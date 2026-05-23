@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class GrowthStageBase(BaseModel):
@@ -21,9 +21,7 @@ class GrowthStageResponse(GrowthStageBase):
 
     id: int
     crop_template_id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CropTemplateBase(BaseModel):
@@ -44,6 +42,4 @@ class CropTemplateResponse(CropTemplateBase):
 
     id: int
     stages: list[GrowthStageResponse]
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
