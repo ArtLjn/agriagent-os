@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build
+android/app/build/
+ios/build/
+*.ipa
+*.apk
+
+# Misc
+.env
+.DS_Store
+*.log

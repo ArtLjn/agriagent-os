@@ -1,0 +1,83 @@
+import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {MainTabNavigator} from './MainTabNavigator';
+import {CycleDetailScreen} from '../screens/cycle/CycleDetailScreen';
+import {CycleCreateScreen} from '../screens/cycle/CycleCreateScreen';
+import {LogListScreen} from '../screens/log/LogListScreen';
+import {LogCreateScreen} from '../screens/log/LogCreateScreen';
+import {CostCreateScreen} from '../screens/cost/CostCreateScreen';
+import {ProfitScreen} from '../screens/cost/ProfitScreen';
+import {AgentChatScreen} from '../screens/agent/AgentChatScreen';
+import {AgentReportScreen} from '../screens/agent/AgentReportScreen';
+
+export type RootStackParamList = {
+  Main: undefined;
+  CycleDetail: {cycleId: number};
+  CycleCreate: undefined;
+  LogList: {cycleId: number};
+  LogCreate: {cycleId: number};
+  CostCreate: undefined;
+  Profit: {cycleId: number};
+  AgentChat: {cycleId?: number};
+  AgentReport: {cycleId?: number};
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+export const AppNavigator: React.FC = () => (
+  <NavigationContainer>
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {backgroundColor: '#2E7D32'},
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle: {fontSize: 20, fontWeight: '600'},
+      }}>
+      <Stack.Screen
+        name="Main"
+        component={MainTabNavigator}
+        options={{headerShown: false}}
+      />
+      <Stack.Screen
+        name="CycleDetail"
+        component={CycleDetailScreen}
+        options={{title: '茬口详情'}}
+      />
+      <Stack.Screen
+        name="CycleCreate"
+        component={CycleCreateScreen}
+        options={{title: '新建茬口'}}
+      />
+      <Stack.Screen
+        name="LogList"
+        component={LogListScreen}
+        options={{title: '农事记录'}}
+      />
+      <Stack.Screen
+        name="LogCreate"
+        component={LogCreateScreen}
+        options={{title: '快速打卡'}}
+      />
+      <Stack.Screen
+        name="CostCreate"
+        component={CostCreateScreen}
+        options={{title: '记一笔'}}
+      />
+      <Stack.Screen
+        name="Profit"
+        component={ProfitScreen}
+        options={{title: '利润统计'}}
+      />
+      <Stack.Screen
+        name="AgentChat"
+        component={AgentChatScreen}
+        options={{title: '农事顾问'}}
+      />
+      <Stack.Screen
+        name="AgentReport"
+        component={AgentReportScreen}
+        options={{title: '种植报告'}}
+      />
+    </Stack.Navigator>
+  </NavigationContainer>
+);
