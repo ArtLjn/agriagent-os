@@ -12,6 +12,7 @@ from app.schemas.cycle import (
     CropCycleResponse,
     CycleStageResponse,
 )
+from app.schemas.log import FarmLogCreate, FarmLogResponse
 
 __all__ = [
     "CropTemplateBase",
@@ -24,4 +25,6 @@ __all__ = [
     "CropCycleResponse",
     "CropCycleListResponse",
     "CycleStageResponse",
+    "FarmLogCreate",
+    "FarmLogResponse",
 ]
