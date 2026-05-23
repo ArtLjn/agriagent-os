@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -23,4 +23,10 @@ def list_templates(db: Session = Depends(get_db)):
 @router.get("/templates/{template_id}", response_model=CropTemplateResponse)
 def get_template(template_id: int, db: Session = Depends(get_db)):
     """根据 ID 获取作物模板详情。"""
-    return crop_service.get_crop_template(db, template_id)
+    template = crop_service.get_crop_template(db, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
+__all__ = ["router"]

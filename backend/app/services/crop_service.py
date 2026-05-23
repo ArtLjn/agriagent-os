@@ -33,3 +33,6 @@ def get_crop_templates(db: Session) -> list[CropTemplate]:
 def get_crop_template(db: Session, template_id: int) -> CropTemplate | None:
     """根据 ID 获取单个作物模板。"""
     return db.query(CropTemplate).filter(CropTemplate.id == template_id).first()
+
+
+__all__ = ["create_crop_template", "get_crop_templates", "get_crop_template"]
