@@ -13,6 +13,12 @@ from app.schemas.cycle import (
     CycleStageResponse,
 )
 from app.schemas.log import FarmLogCreate, FarmLogResponse
+from app.schemas.cost import (
+    CostRecordCreate,
+    CostRecordResponse,
+    CycleProfit,
+    YearlySummary,
+)
 
 __all__ = [
     "CropTemplateBase",
@@ -27,4 +33,8 @@ __all__ = [
     "CycleStageResponse",
     "FarmLogCreate",
     "FarmLogResponse",
+    "CostRecordCreate",
+    "CostRecordResponse",
+    "CycleProfit",
+    "YearlySummary",
 ]
