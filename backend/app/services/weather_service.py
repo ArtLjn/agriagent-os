@@ -15,6 +15,9 @@ def fetch_weather(lat: float, lon: float, days: int = 7) -> dict:
 
     Returns:
         包含 daily 预报数据和 location 信息的字典。
+
+    Raises:
+        RuntimeError: 网络请求失败时抛出。
     """
     params = {
         "latitude": lat,
@@ -28,8 +31,12 @@ def fetch_weather(lat: float, lon: float, days: int = 7) -> dict:
         "timezone": "auto",
         "forecast_days": days,
     }
-    response = httpx.get(OPEN_METEO_URL, params=params, timeout=10)
-    response.raise_for_status()
+    try:
+        response = httpx.get(OPEN_METEO_URL, params=params, timeout=10)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"天气 API 请求失败: {exc}") from exc
+
     data = response.json()
     data["location"] = {"latitude": lat, "longitude": lon}
     return data
