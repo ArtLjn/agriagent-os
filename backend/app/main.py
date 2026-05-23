@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import crop, cycle, log, cost
+from app.api import agent, crop, cycle, log, cost
 from app.core.config import settings
 from app.core.database import engine, Base
 
@@ -20,6 +20,7 @@ app.include_router(crop.router)
 app.include_router(cycle.router)
 app.include_router(log.router)
 app.include_router(cost.router)
+app.include_router(agent.router)
 
 
 @app.get("/health")
