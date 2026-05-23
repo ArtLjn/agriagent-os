@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, func
 
 from app.core.database import Base

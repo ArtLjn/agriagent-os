@@ -1,5 +1,4 @@
 import pytest
-from datetime import date
 from fastapi.testclient import TestClient
 
 from app.main import app
