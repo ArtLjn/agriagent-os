@@ -9,6 +9,7 @@ class FarmLogBase(BaseModel):
     cycle_id: int
     operation_type: str
     operation_date: date
+    operation_time: datetime | None = None
     note: str | None = None
     photo_urls: str | None = None
 

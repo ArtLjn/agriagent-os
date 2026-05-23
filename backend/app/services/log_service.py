@@ -1,16 +1,22 @@
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
+from app.models.cycle import CropCycle
 from app.models.log import FarmLog
 from app.schemas.log import FarmLogCreate
 
 
 def create_log(db: Session, log: FarmLogCreate) -> FarmLog:
     """创建一条农事日志记录。"""
+    cycle = db.query(CropCycle).filter(CropCycle.id == log.cycle_id).first()
+    if not cycle:
+        raise ValueError("Crop cycle not found")
+
     db_log = FarmLog(
         cycle_id=log.cycle_id,
         operation_type=log.operation_type,
         operation_date=log.operation_date,
+        operation_time=log.operation_time,
         note=log.note,
         photo_urls=log.photo_urls,
     )

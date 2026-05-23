@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -11,7 +11,10 @@ router = APIRouter(prefix="/logs", tags=["logs"])
 @router.post("", response_model=FarmLogResponse)
 def create_log(log: FarmLogCreate, db: Session = Depends(get_db)):
     """创建农事日志。"""
-    return log_service.create_log(db, log)
+    try:
+        return log_service.create_log(db, log)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("", response_model=list[FarmLogResponse])
