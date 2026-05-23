@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.cycle import CropCycle, CycleStage
+from app.models.cycle import CropCycle
 from app.models.log import FarmLog
 from app.models.cost import CostRecord
 from app.services.weather_service import check_weather_warnings, fetch_weather
