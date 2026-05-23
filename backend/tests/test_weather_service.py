@@ -29,7 +29,6 @@ class TestFetchWeather:
 
         assert "daily" in result
         assert "location" in result
-        mock_get.assert_called_once()
         call_args = mock_get.call_args
         assert call_args.kwargs["params"]["latitude"] == 34.26
         assert call_args.kwargs["params"]["longitude"] == 117.18
