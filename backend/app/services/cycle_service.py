@@ -33,6 +33,7 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate) -> CropCycle:
             start_date=current_date,
             end_date=end_date,
             order_index=stage.order_index,
+            duration_days=stage.duration_days,
             key_tasks=stage.key_tasks,
             is_current=1 if idx == 0 else 0,
         )

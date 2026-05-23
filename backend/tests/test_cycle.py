@@ -1,8 +1,19 @@
+import pytest
+from datetime import date
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.database import Base, engine
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def clean_db():
+    """Clean database before each test."""
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
 
 
 def _create_watermelon_template():

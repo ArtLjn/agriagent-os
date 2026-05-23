@@ -36,6 +36,7 @@ class CycleStage(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     order_index = Column(Integer, nullable=False)
+    duration_days = Column(Integer, nullable=False)
     key_tasks = Column(String, nullable=True)
     is_current = Column(Integer, default=0)
 
