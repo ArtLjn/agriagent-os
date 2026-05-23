@@ -19,6 +19,15 @@ from app.schemas.cost import (
     CycleProfit,
     YearlySummary,
 )
+from app.schemas.agent import (
+    ChatRequest,
+    ChatResponse,
+    DailyAdviceResponse,
+    ReportRequest,
+    ReportResponse,
+    AdviceHistoryItem,
+    ReportHistoryItem,
+)
 
 __all__ = [
     "CropTemplateBase",
@@ -37,4 +46,11 @@ __all__ = [
     "CostRecordResponse",
     "CycleProfit",
     "YearlySummary",
+    "ChatRequest",
+    "ChatResponse",
+    "DailyAdviceResponse",
+    "ReportRequest",
+    "ReportResponse",
+    "AdviceHistoryItem",
+    "ReportHistoryItem",
 ]
