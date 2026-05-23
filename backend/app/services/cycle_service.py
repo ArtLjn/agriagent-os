@@ -80,6 +80,8 @@ def update_stage(
 def _recalculate_stages(db: Session, cycle_id: int) -> None:
     """重新计算指定茬口下所有阶段的起止日期。"""
     cycle = db.query(CropCycle).filter(CropCycle.id == cycle_id).first()
+    if not cycle:
+        raise ValueError("Cycle not found")
     stages = sorted(cycle.stages, key=lambda s: s.order_index)
     current_date = cycle.start_date
 

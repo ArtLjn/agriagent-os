@@ -16,7 +16,8 @@ def clean_db():
     yield
 
 
-def _create_watermelon_template():
+@pytest.fixture
+def watermelon_template_id():
     """创建西瓜模板并返回模板 ID。"""
     payload = {
         "name": "西瓜",
@@ -31,13 +32,11 @@ def _create_watermelon_template():
     return response.json()["id"]
 
 
-def test_create_crop_cycle():
+def test_create_crop_cycle(watermelon_template_id):
     """测试创建茬口并验证阶段日期推算。"""
-    template_id = _create_watermelon_template()
-
     payload = {
         "name": "1号棚西瓜",
-        "crop_template_id": template_id,
+        "crop_template_id": watermelon_template_id,
         "start_date": "2025-03-15",
         "field_name": "1号大棚",
     }
@@ -53,11 +52,21 @@ def test_create_crop_cycle():
     assert data["stages"][1]["start_date"] == "2025-04-14"
 
 
-def test_list_crop_cycles():
+def test_list_crop_cycles(watermelon_template_id):
     """测试获取茬口列表。"""
+    # 先创建一个茬口
+    payload = {
+        "name": "2号棚西瓜",
+        "crop_template_id": watermelon_template_id,
+        "start_date": "2025-03-15",
+        "field_name": "2号大棚",
+    }
+    client.post("/cycles", json=payload)
+
     response = client.get("/cycles")
 
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
-    assert len(data) >= 1
+    assert len(data) == 1
+    assert data[0]["name"] == "2号棚西瓜"
