@@ -66,6 +66,11 @@ def test_create_income_record(cycle_id):
     }
     response = client.post("/costs", json=payload)
     assert response.status_code == 200
+    data = response.json()
+    assert data["record_type"] == "income"
+    assert data["category"] == "批发"
+    assert data["amount"] == "5000.00"
+    assert data["note"] == "卖给王老板，2000斤"
 
 
 def test_cycle_profit(cycle_id):
@@ -122,3 +127,12 @@ def test_yearly_summary(cycle_id):
     assert data["total_income"] == "3000.00"
     assert data["net_profit"] == "2800.00"
     assert "by_category" in data
+
+
+def test_cycle_profit_empty():
+    response = client.get("/costs/cycles/99999/profit")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_cost"] == "0"
+    assert data["total_income"] == "0"
+    assert data["net_profit"] == "0"

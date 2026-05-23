@@ -62,13 +62,19 @@ def get_cycle_profit(db: Session, cycle_id: int) -> CycleProfit:
         周期利润统计对象。
     """
     records = db.query(CostRecord).filter(CostRecord.cycle_id == cycle_id).all()
-    total_cost = sum(r.amount for r in records if r.record_type == "cost")
-    total_income = sum(r.amount for r in records if r.record_type == "income")
+    total_cost = sum(
+        (r.amount for r in records if r.record_type == "cost"),
+        Decimal("0"),
+    )
+    total_income = sum(
+        (r.amount for r in records if r.record_type == "income"),
+        Decimal("0"),
+    )
     return CycleProfit(
         cycle_id=cycle_id,
-        total_cost=Decimal(str(total_cost)),
-        total_income=Decimal(str(total_income)),
-        net_profit=Decimal(str(total_income - total_cost)),
+        total_cost=total_cost,
+        total_income=total_income,
+        net_profit=total_income - total_cost,
     )
 
 
@@ -94,7 +100,7 @@ def get_yearly_summary(db: Session, year: int) -> YearlySummary:
     for r in records:
         if r.record_type == "cost":
             total_cost += r.amount
-        else:
+        elif r.record_type == "income":
             total_income += r.amount
         cat = f"{r.record_type}:{r.category}"
         by_category[cat] = by_category.get(cat, Decimal("0")) + r.amount
@@ -106,3 +112,6 @@ def get_yearly_summary(db: Session, year: int) -> YearlySummary:
         net_profit=total_income - total_cost,
         by_category=by_category,
     )
+
+
+__all__ = ["create_record", "get_records", "get_cycle_profit", "get_yearly_summary"]
