@@ -1,10 +1,18 @@
 """Agent API 路由，提供农事建议、对话和报告接口。"""
 
+import json
+import logging
+import time
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
 from app.core.llm import LlmNotConfiguredError
+from app.core.logger import request_id_var
+from app.models.agent import AdviceRecord
 from app.models.farm import Farm
 from app.schemas.agent import (
     ChatRequest,
@@ -17,50 +25,113 @@ from app.schemas.agent import (
 )
 from app.services.agent_service import (
     chat_with_agent,
+    stream_chat_with_agent,
     get_daily_advice,
     generate_report,
     get_advice_history,
     get_report_history,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 
+def _new_request_id() -> str:
+    rid = uuid.uuid4().hex[:8]
+    request_id_var.set(rid)
+    return rid
+
+
 @router.post("/chat", response_model=ChatResponse)
-def agent_chat(
+async def agent_chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ) -> ChatResponse:
     """与农事顾问 Agent 对话。"""
+    rid = _new_request_id()
+    logger.info("[%s] POST /agent/chat | message=%s cycle_id=%s", rid, request.message[:80], request.cycle_id)
+    start = time.perf_counter()
     try:
-        return chat_with_agent(db, request.message, request.cycle_id, farm_id=farm.id)
+        result = await chat_with_agent(db, request.message, request.cycle_id, farm_id=farm.id)
+        logger.info("[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符", rid, time.perf_counter() - start, len(result.reply))
+        return result
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
 
+@router.post("/chat/stream")
+async def agent_chat_stream(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> StreamingResponse:
+    """流式与农事顾问 Agent 对话（SSE）。"""
+    rid = _new_request_id()
+    logger.info("[%s] POST /agent/chat/stream | message=%s", rid, request.message[:80])
+
+    async def event_generator():
+        full_reply = ""
+        start = time.perf_counter()
+        try:
+            async for chunk in stream_chat_with_agent(request.message, request.cycle_id):
+                full_reply += chunk
+                data = json.dumps({"content": chunk}, ensure_ascii=False)
+                yield f"data: {data}\n\n"
+            record = AdviceRecord(
+                cycle_id=request.cycle_id,
+                advice_type="chat",
+                content=full_reply,
+                farm_id=farm.id,
+            )
+            db.add(record)
+            db.commit()
+            logger.info("[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符", rid, time.perf_counter() - start, len(full_reply))
+        except LlmNotConfiguredError as exc:
+            logger.error("[%s] /chat/stream 失败: %s", rid, exc)
+            yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.get("/daily", response_model=DailyAdviceResponse)
-def daily_advice(
+async def daily_advice(
     cycle_id: int | None = Query(None, description="关联种植周期 ID"),
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ) -> DailyAdviceResponse:
     """获取每日农事建议。"""
+    rid = _new_request_id()
+    logger.info("[%s] GET /agent/daily | cycle_id=%s", rid, cycle_id)
+    start = time.perf_counter()
     try:
-        return get_daily_advice(db, cycle_id, farm_id=farm.id)
+        result = await get_daily_advice(db, cycle_id, farm_id=farm.id)
+        logger.info("[%s] /agent/daily 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
+        return result
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.post("/report", response_model=ReportResponse)
-def agent_report(
+async def agent_report(
     request: ReportRequest,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ) -> ReportResponse:
     """生成种植周期报告。"""
+    rid = _new_request_id()
+    logger.info("[%s] POST /agent/report | type=%s cycle_id=%s", rid, request.report_type, request.cycle_id)
+    start = time.perf_counter()
     try:
-        return generate_report(db, request.cycle_id, request.report_type, farm_id=farm.id)
+        result = await generate_report(db, request.cycle_id, request.report_type, farm_id=farm.id)
+        logger.info("[%s] /agent/report 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
+        return result
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
