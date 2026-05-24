@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_farm
+from app.models.farm import Farm
 from app.schemas.log import FarmLogCreate, FarmLogResponse
 from app.services import log_service
 
@@ -9,10 +10,14 @@ router = APIRouter(prefix="/logs", tags=["logs"])
 
 
 @router.post("", response_model=FarmLogResponse)
-def create_log(log: FarmLogCreate, db: Session = Depends(get_db)):
+def create_log(
+    log: FarmLogCreate,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
     """创建农事日志。"""
     try:
-        return log_service.create_log(db, log)
+        return log_service.create_log(db, log, farm_id=farm.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -22,9 +27,10 @@ def list_logs(
     cycle_id: int | None = None,
     operation_type: str | None = None,
     db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
 ):
     """获取农事日志列表，支持按周期 ID 和操作类型筛选。"""
-    return log_service.get_logs(db, cycle_id=cycle_id, operation_type=operation_type)
+    return log_service.get_logs(db, farm_id=farm.id, cycle_id=cycle_id, operation_type=operation_type)
 
 
 __all__ = ["router"]

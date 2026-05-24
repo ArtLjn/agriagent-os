@@ -6,13 +6,14 @@ from app.models.log import FarmLog
 from app.schemas.log import FarmLogCreate
 
 
-def create_log(db: Session, log: FarmLogCreate) -> FarmLog:
+def create_log(db: Session, log: FarmLogCreate, farm_id: int) -> FarmLog:
     """创建一条农事日志记录。"""
     cycle = db.query(CropCycle).filter(CropCycle.id == log.cycle_id).first()
     if not cycle:
         raise ValueError("Crop cycle not found")
 
     db_log = FarmLog(
+        farm_id=farm_id,
         cycle_id=log.cycle_id,
         operation_type=log.operation_type,
         operation_date=log.operation_date,
@@ -27,10 +28,10 @@ def create_log(db: Session, log: FarmLogCreate) -> FarmLog:
 
 
 def get_logs(
-    db: Session, cycle_id: int | None = None, operation_type: str | None = None
+    db: Session, farm_id: int, cycle_id: int | None = None, operation_type: str | None = None
 ) -> list[FarmLog]:
     """获取农事日志列表，支持按周期 ID 和操作类型筛选。"""
-    query = db.query(FarmLog)
+    query = db.query(FarmLog).filter(FarmLog.farm_id == farm_id)
     if cycle_id is not None:
         query = query.filter(FarmLog.cycle_id == cycle_id)
     if operation_type is not None:

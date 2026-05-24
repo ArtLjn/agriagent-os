@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_current_farm
+from app.models.farm import Farm
 from app.schemas.agent import (
     ChatRequest,
     ChatResponse,
@@ -28,51 +29,30 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 def agent_chat(
     request: ChatRequest,
     db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
 ) -> ChatResponse:
-    """与农事顾问 Agent 对话。
-
-    Args:
-        request: 对话请求，包含用户消息和可选的周期 ID。
-        db: 数据库会话。
-
-    Returns:
-        Agent 回复。
-    """
-    return chat_with_agent(db, request.message, request.cycle_id)
+    """与农事顾问 Agent 对话。"""
+    return chat_with_agent(db, request.message, request.cycle_id, farm_id=farm.id)
 
 
 @router.get("/daily", response_model=DailyAdviceResponse)
 def daily_advice(
     cycle_id: int | None = Query(None, description="关联种植周期 ID"),
     db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
 ) -> DailyAdviceResponse:
-    """获取每日农事建议。
-
-    Args:
-        cycle_id: 种植周期 ID（可选，不指定则生成通用建议）。
-        db: 数据库会话。
-
-    Returns:
-        每日建议，包含生成时间。
-    """
-    return get_daily_advice(db, cycle_id)
+    """获取每日农事建议。"""
+    return get_daily_advice(db, cycle_id, farm_id=farm.id)
 
 
 @router.post("/report", response_model=ReportResponse)
 def agent_report(
     request: ReportRequest,
     db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
 ) -> ReportResponse:
-    """生成种植周期报告。
-
-    Args:
-        request: 报告请求，包含周期 ID 和报告类型。
-        db: 数据库会话。
-
-    Returns:
-        生成的报告。
-    """
-    return generate_report(db, request.cycle_id, request.report_type)
+    """生成种植周期报告。"""
+    return generate_report(db, request.cycle_id, request.report_type, farm_id=farm.id)
 
 
 @router.get("/advice-history", response_model=list[AdviceHistoryItem])
@@ -80,18 +60,10 @@ def advice_history(
     cycle_id: int | None = Query(None, description="按周期筛选"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
 ) -> list[AdviceHistoryItem]:
-    """查询建议历史记录。
-
-    Args:
-        cycle_id: 按周期筛选（可选）。
-        limit: 返回数量限制。
-        db: 数据库会话。
-
-    Returns:
-        建议历史列表。
-    """
-    return get_advice_history(db, cycle_id, limit)
+    """查询建议历史记录。"""
+    return get_advice_history(db, cycle_id, limit, farm_id=farm.id)
 
 
 @router.get("/report-history", response_model=list[ReportHistoryItem])
@@ -99,18 +71,10 @@ def report_history(
     cycle_id: int | None = Query(None, description="按周期筛选"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
 ) -> list[ReportHistoryItem]:
-    """查询报告历史记录。
-
-    Args:
-        cycle_id: 按周期筛选（可选）。
-        limit: 返回数量限制。
-        db: 数据库会话。
-
-    Returns:
-        报告历史列表。
-    """
-    return get_report_history(db, cycle_id, limit)
+    """查询报告历史记录。"""
+    return get_report_history(db, cycle_id, limit, farm_id=farm.id)
 
 
 __all__ = ["router"]
