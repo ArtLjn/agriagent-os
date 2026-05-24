@@ -9,10 +9,14 @@ interface AgentState {
   weather: any | null;
   loading: boolean;
   error: string | null;
+  cityName: string;
+  cityLat: number | undefined;
+  cityLon: number | undefined;
   sendMessage: (message: string, cycleId?: number) => Promise<void>;
   fetchDailyAdvice: (cycleId?: number) => Promise<void>;
   generateReport: (reportType: string, cycleId?: number) => Promise<void>;
   fetchWeather: () => Promise<void>;
+  setCity: (name: string, lat?: number, lon?: number) => void;
   clearChat: () => void;
   clearError: () => void;
 }
@@ -24,6 +28,9 @@ export const useAgentStore = create<AgentState>(set => ({
   weather: null,
   loading: false,
   error: null,
+  cityName: '苏州',
+  cityLat: undefined,
+  cityLon: undefined,
 
   sendMessage: async (message, cycleId) => {
     set(state => ({
@@ -77,12 +84,15 @@ export const useAgentStore = create<AgentState>(set => ({
   fetchWeather: async () => {
     set({loading: true, error: null});
     try {
-      const res = await weatherApi.getForecast(3);
+      const state = useAgentStore.getState();
+      const res = await weatherApi.getForecast(3, state.cityLat, state.cityLon);
       set({weather: res.data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }
   },
+
+  setCity: (name, lat, lon) => set({cityName: name, cityLat: lat, cityLon: lon}),
 
   clearChat: () => set({messages: []}),
   clearError: () => set({error: null}),

@@ -10,6 +10,8 @@ import {CostCreateScreen} from '../screens/cost/CostCreateScreen';
 import {ProfitScreen} from '../screens/cost/ProfitScreen';
 import {AgentChatScreen} from '../screens/agent/AgentChatScreen';
 import {AgentReportScreen} from '../screens/agent/AgentReportScreen';
+import {GuideScreen} from '../screens/settings/GuideScreen';
+import {colors} from '../theme/colors';
 
 export type RootStackParamList = {
   Main: undefined;
@@ -21,6 +23,7 @@ export type RootStackParamList = {
   Profit: {cycleId: number};
   AgentChat: {cycleId?: number};
   AgentReport: {cycleId?: number};
+  Guide: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -29,9 +32,18 @@ export const AppNavigator: React.FC = () => (
   <NavigationContainer>
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {backgroundColor: '#2E7D32'},
-        headerTintColor: '#FFFFFF',
-        headerTitleStyle: {fontSize: 20, fontWeight: '600'},
+        headerStyle: {
+          backgroundColor: colors.headerBg,
+        },
+        headerTintColor: colors.headerText,
+        headerTitleStyle: {
+          fontSize: 18,
+          fontWeight: '700',
+        },
+        headerShadowVisible: false,
+        contentStyle: {
+          backgroundColor: colors.background,
+        },
       }}>
       <Stack.Screen
         name="Main"
@@ -77,6 +89,11 @@ export const AppNavigator: React.FC = () => (
         name="AgentReport"
         component={AgentReportScreen}
         options={{title: '种植报告'}}
+      />
+      <Stack.Screen
+        name="Guide"
+        component={GuideScreen}
+        options={{title: '使用指南'}}
       />
     </Stack.Navigator>
   </NavigationContainer>

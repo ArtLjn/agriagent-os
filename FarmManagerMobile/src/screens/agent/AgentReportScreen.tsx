@@ -12,7 +12,7 @@ type ReportType = 'weekly' | 'monthly';
 
 export const AgentReportScreen: React.FC = () => {
   const [reportType, setReportType] = useState<ReportType>('weekly');
-  const { report, generateReport, isLoading } = useAgentStore();
+  const { report, generateReport, loading: isLoading } = useAgentStore();
 
   const handleGenerate = async () => {
     await generateReport(reportType);
@@ -59,7 +59,7 @@ export const AgentReportScreen: React.FC = () => {
             <Text style={styles.reportTitle}>
               {reportType === 'weekly' ? '本周农事报告' : '本月农事报告'}
             </Text>
-            <Text style={styles.reportContent}>{report}</Text>
+            <Text style={styles.reportContent}>{report.content}</Text>
           </Card>
         )}
       </ScrollView>

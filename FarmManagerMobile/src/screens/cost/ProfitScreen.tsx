@@ -43,18 +43,22 @@ export const ProfitScreen: React.FC = () => {
       </View>
 
       <View style={styles.cardsRow}>
-        <Card style={[styles.summaryCard, styles.costCard]} padding="lg">
-          <Text style={styles.cardLabel}>总支出</Text>
-          <Text style={[styles.cardValue, {color: colors.danger}]}>
-            -{profit?.total_cost ?? '0.00'}
-          </Text>
-        </Card>
-        <Card style={[styles.summaryCard, styles.incomeCard]} padding="lg">
-          <Text style={styles.cardLabel}>总收入</Text>
-          <Text style={[styles.cardValue, {color: colors.success}]}>
-            +{profit?.total_income ?? '0.00'}
-          </Text>
-        </Card>
+        <View style={styles.summaryCard}>
+          <Card style={styles.costCard} padding="lg">
+            <Text style={styles.cardLabel}>总支出</Text>
+            <Text style={[styles.cardValue, {color: colors.danger}]}>
+              -{profit?.total_cost ?? '0.00'}
+            </Text>
+          </Card>
+        </View>
+        <View style={styles.summaryCard}>
+          <Card style={styles.incomeCard} padding="lg">
+            <Text style={styles.cardLabel}>总收入</Text>
+            <Text style={[styles.cardValue, {color: colors.success}]}>
+              +{profit?.total_income ?? '0.00'}
+            </Text>
+          </Card>
+        </View>
       </View>
     </ScrollView>
   );
@@ -93,15 +97,16 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    alignItems: 'center',
   },
   costCard: {
     borderLeftWidth: 4,
     borderLeftColor: colors.danger,
+    alignItems: 'center',
   },
   incomeCard: {
     borderLeftWidth: 4,
     borderLeftColor: colors.success,
+    alignItems: 'center',
   },
   cardLabel: {
     fontSize: fontSize.sm,

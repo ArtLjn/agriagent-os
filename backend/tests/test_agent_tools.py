@@ -1,7 +1,6 @@
 from datetime import date
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
 
 from app.agents.tools import get_crop_cycle_info, get_recent_farm_logs, get_cycle_cost_summary, get_weather_forecast
 

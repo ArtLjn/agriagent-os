@@ -9,4 +9,4 @@ httpx==0.27.0
 langgraph==0.2.76
 langchain-openai==0.3.14
 pyyaml==6.0.2
-skillify @ git+https://github.com/ArtLjn/skillify.git
+skillify @ file:///app/skillify-sdk

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, Space, message } from 'antd';
-import { PlusOutlined, BugOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider } from 'antd';
+import { PlusOutlined, MinusCircleOutlined, BugOutlined } from '@ant-design/icons';
 import { listTemplates, createTemplate, type CropTemplate } from '../../api/crops';
 import ApiDebugger from '../../components/ApiDebugger';
 
@@ -27,8 +27,16 @@ export default function Crops() {
 
   const handleCreate = async () => {
     const values = await form.validateFields();
+    const payload = {
+      name: values.name,
+      variety: values.variety,
+      stages: (values.stages || []).map((s: any, i: number) => ({
+        ...s,
+        order_index: i + 1,
+      })),
+    };
     try {
-      await createTemplate(values);
+      await createTemplate(payload);
       message.success('创建成功');
       setModalOpen(false);
       form.resetFields();
@@ -53,10 +61,33 @@ export default function Crops() {
       </Space>
       <Table rowKey="id" dataSource={data} columns={columns} loading={loading} />
 
-      <Modal title="新建作物模板" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)}>
+      <Modal title="新建作物模板" open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} width={560}>
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="variety" label="品种"><Input /></Form.Item>
+          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入模板名称' }]}><Input placeholder="如：西瓜" /></Form.Item>
+          <Form.Item name="variety" label="品种"><Input placeholder="如：8424" /></Form.Item>
+
+          <Divider>生长阶段</Divider>
+          <Form.List name="stages">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                    <Form.Item {...restField} name={[name, 'name']} rules={[{ required: true, message: '阶段名' }]}>
+                      <Input placeholder="阶段名" style={{ width: 120 }} />
+                    </Form.Item>
+                    <Form.Item {...restField} name={[name, 'duration_days']} rules={[{ required: true, message: '天数' }]}>
+                      <InputNumber placeholder="天数" min={1} style={{ width: 90 }} />
+                    </Form.Item>
+                    <Form.Item {...restField} name={[name, 'key_tasks']}>
+                      <Input placeholder="关键任务（选填）" style={{ width: 160 }} />
+                    </Form.Item>
+                    <MinusCircleOutlined onClick={() => remove(name)} />
+                  </Space>
+                ))}
+                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>添加阶段</Button>
+              </>
+            )}
+          </Form.List>
         </Form>
       </Modal>
 

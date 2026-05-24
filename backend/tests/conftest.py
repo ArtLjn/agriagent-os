@@ -1,10 +1,8 @@
 """公共测试 fixtures。"""
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.database import Base, SessionLocal, engine
-from app.main import app
 from app.models.farm import Farm
 
 

@@ -1,10 +1,10 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://10.0.2.2:8000';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -74,5 +74,6 @@ export const agentApi = {
 
 // 天气
 export const weatherApi = {
-  getForecast: (days: number = 3) => apiClient.get('/weather/forecast', { params: { days } }),
+  getForecast: (days: number = 3, lat?: number, lon?: number) =>
+    apiClient.get('/weather/forecast', { params: { days, lat, lon } }),
 };

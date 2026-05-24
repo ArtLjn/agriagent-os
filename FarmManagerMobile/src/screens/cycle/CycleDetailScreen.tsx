@@ -28,7 +28,7 @@ export const CycleDetailScreen: React.FC = () => {
   }
 
   const timelineItems = currentCycle.stages.map(stage => ({
-    id: stage.id,
+    id: String(stage.id),
     title: stage.name,
     subtitle: stage.key_tasks || '无关键任务',
     dateRange: `${stage.start_date} ~ ${stage.end_date}`,
