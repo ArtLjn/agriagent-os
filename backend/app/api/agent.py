@@ -1,9 +1,10 @@
 """Agent API 路由，提供农事建议、对话和报告接口。"""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
+from app.core.llm import LlmNotConfiguredError
 from app.models.farm import Farm
 from app.schemas.agent import (
     ChatRequest,
@@ -32,7 +33,10 @@ def agent_chat(
     farm: Farm = Depends(get_current_farm),
 ) -> ChatResponse:
     """与农事顾问 Agent 对话。"""
-    return chat_with_agent(db, request.message, request.cycle_id, farm_id=farm.id)
+    try:
+        return chat_with_agent(db, request.message, request.cycle_id, farm_id=farm.id)
+    except LlmNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.get("/daily", response_model=DailyAdviceResponse)
@@ -42,7 +46,10 @@ def daily_advice(
     farm: Farm = Depends(get_current_farm),
 ) -> DailyAdviceResponse:
     """获取每日农事建议。"""
-    return get_daily_advice(db, cycle_id, farm_id=farm.id)
+    try:
+        return get_daily_advice(db, cycle_id, farm_id=farm.id)
+    except LlmNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.post("/report", response_model=ReportResponse)
@@ -52,7 +59,10 @@ def agent_report(
     farm: Farm = Depends(get_current_farm),
 ) -> ReportResponse:
     """生成种植周期报告。"""
-    return generate_report(db, request.cycle_id, request.report_type, farm_id=farm.id)
+    try:
+        return generate_report(db, request.cycle_id, request.report_type, farm_id=farm.id)
+    except LlmNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.get("/advice-history", response_model=list[AdviceHistoryItem])
