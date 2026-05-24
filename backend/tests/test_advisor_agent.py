@@ -12,6 +12,7 @@ class TestBuildAdvisorAgent:
         mock_get_llm.return_value = mock_llm
 
         from app.agents.advisor import build_advisor_agent
+
         result = build_advisor_agent()
 
         assert result is not None
@@ -30,6 +31,7 @@ class TestAdvisorInvoke:
         mock_get_graph.return_value = mock_graph
 
         from app.agents.advisor import invoke_advisor
+
         result = asyncio.run(invoke_advisor("今天该做什么？"))
 
         assert result == "建议：今天适合浇水。"
@@ -47,6 +49,7 @@ class TestAdvisorInvoke:
         mock_get_graph.return_value = mock_graph
 
         from app.agents.advisor import invoke_advisor
+
         result = asyncio.run(invoke_advisor("问题", farm_id=42))
 
         assert result == "建议内容"

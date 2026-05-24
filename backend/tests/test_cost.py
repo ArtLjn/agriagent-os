@@ -12,7 +12,12 @@ def watermelon_template_id():
         "name": "西瓜",
         "variety": "8424",
         "stages": [
-            {"name": "育苗期", "duration_days": 30, "order_index": 0, "key_tasks": "温湿度管理"},
+            {
+                "name": "育苗期",
+                "duration_days": 30,
+                "order_index": 0,
+                "key_tasks": "温湿度管理",
+            },
         ],
     }
     response = client.post("/crops/templates", json=payload)
@@ -65,20 +70,26 @@ def test_create_income_record(cycle_id):
 
 
 def test_cycle_profit(cycle_id):
-    client.post("/costs", json={
-        "cycle_id": cycle_id,
-        "record_type": "cost",
-        "category": "肥料",
-        "amount": "800.00",
-        "record_date": "2025-03-10",
-    })
-    client.post("/costs", json={
-        "cycle_id": cycle_id,
-        "record_type": "income",
-        "category": "批发",
-        "amount": "5000.00",
-        "record_date": "2025-06-15",
-    })
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "肥料",
+            "amount": "800.00",
+            "record_date": "2025-03-10",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "income",
+            "category": "批发",
+            "amount": "5000.00",
+            "record_date": "2025-06-15",
+        },
+    )
 
     response = client.get(f"/costs/cycles/{cycle_id}/profit")
     assert response.status_code == 200
@@ -92,20 +103,26 @@ def test_cycle_profit(cycle_id):
 
 
 def test_yearly_summary(cycle_id):
-    client.post("/costs", json={
-        "cycle_id": cycle_id,
-        "record_type": "cost",
-        "category": "种子",
-        "amount": "200.00",
-        "record_date": "2025-03-01",
-    })
-    client.post("/costs", json={
-        "cycle_id": cycle_id,
-        "record_type": "income",
-        "category": "零售",
-        "amount": "3000.00",
-        "record_date": "2025-06-20",
-    })
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "种子",
+            "amount": "200.00",
+            "record_date": "2025-03-01",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "income",
+            "category": "零售",
+            "amount": "3000.00",
+            "record_date": "2025-06-20",
+        },
+    )
 
     response = client.get("/costs/summary/2025")
     assert response.status_code == 200
@@ -124,3 +141,8 @@ def test_cycle_profit_empty():
     assert data["total_cost"] == "0"
     assert data["total_income"] == "0"
     assert data["net_profit"] == "0"
+
+
+def test_parse_cost_record():
+    """测试 AI 帮记解析接口（需要 LLM 配置，默认跳过）。"""
+    pytest.skip("需要 LLM 配置")
