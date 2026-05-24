@@ -4,9 +4,9 @@ from app.models.crop import CropTemplate, GrowthStage
 from app.schemas.crop import CropTemplateCreate
 
 
-def create_crop_template(db: Session, template: CropTemplateCreate) -> CropTemplate:
+def create_crop_template(db: Session, template: CropTemplateCreate, farm_id: int) -> CropTemplate:
     """创建作物模板及其生长阶段。"""
-    db_template = CropTemplate(name=template.name, variety=template.variety)
+    db_template = CropTemplate(name=template.name, variety=template.variety, farm_id=farm_id)
     db.add(db_template)
     db.flush()
 
@@ -25,14 +25,14 @@ def create_crop_template(db: Session, template: CropTemplateCreate) -> CropTempl
     return db_template
 
 
-def get_crop_templates(db: Session) -> list[CropTemplate]:
-    """获取所有作物模板。"""
-    return db.query(CropTemplate).all()
+def get_crop_templates(db: Session, farm_id: int) -> list[CropTemplate]:
+    """获取指定农场的所有作物模板。"""
+    return db.query(CropTemplate).filter(CropTemplate.farm_id == farm_id).all()
 
 
-def get_crop_template(db: Session, template_id: int) -> CropTemplate | None:
-    """根据 ID 获取单个作物模板。"""
-    return db.query(CropTemplate).filter(CropTemplate.id == template_id).first()
+def get_crop_template(db: Session, template_id: int, farm_id: int) -> CropTemplate | None:
+    """根据 ID 获取指定农场的单个作物模板。"""
+    return db.query(CropTemplate).filter(CropTemplate.id == template_id, CropTemplate.farm_id == farm_id).first()
 
 
 __all__ = ["create_crop_template", "get_crop_templates", "get_crop_template"]

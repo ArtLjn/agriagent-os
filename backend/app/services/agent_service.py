@@ -8,13 +8,14 @@ from app.models.agent import AdviceRecord, ReportRecord
 from app.schemas.agent import ChatResponse, DailyAdviceResponse, ReportResponse
 
 
-def chat_with_agent(db: Session, message: str, cycle_id: int | None = None) -> ChatResponse:
+def chat_with_agent(db: Session, message: str, cycle_id: int | None = None, farm_id: int = 1) -> ChatResponse:
     """与用户进行 Agent 对话，保存记录。
 
     Args:
         db: 数据库会话。
         message: 用户消息。
         cycle_id: 关联的种植周期 ID（可选）。
+        farm_id: 农场 ID。
 
     Returns:
         Agent 回复。
@@ -23,19 +24,20 @@ def chat_with_agent(db: Session, message: str, cycle_id: int | None = None) -> C
     full_input = context + message
     reply = invoke_advisor(full_input)
 
-    record = AdviceRecord(cycle_id=cycle_id, advice_type="chat", content=reply)
+    record = AdviceRecord(cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id)
     db.add(record)
     db.commit()
 
     return ChatResponse(reply=reply)
 
 
-def get_daily_advice(db: Session, cycle_id: int | None = None) -> DailyAdviceResponse:
+def get_daily_advice(db: Session, cycle_id: int | None = None, farm_id: int = 1) -> DailyAdviceResponse:
     """生成每日农事建议并保存。
 
     Args:
         db: 数据库会话。
         cycle_id: 关联的种植周期 ID（可选）。
+        farm_id: 农场 ID。
 
     Returns:
         每日建议。
@@ -45,7 +47,7 @@ def get_daily_advice(db: Session, cycle_id: int | None = None) -> DailyAdviceRes
         prompt = f"请为周期 ID={cycle_id} 生成今天的农事建议，查询天气和周期信息。"
     advice = invoke_advisor(prompt)
 
-    record = AdviceRecord(cycle_id=cycle_id, advice_type="daily", content=advice)
+    record = AdviceRecord(cycle_id=cycle_id, advice_type="daily", content=advice, farm_id=farm_id)
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -58,7 +60,7 @@ def get_daily_advice(db: Session, cycle_id: int | None = None) -> DailyAdviceRes
 
 
 def generate_report(
-    db: Session, cycle_id: int | None = None, report_type: str = "weekly"
+    db: Session, cycle_id: int | None = None, report_type: str = "weekly", farm_id: int = 1
 ) -> ReportResponse:
     """生成种植周期报告并保存。
 
@@ -66,6 +68,7 @@ def generate_report(
         db: 数据库会话。
         cycle_id: 关联的种植周期 ID（可选）。
         report_type: 报告类型（weekly / monthly）。
+        farm_id: 农场 ID。
 
     Returns:
         生成的报告。
