@@ -3,7 +3,11 @@ from typing import Optional
 
 import yaml
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 
 class ServerConfig(BaseModel):
@@ -24,6 +28,13 @@ class AIConfig(BaseModel):
 class WeatherConfig(BaseModel):
     latitude: float = 34.26
     longitude: float = 117.18
+
+
+class CircuitBreakerConfig(BaseModel):
+    failure_threshold: int = 3
+    recovery_timeout: int = 30
+    retry_max: int = 3
+    retry_backoff_base: float = 2.0
 
 
 class _YamlSettingsSource(PydanticBaseSettingsSource):
@@ -52,6 +63,7 @@ class Settings(BaseSettings):
     database: DatabaseConfig = DatabaseConfig()
     ai: AIConfig = AIConfig()
     weather: WeatherConfig = WeatherConfig()
+    circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
     project_name: str = "Farm Manager API"
 
     def __init__(self, _config_path: Optional[str] = None, **kwargs):
@@ -78,7 +90,9 @@ class Settings(BaseSettings):
         # 优先级从高到低：init_settings > env_settings > yaml_source
         yaml_data = getattr(cls, "_yaml_data_store", {})
         yaml_source = _YamlSettingsSource(settings_cls, yaml_data)
-        sources = [s for s in (init_settings, env_settings, yaml_source) if s is not None]
+        sources = [
+            s for s in (init_settings, env_settings, yaml_source) if s is not None
+        ]
         return tuple(sources)
 
     @staticmethod
@@ -109,6 +123,10 @@ class Settings(BaseSettings):
     @property
     def weather_longitude(self) -> float:
         return self.weather.longitude
+
+    @property
+    def circuit_breaker_config(self) -> CircuitBreakerConfig:
+        return self.circuit_breaker
 
 
 settings = Settings()
