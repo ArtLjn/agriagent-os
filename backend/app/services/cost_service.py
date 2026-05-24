@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary, CostParseResponse
-from app.core.llm import get_llm, llm_invoke_with_breaker, LlmNotConfiguredError
+from app.core.llm import get_llm, llm_invoke_with_breaker
 
 logger = logging.getLogger(__name__)
 

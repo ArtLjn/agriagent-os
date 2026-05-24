@@ -5,6 +5,7 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -63,6 +64,18 @@ export const CostListScreen: React.FC = () => {
       .filter(r => r.record_type === 'income')
       .reduce((sum, r) => sum + parseFloat(r.amount), 0);
     return {cost, income, balance: income - cost};
+  }, [records, currentMonth]);
+
+  const categoryStats = useMemo(() => {
+    const monthRecords = records.filter(r => r.record_date.startsWith(currentMonth));
+    const stats: Record<string, {cost: number; income: number}> = {};
+    for (const r of monthRecords) {
+      if (!stats[r.category]) stats[r.category] = {cost: 0, income: 0};
+      const val = parseFloat(r.amount);
+      if (r.record_type === 'cost') stats[r.category].cost += val;
+      else stats[r.category].income += val;
+    }
+    return stats;
   }, [records, currentMonth]);
 
   const filteredRecords = useMemo(() => {
@@ -165,6 +178,32 @@ export const CostListScreen: React.FC = () => {
           </Card>
         </View>
       </View>
+
+      {/* Category Summary */}
+      {Object.keys(categoryStats).length > 0 && (
+        <View style={styles.categorySection}>
+          <Text style={styles.categoryTitle}>本月分类汇总</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {Object.entries(categoryStats).map(([cat, val]) => {
+              const catIcon = CATEGORY_ICONS[cat] || 'tag';
+              return (
+                <View key={cat} style={styles.categoryChip}>
+                  <Icon name={catIcon} size={20} color={colors.primary} />
+                  <Text style={styles.categoryChipName}>{cat}</Text>
+                  <Text style={[styles.categoryChipAmount, {color: colors.danger}]}>
+                    -{val.cost.toFixed(0)}
+                  </Text>
+                  {val.income > 0 && (
+                    <Text style={[styles.categoryChipAmount, {color: colors.success}]}>
+                      +{val.income.toFixed(0)}
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Filter */}
       {renderFilter()}
@@ -375,6 +414,37 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     flex: 1,
+  },
+  categorySection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  categoryTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  categoryChip: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginRight: spacing.sm,
+    minWidth: 90,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  categoryChipName: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  categoryChipAmount: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
   },
   fab: {
     position: 'absolute',
