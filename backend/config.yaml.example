@@ -1,0 +1,19 @@
+# Farm Manager 后端配置文件
+# 使用方法: cp config.yaml.example config.yaml
+# 环境变量会覆盖 YAML 中的同名配置
+
+server:
+  host: "0.0.0.0"    # 监听地址
+  port: 8000          # 监听端口
+
+database:
+  url: "sqlite:///./farm_manager.db"  # 数据库连接地址
+
+ai:
+  model: "qwen3.5-plus-2026-04-20"                        # LLM 模型名称
+  api_key: ""                                              # LLM API 密钥（必填）
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # LLM API 地址
+
+weather:
+  latitude: 34.26    # 天气查询纬度（默认徐州）
+  longitude: 117.18  # 天气查询经度（默认徐州）
