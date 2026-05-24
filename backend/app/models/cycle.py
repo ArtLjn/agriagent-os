@@ -10,6 +10,7 @@ class CropCycle(Base):
     __tablename__ = "crop_cycles"
 
     id = Column(Integer, primary_key=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     name = Column(String, nullable=False)
     crop_template_id = Column(Integer, ForeignKey("crop_templates.id"), nullable=False)
     start_date = Column(Date, nullable=False)

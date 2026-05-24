@@ -9,6 +9,7 @@ class FarmLog(Base):
     __tablename__ = "farm_logs"
 
     id = Column(Integer, primary_key=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     cycle_id = Column(Integer, ForeignKey("crop_cycles.id"), nullable=False)
     operation_type = Column(String, nullable=False)
     operation_date = Column(Date, nullable=False)

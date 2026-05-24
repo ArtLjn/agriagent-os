@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime, func
+from sqlalchemy import Column, ForeignKey, Integer, String, Numeric, Date, DateTime, func
 
 from app.core.database import Base
 
@@ -9,6 +9,7 @@ class CostRecord(Base):
     __tablename__ = "cost_records"
 
     id = Column(Integer, primary_key=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     cycle_id = Column(Integer, nullable=True)
     record_type = Column(String, nullable=False)
     category = Column(String, nullable=False)

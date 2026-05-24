@@ -10,6 +10,7 @@ class CropTemplate(Base):
     __tablename__ = "crop_templates"
 
     id = Column(Integer, primary_key=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     name = Column(String, nullable=False)
     variety = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

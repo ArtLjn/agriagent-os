@@ -11,6 +11,7 @@ class AdviceRecord(Base):
     __tablename__ = "advice_records"
 
     id = Column(Integer, primary_key=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     cycle_id = Column(Integer, ForeignKey("crop_cycles.id"), nullable=True)
     advice_type = Column(String, nullable=False)
     content = Column(Text, nullable=False)
@@ -23,6 +24,7 @@ class ReportRecord(Base):
     __tablename__ = "report_records"
 
     id = Column(Integer, primary_key=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     cycle_id = Column(Integer, ForeignKey("crop_cycles.id"), nullable=True)
     report_type = Column(String, nullable=False)
     content = Column(Text, nullable=False)
