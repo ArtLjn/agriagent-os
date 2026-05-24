@@ -2,17 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.core.database import engine, Base
 
 client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def clean_db():
-    """Clean database before each test."""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    yield
 
 
 def test_create_crop_template():
@@ -33,7 +24,6 @@ def test_create_crop_template():
 
 
 def test_list_crop_templates():
-    # First create a template
     payload = {
         "name": "豆角",
         "variety": "长豆角",

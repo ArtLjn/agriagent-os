@@ -2,16 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.core.database import Base, engine
 
 client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def clean_db():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    yield
 
 
 @pytest.fixture
@@ -73,7 +65,6 @@ def test_create_income_record(cycle_id):
 
 
 def test_cycle_profit(cycle_id):
-    # Create cost record
     client.post("/costs", json={
         "cycle_id": cycle_id,
         "record_type": "cost",
@@ -81,7 +72,6 @@ def test_cycle_profit(cycle_id):
         "amount": "800.00",
         "record_date": "2025-03-10",
     })
-    # Create income record
     client.post("/costs", json={
         "cycle_id": cycle_id,
         "record_type": "income",
@@ -102,7 +92,6 @@ def test_cycle_profit(cycle_id):
 
 
 def test_yearly_summary(cycle_id):
-    # Create records in 2025
     client.post("/costs", json={
         "cycle_id": cycle_id,
         "record_type": "cost",

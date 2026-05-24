@@ -2,17 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.core.database import Base, engine
 
 client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def clean_db():
-    """Clean database before each test."""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    yield
 
 
 @pytest.fixture
@@ -53,7 +44,6 @@ def test_create_crop_cycle(watermelon_template_id):
 
 def test_list_crop_cycles(watermelon_template_id):
     """测试获取茬口列表。"""
-    # 先创建一个茬口
     payload = {
         "name": "2号棚西瓜",
         "crop_template_id": watermelon_template_id,
