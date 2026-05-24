@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.git/
+.gitignore
+*.md
+config.yaml
+farm_manager.db
+*.bak
+*.tmp
