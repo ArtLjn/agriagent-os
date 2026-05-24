@@ -2,29 +2,33 @@
 
 import asyncio
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
+from skillify.core.context import SkillContext
 from typing_extensions import TypedDict
 
 from app.core.llm import get_llm
-from app.skills import get_langchain_tools
+from app.skills import get_langchain_tools, get_skill_manager
 
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "你是一位经验丰富的农业技术顾问，擅长西瓜、豆角等作物的种植管理。"
     "你具备以下能力：查询天气预报和灾害预警、查看种植周期和当前阶段、"
-    "了解近期农事记录、统计成本收支。请根据用户的问题，主动调用合适的工具"
-    "获取信息，然后给出具体、可操作的建议。回答要简洁明了，适合农民理解。"
-    "使用中文回答。"
+    "了解近期农事记录、统计成本收支。"
+    "成本分析方面，你可以按分类/按月/按时间范围查询支出和收入，"
+    "也可以进行全局的收支趋势对比分析。"
+    "请根据用户的问题，主动调用合适的工具获取信息，"
+    "然后给出具体、可操作的建议。回答要简洁明了。使用中文回答。"
 )
 
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
+    farm_id: int
 
 
 def _should_continue(state: AgentState) -> str:
@@ -51,20 +55,31 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         return {"messages": []}
 
     tool_map = {t.name: t for t in get_langchain_tools()}
+    skill_mgr = get_skill_manager()
+    farm_id = state.get("farm_id", 1)
+    ctx = SkillContext(farm_id=farm_id)
 
     async def _call_one(tc: dict) -> ToolMessage:
         name = tc["name"]
         args = tc["args"]
         tool_call_id = tc["id"]
-        logger.info("Skill 调用 %s(%s)", name, args)
+        logger.info("Skill 调用 %s(%s) farm_id=%s", name, args, farm_id)
         try:
             tool = tool_map.get(name)
             if not tool:
-                return ToolMessage(content=f"未知工具: {name}", tool_call_id=tool_call_id)
-            result = await tool.ainvoke(args)
-            summary = str(result)[:120].replace("\n", " ")
+                return ToolMessage(
+                    content=f"未知工具: {name}", tool_call_id=tool_call_id
+                )
+            skill = skill_mgr.get_skill(name)
+            if skill:
+                result = await skill.execute(args, ctx)
+                content = result.reply
+            else:
+                result = await tool.ainvoke(args)
+                content = str(result)
+            summary = str(content)[:120].replace("\n", " ")
             logger.info("Skill 返回 %s -> %s", name, summary)
-            return ToolMessage(content=str(result), tool_call_id=tool_call_id)
+            return ToolMessage(content=str(content), tool_call_id=tool_call_id)
         except Exception as e:
             logger.error("Skill 失败 %s: %s", name, e)
             return ToolMessage(content=f"工具调用失败: {e}", tool_call_id=tool_call_id)

@@ -1,9 +1,16 @@
+import json
+import logging
 from decimal import Decimal
+from datetime import date
+
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
 from app.models.cost import CostRecord
-from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary
+from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary, CostParseResponse
+from app.core.llm import get_llm, llm_invoke_with_breaker, LlmNotConfiguredError
+
+logger = logging.getLogger(__name__)
 
 
 def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRecord:
@@ -119,4 +126,59 @@ def get_yearly_summary(db: Session, year: int, farm_id: int) -> YearlySummary:
     )
 
 
-__all__ = ["create_record", "get_records", "get_cycle_profit", "get_yearly_summary"]
+async def parse_record(description: str) -> CostParseResponse:
+    """使用 LLM 解析自然语言记账描述。
+
+    Args:
+        description: 用户输入的记账描述，如"买了50斤化肥花了120块"。
+
+    Returns:
+        解析后的结构化记账数据。
+
+    Raises:
+        LlmNotConfiguredError: LLM 未配置时抛出。
+    """
+    today = date.today().isoformat()
+    prompt = (
+        "请解析以下记账描述，提取记账信息。\n\n"
+        "规则：\n"
+        "1. record_type 只能是 'cost'（支出）或 'income'（收入）\n"
+        "2. category（分类）支出可选：种子、化肥、农药、人工、水电、地租、其他\n"
+        "   收入可选：销售、补贴、其他\n"
+        "3. amount 是纯数字金额（不含正负号）\n"
+        "4. record_date 是 YYYY-MM-DD 格式，未提及则使用今天\n"
+        "5. note 是额外描述信息，没有则为空\n\n"
+        "请严格返回以下 JSON 格式，不要添加任何其他内容：\n"
+        '{"record_type": "...", "category": "...", "amount": "...", "record_date": "...", "note": "..."}\n\n'
+        f"今天是 {today}。\n"
+        f"描述：{description}"
+    )
+
+    llm = get_llm()
+    messages = [{"role": "user", "content": prompt}]
+    result = await llm_invoke_with_breaker(llm, messages)
+    content = result.content.strip()
+
+    # 尝试提取 JSON 内容
+    if "```json" in content:
+        content = content.split("```json")[1].split("```")[0].strip()
+    elif "```" in content:
+        content = content.split("```")[1].split("```")[0].strip()
+
+    data = json.loads(content)
+    return CostParseResponse(
+        record_type=data["record_type"],
+        category=data["category"],
+        amount=str(data["amount"]),
+        record_date=data["record_date"],
+        note=data.get("note") or None,
+    )
+
+
+__all__ = [
+    "create_record",
+    "get_records",
+    "get_cycle_profit",
+    "get_yearly_summary",
+    "parse_record",
+]

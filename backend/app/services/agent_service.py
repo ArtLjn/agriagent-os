@@ -13,14 +13,20 @@ from app.schemas.agent import ChatResponse, DailyAdviceResponse, ReportResponse
 logger = logging.getLogger(__name__)
 
 
-async def chat_with_agent(db: Session, message: str, cycle_id: int | None = None, farm_id: int = 1) -> ChatResponse:
+async def chat_with_agent(
+    db: Session, message: str, cycle_id: int | None = None, farm_id: int = 1
+) -> ChatResponse:
     """与用户进行 Agent 对话，保存记录。"""
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
     full_input = context + message
-    logger.info("开始对话 | farm=%s cycle=%s | input: %s", farm_id, cycle_id, message[:100])
-    reply = await invoke_advisor(full_input)
+    logger.info(
+        "开始对话 | farm=%s cycle=%s | input: %s", farm_id, cycle_id, message[:100]
+    )
+    reply = await invoke_advisor(full_input, farm_id=farm_id)
 
-    record = AdviceRecord(cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id)
+    record = AdviceRecord(
+        cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id
+    )
     db.add(record)
     db.commit()
     logger.info("对话记录已保存 | record_id=%s", record.id)
@@ -29,24 +35,28 @@ async def chat_with_agent(db: Session, message: str, cycle_id: int | None = None
 
 
 async def stream_chat_with_agent(
-    message: str, cycle_id: int | None = None
+    message: str, cycle_id: int | None = None, farm_id: int = 1
 ) -> AsyncGenerator[str, None]:
     """流式与 Agent 对话，逐 token 返回。"""
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
     full_input = context + message
-    async for chunk in stream_advisor(full_input):
+    async for chunk in stream_advisor(full_input, farm_id=farm_id):
         yield chunk
 
 
-async def get_daily_advice(db: Session, cycle_id: int | None = None, farm_id: int = 1) -> DailyAdviceResponse:
+async def get_daily_advice(
+    db: Session, cycle_id: int | None = None, farm_id: int = 1
+) -> DailyAdviceResponse:
     """生成每日农事建议并保存。"""
     prompt = "请生成今天的农事建议，考虑当前天气和种植周期阶段。"
     if cycle_id:
         prompt = f"请为周期 ID={cycle_id} 生成今天的农事建议，查询天气和周期信息。"
     logger.info("生成每日建议 | farm=%s cycle=%s", farm_id, cycle_id)
-    advice = await invoke_advisor(prompt)
+    advice = await invoke_advisor(prompt, farm_id=farm_id)
 
-    record = AdviceRecord(cycle_id=cycle_id, advice_type="daily", content=advice, farm_id=farm_id)
+    record = AdviceRecord(
+        cycle_id=cycle_id, advice_type="daily", content=advice, farm_id=farm_id
+    )
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -60,16 +70,24 @@ async def get_daily_advice(db: Session, cycle_id: int | None = None, farm_id: in
 
 
 async def generate_report(
-    db: Session, cycle_id: int | None = None, report_type: str = "weekly", farm_id: int = 1
+    db: Session,
+    cycle_id: int | None = None,
+    report_type: str = "weekly",
+    farm_id: int = 1,
 ) -> ReportResponse:
     """生成种植周期报告并保存。"""
     logger.info("生成报告 | type=%s cycle=%s farm=%s", report_type, cycle_id, farm_id)
     if cycle_id:
         content = await generate_cycle_report(cycle_id)
     else:
-        content = await invoke_advisor(f"请生成一份{report_type}综合报告，查询所有活跃周期的信息。")
+        content = await invoke_advisor(
+            f"请生成一份{report_type}综合报告，查询所有活跃周期的信息。",
+            farm_id=farm_id,
+        )
 
-    record = ReportRecord(cycle_id=cycle_id, report_type=report_type, content=content, farm_id=farm_id)
+    record = ReportRecord(
+        cycle_id=cycle_id, report_type=report_type, content=content, farm_id=farm_id
+    )
     db.add(record)
     db.commit()
     db.refresh(record)
