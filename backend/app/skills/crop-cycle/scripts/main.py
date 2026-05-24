@@ -50,6 +50,3 @@ class CropCycleSkill(Skill):
             return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
         finally:
             db.close()
-
-
-skill = CropCycleSkill()

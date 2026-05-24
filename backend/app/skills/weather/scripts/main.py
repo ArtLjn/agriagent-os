@@ -55,6 +55,3 @@ class WeatherSkill(Skill):
             lines.append("近期无极端天气预警。")
 
         return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
-
-
-skill = WeatherSkill()

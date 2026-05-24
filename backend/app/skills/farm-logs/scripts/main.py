@@ -51,6 +51,3 @@ class FarmLogSkill(Skill):
             return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
         finally:
             db.close()
-
-
-skill = FarmLogSkill()
