@@ -7,6 +7,8 @@ import time
 from collections.abc import Callable
 from functools import wraps
 
+from skillify.models.schemas import ResultStatus, SkillResult
+
 logger = logging.getLogger(__name__)
 
 _cache: dict[tuple[str, str], tuple[str, float]] = {}
@@ -35,7 +37,6 @@ def cached(ttl_seconds: int, key_fn: Callable[[dict], str] | None = None):
                 age = time.time() - (expire_at - ttl_seconds)
                 if time.time() < expire_at:
                     logger.info("CACHE HIT skill=%s age=%.0fs ttl=%ds", self.name(), age, ttl_seconds)
-                    from skillify.models.schemas import ResultStatus, SkillResult
                     return SkillResult(status=ResultStatus.SUCCESS, reply=result)
                 del _cache[full_key]
 
@@ -60,3 +61,6 @@ def clear_cache(skill_name: str | None = None) -> int:
     count = len(_cache)
     _cache.clear()
     return count
+
+
+__all__ = ["cached", "clear_cache"]
