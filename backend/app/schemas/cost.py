@@ -125,3 +125,77 @@ class CostParseResponse(BaseModel):
         if d > 10_000_000:
             raise ValueError("amount 不能超过 10,000,000")
         return v
+
+    @field_validator("record_date")
+    @classmethod
+    def _validate_record_date(cls, v: str) -> str:
+        from datetime import date, timedelta
+
+        today = date.today()
+        if not v:
+            return today.isoformat()
+        try:
+            parsed = date.fromisoformat(v)
+        except (ValueError, TypeError):
+            return today.isoformat()
+        min_date = date(2020, 1, 1)
+        max_date = today + timedelta(days=1)
+        if parsed < min_date or parsed > max_date:
+            return today.isoformat()
+        return parsed.isoformat()
+
+
+class CostParseResult(BaseModel):
+    """AI 解析后的结构化结果（带校验）。"""
+
+    record_type: str = "cost"
+    category: str = "其他"
+    amount: str = "0"
+    record_date: str = ""
+    note: str | None = None
+
+    @field_validator("record_type")
+    @classmethod
+    def _validate_record_type(cls, v: str) -> str:
+        if v not in RECORD_TYPE_ENUM:
+            return "cost"
+        return v
+
+    @field_validator("category")
+    @classmethod
+    def _validate_category(cls, v: str) -> str:
+        if not v or not isinstance(v, str):
+            return "其他"
+        return v[:50]
+
+    @field_validator("amount")
+    @classmethod
+    def _validate_amount(cls, v: str) -> str:
+        try:
+            d = Decimal(str(v))
+        except Exception:
+            return "0"
+        if d <= 0:
+            return "0"
+        if d > 10_000_000:
+            return "10000000"
+        return str(v)
+
+    @field_validator("record_date")
+    @classmethod
+    def _validate_record_date(cls, v: str | None) -> str:
+        from datetime import date, timedelta
+
+        today = date.today()
+        if not v:
+            return today.isoformat()
+        try:
+            parsed = date.fromisoformat(v)
+        except (ValueError, TypeError):
+            return today.isoformat()
+
+        min_date = date(2020, 1, 1)
+        max_date = today + timedelta(days=1)
+        if parsed < min_date or parsed > max_date:
+            return today.isoformat()
+        return parsed.isoformat()

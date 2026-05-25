@@ -83,4 +83,41 @@ def get_langchain_tools() -> list[StructuredTool]:
     return skills_to_langchain_tools(get_skill_manager())
 
 
-__all__ = ["get_skill_manager", "skills_to_langchain_tools", "get_langchain_tools"]
+_SKILL_REGISTRY: dict = {}
+
+
+def get_skill_registry() -> dict:
+    """获取全局 Skill 注册表（名称 -> 工具实例）。"""
+    global _SKILL_REGISTRY
+    if not _SKILL_REGISTRY:
+        _SKILL_REGISTRY = _build_registry()
+    return _SKILL_REGISTRY
+
+
+def _build_registry() -> dict:
+    """构建 Skill 注册表。"""
+    registry = {}
+    try:
+        manager = get_skill_manager()
+        for skill_def in manager.list_skills():
+            skill = manager.get_skill(skill_def.name)
+            if skill:
+                registry[skill.name()] = skill
+    except Exception as e:
+        logger.warning("Skill 加载失败: %s", e)
+    return registry
+
+
+def clear_skill_cache():
+    """清除工具缓存（用于热重载）。"""
+    global _SKILL_REGISTRY
+    _SKILL_REGISTRY = {}
+
+
+__all__ = [
+    "get_skill_manager",
+    "skills_to_langchain_tools",
+    "get_langchain_tools",
+    "get_skill_registry",
+    "clear_skill_cache",
+]

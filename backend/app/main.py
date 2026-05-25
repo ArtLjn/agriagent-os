@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -21,9 +22,11 @@ from app.core.logger import get_logger, setup_logging
 
 setup_logging()
 
-from app.api import agent, cost, cost_categories, crop, cycle, log, weather
+from app.api import admin, agent, cost, cost_categories, crop, cycle, log, weather
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
+from app.core.date_context import get_request_date, set_request_date
+from app.core.prompt_registry import get_registry
 from app.core.seed import seed_default_farm
 
 logger = get_logger(__name__)
@@ -46,6 +49,11 @@ async def lifespan(app: FastAPI):
         seed_default_farm(db)
     finally:
         db.close()
+
+    # 加载 Prompt 模板
+    registry = get_registry()
+    registry.reload(settings.prompts_dir)
+    logger.info("Prompt 模板已加载 | dir=%s", settings.prompts_dir)
     yield
 
 
@@ -63,6 +71,32 @@ app.add_middleware(
 )
 
 app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def date_injection_middleware(request: Request, call_next):
+    """读取 X-Current-Date 请求头并注入上下文。"""
+    header_date = request.headers.get("X-Current-Date")
+    server_date = date.today()
+    effective_date = server_date
+
+    if header_date:
+        try:
+            client_date = date.fromisoformat(header_date)
+            delta = abs((client_date - server_date).days)
+            if delta <= 7:
+                effective_date = client_date
+            else:
+                logger.warning(
+                    "客户端日期偏差过大 | client=%s server=%s delta=%dd",
+                    header_date, server_date, delta,
+                )
+        except ValueError:
+            logger.warning("X-Current-Date 格式无效: %s", header_date)
+
+    set_request_date(effective_date.isoformat())
+    response = await call_next(request)
+    return response
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(_request, exc):
@@ -112,6 +146,7 @@ app.include_router(cost.router)
 app.include_router(cost_categories.router)
 app.include_router(agent.router)
 app.include_router(weather.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

@@ -1,3 +1,6 @@
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
+
 import SSE from 'react-native-sse';
 import axios from 'axios';
 
@@ -12,6 +15,8 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async config => {
+  const today = new Date().toISOString().split('T')[0];
+  config.headers['X-Current-Date'] = today;
   return config;
 });
 
@@ -70,8 +75,12 @@ export const costApi = {
   deleteRecord: (id: number) => apiClient.delete(`/costs/${id}`),
   getProfit: (cycleId: number) => apiClient.get(`/costs/cycles/${cycleId}/profit`),
   getYearlySummary: (year: number) => apiClient.get(`/costs/summary/${year}`),
-  parseRecord: (description: string) =>
-    apiClient.post('/costs/parse', { description }),
+  parseRecord: (description: string) => {
+    const idempotencyKey = uuidv4();
+    return apiClient.post('/costs/parse', { description }, {
+      headers: { 'X-Idempotency-Key': idempotencyKey },
+    });
+  },
 };
 
 // Agent

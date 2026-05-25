@@ -10,17 +10,29 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from app.core.llm import get_llm
+from app.core.prompt_registry import get_registry
+from app.core.prompt_renderer import render_prompt
+from app.core.date_context import get_request_date
 from app.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = (
-    "你是一位经验丰富的农业技术顾问，擅长西瓜、豆角等作物的种植管理。"
-    "你具备以下能力：查询天气预报和灾害预警、查看种植周期和当前阶段、"
-    "了解近期农事记录、统计成本收支。请根据用户的问题，主动调用合适的工具"
-    "获取信息，然后给出具体、可操作的建议。回答要简洁明了，适合农民理解。"
-    "使用中文回答。"
-)
+_KEEP_RECENT = 3
+
+
+def micro_compact(messages: list) -> list:
+    """压缩历史消息中旧的 tool result，只保留最近 N 个完整内容。"""
+    tool_results = [(i, msg) for i, msg in enumerate(messages) if isinstance(msg, ToolMessage)]
+    if len(tool_results) <= _KEEP_RECENT:
+        return messages
+
+    result = list(messages)
+    for _idx, (i, msg) in enumerate(tool_results[:-_KEEP_RECENT]):
+        content = msg.content or ""
+        if len(content) > 100:
+            tool_name = getattr(msg, "name", "unknown")
+            result[i] = ToolMessage(content=f"[已执行 {tool_name}]", tool_call_id=msg.tool_call_id)
+    return result
 
 
 class AgentState(TypedDict):
@@ -36,11 +48,16 @@ def _should_continue(state: AgentState) -> str:
 
 
 def _llm_node(state: AgentState) -> dict:
-    """LLM 推理节点。"""
+    """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     tools = get_langchain_tools()
     llm = get_llm().bind_tools(tools)
-    system = HumanMessage(content=SYSTEM_PROMPT)
-    response = llm.invoke([system] + state["messages"])
+
+    current_date = get_request_date()
+    system_text = render_prompt("system_base", registry=get_registry(), current_date=current_date)
+    system = HumanMessage(content=system_text)
+
+    messages = micro_compact(state["messages"])
+    response = llm.invoke([system] + messages)
     return {"messages": [response]}
 
 

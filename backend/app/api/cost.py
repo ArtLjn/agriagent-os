@@ -1,10 +1,26 @@
-from fastapi import APIRouter, Depends, Query
+import json
+import logging
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_farm
+from app.api.deps import get_current_farm, get_db
+from app.core.json_repair import safe_parse_json
+from app.core.prompt_registry import get_registry
+from app.core.prompt_renderer import render_prompt
+from app.core.date_context import get_request_date
 from app.models.farm import Farm
+from app.models.idempotency_key import IdempotencyKey
 from app.schemas.common import PaginatedResponse
-from app.schemas.cost import CostParseRequest, CostParseResponse, CostRecordCreate, CostRecordResponse, CycleProfit, YearlySummary
+from app.schemas.cost import (
+    CostParseRequest,
+    CostParseResponse,
+    CostParseResult,
+    CostRecordCreate,
+    CostRecordResponse,
+    CycleProfit,
+    YearlySummary,
+)
 from app.services import cost_service
 
 router = APIRouter(prefix="/costs", tags=["costs"])
@@ -64,51 +80,65 @@ def get_yearly_summary(
 async def parse_cost_record(
     req: CostParseRequest,
     farm: Farm = Depends(get_current_farm),
+    db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(None, alias="X-Idempotency-Key"),
 ):
-    """AI 解析自然语言记账描述，返回结构化记录。"""
-    import json
-    import logging
+    """AI 解析自然语言记账描述，返回结构化记录。
 
-    from app.agents.advisor import invoke_advisor
-
+    支持幂等键去重（24 小时内相同 key 直接返回缓存结果）。
+    """
     logger = logging.getLogger(__name__)
-    prompt = (
-        f'请将以下记账描述解析为 JSON 格式，包含字段：record_type（cost 或 income）、'
-        f'category（简短类别名，如"种子"、"化肥"、"销售收入"）、'
-        f'amount（数字字符串）、record_date（YYYY-MM-DD 格式，默认今天）、'
-        f'note（可选备注）。\n'
-        f'只返回 JSON，不要其他文字。\n'
-        f'描述：{req.description}'
+
+    # 幂等键检查
+    if idempotency_key:
+        cached = db.query(IdempotencyKey).filter(IdempotencyKey.key == idempotency_key).first()
+        if cached:
+            logger.info("幂等键命中 | key=%s", idempotency_key)
+            try:
+                data = json.loads(cached.response)
+                return CostParseResponse(**data)
+            except Exception:
+                logger.warning("幂等缓存解析失败，重新执行 | key=%s", idempotency_key)
+
+    current_date = get_request_date()
+    prompt = render_prompt(
+        "cost_parse",
+        {"description": req.description},
+        registry=get_registry(),
+        current_date=current_date,
     )
     logger.info("AI 解析记账 | farm=%s | input: %s", farm.id, req.description)
+
+    from app.agents.advisor import invoke_advisor
     reply = await invoke_advisor(prompt, farm_id=farm.id)
 
-    # 提取 JSON
+    # JSON 解析（提取代码块 + 修复）
     try:
-        text = reply.strip()
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip()
-        data = json.loads(text)
-    except (json.JSONDecodeError, IndexError):
+        data = safe_parse_json(reply)
+    except ValueError:
         logger.error("AI 返回无法解析: %s", reply[:200])
-        raise ValueError(f"AI 返回格式异常，无法解析: {reply[:100]}")
+        raise HTTPException(status_code=422, detail=f"AI 返回格式异常: {reply[:100]}")
 
-    # 字段校验
-    record_type = data.get("record_type", "cost")
-    if record_type not in ("cost", "income"):
-        record_type = "cost"
-    category = str(data.get("category", "其他"))[:50]
-    amount = str(data.get("amount", "0"))
-    record_date = str(data.get("record_date", ""))
-    note = data.get("note")
+    # Pydantic 校验（非法值自动替换为默认值）
+    result = CostParseResult.model_validate(data)
 
-    return CostParseResponse(
-        record_type=record_type,
-        category=category,
-        amount=amount,
-        record_date=record_date,
-        note=note,
+    # 构建响应
+    response = CostParseResponse(
+        record_type=result.record_type,
+        category=result.category,
+        amount=result.amount,
+        record_date=result.record_date,
+        note=result.note,
     )
+
+    # 缓存幂等键
+    if idempotency_key:
+        try:
+            cache = IdempotencyKey(key=idempotency_key, response=response.model_dump_json())
+            db.add(cache)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.warning("幂等键缓存写入失败 | key=%s", idempotency_key)
+
+    return response

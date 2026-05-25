@@ -4,6 +4,9 @@ from app.models.cycle import CropCycle, CycleStage
 from app.models.log import FarmLog
 from app.models.cost import CostRecord
 from app.models.agent import AdviceRecord, ReportRecord
+from app.models.guardrails_log import GuardrailsLog
+from app.models.idempotency_key import IdempotencyKey
+from app.models.agent_trace import AgentTrace
 
 __all__ = [
     "Farm",
@@ -15,4 +18,7 @@ __all__ = [
     "CostRecord",
     "AdviceRecord",
     "ReportRecord",
+    "GuardrailsLog",
+    "IdempotencyKey",
+    "AgentTrace",
 ]

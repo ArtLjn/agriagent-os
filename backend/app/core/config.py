@@ -149,6 +149,10 @@ class Settings(BaseSettings):
     def langsmith_config(self) -> LangSmithConfig:
         return self.langsmith
 
+    @property
+    def prompts_dir(self) -> Path:
+        return Path(__file__).parent.parent.parent / "prompts"
+
 
 settings = Settings()
 

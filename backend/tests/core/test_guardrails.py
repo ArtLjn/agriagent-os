@@ -1,6 +1,7 @@
 import pytest
 
-from app.core.guardrails import check_input, filter_output
+from app.core.guardrails import _has_english_sentence, check_input, filter_output
+from app.core.term_whitelist import is_whitelisted
 
 
 class TestCheckInput:
@@ -84,3 +85,35 @@ class TestFilterOutput:
         result = filter_output(text)
         assert "[手机号已隐藏]" in result
         assert "[邮箱已隐藏]" in result
+
+
+class TestEnglishDetection:
+    def test_detects_english_sentence(self):
+        assert _has_english_sentence("这是一个中文句子。Here is an English sentence.") is True
+
+    def test_ignores_whitelisted_terms(self):
+        assert _has_english_sentence("今天种了 Watermelon 和 Tomato") is False
+
+    def test_ignores_pure_chinese(self):
+        assert _has_english_sentence("今天天气很好，适合施肥") is False
+
+    def test_detects_short_english(self):
+        assert _has_english_sentence("Please try again") is True
+
+    def test_output_filter_returns_chinese_on_english(self):
+        result = filter_output("This is an error message from the system")
+        assert result == "系统异常，请重试"
+
+    def test_output_filter_allows_chinese(self):
+        text = "西瓜种植需要注意浇水"
+        assert filter_output(text) == text
+
+    def test_json_output_not_filtered(self):
+        """JSON 结构化输出不应被英文检测拦截。"""
+        json_output = '{"record_type": "cost", "category": "化肥", "amount": "200", "record_date": "2026-05-24", "note": ""}'
+        assert filter_output(json_output) == json_output
+
+    def test_json_in_markdown_not_filtered(self):
+        """Markdown 代码块中的 JSON 不应被拦截。"""
+        md_json = '```json\n{"record_type": "income", "category": "销售收入", "amount": "1000"}\n```'
+        assert filter_output(md_json) == md_json

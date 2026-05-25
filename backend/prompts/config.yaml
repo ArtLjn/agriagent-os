@@ -1,0 +1,15 @@
+version: "1.0"
+defaults:
+  system_base: base
+  cost_parse: cost_parse
+  report: report
+templates:
+  base:
+    file: base.j2
+    description: "基础 system prompt，含语言规则置顶"
+  cost_parse:
+    file: cost_parse.j2
+    description: "记账解析 prompt，注入当前日期"
+  report:
+    file: report.j2
+    description: "报告生成 prompt"

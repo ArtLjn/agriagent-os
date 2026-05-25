@@ -1,4 +1,4 @@
-config.yaml
+/config.yaml
 *.db
 .venv/
 __pycache__/
