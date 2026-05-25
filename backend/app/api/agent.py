@@ -5,11 +5,13 @@ import logging
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from starlette.responses import Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
+from app.core.limiter import limiter
 from app.core.llm import LlmNotConfiguredError
 from app.core.logger import request_id_var
 from app.models.agent import AdviceRecord
@@ -46,17 +48,20 @@ def _new_request_id() -> str:
 
 
 @router.post("/chat", response_model=ChatResponse)
+@limiter.limit("10/minute")
 async def agent_chat(
-    request: ChatRequest,
+    request: Request,
+    response: Response,
+    chat_request: ChatRequest,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ) -> ChatResponse:
     """与农事顾问 Agent 对话。"""
     rid = _new_request_id()
-    logger.info("[%s] POST /agent/chat | message=%s cycle_id=%s", rid, request.message[:80], request.cycle_id)
+    logger.info("[%s] POST /agent/chat | message=%s cycle_id=%s", rid, chat_request.message[:80], chat_request.cycle_id)
     start = time.perf_counter()
     try:
-        result = await chat_with_agent(db, request.message, request.cycle_id, farm_id=farm.id)
+        result = await chat_with_agent(db, chat_request.message, chat_request.cycle_id, farm_id=farm.id)
         logger.info("[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符", rid, time.perf_counter() - start, len(result.reply))
         return result
     except LlmNotConfiguredError as e:
@@ -64,25 +69,28 @@ async def agent_chat(
 
 
 @router.post("/chat/stream")
+@limiter.limit("10/minute")
 async def agent_chat_stream(
-    request: ChatRequest,
+    request: Request,
+    response: Response,
+    chat_request: ChatRequest,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ) -> StreamingResponse:
     """流式与农事顾问 Agent 对话（SSE）。"""
     rid = _new_request_id()
-    logger.info("[%s] POST /agent/chat/stream | message=%s", rid, request.message[:80])
+    logger.info("[%s] POST /agent/chat/stream | message=%s", rid, chat_request.message[:80])
 
     async def event_generator():
         full_reply = ""
         start = time.perf_counter()
         try:
-            async for chunk in stream_chat_with_agent(request.message, request.cycle_id):
+            async for chunk in stream_chat_with_agent(chat_request.message, chat_request.cycle_id):
                 full_reply += chunk
                 data = json.dumps({"content": chunk}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
             record = AdviceRecord(
-                cycle_id=request.cycle_id,
+                cycle_id=chat_request.cycle_id,
                 advice_type="chat",
                 content=full_reply,
                 farm_id=farm.id,
@@ -103,7 +111,10 @@ async def agent_chat_stream(
 
 
 @router.get("/daily", response_model=DailyAdviceResponse)
+@limiter.limit("10/minute")
 async def daily_advice(
+    request: Request,
+    response: Response,
     cycle_id: int | None = Query(None, description="关联种植周期 ID"),
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
@@ -139,17 +150,20 @@ async def refresh_daily_advice_endpoint(
 
 
 @router.post("/report", response_model=ReportResponse)
+@limiter.limit("10/minute")
 async def agent_report(
-    request: ReportRequest,
+    request: Request,
+    response: Response,
+    report_request: ReportRequest,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ) -> ReportResponse:
     """生成种植周期报告。"""
     rid = _new_request_id()
-    logger.info("[%s] POST /agent/report | type=%s cycle_id=%s", rid, request.report_type, request.cycle_id)
+    logger.info("[%s] POST /agent/report | type=%s cycle_id=%s", rid, report_request.report_type, report_request.cycle_id)
     start = time.perf_counter()
     try:
-        result = await generate_report(db, request.cycle_id, request.report_type, farm_id=farm.id)
+        result = await generate_report(db, report_request.cycle_id, report_request.report_type, farm_id=farm.id)
         logger.info("[%s] /agent/report 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
         return result
     except LlmNotConfiguredError as e:
@@ -157,7 +171,10 @@ async def agent_report(
 
 
 @router.get("/advice-history", response_model=list[AdviceHistoryItem])
+@limiter.limit("10/minute")
 def advice_history(
+    request: Request,
+    response: Response,
     cycle_id: int | None = Query(None, description="按周期筛选"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -168,7 +185,10 @@ def advice_history(
 
 
 @router.get("/report-history", response_model=list[ReportHistoryItem])
+@limiter.limit("10/minute")
 def report_history(
+    request: Request,
+    response: Response,
     cycle_id: int | None = Query(None, description="按周期筛选"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),

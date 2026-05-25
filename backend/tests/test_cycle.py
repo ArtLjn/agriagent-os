@@ -56,6 +56,120 @@ def test_list_crop_cycles(watermelon_template_id):
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["name"] == "2号棚西瓜"
+    assert "items" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "2号棚西瓜"
+
+
+def test_update_crop_cycle(watermelon_template_id):
+    """测试更新茬口基本信息。"""
+    create_payload = {
+        "name": "1号棚西瓜",
+        "crop_template_id": watermelon_template_id,
+        "start_date": "2025-03-15",
+        "field_name": "1号大棚",
+    }
+    create_resp = client.post("/cycles", json=create_payload)
+    cycle_id = create_resp.json()["id"]
+
+    update_payload = {
+        "name": "1号棚改良西瓜",
+        "crop_template_id": watermelon_template_id,
+        "start_date": "2025-03-20",
+        "field_name": "1号温室",
+    }
+    response = client.put(f"/cycles/{cycle_id}", json=update_payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "1号棚改良西瓜"
+    assert data["start_date"] == "2025-03-20"
+    assert data["field_name"] == "1号温室"
+
+
+def test_update_cycle_not_found(watermelon_template_id):
+    """测试更新不存在的茬口返回 400。"""
+    payload = {
+        "name": "不存在",
+        "crop_template_id": watermelon_template_id,
+        "start_date": "2025-03-15",
+    }
+    response = client.put("/cycles/99999", json=payload)
+    assert response.status_code == 400
+
+
+def test_delete_crop_cycle(watermelon_template_id):
+    """测试删除茬口。"""
+    create_payload = {
+        "name": "临时茬口",
+        "crop_template_id": watermelon_template_id,
+        "start_date": "2025-03-15",
+    }
+    create_resp = client.post("/cycles", json=create_payload)
+    cycle_id = create_resp.json()["id"]
+
+    response = client.delete(f"/cycles/{cycle_id}")
+    assert response.status_code == 200
+    assert response.json()["message"] == "删除成功"
+
+    get_resp = client.get(f"/cycles/{cycle_id}")
+    assert get_resp.status_code == 404
+
+
+def test_delete_cycle_not_found():
+    """测试删除不存在的茬口返回 404。"""
+    response = client.delete("/cycles/99999")
+    assert response.status_code == 404
+
+
+def test_advance_stage(watermelon_template_id):
+    """测试推进茬口阶段。"""
+    create_payload = {
+        "name": "1号棚西瓜",
+        "crop_template_id": watermelon_template_id,
+        "start_date": "2025-03-15",
+    }
+    create_resp = client.post("/cycles", json=create_payload)
+    cycle_id = create_resp.json()["id"]
+
+    # 初始阶段：育苗期 is_current=True
+    get_resp = client.get(f"/cycles/{cycle_id}")
+    stages = get_resp.json()["stages"]
+    assert stages[0]["is_current"] is True
+    assert stages[1]["is_current"] is False
+
+    # 推进到下一阶段
+    response = client.post(f"/cycles/{cycle_id}/advance-stage")
+    assert response.status_code == 200
+    data = response.json()
+    stages = data["stages"]
+    assert stages[0]["is_current"] is False
+    assert stages[1]["is_current"] is True
+
+
+def test_advance_stage_last_stage(watermelon_template_id):
+    """测试推进到最后一个阶段后再推进返回 400。"""
+    create_payload = {
+        "name": "1号棚西瓜",
+        "crop_template_id": watermelon_template_id,
+        "start_date": "2025-03-15",
+    }
+    create_resp = client.post("/cycles", json=create_payload)
+    cycle_id = create_resp.json()["id"]
+
+    # 推进两次到最后一阶段（西瓜模板有3个阶段）
+    client.post(f"/cycles/{cycle_id}/advance-stage")
+    client.post(f"/cycles/{cycle_id}/advance-stage")
+
+    # 第三次推进应失败
+    response = client.post(f"/cycles/{cycle_id}/advance-stage")
+    assert response.status_code == 400
+
+
+def test_advance_stage_not_found():
+    """测试对不存在的茬口推进阶段返回 400。"""
+    response = client.post("/cycles/99999/advance-stage")
+    assert response.status_code == 400

@@ -6,7 +6,26 @@ export interface FarmLog {
   note?: string; photo_urls?: string; created_at: string;
 }
 
-export const listLogs = (params?: { cycle_id?: number; operation_type?: string }) =>
-  apiClient.get<FarmLog[]>('/logs', { params });
-export const createLog = (data: { cycle_id: number; operation_type: string; operation_date: string; note?: string }) =>
-  apiClient.post<FarmLog>('/logs', data);
+export interface PaginatedList<T> {
+  items: T[];
+  total: number;
+}
+
+export async function listLogs(params?: { cycle_id?: number; operation_type?: string; page?: number; size?: number }): Promise<PaginatedList<FarmLog>> {
+  const res = await apiClient.get<PaginatedList<FarmLog>>('/logs', { params });
+  return res.data;
+}
+
+export async function createLog(data: { cycle_id: number; operation_type: string; operation_date: string; note?: string }): Promise<FarmLog> {
+  const res = await apiClient.post<FarmLog>('/logs', data);
+  return res.data;
+}
+
+export async function updateLog(id: number, data: Omit<FarmLog, "id" | "created_at">): Promise<FarmLog> {
+  const res = await apiClient.put<FarmLog>(`/logs/${id}`, data);
+  return res.data;
+}
+
+export async function deleteLog(id: number): Promise<void> {
+  await apiClient.delete(`/logs/${id}`);
+}

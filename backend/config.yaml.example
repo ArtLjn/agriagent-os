@@ -17,3 +17,12 @@ ai:
 weather:
   latitude: 34.26    # 天气查询纬度（默认徐州）
   longitude: 117.18  # 天气查询经度（默认徐州）
+
+rate_limiting:
+  global_requests_per_minute: 30
+  agent_requests_per_minute: 10
+
+langsmith:
+  api_key: ""
+  project_name: "farm-manager"
+  enabled: false

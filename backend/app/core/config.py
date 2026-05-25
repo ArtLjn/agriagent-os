@@ -37,6 +37,17 @@ class CircuitBreakerConfig(BaseModel):
     retry_backoff_base: float = 2.0
 
 
+class RateLimitConfig(BaseModel):
+    global_requests_per_minute: int = 30
+    agent_requests_per_minute: int = 10
+
+
+class LangSmithConfig(BaseModel):
+    api_key: str = ""
+    project_name: str = "farm-manager"
+    enabled: bool = False
+
+
 class _YamlSettingsSource(PydanticBaseSettingsSource):
     """自定义 YAML 配置源，优先级低于环境变量。"""
 
@@ -64,6 +75,8 @@ class Settings(BaseSettings):
     ai: AIConfig = AIConfig()
     weather: WeatherConfig = WeatherConfig()
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
+    rate_limiting: RateLimitConfig = RateLimitConfig()
+    langsmith: LangSmithConfig = LangSmithConfig()
     project_name: str = "Farm Manager API"
 
     def __init__(self, _config_path: Optional[str] = None, **kwargs):
@@ -127,6 +140,14 @@ class Settings(BaseSettings):
     @property
     def circuit_breaker_config(self) -> CircuitBreakerConfig:
         return self.circuit_breaker
+
+    @property
+    def rate_limiting_config(self) -> RateLimitConfig:
+        return self.rate_limiting
+
+    @property
+    def langsmith_config(self) -> LangSmithConfig:
+        return self.langsmith
 
 
 settings = Settings()

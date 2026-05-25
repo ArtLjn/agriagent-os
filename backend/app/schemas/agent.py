@@ -2,14 +2,14 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChatRequest(BaseModel):
     """Agent 对话请求。"""
 
     cycle_id: int | None = None
-    message: str
+    message: str = Field(..., min_length=1, max_length=2000)
 
 
 class ChatResponse(BaseModel):

@@ -58,8 +58,11 @@ def test_list_logs_by_cycle(cycle_id):
     response = client.get(f"/logs?cycle_id={cycle_id}")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["operation_type"] == "施肥"
+    assert "items" in data
+    assert "total" in data
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["operation_type"] == "施肥"
 
 
 def test_list_logs_by_operation_type(cycle_id):
@@ -77,8 +80,9 @@ def test_list_logs_by_operation_type(cycle_id):
     response = client.get(f"/logs?cycle_id={cycle_id}&operation_type=浇水")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["operation_type"] == "浇水"
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["operation_type"] == "浇水"
 
 
 def test_create_log_invalid_cycle():
@@ -89,3 +93,84 @@ def test_create_log_invalid_cycle():
     }
     response = client.post("/logs", json=payload)
     assert response.status_code == 400
+
+
+def test_update_farm_log(cycle_id):
+    """测试更新农事日志。"""
+    create_payload = {
+        "cycle_id": cycle_id,
+        "operation_type": "浇水",
+        "operation_date": "2025-05-20",
+        "note": "早晨浇透水",
+    }
+    create_resp = client.post("/logs", json=create_payload)
+    log_id = create_resp.json()["id"]
+
+    update_payload = {
+        "cycle_id": cycle_id,
+        "operation_type": "施肥",
+        "operation_date": "2025-05-21",
+        "note": "下午施复合肥",
+    }
+    response = client.put(f"/logs/{log_id}", json=update_payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["operation_type"] == "施肥"
+    assert data["operation_date"] == "2025-05-21"
+    assert data["note"] == "下午施复合肥"
+
+
+def test_update_log_invalid_cycle(cycle_id):
+    """测试更新日志时指定不存在的 cycle 返回 400。"""
+    create_payload = {
+        "cycle_id": cycle_id,
+        "operation_type": "浇水",
+        "operation_date": "2025-05-20",
+    }
+    create_resp = client.post("/logs", json=create_payload)
+    log_id = create_resp.json()["id"]
+
+    update_payload = {
+        "cycle_id": 99999,
+        "operation_type": "施肥",
+        "operation_date": "2025-05-21",
+    }
+    response = client.put(f"/logs/{log_id}", json=update_payload)
+    assert response.status_code == 400
+
+
+def test_update_log_not_found(cycle_id):
+    """测试更新不存在的日志返回 400。"""
+    payload = {
+        "cycle_id": cycle_id,
+        "operation_type": "浇水",
+        "operation_date": "2025-05-20",
+    }
+    response = client.put("/logs/99999", json=payload)
+    assert response.status_code == 400
+
+
+def test_delete_farm_log(cycle_id):
+    """测试删除农事日志。"""
+    create_payload = {
+        "cycle_id": cycle_id,
+        "operation_type": "浇水",
+        "operation_date": "2025-05-20",
+    }
+    create_resp = client.post("/logs", json=create_payload)
+    log_id = create_resp.json()["id"]
+
+    response = client.delete(f"/logs/{log_id}")
+    assert response.status_code == 200
+    assert response.json()["message"] == "删除成功"
+
+    list_resp = client.get(f"/logs?cycle_id={cycle_id}")
+    assert list_resp.json()["total"] == 0
+    assert len(list_resp.json()["items"]) == 0
+
+
+def test_delete_log_not_found():
+    """测试删除不存在的日志返回 404。"""
+    response = client.delete("/logs/99999")
+    assert response.status_code == 404

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider } from 'antd';
-import { PlusOutlined, MinusCircleOutlined, BugOutlined } from '@ant-design/icons';
-import { listTemplates, createTemplate, type CropTemplate } from '../../api/crops';
+import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider, Popconfirm } from 'antd';
+import { PlusOutlined, MinusCircleOutlined, BugOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { listTemplates, createTemplate, updateTemplate, deleteTemplate, type CropTemplate } from '../../api/crops';
 import ApiDebugger from '../../components/ApiDebugger';
 
 export default function Crops() {
@@ -9,13 +9,16 @@ export default function Crops() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
-  const fetchData = async () => {
+  const fetchData = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
-      const res = await listTemplates();
-      setData(res.data);
+      const res = await listTemplates({ page, size: pageSize });
+      setData(res.items);
+      setPagination({ current: page, pageSize, total: res.total });
     } catch {
       message.error('加载失败');
     } finally {
@@ -46,22 +49,100 @@ export default function Crops() {
     }
   };
 
+  const openEdit = (record: CropTemplate) => {
+    setEditingId(record.id);
+    form.setFieldsValue({
+      name: record.name,
+      variety: record.variety,
+      stages: record.stages.map((s) => ({
+        name: s.name,
+        duration_days: s.duration_days,
+        key_tasks: s.key_tasks,
+      })),
+    });
+    setModalOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (editingId === null) return;
+    const values = await form.validateFields();
+    const payload = {
+      name: values.name,
+      variety: values.variety,
+      stages: (values.stages || []).map((s: any, i: number) => ({
+        ...s,
+        order_index: i + 1,
+      })),
+    };
+    try {
+      await updateTemplate(editingId, payload);
+      message.success('更新成功');
+      setModalOpen(false);
+      setEditingId(null);
+      form.resetFields();
+      fetchData();
+    } catch {
+      message.error('更新失败');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteTemplate(id);
+      message.success('删除成功');
+      fetchData();
+    } catch {
+      message.error('删除失败');
+    }
+  };
+
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     { title: '名称', dataIndex: 'name' },
     { title: '品种', dataIndex: 'variety' },
     { title: '阶段数', key: 'stages', render: (_: unknown, r: CropTemplate) => r.stages?.length ?? 0 },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: unknown, record: CropTemplate) => (
+        <Space>
+          <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)}>编辑</Button>
+          <Popconfirm
+            title="确认删除"
+            description={`删除 "${record.name}"？`}
+            onConfirm={() => handleDelete(record.id)}
+            okText="删除"
+            cancelText="取消"
+          >
+            <Button danger icon={<DeleteOutlined />} size="small">删除</Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   return (
     <div>
       <Space style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新建模板</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建模板</Button>
         <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
       </Space>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} />
+      <Table
+        rowKey="id"
+        dataSource={data}
+        columns={columns}
+        loading={loading}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50],
+        }}
+        onChange={(p) => fetchData(p.current, p.pageSize)}
+      />
 
-      <Modal title="新建作物模板" open={modalOpen} onOk={handleCreate} onCancel={() => { setModalOpen(false); form.resetFields(); }} width={560}>
+      <Modal title={editingId !== null ? '编辑作物模板' : '新建作物模板'} open={modalOpen} onOk={editingId !== null ? handleUpdate : handleCreate} onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields(); }} width={560}>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入模板名称' }]}><Input placeholder="如：西瓜" /></Form.Item>
           <Form.Item name="variety" label="品种"><Input placeholder="如：8424" /></Form.Item>

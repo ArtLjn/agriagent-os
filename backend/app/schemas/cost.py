@@ -1,6 +1,10 @@
 from datetime import date
 from decimal import Decimal
-from pydantic import BaseModel, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+RECORD_TYPE_ENUM = {"cost", "income"}
 
 
 class CostRecordBase(BaseModel):
@@ -8,10 +12,24 @@ class CostRecordBase(BaseModel):
 
     cycle_id: int | None = None
     record_type: str
-    category: str
-    amount: Decimal
+    category: str = Field(..., min_length=1, max_length=50)
+    amount: Decimal = Field(..., gt=0, le=10_000_000)
     record_date: date
-    note: str | None = None
+    note: str | None = Field(None, max_length=500)
+
+    @field_validator("record_type")
+    @classmethod
+    def _validate_record_type(cls, v: str) -> str:
+        if v not in RECORD_TYPE_ENUM:
+            raise ValueError(f"record_type 必须是 {RECORD_TYPE_ENUM} 之一")
+        return v
+
+    @field_validator("amount")
+    @classmethod
+    def _validate_amount_precision(cls, v: Decimal) -> Decimal:
+        if v.as_tuple().exponent < -2:
+            raise ValueError("amount 最多保留两位小数")
+        return v
 
 
 class CostRecordCreate(CostRecordBase):
@@ -32,10 +50,24 @@ class CostRecordUpdate(BaseModel):
 
     cycle_id: int | None = None
     record_type: str | None = None
-    category: str | None = None
-    amount: Decimal | None = None
+    category: str | None = Field(None, min_length=1, max_length=50)
+    amount: Decimal | None = Field(None, gt=0, le=10_000_000)
     record_date: date | None = None
-    note: str | None = None
+    note: str | None = Field(None, max_length=500)
+
+    @field_validator("record_type")
+    @classmethod
+    def _validate_record_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in RECORD_TYPE_ENUM:
+            raise ValueError(f"record_type 必须是 {RECORD_TYPE_ENUM} 之一")
+        return v
+
+    @field_validator("amount")
+    @classmethod
+    def _validate_amount_precision(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v.as_tuple().exponent < -2:
+            raise ValueError("amount 最多保留两位小数")
+        return v
 
 
 class CycleProfit(BaseModel):
@@ -62,7 +94,7 @@ class YearlySummary(BaseModel):
 class CostParseRequest(BaseModel):
     """AI 解析记账描述请求。"""
 
-    description: str
+    description: str = Field(..., min_length=1, max_length=500)
 
 
 class CostParseResponse(BaseModel):
@@ -73,3 +105,23 @@ class CostParseResponse(BaseModel):
     amount: str
     record_date: str
     note: str | None = None
+
+    @field_validator("record_type")
+    @classmethod
+    def _validate_record_type(cls, v: str) -> str:
+        if v not in RECORD_TYPE_ENUM:
+            raise ValueError(f"record_type 必须是 {RECORD_TYPE_ENUM} 之一")
+        return v
+
+    @field_validator("amount")
+    @classmethod
+    def _validate_amount(cls, v: str) -> str:
+        try:
+            d = Decimal(v)
+        except Exception:
+            raise ValueError("amount 必须是有效的数字字符串")
+        if d <= 0:
+            raise ValueError("amount 必须大于 0")
+        if d > 10_000_000:
+            raise ValueError("amount 不能超过 10,000,000")
+        return v

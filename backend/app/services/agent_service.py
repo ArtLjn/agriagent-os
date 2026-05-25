@@ -2,9 +2,7 @@
 
 import logging
 from collections.abc import AsyncGenerator
-from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.agents.advisor import invoke_advisor, stream_advisor
@@ -14,33 +12,21 @@ from app.schemas.agent import ChatResponse, DailyAdviceResponse, ReportResponse
 
 logger = logging.getLogger(__name__)
 
-_CST_OFFSET = timedelta(hours=8)
 
-
-def _today_start_cst() -> datetime:
-    """返回今天 00:00 CST 对应的 UTC 时间（无时区信息，用于数据库比较）。"""
-    cst = timezone(_CST_OFFSET)
-    now_cst = datetime.now(cst)
-    today_cst = now_cst.replace(hour=0, minute=0, second=0, microsecond=0)
-    return today_cst.astimezone(timezone.utc).replace(tzinfo=None)
-
-
-async def chat_with_agent(
-    db: Session, message: str, cycle_id: int | None = None, farm_id: int = 1
-) -> ChatResponse:
+async def chat_with_agent(db: Session, message: str, cycle_id: int | None = None, farm_id: int = 1) -> ChatResponse:
     """与用户进行 Agent 对话，保存记录。"""
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
     full_input = context + message
-    logger.info(
-        "开始对话 | farm=%s cycle=%s | input: %s", farm_id, cycle_id, message[:100]
-    )
+    logger.info("开始对话 | farm=%s cycle=%s | input: %s", farm_id, cycle_id, message[:100])
     reply = await invoke_advisor(full_input, farm_id=farm_id)
 
-    record = AdviceRecord(
-        cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id
-    )
+    record = AdviceRecord(cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id)
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     logger.info("对话记录已保存 | record_id=%s", record.id)
 
     return ChatResponse(reply=reply)
@@ -56,43 +42,22 @@ async def stream_chat_with_agent(
         yield chunk
 
 
-async def get_daily_advice(
-    db: Session, cycle_id: int | None = None, farm_id: int = 1
-) -> DailyAdviceResponse:
-    """生成每日农事建议并保存；同一天同一农场命中缓存则直接返回。"""
-    today_start = _today_start_cst()
-    cached = (
-        db.query(AdviceRecord)
-        .filter(
-            and_(
-                AdviceRecord.farm_id == farm_id,
-                AdviceRecord.advice_type == "daily",
-                AdviceRecord.created_at >= today_start,
-            )
-        )
-        .order_by(AdviceRecord.created_at.desc())
-        .first()
-    )
-    if cached:
-        logger.info("每日建议缓存命中 | farm=%s record_id=%s", farm_id, cached.id)
-        return DailyAdviceResponse(
-            cycle_id=cached.cycle_id,
-            advice=cached.content,
-            created_at=cached.created_at,
-        )
-
+async def get_daily_advice(db: Session, cycle_id: int | None = None, farm_id: int = 1) -> DailyAdviceResponse:
+    """生成每日农事建议并保存。"""
     prompt = "请生成今天的农事建议，考虑当前天气和种植周期阶段。"
     if cycle_id:
         prompt = f"请为周期 ID={cycle_id} 生成今天的农事建议，查询天气和周期信息。"
     logger.info("生成每日建议 | farm=%s cycle=%s", farm_id, cycle_id)
     advice = await invoke_advisor(prompt, farm_id=farm_id)
 
-    record = AdviceRecord(
-        cycle_id=cycle_id, advice_type="daily", content=advice, farm_id=farm_id
-    )
+    record = AdviceRecord(cycle_id=cycle_id, advice_type="daily", content=advice, farm_id=farm_id)
     db.add(record)
-    db.commit()
-    db.refresh(record)
+    try:
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        raise
     logger.info("建议已保存 | record_id=%s", record.id)
 
     return DailyAdviceResponse(
@@ -102,45 +67,24 @@ async def get_daily_advice(
     )
 
 
-async def refresh_daily_advice(
-    db: Session, cycle_id: int | None = None, farm_id: int = 1
-) -> DailyAdviceResponse:
-    """强制刷新每日建议：删除当天缓存后重新生成。"""
-    today_start = _today_start_cst()
-    db.query(AdviceRecord).filter(
-        and_(
-            AdviceRecord.farm_id == farm_id,
-            AdviceRecord.advice_type == "daily",
-            AdviceRecord.created_at >= today_start,
-        )
-    ).delete(synchronize_session=False)
-    db.commit()
-    logger.info("每日建议缓存已清除 | farm=%s", farm_id)
-    return await get_daily_advice(db, cycle_id=cycle_id, farm_id=farm_id)
-
-
 async def generate_report(
-    db: Session,
-    cycle_id: int | None = None,
-    report_type: str = "weekly",
-    farm_id: int = 1,
+    db: Session, cycle_id: int | None = None, report_type: str = "weekly", farm_id: int = 1
 ) -> ReportResponse:
     """生成种植周期报告并保存。"""
     logger.info("生成报告 | type=%s cycle=%s farm=%s", report_type, cycle_id, farm_id)
     if cycle_id:
         content = await generate_cycle_report(cycle_id)
     else:
-        content = await invoke_advisor(
-            f"请生成一份{report_type}综合报告，查询所有活跃周期的信息。",
-            farm_id=farm_id,
-        )
+        content = await invoke_advisor(f"请生成一份{report_type}综合报告，查询所有活跃周期的信息。", farm_id=farm_id)
 
-    record = ReportRecord(
-        cycle_id=cycle_id, report_type=report_type, content=content, farm_id=farm_id
-    )
+    record = ReportRecord(cycle_id=cycle_id, report_type=report_type, content=content, farm_id=farm_id)
     db.add(record)
-    db.commit()
-    db.refresh(record)
+    try:
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        raise
     logger.info("报告已保存 | record_id=%s", record.id)
 
     return ReportResponse(
@@ -175,7 +119,6 @@ __all__ = [
     "chat_with_agent",
     "stream_chat_with_agent",
     "get_daily_advice",
-    "refresh_daily_advice",
     "generate_report",
     "get_advice_history",
     "get_report_history",

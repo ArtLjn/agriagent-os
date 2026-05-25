@@ -1,10 +1,11 @@
 """报告 Agent 封装，生成种植周期周报/月报。"""
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from langchain_core.messages import HumanMessage
 
+from app.core.guardrails import filter_output
 from app.core.llm import get_llm
 from app.skills import get_langchain_tools
 
@@ -39,11 +40,14 @@ async def generate_cycle_report(cycle_id: int) -> str:
     )
     cst = timezone(timedelta(hours=8))
     now = datetime.now(cst)
-    weekday_cn = ['一','二','三','四','五','六','日'][now.weekday()]
+    weekday_cn = ["一", "二", "三", "四", "五", "六", "日"][now.weekday()]
     time_info = f"当前时间：{now.strftime('%Y年%m月%d日 %H:%M')}，星期{weekday_cn}"
     system = HumanMessage(content=f"{REPORT_SYSTEM_PROMPT}\n{time_info}")
-    response = await llm.ainvoke([system, HumanMessage(content=prompt)])
-    return response.content
+    response = await llm.ainvoke(
+        [system, HumanMessage(content=prompt)],
+        config={"run_name": "cycle_report", "metadata": {"cycle_id": cycle_id}},
+    )
+    return filter_output(response.content)
 
 
 __all__ = ["generate_cycle_report"]

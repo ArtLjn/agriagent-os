@@ -22,7 +22,36 @@ export interface CropCycleListItem {
   current_stage_name?: string;
 }
 
-export const listCycles = () => apiClient.get<CropCycleListItem[]>('/cycles');
-export const getCycle = (id: number) => apiClient.get<CropCycle>(`/cycles/${id}`);
-export const createCycle = (data: { name: string; crop_template_id: number; start_date: string; field_name?: string }) =>
-  apiClient.post<CropCycle>('/cycles', data);
+export interface PaginatedList<T> {
+  items: T[];
+  total: number;
+}
+
+export async function listCycles(params?: { page?: number; size?: number }): Promise<PaginatedList<CropCycleListItem>> {
+  const res = await apiClient.get<PaginatedList<CropCycleListItem>>('/cycles', { params });
+  return res.data;
+}
+
+export async function getCycle(id: number): Promise<CropCycle> {
+  const res = await apiClient.get<CropCycle>(`/cycles/${id}`);
+  return res.data;
+}
+
+export async function createCycle(data: { name: string; crop_template_id: number; start_date: string; field_name?: string }): Promise<CropCycle> {
+  const res = await apiClient.post<CropCycle>('/cycles', data);
+  return res.data;
+}
+
+export async function updateCycle(id: number, data: Omit<CropCycle, "id" | "stages">): Promise<CropCycle> {
+  const res = await apiClient.put<CropCycle>(`/cycles/${id}`, data);
+  return res.data;
+}
+
+export async function deleteCycle(id: number): Promise<void> {
+  await apiClient.delete(`/cycles/${id}`);
+}
+
+export async function advanceStage(id: number): Promise<CropCycle> {
+  const res = await apiClient.post<CropCycle>(`/cycles/${id}/advance-stage`);
+  return res.data;
+}

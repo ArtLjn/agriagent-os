@@ -41,14 +41,31 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> Crop
         db.add(db_stage)
         current_date = end_date + timedelta(days=1)
 
-    db.commit()
-    db.refresh(db_cycle)
+    try:
+        db.commit()
+        db.refresh(db_cycle)
+    except Exception:
+        db.rollback()
+        raise
     return db_cycle
 
 
-def get_crop_cycles(db: Session, farm_id: int) -> list[CropCycle]:
-    """获取指定农场的所有茬口。"""
-    return db.query(CropCycle).filter(CropCycle.farm_id == farm_id).all()
+def get_crop_cycles(
+    db: Session, farm_id: int, skip: int = 0, limit: int = 100
+) -> list[CropCycle]:
+    """获取指定农场的茬口列表（分页）。"""
+    return (
+        db.query(CropCycle)
+        .filter(CropCycle.farm_id == farm_id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def count_crop_cycles(db: Session, farm_id: int) -> int:
+    """获取指定农场的茬口总数。"""
+    return db.query(CropCycle).filter(CropCycle.farm_id == farm_id).count()
 
 
 def get_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> CropCycle | None:
@@ -73,8 +90,12 @@ def update_stage(
         stage.duration_days = duration_days
         _recalculate_stages(db, stage.cycle_id)
 
-    db.commit()
-    db.refresh(stage)
+    try:
+        db.commit()
+        db.refresh(stage)
+    except Exception:
+        db.rollback()
+        raise
     return stage
 
 
@@ -93,13 +114,86 @@ def _recalculate_stages(db: Session, cycle_id: int) -> None:
         stage.is_current = 1 if stage.start_date <= today <= stage.end_date else 0
         current_date = stage.end_date + timedelta(days=1)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
+def update_crop_cycle(
+    db: Session, cycle_id: int, update: CropCycleCreate, farm_id: int
+) -> CropCycle:
+    """更新茬口基本信息。"""
+    cycle = get_crop_cycle(db, cycle_id, farm_id)
+    if not cycle:
+        raise ValueError(f"茬口 {cycle_id} 不存在")
+
+    cycle.name = update.name
+    cycle.crop_template_id = update.crop_template_id
+    cycle.start_date = update.start_date
+    cycle.field_name = update.field_name
+
+    try:
+        db.commit()
+        db.refresh(cycle)
+    except Exception:
+        db.rollback()
+        raise
+    return cycle
+
+
+def delete_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> None:
+    """删除茬口及其所有阶段。"""
+    cycle = get_crop_cycle(db, cycle_id, farm_id)
+    if not cycle:
+        raise ValueError(f"茬口 {cycle_id} 不存在")
+
+    for stage in cycle.stages:
+        db.delete(stage)
+    db.delete(cycle)
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
+def advance_stage(db: Session, cycle_id: int, farm_id: int) -> CropCycle:
+    """推进茬口到下一个阶段。"""
+    cycle = get_crop_cycle(db, cycle_id, farm_id)
+    if not cycle:
+        raise ValueError(f"茬口 {cycle_id} 不存在")
+
+    stages = sorted(cycle.stages, key=lambda s: s.order_index)
+    current_idx = next((i for i, s in enumerate(stages) if s.is_current), None)
+    if current_idx is None:
+        if stages:
+            stages[0].is_current = 1
+    elif current_idx < len(stages) - 1:
+        stages[current_idx].is_current = 0
+        stages[current_idx + 1].is_current = 1
+    else:
+        raise ValueError("已经是最后一个阶段，无法推进")
+
+    try:
+        db.commit()
+        db.refresh(cycle)
+    except Exception:
+        db.rollback()
+        raise
+    return cycle
 
 
 __all__ = [
     "create_crop_cycle",
     "get_crop_cycles",
+    "count_crop_cycles",
     "get_crop_cycle",
     "update_stage",
     "_recalculate_stages",
+    "update_crop_cycle",
+    "delete_crop_cycle",
+    "advance_stage",
 ]
