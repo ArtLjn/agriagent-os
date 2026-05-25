@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
+import {persist, createJSONStorage} from 'zustand/middleware';
 import type {ChatMessage, DailyAdvice, ReportResponse} from '../api/types';
 import {agentApi, weatherApi} from '../api/client';
 
@@ -21,16 +23,18 @@ interface AgentState {
   clearError: () => void;
 }
 
-export const useAgentStore = create<AgentState>(set => ({
-  messages: [],
-  dailyAdvice: null,
-  report: null,
-  weather: null,
-  loading: false,
-  error: null,
-  cityName: '苏州',
-  cityLat: undefined,
-  cityLon: undefined,
+export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
+  persist(
+    set => ({
+      messages: [],
+      dailyAdvice: null,
+      report: null,
+      weather: null,
+      loading: false,
+      error: null,
+      cityName: '苏州',
+      cityLat: 31.30,
+      cityLon: 120.62,
 
   sendMessage: async (message, cycleId) => {
     set(state => ({
@@ -96,4 +100,14 @@ export const useAgentStore = create<AgentState>(set => ({
 
   clearChat: () => set({messages: []}),
   clearError: () => set({error: null}),
-}));
+}),
+{
+  name: 'agent-store',
+  storage: createJSONStorage(() => AsyncStorage),
+  partialize: (state) => ({
+    cityName: state.cityName,
+    cityLat: state.cityLat,
+    cityLon: state.cityLon,
+  }),
+},
+));

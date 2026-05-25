@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAgentStore} from '../../stores/agentStore';
@@ -308,7 +307,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   messageBubble: {
-    maxWidth: '76%',
+    maxWidth: '92%',
     padding: spacing.md,
   },
   userBubble: {

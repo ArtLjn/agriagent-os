@@ -12,7 +12,7 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
-import DateTimePicker, {DateTimePickerEvent} from '@react-native-community/datetimepicker';
+// import DateTimePicker, {DateTimePickerEvent} from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useCostStore} from '../../stores/costStore';
 import {useCategoryStore} from '../../stores/categoryStore';
@@ -77,12 +77,12 @@ export const CostCreateScreen: React.FC = () => {
     }
   };
 
-  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setRecordDate(date);
-    }
-  };
+  // const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
+  //   setShowDatePicker(Platform.OS === 'ios');
+  //   if (date) {
+  //     setRecordDate(date);
+  //   }
+  // };
 
   const handleCategorySelect = (cat: string) => {
     setCategory(cat);
@@ -183,6 +183,7 @@ export const CostCreateScreen: React.FC = () => {
         <Icon name="calendar" size={20} color={colors.primary} />
         <Text style={styles.dateText}>{dayjs(recordDate).format('YYYY年MM月DD日')}</Text>
       </TouchableOpacity>
+      {/* Temporarily disabled DateTimePicker due to module linking issues
       {showDatePicker && (
         <DateTimePicker
           value={recordDate}
@@ -191,7 +192,7 @@ export const CostCreateScreen: React.FC = () => {
           onChange={handleDateChange}
           maximumDate={new Date()}
         />
-      )}
+      )} */}
 
       <Text style={styles.sectionTitle}>备注</Text>
       <TextInput

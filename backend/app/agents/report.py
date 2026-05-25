@@ -1,6 +1,7 @@
 """报告 Agent 封装，生成种植周期周报/月报。"""
 
 import logging
+from datetime import datetime, timezone, timedelta
 
 from langchain_core.messages import HumanMessage
 
@@ -36,7 +37,11 @@ async def generate_cycle_report(cycle_id: int) -> str:
         "请查询该周期的基本信息、最近农事记录和成本收支，"
         "整理成一份包含进度、成本分析和下一步建议的报告。"
     )
-    system = HumanMessage(content=REPORT_SYSTEM_PROMPT)
+    cst = timezone(timedelta(hours=8))
+    now = datetime.now(cst)
+    weekday_cn = ['一','二','三','四','五','六','日'][now.weekday()]
+    time_info = f"当前时间：{now.strftime('%Y年%m月%d日 %H:%M')}，星期{weekday_cn}"
+    system = HumanMessage(content=f"{REPORT_SYSTEM_PROMPT}\n{time_info}")
     response = await llm.ainvoke([system, HumanMessage(content=prompt)])
     return response.content
 

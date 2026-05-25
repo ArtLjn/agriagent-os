@@ -85,11 +85,15 @@ export const CostListScreen: React.FC = () => {
     navigation.navigate('CostCreate');
   };
 
-  const handleMonthChange = (event: DateTimePickerEvent, date?: Date) => {
+  const handleMonthChange = (date?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (date) {
       setSelectedMonth(date);
     }
+  };
+
+  const handleMonthPickerPress = () => {
+    setShowDatePicker(true);
   };
 
   const handleDelete = (record: CostRecord) => {
@@ -142,9 +146,6 @@ export const CostListScreen: React.FC = () => {
         <MonthlyStats
           selectedMonth={selectedMonth}
           stats={{cost: 0, income: 0, balance: 0}}
-          showDatePicker={showDatePicker}
-          onMonthChange={handleMonthChange}
-          onToggleDatePicker={() => setShowDatePicker(!showDatePicker)}
         />
         <EmptyState
           title="暂无账单记录"
@@ -163,9 +164,7 @@ export const CostListScreen: React.FC = () => {
       <MonthlyStats
         selectedMonth={selectedMonth}
         stats={stats}
-        showDatePicker={showDatePicker}
-        onMonthChange={handleMonthChange}
-        onToggleDatePicker={() => setShowDatePicker(!showDatePicker)}
+        onMonthChange={handleMonthPickerPress}
       />
 
       {/* Category Filter */}
@@ -194,6 +193,15 @@ export const CostListScreen: React.FC = () => {
       <TouchableOpacity style={styles.fab} onPress={handleCreate}>
         <Icon name="plus" size={24} color={colors.textInverse} />
       </TouchableOpacity>
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedMonth}
+          mode="date"
+          display="compact"
+          onChange={handleMonthChange}
+          maximumDate={new Date()}
+        />
+      )}
     </View>
   );
 };

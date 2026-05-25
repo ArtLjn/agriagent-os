@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Annotated
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
@@ -26,6 +27,15 @@ SYSTEM_PROMPT = (
 )
 
 
+def _build_system_message() -> HumanMessage:
+    """构建包含当前时间的系统提示（东八区）。"""
+    cst = timezone(timedelta(hours=8))
+    now = datetime.now(cst)
+    weekday_cn = ['一','二','三','四','五','六','日'][now.weekday()]
+    time_info = f"当前时间：{now.strftime('%Y年%m月%d日 %H:%M')}，星期{weekday_cn}"
+    return HumanMessage(content=f"{SYSTEM_PROMPT}\n{time_info}")
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     farm_id: int
@@ -43,7 +53,7 @@ def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点。"""
     tools = get_langchain_tools()
     llm = get_llm().bind_tools(tools)
-    system = HumanMessage(content=SYSTEM_PROMPT)
+    system = _build_system_message()
     response = llm.invoke([system] + state["messages"])
     return {"messages": [response]}
 
