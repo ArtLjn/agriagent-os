@@ -13,11 +13,10 @@ from app.core.logger import setup_logging
 
 setup_logging()
 
-from app.api import agent, crop, cycle, log, cost, weather
+from app.api import agent, cost, cost_categories, crop, cycle, log, weather
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
 from app.core.seed import seed_default_farm
-from app.models.cost_category import CostCategory
 
 
 @asynccontextmanager
@@ -45,6 +44,7 @@ app.include_router(crop.router)
 app.include_router(cycle.router)
 app.include_router(log.router)
 app.include_router(cost.router)
+app.include_router(cost_categories.router)
 app.include_router(agent.router)
 app.include_router(weather.router)
 
