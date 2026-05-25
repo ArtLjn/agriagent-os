@@ -8,12 +8,16 @@ import {
   Alert,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  Platform,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
+import DateTimePicker, {DateTimePickerEvent} from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useCostStore} from '../../stores/costStore';
+import {useCategoryStore} from '../../stores/categoryStore';
 import {BigButton} from '../../components/BigButton';
 import {Loading} from '../../components/Loading';
 import {costApi} from '../../api/client';
@@ -38,17 +42,36 @@ type CostCreateNavigationProp = NativeStackNavigationProp<
 export const CostCreateScreen: React.FC = () => {
   const navigation = useNavigation<CostCreateNavigationProp>();
   const {createRecord, loading, error, clearError} = useCostStore();
+  const {categories} = useCategoryStore();
 
   const [recordType, setRecordType] = useState<'cost' | 'income'>('cost');
   const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
-  const [recordDate, setRecordDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [recordDate, setRecordDate] = useState(new Date());
   const [note, setNote] = useState('');
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
-  const categories =
-    recordType === 'cost' ? COST_CATEGORIES : INCOME_CATEGORIES;
+  // 日期选择器状态
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // 分类弹窗状态
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+
+  // 获取可用分类
+  const availableCategories = React.useMemo(() => {
+    // 先使用用户自定义分类
+    const userCategories = categories
+      .filter(c => c.category_type === recordType)
+      .map(c => c.name);
+
+    // 如果没有用户分类，使用系统默认分类
+    if (userCategories.length === 0) {
+      return recordType === 'cost' ? COST_CATEGORIES : INCOME_CATEGORIES;
+    }
+
+    return userCategories;
+  }, [categories, recordType]);
 
   const handleAiParse = async () => {
     if (!aiInput.trim()) return;
@@ -59,7 +82,7 @@ export const CostCreateScreen: React.FC = () => {
       setRecordType(data.record_type as 'cost' | 'income');
       setCategory(data.category);
       setAmount(String(data.amount));
-      setRecordDate(data.record_date);
+      setRecordDate(dayjs(data.record_date).toDate());
       if (data.note) setNote(data.note);
       setAiInput('');
     } catch (err: any) {
@@ -67,6 +90,18 @@ export const CostCreateScreen: React.FC = () => {
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setRecordDate(date);
+    }
+  };
+
+  const handleCategorySelect = (cat: string) => {
+    setCategory(cat);
+    setShowCategoryModal(false);
   };
 
   const handleSubmit = async () => {
@@ -83,7 +118,7 @@ export const CostCreateScreen: React.FC = () => {
       record_type: recordType,
       category,
       amount,
-      record_date: recordDate,
+      record_date: dayjs(recordDate).format('YYYY-MM-DD'),
       note: note.trim() || undefined,
     });
 
@@ -170,17 +205,14 @@ export const CostCreateScreen: React.FC = () => {
       </View>
 
       <Text style={styles.sectionTitle}>分类</Text>
-      <View style={styles.grid}>
-        {categories.map(cat => (
-          <View key={cat} style={styles.gridItem}>
-            <BigButton
-              title={cat}
-              onPress={() => setCategory(cat)}
-              variant={category === cat ? 'primary' : 'secondary'}
-            />
-          </View>
-        ))}
-      </View>
+      <TouchableOpacity
+        style={styles.categorySelector}
+        onPress={() => setShowCategoryModal(true)}>
+        <Text style={category ? styles.categoryText : styles.categoryPlaceholder}>
+          {category || '请选择分类'}
+        </Text>
+        <Icon name="chevron-right" size={24} color={colors.textSecondary} />
+      </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>金额</Text>
       <View style={styles.amountRow}>
@@ -196,13 +228,21 @@ export const CostCreateScreen: React.FC = () => {
       </View>
 
       <Text style={styles.sectionTitle}>日期</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor={colors.textSecondary}
-        value={recordDate}
-        onChangeText={setRecordDate}
-      />
+      <TouchableOpacity
+        style={styles.dateSelector}
+        onPress={() => setShowDatePicker(true)}>
+        <Icon name="calendar" size={20} color={colors.primary} />
+        <Text style={styles.dateText}>{dayjs(recordDate).format('YYYY年MM月DD日')}</Text>
+      </TouchableOpacity>
+      {showDatePicker && (
+        <DateTimePicker
+          value={recordDate}
+          mode="date"
+          display="compact"
+          onChange={handleDateChange}
+          maximumDate={new Date()}
+        />
+      )}
 
       <Text style={styles.sectionTitle}>备注</Text>
       <TextInput
@@ -219,6 +259,47 @@ export const CostCreateScreen: React.FC = () => {
       <View style={styles.submitArea}>
         <BigButton title="保存" onPress={handleSubmit} />
       </View>
+
+      {/* 分类选择弹窗 */}
+      <Modal
+        visible={showCategoryModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCategoryModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>选择分类</Text>
+              <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                <Icon name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalGrid}>
+              {availableCategories.map(cat => (
+                <View key={cat} style={styles.modalGridItem}>
+                  <BigButton
+                    title={cat}
+                    onPress={() => handleCategorySelect(cat)}
+                    variant={category === cat ? 'primary' : 'secondary'}
+                  />
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.manageCategoriesBtn}
+              onPress={() => {
+                setShowCategoryModal(false);
+                // @ts-ignore
+                navigation.navigate('CostCategory');
+              }}>
+              <Icon name="cog" size={18} color={colors.primary} />
+              <Text style={styles.manageCategoriesText}>管理分类</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -308,15 +389,25 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.sm,
   },
-  grid: {
+  categorySelector: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.surface,
   },
-  gridItem: {
-    width: '33.33%',
-    paddingHorizontal: spacing.sm,
-    marginBottom: spacing.md,
+  categoryText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  categoryPlaceholder: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
   },
   amountRow: {
     flexDirection: 'row',
@@ -340,14 +431,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  input: {
+  dateSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.surface,
+    gap: spacing.md,
+  },
+  dateText: {
     fontSize: fontSize.md,
     color: colors.text,
-    backgroundColor: colors.surface,
+    fontWeight: '600',
   },
   noteInput: {
     borderWidth: 1,
@@ -362,5 +460,54 @@ const styles = StyleSheet.create({
   submitArea: {
     marginTop: spacing.xl,
     marginBottom: spacing.xxl,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.lg,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  modalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -spacing.sm,
+  },
+  modalGridItem: {
+    width: '33.33%',
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  manageCategoriesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
+  },
+  manageCategoriesText: {
+    fontSize: fontSize.md,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });
