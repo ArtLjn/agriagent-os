@@ -14,8 +14,13 @@ export interface YearlySummary {
   net_profit: string; by_category: Record<string, string>;
 }
 
-export async function listRecords(params?: { cycle_id?: number; category?: string }): Promise<CostRecord[]> {
-  const res = await apiClient.get<CostRecord[]>('/costs', { params });
+export interface PaginatedList<T> {
+  items: T[];
+  total: number;
+}
+
+export async function listRecords(params?: { cycle_id?: number; category?: string; page?: number; size?: number }): Promise<PaginatedList<CostRecord>> {
+  const res = await apiClient.get<PaginatedList<CostRecord>>('/costs', { params });
   return res.data;
 }
 

@@ -14,16 +14,18 @@ export default function Logs() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [filterCycleId, setFilterCycleId] = useState<number | undefined>();
   const [form] = Form.useForm();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
-  const fetchData = async () => {
+  const fetchData = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
       const [logsRes, cyclesRes] = await Promise.all([
-        listLogs(filterCycleId ? { cycle_id: filterCycleId } : undefined),
+        listLogs(filterCycleId ? { cycle_id: filterCycleId, page, size: pageSize } : { page, size: pageSize }),
         listCycles(),
       ]);
-      setData(logsRes.data);
-      setCycles(cyclesRes.data);
+      setData(logsRes.items);
+      setPagination({ current: page, pageSize, total: logsRes.total });
+      setCycles(cyclesRes.items);
     } catch {
       message.error('加载失败');
     } finally {
@@ -117,7 +119,20 @@ export default function Logs() {
           onChange={(v) => setFilterCycleId(v)} options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
         <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
       </Space>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} />
+      <Table
+        rowKey="id"
+        dataSource={data}
+        columns={columns}
+        loading={loading}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50],
+        }}
+        onChange={(p) => fetchData(p.current, p.pageSize)}
+      />
 
       <Modal title={editingId !== null ? '编辑日志' : '新增日志'} open={modalOpen} onOk={editingId !== null ? handleUpdate : handleCreate} onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields(); }}>
         <Form form={form} layout="vertical">

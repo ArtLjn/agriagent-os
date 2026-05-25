@@ -22,8 +22,13 @@ export interface CropCycleListItem {
   current_stage_name?: string;
 }
 
-export async function listCycles(): Promise<CropCycleListItem[]> {
-  const res = await apiClient.get<CropCycleListItem[]>('/cycles');
+export interface PaginatedList<T> {
+  items: T[];
+  total: number;
+}
+
+export async function listCycles(params?: { page?: number; size?: number }): Promise<PaginatedList<CropCycleListItem>> {
+  const res = await apiClient.get<PaginatedList<CropCycleListItem>>('/cycles', { params });
   return res.data;
 }
 

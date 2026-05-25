@@ -15,16 +15,18 @@ export default function Costs() {
   const [profit, setProfit] = useState<CycleProfit | null>(null);
   const [yearly, setYearly] = useState<YearlySummary | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
-  const fetchData = async () => {
+  const fetchData = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
       const [recordsRes, cyclesRes] = await Promise.all([
-        listRecords(selectedCycle ? { cycle_id: selectedCycle } : undefined),
+        listRecords(selectedCycle ? { cycle_id: selectedCycle, page, size: pageSize } : { page, size: pageSize }),
         listCycles(),
       ]);
-      setData(recordsRes.data);
-      setCycles(cyclesRes.data);
+      setData(recordsRes.items);
+      setPagination({ current: page, pageSize, total: recordsRes.total });
+      setCycles(cyclesRes.items);
       if (selectedCycle) {
         const profitRes = await getCycleProfit(selectedCycle);
         setProfit(profitRes.data);
@@ -93,7 +95,20 @@ export default function Costs() {
         </Card>
       )}
 
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} />
+      <Table
+        rowKey="id"
+        dataSource={data}
+        columns={columns}
+        loading={loading}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50],
+        }}
+        onChange={(p) => fetchData(p.current, p.pageSize)}
+      />
 
       <Modal title="新增记录" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)}>
         <Form form={form} layout="vertical">

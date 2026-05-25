@@ -11,12 +11,14 @@ export default function Crops() {
   const [debugOpen, setDebugOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
-  const fetchData = async () => {
+  const fetchData = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
-      const res = await listTemplates();
-      setData(res.data);
+      const res = await listTemplates({ page, size: pageSize });
+      setData(res.items);
+      setPagination({ current: page, pageSize, total: res.total });
     } catch {
       message.error('加载失败');
     } finally {
@@ -125,7 +127,20 @@ export default function Crops() {
         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建模板</Button>
         <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
       </Space>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} />
+      <Table
+        rowKey="id"
+        dataSource={data}
+        columns={columns}
+        loading={loading}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50],
+        }}
+        onChange={(p) => fetchData(p.current, p.pageSize)}
+      />
 
       <Modal title={editingId !== null ? '编辑作物模板' : '新建作物模板'} open={modalOpen} onOk={editingId !== null ? handleUpdate : handleCreate} onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields(); }} width={560}>
         <Form form={form} layout="vertical">

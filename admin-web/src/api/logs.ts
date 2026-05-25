@@ -6,8 +6,13 @@ export interface FarmLog {
   note?: string; photo_urls?: string; created_at: string;
 }
 
-export async function listLogs(params?: { cycle_id?: number; operation_type?: string }): Promise<FarmLog[]> {
-  const res = await apiClient.get<FarmLog[]>('/logs', { params });
+export interface PaginatedList<T> {
+  items: T[];
+  total: number;
+}
+
+export async function listLogs(params?: { cycle_id?: number; operation_type?: string; page?: number; size?: number }): Promise<PaginatedList<FarmLog>> {
+  const res = await apiClient.get<PaginatedList<FarmLog>>('/logs', { params });
   return res.data;
 }
 

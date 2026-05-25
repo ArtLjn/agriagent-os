@@ -15,13 +15,18 @@ export default function Cycles() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
-  const fetchData = async () => {
+  const fetchData = async (page = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
-      const [cyclesRes, tplRes] = await Promise.all([listCycles(), listTemplates()]);
-      setData(cyclesRes.data);
-      setTemplates(tplRes.data);
+      const [cyclesRes, tplRes] = await Promise.all([
+        listCycles({ page, size: pageSize }),
+        listTemplates(),
+      ]);
+      setData(cyclesRes.items);
+      setPagination({ current: page, pageSize, total: cyclesRes.total });
+      setTemplates(tplRes.items);
     } catch {
       message.error('加载失败');
     } finally {
@@ -113,7 +118,20 @@ export default function Cycles() {
         <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建茬口</Button>
         <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
       </Space>
-      <Table rowKey="id" dataSource={data} columns={columns} loading={loading} />
+      <Table
+        rowKey="id"
+        dataSource={data}
+        columns={columns}
+        loading={loading}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50],
+        }}
+        onChange={(p) => fetchData(p.current, p.pageSize)}
+      />
 
       <Modal title={editingId !== null ? '编辑茬口' : '新建茬口'} open={modalOpen} onOk={editingId !== null ? handleUpdate : handleCreate} onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields(); }}>
         <Form form={form} layout="vertical">

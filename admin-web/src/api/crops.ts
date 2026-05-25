@@ -14,8 +14,13 @@ export interface CropTemplate {
   stages: GrowthStage[];
 }
 
-export async function listTemplates(): Promise<CropTemplate[]> {
-  const res = await apiClient.get<CropTemplate[]>('/crops/templates');
+export interface PaginatedList<T> {
+  items: T[];
+  total: number;
+}
+
+export async function listTemplates(params?: { page?: number; size?: number }): Promise<PaginatedList<CropTemplate>> {
+  const res = await apiClient.get<PaginatedList<CropTemplate>>('/crops/templates', { params });
   return res.data;
 }
 
