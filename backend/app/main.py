@@ -11,7 +11,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langgraph.errors import GraphRecursionError
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.core.limiter import limiter
+from fastapi import Request
+from starlette.responses import Response
 
 from app.core.logger import get_logger, setup_logging
 
@@ -38,6 +45,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.project_name, lifespan=lifespan)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,6 +55,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SlowAPIMiddleware)
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(_request, exc):
@@ -96,7 +108,8 @@ app.include_router(weather.router)
 
 
 @app.get("/health")
-def health_check():
+@limiter.limit("30/minute")
+def health_check(request: Request, response: Response):
     return {"status": "ok"}
 
 
