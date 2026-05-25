@@ -1,10 +1,20 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
 from app.models.farm import Farm
-from app.schemas.cost import CostRecordCreate, CostRecordResponse, CycleProfit, YearlySummary
+from app.schemas.cost import (
+    CostRecordCreate,
+    CostRecordUpdate,
+    CostRecordResponse,
+    CycleProfit,
+    YearlySummary,
+    CostParseRequest,
+    CostParseResponse,
+)
 from app.services import cost_service
+from app.core.llm import LlmNotConfiguredError
 
 router = APIRouter(prefix="/costs", tags=["costs"])
 
@@ -23,11 +33,20 @@ def create_record(
 def list_records(
     cycle_id: int | None = None,
     category: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ):
-    """查询成本记账记录列表。"""
-    return cost_service.get_records(db, farm_id=farm.id, cycle_id=cycle_id, category=category)
+    """查询成本记账记录列表（支持日期范围筛选）。"""
+    return cost_service.get_records_filtered(
+        db,
+        farm_id=farm.id,
+        cycle_id=cycle_id,
+        category=category,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.get("/cycles/{cycle_id}/profit", response_model=CycleProfit)
@@ -48,3 +67,42 @@ def get_yearly_summary(
 ):
     """获取指定年度的收支汇总。"""
     return cost_service.get_yearly_summary(db, year, farm_id=farm.id)
+
+
+@router.post("/parse", response_model=CostParseResponse)
+async def parse_cost_record(
+    request: CostParseRequest,
+) -> CostParseResponse:
+    """AI 解析自然语言记账描述，返回结构化数据。"""
+    try:
+        return await cost_service.parse_record(request.description)
+    except LlmNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.put("/{record_id}", response_model=CostRecordResponse)
+def update_record(
+    record_id: int,
+    update: CostRecordUpdate,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """更新一条成本或收入记录。"""
+    try:
+        return cost_service.update_record(db, record_id, update, farm_id=farm.id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{record_id}")
+def delete_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """删除一条成本或收入记录。"""
+    try:
+        cost_service.delete_record(db, record_id, farm_id=farm.id)
+        return {"message": "删除成功"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
