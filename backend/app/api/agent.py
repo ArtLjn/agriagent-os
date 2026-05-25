@@ -22,11 +22,13 @@ from app.schemas.agent import (
     ReportResponse,
     AdviceHistoryItem,
     ReportHistoryItem,
+    ReportListResponse,
 )
 from app.services.agent_service import (
     chat_with_agent,
     stream_chat_with_agent,
     get_daily_advice,
+    refresh_daily_advice,
     generate_report,
     get_advice_history,
     get_report_history,
@@ -118,6 +120,24 @@ async def daily_advice(
         raise HTTPException(status_code=503, detail=str(e))
 
 
+@router.post("/daily/refresh", response_model=DailyAdviceResponse)
+async def refresh_daily_advice_endpoint(
+    cycle_id: int | None = Query(None, description="关联种植周期 ID"),
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> DailyAdviceResponse:
+    """强制刷新每日农事建议。"""
+    rid = _new_request_id()
+    logger.info("[%s] POST /agent/daily/refresh | cycle_id=%s", rid, cycle_id)
+    start = time.perf_counter()
+    try:
+        result = await refresh_daily_advice(db, cycle_id, farm_id=farm.id)
+        logger.info("[%s] /agent/daily/refresh 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
+        return result
+    except LlmNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
 @router.post("/report", response_model=ReportResponse)
 async def agent_report(
     request: ReportRequest,
@@ -156,6 +176,39 @@ def report_history(
 ) -> list[ReportHistoryItem]:
     """查询报告历史记录。"""
     return get_report_history(db, cycle_id, limit, farm_id=farm.id)
+
+
+@router.get("/reports", response_model=ReportListResponse)
+async def list_reports(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> ReportListResponse:
+    """获取报告历史列表（支持分页）。"""
+    from sqlalchemy import func as sqlfunc
+    from app.models.agent import ReportRecord
+
+    offset = (page - 1) * size
+    query = db.query(ReportRecord).filter(ReportRecord.farm_id == farm.id)
+    total = query.with_entities(sqlfunc.count(ReportRecord.id)).scalar() or 0
+    records = (
+        query.order_by(ReportRecord.created_at.desc())
+        .offset(offset)
+        .limit(size)
+        .all()
+    )
+    items = [
+        ReportHistoryItem(
+            id=r.id,
+            cycle_id=r.cycle_id,
+            report_type=r.report_type,
+            content=r.content[:200],
+            created_at=r.created_at,
+        )
+        for r in records
+    ]
+    return ReportListResponse(items=items, total=total)
 
 
 __all__ = ["router"]

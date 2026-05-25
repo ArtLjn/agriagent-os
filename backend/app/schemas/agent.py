@@ -65,3 +65,11 @@ class ReportHistoryItem(BaseModel):
     content: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ReportListResponse(BaseModel):
+    """报告历史列表响应。"""
+
+    items: list[ReportHistoryItem]
+    total: int
+    model_config = ConfigDict(from_attributes=True)
