@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langgraph.graph import END, StateGraph
@@ -79,14 +79,14 @@ async def _parallel_tool_node(state: AgentState) -> dict:
 
 
 def compile_advisor_graph():
-    """编译建议 Agent 的 StateGraph（支持并行 Skill 执行）。"""
+    """编译建议 Agent 的 StateGraph（支持并行 Skill 执行，最大 15 步）。"""
     graph = StateGraph(AgentState)
     graph.add_node("llm", _llm_node)
     graph.add_node("tools", _parallel_tool_node)
     graph.set_entry_point("llm")
     graph.add_conditional_edges("llm", _should_continue, {"tools": "tools", END: END})
     graph.add_edge("tools", "llm")
-    return graph.compile()
+    return graph.compile(recursion_limit=15)
 
 
 __all__ = ["compile_advisor_graph"]
