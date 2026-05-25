@@ -31,6 +31,15 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # LangSmith 环境变量配置
+    if settings.langsmith_config.enabled and settings.langsmith_config.api_key:
+        import os
+
+        os.environ["LANGSMITH_API_KEY"] = settings.langsmith_config.api_key
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGSMITH_PROJECT"] = settings.langsmith_config.project_name
+        logger.info("LangSmith 已启用 | project=%s", settings.langsmith_config.project_name)
+
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     db = SessionLocal()
     try:

@@ -38,7 +38,8 @@ async def invoke_advisor(user_input: str, farm_id: int = 1) -> str:
     graph = _get_advisor_graph()
     try:
         result = await graph.ainvoke(
-            {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id}
+            {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id},
+            config={"run_name": "advisor_invoke", "metadata": {"farm_id": farm_id, "request_type": "chat"}},
         )
     except GraphRecursionError:
         logger.error("Agent 步数超限 | farm_id=%s", farm_id)
@@ -65,7 +66,8 @@ async def stream_advisor(
     step = 0
     try:
         async for event in graph.astream(
-            {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id}
+            {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id},
+            config={"run_name": "advisor_stream", "metadata": {"farm_id": farm_id, "request_type": "stream_chat"}},
         ):
             for node, state in event.items():
                 step += 1

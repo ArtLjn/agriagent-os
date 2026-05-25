@@ -43,7 +43,10 @@ async def generate_cycle_report(cycle_id: int) -> str:
     weekday_cn = ["一", "二", "三", "四", "五", "六", "日"][now.weekday()]
     time_info = f"当前时间：{now.strftime('%Y年%m月%d日 %H:%M')}，星期{weekday_cn}"
     system = HumanMessage(content=f"{REPORT_SYSTEM_PROMPT}\n{time_info}")
-    response = await llm.ainvoke([system, HumanMessage(content=prompt)])
+    response = await llm.ainvoke(
+        [system, HumanMessage(content=prompt)],
+        config={"run_name": "cycle_report", "metadata": {"cycle_id": cycle_id}},
+    )
     return filter_output(response.content)
 
 
