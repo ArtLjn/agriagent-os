@@ -10,20 +10,33 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 interface MonthlyStatsProps {
   selectedMonth: Date;
   stats: {cost: number; income: number; balance: number};
-  onMonthChange?: () => void;
+  onPreviousMonth?: () => void;
+  onNextMonth?: () => void;
 }
 
 export const MonthlyStats: React.FC<MonthlyStatsProps> = ({
   selectedMonth,
   stats,
-  onMonthChange,
+  onPreviousMonth,
+  onNextMonth,
 }) => (
   <View style={styles.statsSection}>
-    <TouchableOpacity style={styles.monthSelector} onPress={onMonthChange}>
+    <View style={styles.monthSelector}>
+      <TouchableOpacity
+        onPress={onPreviousMonth}
+        style={styles.monthButton}
+        hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+        <Icon name="chevron-left" size={24} color={colors.primary} />
+      </TouchableOpacity>
       <Icon name="calendar-month" size={20} color={colors.primary} />
       <Text style={styles.monthText}>{dayjs(selectedMonth).format('YYYY年M月')}</Text>
-      <Icon name="chevron-down" size={20} color={colors.primary} />
-    </TouchableOpacity>
+      <TouchableOpacity
+        onPress={onNextMonth}
+        style={styles.monthButton}
+        hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+        <Icon name="chevron-right" size={24} color={colors.primary} />
+      </TouchableOpacity>
+    </View>
     <View style={styles.statsCards}>
       <Card style={[styles.statCard, styles.statCardCost]} padding="lg">
         <Text style={styles.statLabel}>支出</Text>
@@ -63,7 +76,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
-    gap: spacing.xs,
+    gap: spacing.sm,
+  },
+  monthButton: {
+    padding: spacing.sm,
   },
   monthText: {
     fontSize: fontSize.lg,

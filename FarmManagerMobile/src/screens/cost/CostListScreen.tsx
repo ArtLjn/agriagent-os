@@ -6,12 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Platform,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
-import DateTimePicker, {DateTimePickerEvent} from '@react-native-community/datetimepicker';
 import {useCostStore} from '../../stores/costStore';
 import type {CostRecord} from '../../api/types';
 import {EmptyState} from '../../components/EmptyState';
@@ -33,7 +31,6 @@ export const CostListScreen: React.FC = () => {
   const {records, loading, fetchRecords, deleteRecord} = useCostStore();
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,15 +82,16 @@ export const CostListScreen: React.FC = () => {
     navigation.navigate('CostCreate');
   };
 
-  const handleMonthChange = (date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setSelectedMonth(date);
-    }
+  const handlePreviousMonth = () => {
+    setSelectedMonth(dayjs(selectedMonth).subtract(1, 'month').toDate());
   };
 
-  const handleMonthPickerPress = () => {
-    setShowDatePicker(true);
+  const handleNextMonth = () => {
+    const nextMonth = dayjs(selectedMonth).add(1, 'month');
+    // 不允许选择未来月份
+    if (nextMonth.isBefore(dayjs(), 'month')) {
+      setSelectedMonth(nextMonth.toDate());
+    }
   };
 
   const handleDelete = (record: CostRecord) => {
@@ -164,7 +162,8 @@ export const CostListScreen: React.FC = () => {
       <MonthlyStats
         selectedMonth={selectedMonth}
         stats={stats}
-        onMonthChange={handleMonthPickerPress}
+        onPreviousMonth={handlePreviousMonth}
+        onNextMonth={handleNextMonth}
       />
 
       {/* Category Filter */}
@@ -193,15 +192,6 @@ export const CostListScreen: React.FC = () => {
       <TouchableOpacity style={styles.fab} onPress={handleCreate}>
         <Icon name="plus" size={24} color={colors.textInverse} />
       </TouchableOpacity>
-      {showDatePicker && (
-        <DateTimePicker
-          value={selectedMonth}
-          mode="date"
-          display="compact"
-          onChange={handleMonthChange}
-          maximumDate={new Date()}
-        />
-      )}
     </View>
   );
 };
