@@ -64,6 +64,7 @@ export const HomeScreen: React.FC = () => {
     dailyAdvice,
     fetchWeather,
     fetchDailyAdvice,
+    refreshDailyAdvice,
     loading: agentLoading,
     cityName,
     setCity,
@@ -136,6 +137,7 @@ export const HomeScreen: React.FC = () => {
             advice={dailyAdvice?.advice || null}
             loading={agentLoading}
             onPress={handleAdvicePress}
+            onRefresh={() => refreshDailyAdvice()}
           />
         </View>
 

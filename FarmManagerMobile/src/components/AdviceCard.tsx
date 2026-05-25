@@ -23,6 +23,7 @@ interface AdviceCardProps {
   advice: string | null;
   loading?: boolean;
   onPress?: () => void;
+  onRefresh?: () => void;
 }
 
 const MAX_LINES = 4;
@@ -31,6 +32,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
   advice,
   loading = false,
   onPress,
+  onRefresh,
 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -53,6 +55,11 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
         <View style={styles.badge}>
           <Text style={styles.badgeText}>每日更新</Text>
         </View>
+        {onRefresh && (
+          <TouchableOpacity onPress={onRefresh} activeOpacity={0.7} style={styles.refreshBtn}>
+            <Icon name="refresh" size={16} color={colors.textTertiary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Content */}
@@ -159,6 +166,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.primary,
     fontWeight: '600',
+  },
+  refreshBtn: {
+    padding: spacing.xs,
+    marginLeft: spacing.xs,
   },
   center: {
     alignItems: 'center',
