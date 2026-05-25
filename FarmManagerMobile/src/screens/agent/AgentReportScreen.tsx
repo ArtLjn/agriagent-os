@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { MarkdownText } from '../../components/MarkdownText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAgentStore } from '../../stores/agentStore';
 import { Card } from '../../components/Card';
@@ -59,7 +60,7 @@ export const AgentReportScreen: React.FC = () => {
             <Text style={styles.reportTitle}>
               {reportType === 'weekly' ? '本周农事报告' : '本月农事报告'}
             </Text>
-            <Text style={styles.reportContent}>{report.content}</Text>
+            <MarkdownText text={report.content} baseStyle={styles.reportContent} />
           </Card>
         )}
       </ScrollView>
@@ -115,8 +116,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   reportContent: {
-    fontSize: fontSize.md,
-    color: colors.text,
     lineHeight: 24,
   },
 });
