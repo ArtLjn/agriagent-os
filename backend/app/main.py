@@ -7,9 +7,13 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from langgraph.errors import GraphRecursionError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.logger import setup_logging
+from app.core.logger import get_logger, setup_logging
 
 setup_logging()
 
@@ -17,6 +21,8 @@ from app.api import agent, crop, cycle, log, cost, weather
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
 from app.core.seed import seed_default_farm
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -39,6 +45,47 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(_request, exc):
+    """HTTP 异常原样返回，保留 status code 和 detail。"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_request, exc):
+    """请求参数校验失败，返回 422 和结构化字段错误。"""
+    errors = []
+    for err in exc.errors():
+        errors.append({
+            "field": ".".join(str(x) for x in err["loc"]),
+            "message": err["msg"],
+            "type": err["type"],
+        })
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "请求参数校验失败", "errors": errors},
+    )
+
+@app.exception_handler(GraphRecursionError)
+async def graph_recursion_handler(request, exc):
+    """Agent 步数超限，返回 429。"""
+    logger.warning("GraphRecursionError | path=%s", request.url.path)
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Agent 处理步数超出限制，请简化问题后重试"},
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """未捕获异常，返回 500，记录完整堆栈，不泄漏给客户端。"""
+    logger.exception("未捕获异常 | path=%s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "内部服务器错误"},
+    )
 
 app.include_router(crop.router)
 app.include_router(cycle.router)
