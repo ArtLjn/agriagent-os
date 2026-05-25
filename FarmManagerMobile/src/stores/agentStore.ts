@@ -47,22 +47,35 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       error: null,
     }));
     try {
-      const res = await agentApi.chat({message, cycle_id: cycleId});
-      set(state => ({
-        messages: [
-          ...state.messages,
-          {role: 'agent', content: res.data.reply},
-        ],
-        loading: false,
-      }));
+      let reply = '';
+      await agentApi.streamChat(
+        {message, cycle_id: cycleId},
+        chunk => {
+          reply += chunk;
+          set(state => {
+            const msgs = [...state.messages];
+            const lastIdx = msgs.length - 1;
+            if (lastIdx >= 0 && msgs[lastIdx].role === 'agent') {
+              msgs[lastIdx] = {role: 'agent', content: reply};
+            } else {
+              msgs.push({role: 'agent', content: reply});
+            }
+            return {messages: msgs};
+          });
+        },
+      );
+      set({loading: false});
     } catch (err: any) {
-      set(state => ({
-        messages: [
-          ...state.messages,
-          {role: 'agent', content: `抱歉，出错了：${err.message}`},
-        ],
-        loading: false,
-      }));
+      set(state => {
+        const msgs = [...state.messages];
+        const lastIdx = msgs.length - 1;
+        if (lastIdx >= 0 && msgs[lastIdx].role === 'agent' && !msgs[lastIdx].content) {
+          msgs[lastIdx] = {role: 'agent', content: `抱歉，出错了：${err.message}`};
+        } else {
+          msgs.push({role: 'agent', content: `抱歉，出错了：${err.message}`});
+        }
+        return {messages: msgs, loading: false};
+      });
     }
   },
 

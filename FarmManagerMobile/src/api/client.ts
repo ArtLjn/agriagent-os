@@ -18,7 +18,17 @@ apiClient.interceptors.response.use(
   response => response,
   error => {
     if (error.response) {
-      const msg = error.response.data?.detail || `请求失败: ${error.response.status}`;
+      const detail = error.response.data?.detail;
+      let msg: string;
+      if (Array.isArray(detail)) {
+        msg = detail.map((d: any) => d.msg || d.message || String(d)).join('；');
+      } else if (typeof detail === 'string') {
+        msg = detail;
+      } else if (detail && typeof detail === 'object') {
+        msg = detail.msg || detail.message || JSON.stringify(detail);
+      } else {
+        msg = `请求失败: ${error.response.status}`;
+      }
       return Promise.reject(new Error(msg));
     }
     if (error.request) {
@@ -66,6 +76,44 @@ export const costApi = {
 // Agent
 export const agentApi = {
   chat: (data: { cycle_id?: number; message: string }) => apiClient.post('/agent/chat', data),
+  streamChat: async (
+    data: { cycle_id?: number; message: string },
+    onChunk: (chunk: string) => void,
+  ) => {
+    const res = await fetch(`${API_BASE_URL}/agent/chat/stream`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `请求失败: ${res.status}`);
+    }
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('无法读取响应');
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') return;
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.content) onChunk(parsed.content);
+        } catch {
+          // 忽略非 JSON 行
+        }
+      }
+    }
+  },
   getDailyAdvice: (cycleId?: number) =>
     apiClient.get('/agent/daily', { params: { cycle_id: cycleId } }),
   refreshAdvice: (cycleId?: number) =>

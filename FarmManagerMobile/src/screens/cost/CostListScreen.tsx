@@ -91,8 +91,11 @@ export const CostListScreen: React.FC = () => {
 
   const handleNextMonth = () => {
     const nextMonth = dayjs(selectedMonth).add(1, 'month');
-    // 不允许选择未来月份（严格大于当前月）
-    if (!nextMonth.isAfter(dayjs(), 'month')) {
+    const now = dayjs();
+    // 不允许选择未来月份
+    const nextYM = nextMonth.year() * 12 + nextMonth.month();
+    const nowYM = now.year() * 12 + now.month();
+    if (nextYM <= nowYM) {
       setSelectedMonth(nextMonth.toDate());
     }
   };

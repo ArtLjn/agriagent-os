@@ -24,7 +24,7 @@ export type RootStackParamList = {
   CostCategory: undefined;
   Profit: {cycleId: number};
   AgentChat: {cycleId?: number};
-  AgentReport: {cycleId?: number};
+  AgentReport: {cycleId?: number; content?: string; reportType?: string; createdAt?: string; reportId?: number};
   Guide: undefined;
 };
 

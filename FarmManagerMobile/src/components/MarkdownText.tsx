@@ -22,7 +22,7 @@ const tableRules = {
 };
 
 export const MarkdownText: React.FC<MarkdownTextProps> = ({text, baseStyle}) => (
-  <View style={baseStyle}>
+  <View style={[{minHeight: 1, flexGrow: 1}, baseStyle]}>
     <Markdown
       style={styles}
       markdownit={MarkdownIt({typographer: true})}
@@ -78,7 +78,7 @@ const styles = {
   table: {borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.sm},
   thead: {backgroundColor: colors.primaryMuted},
   th: {fontSize: fontSize.xs, fontWeight: '700' as const, color: colors.text, padding: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border, minWidth: 85, flexShrink: 0},
-  tr: {borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row'},
+  tr: {borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row' as const},
   td: {fontSize: fontSize.xs, color: colors.text, lineHeight: 18, padding: spacing.xs, minWidth: 85, flexShrink: 0},
   strong: {fontWeight: '700' as const},
   em: {fontStyle: 'italic' as const},

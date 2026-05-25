@@ -29,7 +29,8 @@ const QUICK_PROMPTS = [
 const ReportListView: React.FC<{
   reports: ReportListItem[];
   onGenerate: () => void;
-}> = ({reports, onGenerate}) => (
+  onViewReport: (r: ReportListItem) => void;
+}> = ({reports, onGenerate, onViewReport}) => (
   <ScrollView style={styles.reportList} contentContainerStyle={styles.reportListContent}>
     <TouchableOpacity style={styles.generateBtn} onPress={onGenerate} activeOpacity={0.7}>
       <Icon name="plus" size={20} color="#FFFFFF" />
@@ -47,14 +48,25 @@ const ReportListView: React.FC<{
           key={r.id}
           style={styles.reportItem}
           activeOpacity={0.7}
-          onPress={() => {}}>
+          onPress={() => onViewReport(r)}>
           <View style={styles.reportItemHeader}>
-            <Text style={styles.reportItemType}>{r.report_type === 'weekly' ? '周报' : '月报'}</Text>
+            <View style={styles.reportItemTypeBadge}>
+              <Icon
+                name={r.report_type === 'weekly' ? 'calendar-week' : 'calendar-month'}
+                size={14}
+                color={colors.primary}
+              />
+              <Text style={styles.reportItemType}>{r.report_type === 'weekly' ? '周报' : '月报'}</Text>
+            </View>
             <Text style={styles.reportItemDate}>
               {new Date(r.created_at).toLocaleDateString('zh-CN')}
             </Text>
           </View>
           <Text style={styles.reportItemPreview} numberOfLines={2}>{r.content}</Text>
+          <View style={styles.reportItemFooter}>
+            <Text style={styles.reportItemView}>点击查看详情</Text>
+            <Icon name="chevron-right" size={16} color={colors.textTertiary} />
+          </View>
         </TouchableOpacity>
       ))
     )}
@@ -248,6 +260,14 @@ export const AgentChatScreen: React.FC = () => {
           <ReportListView
             reports={reports}
             onGenerate={() => navigation.navigate('AgentReport' as never)}
+            onViewReport={(r) =>
+              (navigation as any).navigate('AgentReport', {
+                content: r.content,
+                reportType: r.report_type,
+                createdAt: r.created_at,
+                reportId: r.id,
+              })
+            }
           />
         )}
       </KeyboardAvoidingView>
@@ -546,6 +566,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
+  reportItemTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primaryMuted,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
   reportItemType: {
     fontSize: fontSize.sm,
     fontWeight: '700',
@@ -559,5 +588,18 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  reportItemFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  reportItemView: {
+    fontSize: fontSize.xs,
+    color: colors.textTertiary,
   },
 });

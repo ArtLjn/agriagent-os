@@ -223,7 +223,7 @@ async def list_reports(
             id=r.id,
             cycle_id=r.cycle_id,
             report_type=r.report_type,
-            content=r.content[:200],
+            content=r.content,
             created_at=r.created_at,
         )
         for r in records

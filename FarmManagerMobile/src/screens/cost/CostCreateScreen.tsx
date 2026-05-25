@@ -121,6 +121,8 @@ export const CostCreateScreen: React.FC = () => {
     return <Loading message="保存中..." />;
   }
 
+  const typeColor = recordType === 'cost' ? colors.danger : colors.success;
+
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <AIHelper
@@ -130,60 +132,87 @@ export const CostCreateScreen: React.FC = () => {
         onParse={handleAiParse}
       />
 
-      <Text style={styles.sectionTitle}>类型</Text>
-      <View style={styles.typeRow}>
-        <View style={styles.typeItem}>
-          <BigButton
-            title="支出"
-            onPress={() => {
-              setRecordType('cost');
-              setCategory('');
-            }}
-            variant={recordType === 'cost' ? 'danger' : 'secondary'}
+      {/* 类型选择 */}
+      <View style={styles.formCard}>
+        <Text style={styles.sectionTitle}>类型</Text>
+        <View style={styles.typeRow}>
+          <TouchableOpacity
+            style={[styles.typeBtn, recordType === 'cost' && {backgroundColor: colors.dangerLight, borderColor: colors.danger}]}
+            onPress={() => { setRecordType('cost'); setCategory(''); }}
+            activeOpacity={0.7}>
+            <Icon name="arrow-down-circle" size={22} color={recordType === 'cost' ? colors.danger : colors.textTertiary} />
+            <Text style={[styles.typeBtnText, recordType === 'cost' && {color: colors.danger, fontWeight: '700'}]}>支出</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeBtn, recordType === 'income' && {backgroundColor: colors.successLight, borderColor: colors.success}]}
+            onPress={() => { setRecordType('income'); setCategory(''); }}
+            activeOpacity={0.7}>
+            <Icon name="arrow-up-circle" size={22} color={recordType === 'income' ? colors.success : colors.textTertiary} />
+            <Text style={[styles.typeBtnText, recordType === 'income' && {color: colors.success, fontWeight: '700'}]}>收入</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 分类 */}
+        <Text style={[styles.sectionTitle, {marginTop: spacing.lg}]}>分类</Text>
+        <TouchableOpacity
+          style={styles.fieldRow}
+          onPress={() => setShowCategoryModal(true)}>
+          <View style={styles.fieldLeft}>
+            <Icon name="tag-outline" size={20} color={typeColor} />
+            <Text style={category ? styles.fieldText : styles.fieldPlaceholder}>
+              {category || '请选择分类'}
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={20} color={colors.textTertiary} />
+        </TouchableOpacity>
+
+        {/* 金额 */}
+        <Text style={[styles.sectionTitle, {marginTop: spacing.lg}]}>金额</Text>
+        <View style={styles.amountRow}>
+          <Text style={[styles.amountSymbol, {color: typeColor}]}>¥</Text>
+          <TextInput
+            style={styles.amountInput}
+            placeholder="0.00"
+            placeholderTextColor={colors.textTertiary}
+            keyboardType="decimal-pad"
+            value={amount}
+            onChangeText={setAmount}
           />
         </View>
-        <View style={styles.typeItem}>
-          <BigButton
-            title="收入"
-            onPress={() => {
-              setRecordType('income');
-              setCategory('');
-            }}
-            variant={recordType === 'income' ? 'primary' : 'secondary'}
-          />
-        </View>
+
+        {/* 日期 */}
+        <Text style={[styles.sectionTitle, {marginTop: spacing.lg}]}>日期</Text>
+        <TouchableOpacity
+          style={styles.fieldRow}
+          onPress={() => setShowDatePicker(true)}>
+          <View style={styles.fieldLeft}>
+            <Icon name="calendar-outline" size={20} color={typeColor} />
+            <Text style={styles.fieldText}>{dayjs(recordDate).format('YYYY年MM月DD日')}</Text>
+          </View>
+          <Icon name="chevron-right" size={20} color={colors.textTertiary} />
+        </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionTitle}>分类</Text>
-      <TouchableOpacity
-        style={styles.categorySelector}
-        onPress={() => setShowCategoryModal(true)}>
-        <Text style={category ? styles.categoryText : styles.categoryPlaceholder}>
-          {category || '请选择分类'}
-        </Text>
-        <Icon name="chevron-right" size={24} color={colors.textSecondary} />
-      </TouchableOpacity>
-
-      <Text style={styles.sectionTitle}>金额</Text>
-      <View style={styles.amountRow}>
-        <Text style={styles.amountSymbol}>¥</Text>
+      {/* 备注 */}
+      <View style={styles.formCard}>
+        <Text style={styles.sectionTitle}>备注</Text>
         <TextInput
-          style={styles.amountInput}
-          placeholder="0.00"
-          placeholderTextColor={colors.textSecondary}
-          keyboardType="decimal-pad"
-          value={amount}
-          onChangeText={setAmount}
+          style={styles.noteInput}
+          placeholder="添加备注（可选）"
+          placeholderTextColor={colors.textTertiary}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+          value={note}
+          onChangeText={setNote}
         />
       </View>
 
-      <Text style={styles.sectionTitle}>日期</Text>
-      <TouchableOpacity
-        style={styles.dateSelector}
-        onPress={() => setShowDatePicker(true)}>
-        <Icon name="calendar" size={20} color={colors.primary} />
-        <Text style={styles.dateText}>{dayjs(recordDate).format('YYYY年MM月DD日')}</Text>
-      </TouchableOpacity>
+      {/* 保存按钮 */}
+      <View style={styles.submitArea}>
+        <BigButton title="保存" onPress={handleSubmit} />
+      </View>
+
       <DatePickerModal
         visible={showDatePicker}
         date={recordDate}
@@ -193,22 +222,6 @@ export const CostCreateScreen: React.FC = () => {
         }}
         onCancel={() => setShowDatePicker(false)}
       />
-
-      <Text style={styles.sectionTitle}>备注</Text>
-      <TextInput
-        style={styles.noteInput}
-        placeholder="添加备注（可选）"
-        placeholderTextColor={colors.textSecondary}
-        multiline
-        numberOfLines={3}
-        textAlignVertical="top"
-        value={note}
-        onChangeText={setNote}
-      />
-
-      <View style={styles.submitArea}>
-        <BigButton title="保存" onPress={handleSubmit} />
-      </View>
 
       <CategoryModal
         visible={showCategoryModal}
@@ -227,78 +240,82 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: spacing.md,
   },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: spacing.lg,
+  formCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  sectionTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   typeRow: {
     flexDirection: 'row',
-    marginHorizontal: -spacing.sm,
+    gap: spacing.md,
   },
-  typeItem: {
+  typeBtn: {
     flex: 1,
-    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
-  categorySelector: {
+  typeBtnText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
   },
-  categoryText: {
+  fieldLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  fieldText: {
     fontSize: fontSize.md,
     color: colors.text,
     fontWeight: '600',
   },
-  categoryPlaceholder: {
+  fieldPlaceholder: {
     fontSize: fontSize.md,
-    color: colors.textSecondary,
+    color: colors.textTertiary,
   },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
   },
   amountSymbol: {
-    fontSize: fontSize.xl,
+    fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
     marginRight: spacing.sm,
   },
   amountInput: {
     flex: 1,
-    padding: spacing.md,
-    fontSize: fontSize.xl,
+    fontSize: 28,
     fontWeight: '700',
     color: colors.text,
-  },
-  dateSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
-    gap: spacing.md,
-  },
-  dateText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: '600',
+    padding: 0,
   },
   noteInput: {
     borderWidth: 1,
@@ -307,11 +324,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     fontSize: fontSize.md,
     color: colors.text,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     minHeight: 80,
   },
   submitArea: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     marginBottom: spacing.xxl,
   },
 });
