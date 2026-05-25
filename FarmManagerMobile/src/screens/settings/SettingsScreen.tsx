@@ -1,112 +1,257 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { Card } from '../../components/Card';
-import { colors } from '../../theme/colors';
-import { spacing, fontSize, borderRadius } from '../../theme/spacing';
+import React, {useState, useCallback} from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  Switch,
+} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useNavigation} from '@react-navigation/native';
+import {Card} from '../../components/Card';
+import {CityPicker} from '../../components/CityPicker';
+import {useSettingsStore} from '../../stores/settingsStore';
+import {colors} from '../../theme/colors';
+import {spacing, fontSize, borderRadius, shadows} from '../../theme/spacing';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+const ALL_CROPS = ['西瓜', '豆角', '番茄', '黄瓜', '辣椒', '茄子', '草莓', '葡萄'];
 
-const AI_SECTION = [
-  { label: '农事顾问', icon: 'chat-processing', color: colors.primary, route: 'AgentChat' },
-  { label: '种植报告', icon: 'file-document', color: colors.success, route: 'AgentReport' },
-];
+const showToast = (message: string) => {
+  Alert.alert('提示', message, [{text: '知道了'}]);
+};
 
-const ABOUT_SECTION = [
-  { label: '版本', value: 'v1.0', icon: 'tag', color: colors.textTertiary },
-  { label: '使用指南', value: '', icon: 'book-open-variant', color: colors.primary, route: 'Guide' },
-  { label: '关于', value: '智能种植管理平台', icon: 'information', color: colors.textTertiary },
-];
+const SettingsSection: React.FC<{title: string; children: React.ReactNode}> = ({
+  title,
+  children,
+}) => (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>{title}</Text>
+    <Card elevated={false} style={styles.menuCard}>
+      {children}
+    </Card>
+  </View>
+);
+
+const MenuItem: React.FC<{
+  icon: string;
+  iconColor?: string;
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  isLast?: boolean;
+}> = ({icon, iconColor = colors.primary, label, value, onPress, isLast}) => (
+  <TouchableOpacity
+    style={[styles.menuItem, !isLast && styles.menuItemBorder]}
+    onPress={onPress}
+    activeOpacity={onPress ? 0.6 : 1}
+    disabled={!onPress}>
+    <View style={styles.menuLeft}>
+      <View style={[styles.menuIcon, {backgroundColor: iconColor + '12'}]}>
+        <Icon name={icon} size={20} color={iconColor} />
+      </View>
+      <Text style={styles.menuText}>{label}</Text>
+    </View>
+    <View style={styles.menuRight}>
+      {value ? <Text style={styles.menuValue}>{value}</Text> : null}
+      {onPress ? <Icon name="chevron-right" size={20} color={colors.textTertiary} /> : null}
+    </View>
+  </TouchableOpacity>
+);
+
+const ToggleItem: React.FC<{
+  icon: string;
+  iconColor?: string;
+  label: string;
+  enabled: boolean;
+  onToggle: (v: boolean) => void;
+  isLast?: boolean;
+}> = ({icon, iconColor = colors.primary, label, enabled, onToggle, isLast}) => (
+  <View style={[styles.menuItem, !isLast && styles.menuItemBorder]}>
+    <View style={styles.menuLeft}>
+      <View style={[styles.menuIcon, {backgroundColor: iconColor + '12'}]}>
+        <Icon name={icon} size={20} color={iconColor} />
+      </View>
+      <Text style={styles.menuText}>{label}</Text>
+    </View>
+    <Switch
+      value={enabled}
+      onValueChange={onToggle}
+      trackColor={{false: colors.border, true: colors.primaryLight + '80'}}
+      thumbColor={enabled ? colors.primary : colors.disabled}
+    />
+  </View>
+);
 
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation();
+  const [cityPickerVisible, setCityPickerVisible] = useState(false);
+
+  const {
+    defaultFarmName,
+    defaultCity,
+    crops,
+    reminderTime,
+    notificationEnabled,
+    weatherAlertEnabled,
+    setDefaultCity,
+    setCrops,
+    setNotificationEnabled,
+    setWeatherAlertEnabled,
+  } = useSettingsStore();
+
+  const handleProfilePress = useCallback(() => {
+    Alert.alert('提示', '登录功能即将上线');
+  }, []);
+
+  const handleFarmPress = useCallback(() => {
+    showToast('多农场管理即将上线');
+  }, []);
+
+  const handleExportData = useCallback(() => {
+    showToast('数据导出即将上线');
+  }, []);
+
+  const handleClearCache = useCallback(() => {
+    Alert.alert('清除缓存', '确定要清除所有本地缓存数据吗？', [
+      {text: '取消', style: 'cancel'},
+      {
+        text: '确定',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await AsyncStorage.clear();
+            showToast('缓存已清除');
+          } catch (_e) {
+            showToast('清除失败，请重试');
+          }
+        },
+      },
+    ]);
+  }, []);
+
+  const handleCropPress = useCallback(() => {
+    const currentCrops = new Set(crops);
+    const options = ALL_CROPS.map(crop => ({
+      text: `${currentCrops.has(crop) ? '✓ ' : ''}${crop}`,
+      onPress: () => {
+        const next = new Set(currentCrops);
+        if (next.has(crop)) {
+          next.delete(crop);
+        } else {
+          next.add(crop);
+        }
+        setCrops(Array.from(next));
+      },
+    }));
+    Alert.alert('选择常种作物', '可多选（点击切换）', [...options, {text: '完成', style: 'cancel'}]);
+  }, [crops, setCrops]);
+
+  const handleReminderTimePress = useCallback(() => {
+    const times = ['06:00', '07:00', '08:00', '09:00', '10:00', '18:00'];
+    Alert.alert(
+      '选择提醒时间',
+      undefined,
+      times.map(t => ({
+        text: t,
+        onPress: () => useSettingsStore.getState().setReminderTime(t),
+      })),
+    );
+  }, []);
+
+  const handleCitySelect = useCallback(
+    (city: {name: string; lat: number; lon: number}) => {
+      setDefaultCity(city.name);
+    },
+    [setDefaultCity],
+  );
+
+  const cropLabel = crops.length > 0 ? crops.join('、') : '未选择';
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
-        <View style={styles.profileSection}>
+        <TouchableOpacity style={styles.profileSection} onPress={handleProfilePress} activeOpacity={0.7}>
           <View style={styles.profileCard}>
             <View style={styles.avatar}>
               <Icon name="account" size={32} color={colors.primary} />
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>农事助手</Text>
+              <Text style={styles.profileName}>农友</Text>
               <Text style={styles.profileSub}>让种植更简单</Text>
             </View>
+            <Icon name="chevron-right" size={20} color={colors.textTertiary} />
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* AI Features */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>AI 功能</Text>
-          <Card elevated={false} style={styles.menuCard}>
-            {AI_SECTION.map((item, index) => (
-              <TouchableOpacity
-                key={item.label}
-                style={[
-                  styles.menuItem,
-                  index < AI_SECTION.length - 1 && styles.menuItemBorder,
-                ]}
-                onPress={() => navigation.navigate(item.route as never)}
-                activeOpacity={0.6}
-              >
-                <View style={styles.menuLeft}>
-                  <View style={[styles.menuIcon, { backgroundColor: item.color + '12' }]}>
-                    <Icon name={item.icon} size={20} color={item.color} />
-                  </View>
-                  <Text style={styles.menuText}>{item.label}</Text>
-                </View>
-                <Icon name="chevron-right" size={20} color={colors.textTertiary} />
-              </TouchableOpacity>
-            ))}
-          </Card>
-        </View>
+        {/* Farm Settings */}
+        <SettingsSection title="农场设置">
+          <MenuItem icon="barn" label="默认农场" value={defaultFarmName} onPress={handleFarmPress} />
+          <MenuItem
+            icon="map-marker"
+            label="默认城市"
+            value={defaultCity}
+            onPress={() => setCityPickerVisible(true)}
+            isLast
+          />
+        </SettingsSection>
+
+        {/* Preference */}
+        <SettingsSection title="偏好设置">
+          <MenuItem icon="sprout" label="常种作物" value={cropLabel} onPress={handleCropPress} />
+          <MenuItem
+            icon="clock-outline"
+            label="提醒时间"
+            value={reminderTime}
+            onPress={handleReminderTimePress}
+            isLast
+          />
+        </SettingsSection>
+
+        {/* Notification */}
+        <SettingsSection title="通知设置">
+          <ToggleItem
+            icon="bell-outline"
+            label="农事提醒"
+            enabled={notificationEnabled}
+            onToggle={setNotificationEnabled}
+          />
+          <ToggleItem
+            icon="weather-cloudy-alert"
+            label="天气预警"
+            enabled={weatherAlertEnabled}
+            onToggle={setWeatherAlertEnabled}
+            isLast
+          />
+        </SettingsSection>
+
+        {/* Data */}
+        <SettingsSection title="数据管理">
+          <MenuItem icon="database-export" label="导出数据" onPress={handleExportData} />
+          <MenuItem icon="trash-can-outline" iconColor={colors.danger} label="清除缓存" onPress={handleClearCache} isLast />
+        </SettingsSection>
 
         {/* About */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>关于</Text>
-          <Card elevated={false} style={styles.menuCard}>
-            {ABOUT_SECTION.map((item, index) =>
-              item.route ? (
-                <TouchableOpacity
-                  key={item.label}
-                  style={[
-                    styles.infoItem,
-                    index < ABOUT_SECTION.length - 1 && styles.menuItemBorder,
-                  ]}
-                  onPress={() => navigation.navigate(item.route as never)}
-                  activeOpacity={0.6}
-                >
-                  <View style={styles.menuLeft}>
-                    <View style={[styles.menuIcon, { backgroundColor: item.color + '12' }]}>
-                      <Icon name={item.icon} size={20} color={item.color} />
-                    </View>
-                    <Text style={styles.menuText}>{item.label}</Text>
-                  </View>
-                  <Icon name="chevron-right" size={20} color={colors.textTertiary} />
-                </TouchableOpacity>
-              ) : (
-                <View
-                  key={item.label}
-                  style={[
-                    styles.infoItem,
-                    index < ABOUT_SECTION.length - 1 && styles.menuItemBorder,
-                  ]}
-                >
-                  <View style={styles.menuLeft}>
-                    <View style={[styles.menuIcon, { backgroundColor: item.color + '12' }]}>
-                      <Icon name={item.icon} size={20} color={item.color} />
-                    </View>
-                    <Text style={styles.menuText}>{item.label}</Text>
-                  </View>
-                  <Text style={styles.infoValue}>{item.value}</Text>
-                </View>
-              )
-            )}
-          </Card>
-        </View>
+        <SettingsSection title="关于">
+          <MenuItem icon="tag" label="版本" value="v1.0" />
+          <MenuItem
+            icon="book-open-variant"
+            label="使用指南"
+            onPress={() => navigation.navigate('Guide' as never)}
+          />
+          <MenuItem icon="information" label="关于" value="智能种植管理平台" isLast />
+        </SettingsSection>
       </ScrollView>
+
+      <CityPicker
+        visible={cityPickerVisible}
+        selectedCity={defaultCity}
+        onSelect={handleCitySelect}
+        onClose={() => setCityPickerVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -127,15 +272,16 @@ const styles = StyleSheet.create({
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.headerBg,
+    backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
+    ...shadows.md,
   },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: borderRadius.lg,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -146,11 +292,11 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: fontSize.lg,
     fontWeight: '700',
-    color: colors.headerText,
+    color: colors.text,
   },
   profileSub: {
     fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   section: {
@@ -183,6 +329,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
+  menuRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   menuIcon: {
     width: 36,
     height: 36,
@@ -195,14 +346,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '500',
   },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  infoValue: {
+  menuValue: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     fontWeight: '500',
