@@ -66,13 +66,16 @@ export const costApi = {
 // Agent
 export const agentApi = {
   chat: (data: { cycle_id?: number; message: string }) => apiClient.post('/agent/chat', data),
-  getDailyAdvice: (cycleId?: number) => apiClient.get('/agent/daily', { params: { cycle_id: cycleId } }),
+  getDailyAdvice: (cycleId?: number) =>
+    apiClient.get('/agent/daily', { params: { cycle_id: cycleId } }),
+  refreshAdvice: (cycleId?: number) =>
+    apiClient.post('/agent/daily/refresh', null, { params: { cycle_id: cycleId } }),
   generateReport: (data: { cycle_id?: number; report_type: string }) =>
     apiClient.post('/agent/report', data),
   getAdviceHistory: (cycleId?: number) =>
     apiClient.get('/agent/advice-history', { params: { cycle_id: cycleId } }),
-  getReportHistory: (cycleId?: number) =>
-    apiClient.get('/agent/report-history', { params: { cycle_id: cycleId } }),
+  getReportHistory: (page: number = 1, size: number = 10) =>
+    apiClient.get('/agent/reports', { params: { page, size } }),
 };
 
 // 天气

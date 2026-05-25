@@ -113,3 +113,16 @@ export interface WeatherForecast {
     windspeed_10m_max: number[];
   };
 }
+
+export interface ReportListItem {
+  id: number;
+  cycle_id: number | null;
+  report_type: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ReportListResponse {
+  items: ReportListItem[];
+  total: number;
+}

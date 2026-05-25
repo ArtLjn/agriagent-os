@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
 import {persist, createJSONStorage} from 'zustand/middleware';
-import type {ChatMessage, DailyAdvice, ReportResponse} from '../api/types';
+import type {ChatMessage, DailyAdvice, ReportResponse, ReportListItem} from '../api/types';
 import {agentApi, weatherApi} from '../api/client';
 
 interface AgentState {
@@ -14,10 +14,13 @@ interface AgentState {
   cityName: string;
   cityLat: number | undefined;
   cityLon: number | undefined;
+  reports: ReportListItem[];
   sendMessage: (message: string, cycleId?: number) => Promise<void>;
   fetchDailyAdvice: (cycleId?: number) => Promise<void>;
+  refreshDailyAdvice: (cycleId?: number) => Promise<void>;
   generateReport: (reportType: string, cycleId?: number) => Promise<void>;
   fetchWeather: () => Promise<void>;
+  fetchReports: () => Promise<void>;
   setCity: (name: string, lat?: number, lon?: number) => void;
   clearChat: () => void;
   clearError: () => void;
@@ -35,6 +38,7 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       cityName: '苏州',
       cityLat: 31.30,
       cityLon: 120.62,
+      reports: [],
 
   sendMessage: async (message, cycleId) => {
     set(state => ({
@@ -69,6 +73,25 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       set({dailyAdvice: res.data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
+    }
+  },
+
+  refreshDailyAdvice: async cycleId => {
+    set({loading: true, error: null});
+    try {
+      const res = await agentApi.refreshAdvice(cycleId);
+      set({dailyAdvice: res.data, loading: false});
+    } catch (err: any) {
+      set({error: err.message, loading: false});
+    }
+  },
+
+  fetchReports: async () => {
+    try {
+      const res = await agentApi.getReportHistory();
+      set({reports: res.data.items});
+    } catch (_e) {
+      // 报告列表加载失败不阻塞主流程
     }
   },
 
