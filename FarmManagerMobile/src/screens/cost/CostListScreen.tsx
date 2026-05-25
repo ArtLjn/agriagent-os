@@ -6,10 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
+  Platform,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
+import DateTimePicker, {DateTimePickerEvent} from '@react-native-community/datetimepicker';
 import {useCostStore} from '../../stores/costStore';
 import type {CostRecord} from '../../api/types';
 import {Card} from '../../components/Card';
@@ -46,14 +49,17 @@ type CostListNavigationProp = NativeStackNavigationProp<
 
 export const CostListScreen: React.FC = () => {
   const navigation = useNavigation<CostListNavigationProp>();
-  const {records, loading, fetchRecords} = useCostStore();
+  const {records, loading, fetchRecords, deleteRecord} = useCostStore();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
 
-  const currentMonth = dayjs().format('YYYY-MM');
+  const currentMonth = dayjs(selectedMonth).format('YYYY-MM');
 
   const stats = useMemo(() => {
     const monthRecords = records.filter(r => r.record_date.startsWith(currentMonth));
@@ -65,6 +71,11 @@ export const CostListScreen: React.FC = () => {
       .reduce((sum, r) => sum + parseFloat(r.amount), 0);
     return {cost, income, balance: income - cost};
   }, [records, currentMonth]);
+
+  const categoryList = useMemo(() => {
+    const categories = new Set(records.map(r => r.category));
+    return Array.from(categories);
+  }, [records]);
 
   const categoryStats = useMemo(() => {
     const monthRecords = records.filter(r => r.record_date.startsWith(currentMonth));
@@ -79,12 +90,42 @@ export const CostListScreen: React.FC = () => {
   }, [records, currentMonth]);
 
   const filteredRecords = useMemo(() => {
-    if (filter === 'all') return records;
-    return records.filter(r => r.record_type === filter);
-  }, [records, filter]);
+    let result = records.filter(r => r.record_date.startsWith(currentMonth));
+    if (filter !== 'all') {
+      result = result.filter(r => r.record_type === filter);
+    }
+    if (categoryFilter) {
+      result = result.filter(r => r.category === categoryFilter);
+    }
+    return result;
+  }, [records, currentMonth, filter, categoryFilter]);
 
   const handleCreate = () => {
     navigation.navigate('CostCreate');
+  };
+
+  const handleMonthChange = (event: DateTimePickerEvent, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setSelectedMonth(date);
+    }
+  };
+
+  const handleDelete = (record: CostRecord) => {
+    Alert.alert('确认删除', `确定要删除这条记录吗？`, [
+      {text: '取消', style: 'cancel'},
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteRecord(record.id, record.cycle_id || undefined);
+          } catch (err) {
+            // Error 已在 store 中处理
+          }
+        },
+      },
+    ]);
   };
 
   const renderFilter = () => (
@@ -117,6 +158,58 @@ export const CostListScreen: React.FC = () => {
     </View>
   );
 
+  const renderCategoryFilter = () => (
+    <View style={styles.categoryFilterRow}>
+      <TouchableOpacity
+        style={[
+          styles.categoryChip,
+          categoryFilter === null && styles.categoryChipActive,
+        ]}
+        onPress={() => setCategoryFilter(null)}>
+        <Text
+          style={[
+            styles.categoryChipText,
+            categoryFilter === null && styles.categoryChipTextActive,
+          ]}>
+          全部
+        </Text>
+      </TouchableOpacity>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {categoryList.map(cat => {
+          const catStats = categoryStats[cat];
+          const isActive = categoryFilter === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                styles.categoryChip,
+                isActive && styles.categoryChipActive,
+              ]}
+              onPress={() => setCategoryFilter(cat)}>
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  isActive && styles.categoryChipTextActive,
+                ]}>
+                {cat}
+              </Text>
+              {catStats && (catStats.cost > 0 || catStats.income > 0) && (
+                <Text
+                  style={[
+                    styles.categoryChipAmount,
+                    isActive && styles.categoryChipAmountActive,
+                  ]}>
+                  {catStats.cost > 0 ? `-${catStats.cost.toFixed(0)}` : ''}
+                  {catStats.income > 0 ? `+${catStats.income.toFixed(0)}` : ''}
+                </Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+
   if (loading && records.length === 0) {
     return <Loading message="加载账单中..." />;
   }
@@ -125,7 +218,11 @@ export const CostListScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <View style={styles.statsSection}>
-          <Text style={styles.statsMonth}>{dayjs().format('M月')}账单</Text>
+          <TouchableOpacity style={styles.monthSelector} onPress={() => setShowDatePicker(true)}>
+            <Icon name="calendar-month" size={20} color={colors.primary} />
+            <Text style={styles.monthText}>{dayjs(selectedMonth).format('YYYY年M月')}</Text>
+            <Icon name="chevron-down" size={20} color={colors.primary} />
+          </TouchableOpacity>
           <View style={styles.statsCards}>
             <Card style={[styles.statCard, styles.statCardCost]} padding="lg">
               <Text style={styles.statLabel}>支出</Text>
@@ -140,6 +237,15 @@ export const CostListScreen: React.FC = () => {
               <Text style={[styles.statValue, {color: colors.text}]}>0.00</Text>
             </Card>
           </View>
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedMonth}
+              mode="date"
+              display="compact"
+              onChange={handleMonthChange}
+              maximumDate={new Date()}
+            />
+          )}
         </View>
         <EmptyState
           title="暂无账单记录"
@@ -156,7 +262,20 @@ export const CostListScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Stats Header */}
       <View style={styles.statsSection}>
-        <Text style={styles.statsMonth}>{dayjs().format('M月')}账单</Text>
+        <TouchableOpacity style={styles.monthSelector} onPress={() => setShowDatePicker(true)}>
+          <Icon name="calendar-month" size={20} color={colors.primary} />
+          <Text style={styles.monthText}>{dayjs(selectedMonth).format('YYYY年M月')}</Text>
+          <Icon name="chevron-down" size={20} color={colors.primary} />
+        </TouchableOpacity>
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedMonth}
+            mode="date"
+            display="compact"
+            onChange={handleMonthChange}
+            maximumDate={new Date()}
+          />
+        )}
         <View style={styles.statsCards}>
           <Card style={[styles.statCard, styles.statCardCost]} padding="lg">
             <Text style={styles.statLabel}>支出</Text>
@@ -179,33 +298,10 @@ export const CostListScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Category Summary */}
-      {Object.keys(categoryStats).length > 0 && (
-        <View style={styles.categorySection}>
-          <Text style={styles.categoryTitle}>本月分类汇总</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {Object.entries(categoryStats).map(([cat, val]) => {
-              const catIcon = CATEGORY_ICONS[cat] || 'tag';
-              return (
-                <View key={cat} style={styles.categoryChip}>
-                  <Icon name={catIcon} size={20} color={colors.primary} />
-                  <Text style={styles.categoryChipName}>{cat}</Text>
-                  <Text style={[styles.categoryChipAmount, {color: colors.danger}]}>
-                    -{val.cost.toFixed(0)}
-                  </Text>
-                  {val.income > 0 && (
-                    <Text style={[styles.categoryChipAmount, {color: colors.success}]}>
-                      +{val.income.toFixed(0)}
-                    </Text>
-                  )}
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
+      {/* Category Filter */}
+      {categoryList.length > 0 && renderCategoryFilter()}
 
-      {/* Filter */}
+      {/* Type Filter */}
       {renderFilter()}
 
       {/* List */}
@@ -226,43 +322,48 @@ export const CostListScreen: React.FC = () => {
           const prefix = isCost ? '-' : '+';
 
           return (
-            <Card style={styles.card}>
-              <View style={styles.row}>
-                <View style={styles.left}>
-                  <View style={styles.categoryRow}>
-                    <View style={[styles.typeIcon, {backgroundColor: config.bgColor}]}>
-                      <Icon name={catIcon} size={18} color={config.color} />
+            <TouchableOpacity
+              onLongPress={() => handleDelete(item)}
+              delayLongPress={500}
+              activeOpacity={0.7}>
+              <Card style={styles.card}>
+                <View style={styles.row}>
+                  <View style={styles.left}>
+                    <View style={styles.categoryRow}>
+                      <View style={[styles.typeIcon, {backgroundColor: config.bgColor}]}>
+                        <Icon name={catIcon} size={18} color={config.color} />
+                      </View>
+                      <View>
+                        <Text style={styles.category}>{item.category}</Text>
+                        <Text style={styles.date}>{item.record_date}</Text>
+                      </View>
                     </View>
-                    <View>
-                      <Text style={styles.category}>{item.category}</Text>
-                      <Text style={styles.date}>{item.record_date}</Text>
+                  </View>
+                  <View style={styles.right}>
+                    <Text style={[styles.amount, {color: config.color}]}>
+                      {prefix}{item.amount}
+                    </Text>
+                    <View
+                      style={[
+                        styles.typeBadge,
+                        {backgroundColor: config.bgColor},
+                      ]}>
+                      <Text style={[styles.typeText, {color: config.color}]}>
+                        {config.label}
+                      </Text>
                     </View>
                   </View>
                 </View>
-                <View style={styles.right}>
-                  <Text style={[styles.amount, {color: config.color}]}>
-                    {prefix}{item.amount}
-                  </Text>
-                  <View
-                    style={[
-                      styles.typeBadge,
-                      {backgroundColor: config.bgColor},
-                    ]}>
-                    <Text style={[styles.typeText, {color: config.color}]}>
-                      {config.label}
+                {item.note ? (
+                  <View style={styles.noteRow}>
+                    <Icon name="note-text-outline" size={12} color={colors.textTertiary} />
+                    <Text style={styles.note} numberOfLines={1}>
+                      {item.note}
                     </Text>
                   </View>
-                </View>
-              </View>
-              {item.note ? (
-                <View style={styles.noteRow}>
-                  <Icon name="note-text-outline" size={12} color={colors.textTertiary} />
-                  <Text style={styles.note} numberOfLines={1}>
-                    {item.note}
-                  </Text>
-                </View>
-              ) : null}
-            </Card>
+                ) : null}
+              </Card>
+            </TouchableOpacity>
           );
         }}
       />
@@ -283,11 +384,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
   },
-  statsMonth: {
+  monthSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  monthText: {
     fontSize: fontSize.lg,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
+    color: colors.primary,
   },
   statsCards: {
     flexDirection: 'row',
@@ -318,6 +425,44 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: fontSize.lg,
     fontWeight: '800',
+  },
+  categoryFilterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  categoryChip: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginRight: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  categoryChipActive: {
+    backgroundColor: colors.primaryMuted,
+    borderColor: colors.primary,
+  },
+  categoryChipText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  categoryChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  categoryChipAmount: {
+    fontSize: fontSize.xs,
+    color: colors.textTertiary,
+    marginLeft: spacing.xs,
+  },
+  categoryChipAmountActive: {
+    color: colors.primary,
   },
   filterRow: {
     flexDirection: 'row',
@@ -414,37 +559,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     flex: 1,
-  },
-  categorySection: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  categoryTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  categoryChip: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginRight: spacing.sm,
-    minWidth: 90,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  categoryChipName: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  categoryChipAmount: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
   },
   fab: {
     position: 'absolute',

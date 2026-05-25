@@ -16,6 +16,7 @@ interface CostState {
     record_date: string;
     note?: string;
   }) => Promise<void>;
+  deleteRecord: (id: number, cycleId?: number) => Promise<void>;
   fetchProfit: (cycleId: number) => Promise<void>;
   clearError: () => void;
 }
@@ -44,6 +45,19 @@ export const useCostStore = create<CostState>(set => ({
       await costApi.createRecord(data);
       const res = await costApi.getRecords(
         data.cycle_id ? {cycle_id: data.cycle_id} : undefined,
+      );
+      set({records: res.data, loading: false});
+    } catch (err: any) {
+      set({error: err.message, loading: false});
+    }
+  },
+
+  deleteRecord: async (id, cycleId) => {
+    set({loading: true, error: null});
+    try {
+      await costApi.deleteRecord(id);
+      const res = await costApi.getRecords(
+        cycleId ? {cycle_id: cycleId} : undefined,
       );
       set({records: res.data, loading: false});
     } catch (err: any) {

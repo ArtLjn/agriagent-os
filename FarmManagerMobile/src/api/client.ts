@@ -56,8 +56,11 @@ export const costApi = {
     apiClient.get('/costs', { params }),
   createRecord: (data: { cycle_id?: number; record_type: string; category: string; amount: string; record_date: string; note?: string }) =>
     apiClient.post('/costs', data),
+  deleteRecord: (id: number) => apiClient.delete(`/costs/${id}`),
   getProfit: (cycleId: number) => apiClient.get(`/costs/cycles/${cycleId}/profit`),
   getYearlySummary: (year: number) => apiClient.get(`/costs/summary/${year}`),
+  parseRecord: (description: string) =>
+    apiClient.post('/costs/parse', { description }),
 };
 
 // Agent
