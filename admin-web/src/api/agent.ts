@@ -1,7 +1,57 @@
 import apiClient from './client';
 
-export const chat = (message: string, cycleId?: number) =>
-  apiClient.post('/agent/chat', { message, cycle_id: cycleId });
+export interface ChatRequest {
+  cycle_id?: number;
+  message: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+}
+
+export interface DailyAdviceResponse {
+  cycle_id?: number;
+  advice: string;
+  created_at: string;
+}
+
+export interface ReportRequest {
+  cycle_id?: number;
+  report_type?: string;
+}
+
+export interface ReportResponse {
+  cycle_id?: number;
+  report_type: string;
+  content: string;
+  created_at: string;
+}
+
+export interface AdviceHistoryItem {
+  id: number;
+  cycle_id?: number;
+  advice_type: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ReportHistoryItem {
+  id: number;
+  cycle_id?: number;
+  report_type: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ReportListResponse {
+  items: ReportHistoryItem[];
+  total: number;
+}
+
+export async function chat(data: ChatRequest): Promise<ChatResponse> {
+  const res = await apiClient.post<ChatResponse>("/agent/chat", data);
+  return res.data;
+}
 
 export async function* streamChat(message: string, cycleId?: number): AsyncGenerator<string> {
   const resp = await fetch('/api/agent/chat/stream', {
@@ -36,11 +86,22 @@ export async function* streamChat(message: string, cycleId?: number): AsyncGener
   }
 }
 
-export const getDailyAdvice = (cycleId?: number) =>
-  apiClient.get('/agent/daily', { params: { cycle_id: cycleId } });
-export const generateReport = (reportType: string = 'weekly', cycleId?: number) =>
-  apiClient.post('/agent/report', { report_type: reportType, cycle_id: cycleId });
-export const getAdviceHistory = (params?: { cycle_id?: number; limit?: number }) =>
-  apiClient.get('/agent/advice-history', { params });
-export const getReportHistory = (params?: { cycle_id?: number; limit?: number }) =>
-  apiClient.get('/agent/report-history', { params });
+export async function getDailyAdvice(cycleId?: number): Promise<DailyAdviceResponse> {
+  const res = await apiClient.get<DailyAdviceResponse>("/agent/daily", { params: { cycle_id: cycleId } });
+  return res.data;
+}
+
+export async function generateReport(reportType: string = 'weekly', cycleId?: number): Promise<ReportResponse> {
+  const res = await apiClient.post<ReportResponse>("/agent/report", { report_type: reportType, cycle_id: cycleId });
+  return res.data;
+}
+
+export async function getAdviceHistory(params?: { cycle_id?: number; limit?: number }): Promise<AdviceHistoryItem[]> {
+  const res = await apiClient.get<AdviceHistoryItem[]>("/agent/advice-history", { params });
+  return res.data;
+}
+
+export async function getReportHistory(params?: { cycle_id?: number; limit?: number }): Promise<ReportListResponse> {
+  const res = await apiClient.get<ReportListResponse>("/agent/report-history", { params });
+  return res.data;
+}
