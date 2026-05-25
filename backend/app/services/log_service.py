@@ -32,15 +32,35 @@ def create_log(db: Session, log: FarmLogCreate, farm_id: int) -> FarmLog:
 
 
 def get_logs(
-    db: Session, farm_id: int, cycle_id: int | None = None, operation_type: str | None = None
+    db: Session,
+    farm_id: int,
+    cycle_id: int | None = None,
+    operation_type: str | None = None,
+    skip: int = 0,
+    limit: int = 100,
 ) -> list[FarmLog]:
-    """获取农事日志列表，支持按周期 ID 和操作类型筛选。"""
+    """获取农事日志列表，支持按周期 ID 和操作类型筛选（分页）。"""
     query = db.query(FarmLog).filter(FarmLog.farm_id == farm_id)
     if cycle_id is not None:
         query = query.filter(FarmLog.cycle_id == cycle_id)
     if operation_type is not None:
         query = query.filter(FarmLog.operation_type == operation_type)
-    return query.order_by(FarmLog.operation_date.desc()).all()
+    return query.order_by(FarmLog.operation_date.desc()).offset(skip).limit(limit).all()
+
+
+def count_logs(
+    db: Session,
+    farm_id: int,
+    cycle_id: int | None = None,
+    operation_type: str | None = None,
+) -> int:
+    """获取农事日志总数，支持按周期 ID 和操作类型筛选。"""
+    query = db.query(FarmLog).filter(FarmLog.farm_id == farm_id)
+    if cycle_id is not None:
+        query = query.filter(FarmLog.cycle_id == cycle_id)
+    if operation_type is not None:
+        query = query.filter(FarmLog.operation_type == operation_type)
+    return query.count()
 
 
 def get_logs_by_date(db: Session, year: int, month: int) -> list[FarmLog]:
@@ -96,4 +116,11 @@ def delete_log(db: Session, log_id: int, farm_id: int) -> None:
         raise
 
 
-__all__ = ["create_log", "get_logs", "get_logs_by_date", "update_log", "delete_log"]
+__all__ = [
+    "create_log",
+    "get_logs",
+    "count_logs",
+    "get_logs_by_date",
+    "update_log",
+    "delete_log",
+]

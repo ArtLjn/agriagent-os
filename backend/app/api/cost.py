@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
 from app.models.farm import Farm
+from app.schemas.common import PaginatedResponse
 from app.schemas.cost import CostRecordCreate, CostRecordResponse, CycleProfit, YearlySummary
 from app.services import cost_service
 
@@ -19,15 +20,24 @@ def create_record(
     return cost_service.create_record(db, record, farm_id=farm.id)
 
 
-@router.get("", response_model=list[CostRecordResponse])
+@router.get("", response_model=PaginatedResponse[CostRecordResponse])
 def list_records(
     cycle_id: int | None = None,
     category: str | None = None,
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ):
-    """查询成本记账记录列表。"""
-    return cost_service.get_records(db, farm_id=farm.id, cycle_id=cycle_id, category=category)
+    """查询成本记账记录列表（分页）。"""
+    skip = (page - 1) * size
+    items = cost_service.get_records(
+        db, farm_id=farm.id, cycle_id=cycle_id, category=category, skip=skip, limit=size
+    )
+    total = cost_service.count_records(
+        db, farm_id=farm.id, cycle_id=cycle_id, category=category
+    )
+    return {"items": items, "total": total}
 
 
 @router.get("/cycles/{cycle_id}/profit", response_model=CycleProfit)

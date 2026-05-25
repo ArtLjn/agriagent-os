@@ -28,6 +28,7 @@ from app.schemas.agent import (
     AdviceHistoryItem,
     ReportHistoryItem,
 )
+from app.schemas.common import PaginatedResponse
 
 __all__ = [
     "CropTemplateBase",
@@ -53,4 +54,5 @@ __all__ = [
     "ReportResponse",
     "AdviceHistoryItem",
     "ReportHistoryItem",
+    "PaginatedResponse",
 ]

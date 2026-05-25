@@ -58,8 +58,11 @@ def test_list_logs_by_cycle(cycle_id):
     response = client.get(f"/logs?cycle_id={cycle_id}")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["operation_type"] == "施肥"
+    assert "items" in data
+    assert "total" in data
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["operation_type"] == "施肥"
 
 
 def test_list_logs_by_operation_type(cycle_id):
@@ -77,8 +80,9 @@ def test_list_logs_by_operation_type(cycle_id):
     response = client.get(f"/logs?cycle_id={cycle_id}&operation_type=浇水")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["operation_type"] == "浇水"
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["operation_type"] == "浇水"
 
 
 def test_create_log_invalid_cycle():
@@ -162,7 +166,8 @@ def test_delete_farm_log(cycle_id):
     assert response.json()["message"] == "删除成功"
 
     list_resp = client.get(f"/logs?cycle_id={cycle_id}")
-    assert len(list_resp.json()) == 0
+    assert list_resp.json()["total"] == 0
+    assert len(list_resp.json()["items"]) == 0
 
 
 def test_delete_log_not_found():

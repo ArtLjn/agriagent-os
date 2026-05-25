@@ -35,9 +35,12 @@ def test_list_crop_templates():
     response = client.get("/crops/templates")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["name"] == "豆角"
+    assert "items" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "豆角"
 
 
 def test_get_template_not_found():

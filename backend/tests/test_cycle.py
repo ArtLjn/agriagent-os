@@ -56,9 +56,12 @@ def test_list_crop_cycles(watermelon_template_id):
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 1
-    assert data[0]["name"] == "2号棚西瓜"
+    assert "items" in data
+    assert "total" in data
+    assert isinstance(data["items"], list)
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["name"] == "2号棚西瓜"
 
 
 def test_update_crop_cycle(watermelon_template_id):

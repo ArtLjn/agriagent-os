@@ -50,9 +50,22 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> Crop
     return db_cycle
 
 
-def get_crop_cycles(db: Session, farm_id: int) -> list[CropCycle]:
-    """获取指定农场的所有茬口。"""
-    return db.query(CropCycle).filter(CropCycle.farm_id == farm_id).all()
+def get_crop_cycles(
+    db: Session, farm_id: int, skip: int = 0, limit: int = 100
+) -> list[CropCycle]:
+    """获取指定农场的茬口列表（分页）。"""
+    return (
+        db.query(CropCycle)
+        .filter(CropCycle.farm_id == farm_id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def count_crop_cycles(db: Session, farm_id: int) -> int:
+    """获取指定农场的茬口总数。"""
+    return db.query(CropCycle).filter(CropCycle.farm_id == farm_id).count()
 
 
 def get_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> CropCycle | None:
@@ -176,6 +189,7 @@ def advance_stage(db: Session, cycle_id: int, farm_id: int) -> CropCycle:
 __all__ = [
     "create_crop_cycle",
     "get_crop_cycles",
+    "count_crop_cycles",
     "get_crop_cycle",
     "update_stage",
     "_recalculate_stages",

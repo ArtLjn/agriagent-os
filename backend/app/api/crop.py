@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
 from app.models.farm import Farm
+from app.schemas.common import PaginatedResponse
 from app.schemas.crop import CropTemplateCreate, CropTemplateResponse
 from app.services import crop_service
 
@@ -19,13 +20,18 @@ def create_template(
     return crop_service.create_crop_template(db, template, farm_id=farm.id)
 
 
-@router.get("/templates", response_model=list[CropTemplateResponse])
+@router.get("/templates", response_model=PaginatedResponse[CropTemplateResponse])
 def list_templates(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ):
-    """获取所有作物模板列表。"""
-    return crop_service.get_crop_templates(db, farm_id=farm.id)
+    """获取作物模板列表（分页）。"""
+    skip = (page - 1) * size
+    items = crop_service.get_crop_templates(db, farm_id=farm.id, skip=skip, limit=size)
+    total = crop_service.count_crop_templates(db, farm_id=farm.id)
+    return {"items": items, "total": total}
 
 
 @router.get("/templates/{template_id}", response_model=CropTemplateResponse)

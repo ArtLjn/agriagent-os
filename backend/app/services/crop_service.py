@@ -29,9 +29,22 @@ def create_crop_template(db: Session, template: CropTemplateCreate, farm_id: int
     return db_template
 
 
-def get_crop_templates(db: Session, farm_id: int) -> list[CropTemplate]:
-    """获取指定农场的所有作物模板。"""
-    return db.query(CropTemplate).filter(CropTemplate.farm_id == farm_id).all()
+def get_crop_templates(
+    db: Session, farm_id: int, skip: int = 0, limit: int = 100
+) -> list[CropTemplate]:
+    """获取指定农场的作物模板列表（分页）。"""
+    return (
+        db.query(CropTemplate)
+        .filter(CropTemplate.farm_id == farm_id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def count_crop_templates(db: Session, farm_id: int) -> int:
+    """获取指定农场的作物模板总数。"""
+    return db.query(CropTemplate).filter(CropTemplate.farm_id == farm_id).count()
 
 
 def get_crop_template(db: Session, template_id: int, farm_id: int) -> CropTemplate | None:
@@ -92,6 +105,7 @@ def delete_crop_template(db: Session, template_id: int, farm_id: int) -> None:
 __all__ = [
     "create_crop_template",
     "get_crop_templates",
+    "count_crop_templates",
     "get_crop_template",
     "update_crop_template",
     "delete_crop_template",
