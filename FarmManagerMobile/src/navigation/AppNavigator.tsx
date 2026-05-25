@@ -7,6 +7,7 @@ import {CycleCreateScreen} from '../screens/cycle/CycleCreateScreen';
 import {LogListScreen} from '../screens/log/LogListScreen';
 import {LogCreateScreen} from '../screens/log/LogCreateScreen';
 import {CostCreateScreen} from '../screens/cost/CostCreateScreen';
+import {CostCategoryScreen} from '../screens/cost/CostCategoryScreen';
 import {ProfitScreen} from '../screens/cost/ProfitScreen';
 import {AgentChatScreen} from '../screens/agent/AgentChatScreen';
 import {AgentReportScreen} from '../screens/agent/AgentReportScreen';
@@ -20,6 +21,7 @@ export type RootStackParamList = {
   LogList: {cycleId: number};
   LogCreate: {cycleId: number};
   CostCreate: undefined;
+  CostCategory: undefined;
   Profit: {cycleId: number};
   AgentChat: {cycleId?: number};
   AgentReport: {cycleId?: number};
@@ -74,6 +76,11 @@ export const AppNavigator: React.FC = () => (
         name="CostCreate"
         component={CostCreateScreen}
         options={{title: '记一笔'}}
+      />
+      <Stack.Screen
+        name="CostCategory"
+        component={CostCategoryScreen}
+        options={{title: '分类管理'}}
       />
       <Stack.Screen
         name="Profit"
