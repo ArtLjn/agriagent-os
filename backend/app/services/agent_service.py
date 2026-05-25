@@ -2,7 +2,9 @@
 
 import logging
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.agents.advisor import invoke_advisor, stream_advisor
@@ -11,6 +13,16 @@ from app.models.agent import AdviceRecord, ReportRecord
 from app.schemas.agent import ChatResponse, DailyAdviceResponse, ReportResponse
 
 logger = logging.getLogger(__name__)
+
+_CST_OFFSET = timedelta(hours=8)
+
+
+def _today_start_cst() -> datetime:
+    """返回今天 00:00 CST 对应的 UTC 时间（无时区信息，用于数据库比较）。"""
+    cst = timezone(_CST_OFFSET)
+    now_cst = datetime.now(cst)
+    today_cst = now_cst.replace(hour=0, minute=0, second=0, microsecond=0)
+    return today_cst.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 async def chat_with_agent(
@@ -47,7 +59,28 @@ async def stream_chat_with_agent(
 async def get_daily_advice(
     db: Session, cycle_id: int | None = None, farm_id: int = 1
 ) -> DailyAdviceResponse:
-    """生成每日农事建议并保存。"""
+    """生成每日农事建议并保存；同一天同一农场命中缓存则直接返回。"""
+    today_start = _today_start_cst()
+    cached = (
+        db.query(AdviceRecord)
+        .filter(
+            and_(
+                AdviceRecord.farm_id == farm_id,
+                AdviceRecord.advice_type == "daily",
+                AdviceRecord.created_at >= today_start,
+            )
+        )
+        .order_by(AdviceRecord.created_at.desc())
+        .first()
+    )
+    if cached:
+        logger.info("每日建议缓存命中 | farm=%s record_id=%s", farm_id, cached.id)
+        return DailyAdviceResponse(
+            cycle_id=cached.cycle_id,
+            advice=cached.content,
+            created_at=cached.created_at,
+        )
+
     prompt = "请生成今天的农事建议，考虑当前天气和种植周期阶段。"
     if cycle_id:
         prompt = f"请为周期 ID={cycle_id} 生成今天的农事建议，查询天气和周期信息。"
@@ -67,6 +100,23 @@ async def get_daily_advice(
         advice=record.content,
         created_at=record.created_at,
     )
+
+
+async def refresh_daily_advice(
+    db: Session, cycle_id: int | None = None, farm_id: int = 1
+) -> DailyAdviceResponse:
+    """强制刷新每日建议：删除当天缓存后重新生成。"""
+    today_start = _today_start_cst()
+    db.query(AdviceRecord).filter(
+        and_(
+            AdviceRecord.farm_id == farm_id,
+            AdviceRecord.advice_type == "daily",
+            AdviceRecord.created_at >= today_start,
+        )
+    ).delete(synchronize_session=False)
+    db.commit()
+    logger.info("每日建议缓存已清除 | farm=%s", farm_id)
+    return await get_daily_advice(db, cycle_id=cycle_id, farm_id=farm_id)
 
 
 async def generate_report(
@@ -125,6 +175,7 @@ __all__ = [
     "chat_with_agent",
     "stream_chat_with_agent",
     "get_daily_advice",
+    "refresh_daily_advice",
     "generate_report",
     "get_advice_history",
     "get_report_history",
