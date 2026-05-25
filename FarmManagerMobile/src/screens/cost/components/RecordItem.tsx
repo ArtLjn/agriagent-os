@@ -5,6 +5,7 @@ import {Card} from '../../../components/Card';
 import {colors} from '../../../theme/colors';
 import {spacing, fontSize, borderRadius} from '../../../theme/spacing';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import dayjs from 'dayjs';
 
 const TYPE_CONFIG: Record<string, {label: string; color: string; icon: string; bgColor: string}> = {
   cost: {label: '支出', color: colors.danger, icon: 'arrow-down-circle', bgColor: colors.dangerLight},
@@ -23,12 +24,24 @@ const CATEGORY_ICONS: Record<string, string> = {
   '其他': 'dots-horizontal',
 };
 
+const formatDate = (dateStr: string): string => {
+  const d = dayjs(dateStr);
+  const today = dayjs();
+  if (d.isSame(today, 'day')) return '今天';
+  if (d.isSame(today.subtract(1, 'day'), 'day')) return '昨天';
+  if (d.year() === today.year()) {
+    return d.format('M月D日');
+  }
+  return d.format('YYYY年M月D日');
+};
+
 interface RecordItemProps {
   item: CostRecord;
   onPress: () => void;
+  onLongPress?: () => void;
 }
 
-export const RecordItem: React.FC<RecordItemProps> = ({item, onPress}) => {
+export const RecordItem: React.FC<RecordItemProps> = ({item, onPress, onLongPress}) => {
   const config = TYPE_CONFIG[item.record_type] || {
     label: item.record_type,
     color: colors.textSecondary,
@@ -40,7 +53,7 @@ export const RecordItem: React.FC<RecordItemProps> = ({item, onPress}) => {
   const prefix = isCost ? '-' : '+';
 
   return (
-    <TouchableOpacity onPress={onPress} delayLongPress={500} activeOpacity={0.7}>
+    <TouchableOpacity onPress={onPress} onLongPress={onLongPress} delayLongPress={400} activeOpacity={0.7}>
       <Card style={styles.card}>
         <View style={styles.row}>
           <View style={styles.left}>
@@ -50,7 +63,7 @@ export const RecordItem: React.FC<RecordItemProps> = ({item, onPress}) => {
               </View>
               <View>
                 <Text style={styles.category}>{item.category}</Text>
-                <Text style={styles.date}>{item.record_date}</Text>
+                <Text style={styles.date}>{formatDate(item.record_date)}</Text>
               </View>
             </View>
           </View>
@@ -96,9 +109,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   typeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
+    width: 42,
+    height: 42,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -15,9 +15,11 @@ def _today_start() -> datetime:
     """返回今天 00:00 CST 对应的 UTC 时间（无时区信息）。"""
     cst = timezone(timedelta(hours=8))
     now = datetime.now(cst)
-    return now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(
-        timezone.utc
-    ).replace(tzinfo=None)
+    return (
+        now.replace(hour=0, minute=0, second=0, microsecond=0)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
 
 
 @pytest.fixture

@@ -21,6 +21,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {MonthlyStats} from './components/MonthlyStats';
 import {CategoryFilter} from './components/CategoryFilter';
 import {RecordItem} from './components/RecordItem';
+import {RecordDetailModal} from './components/RecordDetailModal';
 
 type FilterType = 'all' | 'cost' | 'income';
 
@@ -32,6 +33,8 @@ export const CostListScreen: React.FC = () => {
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<CostRecord | null>(null);
 
   useEffect(() => {
     fetchRecords();
@@ -88,10 +91,15 @@ export const CostListScreen: React.FC = () => {
 
   const handleNextMonth = () => {
     const nextMonth = dayjs(selectedMonth).add(1, 'month');
-    // 不允许选择未来月份
-    if (nextMonth.isBefore(dayjs(), 'month')) {
+    // 不允许选择未来月份（严格大于当前月）
+    if (!nextMonth.isAfter(dayjs(), 'month')) {
       setSelectedMonth(nextMonth.toDate());
     }
+  };
+
+  const handleShowDetail = (record: CostRecord) => {
+    setSelectedRecord(record);
+    setDetailVisible(true);
   };
 
   const handleDelete = (record: CostRecord) => {
@@ -144,6 +152,8 @@ export const CostListScreen: React.FC = () => {
         <MonthlyStats
           selectedMonth={selectedMonth}
           stats={{cost: 0, income: 0, balance: 0}}
+          onPreviousMonth={handlePreviousMonth}
+          onNextMonth={handleNextMonth}
         />
         <EmptyState
           title="暂无账单记录"
@@ -183,15 +193,41 @@ export const CostListScreen: React.FC = () => {
       <FlatList
         data={filteredRecords}
         keyExtractor={item => String(item.id)}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          filteredRecords.length === 0 && styles.listEmpty,
+        ]}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Icon name="clipboard-text-outline" size={48} color={colors.textTertiary} />
+            <Text style={styles.emptyText}>本月暂无记录</Text>
+            <Text style={styles.emptySubtext}>点击右下角按钮记一笔</Text>
+          </View>
+        }
         renderItem={({item}) => (
-          <RecordItem item={item} onPress={() => handleDelete(item)} />
+          <RecordItem
+            item={item}
+            onPress={() => handleShowDetail(item)}
+            onLongPress={() => handleDelete(item)}
+          />
         )}
       />
       <TouchableOpacity style={styles.fab} onPress={handleCreate}>
         <Icon name="plus" size={24} color={colors.textInverse} />
       </TouchableOpacity>
+
+      <RecordDetailModal
+        visible={detailVisible}
+        record={selectedRecord}
+        onClose={() => setDetailVisible(false)}
+        onDelete={() => {
+          setDetailVisible(false);
+          if (selectedRecord) {
+            handleDelete(selectedRecord);
+          }
+        }}
+      />
     </View>
   );
 };
@@ -231,6 +267,26 @@ const styles = StyleSheet.create({
   listContent: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+  listEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  emptyText: {
+    fontSize: fontSize.lg,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginTop: spacing.md,
+  },
+  emptySubtext: {
+    fontSize: fontSize.sm,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
   },
   fab: {
     position: 'absolute',

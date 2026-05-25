@@ -38,27 +38,29 @@ export const MonthlyStats: React.FC<MonthlyStatsProps> = ({
       </TouchableOpacity>
     </View>
     <View style={styles.statsCards}>
-      <Card style={[styles.statCard, styles.statCardCost]} padding="lg">
+      <Card style={[styles.statCard, styles.statCardCost]} padding="md">
         <Text style={styles.statLabel}>支出</Text>
-        <Text style={[styles.statValue, {color: colors.danger}]}>
-          {stats.cost.toFixed(2)}
+        <Text style={[styles.statValue, {color: colors.danger}]} numberOfLines={1} adjustsFontSizeToFit>
+          {stats.cost.toFixed(0)}
         </Text>
       </Card>
-      <Card style={[styles.statCard, styles.statCardIncome]} padding="lg">
+      <Card style={[styles.statCard, styles.statCardIncome]} padding="md">
         <Text style={styles.statLabel}>收入</Text>
-        <Text style={[styles.statValue, {color: colors.success}]}>
-          {stats.income.toFixed(2)}
+        <Text style={[styles.statValue, {color: colors.success}]} numberOfLines={1} adjustsFontSizeToFit>
+          {stats.income.toFixed(0)}
         </Text>
       </Card>
-      <Card style={[styles.statCard, styles.statCardBalance]} padding="lg">
+      <Card style={[styles.statCard, styles.statCardBalance]} padding="md">
         <Text style={styles.statLabel}>结余</Text>
         <Text
           style={[
             styles.statValue,
             {color: stats.balance >= 0 ? colors.success : colors.danger},
           ]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
         >
-          {stats.balance.toFixed(2)}
+          {stats.balance.toFixed(0)}
         </Text>
       </Card>
     </View>
@@ -79,7 +81,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   monthButton: {
-    padding: spacing.sm,
+    padding: spacing.md,
+    minWidth: 48,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   monthText: {
     fontSize: fontSize.lg,
@@ -93,7 +99,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   statCardCost: {
     borderTopWidth: 3,

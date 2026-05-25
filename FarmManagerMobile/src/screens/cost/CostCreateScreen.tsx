@@ -24,6 +24,7 @@ import {spacing, fontSize, borderRadius} from '../../theme/spacing';
 import type {RootStackParamList} from '../../navigation/AppNavigator';
 import {AIHelper} from './components/AIHelper';
 import {CategoryModal} from './components/CategoryModal';
+import {DatePickerModal} from './components/DatePickerModal';
 
 const COST_CATEGORIES = ['种子', '化肥', '农药', '人工', '水电', '地租', '其他'];
 const INCOME_CATEGORIES = ['销售', '补贴', '其他'];
@@ -183,16 +184,15 @@ export const CostCreateScreen: React.FC = () => {
         <Icon name="calendar" size={20} color={colors.primary} />
         <Text style={styles.dateText}>{dayjs(recordDate).format('YYYY年MM月DD日')}</Text>
       </TouchableOpacity>
-      {/* Temporarily disabled DateTimePicker due to module linking issues
-      {showDatePicker && (
-        <DateTimePicker
-          value={recordDate}
-          mode="date"
-          display="compact"
-          onChange={handleDateChange}
-          maximumDate={new Date()}
-        />
-      )} */}
+      <DatePickerModal
+        visible={showDatePicker}
+        date={recordDate}
+        onConfirm={(d) => {
+          setRecordDate(d);
+          setShowDatePicker(false);
+        }}
+        onCancel={() => setShowDatePicker(false)}
+      />
 
       <Text style={styles.sectionTitle}>备注</Text>
       <TextInput
