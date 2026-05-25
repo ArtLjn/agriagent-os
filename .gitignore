@@ -28,6 +28,11 @@ Thumbs.db
 build/
 dist/
 
+# Android / Gradle
+FarmManagerMobile/android/.gradle/
+FarmManagerMobile/android/app/build/
+FarmManagerMobile/android/android/
+
 # Claude
 .claude/
 
