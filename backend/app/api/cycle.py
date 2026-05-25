@@ -58,4 +58,45 @@ def get_cycle(
     return cycle
 
 
+@router.put("/{cycle_id}", response_model=CropCycleResponse)
+def update_cycle(
+    cycle_id: int,
+    cycle: CropCycleCreate,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """更新茬口。"""
+    try:
+        return cycle_service.update_crop_cycle(db, cycle_id, cycle, farm_id=farm.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{cycle_id}")
+def delete_cycle(
+    cycle_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """删除茬口。"""
+    try:
+        cycle_service.delete_crop_cycle(db, cycle_id, farm_id=farm.id)
+        return {"message": "删除成功"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{cycle_id}/advance-stage", response_model=CropCycleResponse)
+def advance_stage(
+    cycle_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """推进茬口到下一阶段。"""
+    try:
+        return cycle_service.advance_stage(db, cycle_id, farm_id=farm.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 __all__ = ["router"]

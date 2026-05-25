@@ -41,4 +41,32 @@ def get_template(
     return template
 
 
+@router.put("/templates/{template_id}", response_model=CropTemplateResponse)
+def update_template(
+    template_id: int,
+    template: CropTemplateCreate,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """更新作物模板。"""
+    try:
+        return crop_service.update_crop_template(db, template_id, template, farm_id=farm.id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/templates/{template_id}")
+def delete_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """删除作物模板。"""
+    try:
+        crop_service.delete_crop_template(db, template_id, farm_id=farm.id)
+        return {"message": "删除成功"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 __all__ = ["router"]
