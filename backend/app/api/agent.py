@@ -70,6 +70,7 @@ async def agent_chat(
 @limiter.limit("10/minute")
 async def agent_chat_stream(
     request: Request,
+    response: Response,
     chat_request: ChatRequest,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),

@@ -1,25 +1,22 @@
+import asyncio
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import asyncio
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from langgraph.errors import GraphRecursionError
-from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
-
-from app.core.limiter import limiter
-from fastapi import Request
 from starlette.responses import Response
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.core.limiter import limiter
 from app.core.logger import get_logger, setup_logging
 
 setup_logging()
