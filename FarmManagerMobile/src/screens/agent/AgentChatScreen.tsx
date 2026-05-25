@@ -1,4 +1,4 @@
-import React, {useState, useRef, useCallback} from 'react';
+import React, {useState, useRef, useCallback, useEffect} from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {useNavigation} from '@react-navigation/native';
 import {useAgentStore} from '../../stores/agentStore';
-import type {ChatMessage} from '../../api/types';
+import type {ChatMessage, ReportListItem} from '../../api/types';
 import {MarkdownText} from '../../components/MarkdownText';
 import {colors} from '../../theme/colors';
 import {spacing, fontSize, borderRadius} from '../../theme/spacing';
@@ -24,12 +26,55 @@ const QUICK_PROMPTS = [
   {icon: 'file-document', text: '生成本周种植报告'},
 ];
 
+const ReportListView: React.FC<{
+  reports: ReportListItem[];
+  onGenerate: () => void;
+}> = ({reports, onGenerate}) => (
+  <ScrollView style={styles.reportList} contentContainerStyle={styles.reportListContent}>
+    <TouchableOpacity style={styles.generateBtn} onPress={onGenerate} activeOpacity={0.7}>
+      <Icon name="plus" size={20} color="#FFFFFF" />
+      <Text style={styles.generateBtnText}>生成新报告</Text>
+    </TouchableOpacity>
+    {reports.length === 0 ? (
+      <View style={styles.emptyReports}>
+        <Icon name="file-document-outline" size={48} color={colors.textTertiary} />
+        <Text style={styles.emptyReportsText}>暂无报告</Text>
+        <Text style={styles.emptyReportsSub}>点击上方按钮生成第一份报告</Text>
+      </View>
+    ) : (
+      reports.map(r => (
+        <TouchableOpacity
+          key={r.id}
+          style={styles.reportItem}
+          activeOpacity={0.7}
+          onPress={() => {}}>
+          <View style={styles.reportItemHeader}>
+            <Text style={styles.reportItemType}>{r.report_type === 'weekly' ? '周报' : '月报'}</Text>
+            <Text style={styles.reportItemDate}>
+              {new Date(r.created_at).toLocaleDateString('zh-CN')}
+            </Text>
+          </View>
+          <Text style={styles.reportItemPreview} numberOfLines={2}>{r.content}</Text>
+        </TouchableOpacity>
+      ))
+    )}
+  </ScrollView>
+);
+
 export const AgentChatScreen: React.FC = () => {
-  const {messages, sendMessage, loading: isLoading} = useAgentStore();
+  const navigation = useNavigation();
+  const {messages, sendMessage, loading: isLoading, reports, fetchReports} = useAgentStore();
   const [inputText, setInputText] = useState('');
+  const [activeTab, setActiveTab] = useState<'chat' | 'report'>('chat');
   const flatListRef = useRef<FlatList>(null);
 
   const hasMessages = messages.length > 0;
+
+  useEffect(() => {
+    if (activeTab === 'report') {
+      fetchReports();
+    }
+  }, [activeTab]);
 
   const handleSend = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -119,67 +164,92 @@ export const AgentChatScreen: React.FC = () => {
         </View>
       </View>
 
+      {/* SegmentedControl */}
+      <View style={styles.segmentRow}>
+        <TouchableOpacity
+          style={[styles.segBtn, activeTab === 'chat' && styles.segBtnActive]}
+          onPress={() => setActiveTab('chat')}
+          activeOpacity={0.7}>
+          <Text style={[styles.segText, activeTab === 'chat' && styles.segTextActive]}>对话</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.segBtn, activeTab === 'report' && styles.segBtnActive]}
+          onPress={() => setActiveTab('report')}
+          activeOpacity={0.7}>
+          <Text style={[styles.segText, activeTab === 'report' && styles.segTextActive]}>报告</Text>
+        </TouchableOpacity>
+      </View>
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(_, index) => String(index)}
-          renderItem={renderMessage}
-          contentContainerStyle={[
-            styles.listContent,
-            !hasMessages && {flexGrow: 1},
-          ]}
-          ListHeaderComponent={ListHeaderComponent}
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({animated: true})
-          }
-        />
-
-        {isLoading && hasMessages && (
-          <View style={styles.typingRow}>
-            <View style={styles.typingBubble}>
-              <View style={styles.typingDot} />
-              <View style={[styles.typingDot, styles.typingDot2]} />
-              <View style={[styles.typingDot, styles.typingDot3]} />
-            </View>
-          </View>
-        )}
-
-        {/* Input */}
-        <View style={styles.inputBar}>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="请输入您的问题..."
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              maxLength={500}
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendBtn,
-                (!inputText.trim() || isLoading) && styles.sendBtnDisabled,
+        {activeTab === 'chat' ? (
+          <>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(_, index) => String(index)}
+              renderItem={renderMessage}
+              contentContainerStyle={[
+                styles.listContent,
+                !hasMessages && {flexGrow: 1},
               ]}
-              onPress={handleInputSend}
-              disabled={!inputText.trim() || isLoading}
-              activeOpacity={0.7}>
-              <Icon
-                name="send"
-                size={18}
-                color={
-                  !inputText.trim() || isLoading
-                    ? colors.textTertiary
-                    : '#FFFFFF'
-                }
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
+              ListHeaderComponent={ListHeaderComponent}
+              onContentSizeChange={() =>
+                flatListRef.current?.scrollToEnd({animated: true})
+              }
+            />
+
+            {isLoading && hasMessages && (
+              <View style={styles.typingRow}>
+                <View style={styles.typingBubble}>
+                  <View style={styles.typingDot} />
+                  <View style={[styles.typingDot, styles.typingDot2]} />
+                  <View style={[styles.typingDot, styles.typingDot3]} />
+                </View>
+              </View>
+            )}
+
+            {/* Input */}
+            <View style={styles.inputBar}>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder="请输入您的问题..."
+                  placeholderTextColor={colors.textTertiary}
+                  multiline
+                  maxLength={500}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.sendBtn,
+                    (!inputText.trim() || isLoading) && styles.sendBtnDisabled,
+                  ]}
+                  onPress={handleInputSend}
+                  disabled={!inputText.trim() || isLoading}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name="send"
+                    size={18}
+                    color={
+                      !inputText.trim() || isLoading
+                        ? colors.textTertiary
+                        : '#FFFFFF'
+                    }
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        ) : (
+          <ReportListView
+            reports={reports}
+            onGenerate={() => navigation.navigate('AgentReport' as never)}
+          />
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -231,6 +301,37 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.lg,
+    padding: 3,
+  },
+  segBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderRadius: borderRadius.md,
+  },
+  segBtnActive: {
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  segTextActive: {
+    color: colors.text,
   },
   listContent: {
     padding: spacing.md,
@@ -395,5 +496,68 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: colors.disabledBg,
+  },
+  reportList: {
+    flex: 1,
+  },
+  reportListContent: {
+    padding: spacing.md,
+  },
+  generateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  generateBtnText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  emptyReports: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+  },
+  emptyReportsText: {
+    fontSize: fontSize.lg,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    fontWeight: '600',
+  },
+  emptyReportsSub: {
+    fontSize: fontSize.sm,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
+  reportItem: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  reportItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  reportItemType: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  reportItemDate: {
+    fontSize: fontSize.xs,
+    color: colors.textTertiary,
+  },
+  reportItemPreview: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
 });
