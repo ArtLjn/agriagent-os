@@ -1,3 +1,4 @@
+import SSE from 'react-native-sse';
 import axios from 'axios';
 
 const API_BASE_URL = 'http://10.0.2.2:8000';
@@ -76,43 +77,42 @@ export const costApi = {
 // Agent
 export const agentApi = {
   chat: (data: { cycle_id?: number; message: string }) => apiClient.post('/agent/chat', data),
-  streamChat: async (
+  streamChat: (
     data: { cycle_id?: number; message: string },
     onChunk: (chunk: string) => void,
+    onDone: () => void,
+    onError: (err: string) => void,
   ) => {
-    const res = await fetch(`${API_BASE_URL}/agent/chat/stream`, {
-      method: 'POST',
+    const es = new SSE(`${API_BASE_URL}/agent/chat/stream`, {
       headers: {'Content-Type': 'application/json'},
+      method: 'POST',
       body: JSON.stringify(data),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `请求失败: ${res.status}`);
-    }
-    const reader = res.body?.getReader();
-    if (!reader) throw new Error('无法读取响应');
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const {done, value} = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, {stream: true});
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data: ')) continue;
-        const payload = trimmed.slice(6);
-        if (payload === '[DONE]') return;
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed.error) throw new Error(parsed.error);
-          if (parsed.content) onChunk(parsed.content);
-        } catch {
-          // 忽略非 JSON 行
-        }
+    es.addEventListener('message', event => {
+      if (!event.data) return;
+      const payload = event.data;
+      if (payload === '[DONE]') {
+        es.close();
+        onDone();
+        return;
       }
-    }
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed.error) {
+          es.close();
+          onError(parsed.error);
+          return;
+        }
+        if (parsed.content) onChunk(parsed.content);
+      } catch {
+        // 忽略非 JSON 行
+      }
+    });
+    es.addEventListener('error', () => {
+      es.close();
+      onError('网络连接失败，请检查后重试');
+    });
+    return es;
   },
   getDailyAdvice: (cycleId?: number) =>
     apiClient.get('/agent/daily', { params: { cycle_id: cycleId } }),

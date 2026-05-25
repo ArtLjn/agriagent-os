@@ -27,7 +27,7 @@ export const useLogStore = create<LogState>(set => ({
       const res = await logApi.getLogs(
         cycleId ? {cycle_id: cycleId} : undefined,
       );
-      set({logs: res.data, loading: false});
+      set({logs: (res.data as any)?.items ?? res.data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }
@@ -40,7 +40,7 @@ export const useLogStore = create<LogState>(set => ({
       const res = await logApi.getLogs(
         data.cycle_id ? {cycle_id: data.cycle_id} : undefined,
       );
-      set({logs: res.data, loading: false});
+      set({logs: (res.data as any)?.items ?? res.data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }

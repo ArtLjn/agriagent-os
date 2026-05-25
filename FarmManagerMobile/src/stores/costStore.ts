@@ -33,7 +33,7 @@ export const useCostStore = create<CostState>(set => ({
       const res = await costApi.getRecords(
         cycleId ? {cycle_id: cycleId} : undefined,
       );
-      set({records: res.data, loading: false});
+      set({records: (res.data as any)?.items ?? res.data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }
@@ -46,7 +46,7 @@ export const useCostStore = create<CostState>(set => ({
       const res = await costApi.getRecords(
         data.cycle_id ? {cycle_id: data.cycle_id} : undefined,
       );
-      set({records: res.data, loading: false});
+      set({records: (res.data as any)?.items ?? res.data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }
@@ -59,7 +59,7 @@ export const useCostStore = create<CostState>(set => ({
       const res = await costApi.getRecords(
         cycleId ? {cycle_id: cycleId} : undefined,
       );
-      set({records: res.data, loading: false});
+      set({records: (res.data as any)?.items ?? res.data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }

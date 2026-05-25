@@ -15,7 +15,7 @@ interface AgentState {
   cityLat: number | undefined;
   cityLon: number | undefined;
   reports: ReportListItem[];
-  sendMessage: (message: string, cycleId?: number) => Promise<void>;
+  sendMessage: (message: string, cycleId?: number) => void;
   fetchDailyAdvice: (cycleId?: number) => Promise<void>;
   refreshDailyAdvice: (cycleId?: number) => Promise<void>;
   generateReport: (reportType: string, cycleId?: number) => Promise<void>;
@@ -40,43 +40,37 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       cityLon: 120.62,
       reports: [],
 
-  sendMessage: async (message, cycleId) => {
+  sendMessage: (message, cycleId) => {
     set(state => ({
       messages: [...state.messages, {role: 'user', content: message}],
       loading: true,
       error: null,
     }));
-    try {
-      let reply = '';
-      await agentApi.streamChat(
-        {message, cycle_id: cycleId},
-        chunk => {
-          reply += chunk;
-          set(state => {
-            const msgs = [...state.messages];
-            const lastIdx = msgs.length - 1;
-            if (lastIdx >= 0 && msgs[lastIdx].role === 'agent') {
-              msgs[lastIdx] = {role: 'agent', content: reply};
-            } else {
-              msgs.push({role: 'agent', content: reply});
-            }
-            return {messages: msgs};
-          });
-        },
-      );
-      set({loading: false});
-    } catch (err: any) {
-      set(state => {
-        const msgs = [...state.messages];
-        const lastIdx = msgs.length - 1;
-        if (lastIdx >= 0 && msgs[lastIdx].role === 'agent' && !msgs[lastIdx].content) {
-          msgs[lastIdx] = {role: 'agent', content: `抱歉，出错了：${err.message}`};
-        } else {
-          msgs.push({role: 'agent', content: `抱歉，出错了：${err.message}`});
-        }
-        return {messages: msgs, loading: false};
-      });
-    }
+    agentApi.streamChat(
+      {message, cycle_id: cycleId},
+      chunk => {
+        set(state => {
+          const msgs = [...state.messages];
+          const last = msgs[msgs.length - 1];
+          if (last?.role === 'agent') {
+            msgs[msgs.length - 1] = {...last, content: last.content + chunk};
+          } else {
+            msgs.push({role: 'agent', content: chunk});
+          }
+          return {messages: msgs};
+        });
+      },
+      () => set({loading: false}),
+      err => {
+        set(state => ({
+          messages: [
+            ...state.messages.filter(m => m.role !== 'agent' || m.content),
+            {role: 'agent', content: `抱歉，出错了：${err}`},
+          ],
+          loading: false,
+        }));
+      },
+    );
   },
 
   fetchDailyAdvice: async cycleId => {

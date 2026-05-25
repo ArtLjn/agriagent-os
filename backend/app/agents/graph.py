@@ -86,7 +86,7 @@ def compile_advisor_graph():
     graph.set_entry_point("llm")
     graph.add_conditional_edges("llm", _should_continue, {"tools": "tools", END: END})
     graph.add_edge("tools", "llm")
-    return graph.compile(recursion_limit=15)
+    return graph.compile()
 
 
 __all__ = ["compile_advisor_graph"]

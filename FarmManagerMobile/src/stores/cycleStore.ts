@@ -31,7 +31,8 @@ export const useCycleStore = create<CycleState>(set => ({
     set({loading: true, error: null});
     try {
       const res = await cycleApi.getCycles();
-      set({cycles: res.data, loading: false});
+      const data = (res.data as any)?.items ?? res.data;
+      set({cycles: data, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }
@@ -51,7 +52,8 @@ export const useCycleStore = create<CycleState>(set => ({
     set({loading: true, error: null});
     try {
       const res = await cropApi.getTemplates();
-      set({templates: res.data, loading: false});
+      const tData = (res.data as any)?.items ?? res.data;
+      set({templates: tData, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }
@@ -61,8 +63,9 @@ export const useCycleStore = create<CycleState>(set => ({
     set({loading: true, error: null});
     try {
       await cycleApi.createCycle(data);
-      const res = await cycleApi.getCycles();
-      set({cycles: res.data, loading: false});
+      const res2 = await cycleApi.getCycles();
+      const items = (res2.data as any)?.items ?? res2.data;
+      set({cycles: items, loading: false});
     } catch (err: any) {
       set({error: err.message, loading: false});
     }

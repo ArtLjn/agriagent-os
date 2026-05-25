@@ -67,6 +67,24 @@ async def get_daily_advice(db: Session, cycle_id: int | None = None, farm_id: in
     )
 
 
+async def refresh_daily_advice(db: Session, cycle_id: int | None = None, farm_id: int = 1) -> DailyAdviceResponse:
+    """强制刷新每日农事建议：删除今日旧记录后重新生成。"""
+    today_start = __import__("datetime").datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    db.query(AdviceRecord).filter(
+        AdviceRecord.farm_id == farm_id,
+        AdviceRecord.advice_type == "daily",
+        AdviceRecord.cycle_id == cycle_id if cycle_id is not None else True,
+        AdviceRecord.created_at >= today_start,
+    ).delete(synchronize_session=False)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    logger.info("已清除今日旧建议 | farm=%s cycle=%s", farm_id, cycle_id)
+    return await get_daily_advice(db, cycle_id, farm_id)
+
+
 async def generate_report(
     db: Session, cycle_id: int | None = None, report_type: str = "weekly", farm_id: int = 1
 ) -> ReportResponse:
@@ -119,6 +137,7 @@ __all__ = [
     "chat_with_agent",
     "stream_chat_with_agent",
     "get_daily_advice",
+    "refresh_daily_advice",
     "generate_report",
     "get_advice_history",
     "get_report_history",
