@@ -91,6 +91,7 @@ async def stream_advisor(
     except GraphRecursionError:
         logger.error("Agent 流式步数超限 | farm_id=%s", farm_id)
         yield "Agent 处理步数超出限制，请简化您的问题后重试。"
+        return
 
     logger.info("Agent 流式完成，共 %d 步", step)
 
