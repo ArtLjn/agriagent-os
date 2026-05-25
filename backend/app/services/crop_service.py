@@ -20,8 +20,12 @@ def create_crop_template(db: Session, template: CropTemplateCreate, farm_id: int
         )
         db.add(db_stage)
 
-    db.commit()
-    db.refresh(db_template)
+    try:
+        db.commit()
+        db.refresh(db_template)
+    except Exception:
+        db.rollback()
+        raise
     return db_template
 
 

@@ -22,7 +22,11 @@ async def chat_with_agent(db: Session, message: str, cycle_id: int | None = None
 
     record = AdviceRecord(cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id)
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     logger.info("对话记录已保存 | record_id=%s", record.id)
 
     return ChatResponse(reply=reply)
@@ -48,8 +52,12 @@ async def get_daily_advice(db: Session, cycle_id: int | None = None, farm_id: in
 
     record = AdviceRecord(cycle_id=cycle_id, advice_type="daily", content=advice, farm_id=farm_id)
     db.add(record)
-    db.commit()
-    db.refresh(record)
+    try:
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        raise
     logger.info("建议已保存 | record_id=%s", record.id)
 
     return DailyAdviceResponse(
@@ -71,8 +79,12 @@ async def generate_report(
 
     record = ReportRecord(cycle_id=cycle_id, report_type=report_type, content=content, farm_id=farm_id)
     db.add(record)
-    db.commit()
-    db.refresh(record)
+    try:
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        raise
     logger.info("报告已保存 | record_id=%s", record.id)
 
     return ReportResponse(

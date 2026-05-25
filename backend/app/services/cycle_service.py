@@ -41,8 +41,12 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> Crop
         db.add(db_stage)
         current_date = end_date + timedelta(days=1)
 
-    db.commit()
-    db.refresh(db_cycle)
+    try:
+        db.commit()
+        db.refresh(db_cycle)
+    except Exception:
+        db.rollback()
+        raise
     return db_cycle
 
 
@@ -73,8 +77,12 @@ def update_stage(
         stage.duration_days = duration_days
         _recalculate_stages(db, stage.cycle_id)
 
-    db.commit()
-    db.refresh(stage)
+    try:
+        db.commit()
+        db.refresh(stage)
+    except Exception:
+        db.rollback()
+        raise
     return stage
 
 
@@ -93,7 +101,11 @@ def _recalculate_stages(db: Session, cycle_id: int) -> None:
         stage.is_current = 1 if stage.start_date <= today <= stage.end_date else 0
         current_date = stage.end_date + timedelta(days=1)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 __all__ = [

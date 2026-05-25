@@ -27,8 +27,12 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         farm_id=farm_id,
     )
     db.add(db_record)
-    db.commit()
-    db.refresh(db_record)
+    try:
+        db.commit()
+        db.refresh(db_record)
+    except Exception:
+        db.rollback()
+        raise
     return db_record
 
 

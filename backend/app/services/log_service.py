@@ -22,8 +22,12 @@ def create_log(db: Session, log: FarmLogCreate, farm_id: int) -> FarmLog:
         photo_urls=log.photo_urls,
     )
     db.add(db_log)
-    db.commit()
-    db.refresh(db_log)
+    try:
+        db.commit()
+        db.refresh(db_log)
+    except Exception:
+        db.rollback()
+        raise
     return db_log
 
 
