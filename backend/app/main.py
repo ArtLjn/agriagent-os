@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.api import (  # noqa: E402
     admin,
+    admin_trace,
     agent,
     cost,
     cost_categories,
@@ -193,6 +194,7 @@ app.include_router(cost_categories.router)
 app.include_router(agent.router)
 app.include_router(weather.router)
 app.include_router(admin.router)
+app.include_router(admin_trace.router)
 app.include_router(user_settings.router)
 app.include_router(debt.router)
 
