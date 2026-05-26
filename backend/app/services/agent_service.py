@@ -13,7 +13,9 @@ from app.core.json_repair import safe_parse_json
 from app.core.pending_actions import (
     detect_user_intent,
     get_pending,
+    is_write_skill,
     remove_pending,
+    store_pending,
 )
 from app.models.agent import AdviceRecord, ReportRecord
 from app.schemas.agent import (
@@ -22,9 +24,34 @@ from app.schemas.agent import (
     DailyAdviceResponse,
     ReportResponse,
 )
-from app.skills import get_langchain_tools
+from app.skills import build_skill_context, get_langchain_tools
 
 logger = logging.getLogger(__name__)
+
+
+async def _try_skillify_route(
+    message: str, farm_id: int = 1
+) -> tuple[str, dict] | None:
+    """skillify 预路由：fast_match + LLM 意图兜底。
+
+    返回 (skill_name, params) 命中时，否则返回 None 走 LangGraph。
+    """
+    from app.skills import get_skill_manager
+
+    try:
+        manager = get_skill_manager()
+        context = build_skill_context(farm_id=farm_id)
+        result = await manager.handle(message, context)
+        if result.match and result.match.skill_name:
+            logger.info(
+                "skillify 预路由命中 | source=%s | skill=%s",
+                result.source,
+                result.match.skill_name,
+            )
+            return result.match.skill_name, result.match.params or {}
+    except Exception as exc:
+        logger.warning("skillify 预路由异常，降级到 LangGraph | error=%s", exc)
+    return None
 
 
 # title 超过此长度截断并加省略号
@@ -86,6 +113,25 @@ async def _execute_pending_action(farm_id: int, skill_name: str, params: dict) -
         return f"未知工具: {skill_name}"
     result = await tool.ainvoke(params)
     return str(result)
+
+
+async def _execute_skill(skill_name: str, params: dict) -> str:
+    """直接执行指定 Skill 并返回结果文本。"""
+    tool_map = {t.name: t for t in get_langchain_tools()}
+    tool = tool_map.get(skill_name)
+    if not tool:
+        return f"未知工具: {skill_name}"
+    result = await tool.ainvoke(params)
+    return str(result)
+
+
+async def _invoke_advisor_fallback(
+    message: str, cycle_id: int | None, farm_id: int
+) -> str:
+    """LangGraph 兜底调用。"""
+    context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
+    full_input = context + message
+    return await invoke_advisor(full_input, farm_id=farm_id)
 
 
 async def chat_with_agent(
@@ -150,7 +196,36 @@ async def chat_with_agent(
         # intent == "modify"：用户修正参数，交给 LLM 处理
         # 保留 pending action 不删除，让 LLM 根据上下文重新决策
 
-    # 无 pending action 或用户修正参数 → 正常调用 LLM
+    # 无 pending action 或用户修正参数 → 先尝试 skillify 预路由
+    skillify_match = await _try_skillify_route(message, farm_id=farm_id)
+    if skillify_match:
+        skill_name, skill_params = skillify_match
+        if is_write_skill(skill_name):
+            # 写操作：预路由只做意图识别，参数提取交给 LangGraph
+            logger.info(
+                "skillify 预路由 → 写操作，交给 LangGraph 提取参数 | skill=%s",
+                skill_name,
+            )
+        else:
+            # 只读操作：预路由命中后直接执行
+            try:
+                reply = await _execute_skill(skill_name, skill_params)
+            except Exception as exc:
+                logger.error("skillify 预路由执行失败 | skill=%s error=%s", skill_name, exc)
+                reply = await _invoke_advisor_fallback(message, cycle_id, farm_id)
+
+            record = AdviceRecord(
+                cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id
+            )
+            db.add(record)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            return ChatResponse(reply=reply)
+
+    # 预路由未命中（或写操作需要参数提取）→ 走 LangGraph
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
     full_input = context + message
     reply = await invoke_advisor(full_input, farm_id=farm_id)
@@ -172,7 +247,26 @@ async def chat_with_agent(
 async def stream_chat_with_agent(
     message: str, cycle_id: int | None = None, farm_id: int = 1
 ) -> AsyncGenerator[str, None]:
-    """流式与 Agent 对话，逐 token 返回。"""
+    """流式与 Agent 对话，逐 token 返回。支持 skillify 预路由。"""
+    from app.core.guardrails import check_input, filter_output
+
+    # skillify 预路由（只读 skill 直接执行，写操作和未命中走 LangGraph）
+    skillify_match = await _try_skillify_route(message, farm_id=farm_id)
+    if skillify_match:
+        skill_name, skill_params = skillify_match
+        if not is_write_skill(skill_name):
+            try:
+                result = await _execute_skill(skill_name, skill_params)
+                yield filter_output(result)
+                return
+            except Exception as exc:
+                logger.warning(
+                    "stream 预路由执行失败，降级 LangGraph | skill=%s error=%s",
+                    skill_name,
+                    exc,
+                )
+
+    # 写操作或未命中 → 走 LangGraph 流式
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
     full_input = context + message
     async for chunk in stream_advisor(full_input, farm_id=farm_id):

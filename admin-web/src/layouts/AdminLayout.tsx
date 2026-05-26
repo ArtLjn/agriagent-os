@@ -33,7 +33,7 @@ const ACCENT = '#58a6ff';
 const menuItems = [
   {
     type: 'group' as const,
-    label: '业务管理',
+    label: '接口调试',
     children: [
       { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
       { key: '/crops', icon: <EnvironmentOutlined />, label: '作物管理' },
@@ -84,7 +84,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const currentTitle = pageTitles[location.pathname] || 'Farm Manager';
 
   return (
-    <Layout style={{ minHeight: '100vh', background: BG_PRIMARY }}>
+    <Layout style={{ height: '100vh', background: BG_PRIMARY }}>
       <Sider
         width={200}
         collapsedWidth={64}
@@ -169,7 +169,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </Sider>
 
-      <Layout style={{ background: BG_PRIMARY }}>
+      <Layout style={{ background: BG_PRIMARY, overflow: 'hidden' }}>
         {/* Header */}
         <Header
           style={{
@@ -180,6 +180,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
           }}
         >
           <span style={{ fontSize: 16, fontWeight: 600, color: TEXT_PRIMARY }}>
@@ -199,7 +200,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             borderRadius: 12,
             border: `1px solid ${BORDER}`,
             overflow: 'auto',
-            minHeight: 'calc(100vh - 96px)',
           }}
         >
           {children}

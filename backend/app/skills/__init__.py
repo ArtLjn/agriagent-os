@@ -6,6 +6,7 @@ from typing import Any
 
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, create_model
+from skillify.core.context import SkillContext
 from skillify.manager import SkillManager
 
 logger = logging.getLogger(__name__)
@@ -132,10 +133,29 @@ def clear_skill_cache():
     _SKILL_REGISTRY = {}
 
 
+def build_skill_context(farm_id: int = 1) -> SkillContext:
+    """构建 skillify SkillContext，注入 OpenAI 兼容客户端用于 LLM 意图兜底。"""
+    from openai import AsyncOpenAI
+
+    from app.core.config import settings
+
+    client = AsyncOpenAI(
+        api_key=settings.ai_api_key,
+        base_url=settings.ai_base_url,
+    )
+    return SkillContext(
+        user_id=str(farm_id),
+        farm_id=farm_id,
+        llm_model=settings.ai_model,
+        llm_client=client,
+    )
+
+
 __all__ = [
     "get_skill_manager",
     "skills_to_langchain_tools",
     "get_langchain_tools",
     "get_skill_registry",
     "clear_skill_cache",
+    "build_skill_context",
 ]

@@ -1,6 +1,6 @@
 """成本分类 API 路由。"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -25,7 +25,7 @@ def get_categories(
 @router.post("", response_model=CostCategoryResponse, status_code=201)
 def create_category(
     farm_id: int = Query(1, description="农场 ID"),
-    data: CostCategoryCreate,
+    data: CostCategoryCreate = Body(...),
     db: Session = Depends(get_db),
 ):
     """创建用户自定义分类。"""
