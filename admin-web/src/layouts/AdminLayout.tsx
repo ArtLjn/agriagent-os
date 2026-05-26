@@ -32,7 +32,7 @@ const ACCENT = '#58a6ff';
 
 const menuItems = [
   {
-    type: 'group',
+    type: 'group' as const,
     label: '业务管理',
     children: [
       { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
@@ -46,7 +46,7 @@ const menuItems = [
     ],
   },
   {
-    type: 'group',
+    type: 'group' as const,
     label: '开发调试',
     children: [
       { key: '/dev/traces', icon: <BranchesOutlined />, label: '链路追踪' },

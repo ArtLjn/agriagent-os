@@ -1,10 +1,9 @@
-import React, { useMemo } from 'react';
-import { GanttNode, GanttRound, GanttTimelineProps } from './types';
-import { getNodeColor, getNodeLabel, NODE_TYPE_COLORS } from '@/constants/trace';
+import { useMemo } from 'react';
+import type { GanttNode, GanttRound, GanttTimelineProps } from './types';
+import { getNodeColor, getNodeLabel, NODE_TYPE_COLORS } from '../../constants/trace';
 
 const BG = '#0d1117';
 const BORDER = '#30363d';
-const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
 const ROW_HEIGHT = 40;
 const BAR_HEIGHT = 24;

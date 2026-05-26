@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Tabs, Input, Button, List, Select, Space, message, Typography } from 'antd';
+import { Tabs, Input, Button, Select, Space, message, Typography } from 'antd';
 import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { streamChat, getDailyAdvice, generateReport, getAdviceHistory, getReportHistory } from '../../api/agent';
@@ -19,7 +19,7 @@ export default function Agent() {
   const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
 
   useEffect(() => {
-    listCycles().then((res) => setCycles(res.data)).catch(() => {});
+    listCycles().then((res) => setCycles(res.items)).catch(() => {});
   }, []);
 
   return (
@@ -167,7 +167,7 @@ function AdviceTab({ cycleId }: { cycleId?: number }) {
     setFetched(true);
     try {
       const res = await getDailyAdvice(cycleId);
-      setAdvice(res.data.advice);
+      setAdvice(res.advice);
     } catch {
       message.error('获取建议失败，请确认后端服务正常运行');
       setFetched(false);
@@ -212,7 +212,7 @@ function ReportTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCy
     setLoading(true);
     try {
       const res = await generateReport('weekly', selectedCycle);
-      setReport(res.data.content);
+      setReport(res.content);
     } catch {
       message.error('生成报告失败');
     } finally {
@@ -292,11 +292,11 @@ function HistoryTab({ cycleId }: { cycleId?: number }) {
     setLoading(true);
     try {
       const [a, r] = await Promise.all([
-        getAdviceHistory({ cycle_id: cycleId, limit: 10 }).catch(() => ({ data: [] })),
-        getReportHistory({ cycle_id: cycleId, limit: 10 }).catch(() => ({ data: [] })),
+        getAdviceHistory({ cycle_id: cycleId, limit: 10 }).catch(() => ([])),
+        getReportHistory({ cycle_id: cycleId, limit: 10 }).catch(() => ({ items: [], total: 0 })),
       ]);
-      setAdviceHistory(a.data);
-      setReportHistory(r.data);
+      setAdviceHistory(a);
+      setReportHistory(r.items);
     } finally {
       setLoading(false);
     }

@@ -1,9 +1,8 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Table,
   Button,
   Input,
-  Form,
   Space,
   message,
   Modal,
@@ -12,12 +11,11 @@ import {
   Typography,
   Tag,
 } from 'antd';
-import { SearchOutlined, ClearOutlined, EyeOutlined } from '@ant-design/icons';
+import { SearchOutlined, ClearOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import {
   listTraces,
   getTimeline,
-  getNodeDetail,
   deleteTracesBefore,
   type TraceRecord,
   type TraceTimeline,
@@ -117,7 +115,8 @@ export default function TraceMonitor() {
       [record.request_id]: { timeline: null, loading: true },
     }));
     try {
-      const timeline = await getTimeline(record.request_id);
+      const timelineRes = await getTimeline(record.request_id);
+      const timeline = timelineRes;
       setExpanded((prev) => ({
         ...prev,
         [record.request_id]: { timeline, loading: false },

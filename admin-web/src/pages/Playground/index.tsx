@@ -98,7 +98,8 @@ async function fetchLatestTimeline(): Promise<TraceTimeline | null> {
     const listRes = await listTraces({ limit: 1 });
     if (!listRes.items || listRes.items.length === 0) return null;
     const requestId = listRes.items[0].request_id;
-    const timeline = await getTimeline(requestId);
+    const timelineRes = await getTimeline(requestId);
+        const timeline = timelineRes;
     return timeline;
   } catch {
     return null;

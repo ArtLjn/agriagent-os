@@ -3,27 +3,30 @@ import apiClient from './client';
 // ─── Trace API ───────────────────────────────────────────────────────────────
 
 export interface TraceRecord {
+  id: number;
   request_id: string;
-  session_id?: string;
-  farm_id?: number;
-  start_time: string;
-  end_time?: string;
-  duration_ms?: number;
+  session_id: string | null;
+  farm_id: number;
+  round_index: number;
+  node_type: string;
+  node_name: string;
+  duration_ms: number | null;
   status: string;
-  total_tokens?: number;
+  token_usage: string | null;
+  error_message: string | null;
+  created_at: string;
 }
 
 export interface TraceNode {
-  node_id: string;
   node_type: string;
   node_name: string;
-  duration_ms: number;
+  duration_ms: number | null;
   status: string;
-  token_usage?: number;
-  start_time: string;
-  error_message?: string;
-  input_data?: Record<string, unknown>;
-  output_data?: Record<string, unknown>;
+  token_usage: Record<string, unknown> | null;
+  start_time: string | null;
+  error_message: string | null;
+  input_data: string | null;
+  output_data: string | null;
 }
 
 export interface TraceRound {
@@ -37,18 +40,19 @@ export interface TraceTimeline {
 }
 
 export interface TraceNodeDetail {
-  node_id: string;
+  id: number;
+  request_id: string;
+  round_index: number;
   node_type: string;
   node_name: string;
-  duration_ms: number;
+  input_data: string | null;
+  output_data: string | null;
+  duration_ms: number | null;
+  token_usage: string | null;
   status: string;
-  token_usage?: number;
-  start_time: string;
-  end_time?: string;
-  error_message?: string;
-  input_data?: Record<string, unknown>;
-  output_data?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
+  error_message: string | null;
+  start_time: string | null;
+  end_time: string | null;
 }
 
 export interface ListTracesParams {

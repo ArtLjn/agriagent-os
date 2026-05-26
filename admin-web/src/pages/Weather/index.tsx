@@ -19,13 +19,12 @@ export default function Weather() {
     setLoading(true);
     try {
       const res = await getForecast(days);
-      const d = res.data.daily;
-      const items: DayWeather[] = (d.time || []).map((date: string, i: number) => ({
-        date,
-        temp_max: d.temperature_2m_max?.[i] ?? 0,
-        temp_min: d.temperature_2m_min?.[i] ?? 0,
-        precipitation: d.precipitation_sum?.[i] ?? 0,
-        wind_max: d.windspeed_10m_max?.[i] ?? 0,
+      const items: DayWeather[] = res.days.map((day) => ({
+        date: day.date,
+        temp_max: day.max_temp,
+        temp_min: day.min_temp,
+        precipitation: day.precipitation,
+        wind_max: day.wind_speed,
       }));
       setWeather(items);
     } catch {

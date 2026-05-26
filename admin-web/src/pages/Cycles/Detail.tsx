@@ -16,7 +16,7 @@ export default function CycleDetail() {
     setLoading(true);
     try {
       const res = await getCycle(Number(id));
-      setCycle(res.data);
+      setCycle(res);
     } catch {
       message.error('加载失败');
     } finally {
