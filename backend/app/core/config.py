@@ -20,9 +20,10 @@ class DatabaseConfig(BaseModel):
 
 
 class AIConfig(BaseModel):
-    model: str = "qwen3.5-plus-2026-04-20"
+    model: str = "qwen3.6-flash-2026-04-16"
     api_key: str = ""
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    enable_thinking: bool = False
 
 
 class WeatherConfig(BaseModel):

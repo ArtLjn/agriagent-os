@@ -10,9 +10,10 @@ database:
   url: "sqlite:///./farm_manager.db"  # 数据库连接地址
 
 ai:
-  model: "qwen3.5-plus-2026-04-20"                        # LLM 模型名称
+  model: "qwen3.6-flash-2026-04-16"                        # LLM 模型名称
   api_key: ""                                              # LLM API 密钥（必填）
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # LLM API 地址
+  enable_thinking: false                                   # 是否启用思考模式（qwen3 系列思考模式下不支持 tool_choice）
 
 weather:
   latitude: 34.26    # 天气查询纬度（默认徐州）
