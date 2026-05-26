@@ -96,10 +96,12 @@ export const SettingsScreen: React.FC = () => {
     reminderTime,
     notificationEnabled,
     weatherAlertEnabled,
+    displayName,
     setDefaultCity,
     setCrops,
     setNotificationEnabled,
     setWeatherAlertEnabled,
+    setDisplayName,
   } = useSettingsStore();
 
   const handleProfilePress = useCallback(() => {
@@ -131,6 +133,27 @@ export const SettingsScreen: React.FC = () => {
       },
     ]);
   }, []);
+
+  const handleDisplayNamePress = useCallback(() => {
+    Alert.prompt(
+      'AI 称呼我',
+      '输入你希望 AI 怎么称呼你',
+      [
+        {text: '取消', style: 'cancel'},
+        {
+          text: '确定',
+          onPress: (value?: string) => {
+            const trimmed = (value || '').trim();
+            if (trimmed) {
+              setDisplayName(trimmed);
+            }
+          },
+        },
+      ],
+      'plain-text',
+      displayName,
+    );
+  }, [displayName, setDisplayName]);
 
   const handleCropPress = useCallback(() => {
     const currentCrops = new Set(crops);
@@ -201,6 +224,12 @@ export const SettingsScreen: React.FC = () => {
 
         {/* Preference */}
         <SettingsSection title="偏好设置">
+          <MenuItem
+            icon="account-heart"
+            label="AI 称呼我"
+            value={displayName || '农友'}
+            onPress={handleDisplayNamePress}
+          />
           <MenuItem icon="sprout" label="常种作物" value={cropLabel} onPress={handleCropPress} />
           <MenuItem
             icon="clock-outline"

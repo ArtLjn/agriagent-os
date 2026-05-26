@@ -34,7 +34,9 @@ async def generate_cycle_report(cycle_id: int) -> str:
         "整理成一份包含进度、成本分析和下一步建议的报告。"
     )
     current_date = get_request_date()
-    system_text = render_prompt("report", registry=get_registry(), current_date=current_date)
+    system_text = render_prompt(
+        "report", registry=get_registry(), current_date=current_date
+    )
     system = HumanMessage(content=system_text)
     response = await llm.ainvoke(
         [system, HumanMessage(content=prompt)],

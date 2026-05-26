@@ -18,7 +18,9 @@ def get_skill_manager() -> SkillManager:
     global _manager
     if _manager is None:
         _manager = SkillManager(python_packages=["app.skills"])
-        logger.info("SkillManager 初始化完成，共 %d 个 Skill", len(_manager.list_skills()))
+        logger.info(
+            "SkillManager 初始化完成，共 %d 个 Skill", len(_manager.list_skills())
+        )
     return _manager
 
 
@@ -42,6 +44,7 @@ def _schema_to_pydantic(name: str, schema: dict[str, Any]) -> type[BaseModel]:
 
 def _make_sync_fn(skill):
     """为 StructuredTool 创建同步调用函数。"""
+
     def fn(**kwargs):
         loop = asyncio.new_event_loop()
         try:
@@ -49,14 +52,17 @@ def _make_sync_fn(skill):
             return result.reply
         finally:
             loop.close()
+
     return fn
 
 
 def _make_async_fn(skill):
     """为 StructuredTool 创建异步调用函数。"""
+
     async def coro(**kwargs):
         result = await skill.execute(kwargs, None)
         return result.reply
+
     return coro
 
 
@@ -68,13 +74,15 @@ def skills_to_langchain_tools(manager: SkillManager) -> list[StructuredTool]:
         if not skill:
             continue
         args_schema = _schema_to_pydantic(skill.name(), skill.parameters_schema())
-        tools.append(StructuredTool(
-            name=skill.name(),
-            description=skill.description(),
-            args_schema=args_schema,
-            func=_make_sync_fn(skill),
-            coroutine=_make_async_fn(skill),
-        ))
+        tools.append(
+            StructuredTool(
+                name=skill.name(),
+                description=skill.description(),
+                args_schema=args_schema,
+                func=_make_sync_fn(skill),
+                coroutine=_make_async_fn(skill),
+            )
+        )
     return tools
 
 

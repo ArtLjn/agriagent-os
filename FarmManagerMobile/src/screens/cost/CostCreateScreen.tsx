@@ -17,7 +17,6 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useCostStore} from '../../stores/costStore';
 import {useCategoryStore} from '../../stores/categoryStore';
 import {BigButton} from '../../components/BigButton';
-import {Loading} from '../../components/Loading';
 import {costApi} from '../../api/client';
 import {colors} from '../../theme/colors';
 import {spacing, fontSize, borderRadius} from '../../theme/spacing';
@@ -43,6 +42,7 @@ export const CostCreateScreen: React.FC = () => {
   const [note, setNote] = useState('');
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
@@ -69,7 +69,11 @@ export const CostCreateScreen: React.FC = () => {
       setCategory(data.category);
       setAmount(String(data.amount));
       setRecordDate(dayjs(data.record_date).toDate());
-      if (data.note) setNote(data.note);
+      if (data.note) {
+        setNote(data.note);
+      } else {
+        setNote(aiInput.trim());
+      }
       setAiInput('');
     } catch (err: any) {
       Alert.alert('解析失败', err.message || '请稍后重试');
@@ -91,6 +95,7 @@ export const CostCreateScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (submitting) return;
     if (!category) {
       Alert.alert('提示', '请选择分类');
       return;
@@ -100,26 +105,27 @@ export const CostCreateScreen: React.FC = () => {
       return;
     }
 
-    await createRecord({
-      record_type: recordType,
-      category,
-      amount,
-      record_date: dayjs(recordDate).format('YYYY-MM-DD'),
-      note: note.trim() || undefined,
-    });
+    setSubmitting(true);
+    try {
+      await createRecord({
+        record_type: recordType,
+        category,
+        amount,
+        record_date: dayjs(recordDate).format('YYYY-MM-DD'),
+        note: note.trim() || undefined,
+      });
 
-    if (error) {
-      Alert.alert('创建失败', error);
-      clearError();
-      return;
+      if (error) {
+        Alert.alert('创建失败', error);
+        clearError();
+        return;
+      }
+
+      navigation.goBack();
+    } finally {
+      setSubmitting(false);
     }
-
-    navigation.goBack();
   };
-
-  if (loading) {
-    return <Loading message="保存中..." />;
-  }
 
   const typeColor = recordType === 'cost' ? colors.danger : colors.success;
 
@@ -210,7 +216,7 @@ export const CostCreateScreen: React.FC = () => {
 
       {/* 保存按钮 */}
       <View style={styles.submitArea}>
-        <BigButton title="保存" onPress={handleSubmit} />
+        <BigButton title={submitting ? '保存中...' : '保存'} onPress={handleSubmit} disabled={submitting} />
       </View>
 
       <DatePickerModal

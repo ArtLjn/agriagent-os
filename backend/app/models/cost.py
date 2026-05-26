@@ -1,4 +1,13 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Numeric, Date, DateTime, func
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Numeric,
+    Date,
+    DateTime,
+    func,
+)
 
 from app.core.database import Base
 

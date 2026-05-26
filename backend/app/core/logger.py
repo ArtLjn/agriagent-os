@@ -18,7 +18,10 @@ class _RequestFormatter(logging.Formatter):
 
 def setup_logging() -> None:
     """初始化全局日志配置。"""
-    fmt = "\033[90m%(asctime)s\033[0m │ %(request_id)s │ %(name)s │ %(levelname)s │ %(message)s"
+    fmt = (
+        "\033[90m%(asctime)s\033[0m"
+        " │ %(request_id)s │ %(name)s │ %(levelname)s │ %(message)s"
+    )
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(_RequestFormatter(fmt))
 

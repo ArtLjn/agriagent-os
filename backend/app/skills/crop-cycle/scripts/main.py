@@ -13,7 +13,10 @@ class CropCycleSkill(Skill):
         return "get_crop_cycle_info"
 
     def description(self) -> str:
-        return "查询指定种植周期的详细信息，包括当前阶段和各阶段安排。触发词: 周期、阶段、茬口"
+        return (
+            "查询指定种植周期的详细信息，包括当前阶段和各阶段安排。"
+            "触发词: 周期、阶段、茬口"
+        )
 
     def parameters_schema(self) -> dict:
         return {
@@ -31,7 +34,10 @@ class CropCycleSkill(Skill):
         try:
             cycle = db.query(CropCycle).filter(CropCycle.id == cycle_id).first()
             if not cycle:
-                return SkillResult(status=ResultStatus.SUCCESS, reply=f"未找到 ID 为 {cycle_id} 的种植周期。")
+                return SkillResult(
+                    status=ResultStatus.SUCCESS,
+                    reply=f"未找到 ID 为 {cycle_id} 的种植周期。",
+                )
 
             lines = [
                 f"茬口：{cycle.name}",
@@ -43,8 +49,10 @@ class CropCycleSkill(Skill):
             for stage in sorted(cycle.stages, key=lambda s: s.order_index):
                 current_marker = " [当前]" if stage.is_current else ""
                 lines.append(
-                    f"  {stage.name}{current_marker}: {stage.start_date} ~ {stage.end_date} "
-                    f"({stage.duration_days} 天) 关键任务：{stage.key_tasks or '无'}"
+                    f"  {stage.name}{current_marker}: "
+                    f"{stage.start_date} ~ {stage.end_date} "
+                    f"({stage.duration_days}天) "
+                    f"关键任务：{stage.key_tasks or '无'}"
                 )
 
             return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))

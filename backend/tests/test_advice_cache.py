@@ -1,6 +1,6 @@
 """每日建议缓存逻辑测试。"""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -12,14 +12,13 @@ from app.models.agent import AdviceRecord
 
 
 def _today_start() -> datetime:
-    """返回今天 00:00 CST 对应的 UTC 时间（无时区信息）。"""
-    cst = timezone(timedelta(hours=8))
-    now = datetime.now(cst)
-    return (
-        now.replace(hour=0, minute=0, second=0, microsecond=0)
-        .astimezone(timezone.utc)
-        .replace(tzinfo=None)
-    )
+    """返回今天 00:00 本地时间（无时区信息），与 service 层一致。"""
+    return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _json_items_response(label: str) -> str:
+    """构造合法 JSON 数组 LLM 返回值。"""
+    return f'[{{"title":"{label}","detail":"{label}详情","priority":1,"icon":"📋"}}]'
 
 
 @pytest.fixture
@@ -42,22 +41,23 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = "建议内容"
+            mock_llm.return_value = _json_items_response("建议内容")
             from app.services.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
         mock_llm.assert_called_once()
-        assert result.advice == "建议内容"
+        assert result.items[0].title == "建议内容"
 
     @pytest.mark.asyncio
     async def test_cache_hit_skips_llm(self, db):
         """有缓存时不应调用 LLM，直接返回缓存。"""
         today = _today_start()
+        cached_json = _json_items_response("缓存建议")
         cached = AdviceRecord(
             farm_id=1,
             advice_type="daily",
-            content="缓存建议",
+            content=cached_json,
             created_at=today,
         )
         db.add(cached)
@@ -71,7 +71,7 @@ class TestDailyAdviceCache:
             result = await get_daily_advice(db, farm_id=1)
 
         mock_llm.assert_not_called()
-        assert result.advice == "缓存建议"
+        assert result.items[0].title == "缓存建议"
 
     @pytest.mark.asyncio
     async def test_different_farm_cache_miss(self, db):
@@ -79,7 +79,10 @@ class TestDailyAdviceCache:
         today = _today_start()
         db.add(
             AdviceRecord(
-                farm_id=1, advice_type="daily", content="农场1", created_at=today
+                farm_id=1,
+                advice_type="daily",
+                content=_json_items_response("农场1"),
+                created_at=today,
             )
         )
         db.commit()
@@ -87,13 +90,13 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = "农场2建议"
+            mock_llm.return_value = _json_items_response("农场2建议")
             from app.services.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=2)
 
         mock_llm.assert_called_once()
-        assert result.advice == "农场2建议"
+        assert result.items[0].title == "农场2建议"
 
     @pytest.mark.asyncio
     async def test_yesterday_record_is_expired(self, db):
@@ -103,7 +106,7 @@ class TestDailyAdviceCache:
             AdviceRecord(
                 farm_id=1,
                 advice_type="daily",
-                content="旧建议",
+                content=_json_items_response("旧建议"),
                 created_at=yesterday,
             )
         )
@@ -112,13 +115,13 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = "新建议"
+            mock_llm.return_value = _json_items_response("新建议")
             from app.services.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
         mock_llm.assert_called_once()
-        assert result.advice == "新建议"
+        assert result.items[0].title == "新建议"
 
     @pytest.mark.asyncio
     async def test_refresh_deletes_old_and_regenerates(self, db):
@@ -128,7 +131,7 @@ class TestDailyAdviceCache:
             AdviceRecord(
                 farm_id=1,
                 advice_type="daily",
-                content="旧缓存",
+                content=_json_items_response("旧缓存"),
                 created_at=today,
             )
         )
@@ -137,17 +140,17 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = "刷新后的建议"
+            mock_llm.return_value = _json_items_response("刷新后的建议")
             from app.services.agent_service import refresh_daily_advice
 
             result = await refresh_daily_advice(db, farm_id=1)
 
         mock_llm.assert_called_once()
-        assert result.advice == "刷新后的建议"
+        assert result.items[0].title == "刷新后的建议"
         records = (
             db.query(AdviceRecord)
             .filter(AdviceRecord.farm_id == 1, AdviceRecord.advice_type == "daily")
             .all()
         )
         assert len(records) == 1
-        assert records[0].content == "刷新后的建议"
+        assert "刷新后的建议" in records[0].content

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
 import {persist, createJSONStorage} from 'zustand/middleware';
-import type {ChatMessage, DailyAdvice, ReportResponse, ReportListItem} from '../api/types';
+import type {ChatMessage, DailyAdvice, ReportResponse, ReportListItem, PendingAction} from '../api/types';
 import {agentApi, weatherApi} from '../api/client';
 
 interface AgentState {
@@ -15,6 +15,7 @@ interface AgentState {
   cityLat: number | undefined;
   cityLon: number | undefined;
   reports: ReportListItem[];
+  pendingAction: PendingAction | null;
   sendMessage: (message: string, cycleId?: number) => void;
   fetchDailyAdvice: (cycleId?: number) => Promise<void>;
   refreshDailyAdvice: (cycleId?: number) => Promise<void>;
@@ -39,12 +40,14 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       cityLat: 31.30,
       cityLon: 120.62,
       reports: [],
+      pendingAction: null,
 
   sendMessage: (message, cycleId) => {
     set(state => ({
       messages: [...state.messages, {role: 'user', content: message}],
       loading: true,
       error: null,
+      pendingAction: null,
     }));
     agentApi.streamChat(
       {message, cycle_id: cycleId},
@@ -69,6 +72,16 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
           ],
           loading: false,
         }));
+      },
+      action => {
+        set(state => {
+          const msgs = [...state.messages];
+          const last = msgs[msgs.length - 1];
+          if (last?.role === 'agent') {
+            msgs[msgs.length - 1] = {...last, pending_action: action};
+          }
+          return {messages: msgs, pendingAction: action};
+        });
       },
     );
   },

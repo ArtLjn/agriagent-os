@@ -78,7 +78,11 @@ def update_log(
     db: Session, log_id: int, update: FarmLogCreate, farm_id: int
 ) -> FarmLog:
     """更新农事日志。"""
-    db_log = db.query(FarmLog).filter(FarmLog.id == log_id, FarmLog.farm_id == farm_id).first()
+    db_log = (
+        db.query(FarmLog)
+        .filter(FarmLog.id == log_id, FarmLog.farm_id == farm_id)
+        .first()
+    )
     if not db_log:
         raise ValueError(f"日志 {log_id} 不存在")
 
@@ -104,7 +108,11 @@ def update_log(
 
 def delete_log(db: Session, log_id: int, farm_id: int) -> None:
     """删除农事日志。"""
-    db_log = db.query(FarmLog).filter(FarmLog.id == log_id, FarmLog.farm_id == farm_id).first()
+    db_log = (
+        db.query(FarmLog)
+        .filter(FarmLog.id == log_id, FarmLog.farm_id == farm_id)
+        .first()
+    )
     if not db_log:
         raise ValueError(f"日志 {log_id} 不存在")
 

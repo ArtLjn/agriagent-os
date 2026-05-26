@@ -39,7 +39,11 @@ async def invoke_advisor(user_input: str, farm_id: int = 1) -> str:
     try:
         result = await graph.ainvoke(
             {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id},
-            config={"recursion_limit": 15, "run_name": "advisor_invoke", "metadata": {"farm_id": farm_id, "request_type": "chat"}},
+            config={
+                "recursion_limit": 15,
+                "run_name": "advisor_invoke",
+                "metadata": {"farm_id": farm_id, "request_type": "chat"},
+            },
         )
     except GraphRecursionError:
         logger.error("Agent 步数超限 | farm_id=%s", farm_id)
@@ -67,14 +71,21 @@ async def stream_advisor(
     try:
         async for event in graph.astream(
             {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id},
-            config={"recursion_limit": 15, "run_name": "advisor_stream", "metadata": {"farm_id": farm_id, "request_type": "stream_chat"}},
+            config={
+                "recursion_limit": 15,
+                "run_name": "advisor_stream",
+                "metadata": {"farm_id": farm_id, "request_type": "stream_chat"},
+            },
         ):
             for node, state in event.items():
                 step += 1
                 for msg in state.get("messages", []):
                     if isinstance(msg, ToolMessage):
                         logger.info(
-                            "[step %d] 工具 %s 返回: %s", step, node, str(msg.content)[:150]
+                            "[step %d] 工具 %s 返回: %s",
+                            step,
+                            node,
+                            str(msg.content)[:150],
                         )
                     elif isinstance(msg, AIMessage):
                         if msg.tool_calls:
@@ -87,7 +98,9 @@ async def stream_advisor(
                                 )
                         elif msg.content:
                             logger.info(
-                                "[step %d] LLM 最终回复，长度 %d", step, len(msg.content)
+                                "[step %d] LLM 最终回复，长度 %d",
+                                step,
+                                len(msg.content),
                             )
                             yield filter_output(msg.content)
     except GraphRecursionError:

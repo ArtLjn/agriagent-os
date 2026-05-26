@@ -37,7 +37,10 @@ class CostAnalyticsSkill(Skill):
                 },
                 "compare_period": {
                     "type": "string",
-                    "description": "对比周期: none(不对比)/last_month(上月)/last_year(去年同期)",
+                    "description": (
+                        "对比周期: none(不对比)"
+                        "/last_month(上月)/last_year(去年同期)"
+                    ),
                     "default": "none",
                 },
             },
@@ -97,7 +100,8 @@ class CostAnalyticsSkill(Skill):
     def _format_period(self, data, label):
         lines = [
             f"  {label}: 支出 {data['cost']:.2f} 元, "
-            f"收入 {data['income']:.2f} 元, 净 {data['net']:.2f} 元 ({data['count']} 笔)",
+            f"收入 {data['income']:.2f} 元, "
+            f"净 {data['net']:.2f} 元 ({data['count']} 笔)",
         ]
         if data["by_category"]:
             top_cost = sorted(

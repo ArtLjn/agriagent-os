@@ -57,3 +57,14 @@ SettingsScreen SHALL 移除"农事顾问"和"种植报告"两个 AI 功能快捷
 #### Scenario: 查看版本
 - **WHEN** 用户查看"关于"分组
 - **THEN** 显示"版本 v1.0"、"使用指南"（可跳转）、"关于 - 智能种植管理平台"
+
+### Requirement: Prompt 版本偏好字段
+settingsStore SHALL 新增 `promptVersion` 字段，用于预留用户级 Prompt 版本偏好。MVP 阶段后端支持该字段存储和读取，但 UI 不展示版本切换入口。
+
+#### Scenario: 保存 Prompt 版本偏好
+- **WHEN** 后端返回用户配置包含 `prompt_version: "v2"`
+- **THEN** settingsStore 保存该值，随请求发送到后端
+
+#### Scenario: 默认版本
+- **WHEN** 用户未设置 Prompt 版本
+- **THEN** settingsStore 默认值为 "v1"

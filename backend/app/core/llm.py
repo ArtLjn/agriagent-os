@@ -53,7 +53,7 @@ def get_llm() -> BaseChatModel:
             base_url=settings.ai_base_url,
             temperature=0.7,
             max_retries=cb.retry_max,
-            timeout=cb.retry_backoff_base * (2 ** cb.retry_max) * 2,
+            timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
         )
     return LLM_INSTANCE
 

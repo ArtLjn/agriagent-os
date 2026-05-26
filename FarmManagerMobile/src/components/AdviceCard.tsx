@@ -11,6 +11,7 @@ import {
 import {Card} from './Card';
 import {Loading} from './Loading';
 import {MarkdownText} from './MarkdownText';
+import type {AdviceItem} from '../api/types';
 import {colors} from '../theme/colors';
 import {spacing, fontSize, borderRadius} from '../theme/spacing';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -21,6 +22,7 @@ if (Platform.OS === 'android') {
 
 interface AdviceCardProps {
   advice: string | null;
+  items?: AdviceItem[] | null;
   loading?: boolean;
   onPress?: () => void;
   onRefresh?: () => void;
@@ -28,8 +30,35 @@ interface AdviceCardProps {
 
 const MAX_LINES = 4;
 
+const PRIORITY_LABELS: Record<number, {text: string; color: string; bg: string}> = {
+  1: {text: '!', color: colors.warning, bg: colors.warningLight},
+  2: {text: '!!', color: colors.danger, bg: colors.dangerLight},
+  3: {text: '!!!', color: colors.danger, bg: colors.dangerLight},
+};
+
+const AdviceItemCard: React.FC<{item: AdviceItem}> = ({item}) => {
+  const priorityInfo = PRIORITY_LABELS[item.priority] ?? PRIORITY_LABELS[1];
+  return (
+    <View style={itemStyles.container}>
+      <View style={itemStyles.topRow}>
+        <View style={itemStyles.titleRow}>
+          <Text style={itemStyles.icon}>{item.icon}</Text>
+          <Text style={itemStyles.title} numberOfLines={1}>{item.title}</Text>
+        </View>
+        <View style={[itemStyles.priorityBadge, {backgroundColor: priorityInfo.bg}]}>
+          <Text style={[itemStyles.priorityText, {color: priorityInfo.color}]}>
+            {priorityInfo.text}
+          </Text>
+        </View>
+      </View>
+      <Text style={itemStyles.detail} numberOfLines={2}>{item.detail}</Text>
+    </View>
+  );
+};
+
 export const AdviceCard: React.FC<AdviceCardProps> = ({
   advice,
+  items,
   loading = false,
   onPress,
   onRefresh,
@@ -40,6 +69,8 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpanded(!expanded);
   };
+
+  const hasItems = items && items.length > 0;
 
   return (
     <Card padding="lg" elevated={true}>
@@ -70,7 +101,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
         </View>
       )}
 
-      {!loading && !advice && (
+      {!loading && !advice && !hasItems && (
         <View style={styles.center}>
           <Icon
             name="information-outline"
@@ -81,7 +112,15 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
         </View>
       )}
 
-      {!loading && advice && (
+      {!loading && hasItems && (
+        <View style={styles.itemsContainer}>
+          {items.map((item, index) => (
+            <AdviceItemCard key={index} item={item} />
+          ))}
+        </View>
+      )}
+
+      {!loading && !hasItems && advice && (
         <>
           <View
             style={[
@@ -107,22 +146,24 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
               />
             </TouchableOpacity>
           )}
-
-          {/* Action bar */}
-          <View style={styles.actionBar}>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={onPress}
-              activeOpacity={0.7}>
-              <Icon
-                name="chat-processing-outline"
-                size={18}
-                color={colors.primary}
-              />
-              <Text style={styles.actionText}>继续咨询</Text>
-            </TouchableOpacity>
-          </View>
         </>
+      )}
+
+      {/* Action bar */}
+      {(!loading && (advice || hasItems)) && (
+        <View style={styles.actionBar}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={onPress}
+            activeOpacity={0.7}>
+            <Icon
+              name="chat-processing-outline"
+              size={18}
+              color={colors.primary}
+            />
+            <Text style={styles.actionText}>继续咨询</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </Card>
   );
@@ -200,6 +241,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 2,
   },
+  itemsContainer: {
+    gap: spacing.sm,
+  },
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -221,5 +265,51 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.primary,
     fontWeight: '600',
+  },
+});
+
+const itemStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.sm,
+  },
+  icon: {
+    fontSize: fontSize.lg,
+  },
+  title: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+  },
+  priorityBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  priorityText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
+  detail: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    paddingLeft: fontSize.lg + spacing.sm,
   },
 });

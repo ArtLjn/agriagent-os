@@ -135,6 +135,7 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.section}>
           <AdviceCard
             advice={dailyAdvice?.advice || null}
+            items={dailyAdvice?.items}
             loading={agentLoading}
             onPress={handleAdvicePress}
             onRefresh={() => refreshDailyAdvice()}

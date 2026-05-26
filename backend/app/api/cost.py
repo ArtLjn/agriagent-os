@@ -91,7 +91,11 @@ async def parse_cost_record(
 
     # 幂等键检查
     if idempotency_key:
-        cached = db.query(IdempotencyKey).filter(IdempotencyKey.key == idempotency_key).first()
+        cached = (
+            db.query(IdempotencyKey)
+            .filter(IdempotencyKey.key == idempotency_key)
+            .first()
+        )
         if cached:
             logger.info("幂等键命中 | key=%s", idempotency_key)
             try:
@@ -110,6 +114,7 @@ async def parse_cost_record(
     logger.info("AI 解析记账 | farm=%s | input: %s", farm.id, req.description)
 
     from app.agents.advisor import invoke_advisor
+
     reply = await invoke_advisor(prompt, farm_id=farm.id)
 
     # JSON 解析（提取代码块 + 修复）
@@ -134,7 +139,9 @@ async def parse_cost_record(
     # 缓存幂等键
     if idempotency_key:
         try:
-            cache = IdempotencyKey(key=idempotency_key, response=response.model_dump_json())
+            cache = IdempotencyKey(
+                key=idempotency_key, response=response.model_dump_json()
+            )
             db.add(cache)
             db.commit()
         except Exception:

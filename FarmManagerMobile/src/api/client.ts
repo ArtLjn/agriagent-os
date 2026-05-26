@@ -1,10 +1,8 @@
-import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
-
 import SSE from 'react-native-sse';
 import axios from 'axios';
+import type {PendingAction} from './types';
 
-const API_BASE_URL = 'http://10.0.2.2:8000';
+const API_BASE_URL = 'http://47.98.253.236:8000';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -76,7 +74,12 @@ export const costApi = {
   getProfit: (cycleId: number) => apiClient.get(`/costs/cycles/${cycleId}/profit`),
   getYearlySummary: (year: number) => apiClient.get(`/costs/summary/${year}`),
   parseRecord: (description: string) => {
-    const idempotencyKey = uuidv4();
+    const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+      /[xy]/g, c => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      },
+    );
     return apiClient.post('/costs/parse', { description }, {
       headers: { 'X-Idempotency-Key': idempotencyKey },
     });
@@ -91,6 +94,7 @@ export const agentApi = {
     onChunk: (chunk: string) => void,
     onDone: () => void,
     onError: (err: string) => void,
+    onPendingAction?: (action: PendingAction) => void,
   ) => {
     const es = new SSE(`${API_BASE_URL}/agent/chat/stream`, {
       headers: {'Content-Type': 'application/json'},
@@ -113,6 +117,9 @@ export const agentApi = {
           return;
         }
         if (parsed.content) onChunk(parsed.content);
+        if (parsed.pending_action && onPendingAction) {
+          onPendingAction(parsed.pending_action);
+        }
       } catch {
         // 忽略非 JSON 行
       }

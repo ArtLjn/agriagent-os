@@ -22,12 +22,18 @@ class FarmLogSkill(Skill):
             "type": "object",
             "properties": {
                 "cycle_id": {"type": "integer", "description": "种植周期 ID"},
-                "days": {"type": "integer", "description": "查询天数（默认 7）", "default": 7},
+                "days": {
+                    "type": "integer",
+                    "description": "查询天数（默认 7）",
+                    "default": 7,
+                },
             },
             "required": ["cycle_id"],
         }
 
-    @cached(ttl_seconds=60, key_fn=lambda p: f"logs:{p.get('cycle_id')}:{p.get('days', 7)}")
+    @cached(
+        ttl_seconds=60, key_fn=lambda p: f"logs:{p.get('cycle_id')}:{p.get('days', 7)}"
+    )
     async def execute(self, params: dict, context) -> SkillResult:
         cycle_id = params["cycle_id"]
         days = params.get("days", 7)
@@ -42,11 +48,16 @@ class FarmLogSkill(Skill):
                 .all()
             )
             if not logs:
-                return SkillResult(status=ResultStatus.SUCCESS, reply=f"最近 {days} 天内没有农事记录。")
+                return SkillResult(
+                    status=ResultStatus.SUCCESS, reply=f"最近 {days} 天内没有农事记录。"
+                )
 
             lines = [f"最近 {days} 天农事记录（共 {len(logs)} 条）："]
             for log in logs:
-                lines.append(f"  {log.operation_date}: {log.operation_type} - {log.note or '无备注'}")
+                lines.append(
+                    f"  {log.operation_date}: "
+                    f"{log.operation_type} - {log.note or '无备注'}"
+                )
 
             return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
         finally:

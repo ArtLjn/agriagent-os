@@ -56,7 +56,9 @@ def update_template(
 ):
     """更新作物模板。"""
     try:
-        return crop_service.update_crop_template(db, template_id, template, farm_id=farm.id)
+        return crop_service.update_crop_template(
+            db, template_id, template, farm_id=farm.id
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

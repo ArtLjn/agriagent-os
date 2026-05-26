@@ -72,9 +72,23 @@ export interface CycleProfit {
   net_profit: string;
 }
 
+export interface AdviceItem {
+  title: string;
+  detail: string;
+  priority: number;
+  icon: string;
+}
+
+export interface PendingAction {
+  action_id: string;
+  skill_name: string;
+  params: Record<string, any>;
+}
+
 export interface ChatMessage {
   role: 'user' | 'agent';
   content: string;
+  pending_action?: PendingAction | null;
 }
 
 export interface ChatRequest {
@@ -84,11 +98,13 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   reply: string;
+  pending_action: PendingAction | null;
 }
 
 export interface DailyAdvice {
   cycle_id: number | null;
   advice: string;
+  items: AdviceItem[];
   created_at: string;
 }
 

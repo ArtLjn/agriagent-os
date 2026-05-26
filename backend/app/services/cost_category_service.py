@@ -40,9 +40,7 @@ def init_default_categories(db: Session, farm_id: int) -> list[CostCategory]:
     """
     # 检查是否已存在默认分类
     existing = (
-        db.query(CostCategory)
-        .filter_by(farm_id=farm_id, is_default=True)
-        .first()
+        db.query(CostCategory).filter_by(farm_id=farm_id, is_default=True).first()
     )
     if existing:
         logger.info(f"农场 {farm_id} 的默认分类已存在，跳过初始化")
@@ -126,11 +124,7 @@ def delete_category(db: Session, category_id: int, farm_id: int) -> None:
     Raises:
         ValueError: 分类不存在或为系统预设分类时抛出。
     """
-    category = (
-        db.query(CostCategory)
-        .filter_by(id=category_id, farm_id=farm_id)
-        .first()
-    )
+    category = db.query(CostCategory).filter_by(id=category_id, farm_id=farm_id).first()
 
     if not category:
         raise ValueError(f"分类 {category_id} 不存在")

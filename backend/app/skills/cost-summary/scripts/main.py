@@ -49,7 +49,10 @@ class CostSummarySkill(Skill):
                 },
                 "group_by": {
                     "type": "string",
-                    "description": "分组方式: none(不分组)/category(按分类)/month(按月)，默认none",
+                    "description": (
+                        "分组方式: none(不分组)"
+                        "/category(按分类)/month(按月)，默认none"
+                    ),
                     "default": "none",
                 },
             },

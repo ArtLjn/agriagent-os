@@ -101,7 +101,11 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
     Returns:
         周期利润统计对象。
     """
-    records = db.query(CostRecord).filter(CostRecord.cycle_id == cycle_id, CostRecord.farm_id == farm_id).all()
+    records = (
+        db.query(CostRecord)
+        .filter(CostRecord.cycle_id == cycle_id, CostRecord.farm_id == farm_id)
+        .all()
+    )
     total_cost = sum(
         (r.amount for r in records if r.record_type == "cost"),
         Decimal("0"),
@@ -131,7 +135,10 @@ def get_yearly_summary(db: Session, year: int, farm_id: int) -> YearlySummary:
     """
     records = (
         db.query(CostRecord)
-        .filter(extract("year", CostRecord.record_date) == year, CostRecord.farm_id == farm_id)
+        .filter(
+            extract("year", CostRecord.record_date) == year,
+            CostRecord.farm_id == farm_id,
+        )
         .all()
     )
     total_cost = Decimal("0")

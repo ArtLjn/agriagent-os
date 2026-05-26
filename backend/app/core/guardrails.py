@@ -1,9 +1,7 @@
-"""Agent 输入输出安全审核模块 — 注入检测 + 敏感词 + PII + 英文输出检测。"""
+"""Agent 输入输出安全审核模块 — 注入检测 + 敏感词 + PII 过滤。"""
 
 import logging
 import re
-
-from app.core.term_whitelist import is_whitelisted
 
 logger = logging.getLogger(__name__)
 
@@ -46,22 +44,6 @@ _PII_PATTERNS = {
 
 _INJECTION_REGEX = [re.compile(p, re.IGNORECASE) for p in _INJECTION_PATTERNS]
 
-# 英文句子检测：连续 3+ 个英文单词（排除白名单单词）
-_ENGLISH_WORD_RE = re.compile(r"[a-zA-Z]{2,}")
-
-
-def _has_english_sentence(text: str) -> bool:
-    """检测文本中是否包含英文句子（连续 3+ 英文单词）。
-
-    先移除 PII 模式（email、API key 等），避免其中的英文片段误判。
-    """
-    cleaned = text
-    for _name, (pattern, _replacement) in _PII_PATTERNS.items():
-        cleaned = pattern.sub("", cleaned)
-    words = _ENGLISH_WORD_RE.findall(cleaned)
-    non_whitelisted = [w for w in words if not is_whitelisted(w)]
-    return len(non_whitelisted) >= 3
-
 
 def check_input(text: str) -> tuple[bool, str | None]:
     """检测输入是否包含注入攻击或敏感词。"""
@@ -84,46 +66,11 @@ def check_input(text: str) -> tuple[bool, str | None]:
     return True, None
 
 
-def _is_json_like(text: str) -> bool:
-    """判断文本是否看起来像 JSON（结构化数据不进行英文检测）。"""
-    import json
-
-    stripped = text.strip()
-
-    # 直接 JSON
-    if stripped.startswith(("{", "[")):
-        try:
-            json.loads(stripped)
-            return True
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Markdown 代码块包裹的 JSON
-    if "```" in stripped:
-        import re
-        match = re.search(r"```(?:json)?\s*([\s\S]*?)```", stripped)
-        if match:
-            try:
-                json.loads(match.group(1).strip())
-                return True
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-    return False
-
-
 def filter_output(text: str) -> str:
-    """过滤输出中的 PII 信息和英文句子。"""
+    """过滤输出中的 PII 信息。"""
     if not text or not isinstance(text, str):
         return text
 
-    # JSON 结构化输出跳过英文检测（如记账解析结果）
-    if not _is_json_like(text):
-        if _has_english_sentence(text):
-            logger.warning("Guardrails 拦截输出英文 | text_preview=%s", text[:100])
-            return "系统异常，请重试"
-
-    # PII 过滤
     result = text
     for name, (pattern, replacement) in _PII_PATTERNS.items():
         result, count = pattern.subn(replacement, result)
@@ -143,11 +90,13 @@ def cleanup_old_logs(db=None, days: int = 30) -> None:
         from app.models.guardrails_log import GuardrailsLog
 
         cutoff = datetime.now() - timedelta(days=days)
-        db.query(GuardrailsLog).filter(GuardrailsLog.created_at < cutoff).delete(synchronize_session=False)
+        db.query(GuardrailsLog).filter(GuardrailsLog.created_at < cutoff).delete(
+            synchronize_session=False
+        )
         db.commit()
         logger.info("Guardrails 日志清理完成 | cutoff=%s", cutoff)
     except Exception:
         logger.exception("Guardrails 日志清理失败")
 
 
-__all__ = ["check_input", "filter_output", "cleanup_old_logs", "_has_english_sentence"]
+__all__ = ["check_input", "filter_output", "cleanup_old_logs"]

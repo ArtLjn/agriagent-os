@@ -31,7 +31,9 @@ class WeatherSkill(Skill):
     @cached(ttl_seconds=1800)
     async def execute(self, params: dict, context) -> SkillResult:
         location = params.get("location", "当前地块")
-        data = fetch_weather(settings.weather_latitude, settings.weather_longitude, days=7)
+        data = fetch_weather(
+            settings.weather_latitude, settings.weather_longitude, days=7
+        )
         daily = data.get("daily", {})
         times = daily.get("time", [])
         max_temps = daily.get("temperature_2m_max", [])

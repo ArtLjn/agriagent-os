@@ -8,13 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {useAgentStore} from '../../stores/agentStore';
-import type {ChatMessage, ReportListItem} from '../../api/types';
+import type {ChatMessage} from '../../api/types';
 import {MarkdownText} from '../../components/MarkdownText';
+import {ReportListView} from '../../components/ReportListView';
 import {colors} from '../../theme/colors';
 import {spacing, fontSize, borderRadius} from '../../theme/spacing';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -25,53 +25,6 @@ const QUICK_PROMPTS = [
   {icon: 'bug', text: '常见的病虫害怎么防治？'},
   {icon: 'file-document', text: '生成本周种植报告'},
 ];
-
-const ReportListView: React.FC<{
-  reports: ReportListItem[];
-  onGenerate: () => void;
-  onViewReport: (r: ReportListItem) => void;
-}> = ({reports, onGenerate, onViewReport}) => (
-  <ScrollView style={styles.reportList} contentContainerStyle={styles.reportListContent}>
-    <TouchableOpacity style={styles.generateBtn} onPress={onGenerate} activeOpacity={0.7}>
-      <Icon name="plus" size={20} color="#FFFFFF" />
-      <Text style={styles.generateBtnText}>生成新报告</Text>
-    </TouchableOpacity>
-    {reports.length === 0 ? (
-      <View style={styles.emptyReports}>
-        <Icon name="file-document-outline" size={48} color={colors.textTertiary} />
-        <Text style={styles.emptyReportsText}>暂无报告</Text>
-        <Text style={styles.emptyReportsSub}>点击上方按钮生成第一份报告</Text>
-      </View>
-    ) : (
-      reports.map(r => (
-        <TouchableOpacity
-          key={r.id}
-          style={styles.reportItem}
-          activeOpacity={0.7}
-          onPress={() => onViewReport(r)}>
-          <View style={styles.reportItemHeader}>
-            <View style={styles.reportItemTypeBadge}>
-              <Icon
-                name={r.report_type === 'weekly' ? 'calendar-week' : 'calendar-month'}
-                size={14}
-                color={colors.primary}
-              />
-              <Text style={styles.reportItemType}>{r.report_type === 'weekly' ? '周报' : '月报'}</Text>
-            </View>
-            <Text style={styles.reportItemDate}>
-              {new Date(r.created_at).toLocaleDateString('zh-CN')}
-            </Text>
-          </View>
-          <Text style={styles.reportItemPreview} numberOfLines={2}>{r.content}</Text>
-          <View style={styles.reportItemFooter}>
-            <Text style={styles.reportItemView}>点击查看详情</Text>
-            <Icon name="chevron-right" size={16} color={colors.textTertiary} />
-          </View>
-        </TouchableOpacity>
-      ))
-    )}
-  </ScrollView>
-);
 
 export const AgentChatScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -103,6 +56,7 @@ export const AgentChatScreen: React.FC = () => {
 
   const renderMessage = ({item}: {item: ChatMessage}) => {
     const isUser = item.role === 'user';
+    const hasPendingAction = !isUser && item.pending_action;
     return (
       <View
         style={[
@@ -123,6 +77,24 @@ export const AgentChatScreen: React.FC = () => {
             <Text style={styles.userText}>{item.content}</Text>
           ) : (
             <MarkdownText text={item.content} baseStyle={styles.agentText} />
+          )}
+          {hasPendingAction && (
+            <View style={styles.confirmBar}>
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={() => handleSend('确认')}
+                activeOpacity={0.7}
+                disabled={isLoading}>
+                <Text style={styles.confirmBtnText}>确认</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => handleSend('取消')}
+                activeOpacity={0.7}
+                disabled={isLoading}>
+                <Text style={styles.cancelBtnText}>取消</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </View>
@@ -517,89 +489,35 @@ const styles = StyleSheet.create({
   sendBtnDisabled: {
     backgroundColor: colors.disabledBg,
   },
-  reportList: {
-    flex: 1,
-  },
-  reportListContent: {
-    padding: spacing.md,
-  },
-  generateBtn: {
+  confirmBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md,
+    justifyContent: 'flex-end',
     gap: spacing.sm,
-  },
-  generateBtnText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.md,
-    fontWeight: '700',
-  },
-  emptyReports: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  emptyReportsText: {
-    fontSize: fontSize.lg,
-    color: colors.textSecondary,
     marginTop: spacing.md,
-    fontWeight: '600',
-  },
-  emptyReportsSub: {
-    fontSize: fontSize.sm,
-    color: colors.textTertiary,
-    marginTop: spacing.xs,
-  },
-  reportItem: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  reportItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  reportItemTypeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.primaryMuted,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  reportItemType: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  reportItemDate: {
-    fontSize: fontSize.xs,
-    color: colors.textTertiary,
-  },
-  reportItemPreview: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-  reportItemFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
-  reportItemView: {
-    fontSize: fontSize.xs,
-    color: colors.textTertiary,
+  confirmBtn: {
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  confirmBtnText: {
+    color: colors.textInverse,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+  },
+  cancelBtn: {
+    backgroundColor: colors.disabledBg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  cancelBtnText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
   },
 });

@@ -45,18 +45,37 @@ class TestGetDailyAdvice:
 
     @pytest.mark.asyncio
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    async def test_get_daily_advice_returns_advice(
+    async def test_get_daily_advice_returns_structured_items(
         self, mock_invoke: AsyncMock
     ) -> None:
-        """验证每日建议生成并保存。"""
+        """验证每日建议生成结构化 items 并保存。"""
+        mock_invoke.return_value = (
+            '[{"title":"施肥","detail":"生长期需追肥","priority":1,"icon":"🌱"}]'
+        )
+        mock_db = _make_mock_db()
+
+        result = await get_daily_advice(mock_db, cycle_id=1)
+
+        assert len(result.items) == 1
+        assert result.items[0].title == "施肥"
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_fallback_on_plain_text(
+        self, mock_invoke: AsyncMock
+    ) -> None:
+        """验证 LLM 返回纯文本时 fallback 为单条 item。"""
         mock_invoke.return_value = "今日建议：施肥。"
         mock_db = _make_mock_db()
 
         result = await get_daily_advice(mock_db, cycle_id=1)
 
-        assert result.advice == "今日建议：施肥。"
-        mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        assert len(result.items) == 1
+        assert result.items[0].title == "今日农事建议"
+        # 向后兼容：advice property 返回拼接文本
+        assert "今日建议：施肥。" in result.advice
 
 
 class TestGenerateReport:

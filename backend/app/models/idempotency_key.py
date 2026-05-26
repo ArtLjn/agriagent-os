@@ -27,7 +27,9 @@ def cleanup_old_keys(db=None, hours: int = 24) -> None:
         return
     try:
         cutoff = datetime.now() - timedelta(hours=hours)
-        db.query(IdempotencyKey).filter(IdempotencyKey.created_at < cutoff).delete(synchronize_session=False)
+        db.query(IdempotencyKey).filter(IdempotencyKey.created_at < cutoff).delete(
+            synchronize_session=False
+        )
         db.commit()
         logger.info("幂等键清理完成 | cutoff=%s", cutoff)
     except Exception:

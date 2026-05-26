@@ -9,7 +9,13 @@ from app.schemas.cycle import CropCycleCreate
 
 def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> CropCycle:
     """创建茬口及其阶段，按模板阶段顺序推算日期。"""
-    template = db.query(CropTemplate).filter(CropTemplate.id == cycle.crop_template_id, CropTemplate.farm_id == farm_id).first()
+    template = (
+        db.query(CropTemplate)
+        .filter(
+            CropTemplate.id == cycle.crop_template_id, CropTemplate.farm_id == farm_id
+        )
+        .first()
+    )
     if not template:
         raise ValueError("Crop template not found")
 
@@ -70,7 +76,11 @@ def count_crop_cycles(db: Session, farm_id: int) -> int:
 
 def get_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> CropCycle | None:
     """根据 ID 获取指定农场的单个茬口。"""
-    return db.query(CropCycle).filter(CropCycle.id == cycle_id, CropCycle.farm_id == farm_id).first()
+    return (
+        db.query(CropCycle)
+        .filter(CropCycle.id == cycle_id, CropCycle.farm_id == farm_id)
+        .first()
+    )
 
 
 def update_stage(

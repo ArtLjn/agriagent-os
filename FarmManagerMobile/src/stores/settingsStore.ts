@@ -9,12 +9,14 @@ interface SettingsState {
   reminderTime: string;
   notificationEnabled: boolean;
   weatherAlertEnabled: boolean;
+  displayName: string;
   setDefaultFarmName: (name: string) => void;
   setDefaultCity: (city: string) => void;
   setCrops: (crops: string[]) => void;
   setReminderTime: (time: string) => void;
   setNotificationEnabled: (enabled: boolean) => void;
   setWeatherAlertEnabled: (enabled: boolean) => void;
+  setDisplayName: (name: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState, [['zustand/persist', unknown]]>(
@@ -26,6 +28,7 @@ export const useSettingsStore = create<SettingsState, [['zustand/persist', unkno
       reminderTime: '08:00',
       notificationEnabled: true,
       weatherAlertEnabled: true,
+      displayName: '农友',
 
       setDefaultFarmName: name => set({defaultFarmName: name}),
       setDefaultCity: city => set({defaultCity: city}),
@@ -33,6 +36,7 @@ export const useSettingsStore = create<SettingsState, [['zustand/persist', unkno
       setReminderTime: time => set({reminderTime: time}),
       setNotificationEnabled: enabled => set({notificationEnabled: enabled}),
       setWeatherAlertEnabled: enabled => set({weatherAlertEnabled: enabled}),
+      setDisplayName: name => set({displayName: name}),
     }),
     {
       name: 'settings-store',

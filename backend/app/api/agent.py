@@ -58,11 +58,23 @@ async def agent_chat(
 ) -> ChatResponse:
     """与农事顾问 Agent 对话。"""
     rid = _new_request_id()
-    logger.info("[%s] POST /agent/chat | message=%s cycle_id=%s", rid, chat_request.message[:80], chat_request.cycle_id)
+    logger.info(
+        "[%s] POST /agent/chat | message=%s cycle_id=%s",
+        rid,
+        chat_request.message[:80],
+        chat_request.cycle_id,
+    )
     start = time.perf_counter()
     try:
-        result = await chat_with_agent(db, chat_request.message, chat_request.cycle_id, farm_id=farm.id)
-        logger.info("[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符", rid, time.perf_counter() - start, len(result.reply))
+        result = await chat_with_agent(
+            db, chat_request.message, chat_request.cycle_id, farm_id=farm.id
+        )
+        logger.info(
+            "[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符",
+            rid,
+            time.perf_counter() - start,
+            len(result.reply),
+        )
         return result
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -79,13 +91,17 @@ async def agent_chat_stream(
 ) -> StreamingResponse:
     """流式与农事顾问 Agent 对话（SSE）。"""
     rid = _new_request_id()
-    logger.info("[%s] POST /agent/chat/stream | message=%s", rid, chat_request.message[:80])
+    logger.info(
+        "[%s] POST /agent/chat/stream | message=%s", rid, chat_request.message[:80]
+    )
 
     async def event_generator():
         full_reply = ""
         start = time.perf_counter()
         try:
-            async for chunk in stream_chat_with_agent(chat_request.message, chat_request.cycle_id):
+            async for chunk in stream_chat_with_agent(
+                chat_request.message, chat_request.cycle_id
+            ):
                 full_reply += chunk
                 data = json.dumps({"content": chunk}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
@@ -97,7 +113,12 @@ async def agent_chat_stream(
             )
             db.add(record)
             db.commit()
-            logger.info("[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符", rid, time.perf_counter() - start, len(full_reply))
+            logger.info(
+                "[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符",
+                rid,
+                time.perf_counter() - start,
+                len(full_reply),
+            )
         except LlmNotConfiguredError as exc:
             logger.error("[%s] /chat/stream 失败: %s", rid, exc)
             yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
@@ -125,7 +146,9 @@ async def daily_advice(
     start = time.perf_counter()
     try:
         result = await get_daily_advice(db, cycle_id, farm_id=farm.id)
-        logger.info("[%s] /agent/daily 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
+        logger.info(
+            "[%s] /agent/daily 完成 | 耗时 %.2fs", rid, time.perf_counter() - start
+        )
         return result
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -143,7 +166,11 @@ async def refresh_daily_advice_endpoint(
     start = time.perf_counter()
     try:
         result = await refresh_daily_advice(db, cycle_id, farm_id=farm.id)
-        logger.info("[%s] /agent/daily/refresh 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
+        logger.info(
+            "[%s] /agent/daily/refresh 完成 | 耗时 %.2fs",
+            rid,
+            time.perf_counter() - start,
+        )
         return result
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -160,11 +187,20 @@ async def agent_report(
 ) -> ReportResponse:
     """生成种植周期报告。"""
     rid = _new_request_id()
-    logger.info("[%s] POST /agent/report | type=%s cycle_id=%s", rid, report_request.report_type, report_request.cycle_id)
+    logger.info(
+        "[%s] POST /agent/report | type=%s cycle_id=%s",
+        rid,
+        report_request.report_type,
+        report_request.cycle_id,
+    )
     start = time.perf_counter()
     try:
-        result = await generate_report(db, report_request.cycle_id, report_request.report_type, farm_id=farm.id)
-        logger.info("[%s] /agent/report 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
+        result = await generate_report(
+            db, report_request.cycle_id, report_request.report_type, farm_id=farm.id
+        )
+        logger.info(
+            "[%s] /agent/report 完成 | 耗时 %.2fs", rid, time.perf_counter() - start
+        )
         return result
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -213,10 +249,7 @@ async def list_reports(
     query = db.query(ReportRecord).filter(ReportRecord.farm_id == farm.id)
     total = query.with_entities(sqlfunc.count(ReportRecord.id)).scalar() or 0
     records = (
-        query.order_by(ReportRecord.created_at.desc())
-        .offset(offset)
-        .limit(size)
-        .all()
+        query.order_by(ReportRecord.created_at.desc()).offset(offset).limit(size).all()
     )
     items = [
         ReportHistoryItem(

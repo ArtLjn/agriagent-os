@@ -22,10 +22,20 @@ from app.core.logger import get_logger, setup_logging
 
 setup_logging()
 
-from app.api import admin, agent, cost, cost_categories, crop, cycle, log, user_settings, weather
+from app.api import (
+    admin,
+    agent,
+    cost,
+    cost_categories,
+    crop,
+    cycle,
+    log,
+    user_settings,
+    weather,
+)
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
-from app.core.date_context import get_request_date, set_request_date
+from app.core.date_context import set_request_date
 from app.core.prompt_registry import get_registry
 from app.core.seed import seed_default_farm
 
@@ -41,7 +51,9 @@ async def lifespan(app: FastAPI):
         os.environ["LANGSMITH_API_KEY"] = settings.langsmith_config.api_key
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGSMITH_PROJECT"] = settings.langsmith_config.project_name
-        logger.info("LangSmith 已启用 | project=%s", settings.langsmith_config.project_name)
+        logger.info(
+            "LangSmith 已启用 | project=%s", settings.langsmith_config.project_name
+        )
 
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
     db = SessionLocal()
@@ -89,7 +101,9 @@ async def date_injection_middleware(request: Request, call_next):
             else:
                 logger.warning(
                     "客户端日期偏差过大 | client=%s server=%s delta=%dd",
-                    header_date, server_date, delta,
+                    header_date,
+                    server_date,
+                    delta,
                 )
         except ValueError:
             logger.warning("X-Current-Date 格式无效: %s", header_date)
@@ -97,6 +111,7 @@ async def date_injection_middleware(request: Request, call_next):
     set_request_date(effective_date.isoformat())
     response = await call_next(request)
     return response
+
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(_request, exc):
@@ -106,20 +121,24 @@ async def http_exception_handler(_request, exc):
         content={"detail": exc.detail},
     )
 
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(_request, exc):
     """请求参数校验失败，返回 422 和结构化字段错误。"""
     errors = []
     for err in exc.errors():
-        errors.append({
-            "field": ".".join(str(x) for x in err["loc"]),
-            "message": err["msg"],
-            "type": err["type"],
-        })
+        errors.append(
+            {
+                "field": ".".join(str(x) for x in err["loc"]),
+                "message": err["msg"],
+                "type": err["type"],
+            }
+        )
     return JSONResponse(
         status_code=422,
         content={"detail": "请求参数校验失败", "errors": errors},
     )
+
 
 @app.exception_handler(GraphRecursionError)
 async def graph_recursion_handler(request, exc):
@@ -130,6 +149,7 @@ async def graph_recursion_handler(request, exc):
         content={"detail": "Agent 处理步数超出限制，请简化问题后重试"},
     )
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """未捕获异常，返回 500，记录完整堆栈，不泄漏给客户端。"""
@@ -138,6 +158,7 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={"detail": "内部服务器错误"},
     )
+
 
 app.include_router(crop.router)
 app.include_router(cycle.router)
@@ -158,4 +179,5 @@ def health_check(request: Request, response: Response):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

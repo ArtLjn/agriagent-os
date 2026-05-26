@@ -22,8 +22,10 @@ def _make_key(skill_name: str, params: dict) -> str:
 def cached(ttl_seconds: int, key_fn: Callable[[dict], str] | None = None):
     """装饰 Skill.execute()，按 (skill_name, params_hash) 缓存结果。"""
     if ttl_seconds <= 0:
+
         def decorator(fn):
             return fn
+
         return decorator
 
     def decorator(fn: Callable) -> Callable:
@@ -36,7 +38,12 @@ def cached(ttl_seconds: int, key_fn: Callable[[dict], str] | None = None):
                 result, expire_at = _cache[full_key]
                 age = time.time() - (expire_at - ttl_seconds)
                 if time.time() < expire_at:
-                    logger.info("CACHE HIT skill=%s age=%.0fs ttl=%ds", self.name(), age, ttl_seconds)
+                    logger.info(
+                        "CACHE HIT skill=%s age=%.0fs ttl=%ds",
+                        self.name(),
+                        age,
+                        ttl_seconds,
+                    )
                     return SkillResult(status=ResultStatus.SUCCESS, reply=result)
                 del _cache[full_key]
 
@@ -47,7 +54,9 @@ def cached(ttl_seconds: int, key_fn: Callable[[dict], str] | None = None):
                 _cache[full_key] = (result.reply, time.time() + ttl_seconds)
 
             return result
+
         return wrapper
+
     return decorator
 
 

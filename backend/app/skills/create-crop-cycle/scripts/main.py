@@ -127,4 +127,7 @@ def _format_reply(cycle) -> str:
         for s in sorted(cycle.stages, key=lambda s: s.order_index)
     ]
     stages_text = "\n".join(stage_lines)
-    return f"已建茬口「{cycle.name}」，开始日期 {cycle.start_date}\n阶段规划：\n{stages_text}"
+    return (
+        f"已建茬口「{cycle.name}」，"
+        f"开始日期 {cycle.start_date}\n阶段规划：\n{stages_text}"
+    )

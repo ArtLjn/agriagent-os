@@ -21,5 +21,10 @@ def list_guardrails_logs(
     if trigger_type:
         query = query.filter(GuardrailsLog.trigger_type == trigger_type)
     total = query.count()
-    items = query.order_by(GuardrailsLog.created_at.desc()).offset((page - 1) * size).limit(size).all()
+    items = (
+        query.order_by(GuardrailsLog.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
     return {"items": items, "total": total}
