@@ -1,6 +1,6 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type {PendingAction} from './types';
+import type {PendingAction, CostRecord, DebtListResponse} from './types';
 
 const API_BASE_URL = 'http://47.98.253.236:8000';
 
@@ -140,6 +140,24 @@ export const agentApi = {
     apiClient.get('/agent/advice-history', { params: { cycle_id: cycleId } }),
   getReportHistory: (page: number = 1, size: number = 10) =>
     apiClient.get('/agent/reports', { params: { page, size } }),
+};
+
+// 债务管理
+export const debtApi = {
+  getDebts: (params?: { counterparty?: string; page?: number; size?: number }) =>
+    apiClient.get<DebtListResponse>('/debts', { params }),
+  createDebt: (data: {
+    record_type: string;
+    category: string;
+    amount: string;
+    record_date: string;
+    note?: string;
+    record_subtype?: string;
+    counterparty?: string;
+    due_date?: string;
+  }) => apiClient.post<CostRecord>('/debts', data),
+  settleDebt: (data: { counterparty: string; amount?: string; note?: string }) =>
+    apiClient.post<CostRecord>('/debts/settle', data),
 };
 
 // 天气

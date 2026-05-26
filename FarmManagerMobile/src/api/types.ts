@@ -63,6 +63,12 @@ export interface CostRecord {
   amount: string;
   record_date: string;
   note: string | null;
+  record_subtype?: string;
+  counterparty?: string;
+  due_date?: string;
+  settled_at?: string;
+  parent_record_id?: number;
+  created_at?: string;
 }
 
 export interface CycleProfit {
@@ -141,4 +147,18 @@ export interface ReportListItem {
 export interface ReportListResponse {
   items: ReportListItem[];
   total: number;
+}
+
+export interface DebtSummary {
+  counterparty: string;
+  total_debt: string;
+  total_settled: string;
+  remaining: string;
+  record_count: number;
+}
+
+export interface DebtListResponse {
+  items: CostRecord[];
+  total: number;
+  summary: DebtSummary[];
 }
