@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -16,6 +16,11 @@ class CostRecordBase(BaseModel):
     amount: Decimal = Field(..., gt=0, le=10_000_000)
     record_date: date
     note: str | None = Field(None, max_length=500)
+    record_subtype: str | None = Field(None, max_length=50)
+    counterparty: str | None = Field(None, max_length=100)
+    due_date: date | None = None
+    settled_at: datetime | None = None
+    parent_record_id: int | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -54,6 +59,11 @@ class CostRecordUpdate(BaseModel):
     amount: Decimal | None = Field(None, gt=0, le=10_000_000)
     record_date: date | None = None
     note: str | None = Field(None, max_length=500)
+    record_subtype: str | None = Field(None, max_length=50)
+    counterparty: str | None = Field(None, max_length=100)
+    due_date: date | None = None
+    settled_at: datetime | None = None
+    parent_record_id: int | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -143,6 +153,26 @@ class CostParseResponse(BaseModel):
         if parsed < min_date or parsed > max_date:
             return today.isoformat()
         return parsed.isoformat()
+
+
+class DebtSummary(BaseModel):
+    """债务统计 Schema。"""
+
+    counterparty: str
+    total_debt: Decimal
+    total_settled: Decimal
+    remaining: Decimal
+    record_count: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DebtListResponse(BaseModel):
+    """债务列表响应 Schema。"""
+
+    items: list[CostRecordResponse]
+    total: int
+    summary: list[DebtSummary]
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CostParseResult(BaseModel):
