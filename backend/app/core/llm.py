@@ -8,7 +8,7 @@ for _attr in ("verbose", "debug", "llm_cache"):
     if not hasattr(langchain, _attr):
         setattr(langchain, _attr, False)
 
-from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.language_models.chat_models import BaseChatModel  # noqa: E402
 from langchain_openai import ChatOpenAI  # noqa: E402
 
 from app.core.circuit_breaker import CircuitBreaker, call_with_retry  # noqa: E402
@@ -47,6 +47,9 @@ def get_llm() -> BaseChatModel:
                 "或设置 AI_API_KEY 环境变量。"
             )
         cb = settings.circuit_breaker_config
+        model_kwargs = {}
+        if hasattr(settings, "ai") and hasattr(settings.ai, "enable_thinking"):
+            model_kwargs["enable_thinking"] = settings.ai.enable_thinking
         LLM_INSTANCE = ChatOpenAI(
             model=settings.ai_model,
             api_key=settings.ai_api_key,
@@ -54,6 +57,7 @@ def get_llm() -> BaseChatModel:
             temperature=0.7,
             max_retries=cb.retry_max,
             timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
+            model_kwargs=model_kwargs,
         )
     return LLM_INSTANCE
 
