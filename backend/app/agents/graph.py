@@ -10,6 +10,7 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from app.core.llm import get_llm
+from app.core.pending_actions import is_write_skill, store_pending
 from app.core.prompt_registry import get_registry
 from app.core.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
@@ -90,18 +91,40 @@ def _llm_node(state: AgentState) -> dict:
 
 
 async def _parallel_tool_node(state: AgentState) -> dict:
-    """并行执行多个 tool_calls 的节点。"""
+    """并行执行多个 tool_calls 的节点。写操作 Skill 拦截为 pending action。"""
     last = state["messages"][-1]
     if not isinstance(last, AIMessage) or not last.tool_calls:
         return {"messages": []}
 
     tool_map = {t.name: t for t in get_langchain_tools()}
+    farm_id = state.get("farm_id", 1)
 
     async def _call_one(tc: dict) -> ToolMessage:
         name = tc["name"]
         args = tc["args"]
         tool_call_id = tc["id"]
         logger.info("Skill 调用 %s(%s)", name, args)
+
+        # 写操作 Skill 拦截：存储 pending action，不直接执行
+        if is_write_skill(name):
+            action_id = store_pending(farm_id, name, args)
+            logger.info(
+                "写操作 Skill 已拦截 | farm=%s action_id=%s skill=%s",
+                farm_id,
+                action_id,
+                name,
+            )
+            params_str = ", ".join(f"{k}={v}" for k, v in args.items())
+            return ToolMessage(
+                content=(
+                    f"已记录操作意图：{name}({params_str})。"
+                    f"请向用户确认参数后执行。"
+                    f"确认消息示例：记一笔：{args.get('category', '')} "
+                    f"{args.get('amount', '')}元。确认？"
+                ),
+                tool_call_id=tool_call_id,
+            )
+
         try:
             tool = tool_map.get(name)
             if not tool:

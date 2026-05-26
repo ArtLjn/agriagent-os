@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class ChatRequest(BaseModel):
@@ -12,20 +12,46 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
 
 
+class PendingActionResponse(BaseModel):
+    """待确认操作信息，供前端展示确认 UI。"""
+
+    action_id: str
+    skill_name: str
+    params: dict
+
+
 class ChatResponse(BaseModel):
     """Agent 对话响应。"""
 
     reply: str
+    pending_action: PendingActionResponse | None = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdviceItem(BaseModel):
+    """单条结构化建议。"""
+
+    title: str = Field(..., max_length=15)
+    detail: str = Field(..., max_length=50)
+    priority: int = Field(..., ge=1, le=3)
+    icon: str = Field(default="📋", max_length=4)
 
 
 class DailyAdviceResponse(BaseModel):
     """每日建议响应。"""
 
     cycle_id: int | None = None
-    advice: str
+    items: list[AdviceItem]
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def advice(self) -> str:
+        """向后兼容：拼接所有条目的 title+detail。"""
+        if not self.items:
+            return ""
+        return "; ".join(f"{item.title}: {item.detail}" for item in self.items)
 
 
 class ReportRequest(BaseModel):
