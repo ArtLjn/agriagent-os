@@ -10,6 +10,14 @@ from pydantic_settings import (
 )
 
 
+class TraceConfig(BaseModel):
+    batch_size: int = 20
+    flush_interval: float = 5.0
+    max_queue: int = 1000
+    trace_ttl_days: int = 7
+    token_stats_ttl_days: int = 90
+
+
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
@@ -78,6 +86,7 @@ class Settings(BaseSettings):
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
     rate_limiting: RateLimitConfig = RateLimitConfig()
     langsmith: LangSmithConfig = LangSmithConfig()
+    trace: TraceConfig = TraceConfig()
     project_name: str = "Farm Manager API"
 
     def __init__(self, _config_path: Optional[str] = None, **kwargs):
