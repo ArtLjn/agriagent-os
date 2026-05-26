@@ -6,7 +6,6 @@ from app.models.cost import CostRecord
 from app.models.agent import AdviceRecord, ReportRecord
 from app.models.guardrails_log import GuardrailsLog
 from app.models.idempotency_key import IdempotencyKey
-from app.models.agent_trace import AgentTrace
 from app.models.trace import TraceRecord
 from app.models.token_stats import TokenDailyStats
 
@@ -22,7 +21,6 @@ __all__ = [
     "ReportRecord",
     "GuardrailsLog",
     "IdempotencyKey",
-    "AgentTrace",
     "TraceRecord",
     "TokenDailyStats",
 ]
