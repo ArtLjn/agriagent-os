@@ -54,8 +54,13 @@ def render_prompt(
     reg = registry or get_registry()
     try:
         template_str = reg.get(name, version)
+        logger.debug(
+            "模板渲染 | name=%s | hit=true | vars=%s",
+            name,
+            list((variables or {}).keys()),
+        )
     except KeyError:
-        logger.warning("模板 %s 未注册，使用内置默认", name)
+        logger.warning("模板未注册 | name=%s | 使用内置默认", name)
         template_str = reg.get_fallback(name)
 
     builtin_vars = _build_builtin_vars(current_date)

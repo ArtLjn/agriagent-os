@@ -52,7 +52,7 @@ export const CostCreateScreen: React.FC = () => {
   // 获取可用分类
   const availableCategories = useMemo(() => {
     const userCategories = categories
-      .filter(c => c.category_type === recordType)
+      .filter(c => c.type === recordType)
       .map(c => c.name);
 
     if (userCategories.length === 0) {

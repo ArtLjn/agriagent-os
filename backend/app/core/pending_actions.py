@@ -1,5 +1,6 @@
 """写操作确认机制 — pending action 存储与意图检测。"""
 
+import logging
 import re
 import time
 import uuid
@@ -19,6 +20,8 @@ WRITE_SKILLS = frozenset(
 )
 
 _TIMEOUT_SECONDS = 300  # 5分钟超时
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -46,6 +49,12 @@ def store_pending(farm_id: int, skill_name: str, params: dict) -> str:
         created_at=time.time(),
         farm_id=farm_id,
     )
+    logger.info(
+        "Pending action 已存储 | farm_id=%d | action_id=%s | skill=%s",
+        farm_id,
+        action_id,
+        skill_name,
+    )
     return action_id
 
 
@@ -55,14 +64,25 @@ def get_pending(farm_id: int) -> PendingAction | None:
     if action is None:
         return None
     if time.time() - action.created_at > _TIMEOUT_SECONDS:
+        logger.warning(
+            "Pending action 已超时 | farm_id=%d | skill=%s",
+            farm_id,
+            action.skill_name,
+        )
         del _pending[farm_id]
         return None
+    logger.debug(
+        "Pending action 获取 | farm_id=%d | skill=%s",
+        farm_id,
+        action.skill_name,
+    )
     return action
 
 
 def remove_pending(farm_id: int) -> None:
     """删除 pending action。"""
     _pending.pop(farm_id, None)
+    logger.debug("Pending action 已删除 | farm_id=%d", farm_id)
 
 
 def is_write_skill(skill_name: str) -> bool:
@@ -78,8 +98,9 @@ def detect_user_intent(message: str) -> str:
     """
     stripped = message.strip()
     if _CANCEL_PATTERNS.search(stripped):
-        # 如果消息包含取消词，判定为取消
-        return "cancel"
+        result = "cancel"
+        logger.debug("意图检测 | message=%s | intent=%s", message[:20], result)
+        return result
 
     if _CONFIRM_PATTERNS.search(stripped):
         # 确认词匹配后，检查消息长度。短消息（<=10字）才判定为确认，
@@ -89,15 +110,23 @@ def detect_user_intent(message: str) -> str:
         # 确认词后还有较多内容时，视为修正
         remaining = stripped[match_end:].strip()
         if len(stripped) <= 10 and not remaining:
-            return "confirm"
+            result = "confirm"
+            logger.debug("意图检测 | message=%s | intent=%s", message[:20], result)
+            return result
         # 如果整条消息就是确认词（如"确认"、"好的"）
         if stripped == confirm_match.group(0):
-            return "confirm"
+            result = "confirm"
+            logger.debug("意图检测 | message=%s | intent=%s", message[:20], result)
+            return result
         # 确认词开头且后面内容很短（如"确认一下"、"好的，就这样"）
         if len(remaining) <= 4 and not any(c.isdigit() for c in remaining):
-            return "confirm"
+            result = "confirm"
+            logger.debug("意图检测 | message=%s | intent=%s", message[:20], result)
+            return result
 
-    return "modify"
+    result = "modify"
+    logger.debug("意图检测 | message=%s | intent=%s", message[:20], result)
+    return result
 
 
 __all__ = [

@@ -1,11 +1,14 @@
 export interface CostCategory {
   id: number;
   name: string;
-  category_type: 'expense' | 'income';
-  is_system: boolean;
+  type: 'cost' | 'income';
+  icon: string;
+  sort_order: number;
+  is_default: boolean;
 }
 
 export interface CategoryCreateParams {
   name: string;
-  category_type: 'expense' | 'income';
+  type: 'cost' | 'income';
+  icon?: string;
 }

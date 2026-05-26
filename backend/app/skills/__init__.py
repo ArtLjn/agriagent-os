@@ -18,8 +18,17 @@ def get_skill_manager() -> SkillManager:
     global _manager
     if _manager is None:
         _manager = SkillManager(python_packages=["app.skills"])
+        for skill_def in _manager.list_skills():
+            skill = _manager.get_skill(skill_def.name)
+            if skill:
+                logger.info(
+                    "Skill 已加载 | name=%s | desc=%s",
+                    skill.name(),
+                    skill.description(),
+                )
         logger.info(
-            "SkillManager 初始化完成，共 %d 个 Skill", len(_manager.list_skills())
+            "SkillManager 初始化完成，共 %d 个 Skill",
+            len(_manager.list_skills()),
         )
     return _manager
 
@@ -111,6 +120,7 @@ def _build_registry() -> dict:
             skill = manager.get_skill(skill_def.name)
             if skill:
                 registry[skill.name()] = skill
+                logger.debug("Skill 注册 | name=%s", skill.name())
     except Exception as e:
         logger.warning("Skill 加载失败: %s", e)
     return registry

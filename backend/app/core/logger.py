@@ -48,16 +48,28 @@ def setup_logging() -> None:
     log_dir = _ensure_log_dir(
         Path(os.getenv("LOG_DIR", Path(__file__).resolve().parent.parent / "logs"))
     )
-    log_file = log_dir / "app.log"
     file_fmt = "%(asctime)s │ %(request_id)s │ %(name)s │ %(levelname)s │ %(message)s"
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=10 * 1024 * 1024,  # 10 MB
+
+    # 2a. 全量日志 app.log（INFO 及以上）
+    app_handler = RotatingFileHandler(
+        log_dir / "app.log",
+        maxBytes=10 * 1024 * 1024,
         backupCount=5,
         encoding="utf-8",
     )
-    file_handler.setFormatter(logging.Formatter(file_fmt))
-    root.addHandler(file_handler)
+    app_handler.setFormatter(logging.Formatter(file_fmt))
+    root.addHandler(app_handler)
+
+    # 2b. 错误日志 error.log（WARNING 及以上）
+    error_handler = RotatingFileHandler(
+        log_dir / "error.log",
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    error_handler.setFormatter(logging.Formatter(file_fmt))
+    error_handler.setLevel(logging.WARNING)
+    root.addHandler(error_handler)
 
     # 第三方库降噪
     for noisy in ("httpx", "httpcore", "urllib3", "openai._base_client", "werkzeug"):

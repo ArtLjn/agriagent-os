@@ -25,7 +25,7 @@ def get_categories(
 @router.post("", response_model=CostCategoryResponse, status_code=201)
 def create_category(
     farm_id: int = Query(1, description="农场 ID"),
-    data: CostCategoryCreate = None,  # type: ignore
+    data: CostCategoryCreate,
     db: Session = Depends(get_db),
 ):
     """创建用户自定义分类。"""

@@ -1,7 +1,9 @@
 """LangGraph 图编译模块 — 自定义 StateGraph 实现并行 Skill 执行。"""
 
 import asyncio
+import json
 import logging
+import time
 from typing import Annotated
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
@@ -10,11 +12,13 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from app.core.llm import get_llm
+from app.core.logger import request_id_var
 from app.core.pending_actions import is_write_skill, store_pending
 from app.core.prompt_registry import get_registry
 from app.core.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
 from app.core.database import SessionLocal
+from app.core.trace import write_trace
 from app.models.farm import Farm
 from app.services import farm_context_service
 from app.skills import get_langchain_tools
@@ -55,10 +59,32 @@ def _should_continue(state: AgentState) -> str:
     return END
 
 
+def _find_last_human_message(messages: list) -> str:
+    """从消息列表中找到最后一条 HumanMessage 的内容。"""
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            return msg.content or ""
+    return ""
+
+
+def _extract_tokens_used(response: AIMessage) -> int | None:
+    """从 LLM 响应中提取 token 用量。"""
+    try:
+        usage = response.response_metadata.get("token_usage", {})
+        total = usage.get("total_tokens")
+        if total is not None:
+            return int(total)
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return None
+
+
 def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     tools = get_langchain_tools()
-    llm = get_llm().bind_tools(tools)
+    raw_llm = get_llm()
+    llm = raw_llm.bind_tools(tools)
+    model_name = getattr(raw_llm, "model_name", "unknown")
 
     # 获取农场上下文摘要和用户称呼
     db = SessionLocal()
@@ -86,7 +112,53 @@ def _llm_node(state: AgentState) -> dict:
     system = HumanMessage(content=system_text)
 
     messages = micro_compact(state["messages"])
-    response = llm.invoke([system] + messages)
+    input_summary = _find_last_human_message(state["messages"])[:200]
+
+    # LLM 调用 + 计时
+    start = time.perf_counter()
+    try:
+        response = llm.invoke([system] + messages)
+    except Exception as exc:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        write_trace(
+            farm_id=1,
+            session_id=request_id_var.get("-"),
+            node_type="llm_call",
+            node_name="llm",
+            input_summary=input_summary,
+            duration_ms=duration_ms,
+            error_message=str(exc),
+        )
+        raise
+
+    duration_ms = int((time.perf_counter() - start) * 1000)
+
+    # LLM 工具选择日志
+    if response.tool_calls:
+        tool_names = [tc["name"] for tc in response.tool_calls]
+        logger.info(
+            "LLM 工具选择 | tool_calls=%s | model=%s", tool_names, model_name
+        )
+        output_summary = f"tool_calls: {tool_names}"
+    else:
+        content = response.content or ""
+        logger.info(
+            "LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name
+        )
+        output_summary = content[:200]
+
+    # Trace 写入
+    write_trace(
+        farm_id=1,
+        session_id=request_id_var.get("-"),
+        node_type="llm_call",
+        node_name="llm",
+        input_summary=input_summary,
+        output_summary=output_summary,
+        duration_ms=duration_ms,
+        tokens_used=_extract_tokens_used(response),
+    )
+
     return {"messages": [response]}
 
 
@@ -104,6 +176,7 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         args = tc["args"]
         tool_call_id = tc["id"]
         logger.info("Skill 调用 %s(%s)", name, args)
+        start = time.perf_counter()
 
         # 写操作 Skill 拦截：存储 pending action，不直接执行
         if is_write_skill(name):
@@ -113,6 +186,16 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                 farm_id,
                 action_id,
                 name,
+            )
+            # 拦截时也写 trace
+            write_trace(
+                farm_id=farm_id,
+                session_id=request_id_var.get("-"),
+                node_type="tool_call",
+                node_name=name,
+                input_summary=json.dumps(args, ensure_ascii=False)[:200],
+                output_summary="已拦截为 pending action",
+                duration_ms=0,
             )
             params_str = ", ".join(f"{k}={v}" for k, v in args.items())
             return ToolMessage(
@@ -132,11 +215,37 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                     content=f"未知工具: {name}", tool_call_id=tool_call_id
                 )
             result = await tool.ainvoke(args)
+            duration_ms = int((time.perf_counter() - start) * 1000)
             summary = str(result)[:120].replace("\n", " ")
-            logger.info("Skill 返回 %s -> %s", name, summary)
+            logger.info(
+                "Skill 完成 | name=%s | duration_ms=%d | result=%s",
+                name, duration_ms, summary,
+            )
+            write_trace(
+                farm_id=farm_id,
+                session_id=request_id_var.get("-"),
+                node_type="tool_call",
+                node_name=name,
+                input_summary=json.dumps(args, ensure_ascii=False)[:200],
+                output_summary=str(result)[:200],
+                duration_ms=duration_ms,
+            )
             return ToolMessage(content=str(result), tool_call_id=tool_call_id)
         except Exception as e:
-            logger.error("Skill 失败 %s: %s", name, e)
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.error(
+                "Skill 失败 | name=%s | error=%s", name, e,
+            )
+            write_trace(
+                farm_id=farm_id,
+                session_id=request_id_var.get("-"),
+                node_type="tool_call",
+                node_name=name,
+                input_summary=json.dumps(args, ensure_ascii=False)[:200],
+                output_summary=None,
+                duration_ms=duration_ms,
+                error_message=str(e),
+            )
             return ToolMessage(content=f"工具调用失败: {e}", tool_call_id=tool_call_id)
 
     if len(last.tool_calls) == 1:

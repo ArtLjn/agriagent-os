@@ -5,6 +5,15 @@ import time
 import uuid
 from dataclasses import dataclass
 
+__all__ = [
+    "TraceInfo",
+    "init_trace",
+    "get_trace",
+    "clear_trace",
+    "get_round_index",
+    "increment_round",
+]
+
 
 @dataclass
 class TraceInfo:
@@ -57,6 +66,3 @@ def increment_round() -> int:
     new_val = _round_ctx.get() + 1
     _round_ctx.set(new_val)
     return new_val
-
-
-__all__ = ["TraceInfo", "init_trace", "get_trace", "clear_trace", "get_round_index", "increment_round"]

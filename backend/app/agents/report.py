@@ -1,6 +1,7 @@
 """报告 Agent 封装，生成种植周期周报/月报。"""
 
 import logging
+import time
 
 from langchain_core.messages import HumanMessage
 
@@ -27,6 +28,8 @@ def _get_report_llm():
 
 async def generate_cycle_report(cycle_id: int) -> str:
     """生成指定种植周期的综合报告。"""
+    start = time.perf_counter()
+    logger.info("报告生成开始 | type=cycle | cycle_id=%d", cycle_id)
     llm = _get_report_llm()
     prompt = (
         f"请为 ID={cycle_id} 的种植周期生成一份综合报告。"
@@ -42,7 +45,10 @@ async def generate_cycle_report(cycle_id: int) -> str:
         [system, HumanMessage(content=prompt)],
         config={"run_name": "cycle_report", "metadata": {"cycle_id": cycle_id}},
     )
-    return filter_output(response.content)
+    result = filter_output(response.content)
+    duration_ms = int((time.perf_counter() - start) * 1000)
+    logger.info("报告生成完成 | len=%d | duration_ms=%d", len(result), duration_ms)
+    return result
 
 
 __all__ = ["generate_cycle_report"]

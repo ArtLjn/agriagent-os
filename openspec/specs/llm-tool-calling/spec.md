@@ -16,19 +16,19 @@
 - **THEN** `get_llm()` 不传递 `enable_thinking` 参数（使用模型默认行为）
 
 ### Requirement: Function Calling 链路端到端可用
-当使用支持 FC 的模型（如 `qwen3.6-flash`）且 `enable_thinking` 为 `false` 时，LangGraph 的 `_llm_node` 中 `bind_tools()` SHALL 正常工作。LLM 遇到需要调用 skill 的用户输入时 SHALL 返回 `tool_calls`，`_should_continue` SHALL 检测到并路由到 `_parallel_tool_node` 执行。
+当使用支持 FC 的模型（如 `qwen3.6-flash`）且 `enable_thinking` 为 `false` 时，LangGraph 的 `_llm_node` 中 `bind_tools()` SHALL 正常工作。LLM 遇到需要调用 skill 的用户输入时 SHALL 返回 `tool_calls`，`_should_continue` SHALL 检测到并路由到 `_parallel_tool_node` 执行。`_llm_node` SHALL 在 LLM 返回后以 INFO 级别记录工具选择决策（选择的工具名称列表）或直接回复信息。
 
 #### Scenario: 用户询问天气触发 tool call
 - **WHEN** 用户发送"明天天气怎么样"
-- **THEN** LLM 返回 `tool_calls` 包含 `get_weather_forecast`，`_should_continue` 返回 `"tools"`，`_parallel_tool_node` 执行 weather skill 并返回真实天气数据
+- **THEN** LLM 返回 `tool_calls` 包含 `get_weather_forecast`，`_should_continue` 返回 `"tools"`，`_parallel_tool_node` 执行 weather skill 并返回真实天气数据，`_llm_node` 日志记录 `tool_calls=[get_weather_forecast]`
 
 #### Scenario: 用户闲聊不触发 tool call
 - **WHEN** 用户发送"你好"
-- **THEN** LLM 直接回复文本，`_should_continue` 返回 `END`，不触发任何 skill 执行
+- **THEN** LLM 直接回复文本，`_should_continue` 返回 `END`，不触发任何 skill 执行，`_llm_node` 日志记录 `reply_len=N`
 
 #### Scenario: 多 skill 并行调用
 - **WHEN** 用户发送"看看天气和最近的成本"
-- **THEN** LLM 返回多个 `tool_calls`（weather + cost_summary），`_parallel_tool_node` 并行执行两个 skill
+- **THEN** LLM 返回多个 `tool_calls`（weather + cost_summary），`_parallel_tool_node` 并行执行两个 skill，`_llm_node` 日志记录 `tool_calls=[get_weather_forecast, get_cost_summary]`
 
 ### Requirement: 默认模型切换为 qwen3.6-flash
 `AIConfig.model` 的默认值 SHALL 从 `qwen-flash-character` 变更为 `qwen3.6-flash-2026-04-16`。

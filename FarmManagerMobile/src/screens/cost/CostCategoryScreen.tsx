@@ -75,7 +75,7 @@ export const CostCategoryScreen: React.FC = () => {
     useCategoryStore();
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [categoryType, setCategoryType] = useState<'expense' | 'income'>('expense');
+  const [categoryType, setCategoryType] = useState<'cost' | 'income'>('cost');
   const [categoryName, setCategoryName] = useState('');
 
   useEffect(() => {
@@ -96,10 +96,10 @@ export const CostCategoryScreen: React.FC = () => {
     }
 
     try {
-      await createCategory({name: categoryName.trim(), category_type: categoryType});
+      await createCategory({name: categoryName.trim(), type: categoryType, icon: 'tag'});
       setModalVisible(false);
       setCategoryName('');
-      setCategoryType('expense');
+      setCategoryType('cost');
     } catch (err) {
       // Error 已在 store 中处理
     }
@@ -122,8 +122,8 @@ export const CostCategoryScreen: React.FC = () => {
     ]);
   };
 
-  const expenseCategories = categories.filter(c => c.category_type === 'expense');
-  const incomeCategories = categories.filter(c => c.category_type === 'income');
+  const expenseCategories = categories.filter(c => c.type === 'cost');
+  const incomeCategories = categories.filter(c => c.type === 'income');
 
   return (
     <SafeAreaView style={localStyles.container} edges={['bottom']}>
@@ -157,7 +157,7 @@ export const CostCategoryScreen: React.FC = () => {
             key={category.id}
             name={category.name}
             type="expense"
-            isSystem={category.is_system}
+            isSystem={category.is_default}
             onDelete={() => handleDelete(category.id, category.name)}
           />
         ))}
@@ -180,7 +180,7 @@ export const CostCategoryScreen: React.FC = () => {
             key={category.id}
             name={category.name}
             type="income"
-            isSystem={category.is_system}
+            isSystem={category.is_default}
             onDelete={() => handleDelete(category.id, category.name)}
           />
         ))}

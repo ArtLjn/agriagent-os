@@ -9,7 +9,9 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {useAgentStore} from '../../stores/agentStore';
+import {useSettingsStore} from '../../stores/settingsStore';
 import {useCycleStore} from '../../stores/cycleStore';
+import {CITIES} from '../../data/cities';
 import {Card} from '../../components/Card';
 import {WeatherCard} from '../../components/WeatherCard';
 import {AdviceCard} from '../../components/AdviceCard';
@@ -69,10 +71,17 @@ export const HomeScreen: React.FC = () => {
     cityName,
     setCity,
   } = useAgentStore();
+  const {defaultCity, setDefaultCity} = useSettingsStore();
   const {cycles, fetchCycles} = useCycleStore();
   const [pickerVisible, setPickerVisible] = useState(false);
 
   useEffect(() => {
+    if (defaultCity !== cityName) {
+      const cityData = CITIES.find(c => c.name === defaultCity);
+      if (cityData) {
+        setCity(cityData.name, cityData.lat, cityData.lon);
+      }
+    }
     fetchWeather();
     fetchDailyAdvice();
     fetchCycles();
@@ -87,6 +96,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleCitySelect = (city: {name: string; lat: number; lon: number}) => {
     setCity(city.name, city.lat, city.lon);
+    setDefaultCity(city.name);
     fetchWeather();
   };
 

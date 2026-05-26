@@ -13,6 +13,7 @@ import {useNavigation} from '@react-navigation/native';
 import {Card} from '../../components/Card';
 import {CityPicker} from '../../components/CityPicker';
 import {useSettingsStore} from '../../stores/settingsStore';
+import {useAgentStore} from '../../stores/agentStore';
 import {colors} from '../../theme/colors';
 import {spacing, fontSize, borderRadius, shadows} from '../../theme/spacing';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -187,6 +188,7 @@ export const SettingsScreen: React.FC = () => {
   const handleCitySelect = useCallback(
     (city: {name: string; lat: number; lon: number}) => {
       setDefaultCity(city.name);
+      useAgentStore.getState().setCity(city.name, city.lat, city.lon);
     },
     [setDefaultCity],
   );

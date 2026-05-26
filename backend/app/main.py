@@ -35,7 +35,7 @@ from app.core.date_context import set_request_date  # noqa: E402
 from app.core.limiter import limiter  # noqa: E402
 from app.core.logger import get_logger, setup_logging  # noqa: E402
 from app.core.prompt_registry import get_registry  # noqa: E402
-from app.core.seed import seed_default_farm  # noqa: E402
+from app.core.seed import migrate_cost_records, seed_default_farm  # noqa: E402
 
 setup_logging()
 logger = get_logger(__name__)
@@ -55,6 +55,7 @@ async def lifespan(app: FastAPI):
         )
 
     await asyncio.to_thread(Base.metadata.create_all, bind=engine)
+    await asyncio.to_thread(migrate_cost_records)
     db = SessionLocal()
     try:
         seed_default_farm(db)
@@ -180,4 +181,9 @@ def health_check(request: Request, response: Response):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "app.main:app",
+        host=settings.server.host,
+        port=settings.server.port,
+        reload=True,
+    )
