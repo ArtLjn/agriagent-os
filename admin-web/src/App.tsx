@@ -11,6 +11,12 @@ import Costs from './pages/Costs';
 import Agent from './pages/Agent';
 import Weather from './pages/Weather';
 import ApiTester from './pages/ApiTester';
+import TraceMonitor from './pages/TraceMonitor';
+import TokenDashboard from './pages/TokenDashboard';
+import Playground from './pages/Playground';
+import SkillRegistry from './pages/SkillRegistry';
+import PromptInspector from './pages/PromptInspector';
+import ConfigKeys from './pages/ConfigKeys';
 
 export default function App() {
   return (
@@ -27,6 +33,12 @@ export default function App() {
             <Route path="/agent" element={<Agent />} />
             <Route path="/weather" element={<Weather />} />
             <Route path="/api-tester" element={<ApiTester />} />
+            <Route path="/dev/traces" element={<TraceMonitor />} />
+            <Route path="/dev/tokens" element={<TokenDashboard />} />
+            <Route path="/dev/playground" element={<Playground />} />
+            <Route path="/dev/skills" element={<SkillRegistry />} />
+            <Route path="/dev/prompts" element={<PromptInspector />} />
+            <Route path="/dev/config" element={<ConfigKeys />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AdminLayout>
