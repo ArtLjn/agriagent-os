@@ -90,7 +90,7 @@ def _llm_node(state: AgentState) -> dict:
     return {"messages": [response]}
 
 
-async def _parallel_tool_node(state: AgentState) -> dict:
+async def _parallel_tool_node_async(state: AgentState) -> dict:
     """并行执行多个 tool_calls 的节点。写操作 Skill 拦截为 pending action。"""
     last = state["messages"][-1]
     if not isinstance(last, AIMessage) or not last.tool_calls:
@@ -146,6 +146,11 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         results = await asyncio.gather(*[_call_one(tc) for tc in last.tool_calls])
 
     return {"messages": results}
+
+
+def _parallel_tool_node(state: AgentState) -> dict:
+    """同步入口：异步 tool 节点的包装，适配 LangGraph 同步 invoke。"""
+    return asyncio.run(_parallel_tool_node_async(state))
 
 
 def compile_advisor_graph():
