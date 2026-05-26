@@ -1,4 +1,4 @@
-## ADDED Requirements
+## Requirements
 
 ### Requirement: LLM 初始化支持 thinking 模式配置
 `get_llm()` 创建 `ChatOpenAI` 实例时 SHALL 读取 `config.yaml` 中的 `ai.enable_thinking` 配置，并通过 `model_kwargs` 或 `extra_body` 传递给 API。当 `enable_thinking` 为 `false` 或未设置时，SHALL 传递 `enable_thinking: false`。

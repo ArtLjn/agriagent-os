@@ -1,4 +1,4 @@
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Prompt 模板文件集中存放
 所有 Agent system prompt 和任务 prompt SHALL 存放在 `prompts/` 目录下，以 `.j2`（Jinja2 模板）和 `.yaml`（配置）文件形式管理。禁止在业务代码中硬编码超过 20 字的 prompt 字符串。**`prompts/base.j2` SHALL 包含 tool calling 硬约束指令，确保 LLM 在 skill 覆盖领域必须调用工具而非编造数据。**

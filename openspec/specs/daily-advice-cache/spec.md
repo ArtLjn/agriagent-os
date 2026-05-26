@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## Requirements
 
 ### Requirement: 每日建议按天缓存
 后端 SHALL 在处理 `GET /agent/daily` 请求时，先查询 `advice_cache` 表。当存在 farm_id + 日期 + 城市 + 活跃茬口ID列表 匹配的缓存记录时，直接返回缓存内容，不调用 LLM。

@@ -9,16 +9,10 @@
 | 0 | robustness-and-admin-completeness | done |
 | 0 | mobile-four-tab-redesign | done |
 | 0 | farmer-first-agent | done |
-
-## 已实施（代码已提交，待归档）
-
-| # | Change | 内容 | 关键提交 |
-|---|--------|------|----------|
-| 1 | farm-context-aware-agent | 结构化赊账数据模型 + /debts API + 作物模板自定义 + 赊账管理页面 | cost_records 字段扩展, /debts CRUD, /crops/templates, 移动端赊账页 |
+| 0 | enable-function-calling | done |
+| 0 | farm-context-aware-agent | done |
 
 ## 待实施（按优先级排序）
-
-### P0: enable-function-calling
 
 **为什么先做**: 当前模型 `qwen-flash-character` 不支持 Function Calling，LangGraph 的 skill 执行机制完全失效。已实现的 6 个写操作 Skill 全部静默失败——没有 FC，后面所有 skill 改造都没有意义。
 
