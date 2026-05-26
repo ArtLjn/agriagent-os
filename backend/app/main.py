@@ -22,7 +22,7 @@ from app.core.logger import get_logger, setup_logging
 
 setup_logging()
 
-from app.api import admin, agent, cost, cost_categories, crop, cycle, log, weather
+from app.api import admin, agent, cost, cost_categories, crop, cycle, log, user_settings, weather
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
 from app.core.date_context import get_request_date, set_request_date
@@ -147,6 +147,7 @@ app.include_router(cost_categories.router)
 app.include_router(agent.router)
 app.include_router(weather.router)
 app.include_router(admin.router)
+app.include_router(user_settings.router)
 
 
 @app.get("/health")

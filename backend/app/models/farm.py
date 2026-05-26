@@ -12,4 +12,5 @@ class Farm(Base):
     name = Column(String, nullable=False)
     owner_name = Column(String, nullable=True)
     location = Column(String, nullable=True)
+    display_name = Column(String, nullable=True, default="农友")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
