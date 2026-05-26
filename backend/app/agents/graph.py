@@ -17,10 +17,12 @@ from app.core.prompt_registry import get_registry
 from app.core.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
 from app.core.database import SessionLocal
+from app.core.config import settings
 from app.core.trace_collector import get_collector
 from app.core.trace_context import increment_round
 from app.models.farm import Farm
 from app.services import farm_context_service
+from app.services.quota_service import check_quota
 from app.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
@@ -123,6 +125,15 @@ def _llm_node(state: AgentState) -> dict:
     system = HumanMessage(content=system_text)
     messages = micro_compact(state["messages"])
     input_summary = _find_last_human_message(state["messages"])[:200]
+
+    # Token 配额检查
+    if not check_quota(farm_id=1):
+        action = settings.token_quota.over_quota_action
+        if action == "reject":
+            logger.warning("Token 配额超限，拒绝调用（reject 模式）")
+            return {"messages": [AIMessage(content="今日用量已达上限，明天再来吧。")]}
+        elif action == "warn":
+            logger.warning("Token 配额超限，继续调用（warn 模式）")
 
     # LLM 调用 + 计时
     start = _time.perf_counter()

@@ -18,6 +18,11 @@ class TraceConfig(BaseModel):
     token_stats_ttl_days: int = 90
 
 
+class TokenQuotaConfig(BaseModel):
+    daily_limit: int = 100000
+    over_quota_action: str = "warn"  # warn / reject / downgrade
+
+
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
@@ -87,6 +92,7 @@ class Settings(BaseSettings):
     rate_limiting: RateLimitConfig = RateLimitConfig()
     langsmith: LangSmithConfig = LangSmithConfig()
     trace: TraceConfig = TraceConfig()
+    token_quota: TokenQuotaConfig = TokenQuotaConfig()
     project_name: str = "Farm Manager API"
 
     def __init__(self, _config_path: Optional[str] = None, **kwargs):
