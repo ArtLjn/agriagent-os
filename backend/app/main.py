@@ -29,6 +29,7 @@ from app.api import (
     cost_categories,
     crop,
     cycle,
+    debt,
     log,
     user_settings,
     weather,
@@ -169,6 +170,7 @@ app.include_router(agent.router)
 app.include_router(weather.router)
 app.include_router(admin.router)
 app.include_router(user_settings.router)
+app.include_router(debt.router)
 
 
 @app.get("/health")
