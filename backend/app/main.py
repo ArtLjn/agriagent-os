@@ -36,6 +36,7 @@ from app.core.limiter import limiter  # noqa: E402
 from app.core.logger import get_logger, setup_logging  # noqa: E402
 from app.core.prompt_registry import get_registry  # noqa: E402
 from app.core.seed import migrate_cost_records, seed_default_farm  # noqa: E402
+from app.core.trace_collector import start_trace_system, stop_trace_system  # noqa: E402
 
 setup_logging()
 logger = get_logger(__name__)
@@ -66,7 +67,14 @@ async def lifespan(app: FastAPI):
     registry = get_registry()
     registry.reload(settings.prompts_dir)
     logger.info("Prompt 模板已加载 | dir=%s", settings.prompts_dir)
-    yield
+
+    # 启动 Trace 后台 worker
+    await start_trace_system()
+
+    try:
+        yield
+    finally:
+        await stop_trace_system()
 
 
 app = FastAPI(title=settings.project_name, lifespan=lifespan)
