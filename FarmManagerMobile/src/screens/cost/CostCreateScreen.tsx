@@ -17,7 +17,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useCostStore} from '../../stores/costStore';
 import {useCategoryStore} from '../../stores/categoryStore';
 import {BigButton} from '../../components/BigButton';
-import {costApi} from '../../api/client';
+import {costApi, debtApi} from '../../api/client';
 import {colors} from '../../theme/colors';
 import {spacing, fontSize, borderRadius} from '../../theme/spacing';
 import type {RootStackParamList} from '../../navigation/AppNavigator';
@@ -45,6 +45,9 @@ export const CostCreateScreen: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [isDebt, setIsDebt] = useState(false);
+  const [counterparty, setCounterparty] = useState('');
+  const [dueDate, setDueDate] = useState('');
 
   // 获取可用分类
   const availableCategories = useMemo(() => {
@@ -94,6 +97,12 @@ export const CostCreateScreen: React.FC = () => {
     setShowCategoryModal(false);
   };
 
+  const handleTypeChange = (type: 'cost' | 'income') => {
+    setRecordType(type);
+    setCategory('');
+    setIsDebt(false);
+  };
+
   const handleSubmit = async () => {
     if (submitting) return;
     if (!category) {
@@ -104,16 +113,33 @@ export const CostCreateScreen: React.FC = () => {
       Alert.alert('提示', '请输入有效金额');
       return;
     }
+    if (recordType === 'cost' && isDebt && !counterparty.trim()) {
+      Alert.alert('提示', '请填写债权人');
+      return;
+    }
 
     setSubmitting(true);
     try {
-      await createRecord({
-        record_type: recordType,
-        category,
-        amount,
-        record_date: dayjs(recordDate).format('YYYY-MM-DD'),
-        note: note.trim() || undefined,
-      });
+      if (recordType === 'cost' && isDebt) {
+        await debtApi.createDebt({
+          record_type: 'cost',
+          category,
+          amount,
+          record_date: dayjs(recordDate).format('YYYY-MM-DD'),
+          record_subtype: '赊账',
+          counterparty: counterparty.trim(),
+          due_date: dueDate.trim() || undefined,
+          note: note.trim() || undefined,
+        });
+      } else {
+        await createRecord({
+          record_type: recordType,
+          category,
+          amount,
+          record_date: dayjs(recordDate).format('YYYY-MM-DD'),
+          note: note.trim() || undefined,
+        });
+      }
 
       if (error) {
         Alert.alert('创建失败', error);
@@ -144,14 +170,14 @@ export const CostCreateScreen: React.FC = () => {
         <View style={styles.typeRow}>
           <TouchableOpacity
             style={[styles.typeBtn, recordType === 'cost' && {backgroundColor: colors.dangerLight, borderColor: colors.danger}]}
-            onPress={() => { setRecordType('cost'); setCategory(''); }}
+            onPress={() => handleTypeChange('cost')}
             activeOpacity={0.7}>
             <Icon name="arrow-down-circle" size={22} color={recordType === 'cost' ? colors.danger : colors.textTertiary} />
             <Text style={[styles.typeBtnText, recordType === 'cost' && {color: colors.danger, fontWeight: '700'}]}>支出</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.typeBtn, recordType === 'income' && {backgroundColor: colors.successLight, borderColor: colors.success}]}
-            onPress={() => { setRecordType('income'); setCategory(''); }}
+            onPress={() => handleTypeChange('income')}
             activeOpacity={0.7}>
             <Icon name="arrow-up-circle" size={22} color={recordType === 'income' ? colors.success : colors.textTertiary} />
             <Text style={[styles.typeBtnText, recordType === 'income' && {color: colors.success, fontWeight: '700'}]}>收入</Text>
@@ -197,6 +223,47 @@ export const CostCreateScreen: React.FC = () => {
           </View>
           <Icon name="chevron-right" size={20} color={colors.textTertiary} />
         </TouchableOpacity>
+
+        {/* 赊账选项 */}
+        {recordType === 'cost' && (
+          <View style={{marginTop: spacing.lg}}>
+            <TouchableOpacity
+              style={styles.fieldRow}
+              onPress={() => setIsDebt(!isDebt)}>
+              <View style={styles.fieldLeft}>
+                <Icon name="credit-card-clock-outline" size={20} color={isDebt ? colors.primary : colors.textTertiary} />
+                <Text style={[styles.fieldText, !isDebt && {color: colors.textSecondary}]}>
+                  标记为赊账
+                </Text>
+              </View>
+              <Icon
+                name={isDebt ? 'check-circle' : 'checkbox-blank-circle-outline'}
+                size={22}
+                color={isDebt ? colors.primary : colors.textTertiary}
+              />
+            </TouchableOpacity>
+            {isDebt && (
+              <View style={{marginTop: spacing.md}}>
+                <Text style={[styles.sectionTitle]}>债权人</Text>
+                <TextInput
+                  style={styles.noteInput}
+                  placeholder="如：老王农资店"
+                  placeholderTextColor={colors.textTertiary}
+                  value={counterparty}
+                  onChangeText={setCounterparty}
+                />
+                <Text style={[styles.sectionTitle, {marginTop: spacing.md}]}>到期日（可选）</Text>
+                <TextInput
+                  style={styles.noteInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.textTertiary}
+                  value={dueDate}
+                  onChangeText={setDueDate}
+                />
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       {/* 备注 */}
