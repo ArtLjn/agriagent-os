@@ -55,11 +55,15 @@ class TestYamlConfig:
         settings = Settings(_config_path="/nonexistent/config.yaml")
         assert settings.database_url == "sqlite:///./farm_manager.db"
         assert settings.project_name == "Farm Manager API"
-        assert settings.ai_model == "qwen3.6-flash-2026-04-16"
         assert settings.weather_latitude == 34.26
 
 
 class TestAIConfig:
+    def test_ai_config_default_model(self):
+        from app.core.config import AIConfig
+
+        assert AIConfig().model == "qwen3.6-flash-2026-04-16"
+
     def test_ai_config_default_enable_thinking_false(self):
         from app.core.config import AIConfig
 
