@@ -36,6 +36,7 @@ from app.core.limiter import limiter  # noqa: E402
 from app.core.logger import get_logger, setup_logging  # noqa: E402
 from app.core.prompt_registry import get_registry  # noqa: E402
 from app.core.seed import migrate_cost_records, seed_default_farm  # noqa: E402
+from app.core.trace_cleaner import clean_expired_traces  # noqa: E402
 from app.core.trace_collector import start_trace_system, stop_trace_system  # noqa: E402
 
 setup_logging()
@@ -71,9 +72,25 @@ async def lifespan(app: FastAPI):
     # 启动 Trace 后台 worker
     await start_trace_system()
 
+    # 启动时立即清理过期数据
+    await asyncio.to_thread(clean_expired_traces)
+
+    # 注册定时清理任务
+    async def _daily_cleanup() -> None:
+        while True:
+            await asyncio.sleep(86400)  # 24 小时
+            await asyncio.to_thread(clean_expired_traces)
+
+    cleanup_task = asyncio.create_task(_daily_cleanup())
+
     try:
         yield
     finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
         await stop_trace_system()
 
 
