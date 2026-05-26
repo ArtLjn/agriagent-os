@@ -4,9 +4,27 @@ from app.models.crop import CropTemplate, GrowthStage
 from app.schemas.crop import CropTemplateCreate
 
 
-def create_crop_template(db: Session, template: CropTemplateCreate, farm_id: int) -> CropTemplate:
+def find_template_by_name(
+    db: Session, crop_name: str, farm_id: int
+) -> CropTemplate | None:
+    """根据作物名称模糊搜索模板（LIKE '%crop_name%'）。"""
+    return (
+        db.query(CropTemplate)
+        .filter(
+            CropTemplate.farm_id == farm_id,
+            CropTemplate.name.ilike(f"%{crop_name}%"),
+        )
+        .first()
+    )
+
+
+def create_crop_template(
+    db: Session, template: CropTemplateCreate, farm_id: int
+) -> CropTemplate:
     """创建作物模板及其生长阶段。"""
-    db_template = CropTemplate(name=template.name, variety=template.variety, farm_id=farm_id)
+    db_template = CropTemplate(
+        name=template.name, variety=template.variety, farm_id=farm_id
+    )
     db.add(db_template)
     db.flush()
 
@@ -47,9 +65,15 @@ def count_crop_templates(db: Session, farm_id: int) -> int:
     return db.query(CropTemplate).filter(CropTemplate.farm_id == farm_id).count()
 
 
-def get_crop_template(db: Session, template_id: int, farm_id: int) -> CropTemplate | None:
+def get_crop_template(
+    db: Session, template_id: int, farm_id: int
+) -> CropTemplate | None:
     """根据 ID 获取指定农场的单个作物模板。"""
-    return db.query(CropTemplate).filter(CropTemplate.id == template_id, CropTemplate.farm_id == farm_id).first()
+    return (
+        db.query(CropTemplate)
+        .filter(CropTemplate.id == template_id, CropTemplate.farm_id == farm_id)
+        .first()
+    )
 
 
 def update_crop_template(
@@ -109,4 +133,5 @@ __all__ = [
     "get_crop_template",
     "update_crop_template",
     "delete_crop_template",
+    "find_template_by_name",
 ]
