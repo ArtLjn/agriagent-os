@@ -8,7 +8,7 @@ from app.agents.report import generate_cycle_report
 def _make_mock_astream(exc):
     async def _mock_astream(*args, **kwargs):
         raise exc
-        yield  # noqa: unreachable
+        yield  # noqa: B901
     return _mock_astream
 
 

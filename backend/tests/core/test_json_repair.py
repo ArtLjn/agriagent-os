@@ -1,7 +1,5 @@
 """Tests for JSON repair utility."""
 
-import pytest
-
 from app.core.json_repair import extract_json, repair_json
 
 

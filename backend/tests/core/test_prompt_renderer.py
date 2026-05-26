@@ -1,6 +1,4 @@
 """Tests for PromptRenderer."""
-
-import pytest
 from datetime import date
 
 from app.core.prompt_renderer import render_prompt

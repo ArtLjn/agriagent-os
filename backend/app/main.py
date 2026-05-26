@@ -17,12 +17,7 @@ from starlette.responses import Response
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.limiter import limiter
-from app.core.logger import get_logger, setup_logging
-
-setup_logging()
-
-from app.api import (
+from app.api import (  # noqa: E402
     admin,
     agent,
     cost,
@@ -34,12 +29,15 @@ from app.api import (
     user_settings,
     weather,
 )
-from app.core.config import settings
-from app.core.database import engine, Base, SessionLocal
-from app.core.date_context import set_request_date
-from app.core.prompt_registry import get_registry
-from app.core.seed import seed_default_farm
+from app.core.config import settings  # noqa: E402
+from app.core.database import engine, Base, SessionLocal  # noqa: E402
+from app.core.date_context import set_request_date  # noqa: E402
+from app.core.limiter import limiter  # noqa: E402
+from app.core.logger import get_logger, setup_logging  # noqa: E402
+from app.core.prompt_registry import get_registry  # noqa: E402
+from app.core.seed import seed_default_farm  # noqa: E402
 
+setup_logging()
 logger = get_logger(__name__)
 
 
