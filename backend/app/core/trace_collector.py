@@ -40,6 +40,7 @@ class TraceCollector:
         output_data: Any = None,
         start_time: float | None = None,
         end_time: float | None = None,
+        duration_ms: int | None = None,
         token_usage: dict | None = None,
         error_message: str | None = None,
     ) -> None:
@@ -52,12 +53,17 @@ class TraceCollector:
         if dao is None:
             return
 
-        if start_time is None:
-            start_time = time.time()
-        if end_time is None:
-            end_time = time.time()
-
-        duration_ms = int((end_time - start_time) * 1000)
+        if duration_ms is None:
+            if start_time is None:
+                start_time = time.time()
+            if end_time is None:
+                end_time = time.time()
+            duration_ms = int((end_time - start_time) * 1000)
+        else:
+            if start_time is None:
+                start_time = time.time()
+            if end_time is None:
+                end_time = time.time()
 
         input_str = json.dumps(input_data, ensure_ascii=False, default=str) if input_data else None
         output_str = json.dumps(output_data, ensure_ascii=False, default=str) if output_data else None

@@ -8,6 +8,7 @@ from langgraph.errors import GraphRecursionError
 
 from app.agents.graph import compile_advisor_graph
 from app.core.guardrails import check_input, filter_output
+from app.core.trace_context import clear_trace, init_trace
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ async def invoke_advisor(user_input: str, farm_id: int = 1) -> str:
         logger.warning("Agent 输入被拦截 | farm_id=%s, reason=%s", farm_id, reason)
         return f"输入内容包含不安全信息，已被拦截。原因：{reason}"
 
+    init_trace(farm_id=farm_id)
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
     graph = _get_advisor_graph()
     try:
@@ -48,6 +50,8 @@ async def invoke_advisor(user_input: str, farm_id: int = 1) -> str:
     except GraphRecursionError:
         logger.error("Agent 步数超限 | farm_id=%s", farm_id)
         return "Agent 处理步数超出限制，请简化您的问题后重试。"
+    finally:
+        clear_trace()
 
     reply = result["messages"][-1].content
     filtered = filter_output(reply)
@@ -65,6 +69,7 @@ async def stream_advisor(
         yield f"输入内容包含不安全信息，已被拦截。原因：{reason}"
         return
 
+    init_trace(farm_id=farm_id)
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
     graph = _get_advisor_graph()
     step = 0
@@ -107,6 +112,8 @@ async def stream_advisor(
         logger.error("Agent 流式步数超限 | farm_id=%s", farm_id)
         yield "Agent 处理步数超出限制，请简化您的问题后重试。"
         return
+    finally:
+        clear_trace()
 
     logger.info("Agent 流式完成，共 %d 步", step)
 

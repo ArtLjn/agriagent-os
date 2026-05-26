@@ -1,10 +1,10 @@
 """LangGraph 图编译模块 — 自定义 StateGraph 实现并行 Skill 执行。"""
 
 import asyncio
-import json
 import logging
-import time
 from typing import Annotated
+
+import time as _time
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langgraph.graph import END, StateGraph
@@ -12,13 +12,13 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from app.core.llm import get_llm
-from app.core.logger import request_id_var
 from app.core.pending_actions import is_write_skill, store_pending
 from app.core.prompt_registry import get_registry
 from app.core.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
 from app.core.database import SessionLocal
-from app.core.trace import write_trace
+from app.core.trace_collector import get_collector
+from app.core.trace_context import increment_round
 from app.models.farm import Farm
 from app.services import farm_context_service
 from app.skills import get_langchain_tools
@@ -85,6 +85,8 @@ def _llm_node(state: AgentState) -> dict:
     raw_llm = get_llm()
     llm = raw_llm.bind_tools(tools)
     model_name = getattr(raw_llm, "model_name", "unknown")
+    _round_idx = increment_round()  # 副作用：轮次 +1
+    collector = get_collector()
 
     # 获取农场上下文摘要和用户称呼
     db = SessionLocal()
@@ -109,29 +111,46 @@ def _llm_node(state: AgentState) -> dict:
         registry=get_registry(),
         current_date=current_date,
     )
-    system = HumanMessage(content=system_text)
 
+    # 记录 prompt_render trace
+    collector.record(
+        node_type="prompt_render",
+        node_name="system_prompt",
+        input_data={"template": "system_base", "variables_count": 2},
+        output_data=system_text[:2000],
+    )
+
+    system = HumanMessage(content=system_text)
     messages = micro_compact(state["messages"])
     input_summary = _find_last_human_message(state["messages"])[:200]
 
     # LLM 调用 + 计时
-    start = time.perf_counter()
+    start = _time.perf_counter()
     try:
         response = llm.invoke([system] + messages)
     except Exception as exc:
-        duration_ms = int((time.perf_counter() - start) * 1000)
-        write_trace(
-            farm_id=1,
-            session_id=request_id_var.get("-"),
+        duration_ms = int((_time.perf_counter() - start) * 1000)
+        collector.record(
             node_type="llm_call",
-            node_name="llm",
-            input_summary=input_summary,
+            node_name=model_name,
+            input_data=input_summary,
             duration_ms=duration_ms,
             error_message=str(exc),
         )
         raise
 
-    duration_ms = int((time.perf_counter() - start) * 1000)
+    duration_ms = int((_time.perf_counter() - start) * 1000)
+
+    # 提取 token 用量
+    tokens = _extract_tokens_used(response)
+    token_usage = None
+    if tokens is not None:
+        usage_meta = response.response_metadata.get("token_usage", {})
+        token_usage = {
+            "prompt_tokens": usage_meta.get("prompt_tokens", 0),
+            "completion_tokens": usage_meta.get("completion_tokens", 0),
+            "total_tokens": tokens,
+        }
 
     # LLM 工具选择日志
     if response.tool_calls:
@@ -147,16 +166,13 @@ def _llm_node(state: AgentState) -> dict:
         )
         output_summary = content[:200]
 
-    # Trace 写入
-    write_trace(
-        farm_id=1,
-        session_id=request_id_var.get("-"),
+    collector.record(
         node_type="llm_call",
-        node_name="llm",
-        input_summary=input_summary,
-        output_summary=output_summary,
+        node_name=model_name,
+        input_data=input_summary,
+        output_data=output_summary,
         duration_ms=duration_ms,
-        tokens_used=_extract_tokens_used(response),
+        token_usage=token_usage,
     )
 
     return {"messages": [response]}
@@ -170,13 +186,14 @@ async def _parallel_tool_node(state: AgentState) -> dict:
 
     tool_map = {t.name: t for t in get_langchain_tools()}
     farm_id = state.get("farm_id", 1)
+    collector = get_collector()
 
     async def _call_one(tc: dict) -> ToolMessage:
         name = tc["name"]
         args = tc["args"]
         tool_call_id = tc["id"]
         logger.info("Skill 调用 %s(%s)", name, args)
-        start = time.perf_counter()
+        start = _time.perf_counter()
 
         # 写操作 Skill 拦截：存储 pending action，不直接执行
         if is_write_skill(name):
@@ -187,14 +204,11 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                 action_id,
                 name,
             )
-            # 拦截时也写 trace
-            write_trace(
-                farm_id=farm_id,
-                session_id=request_id_var.get("-"),
-                node_type="tool_call",
+            collector.record(
+                node_type="skill_call",
                 node_name=name,
-                input_summary=json.dumps(args, ensure_ascii=False)[:200],
-                output_summary="已拦截为 pending action",
+                input_data=args,
+                output_data="已拦截为 pending action",
                 duration_ms=0,
             )
             params_str = ", ".join(f"{k}={v}" for k, v in args.items())
@@ -215,34 +229,29 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                     content=f"未知工具: {name}", tool_call_id=tool_call_id
                 )
             result = await tool.ainvoke(args)
-            duration_ms = int((time.perf_counter() - start) * 1000)
+            duration_ms = int((_time.perf_counter() - start) * 1000)
             summary = str(result)[:120].replace("\n", " ")
             logger.info(
                 "Skill 完成 | name=%s | duration_ms=%d | result=%s",
                 name, duration_ms, summary,
             )
-            write_trace(
-                farm_id=farm_id,
-                session_id=request_id_var.get("-"),
-                node_type="tool_call",
+            collector.record(
+                node_type="skill_call",
                 node_name=name,
-                input_summary=json.dumps(args, ensure_ascii=False)[:200],
-                output_summary=str(result)[:200],
+                input_data=args,
+                output_data=str(result)[:200],
                 duration_ms=duration_ms,
             )
             return ToolMessage(content=str(result), tool_call_id=tool_call_id)
         except Exception as e:
-            duration_ms = int((time.perf_counter() - start) * 1000)
+            duration_ms = int((_time.perf_counter() - start) * 1000)
             logger.error(
                 "Skill 失败 | name=%s | error=%s", name, e,
             )
-            write_trace(
-                farm_id=farm_id,
-                session_id=request_id_var.get("-"),
-                node_type="tool_call",
+            collector.record(
+                node_type="skill_call",
                 node_name=name,
-                input_summary=json.dumps(args, ensure_ascii=False)[:200],
-                output_summary=None,
+                input_data=args,
                 duration_ms=duration_ms,
                 error_message=str(e),
             )
