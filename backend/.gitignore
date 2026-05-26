@@ -2,3 +2,5 @@
 *.db
 .venv/
 __pycache__/
+logs/
+logs/

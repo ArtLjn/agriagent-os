@@ -1,9 +1,12 @@
-"""统一日志模块，提供结构化日志输出。"""
+"""统一日志模块，提供结构化日志输出（stdout + 文件）。"""
 
 import logging
+import os
 import sys
 import time
 from contextvars import ContextVar
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 
@@ -16,19 +19,45 @@ class _RequestFormatter(logging.Formatter):
         return super().format(record)
 
 
+def _ensure_log_dir(log_dir: Path) -> Path:
+    """确保日志目录存在并返回路径。"""
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir
+
+
 def setup_logging() -> None:
-    """初始化全局日志配置。"""
-    fmt = (
+    """初始化全局日志配置。
+
+    同时输出到 stdout（带颜色）和文件（纯文本，自动轮转）。
+    日志目录可通过环境变量 ``LOG_DIR`` 自定义，默认 ``backend/logs/``。
+    """
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.setLevel(logging.INFO)
+
+    # ── 1. stdout 处理器（带颜色）─
+    console_fmt = (
         "\033[90m%(asctime)s\033[0m"
         " │ %(request_id)s │ %(name)s │ %(levelname)s │ %(message)s"
     )
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(_RequestFormatter(fmt))
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(_RequestFormatter(console_fmt))
+    root.addHandler(console_handler)
 
-    root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(handler)
-    root.setLevel(logging.INFO)
+    # ── 2. 文件处理器（纯文本，轮转）─
+    log_dir = _ensure_log_dir(
+        Path(os.getenv("LOG_DIR", Path(__file__).resolve().parent.parent / "logs"))
+    )
+    log_file = log_dir / "app.log"
+    file_fmt = "%(asctime)s │ %(request_id)s │ %(name)s │ %(levelname)s │ %(message)s"
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10 MB
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter(file_fmt))
+    root.addHandler(file_handler)
 
     # 第三方库降噪
     for noisy in ("httpx", "httpcore", "urllib3", "openai._base_client", "werkzeug"):

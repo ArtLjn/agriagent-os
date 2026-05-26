@@ -117,6 +117,7 @@ class TestResult:
         self.total = 0
         self.duration = 0.0
         self.failures: list[str] = []
+        self.failure_details: list[str] = []
         self.raw_output = ""
 
 
@@ -175,12 +176,23 @@ def _run_pytest(port: int, timeout: float) -> TestResult:
 
     result.total = result.passed + result.failed + result.skipped + result.error
 
-    # 提取失败用例名称
+    # 提取失败用例名称和详情
+    lines = result.raw_output.splitlines()
     failure_pattern = re.compile(r"FAILED\s+(\S+)")
-    for line in result.raw_output.splitlines():
+    for i, line in enumerate(lines):
         m = failure_pattern.search(line)
         if m:
-            result.failures.append(m.group(1))
+            test_name = m.group(1)
+            result.failures.append(test_name)
+            # 收集该失败用例后的 traceback 上下文（直到下一个 PASSED/FAILED/ERROR 或空行分隔）
+            detail_lines = [line]
+            for j in range(i + 1, min(i + 30, len(lines))):
+                next_line = lines[j]
+                if re.match(r"(PASSED|FAILED|ERROR|tests?/|={10,})", next_line):
+                    break
+                if next_line.strip():
+                    detail_lines.append(next_line)
+            result.failure_details.append("\n".join(detail_lines))
 
     return result
 
@@ -223,6 +235,73 @@ def _analyze_server_logs(log_file: Path) -> LogAnalysis:
     return analysis
 
 
+# ── 错误日志写入 ──────────────────────────────────────
+
+
+def _write_error_log(
+    error_log_file: Path,
+    result: TestResult,
+    log_analysis: LogAnalysis,
+    server_log_file: Path,
+    port: int,
+) -> None:
+    """将所有错误信息写入专门的错误日志文件，方便排查。"""
+    lines: list[str] = []
+    lines.append("=" * 70)
+    lines.append("                    API 测试错误日志")
+    lines.append("=" * 70)
+    lines.append(f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"端口: {port}")
+    lines.append(f"服务日志: {server_log_file}")
+    lines.append("")
+
+    # 测试统计
+    lines.append("-" * 70)
+    lines.append("测试统计")
+    lines.append("-" * 70)
+    lines.append(f"  总用例: {result.total}")
+    lines.append(f"  通过:   {result.passed}")
+    lines.append(f"  失败:   {result.failed}")
+    lines.append(f"  跳过:   {result.skipped}")
+    lines.append(f"  错误:   {result.error}")
+    lines.append(f"  耗时:   {result.duration:.2f}s")
+    lines.append("")
+
+    # 测试失败详情
+    if result.failure_details:
+        lines.append("-" * 70)
+        lines.append(f"测试失败详情 ({len(result.failure_details)} 个)")
+        lines.append("-" * 70)
+        for idx, detail in enumerate(result.failure_details, 1):
+            lines.append(f"")
+            lines.append(f"【失败 {idx}/{len(result.failure_details)}】")
+            lines.append(detail)
+            lines.append("")
+
+    # 服务端错误日志
+    if log_analysis.error_lines:
+        lines.append("-" * 70)
+        lines.append(f"服务端 ERROR/CRITICAL 日志 ({log_analysis.error_count} 条)")
+        lines.append("-" * 70)
+        for idx, err_line in enumerate(log_analysis.error_lines, 1):
+            lines.append(f"[{idx}] {err_line}")
+        lines.append("")
+
+    if log_analysis.exceptions:
+        lines.append("-" * 70)
+        lines.append("异常类型汇总")
+        lines.append("-" * 70)
+        for exc in log_analysis.exceptions:
+            lines.append(f"  - {exc}")
+        lines.append("")
+
+    lines.append("=" * 70)
+    lines.append("                            END")
+    lines.append("=" * 70)
+
+    error_log_file.write_text("\n".join(lines), encoding="utf-8")
+
+
 # ── 报告输出 ──────────────────────────────────────────
 
 
@@ -230,6 +309,7 @@ def _print_report(
     result: TestResult,
     log_analysis: LogAnalysis,
     server_log_file: Path,
+    error_log_file: Path,
     port: int,
 ) -> None:
     """打印测试报告摘要。"""
@@ -273,7 +353,11 @@ def _print_report(
             print(f"  {line[:120]}")
     print()
 
+    # 日志文件路径
     print(f"  完整服务日志: {server_log_file}")
+    has_errors = result.failed > 0 or result.error > 0 or log_analysis.error_count > 0
+    if has_errors:
+        print(f"  {_color('错误汇总日志', RED)}: {error_log_file}")
     print()
 
     # 结论
@@ -316,6 +400,7 @@ async def main() -> int:
     server_proc: subprocess.Popen | None = None
     temp_db: Path | None = None
     server_log = Path(tempfile.gettempdir()) / f"farm_test_server_{port}.log"
+    error_log = Path(tempfile.gettempdir()) / f"farm_test_error_{port}.log"
 
     try:
         # 1. 准备测试数据库
@@ -346,11 +431,21 @@ async def main() -> int:
         # 4. 分析日志
         log_analysis = _analyze_server_logs(server_log)
 
-        # 5. 输出报告
-        _print_report(result, log_analysis, server_log, port)
+        # 5. 写入错误汇总日志
+        has_errors = (
+            result.failed > 0 or result.error > 0 or log_analysis.error_count > 0
+        )
+        if has_errors:
+            _write_error_log(
+                error_log, result, log_analysis, server_log, port
+            )
+            _log(_color(f"错误日志已写入: {error_log}", YELLOW))
+
+        # 6. 输出报告
+        _print_report(result, log_analysis, server_log, error_log, port)
 
         # 返回退出码
-        return 1 if (result.failed > 0 or result.error > 0) else 0
+        return 1 if has_errors else 0
 
     finally:
         # 清理
