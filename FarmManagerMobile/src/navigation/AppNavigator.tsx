@@ -12,6 +12,9 @@ import {ProfitScreen} from '../screens/cost/ProfitScreen';
 import {AgentChatScreen} from '../screens/agent/AgentChatScreen';
 import {AgentReportScreen} from '../screens/agent/AgentReportScreen';
 import {GuideScreen} from '../screens/settings/GuideScreen';
+import {DebtListScreen} from '../screens/debt/DebtListScreen';
+import {DebtCreateScreen} from '../screens/debt/DebtCreateScreen';
+import {CropTemplateScreen} from '../screens/crop/CropTemplateScreen';
 import {colors} from '../theme/colors';
 
 export type RootStackParamList = {
@@ -26,6 +29,9 @@ export type RootStackParamList = {
   AgentChat: {cycleId?: number};
   AgentReport: {cycleId?: number; content?: string; reportType?: string; createdAt?: string; reportId?: number};
   Guide: undefined;
+  DebtList: undefined;
+  DebtCreate: undefined;
+  CropTemplate: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -101,6 +107,21 @@ export const AppNavigator: React.FC = () => (
         name="Guide"
         component={GuideScreen}
         options={{title: '使用指南'}}
+      />
+      <Stack.Screen
+        name="DebtList"
+        component={DebtListScreen}
+        options={{title: '赊账管理'}}
+      />
+      <Stack.Screen
+        name="DebtCreate"
+        component={DebtCreateScreen}
+        options={{title: '记赊账'}}
+      />
+      <Stack.Screen
+        name="CropTemplate"
+        component={CropTemplateScreen}
+        options={{title: '作物模板'}}
       />
     </Stack.Navigator>
   </NavigationContainer>
