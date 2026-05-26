@@ -1,6 +1,6 @@
 """还赊账 Skill — 对话式结清欠款记录。"""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from skillify.models.schemas import ResultStatus, SkillResult
@@ -111,9 +111,13 @@ class SettleDebtSkill(Skill):
                 reply=f"没找到'{counterparty}'的赊账记录。",
             )
 
+        # 判断是否为结构化赊账记录
+        is_structured = any(
+            getattr(r, "record_subtype", None) == "赊账" for r in debt_records
+        )
+
         # 计算还款金额
         if amount is None:
-            # 全额还清：计算赊账总额
             total_debt = sum(
                 (r.amount for r in debt_records),
                 Decimal("0"),
@@ -128,6 +132,9 @@ class SettleDebtSkill(Skill):
         if note:
             settle_note = f"{settle_note}，{note}"
 
+        # 确定 parent_record_id（结构化记录取第一条）
+        parent_id = debt_records[0].id if is_structured else None
+
         # 创建还款记录
         record_create = CostRecordCreate(
             record_type="income",
@@ -135,8 +142,16 @@ class SettleDebtSkill(Skill):
             amount=settle_amount,
             record_date=date.today(),
             note=settle_note,
+            parent_record_id=parent_id,
         )
         created = create_record(db, record_create, farm_id=farm_id)
+
+        # 结构化记录全额还款时标记已结清
+        if is_structured and amount is None:
+            for r in debt_records:
+                if getattr(r, "record_subtype", None) == "赊账":
+                    r.settled_at = datetime.now()
+            db.commit()
 
         return SkillResult(
             status=ResultStatus.SUCCESS,
@@ -145,7 +160,10 @@ class SettleDebtSkill(Skill):
 
     @staticmethod
     def _find_debt_records(db, farm_id: int, counterparty: str) -> list:
-        """查找指定债权人的赊账记录。
+        """查找指定债权人的未结清赊账记录。
+
+        优先使用结构化字段 counterparty + record_subtype 匹配，
+        回退到 note 模糊匹配（兼容旧数据）。
 
         Args:
             db: 数据库会话。
@@ -155,6 +173,17 @@ class SettleDebtSkill(Skill):
         Returns:
             匹配的赊账 CostRecord 列表。
         """
+        structured = (
+            db.query(CostRecord)
+            .filter(CostRecord.farm_id == farm_id)
+            .filter(CostRecord.record_subtype == "赊账")
+            .filter(CostRecord.settled_at.is_(None))
+            .filter(CostRecord.counterparty.ilike(f"%{counterparty}%"))
+            .all()
+        )
+        if structured:
+            return structured
+
         return (
             db.query(CostRecord)
             .filter(CostRecord.farm_id == farm_id)
