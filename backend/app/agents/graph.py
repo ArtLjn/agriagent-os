@@ -13,6 +13,9 @@ from app.core.llm import get_llm
 from app.core.prompt_registry import get_registry
 from app.core.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
+from app.core.database import SessionLocal
+from app.models.farm import Farm
+from app.services import farm_context_service
 from app.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
@@ -22,7 +25,9 @@ _KEEP_RECENT = 3
 
 def micro_compact(messages: list) -> list:
     """压缩历史消息中旧的 tool result，只保留最近 N 个完整内容。"""
-    tool_results = [(i, msg) for i, msg in enumerate(messages) if isinstance(msg, ToolMessage)]
+    tool_results = [
+        (i, msg) for i, msg in enumerate(messages) if isinstance(msg, ToolMessage)
+    ]
     if len(tool_results) <= _KEEP_RECENT:
         return messages
 
@@ -31,7 +36,9 @@ def micro_compact(messages: list) -> list:
         content = msg.content or ""
         if len(content) > 100:
             tool_name = getattr(msg, "name", "unknown")
-            result[i] = ToolMessage(content=f"[已执行 {tool_name}]", tool_call_id=msg.tool_call_id)
+            result[i] = ToolMessage(
+                content=f"[已执行 {tool_name}]", tool_call_id=msg.tool_call_id
+            )
     return result
 
 
@@ -52,8 +59,29 @@ def _llm_node(state: AgentState) -> dict:
     tools = get_langchain_tools()
     llm = get_llm().bind_tools(tools)
 
+    # 获取农场上下文摘要和用户称呼
+    db = SessionLocal()
+    try:
+        farm_context_summary = farm_context_service.build_summary(db, farm_id=1)
+        farm = db.query(Farm).filter(Farm.id == 1).first()
+        display_name = farm.display_name if farm and farm.display_name else "农友"
+    except Exception:
+        logger.warning("获取农场上下文失败，使用默认值", exc_info=True)
+        farm_context_summary = ""
+        display_name = "农友"
+    finally:
+        db.close()
+
     current_date = get_request_date()
-    system_text = render_prompt("system_base", registry=get_registry(), current_date=current_date)
+    system_text = render_prompt(
+        "system_base",
+        variables={
+            "farm_context_summary": farm_context_summary,
+            "display_name": display_name,
+        },
+        registry=get_registry(),
+        current_date=current_date,
+    )
     system = HumanMessage(content=system_text)
 
     messages = micro_compact(state["messages"])
@@ -77,7 +105,9 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         try:
             tool = tool_map.get(name)
             if not tool:
-                return ToolMessage(content=f"未知工具: {name}", tool_call_id=tool_call_id)
+                return ToolMessage(
+                    content=f"未知工具: {name}", tool_call_id=tool_call_id
+                )
             result = await tool.ainvoke(args)
             summary = str(result)[:120].replace("\n", " ")
             logger.info("Skill 返回 %s -> %s", name, summary)

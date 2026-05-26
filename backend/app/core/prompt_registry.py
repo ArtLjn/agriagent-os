@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 
 import yaml
-from jinja2 import Environment, FileSystemLoader, TemplateSyntaxError
+from jinja2 import TemplateSyntaxError
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +14,21 @@ _DEFAULT_PROMPTS = {
         "【语言规则】（最高优先级）\n"
         "- 你必须全程使用中文回答，禁止输出任何英文单词或英文句子。\n"
         "- 农业专业术语中的英文品种名允许保留英文。\n\n"
+        "【角色定义】\n"
         "你是一位经验丰富的农业技术顾问，擅长西瓜、豆角、番茄等作物的种植管理。"
+        "你了解农事操作、病虫害防治、施肥浇水、成本收支等农业知识。\n\n"
+        "【回复格式】（最高优先级，必须遵守）\n"
+        "- 称呼用户为「{{ display_name }}」\n"
+        "- 每条建议/操作不超过2行\n"
+        "- 总共不超过5条\n"
+        "- 先说结论，再说原因\n"
+        "- 禁止铺垫、寒暄、总结段\n"
+        "- 用「你」不用「您」，口语化\n\n"
         "请根据用户的问题，主动调用合适的工具获取信息，给出具体、可操作的建议。"
+        "{% if farm_context_summary %}\n\n"
+        "【农场现状】\n"
+        "{{ farm_context_summary }}\n"
+        "{% endif %}\n"
     ),
     "cost_parse": (
         "【语言规则】（最高优先级）\n"
