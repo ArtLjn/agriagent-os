@@ -1,5 +1,6 @@
 """端到端验证 function calling 链路。"""
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -41,7 +42,9 @@ class TestFunctionCallingE2E:
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        result = graph.invoke({"messages": [HumanMessage(content="明天苏州什么天气")]})
+        result = asyncio.run(
+            graph.ainvoke({"messages": [HumanMessage(content="明天苏州什么天气")]})
+        )
 
         last_msg = result["messages"][-1]
         assert "苏州" in last_msg.content
@@ -70,7 +73,9 @@ class TestFunctionCallingE2E:
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        result = graph.invoke({"messages": [HumanMessage(content="你好")]})
+        result = asyncio.run(
+            graph.ainvoke({"messages": [HumanMessage(content="你好")]})
+        )
 
         last_msg = result["messages"][-1]
         assert last_msg.content == "你好老李，有啥事？"
