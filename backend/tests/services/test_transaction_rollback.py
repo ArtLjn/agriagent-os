@@ -154,6 +154,8 @@ class TestAgentServiceRollback:
         """commit 失败时应调用 rollback 并重新抛出异常。"""
         mock_invoke.return_value = "建议"
         mock_db = MagicMock()
+        # 缓存查询返回 None，使 get_daily_advice 走生成新建议分支
+        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
         mock_db.commit.side_effect = RuntimeError("DB error")
 
         with pytest.raises(RuntimeError, match="DB error"):

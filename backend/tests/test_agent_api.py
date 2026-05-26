@@ -30,16 +30,17 @@ class TestAgentDaily:
     @patch("app.api.agent.get_daily_advice")
     def test_daily_advice_endpoint(self, mock_daily) -> None:
         """验证 GET /agent/daily 返回建议。"""
-        from app.schemas.agent import DailyAdviceResponse
+        from app.schemas.agent import AdviceItem, DailyAdviceResponse
 
+        items = [AdviceItem(title="施肥", detail="追施复合肥", priority=1)]
         mock_daily.return_value = DailyAdviceResponse(
-            cycle_id=1, advice="施肥", created_at=datetime.now()
+            cycle_id=1, items=items, created_at=datetime.now()
         )
 
         response = client.get("/agent/daily?cycle_id=1")
 
         assert response.status_code == 200
-        assert response.json()["advice"] == "施肥"
+        assert "施肥" in response.json()["advice"]
 
 
 class TestAgentReport:

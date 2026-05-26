@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.schemas.agent import AdviceItem
 
 client = TestClient(app)
 
@@ -63,14 +64,15 @@ class TestRefreshDailyAdviceAPI:
         """POST /agent/daily/refresh 返回新的建议。"""
         from app.schemas.agent import DailyAdviceResponse
 
+        items = [AdviceItem(title="新建议", detail="施肥浇水", priority=1)]
         mock_refresh.return_value = DailyAdviceResponse(
-            cycle_id=1, advice="新建议", created_at=datetime.now()
+            cycle_id=1, items=items, created_at=datetime.now()
         )
 
         resp = client.post("/agent/daily/refresh?cycle_id=1")
 
         assert resp.status_code == 200
-        assert resp.json()["advice"] == "新建议"
+        assert "新建议" in resp.json()["advice"]
         mock_refresh.assert_called_once()
 
     @patch("app.api.agent.refresh_daily_advice")
@@ -78,11 +80,12 @@ class TestRefreshDailyAdviceAPI:
         """不带 cycle_id 也能正常刷新。"""
         from app.schemas.agent import DailyAdviceResponse
 
+        items = [AdviceItem(title="综合建议", detail="注意天气", priority=2)]
         mock_refresh.return_value = DailyAdviceResponse(
-            cycle_id=None, advice="综合建议", created_at=datetime.now()
+            cycle_id=None, items=items, created_at=datetime.now()
         )
 
         resp = client.post("/agent/daily/refresh")
 
         assert resp.status_code == 200
-        assert resp.json()["advice"] == "综合建议"
+        assert "综合建议" in resp.json()["advice"]
