@@ -1,14 +1,6 @@
 import { useState } from 'react';
 import { Layout, Menu, Button, Tooltip } from 'antd';
 import {
-  DashboardOutlined,
-  EnvironmentOutlined,
-  SwapOutlined,
-  FileTextOutlined,
-  DollarOutlined,
-  RobotOutlined,
-  CloudOutlined,
-  ApiOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   BranchesOutlined,
@@ -31,43 +23,15 @@ const TEXT_SECONDARY = '#8b949e';
 const ACCENT = '#58a6ff';
 
 const menuItems = [
-  {
-    type: 'group' as const,
-    label: '接口调试',
-    children: [
-      { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-      { key: '/crops', icon: <EnvironmentOutlined />, label: '作物管理' },
-      { key: '/cycles', icon: <SwapOutlined />, label: '茬口管理' },
-      { key: '/logs', icon: <FileTextOutlined />, label: '农事日志' },
-      { key: '/costs', icon: <DollarOutlined />, label: '成本记账' },
-      { key: '/agent', icon: <RobotOutlined />, label: 'AI 助手' },
-      { key: '/weather', icon: <CloudOutlined />, label: '天气预报' },
-      { key: '/api-tester', icon: <ApiOutlined />, label: 'API Tester' },
-    ],
-  },
-  {
-    type: 'group' as const,
-    label: '开发调试',
-    children: [
-      { key: '/dev/traces', icon: <BranchesOutlined />, label: '链路追踪' },
-      { key: '/dev/tokens', icon: <BarChartOutlined />, label: 'Token 看板' },
-      { key: '/dev/playground', icon: <MessageOutlined />, label: 'Playground' },
-      { key: '/dev/skills', icon: <AppstoreOutlined />, label: 'Skill 注册表' },
-      { key: '/dev/prompts', icon: <FileSearchOutlined />, label: 'Prompt 检查器' },
-      { key: '/dev/config', icon: <SettingOutlined />, label: '配置管理' },
-    ],
-  },
+  { key: '/dev/traces', icon: <BranchesOutlined />, label: '链路追踪' },
+  { key: '/dev/tokens', icon: <BarChartOutlined />, label: 'Token 看板' },
+  { key: '/dev/playground', icon: <MessageOutlined />, label: 'Playground' },
+  { key: '/dev/skills', icon: <AppstoreOutlined />, label: 'Skill 注册表' },
+  { key: '/dev/prompts', icon: <FileSearchOutlined />, label: 'Prompt 检查器' },
+  { key: '/dev/config', icon: <SettingOutlined />, label: '配置管理' },
 ];
 
 const pageTitles: Record<string, string> = {
-  '/': '仪表盘',
-  '/crops': '作物管理',
-  '/cycles': '茬口管理',
-  '/logs': '农事日志',
-  '/costs': '成本记账',
-  '/agent': 'AI 助手',
-  '/weather': '天气预报',
-  '/api-tester': 'API Tester',
   '/dev/traces': '链路追踪',
   '/dev/tokens': 'Token 看板',
   '/dev/playground': 'Playground',
