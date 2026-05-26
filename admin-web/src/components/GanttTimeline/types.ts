@@ -4,6 +4,9 @@ export interface GanttNode {
   duration_ms: number | null;
   status: string;
   start_time: string | null;
+  input_data?: string | null;
+  output_data?: string | null;
+  error_message?: string | null;
 }
 
 export interface GanttRound {
