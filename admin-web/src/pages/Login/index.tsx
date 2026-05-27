@@ -53,22 +53,13 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         styles={{ body: { padding: '32px' } }}
       >
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 10,
-              background: 'linear-gradient(135deg, #58a6ff 0%, #238636 100%)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 16,
-            }}
-          >
-            <span style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>F</span>
-          </div>
-          <h2 style={{ color: TEXT_PRIMARY, margin: 0, fontSize: 20 }}>Farm Manager</h2>
-          <p style={{ color: '#8b949e', margin: '8px 0 0' }}>管理后台登录</p>
+          <img
+            src="/logo.png"
+            alt="农博社"
+            style={{ width: 64, height: 64, marginBottom: 16 }}
+          />
+          <h2 style={{ color: TEXT_PRIMARY, margin: 0, fontSize: 22 }}>农博社</h2>
+          <p style={{ color: '#8b949e', margin: '8px 0 0' }}>智能种植管理平台</p>
         </div>
 
         <Input

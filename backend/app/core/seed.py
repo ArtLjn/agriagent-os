@@ -1,10 +1,13 @@
 import logging
+import uuid
 
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.core.database import engine
+from app.core.security import hash_password
 from app.models.farm import Farm
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +45,28 @@ def seed_default_farm(db: Session) -> None:
         return
     db.add(Farm(name="默认农场"))
     db.commit()
+
+
+def seed_admin_user(db: Session, phone: str, password: str) -> None:
+    """根据配置自动创建管理员账号（仅当不存在时）。"""
+    if not phone or not password:
+        return
+    existing = db.query(User).filter(User.phone == phone).first()
+    if existing:
+        if existing.role != "admin":
+            existing.role = "admin"
+            db.commit()
+            logger.info("已将用户 %s 提升为管理员", phone)
+        return
+    db.add(
+        User(
+            id=str(uuid.uuid4()),
+            phone=phone,
+            password_hash=hash_password(password),
+            nickname="系统管理员",
+            role="admin",
+            status="active",
+        )
+    )
+    db.commit()
+    logger.info("已根据配置创建管理员账号 %s", phone)

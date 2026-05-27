@@ -66,6 +66,8 @@ class AuthConfig(BaseModel):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 10080  # 7 天
+    admin_phone: str = ""  # 初始管理员手机号，启动时自动创建
+    admin_password: str = ""  # 初始管理员密码，启动时自动创建
 
 
 class _YamlSettingsSource(PydanticBaseSettingsSource):

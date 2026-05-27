@@ -23,6 +23,10 @@ rate_limiting:
   global_requests_per_minute: 30
   agent_requests_per_minute: 10
 
+auth:
+  admin_phone: ""      # 初始管理员手机号，配置后启动时自动创建管理员账号
+  admin_password: ""   # 初始管理员密码，仅首次启动时使用，建议创建后删除或留空
+
 langsmith:
   api_key: ""
   project_name: "farm-manager"

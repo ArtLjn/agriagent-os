@@ -41,7 +41,7 @@ from app.core.date_context import set_request_date  # noqa: E402
 from app.infra.limiter import limiter  # noqa: E402
 from app.core.logger import get_logger, setup_logging  # noqa: E402
 from app.agent.prompt_registry import get_registry  # noqa: E402
-from app.core.seed import migrate_cost_records, seed_default_farm  # noqa: E402
+from app.core.seed import migrate_cost_records, seed_admin_user, seed_default_farm  # noqa: E402
 from app.infra.trace_cleaner import clean_expired_traces  # noqa: E402
 from app.infra.trace_collector import start_trace_system, stop_trace_system  # noqa: E402
 
@@ -67,6 +67,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_default_farm(db)
+        seed_admin_user(db, settings.auth.admin_phone, settings.auth.admin_password)
     finally:
         db.close()
 
