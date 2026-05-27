@@ -1,10 +1,9 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../theme/colors";
-import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
+import { spacingV2, fontSizeV2 } from "../theme/spacing";
 import { shadowV2 } from "../theme/designTokens";
-import LinearGradient from "react-native-linear-gradient";
 import { HomeScreen } from "../screens/home/HomeScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
 import { CostListScreen } from "../screens/cost/CostListScreen";
@@ -39,18 +38,18 @@ export const MainTabNavigator: React.FC = () => (
       tabBarIcon: ({ focused }) => {
         const config = TAB_CONFIG[route.name];
         return (
-          <View style={styles.tabItem}>
-            {focused ? (
-              <View style={styles.capsule}>
-                <Icon name={config.activeIcon} size={20} color="#5B8CFF" />
-                <Text style={styles.capsuleLabel}>{config.label}</Text>
-              </View>
-            ) : (
-              <View style={styles.inactiveItem}>
-                <Icon name={config.icon} size={22} color={colors.tabInactive} />
-                <Text style={styles.inactiveLabel}>{config.label}</Text>
-              </View>
-            )}
+          <View style={focused ? styles.tabItemActive : styles.tabItem}>
+            <Icon
+              name={focused ? config.activeIcon : config.icon}
+              size={22}
+              color={focused ? colors.primary : colors.tabInactive}
+            />
+            <Text
+              style={focused ? styles.tabLabelActive : styles.tabLabel}
+              numberOfLines={1}
+            >
+              {config.label}
+            </Text>
           </View>
         );
       },
@@ -76,30 +75,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-  },
-  capsule: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.full,
-    gap: 4,
-    backgroundColor: "#EDF4FF",
   },
-  capsuleLabel: {
-    fontSize: fontSizeV2.sm,
-    color: "#5B8CFF",
-    fontWeight: "600",
-  },
-  inactiveItem: {
+  tabItemActive: {
     alignItems: "center",
     justifyContent: "center",
+    flex: 1,
     paddingVertical: spacingV2.sm,
   },
-  inactiveLabel: {
+  tabLabel: {
     fontSize: fontSizeV2.xs,
     color: colors.tabInactive,
     marginTop: 2,
     fontWeight: "500",
+  },
+  tabLabelActive: {
+    fontSize: fontSizeV2.xs,
+    color: colors.primary,
+    marginTop: 2,
+    fontWeight: "600",
   },
 });
