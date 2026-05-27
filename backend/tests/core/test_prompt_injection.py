@@ -191,21 +191,20 @@ class TestFarmDisplayNameFromDatabase:
     """从数据库获取 display_name 的集成测试。"""
 
     def test_get_display_name_from_farm_model(self):
-        """Farm 模型 display_name 字段默认为「农友」。"""
+        """Farm 模型 name 字段默认为「默认农场」。"""
         db = SessionLocal()
         farm = db.query(Farm).filter(Farm.id == 1).first()
-        # conftest 中创建的 Farm 没有设置 display_name，应为 None
-        # 业务层应处理为默认值「农友」
-        display_name = farm.display_name or "农友"
-        assert display_name == "农友"
+        # conftest 中创建的 Farm name 为 "默认农场"
+        display_name = farm.name or "农友"
+        assert display_name == "默认农场"
         db.close()
 
     def test_get_display_name_custom_from_database(self):
-        """Farm 模型 display_name 设置了自定义值时正确读取。"""
+        """Farm 模型 name 设置了自定义值时正确读取。"""
         db = SessionLocal()
         farm = db.query(Farm).filter(Farm.id == 1).first()
-        farm.display_name = "老赵"
+        farm.name = "老赵的农场"
         db.commit()
-        display_name = farm.display_name or "农友"
-        assert display_name == "老赵"
+        display_name = farm.name or "农友"
+        assert display_name == "老赵的农场"
         db.close()

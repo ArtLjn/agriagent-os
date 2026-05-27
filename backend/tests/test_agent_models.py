@@ -1,15 +1,20 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.core.database import Base, engine
+from app.core.database import Base, SessionLocal, engine
 from app.models.agent import AdviceRecord, ReportRecord
+from app.models.farm import Farm
 
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    """每个测试前清理并重置数据库。"""
+    """每个测试前清理并重置数据库并播种默认农场。"""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    db.add(Farm(id=1, name="默认农场"))
+    db.commit()
+    db.close()
     yield
 
 
@@ -29,7 +34,6 @@ class TestAdviceRecord:
     def test_create_advice_record(self, db_session: Session) -> None:
         """验证可以创建建议记录。"""
         record = AdviceRecord(
-            cycle_id=1,
             advice_type="daily",
             content="今天适合浇水",
         )
@@ -47,7 +51,6 @@ class TestReportRecord:
     def test_create_report_record(self, db_session: Session) -> None:
         """验证可以创建报告记录。"""
         record = ReportRecord(
-            cycle_id=1,
             report_type="weekly",
             content="本周报告...",
         )

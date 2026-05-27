@@ -111,7 +111,7 @@ def _llm_node(state: AgentState) -> dict:
     try:
         farm_context_summary = farm_context_service.build_summary(db, farm_id=1)
         farm = db.query(Farm).filter(Farm.id == 1).first()
-        display_name = farm.display_name if farm and farm.display_name else "农友"
+        display_name = farm.name if farm and farm.name else "农友"
         farm_location = farm.location if farm and farm.location else ""
     except Exception:
         logger.warning("获取农场上下文失败，使用默认值", exc_info=True)

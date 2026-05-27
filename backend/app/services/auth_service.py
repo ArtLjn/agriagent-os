@@ -6,6 +6,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.farm import Farm
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -14,10 +15,7 @@ logger = logging.getLogger(__name__)
 def register(
     db: Session, phone: str, password: str, nickname: str = "农友"
 ) -> tuple[User, str]:
-    """注册新用户。
-
-    TODO: Task 5 后启用 Farm 创建 — 当前 Farm 模型缺少 user_id 字段。
-    """
+    """注册新用户并创建默认农场。"""
     user_id = str(uuid.uuid4())
     user = User(
         id=user_id,
@@ -26,6 +24,10 @@ def register(
         nickname=nickname,
     )
     db.add(user)
+
+    farm = Farm(name=f"{nickname}的农场", user_id=user_id)
+    db.add(farm)
+
     db.commit()
     db.refresh(user)
 
