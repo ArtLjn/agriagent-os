@@ -57,3 +57,36 @@ export const shadows = {
     elevation: 6,
   },
 } as const;
+
+export const spacingV2 = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+  xxxxl: 48,
+} as const;
+
+export const fontSizeV2 = {
+  xs: 11,
+  sm: 13,
+  md: 15,
+  lg: 18,
+  xl: 22,
+  xxl: 28,
+  xxxl: 32,
+  xxxxl: 48,
+} as const;
+
+export const borderRadiusV2 = {
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 20,
+  xxl: 22,
+  xxxl: 28,
+  tab: 30,
+  full: 999,
+} as const;
