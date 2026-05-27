@@ -67,6 +67,7 @@ def micro_compact(messages: list) -> list:
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
+    farm_id: int
 
 
 def _should_continue(state: AgentState) -> str:
@@ -106,11 +107,13 @@ def _llm_node(state: AgentState) -> dict:
     _round_idx = increment_round()  # 副作用：轮次 +1
     collector = get_collector()
 
+    farm_id = state.get("farm_id", 1)
+
     # 获取农场上下文摘要和用户称呼
     db = SessionLocal()
     try:
-        farm_context_summary = farm_context_service.build_summary(db, farm_id=1)
-        farm = db.query(Farm).filter(Farm.id == 1).first()
+        farm_context_summary = farm_context_service.build_summary(db, farm_id=farm_id)
+        farm = db.query(Farm).filter(Farm.id == farm_id).first()
         display_name = farm.name if farm and farm.name else "农友"
         farm_location = farm.location if farm and farm.location else ""
     except Exception:
@@ -148,7 +151,7 @@ def _llm_node(state: AgentState) -> dict:
     input_summary = _find_last_human_message(state["messages"])[:200]
 
     # Token 配额检查
-    if not check_quota(farm_id=1):
+    if not check_quota(farm_id=farm_id):
         action = settings.token_quota.over_quota_action
         if action == "reject":
             logger.warning("Token 配额超限，拒绝调用（reject 模式）")
