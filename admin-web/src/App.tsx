@@ -17,32 +17,40 @@ import SkillRegistry from './pages/SkillRegistry';
 import PromptInspector from './pages/PromptInspector';
 import ConfigKeys from './pages/ConfigKeys';
 import Users from './pages/Users';
+import Login from './pages/Login';
+import { authStore } from './stores/authStore';
+
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  if (!authStore.isLoggedIn()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <AdminLayout>{children}</AdminLayout>;
+}
 
 export default function App() {
   return (
     <ConfigProvider locale={zhCN} theme={{ algorithm: theme.darkAlgorithm }}>
       <BrowserRouter>
-        <AdminLayout>
-          <Routes>
-            <Route path="/" element={<Navigate to="/users" replace />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/crops" element={<Crops />} />
-            <Route path="/cycles" element={<Cycles />} />
-            <Route path="/cycles/:id" element={<CycleDetail />} />
-            <Route path="/logs" element={<Logs />} />
-            <Route path="/costs" element={<Costs />} />
-            <Route path="/agent" element={<Agent />} />
-            <Route path="/weather" element={<Weather />} />
-            <Route path="/api-tester" element={<ApiTester />} />
-            <Route path="/dev/traces" element={<TraceMonitor />} />
-            <Route path="/dev/tokens" element={<TokenDashboard />} />
-            <Route path="/dev/playground" element={<Playground />} />
-            <Route path="/dev/skills" element={<SkillRegistry />} />
-            <Route path="/dev/prompts" element={<PromptInspector />} />
-            <Route path="/dev/config" element={<ConfigKeys />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AdminLayout>
+        <Routes>
+          <Route path="/login" element={<Login onLogin={() => window.location.href = '/'} />} />
+          <Route path="/" element={<AuthGuard><Navigate to="/users" replace /></AuthGuard>} />
+          <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
+          <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
+          <Route path="/cycles" element={<AuthGuard><Cycles /></AuthGuard>} />
+          <Route path="/cycles/:id" element={<AuthGuard><CycleDetail /></AuthGuard>} />
+          <Route path="/logs" element={<AuthGuard><Logs /></AuthGuard>} />
+          <Route path="/costs" element={<AuthGuard><Costs /></AuthGuard>} />
+          <Route path="/agent" element={<AuthGuard><Agent /></AuthGuard>} />
+          <Route path="/weather" element={<AuthGuard><Weather /></AuthGuard>} />
+          <Route path="/api-tester" element={<AuthGuard><ApiTester /></AuthGuard>} />
+          <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
+          <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
+          <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />
+          <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
+          <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
+          <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </BrowserRouter>
     </ConfigProvider>
   );

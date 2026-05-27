@@ -1,11 +1,23 @@
 import axios from "axios";
 import { message } from "antd";
+import { authStore } from "../stores/authStore";
 
 const apiClient = axios.create({
   baseURL: "/api",
   timeout: 120000,
   headers: { "Content-Type": "application/json" },
 });
+
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = authStore.getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -14,6 +26,11 @@ apiClient.interceptors.response.use(
       const status = error.response.status;
       const data = error.response.data;
 
+      if (status === 401) {
+        authStore.clearToken();
+        window.location.href = "/login";
+        return Promise.reject(new Error("登录已过期"));
+      }
       if (status === 429) {
         message.error("请求过于频繁，请稍后再试");
       } else if (status === 422) {
@@ -30,7 +47,7 @@ apiClient.interceptors.response.use(
       message.error("请求配置错误");
     }
     return Promise.reject(error);
-  },
+  }
 );
 
 export default apiClient;
