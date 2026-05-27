@@ -22,6 +22,7 @@ from app.api import (  # noqa: E402
     admin_config,
     admin_stats,
     admin_trace,
+    admin_users,
     agent,
     auth,
     cost,
@@ -202,6 +203,7 @@ app.include_router(admin.router)
 app.include_router(admin_trace.router)
 app.include_router(admin_stats.router)
 app.include_router(admin_config.router)
+app.include_router(admin_users.router)
 app.include_router(user_settings.router)
 app.include_router(debt.router)
 app.include_router(feedback.router)
