@@ -14,6 +14,7 @@ import { Card } from "../../components/Card";
 import { CityPicker } from "../../components/CityPicker";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useAuthStore } from "../../stores/authStore";
 import { colors } from "../../theme/colors";
 import {
   spacing,
@@ -118,6 +119,9 @@ export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
 
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
   const {
     defaultFarmName,
     defaultCity,
@@ -134,8 +138,43 @@ export const SettingsScreen: React.FC = () => {
   } = useSettingsStore();
 
   const handleProfilePress = useCallback(() => {
-    Alert.alert("提示", "登录功能即将上线");
-  }, []);
+    if (!user) return;
+    Alert.prompt(
+      "修改昵称",
+      "输入新昵称",
+      [
+        { text: "取消", style: "cancel" },
+        {
+          text: "确定",
+          onPress: async (value?: string) => {
+            const trimmed = (value || "").trim();
+            if (trimmed) {
+              try {
+                await useAuthStore.getState().updateProfile({ nickname: trimmed });
+              } catch {
+                showToast("修改失败");
+              }
+            }
+          },
+        },
+      ],
+      "plain-text",
+      user.nickname
+    );
+  }, [user]);
+
+  const handleLogout = useCallback(() => {
+    Alert.alert("退出登录", "确定要退出登录吗？", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "确定",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+        },
+      },
+    ]);
+  }, [logout]);
 
   const handleFarmPress = useCallback(() => {
     showToast("多农场管理即将上线");
@@ -243,8 +282,8 @@ export const SettingsScreen: React.FC = () => {
               <Icon name="account" size={32} color={colors.primary} />
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>农友</Text>
-              <Text style={styles.profileSub}>让种植更简单</Text>
+              <Text style={styles.profileName}>{user?.nickname || "农友"}</Text>
+              <Text style={styles.profileSub}>{user?.phone || "让种植更简单"}</Text>
             </View>
             <Icon name="chevron-right" size={20} color={colors.textTertiary} />
           </View>
@@ -327,6 +366,12 @@ export const SettingsScreen: React.FC = () => {
             iconColor={colors.danger}
             label="清除缓存"
             onPress={handleClearCache}
+          />
+          <MenuItem
+            icon="logout"
+            iconColor={colors.danger}
+            label="退出登录"
+            onPress={handleLogout}
             isLast
           />
         </SettingsSection>
