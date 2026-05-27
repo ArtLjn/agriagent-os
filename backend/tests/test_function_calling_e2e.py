@@ -3,9 +3,24 @@
 import asyncio
 from unittest.mock import MagicMock, patch
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.graph import compile_advisor_graph
+from app.agent.prompt_registry import get_registry
+
+
+@pytest.fixture(autouse=True)
+def _register_prompt_templates():
+    """为所有测试注册 system_base 模板，避免 KeyError。"""
+    registry = get_registry()
+    registry.register(
+        "system_base",
+        "1.0",
+        "你是农业顾问。{{ farm_context_summary }} {{ display_name }} "
+        "{{ farm_location }} {{ current_season }}",
+    )
+    yield
 
 
 class TestFunctionCallingE2E:

@@ -2,7 +2,16 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.prompt_registry import get_registry
 from app.agent.report import generate_cycle_report
+
+
+@pytest.fixture(autouse=True)
+def _register_prompt_templates():
+    """为所有测试注册必要的 prompt 模板，避免 KeyError。"""
+    registry = get_registry()
+    registry.register("report", "1.0", "测试报告模板 {{ current_date }}")
+    yield
 
 
 def _make_mock_astream(exc):

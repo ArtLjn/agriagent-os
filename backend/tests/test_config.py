@@ -1,6 +1,7 @@
 """测试 YAML 配置加载。"""
 
 import os
+from unittest.mock import patch
 
 import yaml
 
@@ -10,7 +11,11 @@ class TestYamlConfig:
         config_data = {
             "server": {"host": "127.0.0.1", "port": 9000},
             "database": {"url": "sqlite:///./test.db"},
-            "ai": {"model": "test-model", "api_key": "test-key", "base_url": "http://localhost:11434"},
+            "ai": {
+                "model": "test-model",
+                "api_key": "test-key",
+                "base_url": "http://localhost:11434",
+            },
             "weather": {"latitude": 39.9, "longitude": 116.4},
         }
         config_file = tmp_path / "config.yaml"
@@ -27,7 +32,9 @@ class TestYamlConfig:
     def test_default_values_when_no_yaml(self):
         from app.core.config import Settings
 
-        settings = Settings(_config_path="/nonexistent/config.yaml")
+        # patch Path.exists 让默认 config.yaml 也找不到
+        with patch("pathlib.Path.exists", return_value=False):
+            settings = Settings(_config_path="/nonexistent/config.yaml")
         assert settings.server.host == "0.0.0.0"
         assert settings.server.port == 8000
         assert settings.database.url == "sqlite:///./farm_manager.db"
