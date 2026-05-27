@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MainTabNavigator } from "./MainTabNavigator";
@@ -16,6 +17,9 @@ import { DebtListScreen } from "../screens/debt/DebtListScreen";
 import { DebtCreateScreen } from "../screens/debt/DebtCreateScreen";
 import { CropTemplateScreen } from "../screens/crop/CropTemplateScreen";
 import { WeatherDetailScreen } from "../screens/weather/WeatherDetailScreen";
+import { LoginScreen } from "../screens/auth/LoginScreen";
+import { RegisterScreen } from "../screens/auth/RegisterScreen";
+import { useAuthStore, setOnUnauthorized } from "../stores/authStore";
 import { colors } from "../theme/colors";
 
 export type RootStackParamList = {
@@ -40,103 +44,167 @@ export type RootStackParamList = {
   DebtCreate: undefined;
   CropTemplate: undefined;
   WeatherDetail: undefined;
+  Login: undefined;
+  Register: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export const AppNavigator: React.FC = () => (
-  <NavigationContainer>
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.headerBg,
-        },
-        headerTintColor: colors.headerText,
-        headerTitleStyle: {
-          fontSize: 18,
-          fontWeight: "700",
-        },
-        headerShadowVisible: false,
-        contentStyle: {
-          backgroundColor: colors.background,
-        },
+const screenOptions = {
+  headerStyle: {
+    backgroundColor: colors.headerBg,
+  },
+  headerTintColor: colors.headerText,
+  headerTitleStyle: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+  },
+  headerShadowVisible: false,
+  contentStyle: {
+    backgroundColor: colors.background,
+  },
+};
+
+export const AppNavigator: React.FC = () => {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const isInitializing = useAuthStore((s) => s.isInitializing);
+  const initialize = useAuthStore((s) => s.initialize);
+
+  useEffect(() => {
+    initialize();
+  }, []);
+
+  if (isInitializing) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer
+      ref={(ref) => {
+        if (ref) {
+          setOnUnauthorized(() => {
+            try {
+              ref.reset({ index: 0, routes: [{ name: "Login" }] });
+            } catch {}
+          });
+        }
       }}
     >
-      <Stack.Screen
-        name="Main"
-        component={MainTabNavigator}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CycleDetail"
-        component={CycleDetailScreen}
-        options={{ title: "茬口详情" }}
-      />
-      <Stack.Screen
-        name="CycleCreate"
-        component={CycleCreateScreen}
-        options={{ title: "新建茬口" }}
-      />
-      <Stack.Screen
-        name="LogList"
-        component={LogListScreen}
-        options={{ title: "农事记录" }}
-      />
-      <Stack.Screen
-        name="LogCreate"
-        component={LogCreateScreen}
-        options={{ title: "快速打卡" }}
-      />
-      <Stack.Screen
-        name="CostCreate"
-        component={CostCreateScreen}
-        options={{ title: "记一笔" }}
-      />
-      <Stack.Screen
-        name="CostCategory"
-        component={CostCategoryScreen}
-        options={{ title: "分类管理" }}
-      />
-      <Stack.Screen
-        name="Profit"
-        component={ProfitScreen}
-        options={{ title: "利润统计" }}
-      />
-      <Stack.Screen
-        name="AgentChat"
-        component={AgentChatScreen}
-        options={{ title: "农事顾问" }}
-      />
-      <Stack.Screen
-        name="AgentReport"
-        component={AgentReportScreen}
-        options={{ title: "种植报告" }}
-      />
-      <Stack.Screen
-        name="Guide"
-        component={GuideScreen}
-        options={{ title: "使用指南" }}
-      />
-      <Stack.Screen
-        name="DebtList"
-        component={DebtListScreen}
-        options={{ title: "赊账管理" }}
-      />
-      <Stack.Screen
-        name="DebtCreate"
-        component={DebtCreateScreen}
-        options={{ title: "记赊账" }}
-      />
-      <Stack.Screen
-        name="CropTemplate"
-        component={CropTemplateScreen}
-        options={{ title: "作物模板" }}
-      />
-      <Stack.Screen
-        name="WeatherDetail"
-        component={WeatherDetailScreen}
-        options={{ title: "天气详情", headerShown: false }}
-      />
-    </Stack.Navigator>
-  </NavigationContainer>
-);
+      <Stack.Navigator screenOptions={screenOptions}>
+        {isLoggedIn ? (
+          <>
+            <Stack.Screen
+              name="Main"
+              component={MainTabNavigator}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="CycleDetail"
+              component={CycleDetailScreen}
+              options={{ title: "茬口详情" }}
+            />
+            <Stack.Screen
+              name="CycleCreate"
+              component={CycleCreateScreen}
+              options={{ title: "新建茬口" }}
+            />
+            <Stack.Screen
+              name="LogList"
+              component={LogListScreen}
+              options={{ title: "农事记录" }}
+            />
+            <Stack.Screen
+              name="LogCreate"
+              component={LogCreateScreen}
+              options={{ title: "快速打卡" }}
+            />
+            <Stack.Screen
+              name="CostCreate"
+              component={CostCreateScreen}
+              options={{ title: "记一笔" }}
+            />
+            <Stack.Screen
+              name="CostCategory"
+              component={CostCategoryScreen}
+              options={{ title: "分类管理" }}
+            />
+            <Stack.Screen
+              name="Profit"
+              component={ProfitScreen}
+              options={{ title: "利润统计" }}
+            />
+            <Stack.Screen
+              name="AgentChat"
+              component={AgentChatScreen}
+              options={{ title: "农事顾问" }}
+            />
+            <Stack.Screen
+              name="AgentReport"
+              component={AgentReportScreen}
+              options={{ title: "种植报告" }}
+            />
+            <Stack.Screen
+              name="Guide"
+              component={GuideScreen}
+              options={{ title: "使用指南" }}
+            />
+            <Stack.Screen
+              name="DebtList"
+              component={DebtListScreen}
+              options={{ title: "赊账管理" }}
+            />
+            <Stack.Screen
+              name="DebtCreate"
+              component={DebtCreateScreen}
+              options={{ title: "记赊账" }}
+            />
+            <Stack.Screen
+              name="CropTemplate"
+              component={CropTemplateScreen}
+              options={{ title: "作物模板" }}
+            />
+            <Stack.Screen
+              name="WeatherDetail"
+              component={WeatherDetailScreen}
+              options={{ title: "天气详情", headerShown: false }}
+            />
+          </>
+        ) : (
+          <>
+            <Stack.Screen
+              name="Login"
+              component={(props: any) => (
+                <LoginScreen
+                  onNavigateToRegister={() => props.navigation.navigate("Register")}
+                />
+              )}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Register"
+              component={(props: any) => (
+                <RegisterScreen
+                  onNavigateToLogin={() => props.navigation.navigate("Login")}
+                />
+              )}
+              options={{ headerShown: false }}
+            />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background,
+  },
+});
