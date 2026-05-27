@@ -1,13 +1,12 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
+  ScrollView,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -166,13 +165,6 @@ export const AgentChatScreen: React.FC = () => {
     </View>
   );
 
-  const ListHeaderComponent = useCallback(() => {
-    if (hasMessages) {
-      return null;
-    }
-    return renderWelcome();
-  }, [hasMessages]);
-
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <LinearGradient
@@ -231,27 +223,29 @@ export const AgentChatScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
-        {activeTab === "chat" ? (
-          <>
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={(_, index) => String(index)}
-              renderItem={renderMessage}
-              contentContainerStyle={[
-                styles.listContent,
-                !hasMessages && { flexGrow: 1 },
-              ]}
-              ListHeaderComponent={ListHeaderComponent}
-              onContentSizeChange={() =>
-                flatListRef.current?.scrollToEnd({ animated: true })
-              }
-            />
+      {activeTab === "chat" ? (
+        <>
+          {/* Messages Area */}
+          <View style={styles.flex}>
+            {hasMessages ? (
+              <FlatList
+                ref={flatListRef}
+                data={messages}
+                keyExtractor={(_, index) => String(index)}
+                renderItem={renderMessage}
+                contentContainerStyle={styles.listContent}
+                onContentSizeChange={() =>
+                  flatListRef.current?.scrollToEnd({ animated: true })
+                }
+              />
+            ) : (
+              <ScrollView
+                contentContainerStyle={styles.welcomeContainer}
+                showsVerticalScrollIndicator={false}
+              >
+                {renderWelcome()}
+              </ScrollView>
+            )}
 
             {isLoading && hasMessages && (
               <View style={styles.typingRow}>
@@ -262,65 +256,65 @@ export const AgentChatScreen: React.FC = () => {
                 </View>
               </View>
             )}
+          </View>
 
-            {/* Input */}
-            <View style={styles.inputBar}>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  placeholder="请输入您的问题..."
-                  placeholderTextColor={colors.textTertiary}
-                  multiline
-                  maxLength={500}
-                />
-                <TouchableOpacity
+          {/* Input — always at bottom */}
+          <View style={styles.inputBar}>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="请输入您的问题..."
+                placeholderTextColor={colors.textTertiary}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendBtn,
+                  (!inputText.trim() || isLoading) && styles.sendBtnDisabled,
+                ]}
+                onPress={handleInputSend}
+                disabled={!inputText.trim() || isLoading}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  {...appGradients.userBubble}
                   style={[
-                    styles.sendBtn,
-                    (!inputText.trim() || isLoading) && styles.sendBtnDisabled,
+                    styles.sendBtnGradient,
+                    (!inputText.trim() || isLoading) &&
+                      styles.sendBtnDisabled,
                   ]}
-                  onPress={handleInputSend}
-                  disabled={!inputText.trim() || isLoading}
-                  activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    {...appGradients.userBubble}
-                    style={[
-                      styles.sendBtnGradient,
-                      (!inputText.trim() || isLoading) &&
-                        styles.sendBtnDisabled,
-                    ]}
-                  >
-                    <Icon
-                      name="send"
-                      size={18}
-                      color={
-                        !inputText.trim() || isLoading
-                          ? colors.textTertiary
-                          : "#FFFFFF"
-                      }
-                    />
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
+                  <Icon
+                    name="send"
+                    size={18}
+                    color={
+                      !inputText.trim() || isLoading
+                        ? colors.textTertiary
+                        : "#FFFFFF"
+                    }
+                  />
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
-          </>
-        ) : (
-          <ReportListView
-            reports={reports}
-            onGenerate={() => navigation.navigate("AgentReport" as never)}
-            onViewReport={(r) =>
-              (navigation as any).navigate("AgentReport", {
-                content: r.content,
-                reportType: r.report_type,
-                createdAt: r.created_at,
-                reportId: r.id,
-              })
-            }
-          />
-        )}
-      </KeyboardAvoidingView>
+          </View>
+        </>
+      ) : (
+        <ReportListView
+          reports={reports}
+          onGenerate={() => navigation.navigate("AgentReport" as never)}
+          onViewReport={(r) =>
+            (navigation as any).navigate("AgentReport", {
+              content: r.content,
+              reportType: r.report_type,
+              createdAt: r.created_at,
+              reportId: r.id,
+            })
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -457,7 +451,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacingV2.sm,
   },
   welcomeContainer: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacingV2.xxl,

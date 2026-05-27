@@ -40,29 +40,29 @@ const QUICK_ACTIONS = [
   {
     label: "种植规划",
     icon: "seed-plus",
-    bgColor: colors.qaPlanting,
-    iconColor: "#16A34A",
+    bgColor: "#F0FDF4",
+    iconColor: "#3B8B5C",
     route: "CycleCreate",
   },
   {
     label: "农事提醒",
     icon: "bell-ring",
-    bgColor: colors.qaReminder,
+    bgColor: "#EFF6FF",
     iconColor: "#5B8CFF",
     route: "AgentChat",
   },
   {
     label: "天气趋势",
     icon: "weather-partly-cloudy",
-    bgColor: colors.qaWeather,
-    iconColor: "#E8923C",
+    bgColor: "#FFFBEB",
+    iconColor: "#B48A3E",
     route: "AgentChat",
   },
   {
     label: "病虫害识别",
     icon: "bug",
-    bgColor: colors.qaPest,
-    iconColor: "#EF4444",
+    bgColor: "#FEF2F2",
+    iconColor: "#C45B5B",
     route: "AgentChat",
   },
 ];
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: spacingV2.xxxl,
   },
   headerSection: {
     paddingHorizontal: spacingV2.lg,

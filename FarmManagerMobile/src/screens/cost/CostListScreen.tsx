@@ -236,14 +236,15 @@ export const CostListScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <AssetCard income={stats.income} cost={stats.cost} />
-
-      {/* Stats Header */}
+      {/* Month Selector */}
       <MonthlyStats
         selectedMonth={selectedMonth}
         onPreviousMonth={handlePreviousMonth}
         onNextMonth={handleNextMonth}
       />
+
+      {/* Asset Summary */}
+      <AssetCard income={stats.income} cost={stats.cost} />
 
       {/* Category Filter */}
       {categoryList.length > 0 && (

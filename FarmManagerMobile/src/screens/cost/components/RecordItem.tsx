@@ -13,15 +13,15 @@ const TYPE_CONFIG: Record<
 > = {
   cost: {
     label: "支出",
-    color: colors.danger,
+    color: "#C45B5B",
     icon: "arrow-down-circle",
-    bgColor: colors.dangerLight,
+    bgColor: "#FDF0F0",
   },
   income: {
     label: "收入",
-    color: colors.success,
+    color: "#3B8B5C",
     icon: "arrow-up-circle",
-    bgColor: colors.successLight,
+    bgColor: "#E8F5ED",
   },
 };
 

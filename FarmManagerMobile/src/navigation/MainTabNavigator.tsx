@@ -41,15 +41,10 @@ export const MainTabNavigator: React.FC = () => (
         return (
           <View style={styles.tabItem}>
             {focused ? (
-              <LinearGradient
-                colors={["#5B8CFF", "#7A7DFF"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.capsule}
-              >
-                <Icon name={config.activeIcon} size={20} color="#FFFFFF" />
+              <View style={styles.capsule}>
+                <Icon name={config.activeIcon} size={20} color="#5B8CFF" />
                 <Text style={styles.capsuleLabel}>{config.label}</Text>
-              </LinearGradient>
+              </View>
             ) : (
               <View style={styles.inactiveItem}>
                 <Icon name={config.icon} size={22} color={colors.tabInactive} />
@@ -70,19 +65,12 @@ export const MainTabNavigator: React.FC = () => (
 
 const styles = StyleSheet.create({
   tabBar: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
-    height: 72,
-    borderRadius: borderRadiusV2.tab,
-    backgroundColor: Platform.select({
-      ios: "rgba(255,255,255,0.85)",
-      android: "rgba(255,255,255,0.95)",
-    }),
-    borderTopWidth: 0,
-    ...shadowV2.card,
-    elevation: 10,
+    height: 64,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    ...shadowV2.light,
+    elevation: 4,
   },
   tabItem: {
     alignItems: "center",
@@ -96,10 +84,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacingV2.sm,
     borderRadius: borderRadiusV2.full,
     gap: 4,
+    backgroundColor: "#EDF4FF",
   },
   capsuleLabel: {
     fontSize: fontSizeV2.sm,
-    color: "#FFFFFF",
+    color: "#5B8CFF",
     fontWeight: "600",
   },
   inactiveItem: {
