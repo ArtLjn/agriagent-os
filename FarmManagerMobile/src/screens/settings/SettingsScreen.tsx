@@ -135,6 +135,7 @@ export const SettingsScreen: React.FC = () => {
     setNotificationEnabled,
     setWeatherAlertEnabled,
     setDisplayName,
+    syncToServer,
   } = useSettingsStore();
 
   const handleProfilePress = useCallback(() => {
@@ -259,8 +260,9 @@ export const SettingsScreen: React.FC = () => {
     (city: { name: string; lat: number; lon: number }) => {
       setDefaultCity(city.name);
       useAgentStore.getState().setCity(city.name, city.lat, city.lon);
+      syncToServer(city.name, city.lat, city.lon);
     },
-    [setDefaultCity]
+    [setDefaultCity, syncToServer]
   );
 
   const cropLabel = crops.length > 0 ? crops.join("、") : "未选择";

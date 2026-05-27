@@ -1,0 +1,43 @@
+import { CITIES, type City } from '../data/cities';
+
+/**
+ * Haversine 公式计算两点间距离（千米）。
+ */
+function haversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * 从城市列表中找到距离给定坐标最近的城市。
+ */
+export function findNearestCity(
+  lat: number,
+  lon: number,
+): City {
+  let nearest = CITIES[0];
+  let minDist = haversineDistance(lat, lon, nearest.lat, nearest.lon);
+
+  for (let i = 1; i < CITIES.length; i++) {
+    const dist = haversineDistance(lat, lon, CITIES[i].lat, CITIES[i].lon);
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = CITIES[i];
+    }
+  }
+
+  return nearest;
+}

@@ -3,17 +3,20 @@ from app.models.crop import CropTemplate, GrowthStage
 from app.models.cycle import CropCycle, CycleStage
 from app.models.log import FarmLog
 from app.models.cost import CostRecord
+from app.models.cost_category import CostCategory
 from app.models.agent_record import AgentRecord
 from app.models.guardrails_log import GuardrailsLog
 from app.models.idempotency_key import IdempotencyKey
 from app.models.trace import TraceRecord
 from app.models.token_stats import TokenDailyStats
-from app.models.user import User, UserOAuth
+from app.models.user import User
 from app.models.conversation import (
     Conversation,
     ConversationMessage,
     ConversationStatus,
 )
+from app.models.feedback import FeedbackRecord
+from app.models.user_setting import UserSetting
 
 __all__ = [
     "Farm",
@@ -23,14 +26,16 @@ __all__ = [
     "CycleStage",
     "FarmLog",
     "CostRecord",
+    "CostCategory",
     "AgentRecord",
     "GuardrailsLog",
     "IdempotencyKey",
     "TraceRecord",
     "TokenDailyStats",
     "User",
-    "UserOAuth",
     "Conversation",
     "ConversationMessage",
     "ConversationStatus",
+    "FeedbackRecord",
+    "UserSetting",
 ]

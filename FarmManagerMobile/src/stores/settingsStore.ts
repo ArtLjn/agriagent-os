@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+import { settingsApi } from '../api/client';
+
 interface SettingsState {
   defaultFarmName: string;
   defaultCity: string;
@@ -17,6 +19,8 @@ interface SettingsState {
   setNotificationEnabled: (enabled: boolean) => void;
   setWeatherAlertEnabled: (enabled: boolean) => void;
   setDisplayName: (name: string) => void;
+  syncToServer: (city: string, lat: number, lon: number) => Promise<void>;
+  loadFromServer: () => Promise<string | null>;
 }
 
 export const useSettingsStore = create<
@@ -42,6 +46,33 @@ export const useSettingsStore = create<
       setWeatherAlertEnabled: (enabled) =>
         set({ weatherAlertEnabled: enabled }),
       setDisplayName: (name) => set({ displayName: name }),
+
+      syncToServer: async (city: string, lat: number, lon: number) => {
+        try {
+          await settingsApi.update({
+            default_city: city,
+            default_lat: lat,
+            default_lon: lon,
+          });
+          set({ defaultCity: city });
+        } catch {
+          // 网络失败时本地已更新，下次重试
+        }
+      },
+
+      loadFromServer: async () => {
+        try {
+          const res = await settingsApi.get();
+          const data = res.data;
+          if (data.default_city) {
+            set({ defaultCity: data.default_city });
+            return data.default_city;
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      },
     }),
     {
       name: 'settings-store',

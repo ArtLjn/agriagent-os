@@ -15,6 +15,9 @@ import { useAuthStore } from "../../stores/authStore";
 import { colors } from "../../theme/colors";
 import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { detectLocation } from "../../utils/locationUtils";
+import { findNearestCity } from "../../utils/cityMatcher";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 const PHONE_REGEX = /^1[3-9]\d{9}$/;
 
@@ -28,6 +31,8 @@ export const RegisterScreen: React.FC<{
   const [loading, setLoading] = useState(false);
 
   const register = useAuthStore((s) => s.register);
+  const syncToServer = useSettingsStore((s) => s.syncToServer);
+  const setDefaultCity = useSettingsStore((s) => s.setDefaultCity);
 
   const handleRegister = useCallback(async () => {
     if (!PHONE_REGEX.test(phone)) {
@@ -48,6 +53,14 @@ export const RegisterScreen: React.FC<{
         phone,
         password,
         nickname: nickname.trim() || undefined,
+      });
+      // 注册成功后尝试定位，不阻塞 UI
+      detectLocation().then((coords) => {
+        if (coords) {
+          const city = findNearestCity(coords.latitude, coords.longitude);
+          setDefaultCity(city.name);
+          syncToServer(city.name, city.lat, city.lon);
+        }
       });
     } catch (e: any) {
       Alert.alert("注册失败", e.message || "注册失败，请重试");

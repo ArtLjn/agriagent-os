@@ -11,6 +11,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useCycleStore } from "../../stores/cycleStore";
+import { useAuthStore } from "../../stores/authStore";
 import { CITIES } from "../../data/cities";
 import { WeatherCardV2 } from "../../components/WeatherCardV2";
 import { AdviceCard } from "../../components/AdviceCard";
@@ -99,9 +100,31 @@ export const HomeScreen: React.FC = () => {
     cityName,
     setCity,
   } = useAgentStore();
-  const { defaultCity, setDefaultCity } = useSettingsStore();
+  const { defaultCity, setDefaultCity, syncToServer, loadFromServer } = useSettingsStore();
+  const { isLoggedIn } = useAuthStore();
   const { fetchCycles } = useCycleStore();
   const [pickerVisible, setPickerVisible] = useState(false);
+
+  useEffect(() => {
+    // 老用户补全：已登录但服务端无城市设置时触发定位
+    if (isLoggedIn) {
+      (async () => {
+        const serverCity = await loadFromServer();
+        if (!serverCity) {
+          // 服务端无设置，尝试 GPS 定位
+          const { detectLocation } = require("../../utils/locationUtils");
+          const { findNearestCity } = require("../../utils/cityMatcher");
+          detectLocation().then((coords: any) => {
+            if (coords) {
+              const city = findNearestCity(coords.latitude, coords.longitude);
+              setDefaultCity(city.name);
+              syncToServer(city.name, city.lat, city.lon);
+            }
+          });
+        }
+      })();
+    }
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (defaultCity !== cityName) {

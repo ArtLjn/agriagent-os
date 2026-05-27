@@ -4,8 +4,35 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.services.weather_service import check_weather_warnings, fetch_weather
+
+
+def _get_user_coords(farm_id: int) -> tuple[float, float]:
+    """从 user_settings 读取用户坐标，无记录时降级到默认值。"""
+    default_lat = settings.weather_latitude
+    default_lon = settings.weather_longitude
+    try:
+        db = SessionLocal()
+        try:
+            from app.models.farm import Farm
+            from app.models.user_setting import UserSetting
+
+            farm = db.query(Farm).filter(Farm.id == farm_id).first()
+            if farm and farm.user_id:
+                setting = (
+                    db.query(UserSetting)
+                    .filter(UserSetting.user_id == farm.user_id)
+                    .first()
+                )
+                if setting and setting.default_lat and setting.default_lon:
+                    return setting.default_lat, setting.default_lon
+        finally:
+            db.close()
+    except Exception:
+        pass
+    return default_lat, default_lon
 
 
 class WeatherSkill(Skill):
@@ -31,9 +58,9 @@ class WeatherSkill(Skill):
     @cached(ttl_seconds=1800)
     async def execute(self, params: dict, context) -> SkillResult:
         location = params.get("location", "当前地块")
-        data = fetch_weather(
-            settings.weather_latitude, settings.weather_longitude, days=7
-        )
+        farm_id = getattr(context, "farm_id", 1) or 1
+        lat, lon = _get_user_coords(farm_id)
+        data = fetch_weather(lat, lon, days=7)
         daily = data.get("daily", {})
         times = daily.get("time", [])
         max_temps = daily.get("temperature_2m_max", [])

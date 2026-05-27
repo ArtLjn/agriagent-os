@@ -2,7 +2,7 @@ import SSE from 'react-native-sse';
 import axios from 'axios';
 import type { PendingAction, CostRecord, DebtListResponse } from './types';
 
-const API_BASE_URL = 'http://172.16.57.244:8099';
+const API_BASE_URL = 'http://10.167.110.141:8099';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -128,7 +128,7 @@ export const agentApi = {
   chat: (data: { cycle_id?: number; message: string }) =>
     apiClient.post('/agent/chat', data),
   streamChat: (
-    data: { cycle_id?: number; message: string },
+    data: { cycle_id?: number; message: string; session_id?: string },
     onChunk: (chunk: string) => void,
     onDone: () => void,
     onError: (err: string) => void,
@@ -220,4 +220,22 @@ export const debtApi = {
 export const weatherApi = {
   getForecast: (days: number = 3, lat?: number, lon?: number) =>
     apiClient.get('/weather/forecast', { params: { days, lat, lon } }),
+};
+
+// 用户设置
+export interface SettingsResponse {
+  display_name: string;
+  default_city: string | null;
+  default_lat: number | null;
+  default_lon: number | null;
+}
+
+export const settingsApi = {
+  get: () => apiClient.get<SettingsResponse>('/settings'),
+  update: (data: {
+    display_name?: string;
+    default_city?: string;
+    default_lat?: number;
+    default_lon?: number;
+  }) => apiClient.put<SettingsResponse>('/settings', data),
 };
