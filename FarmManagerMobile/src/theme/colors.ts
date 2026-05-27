@@ -5,28 +5,28 @@ export const colors = {
   primaryDark: "#4A7AEE",
   primaryMuted: "rgba(91, 140, 255, 0.08)",
 
-  // AI Accent - Purple
-  aiPurple: "#8B5CF6",
-  aiPurpleLight: "#A78BFA",
-  aiPurpleMuted: "rgba(139, 92, 246, 0.08)",
+  // AI Accent - Purple (muted)
+  aiPurple: "#7A7AE0",
+  aiPurpleLight: "#9B9BEE",
+  aiPurpleMuted: "rgba(122, 122, 224, 0.08)",
 
   // Agriculture - Green
   success: "#3BB273",
   successLight: "#4ADE80",
   successMuted: "rgba(59, 178, 115, 0.08)",
 
-  // Financial
-  income: "#16A34A",
-  incomeBg: "#EDFDF3",
-  expense: "#EF4444",
-  expenseBg: "#FFF1F2",
+  // Financial (muted, less saturated)
+  income: "#3B8B5C",
+  incomeBg: "#E8F5ED",
+  expense: "#C45B5B",
+  expenseBg: "#FDF0F0",
 
-  // Semantic
-  warning: "#E8923C",
+  // Semantic (muted)
+  warning: "#D49A4A",
   warningLight: "#FDF3E7",
-  danger: "#DC4C4C",
+  danger: "#C45B5B",
   dangerLight: "#FDEBEB",
-  info: "#3B82C4",
+  info: "#5B8DB8",
   infoLight: "#EBF3FB",
 
   // Background layers

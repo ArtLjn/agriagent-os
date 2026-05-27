@@ -220,7 +220,6 @@ export const CostListScreen: React.FC = () => {
       <View style={styles.container}>
         <MonthlyStats
           selectedMonth={selectedMonth}
-          stats={{ cost: 0, income: 0, balance: 0 }}
           onPreviousMonth={handlePreviousMonth}
           onNextMonth={handleNextMonth}
         />
@@ -242,7 +241,6 @@ export const CostListScreen: React.FC = () => {
       {/* Stats Header */}
       <MonthlyStats
         selectedMonth={selectedMonth}
-        stats={stats}
         onPreviousMonth={handlePreviousMonth}
         onNextMonth={handleNextMonth}
       />
@@ -397,7 +395,7 @@ const assetStyles = StyleSheet.create({
     marginBottom: spacingV2.xs,
   },
   amount: {
-    fontSize: fontSizeV2.xxl,
+    fontSize: fontSizeV2.lg,
     fontWeight: "800",
   },
   subCard: {
