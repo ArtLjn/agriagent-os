@@ -77,13 +77,18 @@ def close_expired_conversations(db: Session, farm_id: int) -> int:
 
 
 def save_message(
-    db: Session, conversation_id: int, role: str, content: str
+    db: Session,
+    conversation_id: int,
+    role: str,
+    content: str,
+    meta: str | None = None,
 ) -> ConversationMessage:
     """持久化单条消息并更新会话最后活跃时间。"""
     msg = ConversationMessage(
         conversation_id=conversation_id,
         role=role,
         content=content,
+        meta=meta,
     )
     db.add(msg)
     db.commit()
