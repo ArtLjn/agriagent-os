@@ -162,3 +162,35 @@ export interface DebtListResponse {
   total: number;
   summary: DebtSummary[];
 }
+
+export interface UserProfile {
+  id: string;
+  phone: string;
+  nickname: string;
+  avatar_url: string | null;
+  role: string;
+  status: string;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+export interface LoginParams {
+  phone: string;
+  password: string;
+}
+
+export interface RegisterParams {
+  phone: string;
+  password: string;
+  nickname?: string;
+}
+
+export interface UpdateProfileParams {
+  nickname?: string;
+  avatar_url?: string;
+}
