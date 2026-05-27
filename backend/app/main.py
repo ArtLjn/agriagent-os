@@ -23,6 +23,7 @@ from app.api import (  # noqa: E402
     admin_stats,
     admin_trace,
     agent,
+    auth,
     cost,
     cost_categories,
     crop,
@@ -194,6 +195,7 @@ app.include_router(log.router)
 app.include_router(cost.router)
 app.include_router(cost_categories.router)
 app.include_router(agent.router)
+app.include_router(auth.router)
 app.include_router(weather.router)
 app.include_router(admin.router)
 app.include_router(admin_trace.router)
