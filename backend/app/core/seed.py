@@ -30,9 +30,7 @@ def migrate_cost_records() -> None:
         for col_name, col_type in _P1_NEW_COLUMNS:
             if col_name not in existing:
                 conn.execute(
-                    text(
-                        f"ALTER TABLE cost_records ADD COLUMN {col_name} {col_type}"
-                    )
+                    text(f"ALTER TABLE cost_records ADD COLUMN {col_name} {col_type}")
                 )
                 logger.info("已补列 cost_records.%s", col_name)
 

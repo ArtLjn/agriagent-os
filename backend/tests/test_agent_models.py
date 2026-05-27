@@ -17,6 +17,7 @@ def clean_db():
 def db_session():
     """提供一个数据库会话。"""
     from app.core.database import SessionLocal
+
     session = SessionLocal()
     yield session
     session.close()

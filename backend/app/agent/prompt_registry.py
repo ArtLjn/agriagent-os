@@ -89,12 +89,18 @@ class PromptRegistry:
                     content = f.read()
                 version = config.get("version", "1.0")
                 self.register(name, version, content)
-                if name in defaults:
-                    self.set_default(name, defaults[name])
             except TemplateSyntaxError as e:
                 logger.error("模板语法错误 | file=%s error=%s", file_name, e)
             except Exception as e:
                 logger.error("加载模板失败 | file=%s error=%s", file_name, e)
+
+        # 处理别名：defaults 中 alias_name → template_name 的映射
+        for alias, target in defaults.items():
+            if alias not in self._templates and target in self._templates:
+                for ver, content in self._templates[target].items():
+                    self._templates.setdefault(alias, {})[ver] = content
+                if target in self._defaults:
+                    self._defaults[alias] = self._defaults[target]
 
         logger.info("Prompt 加载完成 | count=%d", len(self._templates))
 

@@ -13,9 +13,24 @@ def watermelon_template_id():
         "name": "西瓜",
         "variety": "8424",
         "stages": [
-            {"name": "育苗期", "duration_days": 30, "order_index": 0, "key_tasks": "温湿度管理"},
-            {"name": "定植期", "duration_days": 1, "order_index": 1, "key_tasks": "浇定根水"},
-            {"name": "伸蔓期", "duration_days": 20, "order_index": 2, "key_tasks": "整枝压蔓"},
+            {
+                "name": "育苗期",
+                "duration_days": 30,
+                "order_index": 0,
+                "key_tasks": "温湿度管理",
+            },
+            {
+                "name": "定植期",
+                "duration_days": 1,
+                "order_index": 1,
+                "key_tasks": "浇定根水",
+            },
+            {
+                "name": "伸蔓期",
+                "duration_days": 20,
+                "order_index": 2,
+                "key_tasks": "整枝压蔓",
+            },
         ],
     }
     response = client.post("/crops/templates", json=payload)

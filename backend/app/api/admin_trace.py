@@ -59,10 +59,7 @@ def list_traces(
 
     total = query.count()
     items = (
-        query.order_by(TraceRecord.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
+        query.order_by(TraceRecord.created_at.desc()).offset(offset).limit(limit).all()
     )
 
     return {

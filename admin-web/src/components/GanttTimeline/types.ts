@@ -16,5 +16,5 @@ export interface GanttRound {
 
 export interface GanttTimelineProps {
   rounds: GanttRound[];
-  onNodeClick?: (roundIndex: number, nodeIndex: number) => void;
+  onNodeClick?: (roundIndex: number, nodeIndex: number, node: GanttNode) => void;
 }

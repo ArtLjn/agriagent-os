@@ -23,6 +23,66 @@ class TestAgentChat:
         assert response.status_code == 200
         assert response.json()["reply"] == "建议：浇水。"
 
+    @patch("app.api.agent.chat_with_agent")
+    def test_chat_endpoint_passes_session_id(self, mock_chat) -> None:
+        """验证 POST /agent/chat 传递 session_id 给 service。"""
+        from app.schemas.agent import ChatResponse
+
+        mock_chat.return_value = ChatResponse(reply="回复")
+
+        response = client.post(
+            "/agent/chat",
+            json={"message": "你好", "session_id": "sess-abc"},
+        )
+
+        assert response.status_code == 200
+        mock_chat.assert_called_once()
+        call_kwargs = mock_chat.call_args
+        assert call_kwargs.kwargs.get("session_id") == "sess-abc" or "sess-abc" in str(
+            call_kwargs
+        )
+
+    @patch("app.api.agent.chat_with_agent")
+    def test_chat_endpoint_without_session_id(self, mock_chat) -> None:
+        """验证 POST /agent/chat 无 session_id 时传 None。"""
+        from app.schemas.agent import ChatResponse
+
+        mock_chat.return_value = ChatResponse(reply="回复")
+
+        response = client.post("/agent/chat", json={"message": "你好"})
+
+        assert response.status_code == 200
+        call_kwargs = mock_chat.call_args
+        assert call_kwargs.kwargs.get("session_id") is None or "session_id=None" in str(
+            call_kwargs
+        )
+
+
+class TestAgentChatStream:
+    """测试流式对话接口。"""
+
+    @patch("app.api.agent.stream_chat_with_agent")
+    def test_stream_endpoint_passes_session_id(self, mock_stream) -> None:
+        """验证 POST /agent/chat/stream 传递 session_id。"""
+
+        async def _fake_stream(*args, **kwargs):
+            yield "chunk1"
+
+        mock_stream.side_effect = _fake_stream
+
+        response = client.post(
+            "/agent/chat/stream",
+            json={"message": "你好", "session_id": "sess-stream"},
+        )
+
+        assert response.status_code == 200
+        mock_stream.assert_called_once()
+        call_kwargs = mock_stream.call_args
+        assert (
+            "sess-stream" in str(call_kwargs)
+            or call_kwargs.kwargs.get("session_id") == "sess-stream"
+        )
+
 
 class TestAgentDaily:
     """测试每日建议接口。"""

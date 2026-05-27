@@ -10,6 +10,7 @@ class ChatRequest(BaseModel):
 
     cycle_id: int | None = None
     message: str = Field(..., min_length=1, max_length=2000)
+    session_id: str | None = Field(None, max_length=64)
 
 
 class PendingActionResponse(BaseModel):
@@ -98,4 +99,25 @@ class ReportListResponse(BaseModel):
 
     items: list[ReportHistoryItem]
     total: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationListItem(BaseModel):
+    """会话列表项。"""
+
+    id: int
+    session_id: str
+    status: str
+    created_at: datetime
+    last_active_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationMessageItem(BaseModel):
+    """会话消息项。"""
+
+    id: int
+    role: str
+    content: str
+    created_at: datetime
     model_config = ConfigDict(from_attributes=True)

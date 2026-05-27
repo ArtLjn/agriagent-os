@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
+# 首次部署 — 在阿里云服务器上全新安装后端（Docker 方式）
+# 用法: bash deploy/server-deploy.sh
 set -euo pipefail
 
 SERVER="root@47.98.253.236"
 REMOTE_DIR="/opt/farm-manager"
+PROJECT_ROOT="$(cd "$(dirname "$0")"/.. && pwd)"
 
 echo "==> 打包后端代码..."
 tar czf /tmp/farm-manager-backend.tar.gz \
@@ -13,7 +16,7 @@ tar czf /tmp/farm-manager-backend.tar.gz \
     --exclude='.ruff_cache' \
     --exclude='*.db' \
     --exclude='.claude' \
-    -C "$(dirname "$0")" \
+    -C "${PROJECT_ROOT}" \
     backend/ \
     docker-compose.yml
 

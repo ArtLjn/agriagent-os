@@ -375,6 +375,7 @@ function NodeRow({
 /* ── 图例 ── */
 function Legend() {
   const items = [
+    { type: 'routing', label: '路由决策' },
     { type: 'prompt_render', label: 'Prompt 渲染' },
     { type: 'llm_call', label: 'LLM 调用' },
     { type: 'skill_call', label: 'Skill 执行' },
@@ -498,7 +499,7 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
                   <NodeRow
                     key={nIdx}
                     node={node}
-                    onClick={() => onNodeClick?.(rIdx, nIdx)}
+                    onClick={() => onNodeClick?.(rIdx, nIdx, node)}
                   />
                 ))}
               </>

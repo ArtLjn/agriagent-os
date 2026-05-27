@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
-import { Input, Button, Space, Collapse, Typography } from 'antd';
+import { Input, Button, Space, Collapse, Typography, Drawer, Tag } from 'antd';
 import { SendOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { listTraces, getTimeline, type TraceTimeline } from '../../api/admin';
+import { listTraces, getTimeline, type TraceTimeline, type TraceNodeDetail } from '../../api/admin';
 import GanttTimeline from '../../components/GanttTimeline';
+import type { GanttNode } from '../../components/GanttTimeline/types';
+import { getNodeLabel } from '../../constants/trace';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -99,10 +101,18 @@ async function fetchLatestTimeline(): Promise<TraceTimeline | null> {
     if (!listRes.items || listRes.items.length === 0) return null;
     const requestId = listRes.items[0].request_id;
     const timelineRes = await getTimeline(requestId);
-        const timeline = timelineRes;
-    return timeline;
+    return timelineRes;
   } catch {
     return null;
+  }
+}
+
+function formatJson(raw: string | null): string {
+  if (!raw) return '';
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
   }
 }
 
@@ -113,6 +123,8 @@ export default function Playground() {
   const [loading, setLoading] = useState(false);
   const [timeline, setTimeline] = useState<TraceTimeline | null>(null);
   const [traceLoading, setTraceLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [nodeDetail, setNodeDetail] = useState<TraceNodeDetail | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -171,6 +183,30 @@ export default function Playground() {
   }, [input, scrollToBottom]);
 
   const isThinking = loading && messages.length > 0 && messages[messages.length - 1].content === '';
+
+  const handleNodeClick = (
+    _roundIndex: number,
+    _nodeIndex: number,
+    nodeData: GanttNode
+  ) => {
+    const detail: TraceNodeDetail = {
+      id: 0,
+      request_id: '',
+      round_index: _roundIndex,
+      node_type: nodeData.node_type,
+      node_name: nodeData.node_name,
+      input_data: nodeData.input_data ?? null,
+      output_data: nodeData.output_data ?? null,
+      duration_ms: nodeData.duration_ms,
+      token_usage: null,
+      status: nodeData.status,
+      error_message: nodeData.error_message ?? null,
+      start_time: nodeData.start_time,
+      end_time: null,
+    };
+    setNodeDetail(detail);
+    setDrawerOpen(true);
+  };
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: 24 }}>
@@ -246,8 +282,12 @@ export default function Playground() {
                           duration_ms: n.duration_ms,
                           status: n.status,
                           start_time: n.start_time,
+                          input_data: n.input_data,
+                          output_data: n.output_data,
+                          error_message: n.error_message,
                         })),
                       }))}
+                      onNodeClick={handleNodeClick}
                     />
                   ) : (
                     <div style={{ color: TEXT_DIM, textAlign: 'center', padding: '24px 0' }}>
@@ -287,6 +327,75 @@ export default function Playground() {
           发送
         </Button>
       </Space.Compact>
+
+      {/* 节点详情 Drawer */}
+      <Drawer
+        title="节点详情"
+        placement="right"
+        width={640}
+        onClose={() => setDrawerOpen(false)}
+        open={drawerOpen}
+      >
+        {nodeDetail ? (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <Tag color={nodeDetail.status === 'success' ? 'success' : 'error'}>
+                {nodeDetail.status}
+              </Tag>
+              <Tag color="processing">{getNodeLabel(nodeDetail.node_type)}</Tag>
+              <span style={{ color: TEXT_DIM }}>
+                {nodeDetail.duration_ms?.toLocaleString() ?? '-'} ms
+              </span>
+            </div>
+            <div>
+              <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>节点名称</div>
+              <div style={{ fontSize: 15, fontWeight: 500 }}>{nodeDetail.node_name}</div>
+            </div>
+            {nodeDetail.start_time && (
+              <div>
+                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>开始时间</div>
+                <div>{new Date(nodeDetail.start_time).toLocaleString('zh-CN')}</div>
+              </div>
+            )}
+            {nodeDetail.error_message && (
+              <div>
+                <div style={{ color: '#ff4d4f', marginBottom: 4, fontSize: 12 }}>错误信息</div>
+                <pre style={{
+                  backgroundColor: '#2a1215', padding: 12, borderRadius: 6,
+                  border: '1px solid #58181c', color: '#ff4d4f', fontSize: 12,
+                  margin: 0, whiteSpace: 'pre-wrap',
+                }}>
+                  {nodeDetail.error_message}
+                </pre>
+              </div>
+            )}
+            {nodeDetail.input_data && (
+              <div>
+                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输入数据</div>
+                <pre style={{
+                  backgroundColor: '#161b22', padding: 12, borderRadius: 6,
+                  border: '1px solid #30363d', fontSize: 12, margin: 0,
+                  maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
+                }}>
+                  {formatJson(nodeDetail.input_data)}
+                </pre>
+              </div>
+            )}
+            {nodeDetail.output_data && (
+              <div>
+                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
+                <pre style={{
+                  backgroundColor: '#161b22', padding: 12, borderRadius: 6,
+                  border: '1px solid #30363d', fontSize: 12, margin: 0,
+                  maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
+                }}>
+                  {formatJson(nodeDetail.output_data)}
+                </pre>
+              </div>
+            )}
+          </Space>
+        ) : null}
+      </Drawer>
     </div>
   );
 }

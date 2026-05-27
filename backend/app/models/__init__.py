@@ -8,6 +8,11 @@ from app.models.guardrails_log import GuardrailsLog
 from app.models.idempotency_key import IdempotencyKey
 from app.models.trace import TraceRecord
 from app.models.token_stats import TokenDailyStats
+from app.models.conversation import (
+    Conversation,
+    ConversationMessage,
+    ConversationStatus,
+)
 
 __all__ = [
     "Farm",
@@ -23,4 +28,7 @@ __all__ = [
     "IdempotencyKey",
     "TraceRecord",
     "TokenDailyStats",
+    "Conversation",
+    "ConversationMessage",
+    "ConversationStatus",
 ]

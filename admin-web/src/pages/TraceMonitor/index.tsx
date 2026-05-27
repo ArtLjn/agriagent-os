@@ -22,8 +22,9 @@ import {
   type TraceNodeDetail,
 } from '../../api/admin';
 import GanttTimeline from '../../components/GanttTimeline';
+import type { GanttNode } from '../../components/GanttTimeline/types';
+import { getNodeLabel } from '../../constants/trace';
 
-const BG = '#0d1117';
 const CARD = '#161b22';
 const BORDER = '#30363d';
 const TEXT = '#e6edf3';
@@ -56,6 +57,7 @@ export default function TraceMonitor() {
   const [nodeDetail, setNodeDetail] = useState<TraceNodeDetail | null>(null);
   const [cleanupDate, setCleanupDate] = useState<Dayjs | null>(null);
   const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(
     async (p = page, ps = pageSize) => {
@@ -75,11 +77,7 @@ export default function TraceMonitor() {
         setTotal(res.total);
         setPage(p);
         setPageSize(ps);
-
-        // 自动加载每个 trace 的 timeline
-        for (const item of aggregated) {
-          loadTimeline(item.request_id);
-        }
+        setExpandedCards(new Set());
       } catch {
         message.error('加载 Trace 列表失败');
       } finally {
@@ -134,29 +132,38 @@ export default function TraceMonitor() {
     }
   };
 
-  const handleNodeClick = (requestId: string, roundIndex: number, nodeIndex: number) => {
-    const item = items.find((i) => i.request_id === requestId);
-    if (!item?.timeline) return;
-    const node = item.timeline.rounds[roundIndex]?.nodes[nodeIndex];
-    if (!node) return;
-
+  const handleNodeClick = (
+    requestId: string,
+    _roundIndex: number,
+    _nodeIndex: number,
+    nodeData: GanttNode
+  ) => {
     const detail: TraceNodeDetail = {
       id: 0,
       request_id: requestId,
-      round_index: roundIndex,
-      node_type: node.node_type,
-      node_name: node.node_name,
-      input_data: node.input_data,
-      output_data: node.output_data,
-      duration_ms: node.duration_ms,
-      token_usage: node.token_usage ? JSON.stringify(node.token_usage) : null,
-      status: node.status,
-      error_message: node.error_message,
-      start_time: node.start_time,
+      round_index: _roundIndex,
+      node_type: nodeData.node_type,
+      node_name: nodeData.node_name,
+      input_data: nodeData.input_data ?? null,
+      output_data: nodeData.output_data ?? null,
+      duration_ms: nodeData.duration_ms,
+      token_usage: null,
+      status: nodeData.status,
+      error_message: nodeData.error_message ?? null,
+      start_time: nodeData.start_time,
       end_time: null,
     };
     setNodeDetail(detail);
     setDrawerOpen(true);
+  };
+
+  const formatJson = (raw: string | null): string => {
+    if (!raw) return '';
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+      return raw;
+    }
   };
 
   const handleCleanup = async () => {
@@ -179,6 +186,22 @@ export default function TraceMonitor() {
     } catch {
       message.error('清理失败');
     }
+  };
+
+  const toggleCard = (requestId: string) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(requestId)) {
+        next.delete(requestId);
+      } else {
+        next.add(requestId);
+        const item = items.find((i) => i.request_id === requestId);
+        if (item && !item.timeline) {
+          loadTimeline(requestId);
+        }
+      }
+      return next;
+    });
   };
 
   return (
@@ -227,15 +250,20 @@ export default function TraceMonitor() {
               overflow: 'hidden',
             }}
           >
-            {/* Trace 头部信息 */}
+            {/* Trace 头部信息 - 可点击折叠/展开 */}
             <div
+              onClick={() => toggleCard(item.request_id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 padding: '12px 16px',
-                borderBottom: `1px solid ${BORDER}`,
+                borderBottom: expandedCards.has(item.request_id)
+                  ? `1px solid ${BORDER}`
+                  : 'none',
                 gap: 24,
                 fontSize: 13,
+                cursor: 'pointer',
+                transition: 'background 0.2s',
               }}
             >
               <span>
@@ -264,12 +292,16 @@ export default function TraceMonitor() {
                 <span style={{ color: TEXT_DIM }}>耗时: </span>
                 <span style={{ color: TEXT }}>{item.total_duration_ms}ms</span>
               </span>
-              <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12 }}>
-                {new Date(item.created_at).toLocaleString('zh-CN')}
+              <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
+                <span style={{ color: ACCENT }}>
+                  {expandedCards.has(item.request_id) ? '收起 ▲' : '展开 ▼'}
+                </span>
               </span>
             </div>
 
-            {/* Gantt 图 */}
+            {/* Gantt 图 - 展开时显示 */}
+            {expandedCards.has(item.request_id) && (
             <div style={{ padding: 16 }}>
               {item.timelineLoading ? (
                 <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
@@ -290,16 +322,20 @@ export default function TraceMonitor() {
                       error_message: n.error_message,
                     })),
                   }))}
-                  onNodeClick={(roundIdx, nodeIdx) =>
-                    handleNodeClick(item.request_id, roundIdx, nodeIdx)
+                  onNodeClick={(roundIdx, nodeIdx, node) =>
+                    handleNodeClick(item.request_id, roundIdx, nodeIdx, node)
                   }
                 />
               ) : (
                 <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
-                  暂无 Timeline 数据
+                  <div style={{ marginBottom: 8 }}>暂无 Timeline 数据（可能该 Trace 已过期或未记录链路）</div>
+                  <Button size="small" onClick={() => loadTimeline(item.request_id)}>
+                    重试加载
+                  </Button>
                 </div>
               )}
             </div>
+            )}
           </div>
         ))}
       </div>
@@ -361,73 +397,85 @@ export default function TraceMonitor() {
       <Drawer
         title="节点详情"
         placement="right"
-        width={600}
+        width={640}
         onClose={() => setDrawerOpen(false)}
         open={drawerOpen}
-        styles={{
-          body: { backgroundColor: BG, color: TEXT },
-          header: { backgroundColor: CARD, color: TEXT, borderBottom: `1px solid ${BORDER}` },
-        }}
       >
         {nodeDetail ? (
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
-            <div>
-              <div style={{ color: TEXT_DIM, marginBottom: 4 }}>节点类型</div>
-              <Tag color="blue">{nodeDetail.node_type}</Tag>
-            </div>
-            <div>
-              <div style={{ color: TEXT_DIM, marginBottom: 4 }}>节点名称</div>
-              <div>{nodeDetail.node_name}</div>
-            </div>
-            <div>
-              <div style={{ color: TEXT_DIM, marginBottom: 4 }}>状态</div>
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <Tag color={nodeDetail.status === 'success' ? 'success' : 'error'}>
                 {nodeDetail.status}
               </Tag>
+              <Tag color="processing">{getNodeLabel(nodeDetail.node_type)}</Tag>
+              <span style={{ color: TEXT_DIM }}>
+                {nodeDetail.duration_ms?.toLocaleString() ?? '-'} ms
+              </span>
             </div>
             <div>
-              <div style={{ color: TEXT_DIM, marginBottom: 4 }}>耗时</div>
-              <div>{nodeDetail.duration_ms?.toLocaleString() ?? '-'} ms</div>
+              <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>节点名称</div>
+              <div style={{ fontSize: 15, fontWeight: 500 }}>{nodeDetail.node_name}</div>
             </div>
+            <div>
+              <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>Request ID</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{nodeDetail.request_id}</div>
+            </div>
+            {nodeDetail.start_time && (
+              <div>
+                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>开始时间</div>
+                <div>{new Date(nodeDetail.start_time).toLocaleString('zh-CN')}</div>
+              </div>
+            )}
             {nodeDetail.error_message && (
               <div>
-                <div style={{ color: '#ff4d4f', marginBottom: 4 }}>错误信息</div>
-                <div style={{ color: '#ff4d4f' }}>{nodeDetail.error_message}</div>
+                <div style={{ color: '#ff4d4f', marginBottom: 4, fontSize: 12 }}>错误信息</div>
+                <pre style={{
+                  backgroundColor: '#2a1215',
+                  padding: 12,
+                  borderRadius: 6,
+                  border: '1px solid #58181c',
+                  color: '#ff4d4f',
+                  fontSize: 12,
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {nodeDetail.error_message}
+                </pre>
               </div>
             )}
             {nodeDetail.input_data && (
               <div>
-                <div style={{ color: TEXT_DIM, marginBottom: 4 }}>输入数据</div>
-                <pre
-                  style={{
-                    backgroundColor: CARD,
-                    padding: 12,
-                    borderRadius: 4,
-                    overflow: 'auto',
-                    maxHeight: 300,
-                    border: `1px solid ${BORDER}`,
-                    fontSize: 12,
-                  }}
-                >
-                  {nodeDetail.input_data}
+                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输入数据</div>
+                <pre style={{
+                  backgroundColor: '#161b22',
+                  padding: 12,
+                  borderRadius: 6,
+                  border: '1px solid #30363d',
+                  fontSize: 12,
+                  margin: 0,
+                  maxHeight: 300,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {formatJson(nodeDetail.input_data)}
                 </pre>
               </div>
             )}
             {nodeDetail.output_data && (
               <div>
-                <div style={{ color: TEXT_DIM, marginBottom: 4 }}>输出数据</div>
-                <pre
-                  style={{
-                    backgroundColor: CARD,
-                    padding: 12,
-                    borderRadius: 4,
-                    overflow: 'auto',
-                    maxHeight: 300,
-                    border: `1px solid ${BORDER}`,
-                    fontSize: 12,
-                  }}
-                >
-                  {nodeDetail.output_data}
+                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
+                <pre style={{
+                  backgroundColor: '#161b22',
+                  padding: 12,
+                  borderRadius: 6,
+                  border: '1px solid #30363d',
+                  fontSize: 12,
+                  margin: 0,
+                  maxHeight: 300,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {formatJson(nodeDetail.output_data)}
                 </pre>
               </div>
             )}

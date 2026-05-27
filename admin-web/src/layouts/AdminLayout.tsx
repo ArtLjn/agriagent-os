@@ -133,7 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </Sider>
 
-      <Layout style={{ background: BG_PRIMARY, overflow: 'hidden' }}>
+      <Layout style={{ background: BG_PRIMARY, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <Header
           style={{
@@ -158,8 +158,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Content */}
         <Content
           style={{
+            flex: 1,
+            minHeight: 0,
             margin: 20,
-            padding: 20,
+            padding: '20px 20px 60px 20px',
             background: BG_CARD,
             borderRadius: 12,
             border: `1px solid ${BORDER}`,
