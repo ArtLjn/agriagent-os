@@ -28,8 +28,10 @@ class ServerConfig(BaseModel):
     port: int = 8000
 
 
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+
 class DatabaseConfig(BaseModel):
-    url: str = "sqlite:///./farm_manager.db"
+    url: str = f"sqlite:///{_PROJECT_ROOT / 'farm_manager.db'}"
 
 
 class AIConfig(BaseModel):

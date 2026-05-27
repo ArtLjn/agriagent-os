@@ -6,8 +6,10 @@ server:
   host: "0.0.0.0"    # 监听地址
   port: 8000          # 监听端口
 
-database:
-  url: "sqlite:///./farm_manager.db"  # 数据库连接地址
+# 默认使用项目根目录的 farm_manager.db（绝对路径），无需配置
+# 如需自定义路径，取消注释并修改：
+# database:
+#   url: "sqlite:///custom/path/farm_manager.db"
 
 ai:
   model: "qwen3.6-flash-2026-04-16"                        # LLM 模型名称

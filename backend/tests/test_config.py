@@ -37,7 +37,7 @@ class TestYamlConfig:
             settings = Settings(_config_path="/nonexistent/config.yaml")
         assert settings.server.host == "0.0.0.0"
         assert settings.server.port == 8000
-        assert settings.database.url == "sqlite:///./farm_manager.db"
+        assert "farm_manager.db" in settings.database.url
 
     def test_env_var_overrides_yaml(self, tmp_path):
         config_data = {
@@ -60,7 +60,7 @@ class TestYamlConfig:
         from app.core.config import Settings
 
         settings = Settings(_config_path="/nonexistent/config.yaml")
-        assert settings.database_url == "sqlite:///./farm_manager.db"
+        assert "farm_manager.db" in settings.database_url
         assert settings.project_name == "Farm Manager API"
         assert settings.weather_latitude == 34.26
 
