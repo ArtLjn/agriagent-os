@@ -18,7 +18,7 @@ def get_skill_manager() -> SkillManager:
     """获取全局 SkillManager 单例。"""
     global _manager
     if _manager is None:
-        _manager = SkillManager(python_packages=["app.skills"])
+        _manager = SkillManager(python_packages=["app.agent.skills"])
         for skill_def in _manager.list_skills():
             skill = _manager.get_skill(skill_def.name)
             if skill:
