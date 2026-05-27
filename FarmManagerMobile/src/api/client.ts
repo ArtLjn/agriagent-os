@@ -2,7 +2,7 @@ import SSE from 'react-native-sse';
 import axios from 'axios';
 import type { PendingAction, CostRecord, DebtListResponse } from './types';
 
-const API_BASE_URL = 'http://47.98.253.236:8000';
+const API_BASE_URL = 'http://172.16.57.244:8099';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -134,8 +134,14 @@ export const agentApi = {
     onError: (err: string) => void,
     onPendingAction?: (action: PendingAction) => void
   ) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const { useAuthStore } = require('../stores/authStore');
+    const token = useAuthStore.getState().token;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const es = new SSE(`${API_BASE_URL}/agent/chat/stream`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       method: 'POST',
       body: JSON.stringify(data),
     });

@@ -17,7 +17,7 @@ router = APIRouter(prefix="/admin/stats", tags=["admin-stats"])
 
 @router.get("/tokens")
 def token_summary(
-    farm_id: int = Query(...),
+    farm_id: int = Query(1),
     days: int = Query(7, ge=1, le=90),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -67,7 +67,7 @@ def token_summary(
 
 @router.get("/tokens/daily")
 def token_daily(
-    farm_id: int = Query(...),
+    farm_id: int = Query(1),
     date_str: str | None = Query(None, alias="date"),
     db: Session = Depends(get_db),
 ) -> dict:
