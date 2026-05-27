@@ -136,7 +136,7 @@ export const RegisterScreen: React.FC<{
               />
               <TextInput
                 style={styles.input}
-                placeholder="昵称（可选，默认"农友"）"
+                placeholder={'昵称（可选，默认"农友"）'}
                 placeholderTextColor={colors.textTertiary}
                 maxLength={20}
                 value={nickname}
