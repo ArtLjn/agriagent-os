@@ -133,7 +133,7 @@ def clear_skill_cache():
     _SKILL_REGISTRY = {}
 
 
-def build_skill_context(farm_id: int = 1) -> SkillContext:
+def build_skill_context(farm_id: int) -> SkillContext:
     """构建 skillify SkillContext，注入 OpenAI 兼容客户端用于 LLM 意图兜底。"""
     from openai import AsyncOpenAI
 

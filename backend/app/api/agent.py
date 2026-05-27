@@ -75,8 +75,8 @@ async def agent_chat(
         result = await chat_with_agent(
             db,
             chat_request.message,
-            chat_request.cycle_id,
             farm_id=farm.id,
+            cycle_id=chat_request.cycle_id,
             session_id=chat_request.session_id,
         )
         logger.info(
@@ -111,8 +111,8 @@ async def agent_chat_stream(
         try:
             async for chunk in stream_chat_with_agent(
                 chat_request.message,
-                chat_request.cycle_id,
                 farm_id=farm.id,
+                cycle_id=chat_request.cycle_id,
                 db=db,
                 session_id=chat_request.session_id,
             ):
@@ -207,7 +207,7 @@ async def daily_advice(
     logger.info("[%s] GET /agent/daily | cycle_id=%s", rid, cycle_id)
     start = time.perf_counter()
     try:
-        result = await get_daily_advice(db, cycle_id, farm_id=farm.id)
+        result = await get_daily_advice(db, farm_id=farm.id, cycle_id=cycle_id)
         logger.info(
             "[%s] /agent/daily 完成 | 耗时 %.2fs", rid, time.perf_counter() - start
         )
@@ -227,7 +227,7 @@ async def refresh_daily_advice_endpoint(
     logger.info("[%s] POST /agent/daily/refresh | cycle_id=%s", rid, cycle_id)
     start = time.perf_counter()
     try:
-        result = await refresh_daily_advice(db, cycle_id, farm_id=farm.id)
+        result = await refresh_daily_advice(db, farm_id=farm.id, cycle_id=cycle_id)
         logger.info(
             "[%s] /agent/daily/refresh 完成 | 耗时 %.2fs",
             rid,
@@ -258,7 +258,7 @@ async def agent_report(
     start = time.perf_counter()
     try:
         result = await generate_report(
-            db, report_request.cycle_id, report_request.report_type, farm_id=farm.id
+            db, farm_id=farm.id, cycle_id=report_request.cycle_id, report_type=report_request.report_type
         )
         logger.info(
             "[%s] /agent/report 完成 | 耗时 %.2fs", rid, time.perf_counter() - start
@@ -279,7 +279,7 @@ def advice_history(
     farm: Farm = Depends(get_current_farm),
 ) -> list[AdviceHistoryItem]:
     """查询建议历史记录。"""
-    return get_advice_history(db, cycle_id, limit, farm_id=farm.id)
+    return get_advice_history(db, farm_id=farm.id, cycle_id=cycle_id, limit=limit)
 
 
 @router.get("/report-history", response_model=list[ReportHistoryItem])
@@ -293,7 +293,7 @@ def report_history(
     farm: Farm = Depends(get_current_farm),
 ) -> list[ReportHistoryItem]:
     """查询报告历史记录。"""
-    return get_report_history(db, cycle_id, limit, farm_id=farm.id)
+    return get_report_history(db, farm_id=farm.id, cycle_id=cycle_id, limit=limit)
 
 
 @router.get("/reports", response_model=ReportListResponse)

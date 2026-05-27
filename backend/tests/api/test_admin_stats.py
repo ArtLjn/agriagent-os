@@ -38,7 +38,7 @@ class TestTokenSummary:
 
         app.dependency_overrides[get_db] = _override
         try:
-            resp = client.get("/admin/stats/tokens?days=7")
+            resp = client.get("/admin/stats/tokens?farm_id=1&days=7")
             assert resp.status_code == 200
             data = resp.json()
             assert data["days"] == 7
@@ -68,7 +68,7 @@ class TestTokenDaily:
 
         app.dependency_overrides[get_db] = _override
         try:
-            resp = client.get("/admin/stats/tokens/daily?date=2026-05-26")
+            resp = client.get("/admin/stats/tokens/daily?farm_id=1&date=2026-05-26")
             assert resp.status_code == 200
             data = resp.json()
             assert data["date"] == "2026-05-26"

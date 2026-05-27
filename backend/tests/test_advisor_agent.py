@@ -100,7 +100,7 @@ class TestAdvisorInvoke:
 
         from app.agent.advisor import invoke_advisor
 
-        result = asyncio.run(invoke_advisor("今天该做什么？"))
+        result = asyncio.run(invoke_advisor("今天该做什么？", farm_id=1))
 
         assert result == "建议：今天适合浇水。"
         mock_graph.ainvoke.assert_called_once()
@@ -172,7 +172,7 @@ class TestAdvisorInvoke:
 
         from app.agent.advisor import invoke_advisor
 
-        result = asyncio.run(invoke_advisor("问题"))
+        result = asyncio.run(invoke_advisor("问题", farm_id=1))
 
         assert result == "回复"
         call_args = mock_graph.ainvoke.call_args[0][0]

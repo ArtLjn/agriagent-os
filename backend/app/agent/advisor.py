@@ -48,7 +48,7 @@ def _build_history_messages(
 
 async def invoke_advisor(
     user_input: str,
-    farm_id: int = 1,
+    farm_id: int,
     db: Session | None = None,
     conversation_id: int | None = None,
 ) -> str:
@@ -89,7 +89,7 @@ async def invoke_advisor(
 
 async def stream_advisor(
     user_input: str,
-    farm_id: int = 1,
+    farm_id: int,
     db: Session | None = None,
     conversation_id: int | None = None,
 ) -> AsyncGenerator[str, None]:

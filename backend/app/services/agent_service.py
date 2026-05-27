@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _try_skillify_route(
-    message: str, farm_id: int = 1
+    message: str, farm_id: int
 ) -> tuple[str, dict, str] | None:
     """skillify 预路由：fast_match + LLM 意图兜底。
 
@@ -192,8 +192,8 @@ async def _invoke_advisor_fallback(
 async def chat_with_agent(
     db: Session,
     message: str,
+    farm_id: int,
     cycle_id: int | None = None,
-    farm_id: int = 1,
     session_id: str | None = None,
 ) -> ChatResponse:
     """与用户进行 Agent 对话，支持写操作确认流程。"""
@@ -342,8 +342,8 @@ async def chat_with_agent(
 
 async def stream_chat_with_agent(
     message: str,
+    farm_id: int,
     cycle_id: int | None = None,
-    farm_id: int = 1,
     db: Session | None = None,
     session_id: str | None = None,
 ) -> AsyncGenerator[str, None]:
@@ -400,7 +400,7 @@ async def stream_chat_with_agent(
 
 
 async def get_daily_advice(
-    db: Session, cycle_id: int | None = None, farm_id: int = 1
+    db: Session, farm_id: int, cycle_id: int | None = None
 ) -> DailyAdviceResponse:
     """生成每日农事建议并保存。命中今日缓存则直接返回。"""
     # 缓存命中检查：查询今日已有记录（本地时间计算今天起点）
@@ -458,7 +458,7 @@ async def get_daily_advice(
 
 
 async def refresh_daily_advice(
-    db: Session, cycle_id: int | None = None, farm_id: int = 1
+    db: Session, farm_id: int, cycle_id: int | None = None
 ) -> DailyAdviceResponse:
     """强制刷新每日农事建议：删除今日旧记录后重新生成。"""
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -474,14 +474,14 @@ async def refresh_daily_advice(
         db.rollback()
         raise
     logger.info("已清除今日旧建议 | farm=%s cycle=%s", farm_id, cycle_id)
-    return await get_daily_advice(db, cycle_id, farm_id)
+    return await get_daily_advice(db, farm_id, cycle_id)
 
 
 async def generate_report(
     db: Session,
+    farm_id: int,
     cycle_id: int | None = None,
     report_type: str = "weekly",
-    farm_id: int = 1,
 ) -> ReportResponse:
     """生成种植周期报告并保存。"""
     logger.info("生成报告 | type=%s cycle=%s farm=%s", report_type, cycle_id, farm_id)
@@ -514,7 +514,7 @@ async def generate_report(
 
 
 def get_advice_history(
-    db: Session, cycle_id: int | None = None, limit: int = 20, farm_id: int = 1
+    db: Session, farm_id: int, cycle_id: int | None = None, limit: int = 20
 ) -> list[AgentRecord]:
     """查询建议历史。"""
     query = (
@@ -528,7 +528,7 @@ def get_advice_history(
 
 
 def get_report_history(
-    db: Session, cycle_id: int | None = None, limit: int = 20, farm_id: int = 1
+    db: Session, farm_id: int, cycle_id: int | None = None, limit: int = 20
 ) -> list[AgentRecord]:
     """查询报告历史。"""
     query = (

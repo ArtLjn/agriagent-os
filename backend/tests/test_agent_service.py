@@ -33,7 +33,7 @@ class TestChatWithAgent:
         mock_invoke.return_value = "建议：今天浇水。"
         mock_db = _make_mock_db()
 
-        result = await chat_with_agent(mock_db, "今天做什么？")
+        result = await chat_with_agent(mock_db, "今天做什么？", farm_id=1)
 
         assert result.reply == "建议：今天浇水。"
         mock_db.add.assert_called_once()
@@ -56,7 +56,7 @@ class TestChatWithAgent:
         mock_get_conv.return_value = mock_conv
         mock_db = _make_mock_db()
 
-        result = await chat_with_agent(mock_db, "你好", session_id="sess-123")
+        result = await chat_with_agent(mock_db, "你好", farm_id=1, session_id="sess-123")
 
         assert result.reply == "回复内容"
         # 验证 get_or_create_conversation 被调用
@@ -83,7 +83,7 @@ class TestChatWithAgent:
         mock_get_conv.return_value = mock_conv
         mock_db = _make_mock_db()
 
-        await chat_with_agent(mock_db, "问题", session_id="sess-abc")
+        await chat_with_agent(mock_db, "问题", farm_id=1, session_id="sess-abc")
 
         # invoke_advisor 应该被传入 db 和 conversation_id
         mock_invoke.assert_called_once()
@@ -103,7 +103,7 @@ class TestChatWithAgent:
         mock_invoke.return_value = "回复"
         mock_db = _make_mock_db()
 
-        result = await chat_with_agent(mock_db, "问题")
+        result = await chat_with_agent(mock_db, "问题", farm_id=1)
 
         assert result.reply == "回复"
         mock_save_msg.assert_not_called()
@@ -136,7 +136,7 @@ class TestChatWithAgent:
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = "已记账"
-            result = await chat_with_agent(mock_db, "确认", session_id="sess-confirm")
+            result = await chat_with_agent(mock_db, "确认", farm_id=1, session_id="sess-confirm")
 
         assert "已记账" in result.reply or "已执行" in result.reply
         # 应该保存 user + assistant 消息
@@ -203,7 +203,7 @@ class TestGetDailyAdvice:
         )
         mock_db = _make_mock_db()
 
-        result = await get_daily_advice(mock_db, cycle_id=1)
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
         assert len(result.items) == 1
         assert result.items[0].title == "施肥"
@@ -219,7 +219,7 @@ class TestGetDailyAdvice:
         mock_invoke.return_value = "今日建议：施肥。"
         mock_db = _make_mock_db()
 
-        result = await get_daily_advice(mock_db, cycle_id=1)
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
         assert len(result.items) == 1
         assert result.items[0].title == "今日农事建议"
@@ -239,7 +239,7 @@ class TestGenerateReport:
         mock_generate.return_value = "报告内容..."
         mock_db = _make_mock_db()
 
-        result = await generate_report(mock_db, cycle_id=1, report_type="weekly")
+        result = await generate_report(mock_db, farm_id=1, cycle_id=1, report_type="weekly")
 
         assert result.content == "报告内容..."
         mock_db.add.assert_called_once()

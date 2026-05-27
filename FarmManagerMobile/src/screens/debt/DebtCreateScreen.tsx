@@ -7,7 +7,9 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
@@ -24,9 +26,10 @@ export const DebtCreateScreen: React.FC = () => {
   const [category, setCategory] = useState('化肥');
   const [amount, setAmount] = useState('');
   const [counterparty, setCounterparty] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [note, setNote] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const handleSubmit = async () => {
     if (!amount || !counterparty) {
@@ -46,11 +49,18 @@ export const DebtCreateScreen: React.FC = () => {
       record_date: dayjs().format('YYYY-MM-DD'),
       record_subtype: '赊账',
       counterparty: counterparty.trim(),
-      due_date: dueDate || undefined,
+      due_date: dueDate ? dayjs(dueDate).format('YYYY-MM-DD') : undefined,
       note: note.trim() || undefined,
     });
 
     navigation.goBack();
+  };
+
+  const handleDateChange = (_event: any, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setDueDate(date);
+    }
   };
 
   return (
@@ -116,13 +126,29 @@ export const DebtCreateScreen: React.FC = () => {
 
       <View style={styles.field}>
         <Text style={styles.label}>到期日（可选）</Text>
-        <TextInput
-          style={styles.input}
-          value={dueDate}
-          onChangeText={setDueDate}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={colors.textSecondary}
-        />
+        <TouchableOpacity
+          style={styles.selectButton}
+          onPress={() => setShowDatePicker(true)}>
+          <Text style={{color: dueDate ? colors.text : colors.textSecondary}}>
+            {dueDate ? dayjs(dueDate).format('YYYY-MM-DD') : '点击选择日期'}
+          </Text>
+        </TouchableOpacity>
+        {showDatePicker && (
+          <DateTimePicker
+            value={dueDate || new Date()}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleDateChange}
+            minimumDate={new Date()}
+          />
+        )}
+        {dueDate ? (
+          <TouchableOpacity
+            onPress={() => setDueDate(undefined)}
+            style={styles.clearDate}>
+            <Text style={styles.clearDateText}>清除日期</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <View style={styles.field}>
@@ -206,5 +232,13 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     fontSize: fontSize.md,
     fontWeight: '600',
+  },
+  clearDate: {
+    marginTop: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  clearDateText: {
+    color: colors.primary,
+    fontSize: fontSize.sm,
   },
 });
