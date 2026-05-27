@@ -27,4 +27,5 @@ class TraceRecord(Base):
     token_usage = Column(Text, nullable=True)  # JSON: {prompt, completion, total}
     status = Column(String(10), default="success")
     error_message = Column(Text, nullable=True)
+    conversation_message_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
