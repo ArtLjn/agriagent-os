@@ -8,12 +8,14 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-import {Card} from './Card';
+import LinearGradient from 'react-native-linear-gradient';
 import {Loading} from './Loading';
 import {MarkdownText} from './MarkdownText';
 import type {AdviceItem} from '../api/types';
 import {colors} from '../theme/colors';
-import {spacing, fontSize, borderRadius} from '../theme/spacing';
+import {spacingV2, fontSizeV2, borderRadiusV2} from '../theme/spacing';
+import {appGradients} from '../theme/gradients';
+import {shadowV2} from '../theme/designTokens';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 if (Platform.OS === 'android') {
@@ -26,34 +28,37 @@ interface AdviceCardProps {
   loading?: boolean;
   onPress?: () => void;
   onRefresh?: () => void;
+  weatherCondition?: 'foggy' | 'sunny' | 'rainy' | 'cold';
 }
 
 const MAX_LINES = 4;
 
-const PRIORITY_LABELS: Record<number, {text: string; color: string; bg: string}> = {
-  1: {text: '!', color: colors.warning, bg: colors.warningLight},
-  2: {text: '!!', color: colors.danger, bg: colors.dangerLight},
-  3: {text: '!!!', color: colors.danger, bg: colors.dangerLight},
+const getEmotionGradient = (condition?: string) => {
+  switch (condition) {
+    case 'foggy':
+      return appGradients.emotionFoggy;
+    case 'rainy':
+      return appGradients.emotionRainy;
+    case 'cold':
+      return appGradients.emotionCold;
+    case 'sunny':
+    default:
+      return appGradients.emotionSunny;
+  }
 };
 
-const AdviceItemCard: React.FC<{item: AdviceItem}> = ({item}) => {
-  const priorityInfo = PRIORITY_LABELS[item.priority] ?? PRIORITY_LABELS[1];
-  return (
-    <View style={itemStyles.container}>
-      <View style={itemStyles.topRow}>
-        <View style={itemStyles.titleRow}>
-          <Text style={itemStyles.icon}>{item.icon}</Text>
-          <Text style={itemStyles.title} numberOfLines={1}>{item.title}</Text>
-        </View>
-        <View style={[itemStyles.priorityBadge, {backgroundColor: priorityInfo.bg}]}>
-          <Text style={[itemStyles.priorityText, {color: priorityInfo.color}]}>
-            {priorityInfo.text}
-          </Text>
-        </View>
-      </View>
-      <Text style={itemStyles.detail} numberOfLines={2}>{item.detail}</Text>
-    </View>
-  );
+const getEmotionTitle = (condition?: string) => {
+  switch (condition) {
+    case 'foggy':
+      return '雾气朦胧，注意排湿';
+    case 'rainy':
+      return '雨水充沛，防涝为主';
+    case 'cold':
+      return '气温骤降，注意防冻';
+    case 'sunny':
+    default:
+      return '阳光正好，适合农作';
+  }
 };
 
 export const AdviceCard: React.FC<AdviceCardProps> = ({
@@ -62,8 +67,10 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
   loading = false,
   onPress,
   onRefresh,
+  weatherCondition = 'sunny',
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const gradient = getEmotionGradient(weatherCondition);
 
   const handleToggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -73,18 +80,17 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
   const hasItems = items && items.length > 0;
 
   return (
-    <Card padding="lg" elevated={true}>
+    <LinearGradient
+      {...gradient}
+      style={[styles.card, shadowV2.light]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.iconCircle}>
           <Icon name="sprout" size={20} color={colors.success} />
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.title}>今日农事建议</Text>
+          <Text style={styles.title}>{getEmotionTitle(weatherCondition)}</Text>
           <Text style={styles.subtitle}>AI 农事顾问</Text>
-        </View>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>每日更新</Text>
         </View>
         {onRefresh && (
           <TouchableOpacity onPress={onRefresh} activeOpacity={0.7} style={styles.refreshBtn}>
@@ -103,11 +109,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
 
       {!loading && !advice && !hasItems && (
         <View style={styles.center}>
-          <Icon
-            name="information-outline"
-            size={32}
-            color={colors.textTertiary}
-          />
+          <Icon name="information-outline" size={32} color={colors.textTertiary} />
           <Text style={styles.hint}>暂无建议，请稍后重试</Text>
         </View>
       )}
@@ -115,72 +117,58 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
       {!loading && hasItems && (
         <View style={styles.itemsContainer}>
           {items.map((item, index) => (
-            <AdviceItemCard key={index} item={item} />
+            <View key={index} style={styles.itemCard}>
+              <View style={styles.itemTopRow}>
+                <Text style={styles.itemTitle}>{item.title}</Text>
+              </View>
+              <Text style={styles.itemDetail} numberOfLines={2}>{item.detail}</Text>
+            </View>
           ))}
         </View>
       )}
 
       {!loading && !hasItems && advice && (
         <>
-          <View
-            style={[
-              styles.contentWrapper,
-              !expanded && styles.contentCollapsed,
-            ]}>
-            <MarkdownText text={advice} />
+          <View style={[styles.contentWrapper, !expanded && styles.contentCollapsed]}>
+            <MarkdownText text={advice} baseStyle={styles.adviceText} />
           </View>
-
-          {/* Expand / Collapse toggle */}
           {advice.split('\n').length > MAX_LINES && (
-            <TouchableOpacity
-              onPress={handleToggle}
-              style={styles.toggleBtn}
-              activeOpacity={0.7}>
-              <Text style={styles.toggleText}>
-                {expanded ? '收起' : '展开更多'}
-              </Text>
-              <Icon
-                name={expanded ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.primary}
-              />
+            <TouchableOpacity onPress={handleToggle} style={styles.toggleBtn} activeOpacity={0.7}>
+              <Text style={styles.toggleText}>{expanded ? '收起' : '展开更多'}</Text>
+              <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.primary} />
             </TouchableOpacity>
           )}
         </>
       )}
 
-      {/* Action bar */}
       {(!loading && (advice || hasItems)) && (
         <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={onPress}
-            activeOpacity={0.7}>
-            <Icon
-              name="chat-processing-outline"
-              size={18}
-              color={colors.primary}
-            />
+          <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
+            <Icon name="chat-processing-outline" size={18} color={colors.primary} />
             <Text style={styles.actionText}>继续咨询</Text>
           </TouchableOpacity>
         </View>
       )}
-    </Card>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
+  card: {
+    borderRadius: borderRadiusV2.xxxl,
+    padding: spacingV2.xl,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
-    gap: spacing.sm,
+    marginBottom: spacingV2.md,
+    gap: spacingV2.sm,
   },
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.successLight,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.successMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -188,38 +176,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     fontWeight: '700',
     color: colors.text,
   },
   subtitle: {
-    fontSize: fontSize.xs,
+    fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
     marginTop: 2,
   },
-  badge: {
-    backgroundColor: colors.primaryMuted,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-  },
-  badgeText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: '600',
-  },
   refreshBtn: {
-    padding: spacing.xs,
-    marginLeft: spacing.xs,
+    padding: spacingV2.xs,
   },
   center: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xl,
-    gap: spacing.sm,
+    paddingVertical: spacingV2.xl,
+    gap: spacingV2.sm,
   },
   hint: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
   },
   contentWrapper: {
@@ -228,88 +204,67 @@ const styles = StyleSheet.create({
   contentCollapsed: {
     maxHeight: 140,
   },
+  adviceText: {
+    fontSize: fontSizeV2.md,
+    color: colors.textSecondary,
+    lineHeight: 24,
+  },
   toggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.sm,
-    paddingVertical: spacing.xs,
+    marginTop: spacingV2.sm,
+    paddingVertical: spacingV2.xs,
   },
   toggleText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.primary,
     fontWeight: '600',
     marginRight: 2,
   },
   itemsContainer: {
-    gap: spacing.sm,
+    gap: spacingV2.sm,
+  },
+  itemCard: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: borderRadiusV2.lg,
+    padding: spacingV2.md,
+  },
+  itemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacingV2.xs,
+  },
+  itemTitle: {
+    fontSize: fontSizeV2.md,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  itemDetail: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
+    marginTop: spacingV2.md,
+    paddingTop: spacingV2.md,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: 'rgba(0,0,0,0.06)',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.primaryMuted,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    gap: spacingV2.xs,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
+    borderRadius: borderRadiusV2.md,
   },
   actionText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.primary,
     fontWeight: '600',
-  },
-});
-
-const itemStyles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: spacing.sm,
-  },
-  icon: {
-    fontSize: fontSize.lg,
-  },
-  title: {
-    fontSize: fontSize.md,
-    fontWeight: '700',
-    color: colors.text,
-    flex: 1,
-  },
-  priorityBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  priorityText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  detail: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    paddingLeft: fontSize.lg + spacing.sm,
   },
 });
