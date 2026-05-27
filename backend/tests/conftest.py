@@ -38,6 +38,7 @@ def clean_db():
             phone="00000000000",
             password_hash="h",
             nickname="测试用户",
+            role="user",
             status="active",
         )
 
