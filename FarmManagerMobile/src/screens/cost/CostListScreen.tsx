@@ -15,7 +15,8 @@ import type {CostRecord} from '../../api/types';
 import {EmptyState} from '../../components/EmptyState';
 import {Loading} from '../../components/Loading';
 import {colors} from '../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../theme/spacing';
+import {spacing, fontSize, borderRadius, spacingV2, fontSizeV2, borderRadiusV2} from '../../theme/spacing';
+import {shadowV2} from '../../theme/designTokens';
 import type {RootStackParamList} from '../../navigation/AppNavigator';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {MonthlyStats} from './components/MonthlyStats';
@@ -26,6 +27,28 @@ import {RecordDetailModal} from './components/RecordDetailModal';
 type FilterType = 'all' | 'cost' | 'income';
 
 type CostListNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CostCreate'>;
+
+const AssetCard: React.FC<{income: number; cost: number}> = ({income, cost}) => {
+  const total = income - cost;
+  return (
+    <View style={assetStyles.container}>
+      <View style={assetStyles.card}>
+        <Text style={assetStyles.label}>本月结余</Text>
+        <Text style={[assetStyles.amount, {color: total >= 0 ? colors.income : colors.expense}]}>
+          {total >= 0 ? '+' : ''}{total.toFixed(2)}
+        </Text>
+      </View>
+      <View style={[assetStyles.subCard, {backgroundColor: colors.incomeBg}]}>
+        <Text style={[assetStyles.subLabel, {color: colors.income}]}>收入</Text>
+        <Text style={[assetStyles.subAmount, {color: colors.income}]}>{income.toFixed(2)}</Text>
+      </View>
+      <View style={[assetStyles.subCard, {backgroundColor: colors.expenseBg}]}>
+        <Text style={[assetStyles.subLabel, {color: colors.expense}]}>支出</Text>
+        <Text style={[assetStyles.subAmount, {color: colors.expense}]}>{cost.toFixed(2)}</Text>
+      </View>
+    </View>
+  );
+};
 
 export const CostListScreen: React.FC = () => {
   const navigation = useNavigation<CostListNavigationProp>();
@@ -171,6 +194,8 @@ export const CostListScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <AssetCard income={stats.income} cost={stats.cost} />
+
       {/* Stats Header */}
       <MonthlyStats
         selectedMonth={selectedMonth}
@@ -293,18 +318,53 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.lg,
+    right: spacingV2.lg,
+    bottom: spacingV2.lg,
     width: 56,
     height: 56,
-    borderRadius: borderRadius.full,
+    borderRadius: borderRadiusV2.full,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    ...shadowV2.float,
+  },
+});
+
+const assetStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    gap: spacingV2.sm,
+    paddingHorizontal: spacingV2.lg,
+    marginBottom: spacingV2.md,
+  },
+  card: {
+    flex: 1.5,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.lg,
+    ...shadowV2.light,
+  },
+  label: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    marginBottom: spacingV2.xs,
+  },
+  amount: {
+    fontSize: fontSizeV2.xxl,
+    fontWeight: '800',
+  },
+  subCard: {
+    flex: 1,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.md,
+    justifyContent: 'center',
+  },
+  subLabel: {
+    fontSize: fontSizeV2.xs,
+    marginBottom: spacingV2.xs,
+  },
+  subAmount: {
+    fontSize: fontSizeV2.lg,
+    fontWeight: '700',
   },
 });
