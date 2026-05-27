@@ -258,7 +258,10 @@ async def agent_report(
     start = time.perf_counter()
     try:
         result = await generate_report(
-            db, farm_id=farm.id, cycle_id=report_request.cycle_id, report_type=report_request.report_type
+            db,
+            farm_id=farm.id,
+            cycle_id=report_request.cycle_id,
+            report_type=report_request.report_type,
         )
         logger.info(
             "[%s] /agent/report 完成 | 耗时 %.2fs", rid, time.perf_counter() - start

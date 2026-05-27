@@ -37,8 +37,8 @@ def migrate_cost_records() -> None:
 
 def seed_default_farm(db: Session) -> None:
     """确保至少有一个默认农场（兼容旧数据无 user_id）。"""
-    existing = db.query(Farm).filter(Farm.id == 1).first()
+    existing = db.query(Farm).filter(Farm.name == "默认农场").first()
     if existing:
         return
-    db.add(Farm(id=1, name="默认农场"))
+    db.add(Farm(name="默认农场"))
     db.commit()

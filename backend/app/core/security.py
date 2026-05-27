@@ -16,14 +16,10 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     """校验明文密码与哈希是否匹配。"""
-    return bcrypt.checkpw(
-        plain.encode("utf-8"), hashed.encode("utf-8")
-    )
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(
-    user_id: str, expires_minutes: int | None = None
-) -> str:
+def create_access_token(user_id: str, expires_minutes: int | None = None) -> str:
     """签发 JWT access token。"""
     cfg = settings.auth
     expire = datetime.now(timezone.utc) + timedelta(
@@ -39,8 +35,6 @@ def verify_token(token: str) -> dict | None:
     """验证 JWT token，成功返回 payload，失败返回 None。"""
     cfg = settings.auth
     try:
-        return jwt.decode(
-            token, cfg.jwt_secret, algorithms=[cfg.jwt_algorithm]
-        )
+        return jwt.decode(token, cfg.jwt_secret, algorithms=[cfg.jwt_algorithm])
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         return None

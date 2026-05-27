@@ -23,7 +23,11 @@ class TestAuthRegister:
         """POST /auth/register 注册成功。"""
         resp = client.post(
             "/auth/register",
-            json={"phone": "13800138000", "password": "password123", "nickname": "张三"},
+            json={
+                "phone": "13800138000",
+                "password": "password123",
+                "nickname": "张三",
+            },
         )
 
         assert resp.status_code == 200

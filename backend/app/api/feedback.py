@@ -18,9 +18,7 @@ def post_feedback(
     db: Session = Depends(get_db),
 ) -> FeedbackResponse:
     """提交 AI 回复评价。"""
-    record = submit_feedback(
-        db, user.id, req.message_id, req.rating, req.correction
-    )
+    record = submit_feedback(db, user.id, req.message_id, req.rating, req.correction)
     return FeedbackResponse.model_validate(record)
 
 

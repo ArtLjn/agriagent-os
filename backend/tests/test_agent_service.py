@@ -56,7 +56,9 @@ class TestChatWithAgent:
         mock_get_conv.return_value = mock_conv
         mock_db = _make_mock_db()
 
-        result = await chat_with_agent(mock_db, "你好", farm_id=1, session_id="sess-123")
+        result = await chat_with_agent(
+            mock_db, "你好", farm_id=1, session_id="sess-123"
+        )
 
         assert result.reply == "回复内容"
         # 验证 get_or_create_conversation 被调用
@@ -136,7 +138,9 @@ class TestChatWithAgent:
             new_callable=AsyncMock,
         ) as mock_exec:
             mock_exec.return_value = "已记账"
-            result = await chat_with_agent(mock_db, "确认", farm_id=1, session_id="sess-confirm")
+            result = await chat_with_agent(
+                mock_db, "确认", farm_id=1, session_id="sess-confirm"
+            )
 
         assert "已记账" in result.reply or "已执行" in result.reply
         # 应该保存 user + assistant 消息
@@ -239,7 +243,9 @@ class TestGenerateReport:
         mock_generate.return_value = "报告内容..."
         mock_db = _make_mock_db()
 
-        result = await generate_report(mock_db, farm_id=1, cycle_id=1, report_type="weekly")
+        result = await generate_report(
+            mock_db, farm_id=1, cycle_id=1, report_type="weekly"
+        )
 
         assert result.content == "报告内容..."
         mock_db.add.assert_called_once()

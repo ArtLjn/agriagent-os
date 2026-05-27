@@ -11,7 +11,9 @@ def test_register_success():
     """正常注册成功，返回 user 和 token。"""
     db = SessionLocal()
     try:
-        user, token = register(db, phone="13800138000", password="pass1234", nickname="张三")
+        user, token = register(
+            db, phone="13800138000", password="pass1234", nickname="张三"
+        )
         assert user.phone == "13800138000"
         assert user.nickname == "张三"
         assert user.role == "user"

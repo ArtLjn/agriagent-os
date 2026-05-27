@@ -25,9 +25,7 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def get_current_user(
-    request: Request, db: Session = Depends(get_db)
-) -> User:
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """Layer 1: 从 JWT 解析 user_id → 查询 User → 校验 status。"""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):

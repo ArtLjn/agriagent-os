@@ -27,9 +27,7 @@ def submit_feedback(
     db.add(record)
     db.commit()
     db.refresh(record)
-    logger.info(
-        "反馈已提交 | user=%s msg=%s rating=%s", user_id, message_id, rating
-    )
+    logger.info("反馈已提交 | user=%s msg=%s rating=%s", user_id, message_id, rating)
     return record
 
 
