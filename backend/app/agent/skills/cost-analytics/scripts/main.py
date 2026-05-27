@@ -7,7 +7,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.core.database import SessionLocal
-from app.core.skill_cache import cached
+from app.infra.skill_cache import cached
 from app.models.cost import CostRecord
 
 
@@ -38,8 +38,7 @@ class CostAnalyticsSkill(Skill):
                 "compare_period": {
                     "type": "string",
                     "description": (
-                        "对比周期: none(不对比)"
-                        "/last_month(上月)/last_year(去年同期)"
+                        "对比周期: none(不对比)/last_month(上月)/last_year(去年同期)"
                     ),
                     "default": "none",
                 },

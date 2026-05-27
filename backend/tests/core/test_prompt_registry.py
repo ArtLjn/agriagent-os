@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core.prompt_registry import PromptRegistry
+from app.agent.prompt_registry import PromptRegistry
 
 
 class TestPromptRegistry:

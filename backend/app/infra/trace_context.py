@@ -18,6 +18,7 @@ __all__ = [
 @dataclass
 class TraceInfo:
     """一次对话请求的追踪上下文。"""
+
     request_id: str
     session_id: str
     farm_id: int

@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.guardrails import check_input, filter_output
+from app.agent.guardrails import check_input, filter_output
 
 
 class TestCheckInput:

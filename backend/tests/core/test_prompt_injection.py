@@ -3,8 +3,8 @@
 import pytest
 from datetime import date
 
-from app.core.prompt_renderer import render_prompt
-from app.core.prompt_registry import PromptRegistry
+from app.agent.prompt_renderer import render_prompt
+from app.agent.prompt_registry import PromptRegistry
 from app.models.farm import Farm
 from app.core.database import SessionLocal
 
@@ -185,7 +185,6 @@ class TestBaseJ2TemplateContent:
         assert "西瓜(伸蔓期)" in result
         assert "老王" in result
         assert "2026-05-25" in result
-
 
 
 class TestFarmDisplayNameFromDatabase:

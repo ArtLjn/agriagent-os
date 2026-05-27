@@ -11,8 +11,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
-from app.core.limiter import limiter
-from app.core.llm import LlmNotConfiguredError
+from app.infra.limiter import limiter
+from app.agent.llm import LlmNotConfiguredError
 from app.core.logger import request_id_var
 from app.models.agent import AdviceRecord
 from app.models.farm import Farm
@@ -25,6 +25,8 @@ from app.schemas.agent import (
     AdviceHistoryItem,
     ReportHistoryItem,
     ReportListResponse,
+    ConversationListItem,
+    ConversationMessageItem,
 )
 from app.services.agent_service import (
     chat_with_agent,
@@ -34,6 +36,10 @@ from app.services.agent_service import (
     generate_report,
     get_advice_history,
     get_report_history,
+)
+from app.services.conversation_service import (
+    list_conversations,
+    get_conversation_messages,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +73,11 @@ async def agent_chat(
     start = time.perf_counter()
     try:
         result = await chat_with_agent(
-            db, chat_request.message, chat_request.cycle_id, farm_id=farm.id
+            db,
+            chat_request.message,
+            chat_request.cycle_id,
+            farm_id=farm.id,
+            session_id=chat_request.session_id,
         )
         logger.info(
             "[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符",
@@ -100,7 +110,11 @@ async def agent_chat_stream(
         start = time.perf_counter()
         try:
             async for chunk in stream_chat_with_agent(
-                chat_request.message, chat_request.cycle_id
+                chat_request.message,
+                chat_request.cycle_id,
+                farm_id=farm.id,
+                db=db,
+                session_id=chat_request.session_id,
             ):
                 full_reply += chunk
                 data = json.dumps({"content": chunk}, ensure_ascii=False)
@@ -129,6 +143,54 @@ async def agent_chat_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/conversations", response_model=list[ConversationListItem])
+@limiter.limit("30/minute")
+def get_conversations(
+    request: Request,
+    response: Response,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> list[ConversationListItem]:
+    """获取当前 farm 的会话列表。"""
+    conversations = list_conversations(db, farm_id=farm.id, limit=limit)
+    return [
+        ConversationListItem(
+            id=c.id,
+            session_id=c.session_id,
+            status=c.status,
+            created_at=c.created_at,
+            last_active_at=c.last_active_at,
+        )
+        for c in conversations
+    ]
+
+
+@router.get(
+    "/conversations/{session_id}/messages",
+    response_model=list[ConversationMessageItem],
+)
+@limiter.limit("30/minute")
+def get_messages_by_session(
+    request: Request,
+    response: Response,
+    session_id: str,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> list[ConversationMessageItem]:
+    """获取指定会话的消息列表。"""
+    messages = get_conversation_messages(db, session_id)
+    return [
+        ConversationMessageItem(
+            id=m.id,
+            role=m.role,
+            content=m.content,
+            created_at=m.created_at,
+        )
+        for m in messages
+    ]
 
 
 @router.get("/daily", response_model=DailyAdviceResponse)

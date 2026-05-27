@@ -12,7 +12,7 @@ from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordCreate
 from app.services.cost_service import create_record
 
-_settle_mod = importlib.import_module("app.skills.settle-debt.scripts.main")
+_settle_mod = importlib.import_module("app.agent.skills.settle-debt.scripts.main")
 SettleDebtSkill = _settle_mod.SettleDebtSkill
 
 

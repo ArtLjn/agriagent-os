@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.pending_actions import (
+from app.infra.pending_actions import (
     PendingAction,
     _pending,
     get_pending,
@@ -283,7 +283,7 @@ class TestConfirmIntentDetection:
     )
     def test_intent_detection(self, message: str, expected_intent: str):
         """验证各类消息的意图识别。"""
-        from app.core.pending_actions import detect_user_intent
+        from app.infra.pending_actions import detect_user_intent
 
         result = detect_user_intent(message)
         assert result == expected_intent
@@ -298,7 +298,7 @@ class TestGraphToolNodeIntegration:
     @pytest.mark.asyncio
     async def test_write_skill_intercepted(self):
         """写操作 Skill 应被拦截，不直接执行。"""
-        from app.agents.graph import _parallel_tool_node
+        from app.agent.graph import _parallel_tool_node
         from langchain_core.messages import AIMessage
 
         ai_msg = AIMessage(
@@ -328,7 +328,7 @@ class TestGraphToolNodeIntegration:
     @pytest.mark.asyncio
     async def test_read_skill_executed_directly(self):
         """只读 Skill 应直接执行，不拦截。"""
-        from app.agents.graph import _parallel_tool_node
+        from app.agent.graph import _parallel_tool_node
         from langchain_core.messages import AIMessage
 
         ai_msg = AIMessage(
@@ -339,7 +339,7 @@ class TestGraphToolNodeIntegration:
         )
         state = {"messages": [ai_msg]}
 
-        with patch("app.agents.graph.get_langchain_tools") as mock_tools:
+        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
             mock_tool = MagicMock()
             mock_tool.name = "get_cost_summary"
             mock_tool.ainvoke = AsyncMock(return_value="本月支出：2000元")

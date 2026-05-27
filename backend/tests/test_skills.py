@@ -7,8 +7,12 @@ from unittest.mock import MagicMock, patch
 from skillify.core.context import SkillContext
 
 # 目录名含连字符，无法直接 import，使用 importlib 动态加载
-_cost_summary_mod = importlib.import_module("app.skills.cost-summary.scripts.main")
-_cost_analytics_mod = importlib.import_module("app.skills.cost-analytics.scripts.main")
+_cost_summary_mod = importlib.import_module(
+    "app.agent.skills.cost-summary.scripts.main"
+)
+_cost_analytics_mod = importlib.import_module(
+    "app.agent.skills.cost-analytics.scripts.main"
+)
 CostSummarySkill = _cost_summary_mod.CostSummarySkill
 CostAnalyticsSkill = _cost_analytics_mod.CostAnalyticsSkill
 

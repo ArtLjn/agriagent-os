@@ -7,8 +7,8 @@ import time
 from datetime import date
 from typing import Any
 
-from app.core.trace_context import get_trace, get_round_index
-from app.core.trace_dao import TraceDAO
+from app.infra.trace_context import get_trace, get_round_index
+from app.infra.trace_dao import TraceDAO
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,16 @@ class TraceCollector:
             if end_time is None:
                 end_time = time.time()
 
-        input_str = json.dumps(input_data, ensure_ascii=False, default=str) if input_data else None
-        output_str = json.dumps(output_data, ensure_ascii=False, default=str) if output_data else None
+        input_str = (
+            json.dumps(input_data, ensure_ascii=False, default=str)
+            if input_data
+            else None
+        )
+        output_str = (
+            json.dumps(output_data, ensure_ascii=False, default=str)
+            if output_data
+            else None
+        )
 
         trace_data = {
             "request_id": trace.request_id,
@@ -80,7 +88,9 @@ class TraceCollector:
             "node_name": node_name,
             "input_data": input_str,
             "output_data": output_str,
-            "start_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(start_time)),
+            "start_time": time.strftime(
+                "%Y-%m-%dT%H:%M:%S", time.localtime(start_time)
+            ),
             "end_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(end_time)),
             "duration_ms": duration_ms,
             "token_usage": json.dumps(token_usage) if token_usage else None,
@@ -140,17 +150,16 @@ async def stop_trace_system() -> None:
 
 
 async def _flush_loop() -> None:
-    """每 5 秒或队列达 20 条时 flush。"""
+    """定时 flush：队列满时批量写入，超时时也写入避免数据积压。"""
     from app.core.config import settings
 
     interval = settings.trace.flush_interval
-    batch_size = settings.trace.batch_size
 
     while _running:
         try:
             await asyncio.sleep(interval)
             dao = get_trace_dao()
-            if dao and dao.queue_size >= batch_size:
+            if dao and dao.queue_size > 0:
                 await dao.flush_now()
         except asyncio.CancelledError:
             break

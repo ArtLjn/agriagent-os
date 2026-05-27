@@ -5,16 +5,16 @@ from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.agents.graph import compile_advisor_graph
+from app.agent.graph import compile_advisor_graph
 
 
 class TestFunctionCallingE2E:
     """端到端验证 function calling 链路。"""
 
-    @patch("app.agents.graph.get_langchain_tools")
-    @patch("app.agents.graph.get_llm")
-    @patch("app.agents.graph.farm_context_service.build_summary")
-    @patch("app.agents.graph.SessionLocal")
+    @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.get_llm")
+    @patch("app.agent.graph.farm_context_service.build_summary")
+    @patch("app.agent.graph.SessionLocal")
     def test_weather_query_triggers_tool_call(
         self, mock_session, mock_summary, mock_get_llm, mock_get_tools
     ):
@@ -50,10 +50,10 @@ class TestFunctionCallingE2E:
         assert "苏州" in last_msg.content
         mock_llm.invoke.assert_called()
 
-    @patch("app.agents.graph.get_langchain_tools")
-    @patch("app.agents.graph.get_llm")
-    @patch("app.agents.graph.farm_context_service.build_summary")
-    @patch("app.agents.graph.SessionLocal")
+    @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.get_llm")
+    @patch("app.agent.graph.farm_context_service.build_summary")
+    @patch("app.agent.graph.SessionLocal")
     def test_chat_query_does_not_trigger_tool_call(
         self, mock_session, mock_summary, mock_get_llm, mock_get_tools
     ):

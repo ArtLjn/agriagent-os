@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from datetime import date
 from typing import Annotated
 
 import time as _time
@@ -11,23 +12,38 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from app.core.llm import get_llm
-from app.core.pending_actions import is_write_skill, store_pending
-from app.core.prompt_registry import get_registry
-from app.core.prompt_renderer import render_prompt
+from app.agent.llm import get_llm
+from app.infra.pending_actions import is_write_skill, store_pending
+from app.agent.prompt_registry import get_registry
+from app.agent.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
 from app.core.database import SessionLocal
 from app.core.config import settings
-from app.core.trace_collector import get_collector
-from app.core.trace_context import increment_round
+from app.infra.trace_collector import get_collector
+from app.infra.trace_context import increment_round
 from app.models.farm import Farm
 from app.services import farm_context_service
 from app.services.quota_service import check_quota
-from app.skills import get_langchain_tools
+from app.agent.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
 
 _KEEP_RECENT = 3
+
+
+def _get_season(current_date: date | None = None) -> str:
+    """根据当前月份返回季节。"""
+    if current_date is None:
+        current_date = date.today()
+    month = current_date.month
+    if month in (3, 4, 5):
+        return "春季"
+    elif month in (6, 7, 8):
+        return "夏季"
+    elif month in (9, 10, 11):
+        return "秋季"
+    else:
+        return "冬季"
 
 
 def micro_compact(messages: list) -> list:
@@ -96,19 +112,24 @@ def _llm_node(state: AgentState) -> dict:
         farm_context_summary = farm_context_service.build_summary(db, farm_id=1)
         farm = db.query(Farm).filter(Farm.id == 1).first()
         display_name = farm.display_name if farm and farm.display_name else "农友"
+        farm_location = farm.location if farm and farm.location else ""
     except Exception:
         logger.warning("获取农场上下文失败，使用默认值", exc_info=True)
         farm_context_summary = ""
         display_name = "农友"
+        farm_location = ""
     finally:
         db.close()
 
     current_date = get_request_date()
+    current_season = _get_season(current_date)
     system_text = render_prompt(
         "system_base",
         variables={
             "farm_context_summary": farm_context_summary,
             "display_name": display_name,
+            "farm_location": farm_location,
+            "current_season": current_season,
         },
         registry=get_registry(),
         current_date=current_date,
@@ -166,15 +187,11 @@ def _llm_node(state: AgentState) -> dict:
     # LLM 工具选择日志
     if response.tool_calls:
         tool_names = [tc["name"] for tc in response.tool_calls]
-        logger.info(
-            "LLM 工具选择 | tool_calls=%s | model=%s", tool_names, model_name
-        )
+        logger.info("LLM 工具选择 | tool_calls=%s | model=%s", tool_names, model_name)
         output_summary = f"tool_calls: {tool_names}"
     else:
         content = response.content or ""
-        logger.info(
-            "LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name
-        )
+        logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
         output_summary = content[:200]
 
     collector.record(
@@ -244,7 +261,9 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             summary = str(result)[:120].replace("\n", " ")
             logger.info(
                 "Skill 完成 | name=%s | duration_ms=%d | result=%s",
-                name, duration_ms, summary,
+                name,
+                duration_ms,
+                summary,
             )
             collector.record(
                 node_type="skill_call",
@@ -257,7 +276,9 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         except Exception as e:
             duration_ms = int((_time.perf_counter() - start) * 1000)
             logger.error(
-                "Skill 失败 | name=%s | error=%s", name, e,
+                "Skill 失败 | name=%s | error=%s",
+                name,
+                e,
             )
             collector.record(
                 node_type="skill_call",

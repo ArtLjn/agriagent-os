@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core.trace_context import (
+from app.infra.trace_context import (
     TraceInfo,
     clear_trace,
     get_trace,
@@ -95,7 +95,7 @@ class TestRoundTracking:
 
 class TestAllExport:
     def test_all_exports(self) -> None:
-        from app.core import trace_context
+        from app.infra import trace_context
 
         expected = [
             "TraceInfo",

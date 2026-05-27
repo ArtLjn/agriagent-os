@@ -6,7 +6,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.core.database import SessionLocal
-from app.core.skill_cache import cached
+from app.infra.skill_cache import cached
 from app.models.cost import CostRecord
 
 
@@ -50,8 +50,7 @@ class CostSummarySkill(Skill):
                 "group_by": {
                     "type": "string",
                     "description": (
-                        "分组方式: none(不分组)"
-                        "/category(按分类)/month(按月)，默认none"
+                        "分组方式: none(不分组)/category(按分类)/month(按月)，默认none"
                     ),
                     "default": "none",
                 },

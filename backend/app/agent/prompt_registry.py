@@ -99,7 +99,6 @@ class PromptRegistry:
         logger.info("Prompt 加载完成 | count=%d", len(self._templates))
 
 
-
 # 全局单例
 _registry = PromptRegistry()
 

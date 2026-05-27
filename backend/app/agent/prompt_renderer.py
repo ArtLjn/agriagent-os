@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from jinja2 import Template
 
 if TYPE_CHECKING:
-    from app.core.prompt_registry import PromptRegistry
+    from app.agent.prompt_registry import PromptRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def render_prompt(
         KeyError: 模板未注册。
         TemplateError: 模板语法错误。
     """
-    from app.core.prompt_registry import get_registry
+    from app.agent.prompt_registry import get_registry
 
     reg = registry or get_registry()
     template_str = reg.get(name, version)

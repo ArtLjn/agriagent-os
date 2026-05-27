@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from app.core.prompt_renderer import render_prompt
+from app.agent.prompt_renderer import render_prompt
 
 
 def test_system_base_prompt_contains_tool_calling_rule():
@@ -27,7 +27,7 @@ class TestUserContextInPrompt:
         """从 prompts/ 目录加载 base.j2 的 registry，同时注册 system_base 别名。"""
         from pathlib import Path
 
-        from app.core.prompt_registry import PromptRegistry
+        from app.agent.prompt_registry import PromptRegistry
 
         prompts_dir = Path(__file__).resolve().parent.parent / "prompts"
         reg = PromptRegistry()
@@ -76,7 +76,9 @@ class TestUserContextInPrompt:
         )
         assert "<location>" not in result
 
-    def test_prompt_skips_entire_section_when_no_location_and_no_season(self, _registry_with_base):
+    def test_prompt_skips_entire_section_when_no_location_and_no_season(
+        self, _registry_with_base
+    ):
         """farm_location 和 current_season 都为空时不输出用户信息区块。"""
         result = render_prompt(
             "system_base",
@@ -128,12 +130,12 @@ class TestGetSeason:
         ],
     )
     def test_season_by_month(self, test_date, expected):
-        from app.agents.graph import _get_season
+        from app.agent.graph import _get_season
 
         assert _get_season(test_date) == expected
 
     def test_season_default_uses_today(self):
-        from app.agents.graph import _get_season
+        from app.agent.graph import _get_season
 
         result = _get_season()
         assert result in ("春季", "夏季", "秋季", "冬季")

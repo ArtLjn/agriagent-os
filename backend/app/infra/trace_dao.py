@@ -32,13 +32,12 @@ class TraceDAO:
         self._queue.append(trace_data)
 
     async def flush_now(self) -> int:
-        """立即将队列中的数据批量写入 SQLite。"""
+        """立即将队列中的所有数据写入 SQLite。"""
         if not self._queue:
             return 0
 
-        items = []
-        while self._queue and len(items) < self._batch_size:
-            items.append(self._queue.popleft())
+        items = list(self._queue)
+        self._queue.clear()
 
         db = SessionLocal()
         try:

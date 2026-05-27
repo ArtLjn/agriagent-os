@@ -4,7 +4,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.core.config import settings
-from app.core.skill_cache import cached
+from app.infra.skill_cache import cached
 from app.services.weather_service import check_weather_warnings, fetch_weather
 
 

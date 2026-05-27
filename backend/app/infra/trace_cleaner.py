@@ -31,7 +31,8 @@ def clean_expired_traces() -> dict[str, int]:
         db.commit()
         logger.info(
             "TTL 清理完成 | trace_deleted=%d stats_deleted=%d",
-            trace_deleted, stats_deleted,
+            trace_deleted,
+            stats_deleted,
         )
         return {
             "trace_records_deleted": trace_deleted,

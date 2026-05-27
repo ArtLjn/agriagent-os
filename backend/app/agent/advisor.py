@@ -5,10 +5,12 @@ from collections.abc import AsyncGenerator
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
+from sqlalchemy.orm import Session
 
-from app.agents.graph import compile_advisor_graph
-from app.core.guardrails import check_input, filter_output
-from app.core.trace_context import clear_trace, init_trace
+from app.agent.graph import compile_advisor_graph
+from app.agent.guardrails import check_input, filter_output
+from app.infra.trace_context import clear_trace, init_trace
+from app.services.conversation_service import get_recent_messages
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,28 @@ def build_advisor_agent():
     return compile_advisor_graph()
 
 
-async def invoke_advisor(user_input: str, farm_id: int = 1) -> str:
+def _build_history_messages(
+    db: Session | None, conversation_id: int | None, limit: int = 20
+) -> list[HumanMessage | AIMessage]:
+    """从数据库加载最近 N 条消息，转为 LangChain message 列表。"""
+    if db is None or conversation_id is None:
+        return []
+    records = get_recent_messages(db, conversation_id, limit=limit)
+    messages: list[HumanMessage | AIMessage] = []
+    for rec in records:
+        if rec.role == "user":
+            messages.append(HumanMessage(content=rec.content))
+        elif rec.role == "assistant":
+            messages.append(AIMessage(content=rec.content))
+    return messages
+
+
+async def invoke_advisor(
+    user_input: str,
+    farm_id: int = 1,
+    db: Session | None = None,
+    conversation_id: int | None = None,
+) -> str:
     """调用建议 Agent 回答用户问题。"""
     ok, reason = check_input(user_input)
     if not ok:
@@ -38,9 +61,14 @@ async def invoke_advisor(user_input: str, farm_id: int = 1) -> str:
     init_trace(farm_id=farm_id)
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
     graph = _get_advisor_graph()
+
+    # 构建历史消息 + 当前消息
+    history = _build_history_messages(db, conversation_id)
+    messages = history + [HumanMessage(content=user_input)]
+
     try:
         result = await graph.ainvoke(
-            {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id},
+            {"messages": messages, "farm_id": farm_id},
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_invoke",
@@ -60,7 +88,10 @@ async def invoke_advisor(user_input: str, farm_id: int = 1) -> str:
 
 
 async def stream_advisor(
-    user_input: str, farm_id: int = 1
+    user_input: str,
+    farm_id: int = 1,
+    db: Session | None = None,
+    conversation_id: int | None = None,
 ) -> AsyncGenerator[str, None]:
     """流式调用建议 Agent，逐 token 返回最终 AI 回复。"""
     ok, reason = check_input(user_input)
@@ -72,10 +103,15 @@ async def stream_advisor(
     init_trace(farm_id=farm_id)
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
     graph = _get_advisor_graph()
+
+    # 构建历史消息 + 当前消息
+    history = _build_history_messages(db, conversation_id)
+    messages = history + [HumanMessage(content=user_input)]
+
     step = 0
     try:
         async for event in graph.astream(
-            {"messages": [HumanMessage(content=user_input)], "farm_id": farm_id},
+            {"messages": messages, "farm_id": farm_id},
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_stream",

@@ -4,7 +4,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.core.database import SessionLocal
-from app.core.skill_cache import cached
+from app.infra.skill_cache import cached
 from app.models.cycle import CropCycle
 
 

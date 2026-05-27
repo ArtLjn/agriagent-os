@@ -11,7 +11,7 @@ for _attr in ("verbose", "debug", "llm_cache"):
 from langchain_core.language_models.chat_models import BaseChatModel  # noqa: E402
 from langchain_openai import ChatOpenAI  # noqa: E402
 
-from app.core.circuit_breaker import CircuitBreaker, call_with_retry  # noqa: E402
+from app.infra.circuit_breaker import CircuitBreaker, call_with_retry  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
 logger = logging.getLogger(__name__)

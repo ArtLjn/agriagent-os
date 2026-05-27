@@ -8,7 +8,9 @@ import pytest
 
 from skillify.core.context import SkillContext
 
-_create_cycle_mod = importlib.import_module("app.skills.create-crop-cycle.scripts.main")
+_create_cycle_mod = importlib.import_module(
+    "app.agent.skills.create-crop-cycle.scripts.main"
+)
 CreateCropCycleSkill = _create_cycle_mod.CreateCropCycleSkill
 
 
