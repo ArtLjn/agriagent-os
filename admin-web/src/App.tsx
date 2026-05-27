@@ -16,6 +16,7 @@ import Playground from './pages/Playground';
 import SkillRegistry from './pages/SkillRegistry';
 import PromptInspector from './pages/PromptInspector';
 import ConfigKeys from './pages/ConfigKeys';
+import Users from './pages/Users';
 
 export default function App() {
   return (
@@ -23,7 +24,8 @@ export default function App() {
       <BrowserRouter>
         <AdminLayout>
           <Routes>
-            <Route path="/" element={<Navigate to="/dev/traces" replace />} />
+            <Route path="/" element={<Navigate to="/users" replace />} />
+            <Route path="/users" element={<Users />} />
             <Route path="/crops" element={<Crops />} />
             <Route path="/cycles" element={<Cycles />} />
             <Route path="/cycles/:id" element={<CycleDetail />} />

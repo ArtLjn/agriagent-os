@@ -9,6 +9,7 @@ import {
   AppstoreOutlined,
   FileSearchOutlined,
   SettingOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -23,6 +24,7 @@ const TEXT_SECONDARY = '#8b949e';
 const ACCENT = '#58a6ff';
 
 const menuItems = [
+  { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
   { key: '/dev/traces', icon: <BranchesOutlined />, label: '链路追踪' },
   { key: '/dev/tokens', icon: <BarChartOutlined />, label: 'Token 看板' },
   { key: '/dev/playground', icon: <MessageOutlined />, label: 'Playground' },
@@ -32,6 +34,7 @@ const menuItems = [
 ];
 
 const pageTitles: Record<string, string> = {
+  '/users': '用户管理',
   '/dev/traces': '链路追踪',
   '/dev/tokens': 'Token 看板',
   '/dev/playground': 'Playground',
