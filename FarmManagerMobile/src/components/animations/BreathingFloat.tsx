@@ -1,6 +1,6 @@
-import React, {useEffect, useRef} from 'react';
-import {Animated, ViewStyle} from 'react-native';
-import {animationConfig} from '../../theme/animations';
+import React, { useEffect, useRef } from "react";
+import { Animated, ViewStyle } from "react-native";
+import { animationConfig } from "../../theme/animations";
 
 interface BreathingFloatProps {
   children: React.ReactNode;
@@ -31,7 +31,7 @@ export const BreathingFloat: React.FC<BreathingFloatProps> = ({
           duration: animationConfig.breathing.duration / 2,
           useNativeDriver: animationConfig.breathing.useNativeDriver,
         }),
-      ]),
+      ])
     ).start();
   }, [translateY]);
 
@@ -40,9 +40,10 @@ export const BreathingFloat: React.FC<BreathingFloatProps> = ({
       style={[
         style,
         {
-          transform: [{translateY}],
+          transform: [{ translateY }],
         },
-      ]}>
+      ]}
+    >
       {children}
     </Animated.View>
   );

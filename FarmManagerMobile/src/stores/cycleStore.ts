@@ -1,6 +1,6 @@
-import {create} from 'zustand';
-import type {CropCycle, CropCycleListItem, CropTemplate} from '../api/types';
-import {cycleApi, cropApi} from '../api/client';
+import { create } from 'zustand';
+import type { CropCycle, CropCycleListItem, CropTemplate } from '../api/types';
+import { cycleApi, cropApi } from '../api/client';
 
 interface CycleState {
   cycles: CropCycleListItem[];
@@ -20,7 +20,7 @@ interface CycleState {
   clearError: () => void;
 }
 
-export const useCycleStore = create<CycleState>(set => ({
+export const useCycleStore = create<CycleState>((set) => ({
   cycles: [],
   currentCycle: null,
   templates: [],
@@ -28,48 +28,48 @@ export const useCycleStore = create<CycleState>(set => ({
   error: null,
 
   fetchCycles: async () => {
-    set({loading: true, error: null});
+    set({ loading: true, error: null });
     try {
       const res = await cycleApi.getCycles();
       const data = (res.data as any)?.items ?? res.data;
-      set({cycles: data, loading: false});
+      set({ cycles: data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
   fetchCycleDetail: async (id: number) => {
-    set({loading: true, error: null});
+    set({ loading: true, error: null });
     try {
       const res = await cycleApi.getCycle(id);
-      set({currentCycle: res.data, loading: false});
+      set({ currentCycle: res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
   fetchTemplates: async () => {
-    set({loading: true, error: null});
+    set({ loading: true, error: null });
     try {
       const res = await cropApi.getTemplates();
       const tData = (res.data as any)?.items ?? res.data;
-      set({templates: tData, loading: false});
+      set({ templates: tData, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  createCycle: async data => {
-    set({loading: true, error: null});
+  createCycle: async (data) => {
+    set({ loading: true, error: null });
     try {
       await cycleApi.createCycle(data);
       const res2 = await cycleApi.getCycles();
       const items = (res2.data as any)?.items ?? res2.data;
-      set({cycles: items, loading: false});
+      set({ cycles: items, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  clearError: () => set({error: null}),
+  clearError: () => set({ error: null }),
 }));

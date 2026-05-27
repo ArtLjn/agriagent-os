@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../theme/colors';
-import { spacing, fontSize } from '../theme/spacing';
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { colors } from "../theme/colors";
+import { spacing, fontSize } from "../theme/spacing";
 
 interface TimelineItem {
   id: string;
@@ -23,12 +23,7 @@ export const Timeline: React.FC<TimelineProps> = ({ items }) => {
         return (
           <View key={item.id} style={styles.row}>
             <View style={styles.leftColumn}>
-              <View
-                style={[
-                  styles.dot,
-                  item.isCurrent && styles.dotCurrent,
-                ]}
-              />
+              <View style={[styles.dot, item.isCurrent && styles.dotCurrent]} />
               {!isLast && <View style={styles.line} />}
             </View>
 
@@ -39,10 +34,7 @@ export const Timeline: React.FC<TimelineProps> = ({ items }) => {
               ]}
             >
               <Text
-                style={[
-                  styles.title,
-                  item.isCurrent && styles.titleCurrent,
-                ]}
+                style={[styles.title, item.isCurrent && styles.titleCurrent]}
               >
                 {item.title}
               </Text>
@@ -62,11 +54,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   leftColumn: {
     width: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   dot: {
     width: 12,
@@ -94,7 +86,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: 'transparent',
+    borderLeftColor: "transparent",
   },
   contentCardCurrent: {
     backgroundColor: colors.primaryLight,
@@ -102,7 +94,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: fontSize.md,
-    fontWeight: '600',
+    fontWeight: "600",
     color: colors.text,
     marginBottom: spacing.xs,
   },

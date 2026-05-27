@@ -11,12 +11,12 @@ export const radii = {
 export const typography = {
   heading1: {
     fontSize: 32,
-    fontWeight: '700' as const,
+    fontWeight: "700" as const,
     letterSpacing: -0.5,
   },
   heading2: {
     fontSize: 22,
-    fontWeight: '600' as const,
+    fontWeight: "600" as const,
   },
   body: {
     fontSize: 15,
@@ -32,22 +32,22 @@ export const typography = {
 
 export const shadowV2 = {
   card: {
-    shadowColor: '#5B8CFF',
-    shadowOffset: {width: 0, height: 8},
+    shadowColor: "#5B8CFF",
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 30,
     elevation: 8,
   },
   light: {
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 4},
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 16,
     elevation: 4,
   },
   float: {
-    shadowColor: '#5B8CFF',
-    shadowOffset: {width: 0, height: 6},
+    shadowColor: "#5B8CFF",
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 10,

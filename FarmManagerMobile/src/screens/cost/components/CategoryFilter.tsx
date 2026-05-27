@@ -1,11 +1,17 @@
-import React from 'react';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet} from 'react-native';
-import {colors} from '../../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../../theme/spacing';
+import React from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
+import { colors } from "../../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
 
 interface CategoryFilterProps {
   categoryList: string[];
-  categoryStats: Record<string, {cost: number; income: number}>;
+  categoryStats: Record<string, { cost: number; income: number }>;
   selectedCategory: string | null;
   onSelectCategory: (category: string | null) => void;
 }
@@ -18,30 +24,37 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
 }) => (
   <View style={styles.categoryFilterRow}>
     <TouchableOpacity
-      style={[styles.categoryChip, selectedCategory === null && styles.categoryChipActive]}
-      onPress={() => onSelectCategory(null)}>
+      style={[
+        styles.categoryChip,
+        selectedCategory === null && styles.categoryChipActive,
+      ]}
+      onPress={() => onSelectCategory(null)}
+    >
       <Text
         style={[
           styles.categoryChipText,
           selectedCategory === null && styles.categoryChipTextActive,
-        ]}>
+        ]}
+      >
         全部
       </Text>
     </TouchableOpacity>
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      {categoryList.map(cat => {
+      {categoryList.map((cat) => {
         const catStats = categoryStats[cat];
         const isActive = selectedCategory === cat;
         return (
           <TouchableOpacity
             key={cat}
             style={[styles.categoryChip, isActive && styles.categoryChipActive]}
-            onPress={() => onSelectCategory(cat)}>
+            onPress={() => onSelectCategory(cat)}
+          >
             <Text
               style={[
                 styles.categoryChipText,
                 isActive && styles.categoryChipTextActive,
-              ]}>
+              ]}
+            >
               {cat}
             </Text>
             {catStats && (catStats.cost > 0 || catStats.income > 0) && (
@@ -49,9 +62,10 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 style={[
                   styles.categoryChipAmount,
                   isActive && styles.categoryChipAmountActive,
-                ]}>
-                {catStats.cost > 0 ? `-${catStats.cost.toFixed(0)}` : ''}
-                {catStats.income > 0 ? `+${catStats.income.toFixed(0)}` : ''}
+                ]}
+              >
+                {catStats.cost > 0 ? `-${catStats.cost.toFixed(0)}` : ""}
+                {catStats.income > 0 ? `+${catStats.income.toFixed(0)}` : ""}
               </Text>
             )}
           </TouchableOpacity>
@@ -63,7 +77,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
 
 const styles = StyleSheet.create({
   categoryFilterRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
     gap: spacing.sm,
@@ -74,8 +88,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     marginRight: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
@@ -86,11 +100,11 @@ const styles = StyleSheet.create({
   categoryChipText: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   categoryChipTextActive: {
     color: colors.primary,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   categoryChipAmount: {
     fontSize: fontSize.xs,

@@ -1,6 +1,6 @@
-import {create} from 'zustand';
-import type {CostCategory, CategoryCreateParams} from '../types/category';
-import {categoryApi} from '../api/category';
+import { create } from 'zustand';
+import type { CostCategory, CategoryCreateParams } from '../types/category';
+import { categoryApi } from '../api/category';
 
 interface CategoryState {
   categories: CostCategory[];
@@ -12,42 +12,42 @@ interface CategoryState {
   clearError: () => void;
 }
 
-export const useCategoryStore = create<CategoryState>(set => ({
+export const useCategoryStore = create<CategoryState>((set) => ({
   categories: [],
   loading: false,
   error: null,
 
   fetchCategories: async () => {
-    set({loading: true, error: null});
+    set({ loading: true, error: null });
     try {
       const res = await categoryApi.getCategories();
-      set({categories: res.data, loading: false});
+      set({ categories: res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  createCategory: async data => {
-    set({loading: true, error: null});
+  createCategory: async (data) => {
+    set({ loading: true, error: null });
     try {
       await categoryApi.createCategory(data);
       const res = await categoryApi.getCategories();
-      set({categories: res.data, loading: false});
+      set({ categories: res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  deleteCategory: async id => {
-    set({loading: true, error: null});
+  deleteCategory: async (id) => {
+    set({ loading: true, error: null });
     try {
       await categoryApi.deleteCategory(id);
       const res = await categoryApi.getCategories();
-      set({categories: res.data, loading: false});
+      set({ categories: res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  clearError: () => set({error: null}),
+  clearError: () => set({ error: null }),
 }));

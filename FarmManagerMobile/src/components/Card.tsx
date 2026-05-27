@@ -1,30 +1,36 @@
-import React from 'react';
-import {View, StyleSheet, ViewStyle} from 'react-native';
-import {colors} from '../theme/colors';
-import {spacing, borderRadius, shadows} from '../theme/spacing';
+import React from "react";
+import { View, StyleSheet, ViewStyle } from "react-native";
+import { colors } from "../theme/colors";
+import { spacing, borderRadius, shadows } from "../theme/spacing";
 
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle | ViewStyle[];
-  padding?: 'none' | 'sm' | 'md' | 'lg';
+  padding?: "none" | "sm" | "md" | "lg";
   elevated?: boolean;
 }
 
 export const Card: React.FC<CardProps> = ({
   children,
   style,
-  padding = 'md',
+  padding = "md",
   elevated = true,
 }) => {
-  const paddingMap = {none: 0, sm: spacing.sm, md: spacing.md, lg: spacing.lg};
+  const paddingMap = {
+    none: 0,
+    sm: spacing.sm,
+    md: spacing.md,
+    lg: spacing.lg,
+  };
   return (
     <View
       style={[
         styles.card,
-        {padding: paddingMap[padding]},
+        { padding: paddingMap[padding] },
         elevated && styles.elevated,
         style,
-      ]}>
+      ]}
+    >
       {children}
     </View>
   );

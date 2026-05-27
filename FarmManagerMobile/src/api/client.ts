@@ -1,6 +1,6 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type {PendingAction, CostRecord, DebtListResponse} from './types';
+import type { PendingAction, CostRecord, DebtListResponse } from './types';
 
 const API_BASE_URL = 'http://47.98.253.236:8000';
 
@@ -12,20 +12,22 @@ export const apiClient = axios.create({
   },
 });
 
-apiClient.interceptors.request.use(async config => {
+apiClient.interceptors.request.use(async (config) => {
   const today = new Date().toISOString().split('T')[0];
   config.headers['X-Current-Date'] = today;
   return config;
 });
 
 apiClient.interceptors.response.use(
-  response => response,
-  error => {
+  (response) => response,
+  (error) => {
     if (error.response) {
       const detail = error.response.data?.detail;
       let msg: string;
       if (Array.isArray(detail)) {
-        msg = detail.map((d: any) => d.msg || d.message || String(d)).join('；');
+        msg = detail
+          .map((d: any) => d.msg || d.message || String(d))
+          .join('；');
       } else if (typeof detail === 'string') {
         msg = detail;
       } else if (detail && typeof detail === 'object') {
@@ -39,7 +41,7 @@ apiClient.interceptors.response.use(
       return Promise.reject(new Error('网络连接失败，请检查后重试'));
     }
     return Promise.reject(new Error('请求发生错误'));
-  },
+  }
 );
 
 // 作物模板
@@ -52,57 +54,80 @@ export const cropApi = {
 export const cycleApi = {
   getCycles: () => apiClient.get('/cycles'),
   getCycle: (id: number) => apiClient.get(`/cycles/${id}`),
-  createCycle: (data: { name: string; crop_template_id: number; start_date: string; field_name?: string }) =>
-    apiClient.post('/cycles', data),
+  createCycle: (data: {
+    name: string;
+    crop_template_id: number;
+    start_date: string;
+    field_name?: string;
+  }) => apiClient.post('/cycles', data),
 };
 
 // 农事日志
 export const logApi = {
   getLogs: (params?: { cycle_id?: number; operation_type?: string }) =>
     apiClient.get('/logs', { params }),
-  createLog: (data: { cycle_id: number; operation_type: string; operation_date: string; note?: string }) =>
-    apiClient.post('/logs', data),
+  createLog: (data: {
+    cycle_id: number;
+    operation_type: string;
+    operation_date: string;
+    note?: string;
+  }) => apiClient.post('/logs', data),
 };
 
 // 成本记账
 export const costApi = {
   getRecords: (params?: { cycle_id?: number; category?: string }) =>
     apiClient.get('/costs', { params }),
-  createRecord: (data: { cycle_id?: number; record_type: string; category: string; amount: string; record_date: string; note?: string }) =>
-    apiClient.post('/costs', data),
+  createRecord: (data: {
+    cycle_id?: number;
+    record_type: string;
+    category: string;
+    amount: string;
+    record_date: string;
+    note?: string;
+  }) => apiClient.post('/costs', data),
   deleteRecord: (id: number) => apiClient.delete(`/costs/${id}`),
-  getProfit: (cycleId: number) => apiClient.get(`/costs/cycles/${cycleId}/profit`),
+  getProfit: (cycleId: number) =>
+    apiClient.get(`/costs/cycles/${cycleId}/profit`),
   getYearlySummary: (year: number) => apiClient.get(`/costs/summary/${year}`),
   parseRecord: (description: string) => {
     const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
-      /[xy]/g, c => {
+      /[xy]/g,
+      (c) => {
         const r = (Math.random() * 16) | 0;
         return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-      },
+      }
     );
-    return apiClient.post('/costs/parse', { description }, {
-      headers: { 'X-Idempotency-Key': idempotencyKey },
-    });
+    return apiClient.post(
+      '/costs/parse',
+      { description },
+      {
+        headers: { 'X-Idempotency-Key': idempotencyKey },
+      }
+    );
   },
 };
 
 // Agent
 export const agentApi = {
-  chat: (data: { cycle_id?: number; message: string }) => apiClient.post('/agent/chat', data),
+  chat: (data: { cycle_id?: number; message: string }) =>
+    apiClient.post('/agent/chat', data),
   streamChat: (
     data: { cycle_id?: number; message: string },
     onChunk: (chunk: string) => void,
     onDone: () => void,
     onError: (err: string) => void,
-    onPendingAction?: (action: PendingAction) => void,
+    onPendingAction?: (action: PendingAction) => void
   ) => {
     const es = new SSE(`${API_BASE_URL}/agent/chat/stream`, {
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       body: JSON.stringify(data),
     });
-    es.addEventListener('message', event => {
-      if (!event.data) return;
+    es.addEventListener('message', (event) => {
+      if (!event.data) {
+        return;
+      }
       const payload = event.data;
       if (payload === '[DONE]') {
         es.close();
@@ -116,7 +141,9 @@ export const agentApi = {
           onError(parsed.error);
           return;
         }
-        if (parsed.content) onChunk(parsed.content);
+        if (parsed.content) {
+          onChunk(parsed.content);
+        }
         if (parsed.pending_action && onPendingAction) {
           onPendingAction(parsed.pending_action);
         }
@@ -133,7 +160,9 @@ export const agentApi = {
   getDailyAdvice: (cycleId?: number) =>
     apiClient.get('/agent/daily', { params: { cycle_id: cycleId } }),
   refreshAdvice: (cycleId?: number) =>
-    apiClient.post('/agent/daily/refresh', null, { params: { cycle_id: cycleId } }),
+    apiClient.post('/agent/daily/refresh', null, {
+      params: { cycle_id: cycleId },
+    }),
   generateReport: (data: { cycle_id?: number; report_type: string }) =>
     apiClient.post('/agent/report', data),
   getAdviceHistory: (cycleId?: number) =>
@@ -144,8 +173,11 @@ export const agentApi = {
 
 // 债务管理
 export const debtApi = {
-  getDebts: (params?: { counterparty?: string; page?: number; size?: number }) =>
-    apiClient.get<DebtListResponse>('/debts', { params }),
+  getDebts: (params?: {
+    counterparty?: string;
+    page?: number;
+    size?: number;
+  }) => apiClient.get<DebtListResponse>('/debts', { params }),
   createDebt: (data: {
     record_type: string;
     category: string;
@@ -156,8 +188,11 @@ export const debtApi = {
     counterparty?: string;
     due_date?: string;
   }) => apiClient.post<CostRecord>('/debts', data),
-  settleDebt: (data: { counterparty: string; amount?: string; note?: string }) =>
-    apiClient.post<CostRecord>('/debts/settle', data),
+  settleDebt: (data: {
+    counterparty: string;
+    amount?: string;
+    note?: string;
+  }) => apiClient.post<CostRecord>('/debts/settle', data),
 };
 
 // 天气

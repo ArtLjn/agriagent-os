@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,18 +7,18 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-} from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import {Loading} from './Loading';
-import {MarkdownText} from './MarkdownText';
-import type {AdviceItem} from '../api/types';
-import {colors} from '../theme/colors';
-import {spacingV2, fontSizeV2, borderRadiusV2} from '../theme/spacing';
-import {appGradients} from '../theme/gradients';
-import {shadowV2} from '../theme/designTokens';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+} from "react-native";
+import LinearGradient from "react-native-linear-gradient";
+import { Loading } from "./Loading";
+import { MarkdownText } from "./MarkdownText";
+import type { AdviceItem } from "../api/types";
+import { colors } from "../theme/colors";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
+import { appGradients } from "../theme/gradients";
+import { shadowV2 } from "../theme/designTokens";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-if (Platform.OS === 'android') {
+if (Platform.OS === "android") {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
 }
 
@@ -28,20 +28,20 @@ interface AdviceCardProps {
   loading?: boolean;
   onPress?: () => void;
   onRefresh?: () => void;
-  weatherCondition?: 'foggy' | 'sunny' | 'rainy' | 'cold';
+  weatherCondition?: "foggy" | "sunny" | "rainy" | "cold";
 }
 
 const MAX_LINES = 4;
 
 const getEmotionGradient = (condition?: string) => {
   switch (condition) {
-    case 'foggy':
+    case "foggy":
       return appGradients.emotionFoggy;
-    case 'rainy':
+    case "rainy":
       return appGradients.emotionRainy;
-    case 'cold':
+    case "cold":
       return appGradients.emotionCold;
-    case 'sunny':
+    case "sunny":
     default:
       return appGradients.emotionSunny;
   }
@@ -49,15 +49,15 @@ const getEmotionGradient = (condition?: string) => {
 
 const getEmotionTitle = (condition?: string) => {
   switch (condition) {
-    case 'foggy':
-      return '雾气朦胧，注意排湿';
-    case 'rainy':
-      return '雨水充沛，防涝为主';
-    case 'cold':
-      return '气温骤降，注意防冻';
-    case 'sunny':
+    case "foggy":
+      return "雾气朦胧，注意排湿";
+    case "rainy":
+      return "雨水充沛，防涝为主";
+    case "cold":
+      return "气温骤降，注意防冻";
+    case "sunny":
     default:
-      return '阳光正好，适合农作';
+      return "阳光正好，适合农作";
   }
 };
 
@@ -67,7 +67,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
   loading = false,
   onPress,
   onRefresh,
-  weatherCondition = 'sunny',
+  weatherCondition = "sunny",
 }) => {
   const [expanded, setExpanded] = useState(false);
   const gradient = getEmotionGradient(weatherCondition);
@@ -80,9 +80,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
   const hasItems = items && items.length > 0;
 
   return (
-    <LinearGradient
-      {...gradient}
-      style={[styles.card, shadowV2.light]}>
+    <LinearGradient {...gradient} style={[styles.card, shadowV2.light]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.iconCircle}>
@@ -93,7 +91,11 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
           <Text style={styles.subtitle}>AI 农事顾问</Text>
         </View>
         {onRefresh && (
-          <TouchableOpacity onPress={onRefresh} activeOpacity={0.7} style={styles.refreshBtn}>
+          <TouchableOpacity
+            onPress={onRefresh}
+            activeOpacity={0.7}
+            style={styles.refreshBtn}
+          >
             <Icon name="refresh" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
         )}
@@ -109,7 +111,11 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
 
       {!loading && !advice && !hasItems && (
         <View style={styles.center}>
-          <Icon name="information-outline" size={32} color={colors.textTertiary} />
+          <Icon
+            name="information-outline"
+            size={32}
+            color={colors.textTertiary}
+          />
           <Text style={styles.hint}>暂无建议，请稍后重试</Text>
         </View>
       )}
@@ -121,7 +127,9 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
               <View style={styles.itemTopRow}>
                 <Text style={styles.itemTitle}>{item.title}</Text>
               </View>
-              <Text style={styles.itemDetail} numberOfLines={2}>{item.detail}</Text>
+              <Text style={styles.itemDetail} numberOfLines={2}>
+                {item.detail}
+              </Text>
             </View>
           ))}
         </View>
@@ -129,22 +137,45 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
 
       {!loading && !hasItems && advice && (
         <>
-          <View style={[styles.contentWrapper, !expanded && styles.contentCollapsed]}>
+          <View
+            style={[
+              styles.contentWrapper,
+              !expanded && styles.contentCollapsed,
+            ]}
+          >
             <MarkdownText text={advice} baseStyle={styles.adviceText} />
           </View>
-          {advice.split('\n').length > MAX_LINES && (
-            <TouchableOpacity onPress={handleToggle} style={styles.toggleBtn} activeOpacity={0.7}>
-              <Text style={styles.toggleText}>{expanded ? '收起' : '展开更多'}</Text>
-              <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.primary} />
+          {advice.split("\n").length > MAX_LINES && (
+            <TouchableOpacity
+              onPress={handleToggle}
+              style={styles.toggleBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.toggleText}>
+                {expanded ? "收起" : "展开更多"}
+              </Text>
+              <Icon
+                name={expanded ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={colors.primary}
+              />
             </TouchableOpacity>
           )}
         </>
       )}
 
-      {(!loading && (advice || hasItems)) && (
+      {!loading && (advice || hasItems) && (
         <View style={styles.actionBar}>
-          <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.7}>
-            <Icon name="chat-processing-outline" size={18} color={colors.primary} />
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={onPress}
+            activeOpacity={0.7}
+          >
+            <Icon
+              name="chat-processing-outline"
+              size={18}
+              color={colors.primary}
+            />
             <Text style={styles.actionText}>继续咨询</Text>
           </TouchableOpacity>
         </View>
@@ -159,8 +190,8 @@ const styles = StyleSheet.create({
     padding: spacingV2.xl,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: spacingV2.md,
     gap: spacingV2.sm,
   },
@@ -169,15 +200,15 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: borderRadiusV2.lg,
     backgroundColor: colors.successMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerText: {
     flex: 1,
   },
   title: {
     fontSize: fontSizeV2.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
   },
   subtitle: {
@@ -189,8 +220,8 @@ const styles = StyleSheet.create({
     padding: spacingV2.xs,
   },
   center: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacingV2.xl,
     gap: spacingV2.sm,
   },
@@ -199,7 +230,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   contentWrapper: {
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   contentCollapsed: {
     maxHeight: 140,
@@ -210,34 +241,34 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   toggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: spacingV2.sm,
     paddingVertical: spacingV2.xs,
   },
   toggleText: {
     fontSize: fontSizeV2.sm,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
     marginRight: 2,
   },
   itemsContainer: {
     gap: spacingV2.sm,
   },
   itemCard: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: "rgba(255,255,255,0.6)",
     borderRadius: borderRadiusV2.lg,
     padding: spacingV2.md,
   },
   itemTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: spacingV2.xs,
   },
   itemTitle: {
     fontSize: fontSizeV2.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
   },
   itemDetail: {
@@ -246,18 +277,18 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   actionBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     marginTop: spacingV2.md,
     paddingTop: spacingV2.md,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.06)',
+    borderTopColor: "rgba(0,0,0,0.06)",
   },
   actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacingV2.xs,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: "rgba(255,255,255,0.7)",
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
     borderRadius: borderRadiusV2.md,
@@ -265,6 +296,6 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: fontSizeV2.sm,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

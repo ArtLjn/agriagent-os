@@ -1,4 +1,4 @@
-import React, {useState, useRef, useCallback, useEffect} from 'react';
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,54 +8,62 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-} from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {useNavigation} from '@react-navigation/native';
-import {useAgentStore} from '../../stores/agentStore';
-import type {ChatMessage} from '../../api/types';
-import {MarkdownText} from '../../components/MarkdownText';
-import {ReportListView} from '../../components/ReportListView';
-import {ScalePress} from '../../components/animations/ScalePress';
-import {colors} from '../../theme/colors';
-import {spacingV2, fontSizeV2, borderRadiusV2} from '../../theme/spacing';
-import {appGradients} from '../../theme/gradients';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+} from "react-native";
+import LinearGradient from "react-native-linear-gradient";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { useAgentStore } from "../../stores/agentStore";
+import type { ChatMessage } from "../../api/types";
+import { MarkdownText } from "../../components/MarkdownText";
+import { ReportListView } from "../../components/ReportListView";
+import { ScalePress } from "../../components/animations/ScalePress";
+import { colors } from "../../theme/colors";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
+import { appGradients } from "../../theme/gradients";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 const RECOMMENDED_QUESTIONS = [
-  '帮我规划秋种',
-  '今天适合施肥吗',
-  '未来一周天气',
+  "帮我规划秋种",
+  "今天适合施肥吗",
+  "未来一周天气",
 ];
 
 const QUICK_PROMPTS = [
-  {icon: 'weather-partly-cloudy', text: '今日天气对作物有什么影响？'},
-  {icon: 'sprout', text: '给我一些种植建议'},
-  {icon: 'bug', text: '常见的病虫害怎么防治？'},
-  {icon: 'file-document', text: '生成本周种植报告'},
+  { icon: "weather-partly-cloudy", text: "今日天气对作物有什么影响？" },
+  { icon: "sprout", text: "给我一些种植建议" },
+  { icon: "bug", text: "常见的病虫害怎么防治？" },
+  { icon: "file-document", text: "生成本周种植报告" },
 ];
 
 export const AgentChatScreen: React.FC = () => {
   const navigation = useNavigation();
-  const {messages, sendMessage, loading: isLoading, reports, fetchReports} = useAgentStore();
-  const [inputText, setInputText] = useState('');
-  const [activeTab, setActiveTab] = useState<'chat' | 'report'>('chat');
+  const {
+    messages,
+    sendMessage,
+    loading: isLoading,
+    reports,
+    fetchReports,
+  } = useAgentStore();
+  const [inputText, setInputText] = useState("");
+  const [activeTab, setActiveTab] = useState<"chat" | "report">("chat");
   const flatListRef = useRef<FlatList>(null);
 
   const hasMessages = messages.length > 0;
 
   useEffect(() => {
-    if (activeTab === 'report') {
+    if (activeTab === "report") {
       fetchReports();
     }
   }, [activeTab]);
 
   const handleSend = async (text: string) => {
-    if (!text.trim() || isLoading) return;
-    setInputText('');
+    if (!text.trim() || isLoading) {
+      return;
+    }
+    setInputText("");
     await sendMessage(text.trim());
     setTimeout(() => {
-      flatListRef.current?.scrollToEnd({animated: true});
+      flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   };
 
@@ -63,11 +71,13 @@ export const AgentChatScreen: React.FC = () => {
     handleSend(inputText);
   };
 
-  const renderMessage = ({item}: {item: ChatMessage}) => {
-    const isUser = item.role === 'user';
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
+    const isUser = item.role === "user";
     const hasPendingAction = !isUser && item.pending_action;
     return (
-      <View style={[styles.messageRow, isUser ? styles.userRow : styles.agentRow]}>
+      <View
+        style={[styles.messageRow, isUser ? styles.userRow : styles.agentRow]}
+      >
         {!isUser && (
           <View style={styles.agentAvatar}>
             <View style={styles.aiFace}>
@@ -76,11 +86,17 @@ export const AgentChatScreen: React.FC = () => {
             </View>
           </View>
         )}
-        <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.agentBubble]}>
+        <View
+          style={[
+            styles.messageBubble,
+            isUser ? styles.userBubble : styles.agentBubble,
+          ]}
+        >
           {isUser ? (
             <LinearGradient
               {...appGradients.userBubble}
-              style={styles.userBubbleInner}>
+              style={styles.userBubbleInner}
+            >
               <Text style={styles.userText}>{item.content}</Text>
             </LinearGradient>
           ) : (
@@ -90,10 +106,20 @@ export const AgentChatScreen: React.FC = () => {
           )}
           {hasPendingAction && (
             <View style={styles.confirmBar}>
-              <TouchableOpacity style={styles.confirmBtn} onPress={() => handleSend('确认')} activeOpacity={0.7} disabled={isLoading}>
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={() => handleSend("确认")}
+                activeOpacity={0.7}
+                disabled={isLoading}
+              >
                 <Text style={styles.confirmBtnText}>确认</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => handleSend('取消')} activeOpacity={0.7} disabled={isLoading}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => handleSend("取消")}
+                activeOpacity={0.7}
+                disabled={isLoading}
+              >
                 <Text style={styles.cancelBtnText}>取消</Text>
               </TouchableOpacity>
             </View>
@@ -112,7 +138,9 @@ export const AgentChatScreen: React.FC = () => {
         </View>
       </View>
       <Text style={styles.welcomeTitle}>你好呀，我是 AI 农事助手</Text>
-      <Text style={styles.welcomeSubtitle}>可以帮你分析天气、提供种植建议、生成报告</Text>
+      <Text style={styles.welcomeSubtitle}>
+        可以帮你分析天气、提供种植建议、生成报告
+      </Text>
 
       {/* Recommended question capsules */}
       <View style={styles.capsulesContainer}>
@@ -139,13 +167,18 @@ export const AgentChatScreen: React.FC = () => {
   );
 
   const ListHeaderComponent = useCallback(() => {
-    if (hasMessages) return null;
+    if (hasMessages) {
+      return null;
+    }
     return renderWelcome();
   }, [hasMessages]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <LinearGradient {...appGradients.chatBg} style={StyleSheet.absoluteFill} />
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
+      <LinearGradient
+        {...appGradients.chatBg}
+        style={StyleSheet.absoluteFill}
+      />
 
       {/* Header */}
       <View style={styles.header}>
@@ -169,33 +202,55 @@ export const AgentChatScreen: React.FC = () => {
       {/* SegmentedControl */}
       <View style={styles.segmentRow}>
         <TouchableOpacity
-          style={[styles.segBtn, activeTab === 'chat' && styles.segBtnActive]}
-          onPress={() => setActiveTab('chat')}
-          activeOpacity={0.7}>
-          <Text style={[styles.segText, activeTab === 'chat' && styles.segTextActive]}>对话</Text>
+          style={[styles.segBtn, activeTab === "chat" && styles.segBtnActive]}
+          onPress={() => setActiveTab("chat")}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.segText,
+              activeTab === "chat" && styles.segTextActive,
+            ]}
+          >
+            对话
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.segBtn, activeTab === 'report' && styles.segBtnActive]}
-          onPress={() => setActiveTab('report')}
-          activeOpacity={0.7}>
-          <Text style={[styles.segText, activeTab === 'report' && styles.segTextActive]}>报告</Text>
+          style={[styles.segBtn, activeTab === "report" && styles.segBtnActive]}
+          onPress={() => setActiveTab("report")}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.segText,
+              activeTab === "report" && styles.segTextActive,
+            ]}
+          >
+            报告
+          </Text>
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-        {activeTab === 'chat' ? (
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      >
+        {activeTab === "chat" ? (
           <>
             <FlatList
               ref={flatListRef}
               data={messages}
               keyExtractor={(_, index) => String(index)}
               renderItem={renderMessage}
-              contentContainerStyle={[styles.listContent, !hasMessages && {flexGrow: 1}]}
+              contentContainerStyle={[
+                styles.listContent,
+                !hasMessages && { flexGrow: 1 },
+              ]}
               ListHeaderComponent={ListHeaderComponent}
-              onContentSizeChange={() => flatListRef.current?.scrollToEnd({animated: true})}
+              onContentSizeChange={() =>
+                flatListRef.current?.scrollToEnd({ animated: true })
+              }
             />
 
             {isLoading && hasMessages && (
@@ -221,14 +276,31 @@ export const AgentChatScreen: React.FC = () => {
                   maxLength={500}
                 />
                 <TouchableOpacity
-                  style={[styles.sendBtn, (!inputText.trim() || isLoading) && styles.sendBtnDisabled]}
+                  style={[
+                    styles.sendBtn,
+                    (!inputText.trim() || isLoading) && styles.sendBtnDisabled,
+                  ]}
                   onPress={handleInputSend}
                   disabled={!inputText.trim() || isLoading}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                >
                   <LinearGradient
                     {...appGradients.userBubble}
-                    style={[styles.sendBtnGradient, (!inputText.trim() || isLoading) && styles.sendBtnDisabled]}>
-                    <Icon name="send" size={18} color={!inputText.trim() || isLoading ? colors.textTertiary : '#FFFFFF'} />
+                    style={[
+                      styles.sendBtnGradient,
+                      (!inputText.trim() || isLoading) &&
+                        styles.sendBtnDisabled,
+                    ]}
+                  >
+                    <Icon
+                      name="send"
+                      size={18}
+                      color={
+                        !inputText.trim() || isLoading
+                          ? colors.textTertiary
+                          : "#FFFFFF"
+                      }
+                    />
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -237,9 +309,9 @@ export const AgentChatScreen: React.FC = () => {
         ) : (
           <ReportListView
             reports={reports}
-            onGenerate={() => navigation.navigate('AgentReport' as never)}
+            onGenerate={() => navigation.navigate("AgentReport" as never)}
             onViewReport={(r) =>
-              (navigation as any).navigate('AgentReport', {
+              (navigation as any).navigate("AgentReport", {
                 content: r.content,
                 reportType: r.report_type,
                 createdAt: r.created_at,
@@ -261,81 +333,81 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: spacingV2.lg,
     paddingVertical: spacingV2.md,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   headerAvatar: {
     width: 40,
     height: 40,
     borderRadius: borderRadiusV2.lg,
     backgroundColor: colors.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: spacingV2.md,
   },
   aiFace: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#1A1D23',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#1A1D23",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 4,
   },
   aiEye: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   aiFaceSmall: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#1A1D23',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#1A1D23",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 4,
   },
   aiEyeSmall: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   aiFaceLarge: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#1A1D23',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#1A1D23",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
   },
   aiEyeLarge: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   headerTitle: {
     fontSize: fontSizeV2.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
   },
   statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginTop: 2,
   },
@@ -350,24 +422,24 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   segmentRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginHorizontal: spacingV2.lg,
     marginTop: spacingV2.sm,
     marginBottom: spacingV2.sm,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: "rgba(255,255,255,0.7)",
     borderRadius: borderRadiusV2.lg,
     padding: 3,
   },
   segBtn: {
     flex: 1,
     paddingVertical: spacingV2.sm,
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: borderRadiusV2.md,
   },
   segBtnActive: {
     backgroundColor: colors.surface,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
@@ -375,7 +447,7 @@ const styles = StyleSheet.create({
   segText: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   segTextActive: {
     color: colors.text,
@@ -386,8 +458,8 @@ const styles = StyleSheet.create({
   },
   welcomeContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacingV2.xxl,
     paddingHorizontal: spacingV2.lg,
   },
@@ -396,27 +468,27 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: borderRadiusV2.full,
     backgroundColor: colors.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: spacingV2.lg,
   },
   welcomeTitle: {
     fontSize: fontSizeV2.xl,
-    fontWeight: '800',
+    fontWeight: "800",
     color: colors.text,
     marginBottom: spacingV2.xs,
-    textAlign: 'center',
+    textAlign: "center",
   },
   welcomeSubtitle: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     marginBottom: spacingV2.xl,
-    textAlign: 'center',
+    textAlign: "center",
   },
   capsulesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
     gap: spacingV2.sm,
     marginBottom: spacingV2.xl,
   },
@@ -431,15 +503,15 @@ const styles = StyleSheet.create({
   capsuleText: {
     fontSize: fontSizeV2.sm,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   quickPromptsContainer: {
-    width: '100%',
+    width: "100%",
     gap: spacingV2.sm,
   },
   quickPrompt: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.lg,
     paddingHorizontal: spacingV2.md,
@@ -451,34 +523,34 @@ const styles = StyleSheet.create({
   quickPromptText: {
     fontSize: fontSizeV2.sm,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: "500",
     flex: 1,
   },
   messageRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: spacingV2.md,
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   userRow: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   agentRow: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   agentAvatar: {
     width: 32,
     height: 32,
     borderRadius: borderRadiusV2.md,
     backgroundColor: colors.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: spacingV2.sm,
   },
   messageBubble: {
-    maxWidth: '92%',
+    maxWidth: "92%",
   },
   userBubble: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
   },
   userBubbleInner: {
     borderRadius: borderRadiusV2.lg,
@@ -486,7 +558,7 @@ const styles = StyleSheet.create({
     padding: spacingV2.md,
   },
   agentBubble: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   agentBubbleInner: {
     backgroundColor: colors.surface,
@@ -509,11 +581,11 @@ const styles = StyleSheet.create({
   typingRow: {
     paddingHorizontal: spacingV2.md,
     paddingBottom: spacingV2.sm,
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
   },
   typingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.lg,
     borderBottomLeftRadius: 4,
@@ -543,8 +615,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     backgroundColor: colors.chatInputBg,
     borderRadius: 24,
     paddingLeft: spacingV2.md,
@@ -563,21 +635,21 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: borderRadiusV2.full,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   sendBtnGradient: {
     width: 36,
     height: 36,
     borderRadius: borderRadiusV2.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   sendBtnDisabled: {
     backgroundColor: colors.disabledBg,
   },
   confirmBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: spacingV2.sm,
     marginTop: spacingV2.md,
     paddingTop: spacingV2.sm,
@@ -593,7 +665,7 @@ const styles = StyleSheet.create({
   confirmBtnText: {
     color: colors.textInverse,
     fontSize: fontSizeV2.sm,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   cancelBtn: {
     backgroundColor: colors.disabledBg,
@@ -604,6 +676,6 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     color: colors.textSecondary,
     fontSize: fontSizeV2.sm,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

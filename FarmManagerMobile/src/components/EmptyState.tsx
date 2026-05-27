@@ -1,9 +1,9 @@
-import React from 'react';
-import {View, Text, StyleSheet} from 'react-native';
-import {colors} from '../theme/colors';
-import {spacing, fontSize} from '../theme/spacing';
-import {BigButton} from './BigButton';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { colors } from "../theme/colors";
+import { spacing, fontSize } from "../theme/spacing";
+import { BigButton } from "./BigButton";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 interface EmptyStateProps {
   title: string;
@@ -18,7 +18,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   subtitle,
   actionLabel,
   onAction,
-  icon = 'inbox-outline',
+  icon = "inbox-outline",
 }) => (
   <View style={styles.container}>
     <View style={styles.iconCircle}>
@@ -35,8 +35,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: spacing.xl,
   },
   iconCircle: {
@@ -44,20 +44,20 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: spacing.lg,
   },
   title: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
     marginBottom: spacing.xs,
   },
   subtitle: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: spacing.lg,
   },
   button: {

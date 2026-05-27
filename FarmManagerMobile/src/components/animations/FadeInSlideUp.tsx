@@ -1,6 +1,6 @@
-import React, {useEffect, useRef} from 'react';
-import {Animated, ViewStyle} from 'react-native';
-import {animationConfig} from '../../theme/animations';
+import React, { useEffect, useRef } from "react";
+import { Animated, ViewStyle } from "react-native";
+import { animationConfig } from "../../theme/animations";
 
 interface FadeInSlideUpProps {
   children: React.ReactNode;
@@ -14,7 +14,9 @@ export const FadeInSlideUp: React.FC<FadeInSlideUpProps> = ({
   style,
 }) => {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(animationConfig.entrance.translateY)).current;
+  const translateY = useRef(
+    new Animated.Value(animationConfig.entrance.translateY)
+  ).current;
 
   useEffect(() => {
     Animated.timing(opacity, {
@@ -37,9 +39,10 @@ export const FadeInSlideUp: React.FC<FadeInSlideUpProps> = ({
         style,
         {
           opacity,
-          transform: [{translateY}],
+          transform: [{ translateY }],
         },
-      ]}>
+      ]}
+    >
       {children}
     </Animated.View>
   );

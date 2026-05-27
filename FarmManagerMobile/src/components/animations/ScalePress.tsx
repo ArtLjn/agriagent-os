@@ -1,6 +1,11 @@
-import React, {useRef, useCallback} from 'react';
-import {Animated, Pressable, ViewStyle, GestureResponderEvent} from 'react-native';
-import {animationConfig} from '../../theme/animations';
+import React, { useRef, useCallback } from "react";
+import {
+  Animated,
+  Pressable,
+  ViewStyle,
+  GestureResponderEvent,
+} from "react-native";
+import { animationConfig } from "../../theme/animations";
 
 interface ScalePressProps {
   children: React.ReactNode;
@@ -38,14 +43,16 @@ export const ScalePress: React.FC<ScalePressProps> = ({
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      disabled={disabled}>
+      disabled={disabled}
+    >
       <Animated.View
         style={[
           style,
           {
-            transform: [{scale}],
+            transform: [{ scale }],
           },
-        ]}>
+        ]}
+      >
         {children}
       </Animated.View>
     </Pressable>

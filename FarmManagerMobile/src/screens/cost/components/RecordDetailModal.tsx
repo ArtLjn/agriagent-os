@@ -1,16 +1,10 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-} from 'react-native';
-import type {CostRecord} from '../../../api/types';
-import {colors} from '../../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../../theme/spacing';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import dayjs from 'dayjs';
+import React from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
+import type { CostRecord } from "../../../api/types";
+import { colors } from "../../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import dayjs from "dayjs";
 
 interface RecordDetailModalProps {
   visible: boolean;
@@ -25,37 +19,55 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   onClose,
   onDelete,
 }) => {
-  if (!record) return null;
+  if (!record) {
+    return null;
+  }
 
-  const isCost = record.record_type === 'cost';
-  const typeLabel = isCost ? '支出' : '收入';
+  const isCost = record.record_type === "cost";
+  const typeLabel = isCost ? "支出" : "收入";
   const typeColor = isCost ? colors.danger : colors.success;
   const typeBg = isCost ? colors.dangerLight : colors.successLight;
-  const prefix = isCost ? '-' : '+';
+  const prefix = isCost ? "-" : "+";
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
+        <TouchableOpacity
+          style={styles.backdrop}
+          onPress={onClose}
+          activeOpacity={1}
+        />
         <View style={styles.sheet}>
           {/* 顶部指示条 */}
           <View style={styles.handle} />
 
           {/* 类型标签 */}
-          <View style={[styles.typeBadge, {backgroundColor: typeBg}]}>
-            <Text style={[styles.typeText, {color: typeColor}]}>{typeLabel}</Text>
+          <View style={[styles.typeBadge, { backgroundColor: typeBg }]}>
+            <Text style={[styles.typeText, { color: typeColor }]}>
+              {typeLabel}
+            </Text>
           </View>
 
           {/* 金额 */}
-          <Text style={[styles.amount, {color: typeColor}]}>
-            {prefix}{record.amount}
+          <Text style={[styles.amount, { color: typeColor }]}>
+            {prefix}
+            {record.amount}
           </Text>
 
           {/* 详情列表 */}
           <View style={styles.details}>
             <View style={styles.detailRow}>
               <View style={styles.detailLeft}>
-                <Icon name="tag-outline" size={18} color={colors.textSecondary} />
+                <Icon
+                  name="tag-outline"
+                  size={18}
+                  color={colors.textSecondary}
+                />
                 <Text style={styles.detailLabel}>分类</Text>
               </View>
               <Text style={styles.detailValue}>{record.category}</Text>
@@ -63,18 +75,26 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
             <View style={styles.detailRow}>
               <View style={styles.detailLeft}>
-                <Icon name="calendar-outline" size={18} color={colors.textSecondary} />
+                <Icon
+                  name="calendar-outline"
+                  size={18}
+                  color={colors.textSecondary}
+                />
                 <Text style={styles.detailLabel}>日期</Text>
               </View>
               <Text style={styles.detailValue}>
-                {dayjs(record.record_date).format('YYYY年M月D日')}
+                {dayjs(record.record_date).format("YYYY年M月D日")}
               </Text>
             </View>
 
             {record.note ? (
               <View style={styles.detailRow}>
                 <View style={styles.detailLeft}>
-                  <Icon name="note-text-outline" size={18} color={colors.textSecondary} />
+                  <Icon
+                    name="note-text-outline"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
                   <Text style={styles.detailLabel}>备注</Text>
                 </View>
                 <Text style={styles.detailValue}>{record.note}</Text>
@@ -101,7 +121,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
     backgroundColor: colors.overlay,
   },
   backdrop: {
@@ -114,7 +134,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
     paddingTop: spacing.sm,
-    alignItems: 'center',
+    alignItems: "center",
   },
   handle: {
     width: 40,
@@ -131,29 +151,29 @@ const styles = StyleSheet.create({
   },
   typeText: {
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   amount: {
     fontSize: 36,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: spacing.lg,
   },
   details: {
-    width: '100%',
+    width: "100%",
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
   detailLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
   },
   detailLabel: {
@@ -163,13 +183,13 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: fontSize.md,
     color: colors.text,
-    fontWeight: '600',
-    maxWidth: '60%',
-    textAlign: 'right',
+    fontWeight: "600",
+    maxWidth: "60%",
+    textAlign: "right",
   },
   actions: {
-    flexDirection: 'row',
-    width: '100%',
+    flexDirection: "row",
+    width: "100%",
     gap: spacing.md,
   },
   closeBtn: {
@@ -177,26 +197,26 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.surfaceMuted,
     borderRadius: borderRadius.lg,
-    alignItems: 'center',
+    alignItems: "center",
   },
   closeText: {
     fontSize: fontSize.md,
     color: colors.text,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   deleteBtn: {
     flex: 1,
     paddingVertical: spacing.md,
     backgroundColor: colors.dangerLight,
     borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
     gap: spacing.xs,
   },
   deleteText: {
     fontSize: fontSize.md,
     color: colors.danger,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

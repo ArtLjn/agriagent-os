@@ -1,6 +1,6 @@
-import {create} from 'zustand';
-import type {CostRecord, CycleProfit} from '../api/types';
-import {costApi} from '../api/client';
+import { create } from 'zustand';
+import type { CostRecord, CycleProfit } from '../api/types';
+import { costApi } from '../api/client';
 
 interface CostState {
   records: CostRecord[];
@@ -21,59 +21,59 @@ interface CostState {
   clearError: () => void;
 }
 
-export const useCostStore = create<CostState>(set => ({
+export const useCostStore = create<CostState>((set) => ({
   records: [],
   profit: null,
   loading: false,
   error: null,
 
-  fetchRecords: async cycleId => {
-    set({loading: true, error: null});
+  fetchRecords: async (cycleId) => {
+    set({ loading: true, error: null });
     try {
       const res = await costApi.getRecords(
-        cycleId ? {cycle_id: cycleId} : undefined,
+        cycleId ? { cycle_id: cycleId } : undefined
       );
-      set({records: (res.data as any)?.items ?? res.data, loading: false});
+      set({ records: (res.data as any)?.items ?? res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  createRecord: async data => {
-    set({loading: true, error: null});
+  createRecord: async (data) => {
+    set({ loading: true, error: null });
     try {
       await costApi.createRecord(data);
       const res = await costApi.getRecords(
-        data.cycle_id ? {cycle_id: data.cycle_id} : undefined,
+        data.cycle_id ? { cycle_id: data.cycle_id } : undefined
       );
-      set({records: (res.data as any)?.items ?? res.data, loading: false});
+      set({ records: (res.data as any)?.items ?? res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
   deleteRecord: async (id, cycleId) => {
-    set({loading: true, error: null});
+    set({ loading: true, error: null });
     try {
       await costApi.deleteRecord(id);
       const res = await costApi.getRecords(
-        cycleId ? {cycle_id: cycleId} : undefined,
+        cycleId ? { cycle_id: cycleId } : undefined
       );
-      set({records: (res.data as any)?.items ?? res.data, loading: false});
+      set({ records: (res.data as any)?.items ?? res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  fetchProfit: async cycleId => {
-    set({loading: true, error: null});
+  fetchProfit: async (cycleId) => {
+    set({ loading: true, error: null });
     try {
       const res = await costApi.getProfit(cycleId);
-      set({profit: res.data, loading: false});
+      set({ profit: res.data, loading: false });
     } catch (err: any) {
-      set({error: err.message, loading: false});
+      set({ error: err.message, loading: false });
     }
   },
 
-  clearError: () => set({error: null}),
+  clearError: () => set({ error: null }),
 }));

@@ -1,56 +1,57 @@
-import React, {useEffect} from 'react';
+import React, { useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {useAgentStore} from '../../stores/agentStore';
-import {Card} from '../../components/Card';
-import {MarkdownText} from '../../components/MarkdownText';
-import {colors} from '../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../theme/spacing';
-import type {RootStackParamList} from '../../navigation/AppNavigator';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useAgentStore } from "../../stores/agentStore";
+import { Card } from "../../components/Card";
+import { MarkdownText } from "../../components/MarkdownText";
+import { colors } from "../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import type { RootStackParamList } from "../../navigation/AppNavigator";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const FEATURES = [
   {
-    title: '农事顾问',
-    subtitle: '随时解答种植问题',
-    icon: 'chat-processing',
+    title: "农事顾问",
+    subtitle: "随时解答种植问题",
+    icon: "chat-processing",
     iconColor: colors.primary,
     bgColor: colors.primaryMuted,
-    route: 'AgentChat' as const,
+    route: "AgentChat" as const,
   },
   {
-    title: '种植报告',
-    subtitle: '生成周报与月报',
-    icon: 'file-document',
+    title: "种植报告",
+    subtitle: "生成周报与月报",
+    icon: "file-document",
     iconColor: colors.success,
     bgColor: colors.successLight,
-    route: 'AgentReport' as const,
+    route: "AgentReport" as const,
   },
 ];
 
 export const AgentTabScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const {dailyAdvice, fetchDailyAdvice, loading} = useAgentStore();
+  const { dailyAdvice, fetchDailyAdvice, loading } = useAgentStore();
 
   useEffect(() => {
     fetchDailyAdvice();
   }, [fetchDailyAdvice]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerAvatar}>
@@ -66,17 +67,19 @@ export const AgentTabScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>快捷功能</Text>
           <View style={styles.featuresRow}>
-            {FEATURES.map(feature => (
+            {FEATURES.map((feature) => (
               <TouchableOpacity
                 key={feature.title}
                 style={styles.featureCard}
                 onPress={() => navigation.navigate(feature.route as never)}
-                activeOpacity={0.7}>
+                activeOpacity={0.7}
+              >
                 <View
                   style={[
                     styles.featureIcon,
-                    {backgroundColor: feature.bgColor},
-                  ]}>
+                    { backgroundColor: feature.bgColor },
+                  ]}
+                >
                   <Icon
                     name={feature.icon}
                     size={28}
@@ -95,15 +98,12 @@ export const AgentTabScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>今日建议</Text>
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('AgentChat' as never)}>
+            onPress={() => navigation.navigate("AgentChat" as never)}
+          >
             <Card style={styles.adviceCard}>
               {loading || !dailyAdvice ? (
                 <View style={styles.adviceLoading}>
-                  <Icon
-                    name="loading"
-                    size={20}
-                    color={colors.textTertiary}
-                  />
+                  <Icon name="loading" size={20} color={colors.textTertiary} />
                   <Text style={styles.adviceLoadingText}>加载中...</Text>
                 </View>
               ) : (
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.lg,
   },
@@ -148,13 +148,13 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: borderRadius.full,
     backgroundColor: colors.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: spacing.md,
   },
   headerTitle: {
     fontSize: fontSize.xl,
-    fontWeight: '800',
+    fontWeight: "800",
     color: colors.text,
     marginBottom: spacing.xs,
   },
@@ -168,12 +168,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
     marginBottom: spacing.md,
   },
   featuresRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.md,
   },
   featureCard: {
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
@@ -189,20 +189,20 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: spacing.md,
   },
   featureTitle: {
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
     marginBottom: 2,
   },
   featureSubtitle: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
   },
   adviceCard: {
     padding: spacing.md,
@@ -213,9 +213,9 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   adviceFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
@@ -225,12 +225,12 @@ const styles = StyleSheet.create({
   adviceHint: {
     fontSize: fontSize.sm,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   adviceLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: spacing.sm,
     paddingVertical: spacing.lg,
   },

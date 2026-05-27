@@ -1,13 +1,20 @@
-import React from 'react';
-import {View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator} from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import {colors} from '../../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../../theme/spacing';
+import React from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { colors } from "../../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
 
 const AI_EXAMPLES = [
-  '买了50斤化肥花了120块',
-  '今天卖西瓜收入3000元',
-  '大棚租金5000',
+  "买了50斤化肥花了120块",
+  "今天卖西瓜收入3000元",
+  "大棚租金5000",
 ];
 
 interface AIHelperProps {
@@ -40,7 +47,11 @@ export const AIHelper: React.FC<AIHelperProps> = ({
         returnKeyType="send"
         onSubmitEditing={onParse}
       />
-      <TouchableOpacity style={styles.aiButton} onPress={onParse} disabled={aiLoading}>
+      <TouchableOpacity
+        style={styles.aiButton}
+        onPress={onParse}
+        disabled={aiLoading}
+      >
         {aiLoading ? (
           <ActivityIndicator size="small" color={colors.textInverse} />
         ) : (
@@ -53,7 +64,8 @@ export const AIHelper: React.FC<AIHelperProps> = ({
         <TouchableOpacity
           key={index}
           style={styles.aiExampleChip}
-          onPress={() => onInputChange(example)}>
+          onPress={() => onInputChange(example)}
+        >
           <Text style={styles.aiExampleText}>{example}</Text>
         </TouchableOpacity>
       ))}
@@ -69,13 +81,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   aiHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: spacing.xs,
   },
   aiTitle: {
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.primary,
     marginLeft: spacing.sm,
   },
@@ -85,8 +97,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   aiInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: spacing.md,
   },
   aiInput: {
@@ -105,12 +117,12 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   aiExamplesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   aiExampleChip: {
     backgroundColor: colors.surface,

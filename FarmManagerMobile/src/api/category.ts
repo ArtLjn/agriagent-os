@@ -1,5 +1,5 @@
-import {apiClient} from './client';
-import type {CostCategory, CategoryCreateParams} from '../types/category';
+import { apiClient } from './client';
+import type { CostCategory, CategoryCreateParams } from '../types/category';
 
 export const categoryApi = {
   getCategories: () => apiClient.get<CostCategory[]>('/cost-categories'),

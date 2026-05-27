@@ -1,17 +1,17 @@
-import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {BreathingFloat} from './animations/BreathingFloat';
-import {ScalePress} from './animations/ScalePress';
-import {colors} from '../theme/colors';
-import {shadowV2} from '../theme/designTokens';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import React from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { BreathingFloat } from "./animations/BreathingFloat";
+import { ScalePress } from "./animations/ScalePress";
+import { colors } from "../theme/colors";
+import { shadowV2 } from "../theme/designTokens";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 export const AIPet: React.FC = () => {
   const navigation = useNavigation();
 
   const handlePress = () => {
-    navigation.navigate('AgentChat' as never);
+    navigation.navigate("AgentChat" as never);
   };
 
   return (
@@ -30,7 +30,7 @@ export const AIPet: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     right: 20,
     bottom: 100,
     zIndex: 100,
@@ -40,14 +40,14 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     backgroundColor: colors.aiPetBg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     opacity: 0.9,
     borderWidth: 2,
-    borderColor: 'rgba(91,140,255,0.15)',
+    borderColor: "rgba(91,140,255,0.15)",
   },
   pulseDot: {
-    position: 'absolute',
+    position: "absolute",
     top: 14,
     right: 14,
     width: 10,

@@ -1,9 +1,11 @@
-import React from 'react';
-import {View, ActivityIndicator, Text, StyleSheet} from 'react-native';
-import {colors} from '../theme/colors';
-import {spacing, fontSize} from '../theme/spacing';
+import React from "react";
+import { View, ActivityIndicator, Text, StyleSheet } from "react-native";
+import { colors } from "../theme/colors";
+import { spacing, fontSize } from "../theme/spacing";
 
-export const Loading: React.FC<{message?: string}> = ({message = '加载中...'}) => (
+export const Loading: React.FC<{ message?: string }> = ({
+  message = "加载中...",
+}) => (
   <View style={styles.container}>
     <ActivityIndicator size="large" color={colors.primary} />
     <Text style={styles.text}>{message}</Text>
@@ -13,8 +15,8 @@ export const Loading: React.FC<{message?: string}> = ({message = '加载中...'}
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: spacing.lg,
   },
   text: {
