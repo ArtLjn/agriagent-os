@@ -15,6 +15,7 @@ import {GuideScreen} from '../screens/settings/GuideScreen';
 import {DebtListScreen} from '../screens/debt/DebtListScreen';
 import {DebtCreateScreen} from '../screens/debt/DebtCreateScreen';
 import {CropTemplateScreen} from '../screens/crop/CropTemplateScreen';
+import {WeatherDetailScreen} from '../screens/weather/WeatherDetailScreen';
 import {colors} from '../theme/colors';
 
 export type RootStackParamList = {
@@ -32,6 +33,7 @@ export type RootStackParamList = {
   DebtList: undefined;
   DebtCreate: undefined;
   CropTemplate: undefined;
+  WeatherDetail: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -122,6 +124,11 @@ export const AppNavigator: React.FC = () => (
         name="CropTemplate"
         component={CropTemplateScreen}
         options={{title: '作物模板'}}
+      />
+      <Stack.Screen
+        name="WeatherDetail"
+        component={WeatherDetailScreen}
+        options={{title: '天气详情', headerShown: false}}
       />
     </Stack.Navigator>
   </NavigationContainer>
