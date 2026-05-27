@@ -1,8 +1,10 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {View, StyleSheet, Text} from 'react-native';
+import {View, Text, StyleSheet, Platform} from 'react-native';
 import {colors} from '../theme/colors';
-import {spacing, fontSize} from '../theme/spacing';
+import {spacingV2, fontSizeV2, borderRadiusV2} from '../theme/spacing';
+import {shadowV2} from '../theme/designTokens';
+import LinearGradient from 'react-native-linear-gradient';
 import {HomeScreen} from '../screens/home/HomeScreen';
 import {AgentChatScreen} from '../screens/agent/AgentChatScreen';
 import {CostListScreen} from '../screens/cost/CostListScreen';
@@ -30,23 +32,29 @@ export const MainTabNavigator: React.FC = () => (
     screenOptions={({route}) => ({
       headerShown: false,
       tabBarStyle: styles.tabBar,
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.tabInactive,
-      tabBarShowLabel: true,
-      tabBarLabel: ({focused, color}) => (
-        <Text style={[styles.tabLabel, focused && styles.tabLabelActive, {color}]}>
-          {TAB_CONFIG[route.name].label}
-        </Text>
-      ),
-      tabBarIcon: ({focused, color}) => (
-        <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-          <Icon
-            name={focused ? TAB_CONFIG[route.name].activeIcon : TAB_CONFIG[route.name].icon}
-            size={22}
-            color={color}
-          />
-        </View>
-      ),
+      tabBarShowLabel: false,
+      tabBarIcon: ({focused}) => {
+        const config = TAB_CONFIG[route.name];
+        return (
+          <View style={styles.tabItem}>
+            {focused ? (
+              <LinearGradient
+                colors={['#5B8CFF', '#7A7DFF']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 0}}
+                style={styles.capsule}>
+                <Icon name={config.activeIcon} size={20} color="#FFFFFF" />
+                <Text style={styles.capsuleLabel}>{config.label}</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.inactiveItem}>
+                <Icon name={config.icon} size={22} color={colors.tabInactive} />
+                <Text style={styles.inactiveLabel}>{config.label}</Text>
+              </View>
+            )}
+          </View>
+        );
+      },
     })}>
     <Tab.Screen name="Home" component={HomeScreen} />
     <Tab.Screen name="AgentChat" component={AgentChatScreen} />
@@ -57,35 +65,47 @@ export const MainTabNavigator: React.FC = () => (
 
 const styles = StyleSheet.create({
   tabBar: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
     height: 72,
-    paddingBottom: 10,
-    paddingTop: 6,
-    backgroundColor: colors.tabBg,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    shadowColor: colors.shadow,
-    shadowOffset: {width: 0, height: -2},
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 8,
+    borderRadius: borderRadiusV2.tab,
+    backgroundColor: Platform.select({
+      ios: 'rgba(255,255,255,0.85)',
+      android: 'rgba(255,255,255,0.95)',
+    }),
+    borderTopWidth: 0,
+    ...shadowV2.card,
+    elevation: 10,
   },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    flex: 1,
   },
-  iconContainerActive: {
-    backgroundColor: colors.primaryMuted,
+  capsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
+    borderRadius: borderRadiusV2.full,
+    gap: 4,
   },
-  tabLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '500',
+  capsuleLabel: {
+    fontSize: fontSizeV2.sm,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  inactiveItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacingV2.sm,
+  },
+  inactiveLabel: {
+    fontSize: fontSizeV2.xs,
+    color: colors.tabInactive,
     marginTop: 2,
-  },
-  tabLabelActive: {
-    fontWeight: '700',
+    fontWeight: '500',
   },
 });
