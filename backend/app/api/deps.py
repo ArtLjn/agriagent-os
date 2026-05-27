@@ -59,3 +59,10 @@ def verify_resource_owner(resource_farm_id: int, current_farm: Farm) -> None:
     """Layer 3a: 校验资源是否属于当前用户的农场。"""
     if resource_farm_id != current_farm.id:
         raise HTTPException(status_code=403, detail="无权访问此资源")
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    """Layer 0: 校验当前用户是否为管理员。"""
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return user
