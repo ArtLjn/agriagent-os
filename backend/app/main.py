@@ -29,6 +29,7 @@ from app.api import (  # noqa: E402
     crop,
     cycle,
     debt,
+    feedback,
     log,
     user_settings,
     weather,
@@ -203,6 +204,7 @@ app.include_router(admin_stats.router)
 app.include_router(admin_config.router)
 app.include_router(user_settings.router)
 app.include_router(debt.router)
+app.include_router(feedback.router)
 
 
 @app.get("/health")
