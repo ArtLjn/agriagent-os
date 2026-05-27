@@ -9,7 +9,7 @@ import pytest
 
 from skillify.core.context import SkillContext
 
-_settle_mod = importlib.import_module("app.skills.settle-debt.scripts.main")
+_settle_mod = importlib.import_module("app.agent.skills.settle-debt.scripts.main")
 SettleDebtSkill = _settle_mod.SettleDebtSkill
 
 

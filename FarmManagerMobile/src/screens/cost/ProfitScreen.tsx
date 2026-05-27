@@ -1,20 +1,20 @@
-import React, {useEffect} from 'react';
-import {View, Text, StyleSheet, ScrollView} from 'react-native';
-import {useRoute} from '@react-navigation/native';
-import {useCostStore} from '../../stores/costStore';
-import {Card} from '../../components/Card';
-import {Loading} from '../../components/Loading';
-import {colors} from '../../theme/colors';
-import {spacing, fontSize} from '../../theme/spacing';
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { useRoute } from "@react-navigation/native";
+import { useCostStore } from "../../stores/costStore";
+import { Card } from "../../components/Card";
+import { Loading } from "../../components/Loading";
+import { colors } from "../../theme/colors";
+import { spacing, fontSize } from "../../theme/spacing";
 
 type ProfitRouteProp = {
-  params: {cycleId: number};
+  params: { cycleId: number };
 };
 
 export const ProfitScreen: React.FC = () => {
   const route = useRoute() as ProfitRouteProp;
-  const {cycleId} = route.params;
-  const {profit, loading, fetchProfit} = useCostStore();
+  const { cycleId } = route.params;
+  const { profit, loading, fetchProfit } = useCostStore();
 
   useEffect(() => {
     fetchProfit(cycleId);
@@ -34,10 +34,11 @@ export const ProfitScreen: React.FC = () => {
         <Text
           style={[
             styles.netProfit,
-            {color: isProfit ? colors.success : colors.danger},
-          ]}>
-          {isProfit ? '+' : ''}
-          {profit?.net_profit ?? '0.00'}
+            { color: isProfit ? colors.success : colors.danger },
+          ]}
+        >
+          {isProfit ? "+" : ""}
+          {profit?.net_profit ?? "0.00"}
         </Text>
         <Text style={styles.headerUnit}>元</Text>
       </View>
@@ -46,16 +47,16 @@ export const ProfitScreen: React.FC = () => {
         <View style={styles.summaryCard}>
           <Card style={styles.costCard} padding="lg">
             <Text style={styles.cardLabel}>总支出</Text>
-            <Text style={[styles.cardValue, {color: colors.danger}]}>
-              -{profit?.total_cost ?? '0.00'}
+            <Text style={[styles.cardValue, { color: colors.danger }]}>
+              -{profit?.total_cost ?? "0.00"}
             </Text>
           </Card>
         </View>
         <View style={styles.summaryCard}>
           <Card style={styles.incomeCard} padding="lg">
             <Text style={styles.cardLabel}>总收入</Text>
-            <Text style={[styles.cardValue, {color: colors.success}]}>
-              +{profit?.total_income ?? '0.00'}
+            <Text style={[styles.cardValue, { color: colors.success }]}>
+              +{profit?.total_income ?? "0.00"}
             </Text>
           </Card>
         </View>
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.xxl,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
@@ -83,7 +84,7 @@ const styles = StyleSheet.create({
   },
   netProfit: {
     fontSize: fontSize.xxxl,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   headerUnit: {
     fontSize: fontSize.md,
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   cardsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: spacing.md,
     gap: spacing.md,
   },
@@ -101,12 +102,12 @@ const styles = StyleSheet.create({
   costCard: {
     borderLeftWidth: 4,
     borderLeftColor: colors.danger,
-    alignItems: 'center',
+    alignItems: "center",
   },
   incomeCard: {
     borderLeftWidth: 4,
     borderLeftColor: colors.success,
-    alignItems: 'center',
+    alignItems: "center",
   },
   cardLabel: {
     fontSize: fontSize.sm,
@@ -115,6 +116,6 @@ const styles = StyleSheet.create({
   },
   cardValue: {
     fontSize: fontSize.xl,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

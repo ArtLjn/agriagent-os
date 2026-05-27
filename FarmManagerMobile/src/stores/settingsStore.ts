@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {create} from 'zustand';
-import {persist, createJSONStorage} from 'zustand/middleware';
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface SettingsState {
   defaultFarmName: string;
@@ -19,9 +19,12 @@ interface SettingsState {
   setDisplayName: (name: string) => void;
 }
 
-export const useSettingsStore = create<SettingsState, [['zustand/persist', unknown]]>(
+export const useSettingsStore = create<
+  SettingsState,
+  [['zustand/persist', unknown]]
+>(
   persist(
-    set => ({
+    (set) => ({
       defaultFarmName: '睢宁农场',
       defaultCity: '苏州',
       crops: ['西瓜', '豆角'],
@@ -30,17 +33,19 @@ export const useSettingsStore = create<SettingsState, [['zustand/persist', unkno
       weatherAlertEnabled: true,
       displayName: '农友',
 
-      setDefaultFarmName: name => set({defaultFarmName: name}),
-      setDefaultCity: city => set({defaultCity: city}),
-      setCrops: crops => set({crops}),
-      setReminderTime: time => set({reminderTime: time}),
-      setNotificationEnabled: enabled => set({notificationEnabled: enabled}),
-      setWeatherAlertEnabled: enabled => set({weatherAlertEnabled: enabled}),
-      setDisplayName: name => set({displayName: name}),
+      setDefaultFarmName: (name) => set({ defaultFarmName: name }),
+      setDefaultCity: (city) => set({ defaultCity: city }),
+      setCrops: (crops) => set({ crops }),
+      setReminderTime: (time) => set({ reminderTime: time }),
+      setNotificationEnabled: (enabled) =>
+        set({ notificationEnabled: enabled }),
+      setWeatherAlertEnabled: (enabled) =>
+        set({ weatherAlertEnabled: enabled }),
+      setDisplayName: (name) => set({ displayName: name }),
     }),
     {
       name: 'settings-store',
       storage: createJSONStorage(() => AsyncStorage),
-    },
-  ),
+    }
+  )
 );

@@ -1,13 +1,15 @@
-import React from 'react';
-import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {View, StyleSheet, Text} from 'react-native';
-import {colors} from '../theme/colors';
-import {spacing, fontSize} from '../theme/spacing';
-import {HomeScreen} from '../screens/home/HomeScreen';
-import {AgentChatScreen} from '../screens/agent/AgentChatScreen';
-import {CostListScreen} from '../screens/cost/CostListScreen';
-import {SettingsScreen} from '../screens/settings/SettingsScreen';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import React from "react";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { View, Text, StyleSheet, Platform } from "react-native";
+import { colors } from "../theme/colors";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
+import { shadowV2 } from "../theme/designTokens";
+import LinearGradient from "react-native-linear-gradient";
+import { HomeScreen } from "../screens/home/HomeScreen";
+import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
+import { CostListScreen } from "../screens/cost/CostListScreen";
+import { SettingsScreen } from "../screens/settings/SettingsScreen";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 export type MainTabParamList = {
   Home: undefined;
@@ -18,36 +20,42 @@ export type MainTabParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const TAB_CONFIG: Record<keyof MainTabParamList, {label: string; icon: string; activeIcon: string}> = {
-  Home: {label: '首页', icon: 'home-outline', activeIcon: 'home'},
-  AgentChat: {label: 'AI助手', icon: 'robot-outline', activeIcon: 'robot'},
-  Costs: {label: '记账', icon: 'cash-multiple', activeIcon: 'cash-multiple'},
-  Settings: {label: '我的', icon: 'account-outline', activeIcon: 'account'},
+const TAB_CONFIG: Record<
+  keyof MainTabParamList,
+  { label: string; icon: string; activeIcon: string }
+> = {
+  Home: { label: "首页", icon: "home-outline", activeIcon: "home" },
+  AgentChat: { label: "AI助手", icon: "robot-outline", activeIcon: "robot" },
+  Costs: { label: "记账", icon: "cash-multiple", activeIcon: "cash-multiple" },
+  Settings: { label: "我的", icon: "account-outline", activeIcon: "account" },
 };
 
 export const MainTabNavigator: React.FC = () => (
   <Tab.Navigator
-    screenOptions={({route}) => ({
+    screenOptions={({ route }) => ({
       headerShown: false,
       tabBarStyle: styles.tabBar,
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.tabInactive,
-      tabBarShowLabel: true,
-      tabBarLabel: ({focused, color}) => (
-        <Text style={[styles.tabLabel, focused && styles.tabLabelActive, {color}]}>
-          {TAB_CONFIG[route.name].label}
-        </Text>
-      ),
-      tabBarIcon: ({focused, color}) => (
-        <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-          <Icon
-            name={focused ? TAB_CONFIG[route.name].activeIcon : TAB_CONFIG[route.name].icon}
-            size={22}
-            color={color}
-          />
-        </View>
-      ),
-    })}>
+      tabBarShowLabel: false,
+      tabBarIcon: ({ focused }) => {
+        const config = TAB_CONFIG[route.name];
+        return (
+          <View style={styles.tabItem}>
+            {focused ? (
+              <View style={styles.capsule}>
+                <Icon name={config.activeIcon} size={20} color="#5B8CFF" />
+                <Text style={styles.capsuleLabel}>{config.label}</Text>
+              </View>
+            ) : (
+              <View style={styles.inactiveItem}>
+                <Icon name={config.icon} size={22} color={colors.tabInactive} />
+                <Text style={styles.inactiveLabel}>{config.label}</Text>
+              </View>
+            )}
+          </View>
+        );
+      },
+    })}
+  >
     <Tab.Screen name="Home" component={HomeScreen} />
     <Tab.Screen name="AgentChat" component={AgentChatScreen} />
     <Tab.Screen name="Costs" component={CostListScreen} />
@@ -57,35 +65,41 @@ export const MainTabNavigator: React.FC = () => (
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 72,
-    paddingBottom: 10,
-    paddingTop: 6,
-    backgroundColor: colors.tabBg,
+    height: 64,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
-    shadowColor: colors.shadow,
-    shadowOffset: {width: 0, height: -2},
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 8,
+    ...shadowV2.light,
+    elevation: 4,
   },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
+  tabItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
   },
-  iconContainerActive: {
-    backgroundColor: colors.primaryMuted,
+  capsule: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
+    borderRadius: borderRadiusV2.full,
+    gap: 4,
+    backgroundColor: "#EDF4FF",
   },
-  tabLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '500',
+  capsuleLabel: {
+    fontSize: fontSizeV2.sm,
+    color: "#5B8CFF",
+    fontWeight: "600",
+  },
+  inactiveItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacingV2.sm,
+  },
+  inactiveLabel: {
+    fontSize: fontSizeV2.xs,
+    color: colors.tabInactive,
     marginTop: 2,
-  },
-  tabLabelActive: {
-    fontWeight: '700',
+    fontWeight: "500",
   },
 });

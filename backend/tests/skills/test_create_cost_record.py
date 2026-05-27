@@ -9,7 +9,9 @@ import pytest
 
 from skillify.core.context import SkillContext
 
-_create_cost_mod = importlib.import_module("app.skills.create-cost-record.scripts.main")
+_create_cost_mod = importlib.import_module(
+    "app.agent.skills.create-cost-record.scripts.main"
+)
 CreateCostRecordSkill = _create_cost_mod.CreateCostRecordSkill
 
 

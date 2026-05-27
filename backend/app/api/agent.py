@@ -11,10 +11,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_farm
-from app.core.limiter import limiter
-from app.core.llm import LlmNotConfiguredError
+from app.infra.limiter import limiter
+from app.agent.llm import LlmNotConfiguredError
 from app.core.logger import request_id_var
-from app.models.agent import AdviceRecord
+from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 from app.schemas.agent import (
     ChatRequest,
@@ -25,6 +25,8 @@ from app.schemas.agent import (
     AdviceHistoryItem,
     ReportHistoryItem,
     ReportListResponse,
+    ConversationListItem,
+    ConversationMessageItem,
 )
 from app.services.agent_service import (
     chat_with_agent,
@@ -34,6 +36,10 @@ from app.services.agent_service import (
     generate_report,
     get_advice_history,
     get_report_history,
+)
+from app.services.conversation_service import (
+    list_conversations,
+    get_conversation_messages,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,7 +73,11 @@ async def agent_chat(
     start = time.perf_counter()
     try:
         result = await chat_with_agent(
-            db, chat_request.message, chat_request.cycle_id, farm_id=farm.id
+            db,
+            chat_request.message,
+            farm_id=farm.id,
+            cycle_id=chat_request.cycle_id,
+            session_id=chat_request.session_id,
         )
         logger.info(
             "[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符",
@@ -100,14 +110,18 @@ async def agent_chat_stream(
         start = time.perf_counter()
         try:
             async for chunk in stream_chat_with_agent(
-                chat_request.message, chat_request.cycle_id
+                chat_request.message,
+                farm_id=farm.id,
+                cycle_id=chat_request.cycle_id,
+                db=db,
+                session_id=chat_request.session_id,
             ):
                 full_reply += chunk
                 data = json.dumps({"content": chunk}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
-            record = AdviceRecord(
+            record = AgentRecord(
                 cycle_id=chat_request.cycle_id,
-                advice_type="chat",
+                record_type="chat",
                 content=full_reply,
                 farm_id=farm.id,
             )
@@ -131,6 +145,54 @@ async def agent_chat_stream(
     )
 
 
+@router.get("/conversations", response_model=list[ConversationListItem])
+@limiter.limit("30/minute")
+def get_conversations(
+    request: Request,
+    response: Response,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> list[ConversationListItem]:
+    """获取当前 farm 的会话列表。"""
+    conversations = list_conversations(db, farm_id=farm.id, limit=limit)
+    return [
+        ConversationListItem(
+            id=c.id,
+            session_id=c.session_id,
+            status=c.status,
+            created_at=c.created_at,
+            last_active_at=c.last_active_at,
+        )
+        for c in conversations
+    ]
+
+
+@router.get(
+    "/conversations/{session_id}/messages",
+    response_model=list[ConversationMessageItem],
+)
+@limiter.limit("30/minute")
+def get_messages_by_session(
+    request: Request,
+    response: Response,
+    session_id: str,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> list[ConversationMessageItem]:
+    """获取指定会话的消息列表。"""
+    messages = get_conversation_messages(db, session_id)
+    return [
+        ConversationMessageItem(
+            id=m.id,
+            role=m.role,
+            content=m.content,
+            created_at=m.created_at,
+        )
+        for m in messages
+    ]
+
+
 @router.get("/daily", response_model=DailyAdviceResponse)
 @limiter.limit("10/minute")
 async def daily_advice(
@@ -145,7 +207,7 @@ async def daily_advice(
     logger.info("[%s] GET /agent/daily | cycle_id=%s", rid, cycle_id)
     start = time.perf_counter()
     try:
-        result = await get_daily_advice(db, cycle_id, farm_id=farm.id)
+        result = await get_daily_advice(db, farm_id=farm.id, cycle_id=cycle_id)
         logger.info(
             "[%s] /agent/daily 完成 | 耗时 %.2fs", rid, time.perf_counter() - start
         )
@@ -165,7 +227,7 @@ async def refresh_daily_advice_endpoint(
     logger.info("[%s] POST /agent/daily/refresh | cycle_id=%s", rid, cycle_id)
     start = time.perf_counter()
     try:
-        result = await refresh_daily_advice(db, cycle_id, farm_id=farm.id)
+        result = await refresh_daily_advice(db, farm_id=farm.id, cycle_id=cycle_id)
         logger.info(
             "[%s] /agent/daily/refresh 完成 | 耗时 %.2fs",
             rid,
@@ -196,7 +258,10 @@ async def agent_report(
     start = time.perf_counter()
     try:
         result = await generate_report(
-            db, report_request.cycle_id, report_request.report_type, farm_id=farm.id
+            db,
+            farm_id=farm.id,
+            cycle_id=report_request.cycle_id,
+            report_type=report_request.report_type,
         )
         logger.info(
             "[%s] /agent/report 完成 | 耗时 %.2fs", rid, time.perf_counter() - start
@@ -217,7 +282,7 @@ def advice_history(
     farm: Farm = Depends(get_current_farm),
 ) -> list[AdviceHistoryItem]:
     """查询建议历史记录。"""
-    return get_advice_history(db, cycle_id, limit, farm_id=farm.id)
+    return get_advice_history(db, farm_id=farm.id, cycle_id=cycle_id, limit=limit)
 
 
 @router.get("/report-history", response_model=list[ReportHistoryItem])
@@ -231,7 +296,7 @@ def report_history(
     farm: Farm = Depends(get_current_farm),
 ) -> list[ReportHistoryItem]:
     """查询报告历史记录。"""
-    return get_report_history(db, cycle_id, limit, farm_id=farm.id)
+    return get_report_history(db, farm_id=farm.id, cycle_id=cycle_id, limit=limit)
 
 
 @router.get("/reports", response_model=ReportListResponse)
@@ -243,19 +308,19 @@ async def list_reports(
 ) -> ReportListResponse:
     """获取报告历史列表（支持分页）。"""
     from sqlalchemy import func as sqlfunc
-    from app.models.agent import ReportRecord
 
     offset = (page - 1) * size
-    query = db.query(ReportRecord).filter(ReportRecord.farm_id == farm.id)
-    total = query.with_entities(sqlfunc.count(ReportRecord.id)).scalar() or 0
+    query = db.query(AgentRecord).filter(AgentRecord.farm_id == farm.id)
+    query = query.filter(AgentRecord.record_type == "report")
+    total = query.with_entities(sqlfunc.count(AgentRecord.id)).scalar() or 0
     records = (
-        query.order_by(ReportRecord.created_at.desc()).offset(offset).limit(size).all()
+        query.order_by(AgentRecord.created_at.desc()).offset(offset).limit(size).all()
     )
     items = [
         ReportHistoryItem(
             id=r.id,
             cycle_id=r.cycle_id,
-            report_type=r.report_type,
+            record_type=r.record_type,
             content=r.content,
             created_at=r.created_at,
         )

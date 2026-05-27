@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_farm, get_db
 from app.core.json_repair import safe_parse_json
-from app.core.prompt_registry import get_registry
-from app.core.prompt_renderer import render_prompt
+from app.agent.prompt_registry import get_registry
+from app.agent.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
 from app.models.farm import Farm
 from app.models.idempotency_key import IdempotencyKey
@@ -113,7 +113,7 @@ async def parse_cost_record(
     )
     logger.info("AI 解析记账 | farm=%s | input: %s", farm.id, req.description)
 
-    from app.agents.advisor import invoke_advisor
+    from app.agent.advisor import invoke_advisor
 
     reply = await invoke_advisor(prompt, farm_id=farm.id)
 

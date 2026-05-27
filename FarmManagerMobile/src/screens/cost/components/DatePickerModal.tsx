@@ -1,4 +1,4 @@
-import React, {useState, useMemo} from 'react';
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,11 +6,11 @@ import {
   StyleSheet,
   Modal,
   Dimensions,
-} from 'react-native';
-import dayjs from 'dayjs';
-import {colors} from '../../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../../theme/spacing';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+} from "react-native";
+import dayjs from "dayjs";
+import { colors } from "../../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 interface DatePickerModalProps {
   visible: boolean;
@@ -19,8 +19,8 @@ interface DatePickerModalProps {
   onCancel: () => void;
 }
 
-const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const SCREEN_WIDTH = Dimensions.get('window').width;
+const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+const SCREEN_WIDTH = Dimensions.get("window").width;
 
 export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   visible,
@@ -34,17 +34,20 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const today = dayjs();
 
   const days = useMemo(() => {
-    const startOfMonth = viewMonth.startOf('month');
-    const endOfMonth = viewMonth.endOf('month');
+    const startOfMonth = viewMonth.startOf("month");
+    const endOfMonth = viewMonth.endOf("month");
     const startDay = startOfMonth.day();
     const daysInMonth = endOfMonth.date();
 
-    const result: {day: number; isCurrentMonth: boolean; date: dayjs.Dayjs}[] =
-      [];
+    const result: {
+      day: number;
+      isCurrentMonth: boolean;
+      date: dayjs.Dayjs;
+    }[] = [];
 
     // 上月填充
-    const prevMonth = startOfMonth.subtract(1, 'month');
-    const prevDays = prevMonth.endOf('month').date();
+    const prevMonth = startOfMonth.subtract(1, "month");
+    const prevDays = prevMonth.endOf("month").date();
     for (let i = startDay - 1; i >= 0; i--) {
       result.push({
         day: prevDays - i,
@@ -64,7 +67,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
     // 下月填充到完整周
     const remaining = (7 - (result.length % 7)) % 7;
-    const nextMonth = startOfMonth.add(1, 'month');
+    const nextMonth = startOfMonth.add(1, "month");
     for (let i = 1; i <= remaining; i++) {
       result.push({
         day: i,
@@ -76,16 +79,18 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     return result;
   }, [viewMonth]);
 
-  const handlePrevMonth = () => setViewMonth(viewMonth.subtract(1, 'month'));
+  const handlePrevMonth = () => setViewMonth(viewMonth.subtract(1, "month"));
   const handleNextMonth = () => {
-    const next = viewMonth.add(1, 'month');
-    if (!next.isAfter(today, 'month')) {
+    const next = viewMonth.add(1, "month");
+    if (!next.isAfter(today, "month")) {
       setViewMonth(next);
     }
   };
 
   const handleDayPress = (d: dayjs.Dayjs) => {
-    if (d.isAfter(today, 'day')) return;
+    if (d.isAfter(today, "day")) {
+      return;
+    }
     setSelectedDate(d);
   };
 
@@ -94,32 +99,45 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={handlePrevMonth} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            <TouchableOpacity
+              onPress={handlePrevMonth}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Icon name="chevron-left" size={24} color={colors.primary} />
             </TouchableOpacity>
             <Text style={styles.monthText}>
-              {viewMonth.format('YYYY年M月')}
+              {viewMonth.format("YYYY年M月")}
             </Text>
-            <TouchableOpacity onPress={handleNextMonth} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            <TouchableOpacity
+              onPress={handleNextMonth}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Icon name="chevron-right" size={24} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.weekRow}>
-            {WEEKDAYS.map(w => (
-              <Text key={w} style={styles.weekday}>{w}</Text>
+            {WEEKDAYS.map((w) => (
+              <Text key={w} style={styles.weekday}>
+                {w}
+              </Text>
             ))}
           </View>
 
           <View style={styles.daysGrid}>
             {days.map((item, idx) => {
-              const isSelected = selectedDate.isSame(item.date, 'day');
-              const isToday = today.isSame(item.date, 'day');
-              const isFuture = item.date.isAfter(today, 'day');
+              const isSelected = selectedDate.isSame(item.date, "day");
+              const isToday = today.isSame(item.date, "day");
+              const isFuture = item.date.isAfter(today, "day");
               return (
                 <TouchableOpacity
                   key={idx}
@@ -129,14 +147,16 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                     isToday && !isSelected && styles.dayCellToday,
                   ]}
                   onPress={() => handleDayPress(item.date)}
-                  disabled={isFuture}>
+                  disabled={isFuture}
+                >
                   <Text
                     style={[
                       styles.dayText,
                       !item.isCurrentMonth && styles.dayTextMuted,
                       isSelected && styles.dayTextSelected,
                       isFuture && styles.dayTextDisabled,
-                    ]}>
+                    ]}
+                  >
                     {item.day}
                   </Text>
                 </TouchableOpacity>
@@ -164,8 +184,8 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: spacing.lg,
   },
   container: {
@@ -175,36 +195,36 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH - spacing.lg * 2,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: spacing.md,
   },
   monthText: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
   },
   weekRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: spacing.sm,
   },
   weekday: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: fontSize.sm,
     color: colors.textTertiary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   dayCell: {
     width: DAY_CELL_SIZE,
     height: DAY_CELL_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderRadius: borderRadius.full,
   },
   dayCellSelected: {
@@ -217,21 +237,21 @@ const styles = StyleSheet.create({
   dayText: {
     fontSize: fontSize.md,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   dayTextMuted: {
     color: colors.textTertiary,
   },
   dayTextSelected: {
     color: colors.textInverse,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   dayTextDisabled: {
     color: colors.disabled,
   },
   actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     marginTop: spacing.md,
     gap: spacing.md,
   },
@@ -242,7 +262,7 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   confirmBtn: {
     paddingVertical: spacing.sm,
@@ -253,6 +273,6 @@ const styles = StyleSheet.create({
   confirmText: {
     fontSize: fontSize.md,
     color: colors.textInverse,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,11 @@ import {
   StyleSheet,
   Alert,
   RefreshControl,
-} from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import {cropApi} from '../../api/client';
-import {colors} from '../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../theme/spacing';
+} from "react-native";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { cropApi } from "../../api/client";
+import { colors } from "../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 
 interface GrowthStage {
   id: number;
@@ -40,7 +40,7 @@ export const CropTemplateScreen: React.FC = () => {
       const data = res.data as any;
       setTemplates(data.items ?? data ?? []);
     } catch (err: any) {
-      Alert.alert('加载失败', err.message || '请稍后重试');
+      Alert.alert("加载失败", err.message || "请稍后重试");
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export const CropTemplateScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const renderTemplateItem = ({item}: {item: CropTemplate}) => (
+  const renderTemplateItem = ({ item }: { item: CropTemplate }) => (
     <View style={styles.templateCard}>
       <View style={styles.templateHeader}>
         <Text style={styles.templateName}>{item.name}</Text>
@@ -65,9 +65,11 @@ export const CropTemplateScreen: React.FC = () => {
         )}
       </View>
       <Text style={styles.stageTitle}>生长阶段：</Text>
-      {item.stages.map(stage => (
+      {item.stages.map((stage) => (
         <View key={stage.id} style={styles.stageRow}>
-          <Text style={styles.stageName}>{stage.order_index + 1}. {stage.name}</Text>
+          <Text style={styles.stageName}>
+            {stage.order_index + 1}. {stage.name}
+          </Text>
           <Text style={styles.stageDuration}>{stage.duration_days}天</Text>
         </View>
       ))}
@@ -83,14 +85,15 @@ export const CropTemplateScreen: React.FC = () => {
         <Text style={styles.headerTitle}>作物模板</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => Alert.alert('提示', '创建模板功能后续开放')}>
+          onPress={() => Alert.alert("提示", "创建模板功能后续开放")}
+        >
           <Icon name="plus" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
       <FlatList
         data={templates}
-        keyExtractor={item => String(item.id)}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderTemplateItem}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -109,18 +112,18 @@ export const CropTemplateScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: colors.background},
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  headerTitle: {fontSize: fontSize.xl, fontWeight: '700', color: colors.text},
-  addButton: {padding: spacing.sm},
-  listContent: {padding: spacing.md},
+  headerTitle: { fontSize: fontSize.xl, fontWeight: "700", color: colors.text },
+  addButton: { padding: spacing.sm },
+  listContent: { padding: spacing.md },
   templateCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
@@ -129,18 +132,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  templateHeader: {marginBottom: spacing.sm},
-  templateName: {fontSize: fontSize.lg, fontWeight: '700', color: colors.text},
-  templateVariety: {fontSize: fontSize.sm, color: colors.textSecondary, marginTop: spacing.xs},
-  stageTitle: {fontSize: fontSize.md, fontWeight: '600', marginTop: spacing.sm, color: colors.text},
+  templateHeader: { marginBottom: spacing.sm },
+  templateName: {
+    fontSize: fontSize.lg,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  templateVariety: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  stageTitle: {
+    fontSize: fontSize.md,
+    fontWeight: "600",
+    marginTop: spacing.sm,
+    color: colors.text,
+  },
   stageRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: spacing.xs,
   },
-  stageName: {fontSize: fontSize.sm, color: colors.text},
-  stageDuration: {fontSize: fontSize.sm, color: colors.textSecondary},
-  emptyStage: {fontSize: fontSize.sm, color: colors.textSecondary, marginTop: spacing.xs},
-  emptyContainer: {alignItems: 'center', paddingVertical: spacing.xl},
-  emptyText: {color: colors.textSecondary, fontSize: fontSize.md},
+  stageName: { fontSize: fontSize.sm, color: colors.text },
+  stageDuration: { fontSize: fontSize.sm, color: colors.textSecondary },
+  emptyStage: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  emptyContainer: { alignItems: "center", paddingVertical: spacing.xl },
+  emptyText: { color: colors.textSecondary, fontSize: fontSize.md },
 });

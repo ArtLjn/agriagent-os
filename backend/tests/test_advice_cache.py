@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.agent import AdviceRecord
+from app.models.agent_record import AgentRecord
 
 
 def _today_start() -> datetime:
@@ -54,9 +54,9 @@ class TestDailyAdviceCache:
         """有缓存时不应调用 LLM，直接返回缓存。"""
         today = _today_start()
         cached_json = _json_items_response("缓存建议")
-        cached = AdviceRecord(
+        cached = AgentRecord(
             farm_id=1,
-            advice_type="daily",
+            record_type="daily",
             content=cached_json,
             created_at=today,
         )
@@ -78,9 +78,9 @@ class TestDailyAdviceCache:
         """不同 farm_id 应视为缓存未命中。"""
         today = _today_start()
         db.add(
-            AdviceRecord(
+            AgentRecord(
                 farm_id=1,
-                advice_type="daily",
+                record_type="daily",
                 content=_json_items_response("农场1"),
                 created_at=today,
             )
@@ -103,9 +103,9 @@ class TestDailyAdviceCache:
         """昨天生成的缓存应已过期，需重新生成。"""
         yesterday = _today_start() - timedelta(days=1)
         db.add(
-            AdviceRecord(
+            AgentRecord(
                 farm_id=1,
-                advice_type="daily",
+                record_type="daily",
                 content=_json_items_response("旧建议"),
                 created_at=yesterday,
             )
@@ -128,9 +128,9 @@ class TestDailyAdviceCache:
         """刷新应删除旧缓存并重新生成。"""
         today = _today_start()
         db.add(
-            AdviceRecord(
+            AgentRecord(
                 farm_id=1,
-                advice_type="daily",
+                record_type="daily",
                 content=_json_items_response("旧缓存"),
                 created_at=today,
             )
@@ -148,8 +148,8 @@ class TestDailyAdviceCache:
         mock_llm.assert_called_once()
         assert result.items[0].title == "刷新后的建议"
         records = (
-            db.query(AdviceRecord)
-            .filter(AdviceRecord.farm_id == 1, AdviceRecord.advice_type == "daily")
+            db.query(AgentRecord)
+            .filter(AgentRecord.farm_id == 1, AgentRecord.record_type == "daily")
             .all()
         )
         assert len(records) == 1

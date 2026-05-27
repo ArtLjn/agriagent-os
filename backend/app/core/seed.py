@@ -30,17 +30,15 @@ def migrate_cost_records() -> None:
         for col_name, col_type in _P1_NEW_COLUMNS:
             if col_name not in existing:
                 conn.execute(
-                    text(
-                        f"ALTER TABLE cost_records ADD COLUMN {col_name} {col_type}"
-                    )
+                    text(f"ALTER TABLE cost_records ADD COLUMN {col_name} {col_type}")
                 )
                 logger.info("已补列 cost_records.%s", col_name)
 
 
 def seed_default_farm(db: Session) -> None:
-    """向数据库插入默认农场记录（如不存在）。"""
-    existing = db.query(Farm).filter(Farm.id == 1).first()
+    """确保至少有一个默认农场（兼容旧数据无 user_id）。"""
+    existing = db.query(Farm).filter(Farm.name == "默认农场").first()
     if existing:
         return
-    db.add(Farm(id=1, name="默认农场", owner_name="默认农户"))
+    db.add(Farm(name="默认农场"))
     db.commit()

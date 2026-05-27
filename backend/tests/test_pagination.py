@@ -15,7 +15,12 @@ def watermelon_template_id():
         "name": "西瓜",
         "variety": "8424",
         "stages": [
-            {"name": "育苗期", "duration_days": 30, "order_index": 0, "key_tasks": "温湿度管理"},
+            {
+                "name": "育苗期",
+                "duration_days": 30,
+                "order_index": 0,
+                "key_tasks": "温湿度管理",
+            },
         ],
     }
     response = client.post("/crops/templates", json=payload)
@@ -50,11 +55,14 @@ class TestCropPagination:
     def test_pagination_with_multiple_items(self):
         """测试创建多个模板后分页返回正确总数。"""
         for i in range(3):
-            client.post("/crops/templates", json={
-                "name": f"作物{i}",
-                "variety": "测试",
-                "stages": [],
-            })
+            client.post(
+                "/crops/templates",
+                json={
+                    "name": f"作物{i}",
+                    "variety": "测试",
+                    "stages": [],
+                },
+            )
 
         response = client.get("/crops/templates")
         data = response.json()
@@ -64,11 +72,14 @@ class TestCropPagination:
     def test_pagination_limit(self):
         """测试 size 参数限制返回数量。"""
         for i in range(5):
-            client.post("/crops/templates", json={
-                "name": f"作物{i}",
-                "variety": "测试",
-                "stages": [],
-            })
+            client.post(
+                "/crops/templates",
+                json={
+                    "name": f"作物{i}",
+                    "variety": "测试",
+                    "stages": [],
+                },
+            )
 
         response = client.get("/crops/templates?page=1&size=2")
         data = response.json()
@@ -78,11 +89,14 @@ class TestCropPagination:
     def test_pagination_skip(self):
         """测试 page 参数正确跳过记录。"""
         for i in range(5):
-            client.post("/crops/templates", json={
-                "name": f"作物{i}",
-                "variety": "测试",
-                "stages": [],
-            })
+            client.post(
+                "/crops/templates",
+                json={
+                    "name": f"作物{i}",
+                    "variety": "测试",
+                    "stages": [],
+                },
+            )
 
         response = client.get("/crops/templates?page=2&size=2")
         data = response.json()
@@ -121,11 +135,14 @@ class TestCyclePagination:
     def test_pagination_with_cycles(self, watermelon_template_id):
         """测试多个茬口分页。"""
         for i in range(3):
-            client.post("/cycles", json={
-                "name": f"棚{i}西瓜",
-                "crop_template_id": watermelon_template_id,
-                "start_date": "2025-03-15",
-            })
+            client.post(
+                "/cycles",
+                json={
+                    "name": f"棚{i}西瓜",
+                    "crop_template_id": watermelon_template_id,
+                    "start_date": "2025-03-15",
+                },
+            )
 
         response = client.get("/cycles")
         data = response.json()
@@ -147,11 +164,14 @@ class TestLogPagination:
     def test_pagination_with_filter(self, cycle_id):
         """测试带过滤条件的分页。"""
         for i in range(3):
-            client.post("/logs", json={
-                "cycle_id": cycle_id,
-                "operation_type": "浇水",
-                "operation_date": f"2025-05-{20 + i}",
-            })
+            client.post(
+                "/logs",
+                json={
+                    "cycle_id": cycle_id,
+                    "operation_type": "浇水",
+                    "operation_date": f"2025-05-{20 + i}",
+                },
+            )
 
         response = client.get(f"/logs?cycle_id={cycle_id}")
         data = response.json()
@@ -161,11 +181,14 @@ class TestLogPagination:
     def test_pagination_with_filter_and_size(self, cycle_id):
         """测试带过滤条件且限制返回数量。"""
         for i in range(5):
-            client.post("/logs", json={
-                "cycle_id": cycle_id,
-                "operation_type": "浇水",
-                "operation_date": f"2025-05-{20 + i}",
-            })
+            client.post(
+                "/logs",
+                json={
+                    "cycle_id": cycle_id,
+                    "operation_type": "浇水",
+                    "operation_date": f"2025-05-{20 + i}",
+                },
+            )
 
         response = client.get(f"/logs?cycle_id={cycle_id}&page=1&size=2")
         data = response.json()
@@ -187,13 +210,16 @@ class TestCostPagination:
     def test_pagination_with_filter(self, cycle_id):
         """测试带过滤条件的成本分页。"""
         for i in range(3):
-            client.post("/costs", json={
-                "cycle_id": cycle_id,
-                "record_type": "cost",
-                "category": "肥料",
-                "amount": "100.00",
-                "record_date": f"2025-03-{10 + i}",
-            })
+            client.post(
+                "/costs",
+                json={
+                    "cycle_id": cycle_id,
+                    "record_type": "cost",
+                    "category": "肥料",
+                    "amount": "100.00",
+                    "record_date": f"2025-03-{10 + i}",
+                },
+            )
 
         response = client.get(f"/costs?cycle_id={cycle_id}")
         data = response.json()
@@ -202,20 +228,26 @@ class TestCostPagination:
 
     def test_pagination_with_category_filter(self, cycle_id):
         """测试按类别过滤的分页。"""
-        client.post("/costs", json={
-            "cycle_id": cycle_id,
-            "record_type": "cost",
-            "category": "肥料",
-            "amount": "100.00",
-            "record_date": "2025-03-10",
-        })
-        client.post("/costs", json={
-            "cycle_id": cycle_id,
-            "record_type": "cost",
-            "category": "种子",
-            "amount": "50.00",
-            "record_date": "2025-03-11",
-        })
+        client.post(
+            "/costs",
+            json={
+                "cycle_id": cycle_id,
+                "record_type": "cost",
+                "category": "肥料",
+                "amount": "100.00",
+                "record_date": "2025-03-10",
+            },
+        )
+        client.post(
+            "/costs",
+            json={
+                "cycle_id": cycle_id,
+                "record_type": "cost",
+                "category": "种子",
+                "amount": "50.00",
+                "record_date": "2025-03-11",
+            },
+        )
 
         response = client.get(f"/costs?cycle_id={cycle_id}&category=肥料")
         data = response.json()

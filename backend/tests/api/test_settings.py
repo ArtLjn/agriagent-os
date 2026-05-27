@@ -12,8 +12,8 @@ class TestGetSettings:
     """GET /settings 测试组。"""
 
     def test_returns_default_display_name(self):
-        """未设置 display_name 时返回默认值'农友'。"""
-        # Arrange: conftest 已播种默认农场，display_name 为 None
+        """未设置 display_name 时返回农场名称。"""
+        # Arrange: conftest 已播种默认农场，name 为 "默认农场"
 
         # Act
         response = client.get("/settings")
@@ -21,7 +21,7 @@ class TestGetSettings:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert data["display_name"] == "农友"
+        assert data["display_name"] == "默认农场"
 
     def test_returns_custom_display_name(self):
         """设置 display_name 后返回自定义值。"""

@@ -33,11 +33,164 @@ class TestChatWithAgent:
         mock_invoke.return_value = "建议：今天浇水。"
         mock_db = _make_mock_db()
 
-        result = await chat_with_agent(mock_db, "今天做什么？")
+        result = await chat_with_agent(mock_db, "今天做什么？", farm_id=1)
 
         assert result.reply == "建议：今天浇水。"
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.save_message")
+    @patch("app.services.agent_service.get_or_create_conversation")
+    async def test_chat_with_session_id_saves_messages(
+        self,
+        mock_get_conv: MagicMock,
+        mock_save_msg: MagicMock,
+        mock_invoke: AsyncMock,
+    ) -> None:
+        """验证 session_id 存在时保存用户和助手消息到会话。"""
+        mock_invoke.return_value = "回复内容"
+        mock_conv = MagicMock()
+        mock_conv.id = 42
+        mock_get_conv.return_value = mock_conv
+        mock_db = _make_mock_db()
+
+        result = await chat_with_agent(
+            mock_db, "你好", farm_id=1, session_id="sess-123"
+        )
+
+        assert result.reply == "回复内容"
+        # 验证 get_or_create_conversation 被调用
+        mock_get_conv.assert_called_once_with(mock_db, 1, "sess-123")
+        # 验证 save_message 被调用 2 次：user + assistant
+        assert mock_save_msg.call_count == 2
+        mock_save_msg.assert_any_call(mock_db, 42, "user", "你好")
+        mock_save_msg.assert_any_call(mock_db, 42, "assistant", "回复内容")
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.save_message")
+    @patch("app.services.agent_service.get_or_create_conversation")
+    async def test_chat_with_session_id_passes_conversation_id_to_advisor(
+        self,
+        mock_get_conv: MagicMock,
+        mock_save_msg: MagicMock,
+        mock_invoke: AsyncMock,
+    ) -> None:
+        """验证 session_id 时 conversation_id 传递给 invoke_advisor。"""
+        mock_invoke.return_value = "回复"
+        mock_conv = MagicMock()
+        mock_conv.id = 99
+        mock_get_conv.return_value = mock_conv
+        mock_db = _make_mock_db()
+
+        await chat_with_agent(mock_db, "问题", farm_id=1, session_id="sess-abc")
+
+        # invoke_advisor 应该被传入 db 和 conversation_id
+        mock_invoke.assert_called_once()
+        call_kwargs = mock_invoke.call_args
+        assert (
+            call_kwargs.kwargs.get("db") == mock_db
+            or call_kwargs[1].get("db") == mock_db
+        )
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.save_message")
+    async def test_chat_without_session_id_no_conversation(
+        self, mock_save_msg: MagicMock, mock_invoke: AsyncMock
+    ) -> None:
+        """验证无 session_id 时不保存会话消息。"""
+        mock_invoke.return_value = "回复"
+        mock_db = _make_mock_db()
+
+        result = await chat_with_agent(mock_db, "问题", farm_id=1)
+
+        assert result.reply == "回复"
+        mock_save_msg.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.save_message")
+    @patch("app.services.agent_service.get_or_create_conversation")
+    async def test_chat_pending_confirm_saves_to_conversation(
+        self,
+        mock_get_conv: MagicMock,
+        mock_save_msg: MagicMock,
+        mock_invoke: AsyncMock,
+    ) -> None:
+        """验证 pending action 确认路径也保存会话消息。"""
+        from app.infra.pending_actions import store_pending, remove_pending
+
+        mock_conv = MagicMock()
+        mock_conv.id = 10
+        mock_get_conv.return_value = mock_conv
+
+        # 清理：确保无残留 pending
+        remove_pending(1)
+        store_pending(1, "create_cost_record", {"amount": 100})
+
+        mock_db = _make_mock_db()
+        # mock execute 相关
+        with patch(
+            "app.services.agent_service._execute_pending_action",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_exec.return_value = "已记账"
+            result = await chat_with_agent(
+                mock_db, "确认", farm_id=1, session_id="sess-confirm"
+            )
+
+        assert "已记账" in result.reply or "已执行" in result.reply
+        # 应该保存 user + assistant 消息
+        assert mock_save_msg.call_count == 2
+        mock_save_msg.assert_any_call(mock_db, 10, "user", "确认")
+
+        # 清理
+        remove_pending(1)
+
+
+class TestStreamChatWithAgent:
+    """测试流式对话服务。"""
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.stream_advisor")
+    @patch("app.services.agent_service.save_message")
+    @patch("app.services.agent_service.get_or_create_conversation")
+    @patch("app.services.agent_service._try_skillify_route", new_callable=AsyncMock)
+    async def test_stream_with_session_id_saves_messages(
+        self,
+        mock_skillify: AsyncMock,
+        mock_get_conv: MagicMock,
+        mock_save_msg: MagicMock,
+        mock_stream: MagicMock,
+    ) -> None:
+        """验证流式对话也保存消息到会话。"""
+        mock_skillify.return_value = None
+        mock_conv = MagicMock()
+        mock_conv.id = 55
+        mock_get_conv.return_value = mock_conv
+
+        async def _fake_stream(*args, **kwargs):
+            yield "chunk1"
+            yield "chunk2"
+
+        mock_stream.side_effect = _fake_stream
+        mock_db = _make_mock_db()
+
+        from app.services.agent_service import stream_chat_with_agent
+
+        chunks = []
+        async for chunk in stream_chat_with_agent(
+            "问题", farm_id=1, db=mock_db, session_id="sess-stream"
+        ):
+            chunks.append(chunk)
+
+        assert chunks == ["chunk1", "chunk2"]
+        # 验证保存 user 消息和 assistant 消息
+        mock_save_msg.assert_any_call(mock_db, 55, "user", "问题")
+        mock_save_msg.assert_any_call(mock_db, 55, "assistant", "chunk1chunk2")
 
 
 class TestGetDailyAdvice:
@@ -54,7 +207,7 @@ class TestGetDailyAdvice:
         )
         mock_db = _make_mock_db()
 
-        result = await get_daily_advice(mock_db, cycle_id=1)
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
         assert len(result.items) == 1
         assert result.items[0].title == "施肥"
@@ -70,7 +223,7 @@ class TestGetDailyAdvice:
         mock_invoke.return_value = "今日建议：施肥。"
         mock_db = _make_mock_db()
 
-        result = await get_daily_advice(mock_db, cycle_id=1)
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
         assert len(result.items) == 1
         assert result.items[0].title == "今日农事建议"
@@ -90,7 +243,9 @@ class TestGenerateReport:
         mock_generate.return_value = "报告内容..."
         mock_db = _make_mock_db()
 
-        result = await generate_report(mock_db, cycle_id=1, report_type="weekly")
+        result = await generate_report(
+            mock_db, farm_id=1, cycle_id=1, report_type="weekly"
+        )
 
         assert result.content == "报告内容..."
         mock_db.add.assert_called_once()

@@ -1,20 +1,26 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { MarkdownText } from '../../components/MarkdownText';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
-import { useAgentStore } from '../../stores/agentStore';
-import { Card } from '../../components/Card';
-import { Loading } from '../../components/Loading';
-import { colors } from '../../theme/colors';
-import { spacing, fontSize, borderRadius } from '../../theme/spacing';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native";
+import { MarkdownText } from "../../components/MarkdownText";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRoute } from "@react-navigation/native";
+import { useAgentStore } from "../../stores/agentStore";
+import { Card } from "../../components/Card";
+import { Loading } from "../../components/Loading";
+import { colors } from "../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-type ReportType = 'weekly' | 'monthly';
+type ReportType = "weekly" | "monthly";
 
 export const AgentReportScreen: React.FC = () => {
   const route = useRoute<any>();
-  const [reportType, setReportType] = useState<ReportType>('weekly');
+  const [reportType, setReportType] = useState<ReportType>("weekly");
   const { report, generateReport, loading: isLoading } = useAgentStore();
 
   const passedContent = route.params?.content as string | undefined;
@@ -27,29 +33,40 @@ export const AgentReportScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {isViewMode ? (
           <>
             <View style={styles.viewHeader}>
               <View style={styles.viewHeaderBadge}>
                 <Icon
-                  name={passedReportType === 'weekly' ? 'calendar-week' : 'calendar-month'}
+                  name={
+                    passedReportType === "weekly"
+                      ? "calendar-week"
+                      : "calendar-month"
+                  }
                   size={16}
                   color={colors.primary}
                 />
                 <Text style={styles.viewHeaderTitle}>
-                  {passedReportType === 'weekly' ? '周报' : passedReportType === 'monthly' ? '月报' : '农事报告'}
+                  {passedReportType === "weekly"
+                    ? "周报"
+                    : passedReportType === "monthly"
+                    ? "月报"
+                    : "农事报告"}
                 </Text>
               </View>
               {passedCreatedAt && (
                 <Text style={styles.viewHeaderDate}>
-                  {new Date(passedCreatedAt).toLocaleDateString('zh-CN')}
+                  {new Date(passedCreatedAt).toLocaleDateString("zh-CN")}
                 </Text>
               )}
             </View>
             <Card style={styles.reportCard} padding="lg">
-              <MarkdownText text={passedContent!} baseStyle={styles.reportContent} />
+              <MarkdownText
+                text={passedContent!}
+                baseStyle={styles.reportContent}
+              />
             </Card>
           </>
         ) : (
@@ -57,11 +74,17 @@ export const AgentReportScreen: React.FC = () => {
             {/* 页面头部 */}
             <View style={styles.pageHeader}>
               <View style={styles.pageHeaderIcon}>
-                <Icon name="file-document-edit" size={28} color={colors.primary} />
+                <Icon
+                  name="file-document-edit"
+                  size={28}
+                  color={colors.primary}
+                />
               </View>
               <View>
                 <Text style={styles.pageHeaderTitle}>农事报告</Text>
-                <Text style={styles.pageHeaderSub}>基于种植数据自动生成周报/月报</Text>
+                <Text style={styles.pageHeaderSub}>
+                  基于种植数据自动生成周报/月报
+                </Text>
               </View>
             </View>
 
@@ -69,28 +92,50 @@ export const AgentReportScreen: React.FC = () => {
             <Text style={styles.sectionLabel}>报告类型</Text>
             <View style={styles.toggleRow}>
               <TouchableOpacity
-                style={[styles.typePill, reportType === 'weekly' && styles.typePillActive]}
-                onPress={() => setReportType('weekly')}
-                activeOpacity={0.7}>
+                style={[
+                  styles.typePill,
+                  reportType === "weekly" && styles.typePillActive,
+                ]}
+                onPress={() => setReportType("weekly")}
+                activeOpacity={0.7}
+              >
                 <Icon
                   name="calendar-week"
                   size={18}
-                  color={reportType === 'weekly' ? '#FFFFFF' : colors.textSecondary}
+                  color={
+                    reportType === "weekly" ? "#FFFFFF" : colors.textSecondary
+                  }
                 />
-                <Text style={[styles.typePillText, reportType === 'weekly' && styles.typePillTextActive]}>
+                <Text
+                  style={[
+                    styles.typePillText,
+                    reportType === "weekly" && styles.typePillTextActive,
+                  ]}
+                >
                   周报
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.typePill, reportType === 'monthly' && styles.typePillActive]}
-                onPress={() => setReportType('monthly')}
-                activeOpacity={0.7}>
+                style={[
+                  styles.typePill,
+                  reportType === "monthly" && styles.typePillActive,
+                ]}
+                onPress={() => setReportType("monthly")}
+                activeOpacity={0.7}
+              >
                 <Icon
                   name="calendar-month"
                   size={18}
-                  color={reportType === 'monthly' ? '#FFFFFF' : colors.textSecondary}
+                  color={
+                    reportType === "monthly" ? "#FFFFFF" : colors.textSecondary
+                  }
                 />
-                <Text style={[styles.typePillText, reportType === 'monthly' && styles.typePillTextActive]}>
+                <Text
+                  style={[
+                    styles.typePillText,
+                    reportType === "monthly" && styles.typePillTextActive,
+                  ]}
+                >
                   月报
                 </Text>
               </TouchableOpacity>
@@ -101,7 +146,8 @@ export const AgentReportScreen: React.FC = () => {
               style={styles.generateBtn}
               onPress={handleGenerate}
               activeOpacity={0.7}
-              disabled={isLoading}>
+              disabled={isLoading}
+            >
               <Icon name="auto-fix" size={22} color="#FFFFFF" />
               <Text style={styles.generateBtnText}>生成报告</Text>
             </TouchableOpacity>
@@ -109,7 +155,9 @@ export const AgentReportScreen: React.FC = () => {
             {isLoading && (
               <View style={styles.loadingContainer}>
                 <Loading />
-                <Text style={styles.loadingText}>正在分析数据并生成报告...</Text>
+                <Text style={styles.loadingText}>
+                  正在分析数据并生成报告...
+                </Text>
               </View>
             )}
 
@@ -118,11 +166,14 @@ export const AgentReportScreen: React.FC = () => {
                 <View style={styles.resultHeader}>
                   <Icon name="check-circle" size={18} color={colors.success} />
                   <Text style={styles.resultHeaderText}>
-                    {reportType === 'weekly' ? '本周农事报告' : '本月农事报告'}
+                    {reportType === "weekly" ? "本周农事报告" : "本月农事报告"}
                   </Text>
                 </View>
                 <Card style={styles.reportCard} padding="lg">
-                  <MarkdownText text={report.content} baseStyle={styles.reportContent} />
+                  <MarkdownText
+                    text={report.content}
+                    baseStyle={styles.reportContent}
+                  />
                 </Card>
               </>
             )}
@@ -143,14 +194,14 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   viewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: spacing.md,
   },
   viewHeaderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     backgroundColor: colors.primaryMuted,
     paddingHorizontal: spacing.md,
@@ -159,7 +210,7 @@ const styles = StyleSheet.create({
   },
   viewHeaderTitle: {
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.primary,
   },
   viewHeaderDate: {
@@ -167,8 +218,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   pageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
@@ -177,12 +228,12 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   pageHeaderTitle: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
   },
   pageHeaderSub: {
@@ -192,21 +243,21 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: fontSize.sm,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.textSecondary,
     marginBottom: spacing.sm,
     letterSpacing: 0.5,
   },
   toggleRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
   typePill: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: spacing.sm,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.lg,
@@ -221,16 +272,16 @@ const styles = StyleSheet.create({
   typePillText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   typePillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   generateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.primary,
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
@@ -238,12 +289,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   generateBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   loadingContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: spacing.lg,
   },
   loadingText: {
@@ -252,14 +303,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   resultHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
   resultHeaderText: {
     fontSize: fontSize.md,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.success,
   },
   reportCard: {

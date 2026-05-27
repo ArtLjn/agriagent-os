@@ -33,6 +33,15 @@
 今天是 {{ current_date }}，星期{{ current_weekday }}。当前时间 {{ current_time }}。
 {% endif %}
 
+{% if farm_location or current_season %}
+【用户信息】
+<user_context>
+  {% if farm_location %}<location>{{ farm_location }}</location>{% endif %}
+  {% if display_name %}<name>{{ display_name }}</name>{% endif %}
+  {% if current_season %}<season>{{ current_season }}</season>{% endif %}
+</user_context>
+{% endif %}
+
 {% if farm_context_summary %}
 【农场现状】
 {{ farm_context_summary }}

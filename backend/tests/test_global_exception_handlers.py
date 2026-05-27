@@ -26,7 +26,10 @@ class TestGlobalExceptionHandlers:
         assert data["detail"] == "请求参数校验失败"
         assert "errors" in data
         assert isinstance(data["errors"], list)
-        assert all("field" in err and "message" in err and "type" in err for err in data["errors"])
+        assert all(
+            "field" in err and "message" in err and "type" in err
+            for err in data["errors"]
+        )
 
     def test_graph_recursion_error(self):
         """通过调用 Agent 接口触发步数超限（需配合 recursion_limit=1 测试）。"""

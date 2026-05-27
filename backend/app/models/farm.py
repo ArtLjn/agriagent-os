@@ -1,3 +1,5 @@
+"""农场模型 — 通过 user_id 关联用户。"""
+
 from sqlalchemy import Column, DateTime, Integer, String, func
 
 from app.core.database import Base
@@ -8,9 +10,8 @@ class Farm(Base):
 
     __tablename__ = "farms"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String, nullable=False)
-    owner_name = Column(String, nullable=True)
     location = Column(String, nullable=True)
-    display_name = Column(String, nullable=True, default="农友")
+    user_id = Column(String(36), unique=True, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

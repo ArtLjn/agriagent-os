@@ -9,18 +9,23 @@ from sqlalchemy.orm import Session
 
 from app.core.database import Base, engine, SessionLocal
 from app.models.cost import CostRecord
+from app.models.farm import Farm
 from app.schemas.cost import CostRecordCreate
 from app.services.cost_service import create_record
 
-_settle_mod = importlib.import_module("app.skills.settle-debt.scripts.main")
+_settle_mod = importlib.import_module("app.agent.skills.settle-debt.scripts.main")
 SettleDebtSkill = _settle_mod.SettleDebtSkill
 
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    """每个测试前清理并重置数据库。"""
+    """每个测试前清理并重置数据库并播种默认农场。"""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    db.add(Farm(id=1, name="默认农场"))
+    db.commit()
+    db.close()
     yield
 
 

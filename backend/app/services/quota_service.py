@@ -37,7 +37,10 @@ def check_quota(farm_id: int) -> bool:
     if usage >= limit:
         logger.warning(
             "Token 配额超限 | farm=%s usage=%d limit=%d action=%s",
-            farm_id, usage, limit, settings.token_quota.over_quota_action,
+            farm_id,
+            usage,
+            limit,
+            settings.token_quota.over_quota_action,
         )
         return False
     return True

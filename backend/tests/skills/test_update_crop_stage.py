@@ -8,7 +8,7 @@ import pytest
 
 from skillify.core.context import SkillContext
 
-_update_mod = importlib.import_module("app.skills.update-crop-stage.scripts.main")
+_update_mod = importlib.import_module("app.agent.skills.update-crop-stage.scripts.main")
 UpdateCropStageSkill = _update_mod.UpdateCropStageSkill
 
 

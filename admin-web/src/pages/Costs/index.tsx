@@ -29,11 +29,11 @@ export default function Costs() {
       setCycles(cyclesRes.items);
       if (selectedCycle) {
         const profitRes = await getCycleProfit(selectedCycle);
-        setProfit(profitRes.data);
+        setProfit(profitRes);
       }
       const year = new Date().getFullYear();
       const yearlyRes = await getYearlySummary(year);
-      setYearly(yearlyRes.data);
+      setYearly(yearlyRes);
     } catch {
       message.error('加载失败');
     } finally {

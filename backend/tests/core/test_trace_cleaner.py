@@ -2,11 +2,11 @@
 
 from unittest.mock import MagicMock, patch
 
-from app.core.trace_cleaner import clean_expired_traces
+from app.infra.trace_cleaner import clean_expired_traces
 
 
 class TestCleanExpiredTraces:
-    @patch("app.core.trace_cleaner.SessionLocal")
+    @patch("app.infra.trace_cleaner.SessionLocal")
     def test_deletes_old_records(self, mock_sl) -> None:
         mock_db = MagicMock()
         mock_sl.return_value = mock_db
@@ -15,7 +15,7 @@ class TestCleanExpiredTraces:
         result = clean_expired_traces()
         assert result["trace_records_deleted"] == 42
 
-    @patch("app.core.trace_cleaner.SessionLocal")
+    @patch("app.infra.trace_cleaner.SessionLocal")
     def test_handles_db_error(self, mock_sl) -> None:
         mock_db = MagicMock()
         mock_db.commit.side_effect = Exception("DB error")

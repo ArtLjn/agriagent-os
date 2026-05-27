@@ -1,10 +1,17 @@
-import React from 'react';
-import {View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {colors} from '../../../theme/colors';
-import {spacing, fontSize, borderRadius} from '../../../theme/spacing';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import type {RootStackParamList} from '../../../navigation/AppNavigator';
+import React from "react";
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { colors } from "../../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import type { RootStackParamList } from "../../../navigation/AppNavigator";
 
 interface CategoryModalProps {
   visible: boolean;
@@ -24,20 +31,25 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   const navigation = useNavigation();
 
   const categoryIcons: Record<string, string> = {
-    '种子': 'seed',
-    '化肥': 'flask',
-    '农药': 'spray',
-    '人工': 'account-group',
-    '机械': 'tractor',
-    '水电': 'flash',
-    '地租': 'home-variant',
-    '销售': 'cash-register',
-    '补贴': 'hand-coin',
-    '其他': 'dots-horizontal',
+    种子: "seed",
+    化肥: "flask",
+    农药: "spray",
+    人工: "account-group",
+    机械: "tractor",
+    水电: "flash",
+    地租: "home-variant",
+    销售: "cash-register",
+    补贴: "hand-coin",
+    其他: "dots-horizontal",
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
@@ -47,9 +59,12 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.gridContent}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.gridContent}
+          >
             <View style={styles.modalGrid}>
-              {categories.map(cat => (
+              {categories.map((cat) => (
                 <TouchableOpacity
                   key={cat}
                   style={[
@@ -57,17 +72,21 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                     selectedCategory === cat && styles.categoryBtnActive,
                   ]}
                   onPress={() => onSelect(cat)}
-                  activeOpacity={0.7}>
+                  activeOpacity={0.7}
+                >
                   <Icon
-                    name={categoryIcons[cat] || 'tag-outline'}
+                    name={categoryIcons[cat] || "tag-outline"}
                     size={22}
-                    color={selectedCategory === cat ? '#FFFFFF' : colors.primary}
+                    color={
+                      selectedCategory === cat ? "#FFFFFF" : colors.primary
+                    }
                   />
                   <Text
                     style={[
                       styles.categoryBtnText,
                       selectedCategory === cat && styles.categoryBtnTextActive,
-                    ]}>
+                    ]}
+                  >
                     {cat}
                   </Text>
                 </TouchableOpacity>
@@ -80,8 +99,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             onPress={() => {
               onClose();
               // @ts-ignore
-              navigation.navigate('CostCategory');
-            }}>
+              navigation.navigate("CostCategory");
+            }}
+          >
             <Icon name="cog-outline" size={18} color={colors.primary} />
             <Text style={styles.manageCategoriesText}>管理分类</Text>
           </TouchableOpacity>
@@ -94,8 +114,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: colors.surface,
@@ -103,17 +123,17 @@ const styles = StyleSheet.create({
     borderTopRightRadius: borderRadius.xl,
     padding: spacing.lg,
     paddingBottom: spacing.xl,
-    maxHeight: '70%',
+    maxHeight: "70%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: spacing.lg,
   },
   modalTitle: {
     fontSize: fontSize.lg,
-    fontWeight: '700',
+    fontWeight: "700",
     color: colors.text,
   },
   closeBtn: {
@@ -123,14 +143,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   modalGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
   },
   categoryBtn: {
-    width: '31%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: "31%",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.md,
     backgroundColor: colors.background,
     borderRadius: borderRadius.lg,
@@ -146,15 +166,15 @@ const styles = StyleSheet.create({
   categoryBtnText: {
     fontSize: fontSize.sm,
     color: colors.text,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   categoryBtnTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   manageCategoriesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.md,
     marginTop: spacing.sm,
     backgroundColor: colors.primaryMuted,
@@ -164,6 +184,6 @@ const styles = StyleSheet.create({
   manageCategoriesText: {
     fontSize: fontSize.md,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

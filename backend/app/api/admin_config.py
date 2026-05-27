@@ -5,9 +5,9 @@ import logging
 from fastapi import APIRouter
 
 from app.core.config import settings
-from app.core.prompt_registry import get_registry
-from app.core.skill_cache import clear_cache
-from app.skills import get_skill_manager
+from app.agent.prompt_registry import get_registry
+from app.infra.skill_cache import clear_cache
+from app.agent.skills import get_skill_manager
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def get_config() -> dict:
 @router.post("/cache/clear")
 def clear_all_cache() -> dict:
     """清空所有 Skill 缓存。"""
-    from app.skills import clear_skill_cache
+    from app.agent.skills import clear_skill_cache
 
     clear_skill_cache()
     cache_count = clear_cache()

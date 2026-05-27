@@ -1,16 +1,14 @@
 import { useState } from 'react';
 import { Layout, Menu, Button, Tooltip } from 'antd';
 import {
-  DashboardOutlined,
-  EnvironmentOutlined,
-  SwapOutlined,
-  FileTextOutlined,
-  DollarOutlined,
-  RobotOutlined,
-  CloudOutlined,
-  ApiOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  BranchesOutlined,
+  BarChartOutlined,
+  MessageOutlined,
+  AppstoreOutlined,
+  FileSearchOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -25,25 +23,21 @@ const TEXT_SECONDARY = '#8b949e';
 const ACCENT = '#58a6ff';
 
 const menuItems = [
-  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/crops', icon: <EnvironmentOutlined />, label: '作物管理' },
-  { key: '/cycles', icon: <SwapOutlined />, label: '茬口管理' },
-  { key: '/logs', icon: <FileTextOutlined />, label: '农事日志' },
-  { key: '/costs', icon: <DollarOutlined />, label: '成本记账' },
-  { key: '/agent', icon: <RobotOutlined />, label: 'AI 助手' },
-  { key: '/weather', icon: <CloudOutlined />, label: '天气预报' },
-  { key: '/api-tester', icon: <ApiOutlined />, label: 'API Tester' },
+  { key: '/dev/traces', icon: <BranchesOutlined />, label: '链路追踪' },
+  { key: '/dev/tokens', icon: <BarChartOutlined />, label: 'Token 看板' },
+  { key: '/dev/playground', icon: <MessageOutlined />, label: 'Playground' },
+  { key: '/dev/skills', icon: <AppstoreOutlined />, label: 'Skill 注册表' },
+  { key: '/dev/prompts', icon: <FileSearchOutlined />, label: 'Prompt 检查器' },
+  { key: '/dev/config', icon: <SettingOutlined />, label: '配置管理' },
 ];
 
 const pageTitles: Record<string, string> = {
-  '/': '仪表盘',
-  '/crops': '作物管理',
-  '/cycles': '茬口管理',
-  '/logs': '农事日志',
-  '/costs': '成本记账',
-  '/agent': 'AI 助手',
-  '/weather': '天气预报',
-  '/api-tester': 'API Tester',
+  '/dev/traces': '链路追踪',
+  '/dev/tokens': 'Token 看板',
+  '/dev/playground': 'Playground',
+  '/dev/skills': 'Skill 注册表',
+  '/dev/prompts': 'Prompt 检查器',
+  '/dev/config': '配置管理',
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -54,7 +48,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const currentTitle = pageTitles[location.pathname] || 'Farm Manager';
 
   return (
-    <Layout style={{ minHeight: '100vh', background: BG_PRIMARY }}>
+    <Layout style={{ height: '100vh', background: BG_PRIMARY }}>
       <Sider
         width={200}
         collapsedWidth={64}
@@ -139,7 +133,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </Sider>
 
-      <Layout style={{ background: BG_PRIMARY }}>
+      <Layout style={{ background: BG_PRIMARY, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <Header
           style={{
@@ -150,6 +144,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
           }}
         >
           <span style={{ fontSize: 16, fontWeight: 600, color: TEXT_PRIMARY }}>
@@ -163,13 +158,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Content */}
         <Content
           style={{
+            flex: 1,
+            minHeight: 0,
             margin: 20,
-            padding: 20,
+            padding: '20px 20px 60px 20px',
             background: BG_CARD,
             borderRadius: 12,
             border: `1px solid ${BORDER}`,
             overflow: 'auto',
-            minHeight: 'calc(100vh - 96px)',
           }}
         >
           {children}

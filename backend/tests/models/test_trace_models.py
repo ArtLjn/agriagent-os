@@ -1,4 +1,5 @@
 """Tests for trace 相关数据模型。"""
+
 from app.models.trace import TraceRecord
 from app.models.token_stats import TokenDailyStats
 

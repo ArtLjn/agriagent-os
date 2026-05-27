@@ -10,7 +10,9 @@ class TestFetchWeather:
     """测试天气查询功能。"""
 
     @patch("app.services.weather_service.httpx.get")
-    def test_fetch_weather_returns_dict_with_required_keys(self, mock_get: Mock) -> None:
+    def test_fetch_weather_returns_dict_with_required_keys(
+        self, mock_get: Mock
+    ) -> None:
         """验证 fetch_weather 返回包含必需字段的字典。"""
         mock_response = Mock()
         mock_response.json.return_value = {

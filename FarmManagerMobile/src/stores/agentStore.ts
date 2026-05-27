@@ -1,8 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {create} from 'zustand';
-import {persist, createJSONStorage} from 'zustand/middleware';
-import type {ChatMessage, DailyAdvice, ReportResponse, ReportListItem, PendingAction} from '../api/types';
-import {agentApi, weatherApi} from '../api/client';
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type {
+  ChatMessage,
+  DailyAdvice,
+  ReportResponse,
+  ReportListItem,
+  PendingAction,
+} from '../api/types';
+import { agentApi, weatherApi } from '../api/client';
 
 interface AgentState {
   messages: ChatMessage[];
@@ -29,7 +35,7 @@ interface AgentState {
 
 export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
   persist(
-    set => ({
+    (set) => ({
       messages: [],
       dailyAdvice: null,
       report: null,
@@ -37,120 +43,131 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       loading: false,
       error: null,
       cityName: '苏州',
-      cityLat: 31.30,
+      cityLat: 31.3,
       cityLon: 120.62,
       reports: [],
       pendingAction: null,
 
-  sendMessage: (message, cycleId) => {
-    set(state => ({
-      messages: [...state.messages, {role: 'user', content: message}],
-      loading: true,
-      error: null,
-      pendingAction: null,
-    }));
-    agentApi.streamChat(
-      {message, cycle_id: cycleId},
-      chunk => {
-        set(state => {
-          const msgs = [...state.messages];
-          const last = msgs[msgs.length - 1];
-          if (last?.role === 'agent') {
-            msgs[msgs.length - 1] = {...last, content: last.content + chunk};
-          } else {
-            msgs.push({role: 'agent', content: chunk});
-          }
-          return {messages: msgs};
-        });
-      },
-      () => set({loading: false}),
-      err => {
-        set(state => ({
-          messages: [
-            ...state.messages.filter(m => m.role !== 'agent' || m.content),
-            {role: 'agent', content: `抱歉，出错了：${err}`},
-          ],
-          loading: false,
+      sendMessage: (message, cycleId) => {
+        set((state) => ({
+          messages: [...state.messages, { role: 'user', content: message }],
+          loading: true,
+          error: null,
+          pendingAction: null,
         }));
-      },
-      action => {
-        set(state => {
-          const msgs = [...state.messages];
-          const last = msgs[msgs.length - 1];
-          if (last?.role === 'agent') {
-            msgs[msgs.length - 1] = {...last, pending_action: action};
+        agentApi.streamChat(
+          { message, cycle_id: cycleId },
+          (chunk) => {
+            set((state) => {
+              const msgs = [...state.messages];
+              const last = msgs[msgs.length - 1];
+              if (last?.role === 'agent') {
+                msgs[msgs.length - 1] = {
+                  ...last,
+                  content: last.content + chunk,
+                };
+              } else {
+                msgs.push({ role: 'agent', content: chunk });
+              }
+              return { messages: msgs };
+            });
+          },
+          () => set({ loading: false }),
+          (err) => {
+            set((state) => ({
+              messages: [
+                ...state.messages.filter(
+                  (m) => m.role !== 'agent' || m.content
+                ),
+                { role: 'agent', content: `抱歉，出错了：${err}` },
+              ],
+              loading: false,
+            }));
+          },
+          (action) => {
+            set((state) => {
+              const msgs = [...state.messages];
+              const last = msgs[msgs.length - 1];
+              if (last?.role === 'agent') {
+                msgs[msgs.length - 1] = { ...last, pending_action: action };
+              }
+              return { messages: msgs, pendingAction: action };
+            });
           }
-          return {messages: msgs, pendingAction: action};
-        });
+        );
       },
-    );
-  },
 
-  fetchDailyAdvice: async cycleId => {
-    set({loading: true, error: null});
-    try {
-      const res = await agentApi.getDailyAdvice(cycleId);
-      set({dailyAdvice: res.data, loading: false});
-    } catch (err: any) {
-      set({error: err.message, loading: false});
+      fetchDailyAdvice: async (cycleId) => {
+        set({ loading: true, error: null });
+        try {
+          const res = await agentApi.getDailyAdvice(cycleId);
+          set({ dailyAdvice: res.data, loading: false });
+        } catch (err: any) {
+          set({ error: err.message, loading: false });
+        }
+      },
+
+      refreshDailyAdvice: async (cycleId) => {
+        set({ loading: true, error: null });
+        try {
+          const res = await agentApi.refreshAdvice(cycleId);
+          set({ dailyAdvice: res.data, loading: false });
+        } catch (err: any) {
+          set({ error: err.message, loading: false });
+        }
+      },
+
+      fetchReports: async () => {
+        try {
+          const res = await agentApi.getReportHistory();
+          set({ reports: res.data.items });
+        } catch (_e) {
+          // 报告列表加载失败不阻塞主流程
+        }
+      },
+
+      generateReport: async (reportType, cycleId) => {
+        set({ loading: true, error: null });
+        try {
+          const res = await agentApi.generateReport({
+            report_type: reportType,
+            cycle_id: cycleId,
+          });
+          set({ report: res.data, loading: false });
+        } catch (err: any) {
+          set({ error: err.message, loading: false });
+        }
+      },
+
+      fetchWeather: async () => {
+        set({ loading: true, error: null });
+        try {
+          const state = useAgentStore.getState();
+          const res = await weatherApi.getForecast(
+            3,
+            state.cityLat,
+            state.cityLon
+          );
+          set({ weather: res.data, loading: false });
+        } catch (err: any) {
+          set({ error: err.message, loading: false });
+        }
+      },
+
+      setCity: (name, lat, lon) =>
+        set({ cityName: name, cityLat: lat, cityLon: lon }),
+
+      clearChat: () => set({ messages: [] }),
+      clearError: () => set({ error: null }),
+    }),
+    {
+      name: 'agent-store',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        cityName: state.cityName,
+        cityLat: state.cityLat,
+        cityLon: state.cityLon,
+      }),
     }
-  },
-
-  refreshDailyAdvice: async cycleId => {
-    set({loading: true, error: null});
-    try {
-      const res = await agentApi.refreshAdvice(cycleId);
-      set({dailyAdvice: res.data, loading: false});
-    } catch (err: any) {
-      set({error: err.message, loading: false});
-    }
-  },
-
-  fetchReports: async () => {
-    try {
-      const res = await agentApi.getReportHistory();
-      set({reports: res.data.items});
-    } catch (_e) {
-      // 报告列表加载失败不阻塞主流程
-    }
-  },
-
-  generateReport: async (reportType, cycleId) => {
-    set({loading: true, error: null});
-    try {
-      const res = await agentApi.generateReport({
-        report_type: reportType,
-        cycle_id: cycleId,
-      });
-      set({report: res.data, loading: false});
-    } catch (err: any) {
-      set({error: err.message, loading: false});
-    }
-  },
-
-  fetchWeather: async () => {
-    set({loading: true, error: null});
-    try {
-      const state = useAgentStore.getState();
-      const res = await weatherApi.getForecast(3, state.cityLat, state.cityLon);
-      set({weather: res.data, loading: false});
-    } catch (err: any) {
-      set({error: err.message, loading: false});
-    }
-  },
-
-  setCity: (name, lat, lon) => set({cityName: name, cityLat: lat, cityLon: lon}),
-
-  clearChat: () => set({messages: []}),
-  clearError: () => set({error: null}),
-}),
-{
-  name: 'agent-store',
-  storage: createJSONStorage(() => AsyncStorage),
-  partialize: (state) => ({
-    cityName: state.cityName,
-    cityLat: state.cityLat,
-    cityLon: state.cityLon,
-  }),
-},
-));
+  )
+);

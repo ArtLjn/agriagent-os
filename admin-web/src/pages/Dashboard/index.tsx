@@ -57,13 +57,13 @@ export default function Dashboard() {
     // 2. 天气：有缓存用缓存
     const cachedWeather = !force ? getCache<string>('dash_weather') : null;
     const weatherPromise = cachedWeather
-      ? Promise.resolve({ data: null })
+      ? Promise.resolve({ days: [] })
       : weatherApi.getForecast(1);
 
     // 3. AI 建议：有缓存用缓存
     const cachedAdvice = !force ? getCache<string>('dash_advice') : null;
     const advicePromise = cachedAdvice
-      ? Promise.resolve({ data: null })
+      ? Promise.resolve({ advice: '' })
       : agentApi.getDailyAdvice();
 
     const [cyclesRes, costsRes, weatherRes, adviceRes] = await Promise.allSettled([
@@ -74,17 +74,17 @@ export default function Dashboard() {
     ]);
 
     if (cyclesRes.status === 'fulfilled') {
-      setCycleCount(cyclesRes.value.data.length);
+      setCycleCount(cyclesRes.value.items.length);
     }
     if (costsRes.status === 'fulfilled') {
-      setSummary(costsRes.value.data);
+      setSummary(costsRes.value);
     }
 
     if (cachedWeather) {
       setWeather(cachedWeather);
     } else if (weatherRes.status === 'fulfilled') {
-      const d = weatherRes.value.data?.daily;
-      const w = d?.temperature_2m_max?.[0] ? `${d.temperature_2m_max[0]}°C` : '';
+      const d = weatherRes.value.days?.[0];
+      const w = d ? `${d.max_temp}°C` : '';
       setWeather(w);
       if (w) setCache('dash_weather', w);
     }
@@ -92,7 +92,7 @@ export default function Dashboard() {
     if (cachedAdvice) {
       setAdvice(cachedAdvice);
     } else if (adviceRes.status === 'fulfilled') {
-      const a = adviceRes.value.data;
+      const a = adviceRes.value;
       const text = a?.advice ? a.advice.slice(0, 100) + '...' : '暂无建议';
       setAdvice(text);
       if (text) setCache('dash_advice', text);

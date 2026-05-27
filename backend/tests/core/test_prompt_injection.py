@@ -3,8 +3,8 @@
 import pytest
 from datetime import date
 
-from app.core.prompt_renderer import render_prompt
-from app.core.prompt_registry import PromptRegistry
+from app.agent.prompt_renderer import render_prompt
+from app.agent.prompt_registry import PromptRegistry
 from app.models.farm import Farm
 from app.core.database import SessionLocal
 
@@ -187,59 +187,24 @@ class TestBaseJ2TemplateContent:
         assert "2026-05-25" in result
 
 
-class TestFallbackTemplateUpdate:
-    """验证 _DEFAULT_PROMPTS 中 system_base 的 fallback 同步更新。"""
-
-    def test_fallback_contains_display_name(self):
-        """fallback 模板包含 display_name 占位符。"""
-        from app.core.prompt_registry import _DEFAULT_PROMPTS
-
-        fallback = _DEFAULT_PROMPTS["system_base"]
-        assert "display_name" in fallback
-
-    def test_fallback_contains_farm_context_summary(self):
-        """fallback 模板包含 farm_context_summary 占位符。"""
-        from app.core.prompt_registry import _DEFAULT_PROMPTS
-
-        fallback = _DEFAULT_PROMPTS["system_base"]
-        assert "farm_context_summary" in fallback
-
-    def test_fallback_renders_with_variables(self):
-        """fallback 模板带变量渲染不报错。"""
-        reg = PromptRegistry()
-        # 不注册 system_base，让 get_fallback 生效
-        result = render_prompt(
-            "system_base",
-            {
-                "farm_context_summary": "茬口：西瓜",
-                "display_name": "农友",
-            },
-            registry=reg,
-            current_date=date(2026, 5, 25),
-        )
-        assert "农友" in result
-        assert "西瓜" in result
-
-
 class TestFarmDisplayNameFromDatabase:
     """从数据库获取 display_name 的集成测试。"""
 
     def test_get_display_name_from_farm_model(self):
-        """Farm 模型 display_name 字段默认为「农友」。"""
+        """Farm 模型 name 字段默认为「默认农场」。"""
         db = SessionLocal()
         farm = db.query(Farm).filter(Farm.id == 1).first()
-        # conftest 中创建的 Farm 没有设置 display_name，应为 None
-        # 业务层应处理为默认值「农友」
-        display_name = farm.display_name or "农友"
-        assert display_name == "农友"
+        # conftest 中创建的 Farm name 为 "默认农场"
+        display_name = farm.name or "农友"
+        assert display_name == "默认农场"
         db.close()
 
     def test_get_display_name_custom_from_database(self):
-        """Farm 模型 display_name 设置了自定义值时正确读取。"""
+        """Farm 模型 name 设置了自定义值时正确读取。"""
         db = SessionLocal()
         farm = db.query(Farm).filter(Farm.id == 1).first()
-        farm.display_name = "老赵"
+        farm.name = "老赵的农场"
         db.commit()
-        display_name = farm.display_name or "农友"
-        assert display_name == "老赵"
+        display_name = farm.name or "农友"
+        assert display_name == "老赵的农场"
         db.close()

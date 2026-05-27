@@ -70,7 +70,7 @@ def clear_context_cache() -> None:
     logger.info("农场上下文缓存已清除")
 
 
-def build_summary(db: Session, farm_id: int = 1) -> str:
+def build_summary(db: Session, farm_id: int) -> str:
     """组装农场现状摘要文本（≤300字）。
 
     查询数据库获取活跃茬口、近期农事、债务、月度成本，

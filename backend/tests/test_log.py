@@ -12,7 +12,12 @@ def watermelon_template_id():
         "name": "西瓜",
         "variety": "8424",
         "stages": [
-            {"name": "育苗期", "duration_days": 30, "order_index": 0, "key_tasks": "温湿度管理"},
+            {
+                "name": "育苗期",
+                "duration_days": 30,
+                "order_index": 0,
+                "key_tasks": "温湿度管理",
+            },
         ],
     }
     response = client.post("/crops/templates", json=payload)
@@ -49,11 +54,14 @@ def test_create_farm_log(cycle_id):
 
 
 def test_list_logs_by_cycle(cycle_id):
-    client.post("/logs", json={
-        "cycle_id": cycle_id,
-        "operation_type": "施肥",
-        "operation_date": "2025-05-21",
-    })
+    client.post(
+        "/logs",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "施肥",
+            "operation_date": "2025-05-21",
+        },
+    )
 
     response = client.get(f"/logs?cycle_id={cycle_id}")
     assert response.status_code == 200
@@ -66,16 +74,22 @@ def test_list_logs_by_cycle(cycle_id):
 
 
 def test_list_logs_by_operation_type(cycle_id):
-    client.post("/logs", json={
-        "cycle_id": cycle_id,
-        "operation_type": "浇水",
-        "operation_date": "2025-05-20",
-    })
-    client.post("/logs", json={
-        "cycle_id": cycle_id,
-        "operation_type": "施肥",
-        "operation_date": "2025-05-21",
-    })
+    client.post(
+        "/logs",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "浇水",
+            "operation_date": "2025-05-20",
+        },
+    )
+    client.post(
+        "/logs",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "施肥",
+            "operation_date": "2025-05-21",
+        },
+    )
 
     response = client.get(f"/logs?cycle_id={cycle_id}&operation_type=浇水")
     assert response.status_code == 200

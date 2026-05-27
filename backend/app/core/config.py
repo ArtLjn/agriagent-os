@@ -62,6 +62,12 @@ class LangSmithConfig(BaseModel):
     enabled: bool = False
 
 
+class AuthConfig(BaseModel):
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 10080  # 7 天
+
+
 class _YamlSettingsSource(PydanticBaseSettingsSource):
     """自定义 YAML 配置源，优先级低于环境变量。"""
 
@@ -91,6 +97,7 @@ class Settings(BaseSettings):
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
     rate_limiting: RateLimitConfig = RateLimitConfig()
     langsmith: LangSmithConfig = LangSmithConfig()
+    auth: AuthConfig = AuthConfig()
     trace: TraceConfig = TraceConfig()
     token_quota: TokenQuotaConfig = TokenQuotaConfig()
     project_name: str = "Farm Manager API"

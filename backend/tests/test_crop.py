@@ -10,8 +10,18 @@ def test_create_crop_template():
         "name": "西瓜",
         "variety": "8424",
         "stages": [
-            {"name": "育苗期", "duration_days": 30, "order_index": 0, "key_tasks": "温湿度管理"},
-            {"name": "定植期", "duration_days": 1, "order_index": 1, "key_tasks": "浇定根水"},
+            {
+                "name": "育苗期",
+                "duration_days": 30,
+                "order_index": 0,
+                "key_tasks": "温湿度管理",
+            },
+            {
+                "name": "定植期",
+                "duration_days": 1,
+                "order_index": 1,
+                "key_tasks": "浇定根水",
+            },
         ],
     }
     response = client.post("/crops/templates", json=payload)
@@ -27,7 +37,12 @@ def test_list_crop_templates():
         "name": "豆角",
         "variety": "长豆角",
         "stages": [
-            {"name": "播种期", "duration_days": 7, "order_index": 0, "key_tasks": "浇水保湿"},
+            {
+                "name": "播种期",
+                "duration_days": 7,
+                "order_index": 0,
+                "key_tasks": "浇水保湿",
+            },
         ],
     }
     client.post("/crops/templates", json=payload)
@@ -54,7 +69,12 @@ def test_update_crop_template():
         "name": "西瓜",
         "variety": "8424",
         "stages": [
-            {"name": "育苗期", "duration_days": 30, "order_index": 0, "key_tasks": "温湿度管理"},
+            {
+                "name": "育苗期",
+                "duration_days": 30,
+                "order_index": 0,
+                "key_tasks": "温湿度管理",
+            },
         ],
     }
     create_resp = client.post("/crops/templates", json=create_payload)
@@ -64,8 +84,18 @@ def test_update_crop_template():
         "name": "改良西瓜",
         "variety": "麒麟",
         "stages": [
-            {"name": "育苗期", "duration_days": 25, "order_index": 0, "key_tasks": "改良温湿度管理"},
-            {"name": "定植期", "duration_days": 1, "order_index": 1, "key_tasks": "浇定根水"},
+            {
+                "name": "育苗期",
+                "duration_days": 25,
+                "order_index": 0,
+                "key_tasks": "改良温湿度管理",
+            },
+            {
+                "name": "定植期",
+                "duration_days": 1,
+                "order_index": 1,
+                "key_tasks": "浇定根水",
+            },
         ],
     }
     response = client.put(f"/crops/templates/{template_id}", json=update_payload)

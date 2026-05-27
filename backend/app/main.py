@@ -23,11 +23,13 @@ from app.api import (  # noqa: E402
     admin_stats,
     admin_trace,
     agent,
+    auth,
     cost,
     cost_categories,
     crop,
     cycle,
     debt,
+    feedback,
     log,
     user_settings,
     weather,
@@ -35,12 +37,12 @@ from app.api import (  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.database import engine, Base, SessionLocal  # noqa: E402
 from app.core.date_context import set_request_date  # noqa: E402
-from app.core.limiter import limiter  # noqa: E402
+from app.infra.limiter import limiter  # noqa: E402
 from app.core.logger import get_logger, setup_logging  # noqa: E402
-from app.core.prompt_registry import get_registry  # noqa: E402
+from app.agent.prompt_registry import get_registry  # noqa: E402
 from app.core.seed import migrate_cost_records, seed_default_farm  # noqa: E402
-from app.core.trace_cleaner import clean_expired_traces  # noqa: E402
-from app.core.trace_collector import start_trace_system, stop_trace_system  # noqa: E402
+from app.infra.trace_cleaner import clean_expired_traces  # noqa: E402
+from app.infra.trace_collector import start_trace_system, stop_trace_system  # noqa: E402
 
 setup_logging()
 logger = get_logger(__name__)
@@ -194,6 +196,7 @@ app.include_router(log.router)
 app.include_router(cost.router)
 app.include_router(cost_categories.router)
 app.include_router(agent.router)
+app.include_router(auth.router)
 app.include_router(weather.router)
 app.include_router(admin.router)
 app.include_router(admin_trace.router)
@@ -201,6 +204,7 @@ app.include_router(admin_stats.router)
 app.include_router(admin_config.router)
 app.include_router(user_settings.router)
 app.include_router(debt.router)
+app.include_router(feedback.router)
 
 
 @app.get("/health")

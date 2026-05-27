@@ -1,6 +1,6 @@
 """成本分类 API 路由。"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/cost-categories", tags=["分类管理"])
 
 @router.get("", response_model=list[CostCategoryResponse])
 def get_categories(
-    farm_id: int = Query(1, description="农场 ID"), db: Session = Depends(get_db)
+    farm_id: int = Query(..., description="农场 ID"), db: Session = Depends(get_db)
 ):
     """获取农场分类列表，空农场自动初始化预设分类。"""
     categories = cost_category_service.get_categories(db, farm_id)
@@ -24,8 +24,8 @@ def get_categories(
 
 @router.post("", response_model=CostCategoryResponse, status_code=201)
 def create_category(
-    data: CostCategoryCreate,
-    farm_id: int = Query(1, description="农场 ID"),
+    farm_id: int = Query(..., description="农场 ID"),
+    data: CostCategoryCreate = Body(...),
     db: Session = Depends(get_db),
 ):
     """创建用户自定义分类。"""
@@ -35,7 +35,7 @@ def create_category(
 @router.delete("/{category_id}")
 def delete_category(
     category_id: int,
-    farm_id: int = Query(1, description="农场 ID"),
+    farm_id: int = Query(..., description="农场 ID"),
     db: Session = Depends(get_db),
 ):
     """删除分类，禁止删除系统预设分类。"""

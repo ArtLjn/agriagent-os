@@ -54,7 +54,9 @@ class TestGetTimeline:
 
         # 配置 mock_db 的查询链
         mock_db = _mock_db()
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [mock_record]
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            mock_record
+        ]
 
         def _override():
             yield mock_db
