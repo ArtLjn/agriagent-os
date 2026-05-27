@@ -15,6 +15,11 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use(async (config) => {
   const today = new Date().toISOString().split('T')[0];
   config.headers['X-Current-Date'] = today;
+  const { useAuthStore } = require('../stores/authStore');
+  const token = useAuthStore.getState().token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
@@ -22,6 +27,16 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
+      if (error.response.status === 401) {
+        const { useAuthStore } = require('../stores/authStore');
+        const store = useAuthStore.getState();
+        if (store.isLoggedIn) {
+          store.logout();
+          const { triggerUnauthorized } = require('../stores/authStore');
+          triggerUnauthorized();
+        }
+        return Promise.reject(new Error('登录已过期，请重新登录'));
+      }
       const detail = error.response.data?.detail;
       let msg: string;
       if (Array.isArray(detail)) {
