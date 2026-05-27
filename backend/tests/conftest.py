@@ -2,9 +2,11 @@
 
 import pytest
 from fastapi import Depends
+from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_farm, get_current_user, get_db
 from app.core.database import Base, SessionLocal, engine
+from app.core.security import create_access_token
 from app.main import app
 from app.models.farm import Farm
 from app.models.user import User
@@ -48,3 +50,16 @@ def clean_db():
     yield
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def client():
+    """API 测试客户端。"""
+    return TestClient(app)
+
+
+@pytest.fixture()
+def auth_headers():
+    """带有效 JWT 的请求头。"""
+    token = create_access_token(user_id="test-user-001")
+    return {"Authorization": f"Bearer {token}"}
