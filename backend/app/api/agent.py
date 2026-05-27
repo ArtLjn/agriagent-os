@@ -14,7 +14,7 @@ from app.api.deps import get_db, get_current_farm
 from app.infra.limiter import limiter
 from app.agent.llm import LlmNotConfiguredError
 from app.core.logger import request_id_var
-from app.models.agent import AdviceRecord
+from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 from app.schemas.agent import (
     ChatRequest,
@@ -119,9 +119,9 @@ async def agent_chat_stream(
                 full_reply += chunk
                 data = json.dumps({"content": chunk}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
-            record = AdviceRecord(
+            record = AgentRecord(
                 cycle_id=chat_request.cycle_id,
-                advice_type="chat",
+                record_type="chat",
                 content=full_reply,
                 farm_id=farm.id,
             )
@@ -305,19 +305,19 @@ async def list_reports(
 ) -> ReportListResponse:
     """获取报告历史列表（支持分页）。"""
     from sqlalchemy import func as sqlfunc
-    from app.models.agent import ReportRecord
 
     offset = (page - 1) * size
-    query = db.query(ReportRecord).filter(ReportRecord.farm_id == farm.id)
-    total = query.with_entities(sqlfunc.count(ReportRecord.id)).scalar() or 0
+    query = db.query(AgentRecord).filter(AgentRecord.farm_id == farm.id)
+    query = query.filter(AgentRecord.record_type == "report")
+    total = query.with_entities(sqlfunc.count(AgentRecord.id)).scalar() or 0
     records = (
-        query.order_by(ReportRecord.created_at.desc()).offset(offset).limit(size).all()
+        query.order_by(AgentRecord.created_at.desc()).offset(offset).limit(size).all()
     )
     items = [
         ReportHistoryItem(
             id=r.id,
             cycle_id=r.cycle_id,
-            report_type=r.report_type,
+            record_type=r.record_type,
             content=r.content,
             created_at=r.created_at,
         )

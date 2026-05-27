@@ -77,7 +77,7 @@ class AdviceHistoryItem(BaseModel):
 
     id: int
     cycle_id: int | None = None
-    advice_type: str
+    record_type: str
     content: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -88,7 +88,7 @@ class ReportHistoryItem(BaseModel):
 
     id: int
     cycle_id: int | None = None
-    report_type: str
+    record_type: str
     content: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

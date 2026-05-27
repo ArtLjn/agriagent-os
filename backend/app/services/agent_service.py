@@ -19,7 +19,7 @@ from app.infra.pending_actions import (
 )
 from app.infra.trace_collector import get_collector
 from app.infra.trace_context import clear_trace, init_trace
-from app.models.agent import AdviceRecord, ReportRecord
+from app.models.agent_record import AgentRecord
 from app.schemas.agent import (
     AdviceItem,
     ChatResponse,
@@ -231,8 +231,8 @@ async def chat_with_agent(
             finally:
                 remove_pending(farm_id)
 
-            record = AdviceRecord(
-                cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id
+            record = AgentRecord(
+                cycle_id=cycle_id, record_type="chat", content=reply, farm_id=farm_id
             )
             db.add(record)
             try:
@@ -249,8 +249,8 @@ async def chat_with_agent(
             logger.info("用户取消操作 | farm=%s skill=%s", farm_id, pending.skill_name)
             remove_pending(farm_id)
             reply = "已取消操作。"
-            record = AdviceRecord(
-                cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id
+            record = AgentRecord(
+                cycle_id=cycle_id, record_type="chat", content=reply, farm_id=farm_id
             )
             db.add(record)
             try:
@@ -300,8 +300,8 @@ async def chat_with_agent(
             finally:
                 clear_trace()
 
-            record = AdviceRecord(
-                cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id
+            record = AgentRecord(
+                cycle_id=cycle_id, record_type="chat", content=reply, farm_id=farm_id
             )
             db.add(record)
             try:
@@ -323,8 +323,8 @@ async def chat_with_agent(
         conversation_id=conversation.id if conversation else None,
     )
 
-    record = AdviceRecord(
-        cycle_id=cycle_id, advice_type="chat", content=reply, farm_id=farm_id
+    record = AgentRecord(
+        cycle_id=cycle_id, record_type="chat", content=reply, farm_id=farm_id
     )
     db.add(record)
     try:
@@ -406,13 +406,13 @@ async def get_daily_advice(
     # 缓存命中检查：查询今日已有记录（本地时间计算今天起点）
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     cached = (
-        db.query(AdviceRecord)
+        db.query(AgentRecord)
         .filter(
-            AdviceRecord.farm_id == farm_id,
-            AdviceRecord.advice_type == "daily",
-            AdviceRecord.created_at >= today_start,
+            AgentRecord.farm_id == farm_id,
+            AgentRecord.record_type == "daily",
+            AgentRecord.created_at >= today_start,
         )
-        .order_by(AdviceRecord.created_at.desc())
+        .order_by(AgentRecord.created_at.desc())
         .first()
     )
     if cached:
@@ -438,8 +438,8 @@ async def get_daily_advice(
 
     items = _parse_advice_items(advice)
 
-    record = AdviceRecord(
-        cycle_id=cycle_id, advice_type="daily", content=advice, farm_id=farm_id
+    record = AgentRecord(
+        cycle_id=cycle_id, record_type="daily", content=advice, farm_id=farm_id
     )
     db.add(record)
     try:
@@ -462,11 +462,11 @@ async def refresh_daily_advice(
 ) -> DailyAdviceResponse:
     """强制刷新每日农事建议：删除今日旧记录后重新生成。"""
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    db.query(AdviceRecord).filter(
-        AdviceRecord.farm_id == farm_id,
-        AdviceRecord.advice_type == "daily",
-        AdviceRecord.cycle_id == cycle_id if cycle_id is not None else True,
-        AdviceRecord.created_at >= today_start,
+    db.query(AgentRecord).filter(
+        AgentRecord.farm_id == farm_id,
+        AgentRecord.record_type == "daily",
+        AgentRecord.cycle_id == cycle_id if cycle_id is not None else True,
+        AgentRecord.created_at >= today_start,
     ).delete(synchronize_session=False)
     try:
         db.commit()
@@ -493,8 +493,8 @@ async def generate_report(
             farm_id=farm_id,
         )
 
-    record = ReportRecord(
-        cycle_id=cycle_id, report_type=report_type, content=content, farm_id=farm_id
+    record = AgentRecord(
+        cycle_id=cycle_id, record_type=report_type, content=content, farm_id=farm_id
     )
     db.add(record)
     try:
@@ -507,7 +507,7 @@ async def generate_report(
 
     return ReportResponse(
         cycle_id=record.cycle_id,
-        report_type=record.report_type,
+        report_type=record.record_type,
         content=record.content,
         created_at=record.created_at,
     )
@@ -515,22 +515,30 @@ async def generate_report(
 
 def get_advice_history(
     db: Session, cycle_id: int | None = None, limit: int = 20, farm_id: int = 1
-) -> list[AdviceRecord]:
+) -> list[AgentRecord]:
     """查询建议历史。"""
-    query = db.query(AdviceRecord).filter(AdviceRecord.farm_id == farm_id)
+    query = (
+        db.query(AgentRecord)
+        .filter(AgentRecord.farm_id == farm_id)
+        .filter(AgentRecord.record_type.in_(["chat", "daily"]))
+    )
     if cycle_id is not None:
-        query = query.filter(AdviceRecord.cycle_id == cycle_id)
-    return query.order_by(AdviceRecord.created_at.desc()).limit(limit).all()
+        query = query.filter(AgentRecord.cycle_id == cycle_id)
+    return query.order_by(AgentRecord.created_at.desc()).limit(limit).all()
 
 
 def get_report_history(
     db: Session, cycle_id: int | None = None, limit: int = 20, farm_id: int = 1
-) -> list[ReportRecord]:
+) -> list[AgentRecord]:
     """查询报告历史。"""
-    query = db.query(ReportRecord).filter(ReportRecord.farm_id == farm_id)
+    query = (
+        db.query(AgentRecord)
+        .filter(AgentRecord.farm_id == farm_id)
+        .filter(AgentRecord.record_type == "report")
+    )
     if cycle_id is not None:
-        query = query.filter(ReportRecord.cycle_id == cycle_id)
-    return query.order_by(ReportRecord.created_at.desc()).limit(limit).all()
+        query = query.filter(AgentRecord.cycle_id == cycle_id)
+    return query.order_by(AgentRecord.created_at.desc()).limit(limit).all()
 
 
 __all__ = [
