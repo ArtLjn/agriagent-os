@@ -4,7 +4,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from jinja2 import Template, TemplateError
+from jinja2 import Template
 
 if TYPE_CHECKING:
     from app.core.prompt_registry import PromptRegistry
@@ -47,32 +47,26 @@ def render_prompt(
         version: 指定版本，默认使用注册表默认版本。
 
     Returns:
-        渲染后的 prompt 字符串。模板错误时回退到内置默认。
+        渲染后的 prompt 字符串。
+
+    Raises:
+        KeyError: 模板未注册。
+        TemplateError: 模板语法错误。
     """
     from app.core.prompt_registry import get_registry
 
     reg = registry or get_registry()
-    try:
-        template_str = reg.get(name, version)
-        logger.debug(
-            "模板渲染 | name=%s | hit=true | vars=%s",
-            name,
-            list((variables or {}).keys()),
-        )
-    except KeyError:
-        logger.warning("模板未注册 | name=%s | 使用内置默认", name)
-        template_str = reg.get_fallback(name)
+    template_str = reg.get(name, version)
+    logger.debug(
+        "模板渲染 | name=%s | hit=true | vars=%s",
+        name,
+        list((variables or {}).keys()),
+    )
 
     builtin_vars = _build_builtin_vars(current_date)
     ctx = {**builtin_vars, **(variables or {})}
-
-    try:
-        template = Template(template_str)
-        return template.render(ctx)
-    except TemplateError as e:
-        logger.error("模板渲染失败 | name=%s error=%s，回退到默认", name, e)
-        fallback = Template(reg.get_fallback(name))
-        return fallback.render(ctx)
+    template = Template(template_str)
+    return template.render(ctx)
 
 
 __all__ = ["render_prompt"]

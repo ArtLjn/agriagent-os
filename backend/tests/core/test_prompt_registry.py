@@ -41,3 +41,8 @@ class TestPromptRegistry:
         reg.reload()
         with pytest.raises(KeyError):
             reg.get("test")
+
+    def test_get_fallback_removed(self):
+        """get_fallback 方法已被删除。"""
+        reg = PromptRegistry()
+        assert not hasattr(reg, "get_fallback")

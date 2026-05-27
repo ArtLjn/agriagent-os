@@ -187,39 +187,6 @@ class TestBaseJ2TemplateContent:
         assert "2026-05-25" in result
 
 
-class TestFallbackTemplateUpdate:
-    """验证 _DEFAULT_PROMPTS 中 system_base 的 fallback 同步更新。"""
-
-    def test_fallback_contains_display_name(self):
-        """fallback 模板包含 display_name 占位符。"""
-        from app.core.prompt_registry import _DEFAULT_PROMPTS
-
-        fallback = _DEFAULT_PROMPTS["system_base"]
-        assert "display_name" in fallback
-
-    def test_fallback_contains_farm_context_summary(self):
-        """fallback 模板包含 farm_context_summary 占位符。"""
-        from app.core.prompt_registry import _DEFAULT_PROMPTS
-
-        fallback = _DEFAULT_PROMPTS["system_base"]
-        assert "farm_context_summary" in fallback
-
-    def test_fallback_renders_with_variables(self):
-        """fallback 模板带变量渲染不报错。"""
-        reg = PromptRegistry()
-        # 不注册 system_base，让 get_fallback 生效
-        result = render_prompt(
-            "system_base",
-            {
-                "farm_context_summary": "茬口：西瓜",
-                "display_name": "农友",
-            },
-            registry=reg,
-            current_date=date(2026, 5, 25),
-        )
-        assert "农友" in result
-        assert "西瓜" in result
-
 
 class TestFarmDisplayNameFromDatabase:
     """从数据库获取 display_name 的集成测试。"""
