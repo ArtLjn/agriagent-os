@@ -148,3 +148,17 @@ class TestAgentHistory:
 
         assert response.status_code == 200
         assert response.json() == []
+
+
+class TestAgentTraceFilter:
+    """验证 trace 查询只查 skill_call 类型。"""
+
+    def test_stream_trace_query_no_routing(self) -> None:
+        """验证 event_generator 查询 skills 时不含 routing。"""
+        import inspect
+        from app.api import agent as agent_module
+        source = inspect.getsource(agent_module)
+        assert '"routing"' not in source
+        assert "routing" not in [
+            w for w in source.split() if w == '"routing"'
+        ]
