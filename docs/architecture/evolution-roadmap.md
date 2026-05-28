@@ -296,17 +296,24 @@ advice + report 分开                   合并为 agent_records
 │   ├── 用户上下文 (位置/季节/称呼) 注入
 │   └── 会话生命周期管理
 │
-└── Function Calling 启用
-    ├── Skill 从文本匹配 → Tool Calling
-    ├── 并行 Tool 调用
-    └── 更精准的意图路由
+├── Function Calling 迁移 ✅
+│   ├── Skill 从文本匹配 → Tool Calling
+│   ├── 并行 Tool 调用
+│   └── Tool Selection 优化 (description + prompt 映射表)
+│
+└── Tool RAG 预筛选 (Step 1a)
+    ├── Keyword Pre-filter 模块
+    ├── 候选 Tool 2-3 个精准注入
+    └── 弱模型 tool selection 准确率 ↑↑
 ```
 
 **关键交付物:**
 - [x] OpenSpec 提案: `dual-weather-provider`
 - [x] OpenSpec 提案: `session-management-and-context-injection`
-- [ ] 执行两个 apply
-- [ ] Function Calling 迁移
+- [x] Function Calling 迁移 (`function-calling-migration`)
+- [x] Tool Selection Fix (`fc-tool-selection-fix`)
+- [ ] 执行 dual-weather + session-context apply
+- [ ] Tool RAG 预筛选模块
 
 ---
 
@@ -362,35 +369,165 @@ SQLite 单文件                         考虑 PostgreSQL (用户增长后)
 
 ## 五、上下文工程演进路径
 
-> 基于之前的上下文工程研究，针对 Agent 对话场景的优化路线
+> 基于 Lance Martin (LangChain) 上下文工程四维框架：**Write / Select / Compress / Isolate**
+> 参考: [Context Engineering for Agents](https://rlancemartin.github.io/2025/06/23/context_engineering/) | [ToolRAG 论文](https://arxiv.org/abs/2410.14594) | [12-Factor Agents](https://github.com/humanlayer/12-factor-agents/blob/main/content/factor-03-own-your-context-window.md)
+
+### 框架全景
 
 ```
-当前 (Prompt Stuffing)          近期 (Sliding Window)         中期 (Progressive Disclosure)
-─────────────────────          ──────────────────           ───────────────────────
-所有 Skill 描述全量注入          保留最近 N 轮对话              Skill 按需加载
-~3,000 tokens/skill             + 历史摘要压缩                注册表仅名+描述 (~80 tokens)
-10 Skills = ~30K tokens         ~8K tokens 稳态              激活时才加载完整指令
-                                                             ~2K tokens 稳态
-
-┌────────────────────┐         ┌────────────────────┐        ┌────────────────────┐
-│ System Prompt      │         │ System Prompt      │        │ System Prompt      │
-│ ├ base.j2 (全量)   │         │ ├ base.j2          │        │ ├ base.j2 (精简)   │
-│ ├ 10 Skill 描述    │         │ ├ 摘要的上下文      │        │ ├ Skill 注册表     │
-│ └ 用户信息         │         │ └ 最近 N 轮对话     │        │ │  (名称+触发词)   │
-│                    │         │                    │        │ └ 用户画像         │
-│ = ~30K+ tokens     │         │ = ~8K tokens       │        │                    │
-│ 精度↓ 成本↑        │         │ 精度→ 成本↓        │        │ = ~2K tokens       │
-└────────────────────┘         └────────────────────┘        │ 精度↑ 成本↓↓       │
-                                                             └────────────────────┘
+                    上下文工程四维策略
+                    ────────────────
+    ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+    │  Write   │  │  Select  │  │ Compress │  │ Isolate  │
+    │ 写出上下文│  │ 选入上下文│  │ 压缩上下文│  │ 隔离上下文│
+    └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
+         │             │             │             │
+    ┌────▼─────┐  ┌────▼─────┐  ┌────▼─────┐  ┌────▼─────┐
+    │Scratchpad│  │ Tool RAG │  │ 摘要压缩  │  │ 多 Agent │
+    │ 结构化笔记│  │ 按意图筛选│  │ 递归摘要  │  │ 各自独立 │
+    │          │  │ Tool     │  │ 上下文窗口│  │ 上下文窗口│
+    │Memory    │  │ 注册表   │  │ 滑动窗口  │  │          │
+    │ 跨会话记忆│  │          │  │ 裁剪     │  │ State    │
+    └──────────┘  └──────────┘  └──────────┘  │ 显式字段 │
+                                               └──────────┘
 ```
 
-**三步走策略:**
+### 演进路线（四步走）
 
-| 阶段 | 方案 | 效果 | 实施时机 |
-|------|------|------|---------|
-| Step 1 | Sliding Window + 摘要压缩 | 上下文 ~70% 压缩 | Phase 3 完成后 |
-| Step 2 | Skill Progressive Disclosure | Prompt 瘦身 ~90% | Function Calling 稳定后 |
-| Step 3 | 结构化 Scratchpad + 记忆检索 | 多会话连续性 | Phase 4 智能化阶段 |
+```
+ Step 0 (当前)        Step 1 (近期)        Step 2 (中期)         Step 3 (远期)
+ ───────────         ───────────         ───────────          ───────────
+ Prompt Stuffing     Tool RAG            Progressive          Scratchpad +
+ 全量注入 10 Tool    意图预筛 + 精准注入  Disclosure           Memory Store
+                     + 对话压缩           按需加载 Tool
+ ~30K tokens         ~10K tokens          ~4K tokens           ~2K tokens
+ 弱模型精度↓         弱模型精度↑↑         成本↓↓               多会话连续性
+
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│ System Prompt  │  │ System Prompt  │  │ System Prompt  │  │ System Prompt  │
+│ ├ base.j2      │  │ ├ base.j2      │  │ ├ base.j2(精简)│  │ ├ base.j2      │
+│ ├ 10 Tool 描述 │  │ ├ Tool 注册表  │  │ ├ Skill 索引   │  │ ├ Skill 索引   │
+│ │  (全量)      │  │ │ (name+触发词)│  │ │ (name only) │  │ └ 用户画像     │
+│ └ 用户信息     │  │ ├ 压缩历史     │  │ └ 用户画像     │  │                │
+│                │  │ └ 筛选后 Tool  │  │                │  │ + Scratchpad   │
+│ = ~30K tokens  │  │   (2-3个)      │  │ = ~4K tokens   │  │   结构化笔记    │
+│ 精度↓ 成本↑    │  │ = ~10K tokens  │  │ 精度↑ 成本↓↓   │  │ + Memory       │
+└────────────────┘  │ 精度↑↑ 成本→  │  └────────────────┘  │   跨会话记忆    │
+                    └────────────────┘                       │ = ~2K tokens   │
+                                                             │ 连续性↑↑      │
+                                                             └────────────────┘
+```
+
+### Step 0 → Step 1: Tool RAG（已部分实施）
+
+> 论文 [ToolRAG](https://arxiv.org/abs/2410.14594) 显示：按语义相似度预筛 Tool 后再注入，tool selection 准确率提升 3 倍。
+
+**当前已实施:**
+- [x] 10 个 Skill description 优化为"意图场景描述"格式
+- [x] system prompt 注入【可用工具】映射表（name → 触发关键词）
+- [x] directive 格式强化 tool 调用指令（"用户说X → 必须调用Y"）
+
+**待实施 — Tool RAG 预筛选:**
+
+```python
+# graph.py 新增 tool_selector 模块
+
+def select_tools_by_intent(user_message: str, all_tools: list, top_k: int = 3) -> list:
+    """根据用户消息意图，预筛选最相关的 top_k 个 Tool。
+
+    策略: 关键词匹配优先（零成本），语义相似度兜底（embedding）。
+    """
+    # 1. 关键词匹配: 从 Tool description 提取触发词表
+    scored = []
+    for tool in all_tools:
+        score = _keyword_match_score(user_message, tool.description)
+        scored.append((tool, score))
+
+    # 2. 如果 top_k 内有关键词命中，直接返回
+    top = sorted(scored, key=lambda x: x[1], reverse=True)[:top_k]
+    if top[0][1] > 0:
+        return [t for t, s in top if s > 0]
+
+    # 3. 兜底: embedding 语义相似度（可选，Phase 4）
+    return all_tools  # 未命中则全量注入
+```
+
+**效果预期:**
+- 弱模型 (qwen3.6-flash) 只需从 2-3 个候选 Tool 中选择 → 准确率大幅提升
+- System prompt 注入注册表 + 精简 Tool 列表 → token 消耗降低 60%+
+- 消除 "Context Distraction"（10 个 Tool 的重叠描述导致模型混淆）
+
+### Step 1 各子策略对照
+
+| 策略 | 方法 | 适用场景 | 成本 |
+|------|------|---------|------|
+| **Keyword Pre-filter** | 用户消息 → 触发词表匹配 → 候选 Tool | 当前首选，零额外 API 调用 | O(1) |
+| **Tool Registration Table** | System prompt 列出 tool_name → 关键词映射 | 已实施，配合 Keyword Pre-filter | ~200 tokens |
+| **Embedding RAG** | 用户消息 embedding → Tool description embedding 余弦相似度 | Keyword 未命中时的兜底 | ~50ms + embedding API |
+| **LLM 路由** | 用更小模型做意图分类 → 选择 Tool | 精度最高但成本高 | 1次额外 LLM 调用 |
+
+### Step 2: Progressive Disclosure
+
+> 当 Tool 数量增长到 20+ 时，即使预筛选也有压力。按需加载完整 Tool schema。
+
+```
+用户消息 → 意图识别 → Skill 索引(name+触发词, ~80 tokens/skill)
+                         │
+                         ├─ 命中 → 加载完整 Tool schema + description
+                         │         注入 bind_tools()
+                         │
+                         └─ 未命中 → 纯对话模式，不注入任何 Tool
+```
+
+**关键设计:**
+- Skill 索引常驻 system prompt（名称 + 1行触发词，~800 tokens / 10 skills）
+- 完整 Tool schema 仅在命中时动态注入 `bind_tools()`
+- LangGraph 的 `ToolNode` 已支持动态 tool 列表
+
+### Step 3: Scratchpad + Memory Store
+
+> 跨会话连续性 + 结构化工作记忆
+
+```
+┌───────────────────────────────────────────────────┐
+│                 上下文工程完整架构                    │
+│                                                    │
+│  ┌─────────────┐     ┌──────────────┐             │
+│  │  Scratchpad  │     │ Memory Store │             │
+│  │  (会话内)    │     │  (跨会话)    │             │
+│  │  ├ 当前任务  │     │  ├ 用户偏好  │             │
+│  │  ├ 已选Tool │     │  ├ 历史摘要  │             │
+│  │  ├ 中间结果  │     │  ├ 操作模式  │             │
+│  │  └ 待确认项  │     │  └ 作物日历  │             │
+│  └──────┬──────┘     └──────┬───────┘             │
+│         │                   │                      │
+│         ▼                   ▼                      │
+│  ┌──────────────────────────────────────────┐     │
+│  │           Context Assembler              │     │
+│  │  ├ base.j2 (精简 system prompt)          │     │
+│  │  ├ Skill 索引 (name + 触发词)            │     │
+│  │  ├ Scratchpad 片段 (当前任务相关)         │     │
+│  │  ├ Memory 检索结果 (用户偏好/历史)        │     │
+│  │  ├ 压缩后的对话历史 (sliding window)      │     │
+│  │  └ 动态筛选的 Tool (2-3个)               │     │
+│  └──────────────────────────────────────────┘     │
+│                    │                               │
+│                    ▼                               │
+│              LLM (qwen3.6-flash)                   │
+│                                                    │
+│  目标: ~2K tokens 稳态，95%+ Skill 命中率          │
+└───────────────────────────────────────────────────┘
+```
+
+### 实施时间表
+
+| 阶段 | 方案 | 核心模块 | 效果 | 实施时机 |
+|------|------|---------|------|---------|
+| Step 0 | Description 优化 + Prompt 映射表 | `skills/*/main.py` + `base.j2` | ✅ 已完成 | 当前 |
+| Step 1a | Keyword Pre-filter | `agent/tool_selector.py` | 候选 Tool 2-3个 | Phase 3 FC 稳定后 |
+| Step 1b | Sliding Window + 摘要压缩 | `agent/history_compressor.py` | 历史 ~70% 压缩 | Phase 3 后 |
+| Step 2 | Progressive Disclosure | `agent/context_assembler.py` | Prompt ~90% 瘦身 | Tool 数量 >15 时 |
+| Step 3 | Scratchpad + Memory | `agent/scratchpad.py` + `agent/memory_store.py` | 多会话连续性 | Phase 4 智能化 |
 
 ---
 
@@ -416,12 +553,13 @@ Skill引擎   skillify-sdk (自有)                skillify-sdk (持续迭代)
 
 ## 七、关键度量
 
-| 度量 | 当前值 | Phase 2 目标 | Phase 5 目标 |
+| 度量 | 当前值 | Phase 3 目标 | Phase 5 目标 |
 |------|--------|-------------|-------------|
 | 并发用户 | 1 | 5-10 | 100+ |
 | Agent 响应延迟 | ~3s | ~2s | <1.5s |
-| Skill 命中率 | ~70% | ~85% | ~95% |
+| Skill 命中率 | ~75% (FC+描述优化后) | ~90% (Tool RAG) | ~95% |
 | 多轮对话连贯性 | 无 | 3轮上下文 | 10轮+摘要 |
+| Prompt token 消耗 | ~30K/轮 | ~10K/轮 (Tool RAG) | ~4K/轮 (Progressive) |
 | 测试覆盖率 | 部分 | >80% | >90% |
 | 部署频率 | 手动 | 手动 | CI/CD 自动 |
 
