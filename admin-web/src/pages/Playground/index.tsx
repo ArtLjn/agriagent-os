@@ -523,7 +523,7 @@ export default function Playground() {
             size="large"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onPressEnter={handleSend}
+            onPressEnter={() => handleSend()}
             placeholder="输入你的问题..."
             disabled={loading}
             style={{ background: CARD, borderColor: BORDER, color: TEXT }}
@@ -532,7 +532,7 @@ export default function Playground() {
             size="large"
             type="primary"
             icon={<SendOutlined />}
-            onClick={handleSend}
+            onClick={() => handleSend()}
             loading={loading}
             style={{ height: 40 }}
           >
