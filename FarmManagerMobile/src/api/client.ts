@@ -1,6 +1,6 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse } from './types';
+import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest } from './types';
 
 const API_BASE_URL = 'http://47.98.253.236:8000';
 
@@ -79,6 +79,8 @@ export const cropApi = {
       }
     );
   },
+  createTemplate: (data: CreateTemplateRequest) =>
+    apiClient.post('/crops/templates', data),
 };
 
 // 种植周期

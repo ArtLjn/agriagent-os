@@ -17,6 +17,7 @@ import { SettingsScreen } from "../screens/settings/SettingsScreen";
 import { DebtListScreen } from "../screens/debt/DebtListScreen";
 import { DebtCreateScreen } from "../screens/debt/DebtCreateScreen";
 import { CropTemplateScreen } from "../screens/crop/CropTemplateScreen";
+import { CropTemplateCreateScreen } from "../screens/crop/CropTemplateCreateScreen";
 import { WeatherDetailScreen } from "../screens/weather/WeatherDetailScreen";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { RegisterScreen } from "../screens/auth/RegisterScreen";
@@ -44,6 +45,7 @@ export type RootStackParamList = {
   DebtList: undefined;
   DebtCreate: undefined;
   CropTemplate: undefined;
+  CropTemplateCreate: undefined;
   WeatherDetail: undefined;
   Settings: undefined;
   Login: undefined;
@@ -174,6 +176,11 @@ export const AppNavigator: React.FC = () => {
               name="CropTemplate"
               component={CropTemplateScreen}
               options={{ title: "作物模板" }}
+            />
+            <Stack.Screen
+              name="CropTemplateCreate"
+              component={CropTemplateCreateScreen}
+              options={{ title: "创建作物模板" }}
             />
             <Stack.Screen
               name="WeatherDetail"

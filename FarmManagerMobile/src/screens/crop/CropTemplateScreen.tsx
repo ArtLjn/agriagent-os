@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,10 @@ import {
   RefreshControl,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { cropApi } from "../../api/client";
+import type { RootStackParamList } from "../../navigation/AppNavigator";
 import { colors } from "../../theme/colors";
 import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 
@@ -28,7 +31,10 @@ interface CropTemplate {
   stages: GrowthStage[];
 }
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 export const CropTemplateScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
   const [templates, setTemplates] = useState<CropTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,6 +55,12 @@ export const CropTemplateScreen: React.FC = () => {
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTemplates();
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -85,7 +97,7 @@ export const CropTemplateScreen: React.FC = () => {
         <Text style={styles.headerTitle}>作物模板</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => Alert.alert("提示", "创建模板功能后续开放")}
+          onPress={() => navigation.navigate("CropTemplateCreate")}
         >
           <Icon name="plus" size={24} color={colors.primary} />
         </TouchableOpacity>

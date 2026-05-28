@@ -205,3 +205,14 @@ export interface CropTemplateParseResponse {
     key_tasks: string | null;
   }[];
 }
+
+export interface CreateTemplateRequest {
+  name: string;
+  variety?: string | null;
+  stages: {
+    name: string;
+    duration_days: number;
+    order_index: number;
+    key_tasks?: string | null;
+  }[];
+}
