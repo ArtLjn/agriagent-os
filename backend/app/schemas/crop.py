@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GrowthStageBase(BaseModel):
@@ -43,3 +43,19 @@ class CropTemplateResponse(CropTemplateBase):
     id: int
     stages: list[GrowthStageResponse]
     model_config = ConfigDict(from_attributes=True)
+
+
+class CropTemplateParseRequest(BaseModel):
+    """AI 解析作物模板请求 Schema。"""
+
+    description: str = Field(
+        ..., min_length=1, max_length=500, description="自然语言作物描述"
+    )
+
+
+class CropTemplateParseResponse(BaseModel):
+    """AI 解析作物模板响应 Schema。"""
+
+    name: str = Field(..., description="作物名称")
+    variety: str | None = Field(None, description="品种名称")
+    stages: list[GrowthStageCreate] = Field(..., description="生长阶段列表")

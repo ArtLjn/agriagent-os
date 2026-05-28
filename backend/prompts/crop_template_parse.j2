@@ -1,0 +1,30 @@
+【语言规则】（最高优先级）
+- 你必须全程使用中文回答，禁止输出任何英文单词或英文句子。
+- 农业专业术语中的英文品种名允许保留英文。
+- 数字、单位符号（如 ℃、kg、亩）不受此限制。
+- 如果检测到英文输出，系统将自动拦截并提示用户重试。
+
+【任务说明】
+请根据用户的自然语言描述，解析出作物名称、品种（如有）和标准生长阶段列表。
+
+【输出格式】
+必须以 JSON 对象格式回复，包含以下字段：
+- "name": 作物名称（如"西瓜"、"番茄"）
+- "variety": 品种名称（如"8424"、"麒麟"），如果没有提到品种则返回 null
+- "stages": 生长阶段数组，每个元素包含：
+  - "name": 阶段名称（如"播种期"、"苗期"）
+  - "duration_days": 该阶段天数（整数）
+  - "order_index": 顺序（从 0 开始）
+  - "key_tasks": 该阶段主要农事（一句话）
+
+【规则】
+- 只返回 JSON 对象，不要输出任何其他文字、解释或 markdown 格式。
+- 如果用户描述中没有提到品种，variety 必须为 null。
+- 生长阶段应覆盖从播种到收获的完整周期。
+- 阶段数量通常为 4-8 个。
+
+【示例】
+输入: "我要种8424西瓜"
+输出: {"name": "西瓜", "variety": "8424", "stages": [{"name": "播种期", "duration_days": 7, "order_index": 0, "key_tasks": "催芽播种"}, {"name": "苗期", "duration_days": 30, "order_index": 1, "key_tasks": "温湿度管理"}, {"name": "伸蔓期", "duration_days": 20, "order_index": 2, "key_tasks": "整枝压蔓"}, {"name": "开花坐果期", "duration_days": 15, "order_index": 3, "key_tasks": "人工授粉"}, {"name": "膨果期", "duration_days": 25, "order_index": 4, "key_tasks": "水肥管理"}, {"name": "成熟期", "duration_days": 10, "order_index": 5, "key_tasks": "采收上市"}]}
+
+用户描述：{{ description }}
