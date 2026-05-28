@@ -1,6 +1,6 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type { PendingAction, CostRecord, DebtListResponse } from './types';
+import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse } from './types';
 
 const API_BASE_URL = 'http://47.98.253.236:8000';
 
@@ -63,6 +63,22 @@ apiClient.interceptors.response.use(
 export const cropApi = {
   getTemplates: () => apiClient.get('/crops/templates'),
   getTemplate: (id: number) => apiClient.get(`/crops/templates/${id}`),
+  parseTemplate: (description: string) => {
+    const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+      /[xy]/g,
+      (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      }
+    );
+    return apiClient.post<CropTemplateParseResponse>(
+      '/crops/templates/parse',
+      { description },
+      {
+        headers: { 'X-Idempotency-Key': idempotencyKey },
+      }
+    );
+  },
 };
 
 // 种植周期

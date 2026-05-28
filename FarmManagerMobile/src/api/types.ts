@@ -194,3 +194,14 @@ export interface UpdateProfileParams {
   nickname?: string;
   avatar_url?: string;
 }
+
+export interface CropTemplateParseResponse {
+  name: string;
+  variety: string | null;
+  stages: {
+    name: string;
+    duration_days: number;
+    order_index: number;
+    key_tasks: string | null;
+  }[];
+}
