@@ -26,11 +26,24 @@ from app.models.user import User
 from app.services import farm_context_service
 from app.services.quota_service import check_quota
 from app.agent.skills import get_langchain_tools
-from app.agent.tool_selector import select_tools
+from app.agent.tool_selector import select_tools, LLMIntentClassifier
 
 logger = logging.getLogger(__name__)
 
 _KEEP_RECENT = 3
+
+_classifier: LLMIntentClassifier | None = None
+
+
+def _get_classifier() -> LLMIntentClassifier | None:
+    global _classifier
+    if _classifier is None and settings.ai_api_key:
+        _classifier = LLMIntentClassifier(
+            api_key=settings.ai_api_key,
+            base_url=settings.ai_base_url,
+            model=settings.ai_model,
+        )
+    return _classifier
 
 
 def _get_season(current_date: date | None = None) -> str:
@@ -109,7 +122,7 @@ def _llm_node(state: AgentState) -> dict:
         selected_tools = tools
     else:
         user_msg = _find_last_human_message(state["messages"])
-        selected_names = select_tools(user_msg, tools)
+        selected_names = select_tools(user_msg, tools, intent_classifier=_get_classifier())
         selected_tools = [t for t in tools if t.name in selected_names]
     llm = raw_llm.bind_tools(selected_tools)
     model_name = getattr(raw_llm, "model_name", "unknown")

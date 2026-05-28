@@ -1,9 +1,11 @@
-"""Tool 预筛选模块 — 两层过滤器（regex + keyword）缩小 LLM 候选工具集。"""
+"""Tool 预筛选模块 — 三层过滤器（regex + keyword + LLM intent）缩小 LLM 候选工具集。"""
 
 import logging
 import re
+import time
 
 from langchain_core.tools import BaseTool
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +44,81 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "趋势", "对比", "比去年", "比上月", "收支分析",
     },
     "get_crop_cycle_info": {
-        "茬口状态", "当前阶段", "周期进度", "茬口详情",
+        "茬口", "当前阶段", "周期进度", "阶段",
     },
     "get_recent_farm_logs": {
-        "农事记录", "操作日志", "干了啥",
+        "农事记录", "操作日志", "干了啥", "记录",
     },
 }
 
 
-def select_tools(user_message: str, all_tools: list[BaseTool], top_k: int = 3) -> list[str]:
+class LLMIntentClassifier:
+    """Layer 3 — LLM 意图分类兜底。"""
+
+    def __init__(self, api_key: str, base_url: str, model: str):
+        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._model = model
+
+    def classify(self, user_message: str, all_tools: list[BaseTool]) -> list[str] | None:
+        tool_lines = []
+        for t in all_tools:
+            desc = getattr(t, "description", "") or ""
+            tool_lines.append(f"- {t.name}: {desc}")
+        tool_descriptions = "\n".join(tool_lines)
+        tool_names = [t.name for t in all_tools]
+
+        prompt = (
+            "You are an intent classifier. Given the user message below, "
+            "determine which tool best matches the user's intent.\n"
+            "Reply with ONLY the tool name, or 'none' if no tool matches.\n\n"
+            f"Available tools:\n{tool_descriptions}\n\n"
+            f"Tool names: {', '.join(tool_names)}\n\n"
+            f"User message: {user_message}\n"
+            "Matched tool name:"
+        )
+
+        start = time.perf_counter()
+        try:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=50,
+                temperature=0,
+            )
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            content = (response.choices[0].message.content or "").strip()
+
+            matched = None
+            for name in tool_names:
+                if name == content:
+                    matched = [name]
+                    break
+
+            logger.info(
+                "llm_intent | input=%r | raw=%r | matched=%s | latency_ms=%d",
+                user_message[:80],
+                content,
+                matched,
+                latency_ms,
+            )
+            return matched
+        except Exception:
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            logger.warning(
+                "llm_intent 分类失败 | input=%r | latency_ms=%d",
+                user_message[:80],
+                latency_ms,
+                exc_info=True,
+            )
+            return None
+
+
+def select_tools(
+    user_message: str,
+    all_tools: list[BaseTool],
+    top_k: int = 3,
+    intent_classifier: LLMIntentClassifier | None = None,
+) -> list[str]:
     candidates: set[str] = set()
 
     for tool_name, patterns in WRITE_PATTERNS.items():
@@ -66,6 +134,19 @@ def select_tools(user_message: str, all_tools: list[BaseTool], top_k: int = 3) -
                 break
 
     if not candidates:
+        if intent_classifier is not None:
+            llm_result = intent_classifier.classify(user_message, all_tools)
+            if llm_result:
+                ordered = [t.name for t in all_tools if t.name in llm_result]
+                result = ordered[:top_k]
+                logger.info(
+                    "tool_pre_filter | layer=llm_intent | input=%r | returned=%d | total=%d",
+                    user_message[:80],
+                    len(result),
+                    len([t.name for t in all_tools]),
+                )
+                return result
+
         tool_names = [t.name for t in all_tools]
         logger.info(
             "tool_pre_filter | input=%r | candidates=%s | total=%d | fallback=True",
