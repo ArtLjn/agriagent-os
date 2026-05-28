@@ -129,11 +129,11 @@ class CreateCostRecordSkill(Skill):
     def _format_reply(record) -> str:
         """格式化成功回复消息。"""
         type_label = "收入" if record.record_type == "income" else "支出"
-        payment = "赊账" if record.note and "赊账" in record.note else "现金"
-        lines = [
-            f"已记账：{record.category} {record.amount}元",
-            f"（{payment}），{type_label}，日期 {record.record_date}",
-        ]
+        lines = [f"💰 已记账：**{record.category}** {record.amount}元（{type_label}）"]
         if record.note:
-            lines.append(f"备注：{record.note}")
-        return " ".join(lines)
+            if "赊账" in record.note:
+                lines.append(f"📝 {record.note}")
+            else:
+                lines.append(f"📝 备注：{record.note}")
+        lines.append(f"📅 {record.record_date}")
+        return "\n".join(lines)

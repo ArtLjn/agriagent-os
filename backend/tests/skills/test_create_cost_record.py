@@ -349,3 +349,79 @@ class TestCreateCostRecordError:
 
         assert result.status.value == "failed"
         mock_create.assert_not_called()
+
+
+class TestCostRecordFormatReply:
+    """验证记账回复使用 emoji + Markdown 格式。"""
+
+    def test_reply_starts_with_money_emoji(self):
+        """回复以 💰 开头。"""
+        record = MagicMock(
+            record_type="cost",
+            category="化肥",
+            amount=Decimal("200"),
+            record_date=date(2026, 5, 25),
+            note=None,
+        )
+        reply = CreateCostRecordSkill._format_reply(record)
+        assert reply.startswith("💰")
+
+    def test_reply_contains_bold_category(self):
+        """回复包含加粗分类。"""
+        record = MagicMock(
+            record_type="cost",
+            category="化肥",
+            amount=Decimal("200"),
+            record_date=date(2026, 5, 25),
+            note=None,
+        )
+        reply = CreateCostRecordSkill._format_reply(record)
+        assert "**化肥**" in reply
+
+    def test_reply_contains_amount(self):
+        """回复包含金额。"""
+        record = MagicMock(
+            record_type="cost",
+            category="化肥",
+            amount=Decimal("200"),
+            record_date=date(2026, 5, 25),
+            note=None,
+        )
+        reply = CreateCostRecordSkill._format_reply(record)
+        assert "200元" in reply
+
+    def test_income_reply_shows_income_label(self):
+        """收入记录显示「收入」标签。"""
+        record = MagicMock(
+            record_type="income",
+            category="番茄销售",
+            amount=Decimal("5000"),
+            record_date=date(2026, 5, 26),
+            note=None,
+        )
+        reply = CreateCostRecordSkill._format_reply(record)
+        assert "收入" in reply
+
+    def test_debt_reply_shows_debt_label(self):
+        """赊账记录显示「赊账」标签。"""
+        record = MagicMock(
+            record_type="cost",
+            category="大棚膜",
+            amount=Decimal("3000"),
+            record_date=date(2026, 5, 26),
+            note="赊账-农资店老王",
+        )
+        reply = CreateCostRecordSkill._format_reply(record)
+        assert "赊账" in reply
+
+    def test_reply_contains_note_when_present(self):
+        """有备注时显示备注。"""
+        record = MagicMock(
+            record_type="cost",
+            category="化肥",
+            amount=Decimal("200"),
+            record_date=date(2026, 5, 25),
+            note="赊账-农资店老王",
+        )
+        reply = CreateCostRecordSkill._format_reply(record)
+        assert "农资店老王" in reply
