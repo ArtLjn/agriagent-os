@@ -15,6 +15,7 @@ WRITE_SKILLS = frozenset(
     {
         "create_cost_record",
         "create_crop_cycle",
+        "create_crop_template",
         "log_farm_activity",
         "settle_debt",
         "update_crop_stage",
@@ -24,6 +25,7 @@ WRITE_SKILLS = frozenset(
 _SKILL_DISPLAY: dict[str, str] = {
     "create_cost_record": "记账",
     "create_crop_cycle": "创建茬口",
+    "create_crop_template": "创建作物模板",
     "log_farm_activity": "记录农事",
     "settle_debt": "还款",
     "update_crop_stage": "更新阶段",

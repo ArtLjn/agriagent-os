@@ -23,6 +23,10 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r"(?:种植|种[了上下]?)\s*(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米)"),
         re.compile(r"(?:春茬|秋茬|夏茬|冬茬)"),
     ],
+    "create_crop_template": [
+        re.compile(r"(?:创建|建|新建|添加).*(?:作物|模板)"),
+        re.compile(r"(?:没有|缺少|找不到).*(?:模板|作物)"),
+    ],
     "log_farm_activity": [
         re.compile(r"(?:浇[了水]|施[了肥]|打[了药]|除[了草]|翻[了地]|播[了种])"),
         re.compile(r"(?:记录|记下)\s*(?:农事|操作|浇水|施肥)"),
