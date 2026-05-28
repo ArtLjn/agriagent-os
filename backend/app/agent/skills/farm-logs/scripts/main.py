@@ -15,7 +15,11 @@ class FarmLogSkill(Skill):
         return "get_recent_farm_logs"
 
     def description(self) -> str:
-        return "查询指定周期最近N天的农事记录。触发词: 记录、日志、农事"
+        return (
+            "查询最近几天的农事操作记录。当用户问最近干了啥、查看农事记录、"
+            "最近的操作日志、这几天做了什么农活时，调用此工具获取真实记录。"
+            "需要提供周期 ID。"
+        )
 
     def parameters_schema(self) -> dict:
         return {
