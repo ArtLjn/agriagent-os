@@ -39,3 +39,4 @@ FarmManagerMobile/android/android/
 # Database
 *.db
 .github/workflows/
+.worktrees/
