@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
+from app.agent.skills import get_skill_manager, build_skill_context
+from app.infra.pending_actions import (
+    get_pending,
+    remove_pending,
+    detect_user_intent,
+)
 from app.infra.trace_context import clear_trace, init_trace
 from app.services.conversation_service import get_recent_messages
 
@@ -62,6 +68,37 @@ async def invoke_advisor(
 
     init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
+
+    pending = get_pending(farm_id)
+    if pending:
+        intent = detect_user_intent(user_input)
+        if intent == "confirm":
+            logger.info(
+                "用户确认执行 pending action | farm_id=%s | skill=%s",
+                farm_id,
+                pending.skill_name,
+            )
+            try:
+                manager = get_skill_manager()
+                ctx = build_skill_context(farm_id)
+                result = await manager.execute(pending.skill_name, pending.params, ctx)
+                reply = result.reply
+            except Exception as e:
+                logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
+                reply = "操作执行失败，请重试。"
+            finally:
+                remove_pending(farm_id)
+            return filter_output(reply)
+        if intent == "cancel":
+            logger.info("用户取消 pending action | farm_id=%s", farm_id)
+            remove_pending(farm_id)
+            return "好的，已取消。"
+        logger.info(
+            "用户修改 pending action | farm_id=%s | intent=modify",
+            farm_id,
+        )
+        remove_pending(farm_id)
+
     graph = _get_advisor_graph()
 
     # 构建历史消息 + 当前消息
@@ -106,6 +143,39 @@ async def stream_advisor(
 
     init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
+
+    pending = get_pending(farm_id)
+    if pending:
+        intent = detect_user_intent(user_input)
+        if intent == "confirm":
+            logger.info(
+                "用户确认执行 pending action | farm_id=%s | skill=%s",
+                farm_id,
+                pending.skill_name,
+            )
+            try:
+                manager = get_skill_manager()
+                ctx = build_skill_context(farm_id)
+                result = await manager.execute(pending.skill_name, pending.params, ctx)
+                reply = result.reply
+            except Exception as e:
+                logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
+                reply = "操作执行失败，请重试。"
+            finally:
+                remove_pending(farm_id)
+            yield filter_output(reply)
+            return
+        if intent == "cancel":
+            logger.info("用户取消 pending action | farm_id=%s", farm_id)
+            remove_pending(farm_id)
+            yield "好的，已取消。"
+            return
+        logger.info(
+            "用户修改 pending action | farm_id=%s | intent=modify",
+            farm_id,
+        )
+        remove_pending(farm_id)
+
     graph = _get_advisor_graph()
 
     # 构建历史消息 + 当前消息
