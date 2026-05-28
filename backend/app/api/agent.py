@@ -43,9 +43,9 @@ from app.services.agent_service import (
 from app.services.conversation_service import (
     list_conversations,
     get_conversation_messages,
-    get_or_create_conversation,
     save_message,
 )
+from app.infra.pending_actions import get_pending
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +170,10 @@ async def agent_chat_stream(
 
             if skill_names:
                 yield f"data: {json.dumps({'skills': skill_names}, ensure_ascii=False)}\n\n"
+
+            pending = get_pending(farm.id)
+            if pending:
+                yield f"data: {json.dumps({'pending_action': {'action_id': pending.action_id, 'skill_name': pending.skill_name, 'params': pending.params}}, ensure_ascii=False)}\n\n"
 
             logger.info(
                 "[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符 | skills=%s",

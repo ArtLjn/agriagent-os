@@ -14,7 +14,13 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from app.agent.llm import get_llm
-from app.infra.pending_actions import is_write_skill, store_pending
+from app.infra.pending_actions import (
+    PENDING_MARKER,
+    is_write_skill,
+    is_pending_tool_message,
+    build_confirm_message,
+    store_pending,
+)
 from app.agent.prompt_registry import get_registry
 from app.agent.prompt_renderer import render_prompt
 from app.core.date_context import get_request_date
@@ -119,18 +125,30 @@ def _extract_tokens_used(response: AIMessage) -> int | None:
 
 def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
+    messages = state["messages"]
+
+    pending_msgs = [m for m in messages if is_pending_tool_message(m)]
+    if pending_msgs:
+        confirm = pending_msgs[-1].content.replace(PENDING_MARKER, "").strip()
+        logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
+        return {"messages": [AIMessage(content=confirm)]}
+
     tools = get_langchain_tools()
     raw_llm = get_llm()
-    has_tool_results = any(isinstance(m, ToolMessage) for m in state["messages"])
+    has_tool_results = any(isinstance(m, ToolMessage) for m in messages)
     if has_tool_results:
         selected_tools = tools
     else:
-        user_msg = _find_last_human_message(state["messages"])
+        user_msg = _find_last_human_message(messages)
         selected_names = select_tools(user_msg, tools, intent_classifier=_get_classifier())
         selected_tools = [t for t in tools if t.name in selected_names]
-    llm = raw_llm.bind_tools(selected_tools)
+    if selected_tools:
+        llm = raw_llm.bind_tools(selected_tools)
+    else:
+        llm = raw_llm
+        logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
     model_name = getattr(raw_llm, "model_name", "unknown")
-    _round_idx = increment_round()  # 副作用：轮次 +1
+    _round_idx = increment_round()
     collector = get_collector()
 
     farm_id = state.get("farm_id", 1)
@@ -273,16 +291,9 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                 output_data="已拦截为 pending action",
                 duration_ms=0,
             )
-            params_str = ", ".join(f"{k}={v}" for k, v in args.items())
+            confirm_text = build_confirm_message(name, args)
             return ToolMessage(
-                content=(
-                    f"[IMPORTANT] 操作尚未执行！{name}({params_str}) "
-                    f"需要用户确认后才会真正执行。"
-                    f"你必须向用户确认以下参数，收到用户同意后才算完成："
-                    f"{params_str}。"
-                    f"用简洁的口语问用户是否确认，例如："
-                    f"要帮你创建茬口：玉米 春季，确认吗？"
-                ),
+                content=f"{PENDING_MARKER} {confirm_text}",
                 tool_call_id=tool_call_id,
             )
 

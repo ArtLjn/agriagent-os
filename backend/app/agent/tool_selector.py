@@ -86,7 +86,16 @@ class LLMIntentClassifier:
                 temperature=0,
             )
             latency_ms = int((time.perf_counter() - start) * 1000)
-            content = (response.choices[0].message.content or "").strip()
+            content = (response.choices[0].message.content or "").strip().lower()
+
+            if content == "none":
+                logger.info(
+                    "llm_intent | input=%r | raw=%r | matched=[] | latency_ms=%d",
+                    user_message[:80],
+                    content,
+                    latency_ms,
+                )
+                return []
 
             matched = None
             for name in tool_names:
@@ -136,7 +145,14 @@ def select_tools(
     if not candidates:
         if intent_classifier is not None:
             llm_result = intent_classifier.classify(user_message, all_tools)
-            if llm_result:
+            if llm_result is not None:
+                if len(llm_result) == 0:
+                    logger.info(
+                        "tool_pre_filter | layer=llm_intent_none | input=%r | total=%d",
+                        user_message[:80],
+                        len(all_tools),
+                    )
+                    return []
                 ordered = [t.name for t in all_tools if t.name in llm_result]
                 result = ordered[:top_k]
                 logger.info(

@@ -6,6 +6,8 @@ import time
 import uuid
 from dataclasses import dataclass
 
+from langchain_core.messages import ToolMessage
+
 _CONFIRM_PATTERNS = re.compile(r"(确认|好的|是的|没问题|对)")
 _CANCEL_PATTERNS = re.compile(r"(算了|取消|不要了|不需要了)")
 
@@ -18,6 +20,14 @@ WRITE_SKILLS = frozenset(
         "update_crop_stage",
     }
 )
+
+_SKILL_DISPLAY: dict[str, str] = {
+    "create_cost_record": "记账",
+    "create_crop_cycle": "创建茬口",
+    "log_farm_activity": "记录农事",
+    "settle_debt": "还款",
+    "update_crop_stage": "更新阶段",
+}
 
 _TIMEOUT_SECONDS = 300  # 5分钟超时
 
@@ -90,6 +100,25 @@ def is_write_skill(skill_name: str) -> bool:
     return skill_name in WRITE_SKILLS
 
 
+PENDING_MARKER = "[PENDING_ACTION]"
+
+
+def build_confirm_message(skill_name: str, params: dict) -> str:
+    action = _SKILL_DISPLAY.get(skill_name, skill_name)
+    parts = []
+    for k, v in params.items():
+        if v is not None:
+            parts.append(f"{k}={v}")
+    params_str = "、".join(parts) if parts else ""
+    if params_str:
+        return f"要帮你{action}：{params_str}，确认吗？"
+    return f"要帮你{action}，确认吗？"
+
+
+def is_pending_tool_message(message) -> bool:
+    return isinstance(message, ToolMessage) and PENDING_MARKER in (message.content or "")
+
+
 def detect_user_intent(message: str) -> str:
     """检测用户消息意图：confirm / cancel / modify。
 
@@ -136,6 +165,9 @@ __all__ = [
     "remove_pending",
     "is_write_skill",
     "detect_user_intent",
+    "build_confirm_message",
+    "is_pending_tool_message",
+    "PENDING_MARKER",
     "_pending",
     "WRITE_SKILLS",
 ]
