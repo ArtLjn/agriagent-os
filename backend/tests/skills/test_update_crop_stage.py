@@ -75,6 +75,7 @@ class TestUpdateCropStageMeta:
         desc = skill.description()
         assert "阶段" in desc
         assert "进" in desc
+        assert "更新" in desc
 
     def test_parameters_schema_required_fields(self):
         skill = UpdateCropStageSkill()

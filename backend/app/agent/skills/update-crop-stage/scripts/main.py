@@ -21,8 +21,9 @@ class UpdateCropStageSkill(Skill):
 
     def description(self) -> str:
         return (
-            "更新茬口的生长阶段。当用户说进XX期了、到XX阶段了时使用。"
-            "触发词: 进XX期、到XX阶段、阶段更新"
+            "更新茬口的生长阶段。当用户说西瓜进苗期了、到开花期了、"
+            "阶段更新、进入下一阶段时，调用此工具更新当前阶段。"
+            "需要提供目标阶段名称，可选指定茬口 ID。"
         )
 
     def parameters_schema(self) -> dict:
