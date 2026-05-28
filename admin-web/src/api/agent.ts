@@ -54,7 +54,18 @@ export async function chat(data: ChatRequest): Promise<ChatResponse> {
   return res.data;
 }
 
-export async function* streamChat(message: string, cycleId?: number, sessionId?: string): AsyncGenerator<string> {
+export interface PendingAction {
+  action_id: string;
+  skill_name: string;
+  params: Record<string, any>;
+}
+
+export type StreamChunk =
+  | { type: 'content'; data: string }
+  | { type: 'skills'; data: string[] }
+  | { type: 'pending_action'; data: PendingAction };
+
+export async function* streamChat(message: string, cycleId?: number, sessionId?: string): AsyncGenerator<StreamChunk> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = authStore.getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -81,7 +92,9 @@ export async function* streamChat(message: string, cycleId?: number, sessionId?:
       try {
         const obj = JSON.parse(payload);
         if (obj.error) throw new Error(obj.error);
-        if (obj.content) yield obj.content;
+        if (obj.content) yield { type: 'content', data: obj.content };
+        if (obj.skills) yield { type: 'skills', data: obj.skills };
+        if (obj.pending_action) yield { type: 'pending_action', data: obj.pending_action };
       } catch (e) {
         if (e instanceof SyntaxError) continue;
         throw e;

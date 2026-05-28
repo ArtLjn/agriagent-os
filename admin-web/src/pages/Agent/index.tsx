@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Tabs, Input, Button, Select, Space, message, Typography } from 'antd';
 import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { streamChat, getDailyAdvice, generateReport, getAdviceHistory, getReportHistory } from '../../api/agent';
+import { streamChat, getDailyAdvice, generateReport, getAdviceHistory, getReportHistory, type PendingAction, type StreamChunk } from '../../api/agent';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 
 const BG = '#0d1117';
@@ -54,7 +54,7 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 /* ── 聊天气泡组件 ── */
-function ChatBubble({ role, content }: { role: string; content: string }) {
+function ChatBubble({ role, content, pendingAction, onAction }: { role: string; content: string; pendingAction?: PendingAction | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
   return (
     <div style={{ marginBottom: 16, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
@@ -74,6 +74,12 @@ function ChatBubble({ role, content }: { role: string; content: string }) {
         wordBreak: 'break-word',
       }}>
         {isUser ? content : <MarkdownContent content={content} />}
+        {!isUser && pendingAction && onAction && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+            <Button size="small" type="primary" onClick={() => onAction('确认')}>确认</Button>
+            <Button size="small" onClick={() => onAction('取消')}>取消</Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -82,7 +88,7 @@ function ChatBubble({ role, content }: { role: string; content: string }) {
 /* ── 对话 Tab ── */
 function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycleListItem[]; selectedCycle?: number; setSelectedCycle: (v?: number) => void }) {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [messages, setMessages] = useState<{ role: string; content: string; pendingAction?: PendingAction | null }[]>([]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -90,9 +96,9 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
   };
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    const userMsg = input;
+  const handleSend = async (overrideInput?: string) => {
+    const userMsg = overrideInput ?? input;
+    if (!userMsg.trim()) return;
     setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
     setInput('');
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
@@ -102,11 +108,19 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
       let idx = -1;
       setMessages((prev) => { idx = prev.length - 1; return prev; });
       for await (const chunk of streamChat(userMsg, selectedCycle, sessionId)) {
-        setMessages((prev) => {
-          const next = [...prev];
-          next[idx] = { ...next[idx], content: next[idx].content + chunk };
-          return next;
-        });
+        if (chunk.type === 'content') {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[idx] = { ...next[idx], content: next[idx].content + chunk.data };
+            return next;
+          });
+        } else if (chunk.type === 'pending_action') {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[idx] = { ...next[idx], pendingAction: chunk.data };
+            return next;
+          });
+        }
         scrollToBottom();
       }
     } catch {
@@ -140,7 +154,15 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
             <div style={{ fontSize: 13 }}>可以问我天气、种植周期、农事记录、成本收支等问题</div>
           </div>
         )}
-        {messages.map((m, i) => <ChatBubble key={i} role={m.role} content={m.content} />)}
+        {messages.map((m, i) => (
+          <ChatBubble
+            key={i}
+            role={m.role}
+            content={m.content}
+            pendingAction={m.pendingAction}
+            onAction={loading ? undefined : (action) => handleSend(action)}
+          />
+        ))}
         {loading && messages[messages.length - 1]?.content === '' && (
           <div style={{ display: 'flex', alignItems: 'center', color: TEXT_DIM, padding: '0 42px' }}>
             <span className="ant-spin-dot" style={{ marginRight: 8 }} />
@@ -152,9 +174,9 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
       {/* 输入区域 */}
       <Space.Compact style={{ width: '100%' }}>
         <Input size="large" value={input} onChange={(e) => setInput(e.target.value)}
-          onPressEnter={handleSend} placeholder="输入你的问题..."
+          onPressEnter={() => handleSend()} placeholder="输入你的问题..."
           style={{ background: CARD, borderColor: BORDER, color: TEXT }} />
-        <Button size="large" type="primary" icon={<SendOutlined />} onClick={handleSend}
+        <Button size="large" type="primary" icon={<SendOutlined />} onClick={() => handleSend()}
           loading={loading} style={{ height: 40 }}>发送</Button>
       </Space.Compact>
     </div>

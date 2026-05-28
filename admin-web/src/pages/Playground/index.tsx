@@ -4,6 +4,7 @@ import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutli
 import ReactMarkdown from 'react-markdown';
 import { listTraces, getTimeline, type TraceTimeline, type TraceNodeDetail } from '../../api/admin';
 import { listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
+import type { PendingAction } from '../../api/agent';
 import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
@@ -22,6 +23,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   skills?: string[];
+  pendingAction?: PendingAction | null;
 }
 
 function generateSessionId(): string {
@@ -38,7 +40,7 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 /* ── 聊天气泡组件 ── */
-function ChatBubble({ role, content, skills }: { role: 'user' | 'assistant'; content: string; skills?: string[] }) {
+function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
   return (
     <div style={{ marginBottom: 16, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
@@ -70,12 +72,18 @@ function ChatBubble({ role, content, skills }: { role: 'user' | 'assistant'; con
             ))}
           </div>
         )}
+        {!isUser && pendingAction && onAction && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+            <button onClick={() => onAction('确认')} style={{ background: '#238636', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13 }}>确认</button>
+            <button onClick={() => onAction('取消')} style={{ background: '#30363d', color: '#8b949e', border: 'none', borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13 }}>取消</button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-type StreamChunk = { type: 'content'; data: string } | { type: 'skills'; data: string[] };
+type StreamChunk = { type: 'content'; data: string } | { type: 'skills'; data: string[] } | { type: 'pending_action'; data: PendingAction };
 
 /* ── SSE 流式对话 ── */
 async function* streamPlaygroundChat(message: string, sessionId: string): AsyncGenerator<StreamChunk> {
@@ -107,6 +115,7 @@ async function* streamPlaygroundChat(message: string, sessionId: string): AsyncG
         if (obj.error) throw new Error(obj.error);
         if (obj.content) yield { type: 'content', data: obj.content };
         if (obj.skills) yield { type: 'skills', data: obj.skills };
+        if (obj.pending_action) yield { type: 'pending_action', data: obj.pending_action };
       } catch (e) {
         if (e instanceof SyntaxError) continue;
         throw e;
@@ -219,9 +228,9 @@ export default function Playground() {
     setSessionId(generateSessionId());
   }, []);
 
-  const handleSend = useCallback(async () => {
-    if (!input.trim()) return;
-    const userMsg = input.trim();
+  const handleSend = useCallback(async (overrideMsg?: string) => {
+    const userMsg = overrideMsg ?? input.trim();
+    if (!userMsg) return;
     setInput('');
     setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
@@ -251,15 +260,21 @@ export default function Playground() {
             }
             return next;
           });
+        } else if (chunk.type === 'pending_action') {
+          setMessages((prev) => {
+            const next = [...prev];
+            if (assistantIdx >= 0 && assistantIdx < next.length) {
+              next[assistantIdx] = { ...next[assistantIdx], pendingAction: chunk.data };
+            }
+            return next;
+          });
         }
       }
 
-      // 对话完成后查询最新 trace
       setTraceLoading(true);
       const latestTimeline = await fetchLatestTimeline();
       setTimeline(latestTimeline);
 
-      // 刷新会话列表
       await loadConversations();
     } catch {
       setMessages((prev) => {
@@ -437,7 +452,14 @@ export default function Playground() {
             </div>
           )}
           {messages.map((m, i) => (
-            <ChatBubble key={i} role={m.role} content={m.content} skills={m.skills} />
+            <ChatBubble
+              key={i}
+              role={m.role}
+              content={m.content}
+              skills={m.skills}
+              pendingAction={m.pendingAction}
+              onAction={loading ? undefined : (action) => handleSend(action)}
+            />
           ))}
           {isThinking && (
             <div style={{ display: 'flex', alignItems: 'center', color: TEXT_DIM, padding: '0 42px' }}>
