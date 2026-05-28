@@ -17,6 +17,42 @@ CostSummarySkill = _cost_summary_mod.CostSummarySkill
 CostAnalyticsSkill = _cost_analytics_mod.CostAnalyticsSkill
 
 
+class TestCostSummarySkillMeta:
+    def test_name(self):
+        skill = CostSummarySkill()
+        assert skill.name() == "get_cost_summary"
+
+    def test_description_contains_trigger_words(self):
+        skill = CostSummarySkill()
+        desc = skill.description()
+        assert "余额" in desc
+        assert "花了" in desc
+        assert "收支" in desc
+
+    def test_parameters_schema(self):
+        skill = CostSummarySkill()
+        schema = skill.parameters_schema()
+        assert "cycle_id" in schema["properties"]
+        assert "group_by" in schema["properties"]
+
+
+class TestCostAnalyticsSkillMeta:
+    def test_name(self):
+        skill = CostAnalyticsSkill()
+        assert skill.name() == "get_cost_analytics"
+
+    def test_description_contains_trigger_words(self):
+        skill = CostAnalyticsSkill()
+        desc = skill.description()
+        assert "趋势" in desc
+        assert "对比" in desc
+
+    def test_parameters_schema(self):
+        skill = CostAnalyticsSkill()
+        schema = skill.parameters_schema()
+        assert "compare_period" in schema["properties"]
+
+
 @pytest.fixture
 def ctx():
     return SkillContext(farm_id=1)

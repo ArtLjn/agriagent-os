@@ -18,8 +18,9 @@ class CostSummarySkill(Skill):
 
     def description(self) -> str:
         return (
-            "查询农场成本与收入汇总，支持按周期、日期范围、分类、记录类型筛选，"
-            "并可按分类或月份分组。触发词: 成本、收入、利润、收支"
+            "查询农场收支汇总数据。当用户问余额、花了多少、赚了多少、"
+            "收支情况、成本多少、利润、账单、近期收支时，调用此工具获取真实数据。"
+            "支持按日期、分类筛选和分组。"
         )
 
     def parameters_schema(self) -> dict:
