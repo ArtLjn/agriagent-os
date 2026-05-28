@@ -35,6 +35,61 @@ def _get_user_coords(farm_id: int) -> tuple[float, float]:
     return default_lat, default_lon
 
 
+def _weather_emoji(precip: float, max_temp: float) -> str:
+    """根据降水量和温度返回天气 emoji。"""
+    if precip >= 20:
+        return "⛈️"
+    if precip >= 5:
+        return "🌧️"
+    if precip >= 0.5:
+        return "🌦️"
+    if precip == 0 and max_temp >= 25:
+        return "☀️"
+    if max_temp <= 5:
+        return "❄️"
+    return "🌤️"
+
+
+def _format_date_m_d(date_str: str) -> str:
+    """将 YYYY-MM-DD 转为 M/D 格式。"""
+    parts = date_str.split("-")
+    return f"{int(parts[1])}/{int(parts[2])}"
+
+
+def _format_weather_reply(location: str, data: dict) -> str:
+    """将天气数据格式化为 Markdown 表格回复。"""
+    daily = data.get("daily", {})
+    times = daily.get("time", [])
+    max_temps = daily.get("temperature_2m_max", [])
+    min_temps = daily.get("temperature_2m_min", [])
+    precips = daily.get("precipitation_sum", [])
+
+    if not times:
+        return "🌤️ 暂时获取不到天气数据，请稍后再试。"
+
+    count = min(3, len(times))
+
+    lines = [f"📍 {location} · 未来 {count} 天预报", ""]
+    lines.append("| 日期 | 天气 | 最高 | 最低 | 降水 |")
+    lines.append("|------|------|------|------|------|")
+
+    for i in range(count):
+        day = _format_date_m_d(times[i])
+        max_t = max_temps[i] if i < len(max_temps) else "-"
+        min_t = min_temps[i] if i < len(min_temps) else "-"
+        p = precips[i] if i < len(precips) else 0
+        emoji = _weather_emoji(float(p), float(max_t) if max_t != "-" else 20)
+        lines.append(f"| {day} | {emoji} | {max_t}℃ | {min_t}℃ | {p}mm |")
+
+    warnings = check_weather_warnings(data)
+    if warnings:
+        lines.append("")
+        for w in warnings:
+            lines.append(f"⚠️ {w}")
+
+    return "\n".join(lines)
+
+
 class WeatherSkill(Skill):
     def name(self) -> str:
         return "get_weather_forecast"
@@ -63,27 +118,6 @@ class WeatherSkill(Skill):
         location = params.get("location", "当前地块")
         farm_id = getattr(context, "farm_id", 1) or 1
         lat, lon = _get_user_coords(farm_id)
-        data = fetch_weather(lat, lon, days=7)
-        daily = data.get("daily", {})
-        times = daily.get("time", [])
-        max_temps = daily.get("temperature_2m_max", [])
-        min_temps = daily.get("temperature_2m_min", [])
-        precips = daily.get("precipitation_sum", [])
-        winds = daily.get("windspeed_10m_max", [])
-
-        lines = [f"地点：{location}", "未来 7 天天气预报："]
-        for i, day in enumerate(times):
-            max_t = max_temps[i] if i < len(max_temps) else "-"
-            min_t = min_temps[i] if i < len(min_temps) else "-"
-            p = precips[i] if i < len(precips) else "-"
-            w = winds[i] if i < len(winds) else "-"
-            lines.append(f"  {day}: 最高{max_t}C 最低{min_t}C 降水{p}mm 风速{w}m/s")
-
-        warnings = check_weather_warnings(data)
-        if warnings:
-            lines.append("天气预警：")
-            lines.extend(f"  {w}" for w in warnings)
-        else:
-            lines.append("近期无极端天气预警。")
-
-        return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
+        data = fetch_weather(lat, lon, days=3)
+        reply = _format_weather_reply(location, data)
+        return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
