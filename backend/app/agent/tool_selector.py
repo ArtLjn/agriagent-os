@@ -55,14 +55,14 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
 class LLMIntentClassifier:
     """Layer 3 — LLM 意图分类兜底。"""
 
-    def __init__(self, api_key: str, base_url: str, model: str):
-        self._client = OpenAI(api_key=api_key, base_url=base_url)
+    def __init__(self, api_key: str, base_url: str, model: str, timeout: float = 5.0):
+        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
         self._model = model
 
     def classify(self, user_message: str, all_tools: list[BaseTool]) -> list[str] | None:
         tool_lines = []
         for t in all_tools:
-            desc = getattr(t, "description", "") or ""
+            desc = (getattr(t, "description", "") or "")[:100]
             tool_lines.append(f"- {t.name}: {desc}")
         tool_descriptions = "\n".join(tool_lines)
         tool_names = [t.name for t in all_tools]
@@ -143,7 +143,7 @@ def select_tools(
                     "tool_pre_filter | layer=llm_intent | input=%r | returned=%d | total=%d",
                     user_message[:80],
                     len(result),
-                    len([t.name for t in all_tools]),
+                    len(all_tools),
                 )
                 return result
 
@@ -164,6 +164,6 @@ def select_tools(
         user_message[:80],
         ordered,
         len(result),
-        len([t.name for t in all_tools]),
+        len(all_tools),
     )
     return result

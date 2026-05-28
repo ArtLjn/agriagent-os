@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import threading
 from datetime import date
 from typing import Annotated
 
@@ -33,16 +34,19 @@ logger = logging.getLogger(__name__)
 _KEEP_RECENT = 3
 
 _classifier: LLMIntentClassifier | None = None
+_classifier_lock = threading.Lock()
 
 
 def _get_classifier() -> LLMIntentClassifier | None:
     global _classifier
     if _classifier is None and settings.ai_api_key:
-        _classifier = LLMIntentClassifier(
-            api_key=settings.ai_api_key,
-            base_url=settings.ai_base_url,
-            model=settings.ai_model,
-        )
+        with _classifier_lock:
+            if _classifier is None:
+                _classifier = LLMIntentClassifier(
+                    api_key=settings.ai_api_key,
+                    base_url=settings.ai_base_url,
+                    model=settings.ai_model,
+                )
     return _classifier
 
 
