@@ -19,8 +19,9 @@ class CostAnalyticsSkill(Skill):
 
     def description(self) -> str:
         return (
-            "全局收支趋势分析，支持同比环比对比。"
-            "触发词: 分析、趋势、对比、比去年、比上月"
+            "分析农场收支趋势与对比。当用户问收支趋势、比去年花了多少、"
+            "比上月赚了多少、成本分析、同比环比时，调用此工具获取趋势数据。"
+            "支持按月、去年同期对比。"
         )
 
     def parameters_schema(self) -> dict:
