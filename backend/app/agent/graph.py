@@ -276,10 +276,12 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             params_str = ", ".join(f"{k}={v}" for k, v in args.items())
             return ToolMessage(
                 content=(
-                    f"已记录操作意图：{name}({params_str})。"
-                    f"请向用户确认参数后执行。"
-                    f"确认消息示例：记一笔：{args.get('category', '')} "
-                    f"{args.get('amount', '')}元。确认？"
+                    f"[IMPORTANT] 操作尚未执行！{name}({params_str}) "
+                    f"需要用户确认后才会真正执行。"
+                    f"你必须向用户确认以下参数，收到用户同意后才算完成："
+                    f"{params_str}。"
+                    f"用简洁的口语问用户是否确认，例如："
+                    f"要帮你创建茬口：玉米 春季，确认吗？"
                 ),
                 tool_call_id=tool_call_id,
             )
