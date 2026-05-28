@@ -173,7 +173,9 @@ async def agent_chat_stream(
 
             pending = get_pending(farm.id)
             if pending:
-                yield f"data: {json.dumps({'pending_action': {'action_id': pending.action_id, 'skill_name': pending.skill_name, 'params': pending.params}}, ensure_ascii=False)}\n\n"
+                pa_event = json.dumps({'pending_action': {'action_id': pending.action_id, 'skill_name': pending.skill_name, 'params': pending.params}}, ensure_ascii=False)
+                logger.info("[%s] 发送 pending_action SSE 事件 | skill=%s", rid, pending.skill_name)
+                yield f"data: {pa_event}\n\n"
 
             logger.info(
                 "[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符 | skills=%s",
