@@ -81,8 +81,8 @@ async def invoke_advisor(
             try:
                 manager = get_skill_manager()
                 ctx = build_skill_context(farm_id)
-                result = await manager.execute(pending.skill_name, pending.params, ctx)
-                reply = result.reply
+                exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
+                reply = exec_result.result.reply if exec_result.result else "操作完成。"
             except Exception as e:
                 logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
                 reply = "操作执行失败，请重试。"
@@ -156,8 +156,8 @@ async def stream_advisor(
             try:
                 manager = get_skill_manager()
                 ctx = build_skill_context(farm_id)
-                result = await manager.execute(pending.skill_name, pending.params, ctx)
-                reply = result.reply
+                exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
+                reply = exec_result.result.reply if exec_result.result else "操作完成。"
             except Exception as e:
                 logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
                 reply = "操作执行失败，请重试。"
