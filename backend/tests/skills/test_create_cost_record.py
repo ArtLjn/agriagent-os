@@ -32,6 +32,7 @@ class TestCreateCostRecordSkillMeta:
         desc = skill.description()
         assert "记账" in desc
         assert "花了" in desc
+        assert "买了" in desc
 
     def test_parameters_schema_required_fields(self):
         skill = CreateCostRecordSkill()
