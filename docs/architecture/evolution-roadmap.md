@@ -370,7 +370,9 @@ SQLite 单文件                         考虑 PostgreSQL (用户增长后)
 ## 五、上下文工程演进路径
 
 > 基于 Lance Martin (LangChain) 上下文工程四维框架：**Write / Select / Compress / Isolate**
-> 参考: [Context Engineering for Agents](https://rlancemartin.github.io/2025/06/23/context_engineering/) | [ToolRAG 论文](https://arxiv.org/abs/2410.14594) | [12-Factor Agents](https://github.com/humanlayer/12-factor-agents/blob/main/content/factor-03-own-your-context-window.md)
+> 参考: [Context Engineering for Agents](https://rlancemartin.github.io/2025/06/23/context_engineering/) | [12-Factor Agents](https://github.com/humanlayer/12-factor-agents/blob/main/content/factor-03-own-your-context-window.md)
+>
+> Spike 验证：两层规则匹配（regex + keyword）在 34 个用例上达到 100% 召回率，0.005ms/次
 
 ### 框架全景
 
@@ -418,53 +420,58 @@ SQLite 单文件                         考虑 PostgreSQL (用户增长后)
                                                              └────────────────┘
 ```
 
-### Step 0 → Step 1: Tool RAG（已部分实施）
+### Step 0 → Step 1: Tool Pre-Filter（已部分实施）
 
-> 论文 [ToolRAG](https://arxiv.org/abs/2410.14594) 显示：按语义相似度预筛 Tool 后再注入，tool selection 准确率提升 3 倍。
+> Spike 验证：两层规则匹配（写操作 regex + 查询操作 keyword），34 用例 100% 召回率。
 
 **当前已实施:**
 - [x] 10 个 Skill description 优化为"意图场景描述"格式
 - [x] system prompt 注入【可用工具】映射表（name → 触发关键词）
-- [x] directive 格式强化 tool 调用指令（"用户说X → 必须调用Y"）
+- [x] directive 格式强化 tool 调用指令
 
-**待实施 — Tool RAG 预筛选:**
+**待实施 — Tool Pre-Filter:**
 
 ```python
-# graph.py 新增 tool_selector 模块
+# agent/tool_selector.py
 
-def select_tools_by_intent(user_message: str, all_tools: list, top_k: int = 3) -> list:
-    """根据用户消息意图，预筛选最相关的 top_k 个 Tool。
+# Layer 1: 写操作 Regex（deterministic，100% 召回）
+WRITE_PATTERNS = {
+    "create_cost_record": [
+        r"(买了|卖了|花了|收入|支出|赊账|记账|记一笔|付了|收了)",
+        r"\d+\s*(元|块|万|w|W|千|百)",
+    ],
+    "settle_debt": [
+        r"(还[了钱账给]|清账|结清|欠款|还款)",
+        r"(账[结清]|结了.*账|欠.*结)",
+    ],
+    # ...
+}
 
-    策略: 关键词匹配优先（零成本），语义相似度兜底（embedding）。
-    """
-    # 1. 关键词匹配: 从 Tool description 提取触发词表
-    scored = []
-    for tool in all_tools:
-        score = _keyword_match_score(user_message, tool.description)
-        scored.append((tool, score))
+# Layer 2: 查询操作 Keyword（~95% 召回）
+QUERY_TRIGGERS = {
+    "get_weather_forecast": {"天气", "预报", "降雨", "温度", "雨"},
+    "get_cost_summary": {"余额", "收支", "成本", "利润", "月额"},
+    # ...
+}
 
-    # 2. 如果 top_k 内有关键词命中，直接返回
-    top = sorted(scored, key=lambda x: x[1], reverse=True)[:top_k]
-    if top[0][1] > 0:
-        return [t for t, s in top if s > 0]
-
-    # 3. 兜底: embedding 语义相似度（可选，Phase 4）
-    return all_tools  # 未命中则全量注入
+def select_tools(user_message, all_tools, top_k=3):
+    candidates = regex_match(user_message) | keyword_match(user_message)
+    return candidates if candidates else all_tools  # fallback
 ```
 
 **效果预期:**
-- 弱模型 (qwen3.6-flash) 只需从 2-3 个候选 Tool 中选择 → 准确率大幅提升
-- System prompt 注入注册表 + 精简 Tool 列表 → token 消耗降低 60%+
-- 消除 "Context Distraction"（10 个 Tool 的重叠描述导致模型混淆）
+- 写操作 tool selection → 100%（regex deterministic）
+- 查询操作 tool selection → ~95%（keyword matching）
+- 总体 token 消耗降低 60-80%（候选 1-3 个 vs 全量 10 个）
 
 ### Step 1 各子策略对照
 
 | 策略 | 方法 | 适用场景 | 成本 |
 |------|------|---------|------|
-| **Keyword Pre-filter** | 用户消息 → 触发词表匹配 → 候选 Tool | 当前首选，零额外 API 调用 | O(1) |
-| **Tool Registration Table** | System prompt 列出 tool_name → 关键词映射 | 已实施，配合 Keyword Pre-filter | ~200 tokens |
-| **Embedding RAG** | 用户消息 embedding → Tool description embedding 余弦相似度 | Keyword 未命中时的兜底 | ~50ms + embedding API |
-| **LLM 路由** | 用更小模型做意图分类 → 选择 Tool | 精度最高但成本高 | 1次额外 LLM 调用 |
+| **Regex 模式匹配** | 写操作 Tool 维护 regex pattern 列表 | 记账/还账/建茬口等确定性操作 | O(1) deterministic |
+| **Keyword 匹配** | 查询 Tool 维护策划触发词表 | 天气/余额/趋势等模糊查询 | O(1) |
+| **Fallback** | 无命中时全量注入 | 歧义输入、边界 case | 不劣于现状 |
+| **Embedding RAG** | 用户消息 embedding → Tool description 余弦相似度 | Phase 4 可选扩展，Tool >20 时 | ~50ms + API |
 
 ### Step 2: Progressive Disclosure
 
@@ -524,7 +531,7 @@ def select_tools_by_intent(user_message: str, all_tools: list, top_k: int = 3) -
 | 阶段 | 方案 | 核心模块 | 效果 | 实施时机 |
 |------|------|---------|------|---------|
 | Step 0 | Description 优化 + Prompt 映射表 | `skills/*/main.py` + `base.j2` | ✅ 已完成 | 当前 |
-| Step 1a | Keyword Pre-filter | `agent/tool_selector.py` | 候选 Tool 2-3个 | Phase 3 FC 稳定后 |
+| Step 1 | Tool Pre-Filter (regex+keyword) | `agent/tool_selector.py` | 写操作100%, 查询~95% | Phase 3 FC 稳定后 |
 | Step 1b | Sliding Window + 摘要压缩 | `agent/history_compressor.py` | 历史 ~70% 压缩 | Phase 3 后 |
 | Step 2 | Progressive Disclosure | `agent/context_assembler.py` | Prompt ~90% 瘦身 | Tool 数量 >15 时 |
 | Step 3 | Scratchpad + Memory | `agent/scratchpad.py` + `agent/memory_store.py` | 多会话连续性 | Phase 4 智能化 |

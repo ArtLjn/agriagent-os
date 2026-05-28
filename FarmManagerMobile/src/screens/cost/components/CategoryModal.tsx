@@ -19,6 +19,8 @@ interface CategoryModalProps {
   selectedCategory: string;
   onSelect: (category: string) => void;
   onClose: () => void;
+  themeColor?: string;
+  themeMuted?: string;
 }
 
 export const CategoryModal: React.FC<CategoryModalProps> = ({
@@ -27,6 +29,8 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   selectedCategory,
   onSelect,
   onClose,
+  themeColor = colors.primary,
+  themeMuted = colors.primaryMuted,
 }) => {
   const navigation = useNavigation();
 

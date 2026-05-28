@@ -13,7 +13,7 @@ class FeedbackRecord(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(36), nullable=False, index=True)
     conversation_message_id = Column(
-        Integer, ForeignKey("conversation_messages.id"), nullable=True
+        Integer, ForeignKey("conversation_messages.id", ondelete="SET NULL"), nullable=True
     )
     rating = Column(String(10), nullable=False)  # good / bad
     correction = Column(Text, nullable=True)

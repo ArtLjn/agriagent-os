@@ -33,10 +33,10 @@ _round_ctx: contextvars.ContextVar[int] = contextvars.ContextVar(
 )
 
 
-def init_trace(farm_id: int, session_id: str = "") -> TraceInfo:
+def init_trace(farm_id: int, session_id: str = "", request_id: str = "") -> TraceInfo:
     """初始化追踪上下文，生成唯一 request_id。"""
     trace = TraceInfo(
-        request_id=uuid.uuid4().hex[:8],
+        request_id=request_id or uuid.uuid4().hex[:8],
         session_id=session_id,
         farm_id=farm_id,
         created_at=time.time(),

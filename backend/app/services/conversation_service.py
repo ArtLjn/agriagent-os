@@ -18,7 +18,7 @@ _MAX_INJECT_MESSAGES = 20  # 10 轮 = 20 条消息
 
 
 def get_or_create_conversation(
-    db: Session, farm_id: int, session_id: str
+    db: Session, farm_id: int, session_id: str, user_id: str | None = None
 ) -> Conversation:
     """获取或创建会话。每个 farm 同时只有一个活跃会话。"""
     existing = (
@@ -32,6 +32,7 @@ def get_or_create_conversation(
 
     conv = Conversation(
         farm_id=farm_id,
+        user_id=user_id,
         session_id=session_id,
         status=ConversationStatus.ACTIVE,
     )

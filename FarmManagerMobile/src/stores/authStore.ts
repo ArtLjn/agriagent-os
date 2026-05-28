@@ -61,6 +61,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await AsyncStorage.removeItem(TOKEN_KEY);
+    // 清理所有业务 store
+    const { useAgentStore } = require('./agentStore');
+    useAgentStore.getState().clearChat();
     set({ token: null, user: null, isLoggedIn: false });
   },
 

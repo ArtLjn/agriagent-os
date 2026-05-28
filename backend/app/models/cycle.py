@@ -12,7 +12,7 @@ class CropCycle(Base):
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     name = Column(String, nullable=False)
-    crop_template_id = Column(Integer, ForeignKey("crop_templates.id"), nullable=False)
+    crop_template_id = Column(Integer, ForeignKey("crop_templates.id", ondelete="RESTRICT"), nullable=False)
     start_date = Column(Date, nullable=False)
     field_name = Column(String, nullable=True)
     status = Column(String, default="active")
@@ -22,6 +22,7 @@ class CropCycle(Base):
     stages = relationship(
         "CycleStage", back_populates="cycle", cascade="all, delete-orphan"
     )
+    farm_logs = relationship("FarmLog", cascade="all, delete-orphan")
 
 
 class CycleStage(Base):

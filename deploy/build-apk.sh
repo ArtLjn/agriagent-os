@@ -16,7 +16,8 @@ OUTPUT_DIR="$MOBILE_DIR/android/app/build/outputs/apk"
 
 # 默认 API 地址
 PROD_API_URL="http://47.98.253.236:8000"
-LOCAL_API_URL="http://172.16.57.244:8099"
+COMPANY_API_URL="http://172.16.57.244:8099"
+HOME_API_URL="http://10.167.110.141:8099"
 API_URL="$PROD_API_URL"
 BUILD_TYPE="release"
 
@@ -24,7 +25,8 @@ BUILD_TYPE="release"
 for arg in "$@"; do
   case "$arg" in
     --debug)   BUILD_TYPE="debug" ;;
-    --local)   API_URL="$LOCAL_API_URL" ;;
+    --local)   API_URL="$COMPANY_API_URL" ;;
+    --home)    API_URL="$HOME_API_URL" ;;
     --api=*)   API_URL="${arg#--api=}" ;;
     *)         echo "未知参数: $arg"; exit 1 ;;
   esac

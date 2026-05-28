@@ -15,7 +15,6 @@ import { useAuthStore } from "../../stores/authStore";
 import { CITIES } from "../../data/cities";
 import { WeatherCardV2 } from "../../components/WeatherCardV2";
 import { AdviceCard } from "../../components/AdviceCard";
-import { AIPet } from "../../components/AIPet";
 import { CityPicker } from "../../components/CityPicker";
 import { FadeInSlideUp } from "../../components/animations/FadeInSlideUp";
 import { ScalePress } from "../../components/animations/ScalePress";
@@ -40,29 +39,29 @@ const getGreeting = () => {
 const QUICK_ACTIONS = [
   {
     label: "种植规划",
-    icon: "seed-plus",
-    bgColor: "#F0FDF4",
+    icon: "sprout",
+    iconBg: "#EDFDF3",
     iconColor: "#3B8B5C",
     route: "CycleCreate",
   },
   {
     label: "农事提醒",
     icon: "bell-ring",
-    bgColor: "#EFF6FF",
+    iconBg: "#EEF4FF",
     iconColor: "#5B8CFF",
     route: "AgentChat",
   },
   {
     label: "天气趋势",
     icon: "weather-partly-cloudy",
-    bgColor: "#FFFBEB",
+    iconBg: "#FFF8E8",
     iconColor: "#B48A3E",
     route: "AgentChat",
   },
   {
     label: "病虫害识别",
     icon: "bug",
-    bgColor: "#FEF2F2",
+    iconBg: "#FFF1F2",
     iconColor: "#C45B5B",
     route: "AgentChat",
   },
@@ -183,7 +182,7 @@ export const HomeScreen: React.FC = () => {
               onPress={() => navigation.navigate("AgentChat" as never)}
             >
               <View style={styles.aiIconBtn}>
-                <Icon name="robot" size={22} color={colors.primary} />
+                <Icon name="message-text-outline" size={20} color={colors.primary} />
               </View>
             </ScalePress>
           </View>
@@ -208,38 +207,36 @@ export const HomeScreen: React.FC = () => {
 
         {/* Quick Actions */}
         <FadeInSlideUp delay={240} style={styles.section}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickActionsContainer}
-          >
-            {QUICK_ACTIONS.map((action) => (
-              <ScalePress
-                key={action.label}
-                onPress={() => navigation.navigate(action.route as never)}
-              >
-                <View
-                  style={[
-                    styles.quickActionCard,
-                    { backgroundColor: action.bgColor },
-                  ]}
+          <View style={styles.quickActionsCard}>
+            <View style={styles.quickActionsGrid}>
+              {QUICK_ACTIONS.map((action) => (
+                <ScalePress
+                  key={action.label}
+                  onPress={() => navigation.navigate(action.route as never)}
                 >
-                  <View style={styles.quickActionIcon}>
-                    <Icon
-                      name={action.icon}
-                      size={24}
-                      color={action.iconColor}
-                    />
+                  <View style={styles.quickActionItem}>
+                    <View
+                      style={[
+                        styles.quickActionIcon,
+                        { backgroundColor: action.iconBg },
+                      ]}
+                    >
+                      <Icon
+                        name={action.icon}
+                        size={22}
+                        color={action.iconColor}
+                      />
+                    </View>
+                    <Text style={styles.quickActionLabel} numberOfLines={1}>
+                      {action.label}
+                    </Text>
                   </View>
-                  <Text style={styles.quickActionLabel}>{action.label}</Text>
-                </View>
-              </ScalePress>
-            ))}
-          </ScrollView>
+                </ScalePress>
+              ))}
+            </View>
+          </View>
         </FadeInSlideUp>
       </ScrollView>
-
-      <AIPet />
 
       <CityPicker
         visible={pickerVisible}
@@ -308,28 +305,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.lg,
     marginBottom: spacingV2.xl,
   },
-  quickActionsContainer: {
-    paddingRight: spacingV2.lg,
-    gap: spacingV2.md,
+  quickActionsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxxl,
+    paddingVertical: spacingV2.xl,
+    paddingHorizontal: spacingV2.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  quickActionCard: {
-    width: 110,
-    height: 120,
-    borderRadius: borderRadiusV2.xxl,
-    padding: spacingV2.md,
-    justifyContent: "space-between",
+  quickActionsGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "flex-start",
+  },
+  quickActionItem: {
+    alignItems: "center",
+    width: 72,
   },
   quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadiusV2.lg,
-    backgroundColor: "rgba(255,255,255,0.7)",
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 10,
   },
   quickActionLabel: {
-    fontSize: fontSizeV2.sm,
+    fontSize: 13,
     color: colors.text,
-    fontWeight: "600",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 18,
   },
 });

@@ -14,9 +14,14 @@ const ACCENT = '#58a6ff';
 const USER_BG = '#1f6feb';
 const AI_BG = '#21262d';
 
+function generateSessionId(): string {
+  return `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export default function Agent() {
   const [cycles, setCycles] = useState<CropCycleListItem[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
+  const [sessionId] = useState<string>(generateSessionId);
 
   useEffect(() => {
     listCycles().then((res) => setCycles(res.items)).catch(() => {});
@@ -96,7 +101,7 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
     try {
       let idx = -1;
       setMessages((prev) => { idx = prev.length - 1; return prev; });
-      for await (const chunk of streamChat(userMsg, selectedCycle)) {
+      for await (const chunk of streamChat(userMsg, selectedCycle, sessionId)) {
         setMessages((prev) => {
           const next = [...prev];
           next[idx] = { ...next[idx], content: next[idx].content + chunk };

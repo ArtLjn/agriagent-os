@@ -4,16 +4,15 @@ import {
   Text,
   StyleSheet,
   ViewStyle,
-  TextStyle,
 } from "react-native";
 import { colors } from "../theme/colors";
-import { spacing, fontSize, borderRadius, shadows } from "../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 interface BigButtonProps {
   title: string;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "secondary" | "ghost";
   disabled?: boolean;
   style?: ViewStyle;
   icon?: string;
@@ -27,39 +26,18 @@ export const BigButton: React.FC<BigButtonProps> = ({
   style,
   icon,
 }) => {
-  const bgColors = {
-    primary: colors.primary,
-    secondary: colors.surface,
-    danger: colors.danger,
-    ghost: "transparent",
-  };
-
-  const textColors = {
-    primary: colors.textInverse,
-    secondary: colors.text,
-    danger: colors.textInverse,
-    ghost: colors.primary,
-  };
-
-  const borderColors = {
-    primary: colors.primary,
-    secondary: colors.border,
-    danger: colors.danger,
-    ghost: colors.primary,
-  };
+  const isPrimary = variant === "primary";
+  const isSecondary = variant === "secondary";
 
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
       style={[
         styles.button,
-        {
-          backgroundColor: bgColors[variant],
-          borderColor: borderColors[variant],
-        },
-        variant === "primary" && styles.primaryShadow,
+        isPrimary && styles.primary,
+        isSecondary && styles.secondary,
         disabled && styles.disabled,
         style,
       ]}
@@ -68,11 +46,19 @@ export const BigButton: React.FC<BigButtonProps> = ({
         <Icon
           name={icon}
           size={18}
-          color={textColors[variant]}
+          color={isPrimary ? colors.primary : colors.text}
           style={styles.icon}
         />
       )}
-      <Text style={[styles.text, { color: textColors[variant] }]}>{title}</Text>
+      <Text
+        style={[
+          styles.text,
+          isPrimary && styles.primaryText,
+          isSecondary && styles.secondaryText,
+        ]}
+      >
+        {title}
+      </Text>
     </TouchableOpacity>
   );
 };
@@ -80,25 +66,33 @@ export const BigButton: React.FC<BigButtonProps> = ({
 const styles = StyleSheet.create({
   button: {
     flexDirection: "row",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
+    paddingVertical: 14,
+    paddingHorizontal: spacingV2.lg,
+    borderRadius: borderRadiusV2.lg,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 52,
-    borderWidth: 1,
+    minHeight: 48,
   },
-  primaryShadow: {
-    ...shadows.sm,
+  primary: {
+    backgroundColor: colors.primaryMuted,
   },
-  icon: {
-    marginRight: spacing.sm,
+  secondary: {
+    backgroundColor: colors.surfaceMuted,
   },
   text: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     fontWeight: "600",
   },
+  primaryText: {
+    color: colors.primary,
+  },
+  secondaryText: {
+    color: colors.text,
+  },
+  icon: {
+    marginRight: spacingV2.sm,
+  },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
 });

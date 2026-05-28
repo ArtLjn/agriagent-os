@@ -19,7 +19,7 @@ export const AIPet: React.FC = () => {
       <BreathingFloat>
         <ScalePress onPress={handlePress}>
           <View style={[styles.pet, shadowV2.float]}>
-            <Icon name="robot-happy" size={32} color={colors.primary} />
+            <Icon name="robot-happy" size={26} color={colors.primary} />
             <View style={styles.pulseDot} />
           </View>
         </ScalePress>
@@ -32,29 +32,28 @@ const styles = StyleSheet.create({
   container: {
     position: "absolute",
     right: 20,
-    bottom: 100,
+    bottom: 28,
     zIndex: 100,
   },
   pet: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.aiPetBg,
     alignItems: "center",
     justifyContent: "center",
-    opacity: 0.9,
-    borderWidth: 2,
-    borderColor: "rgba(91,140,255,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(91,140,255,0.12)",
   },
   pulseDot: {
     position: "absolute",
-    top: 14,
-    right: 14,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    top: 12,
+    right: 12,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: colors.success,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.aiPetBg,
   },
 });

@@ -6,6 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.feedback import FeedbackRecord
+from app.models.conversation import ConversationMessage
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +18,16 @@ def submit_feedback(
     rating: str,
     correction: str | None = None,
 ) -> FeedbackRecord:
-    """提交一条反馈。"""
+    """提交一条反馈。如果 message_id 对应的消息不存在则置空。"""
+    actual_message_id = message_id
+    if message_id is not None:
+        exists = db.query(ConversationMessage).filter(ConversationMessage.id == message_id).first()
+        if not exists:
+            actual_message_id = None
+
     record = FeedbackRecord(
         user_id=user_id,
-        conversation_message_id=message_id,
+        conversation_message_id=actual_message_id,
         rating=rating,
         correction=correction,
     )

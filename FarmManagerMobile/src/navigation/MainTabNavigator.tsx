@@ -7,7 +7,7 @@ import { shadowV2 } from "../theme/designTokens";
 import { HomeScreen } from "../screens/home/HomeScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
 import { CostListScreen } from "../screens/cost/CostListScreen";
-import { SettingsScreen } from "../screens/settings/SettingsScreen";
+import { ProfileScreen } from "../screens/profile/ProfileScreen";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 export type MainTabParamList = {
@@ -24,7 +24,7 @@ const TAB_CONFIG: Record<
   { label: string; icon: string; activeIcon: string }
 > = {
   Home: { label: "首页", icon: "home-outline", activeIcon: "home" },
-  AgentChat: { label: "AI助手", icon: "robot-outline", activeIcon: "robot" },
+  AgentChat: { label: "助手", icon: "sprout", activeIcon: "sprout" },
   Costs: { label: "记账", icon: "cash-multiple", activeIcon: "cash-multiple" },
   Settings: { label: "我的", icon: "account-outline", activeIcon: "account" },
 };
@@ -58,41 +58,47 @@ export const MainTabNavigator: React.FC = () => (
     <Tab.Screen name="Home" component={HomeScreen} />
     <Tab.Screen name="AgentChat" component={AgentChatScreen} />
     <Tab.Screen name="Costs" component={CostListScreen} />
-    <Tab.Screen name="Settings" component={SettingsScreen} />
+    <Tab.Screen name="Settings" component={ProfileScreen} />
   </Tab.Navigator>
 );
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 64,
+    height: 72,
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    ...shadowV2.light,
-    elevation: 4,
+    borderTopWidth: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 8,
+    paddingHorizontal: spacingV2.sm,
+    paddingBottom: 8,
   },
   tabItem: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-    paddingVertical: spacingV2.sm,
+    paddingVertical: spacingV2.xs,
+    gap: 2,
   },
   tabItemActive: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-    paddingVertical: spacingV2.sm,
+    paddingVertical: spacingV2.xs,
+    gap: 2,
   },
   tabLabel: {
     fontSize: fontSizeV2.xs,
     color: colors.tabInactive,
-    marginTop: 2,
     fontWeight: "500",
   },
   tabLabelActive: {
     fontSize: fontSizeV2.xs,
     color: colors.primary,
-    marginTop: 2,
     fontWeight: "600",
   },
 });

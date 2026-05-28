@@ -22,6 +22,7 @@ interface AgentState {
   cityLon: number | undefined;
   reports: ReportListItem[];
   pendingAction: PendingAction | null;
+  sessionId: string;
   sendMessage: (message: string, cycleId?: number) => void;
   fetchDailyAdvice: (cycleId?: number) => Promise<void>;
   refreshDailyAdvice: (cycleId?: number) => Promise<void>;
@@ -47,6 +48,7 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       cityLon: 120.62,
       reports: [],
       pendingAction: null,
+      sessionId: `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 
       sendMessage: (message, cycleId) => {
         set((state) => ({
@@ -55,8 +57,9 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
           error: null,
           pendingAction: null,
         }));
+        const sid = useAgentStore.getState().sessionId;
         agentApi.streamChat(
-          { message, cycle_id: cycleId },
+          { message, cycle_id: cycleId, session_id: sid },
           (chunk) => {
             set((state) => {
               const msgs = [...state.messages];
@@ -157,7 +160,10 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       setCity: (name, lat, lon) =>
         set({ cityName: name, cityLat: lat, cityLon: lon }),
 
-      clearChat: () => set({ messages: [] }),
+      clearChat: () => set({
+        messages: [],
+        sessionId: `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      }),
       clearError: () => set({ error: null }),
     }),
     {

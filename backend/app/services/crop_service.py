@@ -1,6 +1,10 @@
 from sqlalchemy.orm import Session
 
+from app.models.agent_record import AgentRecord
+from app.models.cost import CostRecord
 from app.models.crop import CropTemplate, GrowthStage
+from app.models.cycle import CropCycle
+from app.models.log import FarmLog
 from app.schemas.crop import CropTemplateCreate
 
 
@@ -110,10 +114,24 @@ def update_crop_template(
 
 
 def delete_crop_template(db: Session, template_id: int, farm_id: int) -> None:
-    """删除作物模板及其关联的阶段。"""
+    """删除作物模板及其关联的阶段、茬口、农事日志、成本记录和Agent记录。"""
     template = get_crop_template(db, template_id, farm_id)
     if not template:
         raise ValueError(f"模板 {template_id} 不存在")
+
+    related_cycles = (
+        db.query(CropCycle).filter(CropCycle.crop_template_id == template_id).all()
+    )
+    for cycle in related_cycles:
+        db.query(AgentRecord).filter(AgentRecord.cycle_id == cycle.id).update(
+            {"cycle_id": None}, synchronize_session=False
+        )
+        db.query(FarmLog).filter(FarmLog.cycle_id == cycle.id).delete(synchronize_session=False)
+        db.query(CostRecord).filter(CostRecord.cycle_id == cycle.id).delete(synchronize_session=False)
+        for stage in cycle.stages:
+            db.delete(stage)
+        db.delete(cycle)
+    db.flush()
 
     for stage in template.stages:
         db.delete(stage)

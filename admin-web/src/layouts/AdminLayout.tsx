@@ -10,8 +10,10 @@ import {
   FileSearchOutlined,
   SettingOutlined,
   TeamOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { authStore } from '../stores/authStore';
 
 const { Sider, Content, Header } = Layout;
 
@@ -155,6 +157,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </span>
           <span style={{ fontSize: 12, color: TEXT_SECONDARY }}>
             {new Date().toLocaleDateString('zh-CN')}
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={() => { authStore.clearToken(); navigate('/login'); }}
+              style={{ color: TEXT_SECONDARY, marginLeft: 16, fontSize: 12 }}
+            >
+              退出登录
+            </Button>
           </span>
         </Header>
 

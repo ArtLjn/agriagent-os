@@ -51,6 +51,8 @@ async def invoke_advisor(
     farm_id: int,
     db: Session | None = None,
     conversation_id: int | None = None,
+    session_id: str = "",
+    request_id: str = "",
 ) -> str:
     """调用建议 Agent 回答用户问题。"""
     ok, reason = check_input(user_input)
@@ -58,7 +60,7 @@ async def invoke_advisor(
         logger.warning("Agent 输入被拦截 | farm_id=%s, reason=%s", farm_id, reason)
         return f"输入内容包含不安全信息，已被拦截。原因：{reason}"
 
-    init_trace(farm_id=farm_id)
+    init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
     graph = _get_advisor_graph()
 
@@ -92,6 +94,8 @@ async def stream_advisor(
     farm_id: int,
     db: Session | None = None,
     conversation_id: int | None = None,
+    session_id: str = "",
+    request_id: str = "",
 ) -> AsyncGenerator[str, None]:
     """流式调用建议 Agent，逐 token 返回最终 AI 回复。"""
     ok, reason = check_input(user_input)
@@ -100,7 +104,7 @@ async def stream_advisor(
         yield f"输入内容包含不安全信息，已被拦截。原因：{reason}"
         return
 
-    init_trace(farm_id=farm_id)
+    init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
     graph = _get_advisor_graph()
 

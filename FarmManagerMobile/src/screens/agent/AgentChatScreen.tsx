@@ -12,6 +12,7 @@ import LinearGradient from "react-native-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useAgentStore } from "../../stores/agentStore";
+import { useAuthStore } from "../../stores/authStore";
 import type { ChatMessage } from "../../api/types";
 import { MarkdownText } from "../../components/MarkdownText";
 import { ReportListView } from "../../components/ReportListView";
@@ -21,21 +22,25 @@ import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import { appGradients } from "../../theme/gradients";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-const RECOMMENDED_QUESTIONS = [
-  "帮我规划秋种",
-  "今天适合施肥吗",
-  "未来一周天气",
+const QUICK_PROMPTS = [
+  { text: "今日天气对作物有什么影响？", icon: "weather-partly-cloudy" },
+  { text: "给我一些种植建议", icon: "sprout" },
+  { text: "常见的病虫害怎么防治？", icon: "bug-outline" },
+  { text: "生成本周种植报告", icon: "file-document-outline" },
 ];
 
-const QUICK_PROMPTS = [
-  { icon: "weather-partly-cloudy", text: "今日天气对作物有什么影响？" },
-  { icon: "sprout", text: "给我一些种植建议" },
-  { icon: "bug", text: "常见的病虫害怎么防治？" },
-  { icon: "file-document", text: "生成本周种植报告" },
-];
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 6) return "夜深了，早点休息";
+  if (hour < 12) return "早上好";
+  if (hour < 14) return "中午好";
+  if (hour < 19) return "下午好";
+  return "晚上好";
+};
 
 export const AgentChatScreen: React.FC = () => {
   const navigation = useNavigation();
+  const { user } = useAuthStore();
   const {
     messages,
     sendMessage,
@@ -79,10 +84,7 @@ export const AgentChatScreen: React.FC = () => {
       >
         {!isUser && (
           <View style={styles.agentAvatar}>
-            <View style={styles.aiFace}>
-              <View style={styles.aiEye} />
-              <View style={styles.aiEye} />
-            </View>
+            <Icon name="sprout" size={14} color={colors.success} />
           </View>
         )}
         <View
@@ -92,12 +94,9 @@ export const AgentChatScreen: React.FC = () => {
           ]}
         >
           {isUser ? (
-            <LinearGradient
-              {...appGradients.userBubble}
-              style={styles.userBubbleInner}
-            >
+            <View style={styles.userBubbleInner}>
               <Text style={styles.userText}>{item.content}</Text>
-            </LinearGradient>
+            </View>
           ) : (
             <View style={styles.agentBubbleInner}>
               <MarkdownText text={item.content} baseStyle={styles.agentText} />
@@ -128,45 +127,44 @@ export const AgentChatScreen: React.FC = () => {
     );
   };
 
-  const renderWelcome = () => (
-    <View style={styles.welcomeContainer}>
-      <View style={styles.welcomeAvatar}>
-        <View style={styles.aiFaceLarge}>
-          <View style={styles.aiEyeLarge} />
-          <View style={styles.aiEyeLarge} />
+  const renderWelcome = () => {
+    const nickname = user?.nickname || "农友";
+    const greeting = getGreeting();
+
+    return (
+      <View style={styles.welcomeContainer}>
+        <View style={styles.welcomeHeader}>
+          <View style={styles.welcomeAvatar}>
+            <Icon name="sprout" size={20} color={colors.success} />
+          </View>
+          <View style={styles.welcomeTextBlock}>
+            <Text style={styles.welcomeTitle}>
+              {greeting}，{nickname}
+            </Text>
+            <Text style={styles.welcomeSubtitle}>
+              可以帮你分析天气、提供种植建议、生成报告
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.promptSection}>
+          <View style={styles.promptCards}>
+            {QUICK_PROMPTS.map((prompt, index) => (
+              <ScalePress key={index} onPress={() => handleSend(prompt.text)}>
+                <View style={styles.promptPill}>
+                  <Icon name={prompt.icon as any} size={13} color="#5B6370" />
+                  <Text style={styles.promptPillText}>{prompt.text}</Text>
+                </View>
+              </ScalePress>
+            ))}
+          </View>
         </View>
       </View>
-      <Text style={styles.welcomeTitle}>你好呀，我是 AI 农事助手</Text>
-      <Text style={styles.welcomeSubtitle}>
-        可以帮你分析天气、提供种植建议、生成报告
-      </Text>
-
-      {/* Recommended question capsules */}
-      <View style={styles.capsulesContainer}>
-        {RECOMMENDED_QUESTIONS.map((q, index) => (
-          <ScalePress key={index} onPress={() => handleSend(q)}>
-            <View style={styles.capsuleChip}>
-              <Text style={styles.capsuleText}>{q}</Text>
-            </View>
-          </ScalePress>
-        ))}
-      </View>
-
-      <View style={styles.quickPromptsContainer}>
-        {QUICK_PROMPTS.map((prompt, index) => (
-          <ScalePress key={index} onPress={() => handleSend(prompt.text)}>
-            <View style={styles.quickPrompt}>
-              <Icon name={prompt.icon} size={18} color={colors.primary} />
-              <Text style={styles.quickPromptText}>{prompt.text}</Text>
-            </View>
-          </ScalePress>
-        ))}
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <LinearGradient
         {...appGradients.chatBg}
         style={StyleSheet.absoluteFill}
@@ -176,13 +174,10 @@ export const AgentChatScreen: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.headerAvatar}>
-            <View style={styles.aiFaceSmall}>
-              <View style={styles.aiEyeSmall} />
-              <View style={styles.aiEyeSmall} />
-            </View>
+            <Icon name="sprout" size={18} color={colors.success} />
           </View>
           <View>
-            <Text style={styles.headerTitle}>AI 农事助手</Text>
+            <Text style={styles.headerTitle}>农事助手</Text>
             <View style={styles.statusRow}>
               <View style={styles.statusDot} />
               <Text style={styles.headerSubtitle}>在线</Text>
@@ -240,7 +235,7 @@ export const AgentChatScreen: React.FC = () => {
               />
             ) : (
               <ScrollView
-                contentContainerStyle={styles.welcomeContainer}
+                contentContainerStyle={styles.welcomeScrollContent}
                 showsVerticalScrollIndicator={false}
               >
                 {renderWelcome()}
@@ -249,6 +244,9 @@ export const AgentChatScreen: React.FC = () => {
 
             {isLoading && hasMessages && (
               <View style={styles.typingRow}>
+                <View style={styles.agentAvatarSmall}>
+                  <Icon name="sprout" size={10} color={colors.success} />
+                </View>
                 <View style={styles.typingBubble}>
                   <View style={styles.typingDot} />
                   <View style={[styles.typingDot, styles.typingDot2]} />
@@ -258,7 +256,7 @@ export const AgentChatScreen: React.FC = () => {
             )}
           </View>
 
-          {/* Input — always at bottom */}
+          {/* Input */}
           <View style={styles.inputBar}>
             <View style={styles.inputWrapper}>
               <TextInput
@@ -279,24 +277,13 @@ export const AgentChatScreen: React.FC = () => {
                 disabled={!inputText.trim() || isLoading}
                 activeOpacity={0.7}
               >
-                <LinearGradient
-                  {...appGradients.userBubble}
-                  style={[
-                    styles.sendBtnGradient,
-                    (!inputText.trim() || isLoading) &&
-                      styles.sendBtnDisabled,
-                  ]}
-                >
-                  <Icon
-                    name="send"
-                    size={18}
-                    color={
-                      !inputText.trim() || isLoading
-                        ? colors.textTertiary
-                        : "#FFFFFF"
-                    }
-                  />
-                </LinearGradient>
+                <Icon
+                  name="send"
+                  size={18}
+                  color={
+                    !inputText.trim() || isLoading ? "#B0B8C1" : "#FFFFFF"
+                  }
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -326,11 +313,14 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+
+  // ─── Header ───
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacingV2.lg,
-    paddingVertical: spacingV2.md,
+    paddingTop: spacingV2.md,
+    paddingBottom: spacingV2.sm,
     backgroundColor: "transparent",
   },
   headerLeft: {
@@ -338,61 +328,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadiusV2.lg,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacingV2.md,
-  },
-  aiFace: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#1A1D23",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  aiEye: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#FFFFFF",
-  },
-  aiFaceSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#1A1D23",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  aiEyeSmall: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: "#FFFFFF",
-  },
-  aiFaceLarge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#1A1D23",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  aiEyeLarge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#FFFFFF",
   },
   headerTitle: {
     fontSize: fontSizeV2.md,
@@ -415,12 +357,13 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.xs,
     color: colors.textSecondary,
   },
+
+  // ─── Segment ───
   segmentRow: {
     flexDirection: "row",
     marginHorizontal: spacingV2.lg,
-    marginTop: spacingV2.sm,
     marginBottom: spacingV2.sm,
-    backgroundColor: "rgba(255,255,255,0.7)",
+    backgroundColor: "rgba(241,243,245,0.8)",
     borderRadius: borderRadiusV2.lg,
     padding: 3,
   },
@@ -434,9 +377,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 1,
   },
   segText: {
     fontSize: fontSizeV2.sm,
@@ -450,75 +393,71 @@ const styles = StyleSheet.create({
     padding: spacingV2.md,
     paddingBottom: spacingV2.sm,
   },
-  welcomeContainer: {
-    alignItems: "center",
+
+  // ─── Welcome — left-aligned ───
+  welcomeScrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
-    paddingVertical: spacingV2.xxl,
+  },
+  welcomeContainer: {
     paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.xl,
+    paddingBottom: spacingV2.xxxl,
+  },
+  welcomeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacingV2.xxl,
   },
   welcomeAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadiusV2.full,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: spacingV2.lg,
+    marginRight: spacingV2.md,
+  },
+  welcomeTextBlock: {
+    flex: 1,
   },
   welcomeTitle: {
-    fontSize: fontSizeV2.xl,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "700",
     color: colors.text,
-    marginBottom: spacingV2.xs,
-    textAlign: "center",
+    marginBottom: 4,
   },
   welcomeSubtitle: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    marginBottom: spacingV2.xl,
-    textAlign: "center",
+    lineHeight: 20,
   },
-  capsulesContainer: {
+
+  // ─── Prompt pills ───
+  promptSection: {
+    marginTop: spacingV2.sm,
+  },
+  promptCards: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
-    gap: spacingV2.sm,
-    marginBottom: spacingV2.xl,
-  },
-  capsuleChip: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.full,
-    paddingHorizontal: spacingV2.md,
-    paddingVertical: spacingV2.sm,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  capsuleText: {
-    fontSize: fontSizeV2.sm,
-    color: colors.text,
-    fontWeight: "500",
-  },
-  quickPromptsContainer: {
-    width: "100%",
     gap: spacingV2.sm,
   },
-  quickPrompt: {
+  promptPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.full,
     paddingHorizontal: spacingV2.md,
-    paddingVertical: spacingV2.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    gap: spacingV2.sm,
+    paddingVertical: 10,
+    gap: 6,
   },
-  quickPromptText: {
-    fontSize: fontSizeV2.sm,
+  promptPillText: {
+    fontSize: fontSizeV2.xs,
     color: colors.text,
     fontWeight: "500",
-    flex: 1,
   },
+
+  // ─── Messages ───
   messageRow: {
     flexDirection: "row",
     marginBottom: spacingV2.md,
@@ -531,21 +470,31 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   agentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadiusV2.md,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacingV2.sm,
+  },
+  agentAvatarSmall: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
     backgroundColor: colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacingV2.sm,
   },
   messageBubble: {
-    maxWidth: "92%",
+    maxWidth: "88%",
   },
   userBubble: {
     alignSelf: "flex-end",
   },
   userBubbleInner: {
+    backgroundColor: colors.primary,
     borderRadius: borderRadiusV2.lg,
     borderBottomRightRadius: 4,
     padding: spacingV2.md,
@@ -554,16 +503,14 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   agentBubbleInner: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceMuted,
     borderRadius: borderRadiusV2.lg,
     borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.chatAiBorder,
     padding: spacingV2.md,
   },
   userText: {
     fontSize: fontSizeV2.md,
-    color: colors.textInverse,
+    color: "#FFFFFF",
     lineHeight: 22,
   },
   agentText: {
@@ -571,10 +518,13 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
+
+  // ─── Typing indicator ───
   typingRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
     paddingHorizontal: spacingV2.md,
     paddingBottom: spacingV2.sm,
-    alignItems: "flex-start",
   },
   typingBubble: {
     flexDirection: "row",
@@ -585,61 +535,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
     borderWidth: 1,
-    borderColor: colors.chatAiBorder,
+    borderColor: colors.borderLight,
     gap: 4,
   },
   typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: colors.textTertiary,
   },
   typingDot2: {
-    opacity: 0.6,
+    opacity: 0.4,
   },
   typingDot3: {
-    opacity: 0.3,
+    opacity: 0.2,
   },
+
+  // ─── Input bar ───
   inputBar: {
     paddingHorizontal: spacingV2.md,
-    paddingVertical: spacingV2.sm,
+    paddingTop: spacingV2.sm,
+    paddingBottom: spacingV2.md,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
   inputWrapper: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    backgroundColor: colors.chatInputBg,
-    borderRadius: 24,
-    paddingLeft: spacingV2.md,
-    paddingRight: 4,
-    paddingVertical: 4,
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderRadius: borderRadiusV2.full,
+    paddingLeft: spacingV2.lg,
+    paddingRight: spacingV2.md,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   input: {
     flex: 1,
     maxHeight: 100,
     fontSize: fontSizeV2.md,
     color: colors.text,
-    paddingVertical: spacingV2.sm,
+    paddingVertical: spacingV2.md,
     paddingRight: spacingV2.sm,
   },
   sendBtn: {
     width: 36,
     height: 36,
     borderRadius: borderRadiusV2.full,
-    overflow: "hidden",
-  },
-  sendBtnGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadiusV2.full,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.primary,
   },
   sendBtnDisabled: {
     backgroundColor: colors.disabledBg,
   },
+
+  // ─── Confirm bar ───
   confirmBar: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -650,13 +602,13 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
   },
   confirmBtn: {
-    backgroundColor: colors.success,
+    backgroundColor: colors.primary,
     paddingHorizontal: spacingV2.lg,
     paddingVertical: spacingV2.sm,
     borderRadius: borderRadiusV2.md,
   },
   confirmBtnText: {
-    color: colors.textInverse,
+    color: "#FFFFFF",
     fontSize: fontSizeV2.sm,
     fontWeight: "600",
   },

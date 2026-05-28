@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import type { CostRecord } from "../../../api/types";
 import { Card } from "../../../components/Card";
 import { colors } from "../../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import dayjs from "dayjs";
 
@@ -128,8 +128,15 @@ export const RecordItem: React.FC<RecordItemProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: spacing.md,
-    padding: spacing.md,
+    marginBottom: spacingV2.sm,
+    padding: spacingV2.lg,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   row: {
     flexDirection: "row",
@@ -142,22 +149,22 @@ const styles = StyleSheet.create({
   categoryRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacingV2.md,
   },
   typeIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: borderRadius.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   category: {
-    fontSize: fontSize.md,
-    fontWeight: "700",
+    fontSize: fontSizeV2.md,
+    fontWeight: "600",
     color: colors.text,
   },
   date: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     marginTop: 2,
   },
@@ -165,30 +172,31 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   amount: {
-    fontSize: fontSize.lg,
-    fontWeight: "800",
+    fontSize: fontSizeV2.lg,
+    fontWeight: "700",
+    letterSpacing: -0.3,
   },
   typeBadge: {
-    marginTop: spacing.xs,
+    marginTop: spacingV2.xs,
     paddingVertical: 2,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacingV2.sm,
+    borderRadius: 6,
   },
   typeText: {
-    fontSize: fontSize.xs,
-    fontWeight: "700",
+    fontSize: fontSizeV2.xs,
+    fontWeight: "600",
   },
   noteRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    marginTop: spacingV2.md,
+    paddingTop: spacingV2.md,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    gap: spacing.xs,
+    borderTopColor: "rgba(0,0,0,0.04)",
+    gap: spacingV2.xs,
   },
   note: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     flex: 1,
   },

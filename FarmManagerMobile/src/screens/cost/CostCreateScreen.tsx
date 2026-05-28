@@ -7,23 +7,39 @@ import {
   StyleSheet,
   Alert,
   TouchableOpacity,
-  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import dayjs from "dayjs";
-// import DateTimePicker, {DateTimePickerEvent} from '@react-native-community/datetimepicker';
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useCostStore } from "../../stores/costStore";
 import { useCategoryStore } from "../../stores/categoryStore";
-import { BigButton } from "../../components/BigButton";
 import { costApi, debtApi } from "../../api/client";
+import { BigButton } from "../../components/BigButton";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import { AIHelper } from "./components/AIHelper";
 import { CategoryModal } from "./components/CategoryModal";
 import { DatePickerModal } from "./components/DatePickerModal";
+
+/** 根据收支类型返回对应的主题色 */
+const useTheme = (recordType: "cost" | "income") => {
+  return useMemo(() => {
+    if (recordType === "income") {
+      return {
+        primary: colors.income,
+        primaryMuted: colors.incomeBg,
+        primaryLight: colors.successLight,
+      };
+    }
+    return {
+      primary: colors.expense,
+      primaryMuted: colors.expenseBg,
+      primaryLight: "#F5A0A0",
+    };
+  }, [recordType]);
+};
 
 const COST_CATEGORIES = [
   "种子",
@@ -43,7 +59,7 @@ type CostCreateNavigationProp = NativeStackNavigationProp<
 
 export const CostCreateScreen: React.FC = () => {
   const navigation = useNavigation<CostCreateNavigationProp>();
-  const { createRecord, loading, error, clearError } = useCostStore();
+  const { createRecord, error, clearError } = useCostStore();
   const { categories } = useCategoryStore();
 
   const [recordType, setRecordType] = useState<"cost" | "income">("cost");
@@ -60,7 +76,8 @@ export const CostCreateScreen: React.FC = () => {
   const [counterparty, setCounterparty] = useState("");
   const [dueDate, setDueDate] = useState("");
 
-  // 获取可用分类
+  const theme = useTheme(recordType);
+
   const availableCategories = useMemo(() => {
     const userCategories = categories
       .filter((c) => c.type === recordType)
@@ -97,13 +114,6 @@ export const CostCreateScreen: React.FC = () => {
       setAiLoading(false);
     }
   };
-
-  // const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
-  //   setShowDatePicker(Platform.OS === 'ios');
-  //   if (date) {
-  //     setRecordDate(date);
-  //   }
-  // };
 
   const handleCategorySelect = (cat: string) => {
     setCategory(cat);
@@ -168,7 +178,7 @@ export const CostCreateScreen: React.FC = () => {
     }
   };
 
-  const typeColor = recordType === "cost" ? colors.danger : colors.success;
+  const isIncome = recordType === "income";
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
@@ -179,97 +189,49 @@ export const CostCreateScreen: React.FC = () => {
         onParse={handleAiParse}
       />
 
-      {/* 类型选择 */}
-      <View style={styles.formCard}>
-        <Text style={styles.sectionTitle}>类型</Text>
-        <View style={styles.typeRow}>
+      {/* Amount - Primary Focus */}
+      <View style={styles.amountSection}>
+        <View style={styles.typeToggle}>
           <TouchableOpacity
-            style={[
-              styles.typeBtn,
-              recordType === "cost" && {
-                backgroundColor: colors.dangerLight,
-                borderColor: colors.danger,
-              },
-            ]}
+            style={styles.typeToggleBtn}
             onPress={() => handleTypeChange("cost")}
             activeOpacity={0.7}
           >
-            <Icon
-              name="arrow-down-circle"
-              size={22}
-              color={
-                recordType === "cost" ? colors.danger : colors.textTertiary
-              }
-            />
             <Text
               style={[
-                styles.typeBtnText,
-                recordType === "cost" && {
-                  color: colors.danger,
-                  fontWeight: "700",
-                },
+                styles.typeToggleText,
+                !isIncome && { color: theme.primary, fontWeight: "600" },
               ]}
             >
               支出
             </Text>
+            {!isIncome && (
+              <View style={[styles.typeIndicator, { backgroundColor: theme.primary }]} />
+            )}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[
-              styles.typeBtn,
-              recordType === "income" && {
-                backgroundColor: colors.successLight,
-                borderColor: colors.success,
-              },
-            ]}
+            style={styles.typeToggleBtn}
             onPress={() => handleTypeChange("income")}
             activeOpacity={0.7}
           >
-            <Icon
-              name="arrow-up-circle"
-              size={22}
-              color={
-                recordType === "income" ? colors.success : colors.textTertiary
-              }
-            />
             <Text
               style={[
-                styles.typeBtnText,
-                recordType === "income" && {
-                  color: colors.success,
-                  fontWeight: "700",
-                },
+                styles.typeToggleText,
+                isIncome && { color: theme.primary, fontWeight: "600" },
               ]}
             >
               收入
             </Text>
+            {isIncome && (
+              <View style={[styles.typeIndicator, { backgroundColor: theme.primary }]} />
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* 分类 */}
-        <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>
-          分类
-        </Text>
-        <TouchableOpacity
-          style={styles.fieldRow}
-          onPress={() => setShowCategoryModal(true)}
-        >
-          <View style={styles.fieldLeft}>
-            <Icon name="tag-outline" size={20} color={typeColor} />
-            <Text style={category ? styles.fieldText : styles.fieldPlaceholder}>
-              {category || "请选择分类"}
-            </Text>
-          </View>
-          <Icon name="chevron-right" size={20} color={colors.textTertiary} />
-        </TouchableOpacity>
-
-        {/* 金额 */}
-        <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>
-          金额
-        </Text>
-        <View style={styles.amountRow}>
-          <Text style={[styles.amountSymbol, { color: typeColor }]}>¥</Text>
+        <View style={styles.amountInputRow}>
+          <Text style={[styles.amountSymbol, { color: theme.primary }]}>¥</Text>
           <TextInput
-            style={styles.amountInput}
+            style={[styles.amountInput, { color: theme.primary }]}
             placeholder="0.00"
             placeholderTextColor={colors.textTertiary}
             keyboardType="decimal-pad"
@@ -277,100 +239,126 @@ export const CostCreateScreen: React.FC = () => {
             onChangeText={setAmount}
           />
         </View>
+      </View>
 
-        {/* 日期 */}
-        <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>
-          日期
-        </Text>
+      {/* Form Fields - Single Card */}
+      <View style={styles.formCard}>
+        <TouchableOpacity
+          style={styles.fieldRow}
+          onPress={() => setShowCategoryModal(true)}
+        >
+          <Text style={styles.fieldLabel}>分类</Text>
+          <View style={styles.fieldRight}>
+            <Text
+              style={category ? styles.fieldValue : styles.fieldPlaceholder}
+            >
+              {category || "请选择"}
+            </Text>
+            <Icon
+              name="chevron-right"
+              size={18}
+              color={colors.textTertiary}
+            />
+          </View>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.fieldRow}
           onPress={() => setShowDatePicker(true)}
         >
-          <View style={styles.fieldLeft}>
-            <Icon name="calendar-outline" size={20} color={typeColor} />
-            <Text style={styles.fieldText}>
-              {dayjs(recordDate).format("YYYY年MM月DD日")}
+          <Text style={styles.fieldLabel}>日期</Text>
+          <View style={styles.fieldRight}>
+            <Text style={styles.fieldValue}>
+              {dayjs(recordDate).format("YYYY年M月D日")}
             </Text>
+            <Icon
+              name="chevron-right"
+              size={18}
+              color={colors.textTertiary}
+            />
           </View>
-          <Icon name="chevron-right" size={20} color={colors.textTertiary} />
         </TouchableOpacity>
 
-        {/* 赊账选项 */}
         {recordType === "cost" && (
-          <View style={{ marginTop: spacing.lg }}>
-            <TouchableOpacity
-              style={styles.fieldRow}
-              onPress={() => setIsDebt(!isDebt)}
-            >
-              <View style={styles.fieldLeft}>
-                <Icon
-                  name="credit-card-clock-outline"
-                  size={20}
-                  color={isDebt ? colors.primary : colors.textTertiary}
-                />
-                <Text
+          <TouchableOpacity
+            style={styles.fieldRow}
+            onPress={() => setIsDebt(!isDebt)}
+          >
+            <Text style={styles.fieldLabel}>标记为赊账</Text>
+            <View style={styles.fieldRight}>
+              <View
+                style={[
+                  styles.toggleTrack,
+                  isDebt && { backgroundColor: colors.primary },
+                ]}
+              >
+                <View
                   style={[
-                    styles.fieldText,
-                    !isDebt && { color: colors.textSecondary },
+                    styles.toggleThumb,
+                    isDebt && styles.toggleThumbActive,
                   ]}
-                >
-                  标记为赊账
-                </Text>
+                />
               </View>
-              <Icon
-                name={isDebt ? "check-circle" : "checkbox-blank-circle-outline"}
-                size={22}
-                color={isDebt ? colors.primary : colors.textTertiary}
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {recordType === "cost" && isDebt && (
+          <View style={styles.debtFields}>
+            <View style={styles.debtField}>
+              <Text style={styles.debtLabel}>债权人</Text>
+              <TextInput
+                style={styles.debtInput}
+                placeholder="如：老王农资店"
+                placeholderTextColor={colors.textTertiary}
+                value={counterparty}
+                onChangeText={setCounterparty}
               />
-            </TouchableOpacity>
-            {isDebt && (
-              <View style={{ marginTop: spacing.md }}>
-                <Text style={[styles.sectionTitle]}>债权人</Text>
-                <TextInput
-                  style={styles.noteInput}
-                  placeholder="如：老王农资店"
-                  placeholderTextColor={colors.textTertiary}
-                  value={counterparty}
-                  onChangeText={setCounterparty}
-                />
-                <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>
-                  到期日（可选）
-                </Text>
-                <TextInput
-                  style={styles.noteInput}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textTertiary}
-                  value={dueDate}
-                  onChangeText={setDueDate}
-                />
-              </View>
-            )}
+            </View>
+            <View style={styles.debtField}>
+              <Text style={styles.debtLabel}>到期日（可选）</Text>
+              <TextInput
+                style={styles.debtInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.textTertiary}
+                value={dueDate}
+                onChangeText={setDueDate}
+              />
+            </View>
           </View>
         )}
+
+        <View style={styles.noteSection}>
+          <Text style={styles.noteLabel}>备注</Text>
+          <TextInput
+            style={styles.noteInput}
+            placeholder="添加备注（可选）"
+            placeholderTextColor={colors.textTertiary}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+            value={note}
+            onChangeText={setNote}
+          />
+        </View>
       </View>
 
-      {/* 备注 */}
-      <View style={styles.formCard}>
-        <Text style={styles.sectionTitle}>备注</Text>
-        <TextInput
-          style={styles.noteInput}
-          placeholder="添加备注（可选）"
-          placeholderTextColor={colors.textTertiary}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-          value={note}
-          onChangeText={setNote}
-        />
-      </View>
-
-      {/* 保存按钮 */}
+      {/* Submit Button */}
       <View style={styles.submitArea}>
-        <BigButton
-          title={submitting ? "保存中..." : "保存"}
+        <TouchableOpacity
+          style={[
+            styles.submitBtn,
+            { backgroundColor: colors.primary },
+            submitting && styles.submitBtnDisabled,
+          ]}
           onPress={handleSubmit}
           disabled={submitting}
-        />
+          activeOpacity={0.8}
+        >
+          <Text style={styles.submitBtnText}>
+            {submitting ? "保存中..." : "保存"}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <DatePickerModal
@@ -398,97 +386,185 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: spacing.md,
   },
-  formCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+  amountSection: {
+    alignItems: "center",
+    paddingVertical: spacingV2.xl,
+    marginHorizontal: spacingV2.lg,
+    marginBottom: spacingV2.md,
   },
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: "700",
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  typeRow: {
+  typeToggle: {
     flexDirection: "row",
-    gap: spacing.md,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.full,
+    padding: 4,
+    marginBottom: spacingV2.lg,
   },
-  typeBtn: {
+  typeToggleBtn: {
     flex: 1,
+    paddingVertical: 10,
+    borderRadius: borderRadiusV2.full,
+    alignItems: "center",
+    position: "relative",
+  },
+  typeToggleText: {
+    fontSize: fontSizeV2.md,
+    color: colors.textTertiary,
+    fontWeight: "500",
+  },
+  typeIndicator: {
+    position: "absolute",
+    bottom: 4,
+    width: 16,
+    height: 3,
+    borderRadius: 2,
+  },
+  amountInputRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.background,
-    borderWidth: 1.5,
-    borderColor: colors.border,
   },
-  typeBtnText: {
-    fontSize: fontSize.md,
+  amountSymbol: {
+    fontSize: fontSizeV2.xxxl,
+    fontWeight: "300",
     color: colors.textSecondary,
-    fontWeight: "600",
+    marginRight: spacingV2.sm,
+  },
+  amountInput: {
+    fontSize: fontSizeV2.xxxxl,
+    fontWeight: "700",
+    color: colors.text,
+    padding: 0,
+    minWidth: 120,
+    textAlign: "center",
+    letterSpacing: -1,
+  },
+  formCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xl,
+    marginHorizontal: spacingV2.lg,
+    marginBottom: spacingV2.md,
+    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.md,
+    paddingBottom: spacingV2.lg,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   fieldRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: spacing.md,
+    paddingVertical: spacingV2.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: "rgba(0,0,0,0.04)",
   },
-  fieldLeft: {
+  fieldLabel: {
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "500",
+  },
+  fieldRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    flex: 1,
+    gap: spacingV2.xs,
   },
-  fieldText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-    fontWeight: "600",
+  fieldValue: {
+    fontSize: fontSizeV2.md,
+    color: colors.textSecondary,
+    fontWeight: "500",
   },
   fieldPlaceholder: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.textTertiary,
+    fontWeight: "500",
   },
-  amountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.md,
+  toggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceMuted,
+    justifyContent: "center",
+    paddingHorizontal: 2,
   },
-  amountSymbol: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginRight: spacing.sm,
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  amountInput: {
-    flex: 1,
-    fontSize: 28,
-    fontWeight: "700",
+  toggleThumbActive: {
+    transform: [{ translateX: 20 }],
+  },
+  debtFields: {
+    marginTop: spacingV2.md,
+    gap: spacingV2.md,
+    paddingLeft: spacingV2.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.expense,
+  },
+  debtField: {
+    gap: spacingV2.xs,
+  },
+  debtLabel: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "500",
+  },
+  debtInput: {
+    borderRadius: borderRadiusV2.lg,
+    padding: spacingV2.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
-    padding: 0,
+    backgroundColor: colors.surfaceMuted,
+  },
+  noteSection: {
+    marginTop: spacingV2.md,
+    gap: spacingV2.xs,
+  },
+  noteLabel: {
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "500",
   },
   noteInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    fontSize: fontSize.md,
+    borderRadius: borderRadiusV2.lg,
+    padding: spacingV2.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
     minHeight: 80,
   },
   submitArea: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.xxl,
+    marginHorizontal: spacingV2.lg,
+    marginTop: spacingV2.sm,
+    marginBottom: spacingV2.xxxl,
+  },
+  submitBtn: {
+    paddingVertical: 16,
+    borderRadius: borderRadiusV2.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  submitBtnDisabled: {
+    opacity: 0.5,
+  },
+  submitBtnText: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "600",
+    color: colors.textInverse,
   },
 });

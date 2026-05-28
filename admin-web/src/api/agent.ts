@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { authStore } from '../stores/authStore';
 
 export interface ChatRequest {
   cycle_id?: number;
@@ -53,11 +54,14 @@ export async function chat(data: ChatRequest): Promise<ChatResponse> {
   return res.data;
 }
 
-export async function* streamChat(message: string, cycleId?: number): AsyncGenerator<string> {
+export async function* streamChat(message: string, cycleId?: number, sessionId?: string): AsyncGenerator<string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = authStore.getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const resp = await fetch('/api/agent/chat/stream', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, cycle_id: cycleId }),
+    headers,
+    body: JSON.stringify({ message, cycle_id: cycleId, session_id: sessionId }),
   });
   if (!resp.ok || !resp.body) throw new Error(`stream error: ${resp.status}`);
   const reader = resp.body.getReader();
@@ -103,5 +107,32 @@ export async function getAdviceHistory(params?: { cycle_id?: number; limit?: num
 
 export async function getReportHistory(params?: { cycle_id?: number; limit?: number }): Promise<ReportListResponse> {
   const res = await apiClient.get<ReportListResponse>("/agent/report-history", { params });
+  return res.data;
+}
+
+// ── Conversation ──
+export interface ConversationItem {
+  id: number;
+  session_id: string;
+  status: string;
+  created_at: string;
+  last_active_at: string;
+}
+
+export interface ConversationMessage {
+  id: number;
+  role: string;
+  content: string;
+  skills?: string[];
+  created_at: string;
+}
+
+export async function listConversations(limit?: number): Promise<ConversationItem[]> {
+  const res = await apiClient.get<ConversationItem[]>("/agent/conversations", { params: { limit } });
+  return res.data;
+}
+
+export async function getConversationMessages(sessionId: string): Promise<ConversationMessage[]> {
+  const res = await apiClient.get<ConversationMessage[]>(`/agent/conversations/${sessionId}/messages`);
   return res.data;
 }

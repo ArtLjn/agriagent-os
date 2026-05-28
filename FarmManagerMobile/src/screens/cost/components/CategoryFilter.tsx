@@ -7,7 +7,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { colors } from "../../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 
 interface CategoryFilterProps {
   categoryList: string[];
@@ -36,7 +36,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
           selectedCategory === null && styles.categoryChipTextActive,
         ]}
       >
-        全部
+        全部分类
       </Text>
     </TouchableOpacity>
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -78,38 +78,35 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
 const styles = StyleSheet.create({
   categoryFilterRow: {
     flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacingV2.lg,
+    marginBottom: spacingV2.md,
+    gap: spacingV2.sm,
   },
   categoryChip: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginRight: spacing.xs,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.full,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.xs,
+    marginRight: spacingV2.xs,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.borderLight,
   },
   categoryChipActive: {
     backgroundColor: colors.primaryMuted,
-    borderColor: colors.primary,
   },
   categoryChipText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     fontWeight: "500",
   },
   categoryChipTextActive: {
     color: colors.primary,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   categoryChipAmount: {
-    fontSize: fontSize.xs,
+    fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
-    marginLeft: spacing.xs,
+    marginLeft: spacingV2.xs,
   },
   categoryChipAmountActive: {
     color: colors.primary,

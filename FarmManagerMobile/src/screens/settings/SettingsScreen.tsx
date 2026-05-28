@@ -20,7 +20,6 @@ import {
   spacing,
   fontSize,
   borderRadius,
-  shadows,
   spacingV2,
   fontSizeV2,
   borderRadiusV2,
@@ -119,7 +118,6 @@ export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
 
-  const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
   const {
@@ -137,32 +135,6 @@ export const SettingsScreen: React.FC = () => {
     setDisplayName,
     syncToServer,
   } = useSettingsStore();
-
-  const handleProfilePress = useCallback(() => {
-    if (!user) return;
-    Alert.prompt(
-      "修改昵称",
-      "输入新昵称",
-      [
-        { text: "取消", style: "cancel" },
-        {
-          text: "确定",
-          onPress: async (value?: string) => {
-            const trimmed = (value || "").trim();
-            if (trimmed) {
-              try {
-                await useAuthStore.getState().updateProfile({ nickname: trimmed });
-              } catch {
-                showToast("修改失败");
-              }
-            }
-          },
-        },
-      ],
-      "plain-text",
-      user.nickname
-    );
-  }, [user]);
 
   const handleLogout = useCallback(() => {
     Alert.alert("退出登录", "确定要退出登录吗？", [
@@ -273,23 +245,18 @@ export const SettingsScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Header */}
-        <TouchableOpacity
-          style={styles.profileSection}
-          onPress={handleProfilePress}
-          activeOpacity={0.7}
-        >
-          <View style={styles.profileCard}>
-            <View style={styles.avatar}>
-              <Icon name="account" size={32} color={colors.primary} />
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user?.nickname || "农友"}</Text>
-              <Text style={styles.profileSub}>{user?.phone || "让种植更简单"}</Text>
-            </View>
-            <Icon name="chevron-right" size={20} color={colors.textTertiary} />
-          </View>
-        </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            activeOpacity={0.6}
+          >
+            <Icon name="chevron-left" size={28} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>设置</Text>
+          <View style={styles.backBtn} />
+        </View>
 
         {/* Farm Settings */}
         <SettingsSection title="农场设置">
@@ -420,40 +387,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing.xxl,
   },
-  profileSection: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  profileCard: {
+  header: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxxl,
-    padding: spacingV2.lg,
-    ...shadowV2.light,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.primaryMuted,
+  backBtn: {
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacing.md,
   },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
+  headerTitle: {
     fontSize: fontSize.lg,
     fontWeight: "700",
     color: colors.text,
-  },
-  profileSub: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: 2,
   },
   section: {
     paddingHorizontal: spacing.lg,

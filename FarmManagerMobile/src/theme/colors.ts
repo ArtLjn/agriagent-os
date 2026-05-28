@@ -1,9 +1,9 @@
 export const colors = {
-  // Primary - Blue
-  primary: "#5B8CFF",
-  primaryLight: "#7AA8FF",
-  primaryDark: "#4A7AEE",
-  primaryMuted: "rgba(91, 140, 255, 0.08)",
+  // Primary - Blue (calm, natural, less saturated)
+  primary: "#4A7BF7",
+  primaryLight: "#6B9AFF",
+  primaryDark: "#3A6AE0",
+  primaryMuted: "rgba(74, 123, 247, 0.08)",
 
   // AI Accent - Purple (muted)
   aiPurple: "#7A7AE0",
@@ -65,6 +65,10 @@ export const colors = {
   disabled: "#D1D5DB",
   disabledBg: "#F3F4F6",
 
+  // Accent (for GuideScreen compatibility)
+  accent: "#5B8CFF",
+  accentMuted: "rgba(91, 140, 255, 0.08)",
+
   // Quick action card backgrounds
   qaPlanting: "#EDFDF3",
   qaReminder: "#EEF4FF",
@@ -91,8 +95,8 @@ export const colors = {
   // Emotion card gradients (solid fallbacks)
   emotionFoggyStart: "#EAF3FF",
   emotionFoggyEnd: "#F7F9FF",
-  emotionSunnyStart: "#FFF4D6",
-  emotionSunnyEnd: "#FFF9EA",
+  emotionSunnyStart: "#F0F4F8",
+  emotionSunnyEnd: "#F7F9FC",
   emotionRainyStart: "#DCEBFF",
   emotionRainyEnd: "#EEF5FF",
   emotionColdStart: "#E7F2FF",
@@ -100,21 +104,21 @@ export const colors = {
 } as const;
 
 export const gradients = {
-  primary: ["#5B8CFF", "#7AA8FF"] as const,
-  primaryPurple: ["#5B8CFF", "#8B5CF6"] as const,
-  userBubble: ["#5B8CFF", "#7A7DFF"] as const,
+  primary: ["#4A7BF7", "#6B9AFF"] as const,
+  primaryPurple: ["#4A7BF7", "#8B5CF6"] as const,
+  userBubble: ["#4A7BF7", "#7A7DFF"] as const,
   header: ["#0F172A", "#1E293B"] as const,
   card: ["#FFFFFF", "#FAFBFC"] as const,
   success: ["#3BB273", "#4ADE80"] as const,
   danger: ["#DC4C4C", "#F87171"] as const,
-  weatherCard: ["#5B8CFF", "#7AA8FF"] as const,
-  fab: ["#5B8CFF", "#8B5CF6"] as const,
-  titleText: ["#4DA2FF", "#C26CFF"] as const,
+  weatherCard: ["#4A7BF7", "#6B9AFF"] as const,
+  fab: ["#4A7BF7", "#6B9AFF"] as const,
+  titleText: ["#4A7BF7", "#7A7DFF"] as const,
   chatBg: ["#F7FAFF", "#FFFFFF"] as const,
   weatherDetail: ["#BFD8FF", "#EAF3FF", "#FFFFFF"] as const,
   emotionFoggy: ["#EAF3FF", "#F7F9FF"] as const,
   emotionSunny: ["#FFF4D6", "#FFF9EA"] as const,
   emotionRainy: ["#DCEBFF", "#EEF5FF"] as const,
   emotionCold: ["#E7F2FF", "#F3F8FF"] as const,
-  capsuleActive: ["#5B8CFF", "#7A7DFF"] as const,
+  capsuleActive: ["#4A7BF7", "#6B9AFF"] as const,
 } as const;

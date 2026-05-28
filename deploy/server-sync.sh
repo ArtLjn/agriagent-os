@@ -53,25 +53,47 @@ rm -rf backend
 echo "  --> 恢复 config.yaml..."
 cp /tmp/config.yaml.bak config.yaml 2>/dev/null || true
 
-echo "  --> 自动迁移数据库（补缺列）..."
-if [ -f farm_manager.db ]; then
-    for col in display_name; do
-        if ! sqlite3 farm_manager.db "PRAGMA table_info(farms);" | grep -q "$col"; then
-            sqlite3 farm_manager.db "ALTER TABLE farms ADD COLUMN $col VARCHAR DEFAULT '农友';"
-            echo "      已补列 farms.$col"
-        fi
-    done
+echo "  --> 检查虚拟环境..."
+if [ ! -d .venv ]; then
+    python3 -m venv .venv
+    echo "      已创建虚拟环境"
 fi
+source .venv/bin/activate
+
+echo "  --> 安装依赖..."
+pip install -q --upgrade pip
+# 先安装本地 skillify-sdk
+pip install -q -e ./skillify-sdk 2>/dev/null || pip install -q ./skillify-sdk
+# 再安装其他依赖（跳过 skillify，因为已本地安装）
+grep -v "^skillify" requirements.txt > /tmp/requirements-no-skillify.txt
+pip install -q -r /tmp/requirements-no-skillify.txt
+
+echo "  --> 检查数据库结构..."
+if [ -f farm_manager.db ]; then
+    if ! sqlite3 farm_manager.db "PRAGMA table_info(farms);" | grep -q "user_id"; then
+        echo "      数据库结构过旧，备份并重建..."
+        mv farm_manager.db "farm_manager.db.bak.$(date +%s)"
+    fi
+fi
+
+echo "  --> 自动建表..."
+python3 -c "
+import sys
+sys.path.insert(0, '.')
+from app.core.database import engine, Base
+import app.models
+Base.metadata.create_all(bind=engine)
+print('      数据库表已同步')
+" 2>/dev/null || echo "      建表跳过（可能需要手动处理）"
 
 echo "  --> 重启服务 (systemctl)..."
 systemctl restart farm-manager
 
 echo "  --> 等待启动..."
-for i in $(seq 1 15); do
-    if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+for i in $(seq 1 20); do
+    if curl -sf http://localhost:8000/docs > /dev/null 2>&1; then
         echo "  ✅ 部署成功！"
         echo "  → API:   http://47.98.253.236:8000"
-        echo "  → 健康检查: http://47.98.253.236:8000/health"
         echo "  → 文档:  http://47.98.253.236:8000/docs"
         echo "  → 日志:  journalctl -u farm-manager -f"
         exit 0
@@ -80,7 +102,12 @@ for i in $(seq 1 15); do
 done
 
 echo "  ❌ 启动超时，最近日志："
-journalctl -u farm-manager -n 30 --no-pager
+journalctl -u farm-manager -n 50 --no-pager || true
+echo ""
+echo "  尝试直接运行查看错误："
+cd /root/workspace/farm-manager/backend
+source .venv/bin/activate
+python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app; print('Import OK')" 2>&1 || true
 exit 1
 REMOTE_SCRIPT
 

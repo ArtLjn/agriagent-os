@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { colors } from "../../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 
 const AI_EXAMPLES = [
   "买了50斤化肥花了120块",
@@ -22,6 +22,8 @@ interface AIHelperProps {
   aiLoading: boolean;
   onInputChange: (text: string) => void;
   onParse: () => void;
+  themeColor?: string;
+  themeMuted?: string;
 }
 
 export const AIHelper: React.FC<AIHelperProps> = ({
@@ -29,16 +31,18 @@ export const AIHelper: React.FC<AIHelperProps> = ({
   aiLoading,
   onInputChange,
   onParse,
+  themeColor = colors.primary,
+  themeMuted = colors.primaryMuted,
 }) => (
-  <View style={styles.aiCard}>
-    <View style={styles.aiHeader}>
-      <Icon name="robot-outline" size={20} color={colors.primary} />
-      <Text style={styles.aiTitle}>AI 帮记</Text>
+  <View style={styles.card}>
+    <View style={styles.header}>
+      <Icon name="text-recognition" size={20} color={colors.primary} />
+      <Text style={styles.title}>智能记账</Text>
     </View>
-    <Text style={styles.aiSubtitle}>用一句话描述，AI 自动识别类型和金额</Text>
-    <View style={styles.aiInputRow}>
+    <Text style={styles.subtitle}>说一句话，自动识别类型和金额</Text>
+    <View style={styles.inputRow}>
       <TextInput
-        style={styles.aiInput}
+        style={styles.input}
         placeholder="例如：买了50斤化肥花了120块"
         placeholderTextColor={colors.textTertiary}
         value={aiInput}
@@ -48,25 +52,25 @@ export const AIHelper: React.FC<AIHelperProps> = ({
         onSubmitEditing={onParse}
       />
       <TouchableOpacity
-        style={styles.aiButton}
+        style={styles.button}
         onPress={onParse}
         disabled={aiLoading}
       >
         {aiLoading ? (
           <ActivityIndicator size="small" color={colors.textInverse} />
         ) : (
-          <Icon name="lightning-bolt" size={20} color={colors.textInverse} />
+          <Icon name="arrow-right" size={20} color={colors.textInverse} />
         )}
       </TouchableOpacity>
     </View>
-    <View style={styles.aiExamplesRow}>
+    <View style={styles.examplesRow}>
       {AI_EXAMPLES.map((example, index) => (
         <TouchableOpacity
           key={index}
-          style={styles.aiExampleChip}
+          style={styles.exampleChip}
           onPress={() => onInputChange(example)}
         >
-          <Text style={styles.aiExampleText}>{example}</Text>
+          <Text style={styles.exampleText}>{example}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -74,68 +78,68 @@ export const AIHelper: React.FC<AIHelperProps> = ({
 );
 
 const styles = StyleSheet.create({
-  aiCard: {
-    backgroundColor: colors.primaryMuted,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  aiHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.xs,
-  },
-  aiTitle: {
-    fontSize: fontSize.md,
-    fontWeight: "700",
-    color: colors.primary,
-    marginLeft: spacing.sm,
-  },
-  aiSubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  aiInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  aiInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    fontSize: fontSize.md,
-    color: colors.text,
+  card: {
     backgroundColor: colors.surface,
-    marginRight: spacing.sm,
+    borderRadius: borderRadiusV2.xl,
+    padding: spacingV2.lg,
+    marginBottom: spacingV2.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  aiButton: {
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacingV2.xs,
+    gap: spacingV2.sm,
+  },
+  title: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  subtitle: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    marginBottom: spacingV2.md,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacingV2.md,
+    gap: spacingV2.sm,
+  },
+  input: {
+    flex: 1,
+    borderRadius: borderRadiusV2.lg,
+    padding: spacingV2.md,
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    backgroundColor: colors.surfaceMuted,
+  },
+  button: {
     width: 44,
     height: 44,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadiusV2.lg,
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
   },
-  aiExamplesRow: {
+  examplesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: spacingV2.xs,
   },
-  aiExampleChip: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+  exampleChip: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.full,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: 6,
   },
-  aiExampleText: {
-    fontSize: fontSize.sm,
+  exampleText: {
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
   },
 });

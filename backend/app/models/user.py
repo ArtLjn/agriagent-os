@@ -32,13 +32,3 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class UserOAuth(Base):
-    """第三方 OAuth 绑定（预留）。"""
-
-    __tablename__ = "user_oauth"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(36), nullable=False, index=True)
-    provider = Column(String(20), nullable=False)
-    provider_uid = Column(String(100), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())

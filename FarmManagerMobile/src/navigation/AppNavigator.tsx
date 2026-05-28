@@ -13,6 +13,7 @@ import { ProfitScreen } from "../screens/cost/ProfitScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
 import { AgentReportScreen } from "../screens/agent/AgentReportScreen";
 import { GuideScreen } from "../screens/settings/GuideScreen";
+import { SettingsScreen } from "../screens/settings/SettingsScreen";
 import { DebtListScreen } from "../screens/debt/DebtListScreen";
 import { DebtCreateScreen } from "../screens/debt/DebtCreateScreen";
 import { CropTemplateScreen } from "../screens/crop/CropTemplateScreen";
@@ -44,6 +45,7 @@ export type RootStackParamList = {
   DebtCreate: undefined;
   CropTemplate: undefined;
   WeatherDetail: undefined;
+  Settings: undefined;
   Login: undefined;
   Register: undefined;
 };
@@ -52,12 +54,13 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const screenOptions = {
   headerStyle: {
-    backgroundColor: colors.headerBg,
+    backgroundColor: colors.surface,
   },
-  headerTintColor: colors.headerText,
+  headerTintColor: colors.text,
   headerTitleStyle: {
     fontSize: 18,
     fontWeight: "700" as const,
+    color: colors.text,
   },
   headerShadowVisible: false,
   contentStyle: {
@@ -151,6 +154,11 @@ export const AppNavigator: React.FC = () => {
               name="Guide"
               component={GuideScreen}
               options={{ title: "使用指南" }}
+            />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="DebtList"

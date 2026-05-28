@@ -165,20 +165,19 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({
       )}
 
       {!loading && (advice || hasItems) && (
-        <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={onPress}
-            activeOpacity={0.7}
-          >
-            <Icon
-              name="chat-processing-outline"
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={styles.actionText}>继续咨询</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.actionBar}
+          onPress={onPress}
+          activeOpacity={0.7}
+        >
+          <Icon
+            name="chat-processing-outline"
+            size={16}
+            color={colors.primary}
+          />
+          <Text style={styles.actionText}>继续咨询</Text>
+          <Icon name="chevron-right" size={16} color={colors.primary} />
+        </TouchableOpacity>
       )}
     </LinearGradient>
   );
@@ -254,44 +253,41 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   itemsContainer: {
-    gap: spacingV2.sm,
+    gap: spacingV2.md,
   },
   itemCard: {
-    backgroundColor: "rgba(255,255,255,0.6)",
-    borderRadius: borderRadiusV2.lg,
-    padding: spacingV2.md,
+    backgroundColor: "rgba(255,255,255,0.55)",
+    borderRadius: borderRadiusV2.xl,
+    padding: spacingV2.lg,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
   },
   itemTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacingV2.xs,
+    marginBottom: 6,
   },
   itemTitle: {
     fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
+    letterSpacing: -0.3,
   },
   itemDetail: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   actionBar: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: spacingV2.md,
-    paddingTop: spacingV2.md,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.06)",
-  },
-  actionBtn: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: spacingV2.xs,
-    backgroundColor: "rgba(255,255,255,0.7)",
+    alignSelf: "flex-end",
+    marginTop: spacingV2.lg,
+    gap: 4,
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.md,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: "rgba(91,140,255,0.06)",
   },
   actionText: {
     fontSize: fontSizeV2.sm,

@@ -2,8 +2,11 @@ from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.models.agent_record import AgentRecord
+from app.models.cost import CostRecord
 from app.models.crop import CropTemplate
 from app.models.cycle import CropCycle, CycleStage
+from app.models.log import FarmLog
 from app.schemas.cycle import CropCycleCreate
 
 
@@ -154,10 +157,17 @@ def update_crop_cycle(
 
 
 def delete_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> None:
-    """删除茬口及其所有阶段。"""
+    """删除茬口及其所有阶段、关联的农事日志、成本记录和Agent记录。"""
     cycle = get_crop_cycle(db, cycle_id, farm_id)
     if not cycle:
         raise ValueError(f"茬口 {cycle_id} 不存在")
+
+    db.query(AgentRecord).filter(AgentRecord.cycle_id == cycle_id).update(
+        {"cycle_id": None}, synchronize_session=False
+    )
+    db.query(FarmLog).filter(FarmLog.cycle_id == cycle_id).delete(synchronize_session=False)
+    db.query(CostRecord).filter(CostRecord.cycle_id == cycle_id).delete(synchronize_session=False)
+    db.flush()
 
     for stage in cycle.stages:
         db.delete(stage)

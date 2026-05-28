@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import type { ReportListItem } from "../api/types";
 import { colors } from "../theme/colors";
-import { spacing, fontSize, borderRadius } from "../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 interface ReportListViewProps {
@@ -31,7 +31,7 @@ export const ReportListView: React.FC<ReportListViewProps> = ({
       onPress={onGenerate}
       activeOpacity={0.7}
     >
-      <Icon name="plus" size={20} color="#FFFFFF" />
+      <Icon name="plus" size={20} color={colors.primary} />
       <Text style={styles.generateBtnText}>生成新报告</Text>
     </TouchableOpacity>
     {reports.length === 0 ? (
@@ -89,85 +89,84 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   reportListContent: {
-    padding: spacing.md,
+    padding: spacingV2.lg,
   },
   generateBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
+    backgroundColor: colors.primaryMuted,
+    borderRadius: borderRadiusV2.xl,
+    paddingVertical: spacingV2.lg,
+    marginBottom: spacingV2.lg,
+    gap: spacingV2.sm,
   },
   generateBtnText: {
-    color: "#FFFFFF",
-    fontSize: fontSize.md,
-    fontWeight: "700",
+    color: colors.primary,
+    fontSize: fontSizeV2.md,
+    fontWeight: "600",
   },
   emptyReports: {
     alignItems: "center",
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacingV2.xxxl,
   },
   emptyReportsText: {
-    fontSize: fontSize.lg,
+    fontSize: fontSizeV2.lg,
     color: colors.textSecondary,
-    marginTop: spacing.md,
+    marginTop: spacingV2.lg,
     fontWeight: "600",
   },
   emptyReportsSub: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
-    marginTop: spacing.xs,
+    marginTop: spacingV2.xs,
   },
   reportItem: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.xl,
+    padding: spacingV2.lg,
+    marginBottom: spacingV2.md,
   },
   reportItemHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: spacing.sm,
+    alignItems: "center",
+    marginBottom: spacingV2.sm,
   },
   reportItemTypeBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     backgroundColor: colors.primaryMuted,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacingV2.sm,
     paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadiusV2.md,
   },
   reportItemType: {
-    fontSize: fontSize.sm,
-    fontWeight: "700",
+    fontSize: fontSizeV2.sm,
+    fontWeight: "600",
     color: colors.primary,
   },
   reportItemDate: {
-    fontSize: fontSize.xs,
+    fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
   },
   reportItemPreview: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   reportItemFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    marginTop: spacingV2.md,
+    paddingTop: spacingV2.md,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: "rgba(0,0,0,0.04)",
   },
   reportItemView: {
-    fontSize: fontSize.xs,
+    fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
   },
 });

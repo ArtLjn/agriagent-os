@@ -92,7 +92,7 @@ export const WeatherCardV2: React.FC<WeatherCardV2Props> = ({ data }) => {
     const isToday = i === 0;
     return {
       date: isToday ? "今天" : `${d.getMonth() + 1}/${d.getDate()}`,
-      weekday: isToday ? "今天" : WEEKDAYS[d.getDay()],
+      weekday: WEEKDAYS[d.getDay()],
       maxTemp: Math.round(temperature_2m_max[i]),
       minTemp: Math.round(temperature_2m_min[i]),
       precipitation: precipitation_sum[i],

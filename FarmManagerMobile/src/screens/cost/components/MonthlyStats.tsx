@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import dayjs from "dayjs";
 import { colors } from "../../../theme/colors";
-import { spacing, fontSize } from "../../../theme/spacing";
+import { spacingV2, fontSizeV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 interface MonthlyStatsProps {
@@ -23,9 +23,8 @@ export const MonthlyStats: React.FC<MonthlyStatsProps> = ({
         style={styles.monthButton}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Icon name="chevron-left" size={24} color={colors.primary} />
+        <Icon name="chevron-left" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
-      <Icon name="calendar-month" size={20} color={colors.primary} />
       <Text style={styles.monthText}>
         {dayjs(selectedMonth).format("YYYY年M月")}
       </Text>
@@ -34,7 +33,7 @@ export const MonthlyStats: React.FC<MonthlyStatsProps> = ({
         style={styles.monthButton}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Icon name="chevron-right" size={24} color={colors.primary} />
+        <Icon name="chevron-right" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
     </View>
   </View>
@@ -42,26 +41,30 @@ export const MonthlyStats: React.FC<MonthlyStatsProps> = ({
 
 const styles = StyleSheet.create({
   statsSection: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.sm,
+    paddingBottom: spacingV2.sm,
   },
   monthSelector: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.sm,
+    gap: spacingV2.sm,
   },
   monthButton: {
-    padding: spacing.md,
-    minWidth: 48,
-    minHeight: 48,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceMuted,
     justifyContent: "center",
     alignItems: "center",
   },
   monthText: {
-    fontSize: fontSize.lg,
+    fontSize: fontSizeV2.lg,
     fontWeight: "700",
-    color: colors.primary,
+    color: colors.text,
+    letterSpacing: -0.3,
+    minWidth: 120,
+    textAlign: "center",
   },
 });

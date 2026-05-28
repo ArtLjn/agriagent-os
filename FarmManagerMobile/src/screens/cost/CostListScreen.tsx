@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -15,19 +16,10 @@ import type { CostRecord } from "../../api/types";
 import { EmptyState } from "../../components/EmptyState";
 import { Loading } from "../../components/Loading";
 import { colors } from "../../theme/colors";
-import {
-  spacing,
-  fontSize,
-  borderRadius,
-  spacingV2,
-  fontSizeV2,
-  borderRadiusV2,
-} from "../../theme/spacing";
-import { shadowV2 } from "../../theme/designTokens";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { MonthlyStats } from "./components/MonthlyStats";
-import { CategoryFilter } from "./components/CategoryFilter";
 import { RecordItem } from "./components/RecordItem";
 import { RecordDetailModal } from "./components/RecordDetailModal";
 
@@ -43,37 +35,52 @@ const AssetCard: React.FC<{ income: number; cost: number }> = ({
   cost,
 }) => {
   const total = income - cost;
+  const isPositive = total >= 0;
   return (
-    <View style={assetStyles.container}>
-      <View style={assetStyles.card}>
+    <View style={assetStyles.card}>
+      <View style={assetStyles.mainSection}>
         <Text style={assetStyles.label}>本月结余</Text>
         <Text
           style={[
-            assetStyles.amount,
-            { color: total >= 0 ? colors.income : colors.expense },
+            assetStyles.total,
+            { color: isPositive ? colors.income : colors.expense },
           ]}
         >
-          {total >= 0 ? "+" : ""}
+          {isPositive ? "+" : ""}
           {total.toFixed(2)}
         </Text>
       </View>
-      <View style={[assetStyles.subCard, { backgroundColor: colors.incomeBg }]}>
-        <Text style={[assetStyles.subLabel, { color: colors.income }]}>
-          收入
-        </Text>
-        <Text style={[assetStyles.subAmount, { color: colors.income }]}>
-          {income.toFixed(2)}
-        </Text>
-      </View>
-      <View
-        style={[assetStyles.subCard, { backgroundColor: colors.expenseBg }]}
-      >
-        <Text style={[assetStyles.subLabel, { color: colors.expense }]}>
-          支出
-        </Text>
-        <Text style={[assetStyles.subAmount, { color: colors.expense }]}>
-          {cost.toFixed(2)}
-        </Text>
+      <View style={assetStyles.divider} />
+      <View style={assetStyles.subRow}>
+        <View style={assetStyles.subItem}>
+          <View style={assetStyles.subItemInner}>
+            <View
+              style={[
+                assetStyles.dot,
+                { backgroundColor: colors.income },
+              ]}
+            />
+            <Text style={assetStyles.subLabel}>收入</Text>
+          </View>
+          <Text style={[assetStyles.subAmount, { color: colors.income }]}>
+            +{income.toFixed(2)}
+          </Text>
+        </View>
+        <View style={assetStyles.subDivider} />
+        <View style={assetStyles.subItem}>
+          <View style={assetStyles.subItemInner}>
+            <View
+              style={[
+                assetStyles.dot,
+                { backgroundColor: colors.expense },
+              ]}
+            />
+            <Text style={assetStyles.subLabel}>支出</Text>
+          </View>
+          <Text style={[assetStyles.subAmount, { color: colors.expense }]}>
+            -{cost.toFixed(2)}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -112,24 +119,6 @@ export const CostListScreen: React.FC = () => {
     return Array.from(categories);
   }, [records]);
 
-  const categoryStats = useMemo(() => {
-    const monthRecords = records.filter((r) =>
-      r.record_date.startsWith(currentMonth)
-    );
-    const stats: Record<string, { cost: number; income: number }> = {};
-    for (const r of monthRecords) {
-      if (!stats[r.category]) {
-        stats[r.category] = { cost: 0, income: 0 };
-      }
-      const val = parseFloat(r.amount);
-      if (r.record_type === "cost") {
-        stats[r.category].cost += val;
-      } else {
-        stats[r.category].income += val;
-      }
-    }
-    return stats;
-  }, [records, currentMonth]);
 
   const filteredRecords = useMemo(() => {
     let result = records.filter((r) => r.record_date.startsWith(currentMonth));
@@ -183,34 +172,6 @@ export const CostListScreen: React.FC = () => {
     ]);
   };
 
-  const renderFilter = () => (
-    <View style={styles.filterRow}>
-      {(
-        [
-          { key: "all", label: "全部" },
-          { key: "cost", label: "支出" },
-          { key: "income", label: "收入" },
-        ] as { key: FilterType; label: string }[]
-      ).map((item) => {
-        const isActive = filter === item.key;
-        return (
-          <TouchableOpacity
-            key={item.key}
-            style={[styles.filterBtn, isActive && styles.filterBtnActive]}
-            onPress={() => setFilter(item.key)}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[styles.filterText, isActive && styles.filterTextActive]}
-            >
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-
   if (loading && records.length === 0) {
     return <Loading message="加载账单中..." />;
   }
@@ -246,18 +207,77 @@ export const CostListScreen: React.FC = () => {
       {/* Asset Summary */}
       <AssetCard income={stats.income} cost={stats.cost} />
 
-      {/* Category Filter */}
-      {categoryList.length > 0 && (
-        <CategoryFilter
-          categoryList={categoryList}
-          categoryStats={categoryStats}
-          selectedCategory={categoryFilter}
-          onSelectCategory={setCategoryFilter}
-        />
-      )}
+      {/* Filters: Type + Category in one row */}
+      <View style={styles.filterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          {/* Type filters */}
+          {(
+            [
+              { key: "all", label: "全部" },
+              { key: "cost", label: "支出" },
+              { key: "income", label: "收入" },
+            ] as { key: FilterType; label: string }[]
+          ).map((item) => {
+            const isActive = filter === item.key;
+            return (
+              <TouchableOpacity
+                key={`type-${item.key}`}
+                style={[
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
+                ]}
+                onPress={() => setFilter(item.key)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isActive && styles.filterChipTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
 
-      {/* Type Filter */}
-      {renderFilter()}
+          {/* Divider */}
+          {categoryList.length > 0 && (
+            <View style={styles.filterDivider} />
+          )}
+
+          {/* Category filters */}
+          {categoryList.map((cat) => {
+            const isActive = categoryFilter === cat;
+            return (
+              <TouchableOpacity
+                key={`cat-${cat}`}
+                style={[
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
+                ]}
+                onPress={() =>
+                  setCategoryFilter(isActive ? null : cat)
+                }
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isActive && styles.filterChipTextActive,
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* List */}
       <FlatList
@@ -311,36 +331,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  filterRow: {
-    flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
+  filterSection: {
+    marginBottom: spacingV2.sm,
   },
-  filterBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+  filterScrollContent: {
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.xs,
+    gap: spacingV2.xs,
+    alignItems: "center",
   },
-  filterBtnActive: {
+  filterChip: {
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: 6,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.surfaceMuted,
+  },
+  filterChipActive: {
     backgroundColor: colors.primaryMuted,
-    borderColor: colors.primary,
   },
-  filterText: {
-    fontSize: fontSize.sm,
+  filterChipText: {
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     fontWeight: "500",
   },
-  filterTextActive: {
+  filterChipTextActive: {
     color: colors.primary,
-    fontWeight: "700",
+    fontWeight: "600",
+  },
+  filterDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: colors.border,
+    marginHorizontal: spacingV2.xs,
   },
   listContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.sm,
+    paddingBottom: spacingV2.xxxl,
   },
   listEmpty: {
     flex: 1,
@@ -349,68 +376,103 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     alignItems: "center",
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacingV2.xxxl,
   },
   emptyText: {
-    fontSize: fontSize.lg,
+    fontSize: fontSizeV2.lg,
     color: colors.textSecondary,
     fontWeight: "600",
-    marginTop: spacing.md,
+    marginTop: spacingV2.lg,
   },
   emptySubtext: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
-    marginTop: spacing.xs,
+    marginTop: spacingV2.xs,
   },
   fab: {
     position: "absolute",
     right: spacingV2.lg,
     bottom: spacingV2.lg,
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: borderRadiusV2.full,
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
-    ...shadowV2.float,
+    shadowColor: "#5B8CFF",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
 });
 
 const assetStyles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    gap: spacingV2.sm,
-    paddingHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.md,
-  },
   card: {
-    flex: 1.5,
+    marginHorizontal: spacingV2.lg,
+    marginBottom: spacingV2.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
+    overflow: "hidden",
+  },
+  mainSection: {
     padding: spacingV2.lg,
-    ...shadowV2.light,
+    paddingBottom: spacingV2.md,
+    alignItems: "center",
   },
   label: {
-    fontSize: fontSizeV2.xs,
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
+    fontWeight: "500",
     marginBottom: spacingV2.xs,
   },
-  amount: {
-    fontSize: fontSizeV2.lg,
-    fontWeight: "800",
+  total: {
+    fontSize: fontSizeV2.xxxl,
+    fontWeight: "700",
+    letterSpacing: -1,
   },
-  subCard: {
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(0,0,0,0.04)",
+    marginHorizontal: spacingV2.lg,
+  },
+  subRow: {
+    flexDirection: "row",
+    paddingVertical: spacingV2.md,
+    paddingHorizontal: spacingV2.lg,
+  },
+  subItem: {
     flex: 1,
-    borderRadius: borderRadiusV2.xxl,
-    padding: spacingV2.md,
-    justifyContent: "center",
+    alignItems: "center",
+  },
+  subItemInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.xs,
+    marginBottom: 2,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  subDivider: {
+    width: 1,
+    backgroundColor: "rgba(0,0,0,0.06)",
   },
   subLabel: {
     fontSize: fontSizeV2.xs,
-    marginBottom: spacingV2.xs,
+    color: colors.textTertiary,
+    fontWeight: "500",
   },
   subAmount: {
-    fontSize: fontSizeV2.lg,
-    fontWeight: "700",
+    fontSize: fontSizeV2.md,
+    fontWeight: "600",
+    letterSpacing: -0.2,
   },
 });
