@@ -62,7 +62,7 @@ class TestChatWithAgent:
 
         assert result.reply == "回复内容"
         # 验证 get_or_create_conversation 被调用
-        mock_get_conv.assert_called_once_with(mock_db, 1, "sess-123")
+        mock_get_conv.assert_called_once_with(mock_db, 1, "sess-123", user_id=None)
         # 验证 save_message 被调用 2 次：user + assistant
         assert mock_save_msg.call_count == 2
         mock_save_msg.assert_any_call(mock_db, 42, "user", "你好")
@@ -158,16 +158,13 @@ class TestStreamChatWithAgent:
     @patch("app.services.agent_service.stream_advisor")
     @patch("app.services.agent_service.save_message")
     @patch("app.services.agent_service.get_or_create_conversation")
-    @patch("app.services.agent_service._try_skillify_route", new_callable=AsyncMock)
     async def test_stream_with_session_id_saves_messages(
         self,
-        mock_skillify: AsyncMock,
         mock_get_conv: MagicMock,
         mock_save_msg: MagicMock,
         mock_stream: MagicMock,
     ) -> None:
         """验证流式对话也保存消息到会话。"""
-        mock_skillify.return_value = None
         mock_conv = MagicMock()
         mock_conv.id = 55
         mock_get_conv.return_value = mock_conv
@@ -188,9 +185,8 @@ class TestStreamChatWithAgent:
             chunks.append(chunk)
 
         assert chunks == ["chunk1", "chunk2"]
-        # 验证保存 user 消息和 assistant 消息
+        # 验证保存 user 消息（assistant 由调用方 agent.py 保存）
         mock_save_msg.assert_any_call(mock_db, 55, "user", "问题")
-        mock_save_msg.assert_any_call(mock_db, 55, "assistant", "chunk1chunk2")
 
 
 class TestGetDailyAdvice:
