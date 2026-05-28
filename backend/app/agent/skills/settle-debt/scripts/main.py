@@ -24,8 +24,9 @@ class SettleDebtSkill(Skill):
 
     def description(self) -> str:
         return (
-            "还赊账，结清欠款。当用户说还钱、还账、还了XX时使用。"
-            "触发词: 还钱、还账、还款、清账"
+            "还赊账、结清欠款。当用户说还钱、还账、还款、清账、"
+            "还了老王多少钱、把欠的账结了时，调用此工具。"
+            "需要提供债权人名称，可选提供还款金额。"
         )
 
     def parameters_schema(self) -> dict:
