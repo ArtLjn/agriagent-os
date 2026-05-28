@@ -69,7 +69,7 @@ class CreateCropTemplateSkill(Skill):
                 stage_names = "→".join(s.name for s in sorted(existing.stages, key=lambda s: s.order_index))
                 return SkillResult(
                     status=ResultStatus.SUCCESS,
-                    reply=f"{crop_name}模板已存在，阶段：{stage_names}。可以直接建茬口了。",
+                    reply=f"📋 {crop_name}模板已存在，阶段：{stage_names}。可以直接建茬口了。",
                 )
 
             stages = await self._generate_stages(context, crop_name)
@@ -87,10 +87,12 @@ class CreateCropTemplateSkill(Skill):
             created = crop_service.create_crop_template(db, template_create, farm_id=farm_id)
 
             stage_lines = [
-                f"  {s.name}（{s.duration_days}天）{s.key_tasks or ''}"
-                for s in sorted(created.stages, key=lambda s: s.order_index)
+                f"{i+1}. {s.name}（{s.duration_days}天）"
+                + (f"— {s.key_tasks}" if s.key_tasks else "")
+                for i, s in enumerate(sorted(created.stages, key=lambda s: s.order_index))
             ]
-            reply = f"已创建{crop_name}模板，生长阶段：\n" + "\n".join(stage_lines)
+            stages_text = "\n".join(stage_lines)
+            reply = f"✅ {crop_name}模板已创建！\n\n📋 **生长阶段**\n{stages_text}"
             return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
         except Exception as exc:
             logger.error("创建作物模板失败 | crop=%s | error=%s", crop_name, exc)
