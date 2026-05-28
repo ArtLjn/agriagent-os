@@ -1,8 +1,8 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest } from './types';
+import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse } from './types';
 
-const API_BASE_URL = 'http://172.16.57.244:8099';
+const API_BASE_URL = 'http://10.167.110.141:8099';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -93,6 +93,22 @@ export const cycleApi = {
     start_date: string;
     field_name?: string;
   }) => apiClient.post('/cycles', data),
+  parseCycle: (description: string) => {
+    const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+      /[xy]/g,
+      (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      }
+    );
+    return apiClient.post<CycleParseResponse>(
+      '/cycles/parse',
+      { description },
+      {
+        headers: { 'X-Idempotency-Key': idempotencyKey },
+      }
+    );
+  },
 };
 
 // 农事日志

@@ -13,7 +13,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useCycleStore } from "../../stores/cycleStore";
 import { useAuthStore } from "../../stores/authStore";
 import { CITIES } from "../../data/cities";
-import { WeatherCardV2 } from "../../components/WeatherCardV2";
+import { WeatherCardApple } from "../../components/WeatherCardApple";
 import { AdviceCard } from "../../components/AdviceCard";
 import { CityPicker } from "../../components/CityPicker";
 import { FadeInSlideUp } from "../../components/animations/FadeInSlideUp";
@@ -42,14 +42,14 @@ const QUICK_ACTIONS = [
     icon: "sprout",
     iconBg: "#EDFDF3",
     iconColor: "#3B8B5C",
-    route: "CycleCreate",
+    route: "CycleList",
   },
   {
     label: "作物模板",
     icon: "seed",
     iconBg: "#FFF8E8",
     iconColor: "#B48A3E",
-    route: "CropTemplateCreate",
+    route: "CropTemplate",
   },
 ];
 
@@ -176,7 +176,7 @@ export const HomeScreen: React.FC = () => {
 
         {/* Weather Card */}
         <FadeInSlideUp delay={80} style={styles.section}>
-          <WeatherCardV2 data={weather} />
+          <WeatherCardApple data={weather} cityName={cityName} />
         </FadeInSlideUp>
 
         {/* AI Briefing Card */}

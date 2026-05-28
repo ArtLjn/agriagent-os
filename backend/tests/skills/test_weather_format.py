@@ -1,9 +1,6 @@
 """天气预报格式化测试 — 验证 Markdown 表格输出。"""
 
 import importlib
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 _weather_mod = importlib.import_module(
     "app.agent.skills.weather.scripts.main"
