@@ -94,3 +94,89 @@ class TestFunctionCallingE2E:
 
         last_msg = result["messages"][-1]
         assert last_msg.content == "你好老李，有啥事？"
+
+    @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.get_llm")
+    @patch("app.agent.graph.farm_context_service.build_summary")
+    @patch("app.agent.graph.SessionLocal")
+    def test_pre_filter_reduces_tools_before_binding(
+        self, mock_session, mock_summary, mock_get_llm, mock_get_tools
+    ):
+        """天气查询应只绑定 get_weather_forecast，不应绑定其他工具。"""
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
+            display_name="老李"
+        )
+        mock_session.return_value = mock_db
+        mock_summary.return_value = "当前无种植计划"
+
+        weather_tool = MagicMock()
+        weather_tool.name = "get_weather_forecast"
+        cost_tool = MagicMock()
+        cost_tool.name = "get_cost_summary"
+        record_tool = MagicMock()
+        record_tool.name = "create_cost_record"
+        mock_get_tools.return_value = [weather_tool, cost_tool, record_tool]
+
+        mock_llm = MagicMock()
+        mock_llm.bind_tools.return_value = mock_llm
+        mock_llm.invoke.return_value = AIMessage(content="明天苏州晴")
+        mock_get_llm.return_value = mock_llm
+
+        graph = compile_advisor_graph()
+        asyncio.run(
+            graph.ainvoke({"messages": [HumanMessage(content="明天苏州什么天气")]})
+        )
+
+        mock_llm.bind_tools.assert_called_once()
+        bound_tools = mock_llm.bind_tools.call_args[0][0]
+        bound_names = [t.name for t in bound_tools]
+        assert "get_weather_forecast" in bound_names
+        assert "create_cost_record" not in bound_names
+        assert "get_cost_summary" not in bound_names
+
+    @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.get_llm")
+    @patch("app.agent.graph.farm_context_service.build_summary")
+    @patch("app.agent.graph.SessionLocal")
+    def test_multi_turn_bypasses_pre_filter(
+        self, mock_session, mock_summary, mock_get_llm, mock_get_tools
+    ):
+        """多轮 tool call 场景下，第二轮应绑定全量工具。"""
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
+            display_name="老李"
+        )
+        mock_session.return_value = mock_db
+        mock_summary.return_value = "当前无种植计划"
+
+        weather_tool = MagicMock()
+        weather_tool.name = "get_weather_forecast"
+        cost_tool = MagicMock()
+        cost_tool.name = "get_cost_summary"
+        mock_get_tools.return_value = [weather_tool, cost_tool]
+
+        tool_call_msg = AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "get_weather_forecast", "args": {}, "id": "tc1"}
+            ],
+        )
+        final_msg = AIMessage(content="天气晴，成本方面还不错")
+
+        mock_llm = MagicMock()
+        mock_llm.bind_tools.return_value = mock_llm
+        mock_llm.invoke.side_effect = [tool_call_msg, final_msg]
+        mock_get_llm.return_value = mock_llm
+
+        graph = compile_advisor_graph()
+        asyncio.run(
+            graph.ainvoke({"messages": [HumanMessage(content="看看天气")]})
+        )
+
+        bind_calls = mock_llm.bind_tools.call_args_list
+        assert len(bind_calls) == 2
+        first_bound = [t.name for t in bind_calls[0][0][0]]
+        second_bound = [t.name for t in bind_calls[1][0][0]]
+        assert "get_weather_forecast" in first_bound
+        assert len(second_bound) == 2

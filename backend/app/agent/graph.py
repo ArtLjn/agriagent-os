@@ -26,6 +26,7 @@ from app.models.user import User
 from app.services import farm_context_service
 from app.services.quota_service import check_quota
 from app.agent.skills import get_langchain_tools
+from app.agent.tool_selector import select_tools
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,14 @@ def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     tools = get_langchain_tools()
     raw_llm = get_llm()
-    llm = raw_llm.bind_tools(tools)
+    has_tool_results = any(isinstance(m, ToolMessage) for m in state["messages"])
+    if has_tool_results:
+        selected_tools = tools
+    else:
+        user_msg = _find_last_human_message(state["messages"])
+        selected_names = select_tools(user_msg, tools)
+        selected_tools = [t for t in tools if t.name in selected_names]
+    llm = raw_llm.bind_tools(selected_tools)
     model_name = getattr(raw_llm, "model_name", "unknown")
     _round_idx = increment_round()  # 副作用：轮次 +1
     collector = get_collector()
