@@ -31,6 +31,24 @@ _SKILL_DISPLAY: dict[str, str] = {
     "update_crop_stage": "更新阶段",
 }
 
+_SKILL_EMOJI: dict[str, str] = {
+    "create_cost_record": "💰",
+    "create_crop_cycle": "🌱",
+    "create_crop_template": "📋",
+    "log_farm_activity": "📝",
+    "settle_debt": "💳",
+    "update_crop_stage": "🔄",
+}
+
+_SKILL_PARAM_FORMAT: dict[str, list[str]] = {
+    "create_cost_record": ["category", "amount", "record_type"],
+    "create_crop_cycle": ["crop_name", "season"],
+    "create_crop_template": ["crop_name"],
+    "log_farm_activity": ["operation_type"],
+    "settle_debt": ["counterparty", "amount"],
+    "update_crop_stage": ["stage_name"],
+}
+
 _TIMEOUT_SECONDS = 300  # 5分钟超时
 
 logger = logging.getLogger(__name__)
@@ -106,15 +124,26 @@ PENDING_MARKER = "[PENDING_ACTION]"
 
 
 def build_confirm_message(skill_name: str, params: dict) -> str:
+    emoji = _SKILL_EMOJI.get(skill_name, "❓")
     action = _SKILL_DISPLAY.get(skill_name, skill_name)
+
+    param_keys = _SKILL_PARAM_FORMAT.get(skill_name, list(params.keys()))
     parts = []
-    for k, v in params.items():
+    for k in param_keys:
+        v = params.get(k)
         if v is not None:
-            parts.append(f"{k}={v}")
-    params_str = "、".join(parts) if parts else ""
-    if params_str:
-        return f"要帮你{action}：{params_str}，确认吗？"
-    return f"要帮你{action}，确认吗？"
+            if k == "amount":
+                parts.append(f"{v}元")
+            elif k == "record_type":
+                label = "收入" if v == "income" else "支出"
+                parts.append(label)
+            else:
+                parts.append(str(v))
+
+    detail = " ".join(parts) if parts else ""
+    if detail:
+        return f"{emoji} 确认{action}：{detail}，确认吗？"
+    return f"{emoji} 确认{action}，确认吗？"
 
 
 def is_pending_tool_message(message) -> bool:

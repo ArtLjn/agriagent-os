@@ -349,3 +349,69 @@ class TestGraphToolNodeIntegration:
 
         # 不应存储 pending action
         assert get_pending(farm_id=1) is None
+
+
+class TestBuildConfirmMessageFormat:
+    """测试 build_confirm_message 的 emoji + 可读格式。"""
+
+    @pytest.mark.parametrize(
+        "skill_name,params,expected_parts",
+        [
+            (
+                "create_cost_record",
+                {"amount": 50, "category": "化肥", "record_type": "cost"},
+                ["💰", "化肥", "50元", "支出"],
+            ),
+            (
+                "create_crop_cycle",
+                {"crop_name": "西瓜", "season": "春季"},
+                ["🌱", "西瓜", "春季"],
+            ),
+            (
+                "create_crop_template",
+                {"crop_name": "玉米"},
+                ["📋", "玉米"],
+            ),
+            (
+                "log_farm_activity",
+                {"operation_type": "浇水"},
+                ["📝", "浇水"],
+            ),
+            (
+                "settle_debt",
+                {"counterparty": "老王", "amount": 500},
+                ["💳", "老王", "500元"],
+            ),
+            (
+                "update_crop_stage",
+                {"stage_name": "开花期"},
+                ["🔄", "开花期"],
+            ),
+        ],
+    )
+    def test_confirm_message_has_emoji_and_readable_params(
+        self, skill_name, params, expected_parts
+    ):
+        """确认文案包含 emoji 和可读参数。"""
+        from app.infra.pending_actions import build_confirm_message
+
+        msg = build_confirm_message(skill_name, params)
+        for part in expected_parts:
+            assert part in msg, f"expected '{part}' in '{msg}'"
+
+    def test_confirm_message_ends_with_question(self):
+        """确认文案以问号结尾。"""
+        from app.infra.pending_actions import build_confirm_message
+
+        msg = build_confirm_message(
+            "create_cost_record",
+            {"amount": 50, "category": "化肥", "record_type": "cost"},
+        )
+        assert msg.rstrip("。").endswith("确认吗？") or msg.endswith("？")
+
+    def test_unknown_skill_uses_default_format(self):
+        """未知 skill 使用默认格式。"""
+        from app.infra.pending_actions import build_confirm_message
+
+        msg = build_confirm_message("unknown_skill", {"foo": "bar"})
+        assert "确认" in msg
