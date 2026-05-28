@@ -17,6 +17,7 @@ interface DatePickerModalProps {
   date: Date;
   onConfirm: (date: Date) => void;
   onCancel: () => void;
+  disableFuture?: boolean;
 }
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -27,6 +28,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   date,
   onConfirm,
   onCancel,
+  disableFuture = true,
 }) => {
   const [viewMonth, setViewMonth] = useState(dayjs(date));
   const [selectedDate, setSelectedDate] = useState(dayjs(date));
@@ -82,13 +84,14 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const handlePrevMonth = () => setViewMonth(viewMonth.subtract(1, "month"));
   const handleNextMonth = () => {
     const next = viewMonth.add(1, "month");
-    if (!next.isAfter(today, "month")) {
-      setViewMonth(next);
+    if (disableFuture && next.isAfter(today, "month")) {
+      return;
     }
+    setViewMonth(next);
   };
 
   const handleDayPress = (d: dayjs.Dayjs) => {
-    if (d.isAfter(today, "day")) {
+    if (disableFuture && d.isAfter(today, "day")) {
       return;
     }
     setSelectedDate(d);
@@ -137,7 +140,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
             {days.map((item, idx) => {
               const isSelected = selectedDate.isSame(item.date, "day");
               const isToday = today.isSame(item.date, "day");
-              const isFuture = item.date.isAfter(today, "day");
+              const isFuture = disableFuture && item.date.isAfter(today, "day");
               return (
                 <TouchableOpacity
                   key={idx}

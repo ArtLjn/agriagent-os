@@ -21,6 +21,7 @@ import { CropTemplateCreateScreen } from "../screens/crop/CropTemplateCreateScre
 import { WeatherDetailScreen } from "../screens/weather/WeatherDetailScreen";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { RegisterScreen } from "../screens/auth/RegisterScreen";
+import { WelcomeScreen } from "../screens/auth/WelcomeScreen";
 import { useAuthStore, setOnUnauthorized } from "../stores/authStore";
 import { colors } from "../theme/colors";
 
@@ -48,6 +49,7 @@ export type RootStackParamList = {
   CropTemplateCreate: undefined;
   WeatherDetail: undefined;
   Settings: undefined;
+  Welcome: undefined;
   Login: undefined;
   Register: undefined;
 };
@@ -93,7 +95,7 @@ export const AppNavigator: React.FC = () => {
         if (ref) {
           setOnUnauthorized(() => {
             try {
-              ref.reset({ index: 0, routes: [{ name: "Login" }] });
+              ref.reset({ index: 0, routes: [{ name: "Welcome" }] });
             } catch {}
           });
         }
@@ -191,13 +193,23 @@ export const AppNavigator: React.FC = () => {
         ) : (
           <>
             <Stack.Screen
+              name="Welcome"
+              component={(props: any) => (
+                <WelcomeScreen
+                  onNavigateToLogin={() => props.navigation.navigate("Login")}
+                  onNavigateToRegister={() => props.navigation.navigate("Register")}
+                />
+              )}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="Login"
               component={(props: any) => (
                 <LoginScreen
                   onNavigateToRegister={() => props.navigation.navigate("Register")}
                 />
               )}
-              options={{ headerShown: false }}
+              options={{ headerShown: false, animation: "slide_from_bottom" }}
             />
             <Stack.Screen
               name="Register"
@@ -206,7 +218,7 @@ export const AppNavigator: React.FC = () => {
                   onNavigateToLogin={() => props.navigation.navigate("Login")}
                 />
               )}
-              options={{ headerShown: false }}
+              options={{ headerShown: false, animation: "slide_from_bottom" }}
             />
           </>
         )}

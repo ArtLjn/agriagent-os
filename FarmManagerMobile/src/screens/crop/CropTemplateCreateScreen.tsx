@@ -21,6 +21,14 @@ import type { RootStackParamList } from "../../navigation/AppNavigator";
 
 const EXAMPLE_CROPS = ["番茄", "西瓜", "玉米", "黄瓜", "辣椒"];
 
+const EXAMPLE_PROMPTS: Record<string, string> = {
+  番茄: "我要种番茄，大概100天成熟",
+  西瓜: "我要种8424西瓜，大概90天成熟",
+  玉米: "我要种甜玉米，大概80天成熟",
+  黄瓜: "我要种黄瓜，大概60天成熟",
+  辣椒: "我要种辣椒，大概120天成熟",
+};
+
 type NavigationProp = NativeStackNavigationProp<
   RootStackParamList,
   "CropTemplateCreate"
@@ -139,14 +147,23 @@ export const CropTemplateCreateScreen: React.FC = () => {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* 智能输入区 */}
-        <View style={styles.aiCard}>
-          <Text style={styles.aiTitle}>描述你想种的作物</Text>
-          <Text style={styles.aiSubtitle}>
-            用自然语言描述，AI 自动生成生长阶段
-          </Text>
-          <View style={styles.aiInputRow}>
+        {/* AI 智能输入区 */}
+        <View style={styles.aiSection}>
+          <View style={styles.aiHeader}>
+            <View style={styles.aiIconWrap}>
+              <Icon name="auto-fix" size={18} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aiTitle}>AI 智能生成</Text>
+              <Text style={styles.aiSubtitle}>
+                描述作物，自动生成生长阶段
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.aiInputWrap}>
             <TextInput
               style={styles.aiInput}
               placeholder="例如：我要种8424西瓜，大概需要90天成熟"
@@ -154,6 +171,8 @@ export const CropTemplateCreateScreen: React.FC = () => {
               value={aiInput}
               onChangeText={setAiInput}
               multiline
+              numberOfLines={2}
+              textAlignVertical="top"
               maxLength={200}
             />
             <TouchableOpacity
@@ -163,37 +182,45 @@ export const CropTemplateCreateScreen: React.FC = () => {
               ]}
               onPress={handleAiParse}
               disabled={aiLoading || !aiInput.trim()}
+              activeOpacity={0.8}
             >
               {aiLoading ? (
-                <ActivityIndicator size="small" color={colors.textInverse} />
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.aiParseBtnText}>智能生成</Text>
+                <>
+                  <Icon
+                    name="lightning-bolt"
+                    size={14}
+                    color="#fff"
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={styles.aiParseBtnText}>生成</Text>
+                </>
               )}
             </TouchableOpacity>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.examplesContainer}
-          >
+
+          <View style={styles.examplesRow}>
             {EXAMPLE_CROPS.map((crop) => (
               <TouchableOpacity
                 key={crop}
                 style={styles.exampleChip}
-                onPress={() =>
-                  setAiInput(`我要种${crop}，请帮我生成生长阶段`)
-                }
+                onPress={() => setAiInput(EXAMPLE_PROMPTS[crop])}
+                activeOpacity={0.7}
               >
                 <Text style={styles.exampleText}>{crop}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
         </View>
 
-        {/* 表单区 */}
-        <View style={styles.formCard}>
+        {/* 分隔线 */}
+        <View style={styles.divider} />
+
+        {/* 基本信息 */}
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>基本信息</Text>
-          <View style={styles.field}>
+          <View style={styles.fieldRow}>
             <Text style={styles.fieldLabel}>
               作物名称 <Text style={styles.required}>*</Text>
             </Text>
@@ -205,11 +232,11 @@ export const CropTemplateCreateScreen: React.FC = () => {
               onChangeText={setName}
             />
           </View>
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>品种（可选）</Text>
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>品种</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="如：8424"
+              placeholder="如：8424（可选）"
               placeholderTextColor={colors.textTertiary}
               value={variety}
               onChangeText={setVariety}
@@ -217,22 +244,40 @@ export const CropTemplateCreateScreen: React.FC = () => {
           </View>
         </View>
 
-        <View style={styles.formCard}>
-          <View style={styles.stageHeader}>
-            <Text style={styles.sectionTitle}>生长阶段</Text>
+        {/* 分隔线 */}
+        <View style={styles.divider} />
+
+        {/* 生长阶段 */}
+        <View style={styles.section}>
+          <View style={styles.stageSectionHeader}>
+            <Text style={styles.sectionTitle}>
+              生长阶段{" "}
+              <Text style={styles.stageCount}>
+                {stages.length > 0 ? `(${stages.length})` : ""}
+              </Text>
+            </Text>
             <TouchableOpacity
               style={styles.addStageBtn}
               onPress={handleAddStage}
+              activeOpacity={0.8}
             >
-              <Icon name="plus" size={18} color={colors.primary} />
-              <Text style={styles.addStageText}>添加阶段</Text>
+              <Icon name="plus" size={16} color={colors.primary} />
+              <Text style={styles.addStageText}>添加</Text>
             </TouchableOpacity>
           </View>
 
           {stages.length === 0 && (
             <View style={styles.emptyStage}>
-              <Text style={styles.emptyStageText}>
-                点击上方按钮添加生长阶段
+              <View style={styles.emptyIconWrap}>
+                <Icon
+                  name="sprout"
+                  size={32}
+                  color={colors.textTertiary}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>还没有生长阶段</Text>
+              <Text style={styles.emptySubtitle}>
+                点击上方"添加"按钮，或试试 AI 智能生成
               </Text>
             </View>
           )}
@@ -240,53 +285,61 @@ export const CropTemplateCreateScreen: React.FC = () => {
           {stages.map((stage, index) => (
             <View key={index} style={styles.stageCard}>
               <View style={styles.stageCardHeader}>
-                <Text style={styles.stageIndex}>阶段 {index + 1}</Text>
+                <View style={styles.stageBadge}>
+                  <Text style={styles.stageBadgeText}>{index + 1}</Text>
+                </View>
+                <Text style={styles.stageCardTitle}>阶段 {index + 1}</Text>
                 <TouchableOpacity
                   style={styles.deleteBtn}
                   onPress={() => handleRemoveStage(index)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Icon name="delete-outline" size={20} color={colors.danger} />
+                  <Icon
+                    name="trash-can-outline"
+                    size={18}
+                    color={colors.danger}
+                  />
                 </TouchableOpacity>
               </View>
-              <View style={styles.stageField}>
-                <Text style={styles.stageFieldLabel}>阶段名称</Text>
+
+              <View style={styles.stageBody}>
                 <TextInput
                   style={styles.stageInput}
-                  placeholder="如：幼苗期"
+                  placeholder="阶段名称，如：幼苗期"
                   placeholderTextColor={colors.textTertiary}
                   value={stage.name}
                   onChangeText={(v) => updateStage(index, "name", v)}
                 />
-              </View>
-              <View style={styles.stageRow}>
-                <View style={[styles.stageField, styles.stageFieldHalf]}>
-                  <Text style={styles.stageFieldLabel}>天数</Text>
-                  <View style={styles.daysInputWrap}>
-                    <TextInput
-                      style={[styles.stageInput, styles.daysInput]}
-                      placeholder="30"
-                      placeholderTextColor={colors.textTertiary}
-                      value={stage.duration_days}
-                      onChangeText={(v) =>
-                        updateStage(index, "duration_days", v)
-                      }
-                      keyboardType="numeric"
-                      maxLength={3}
-                    />
-                    <Text style={styles.daysSuffix}>天</Text>
+                <View style={styles.stageRow}>
+                  <View style={styles.stageCol}>
+                    <Text style={styles.stageColLabel}>天数</Text>
+                    <View style={styles.daysWrap}>
+                      <TextInput
+                        style={styles.daysInput}
+                        placeholder="30"
+                        placeholderTextColor={colors.textTertiary}
+                        value={stage.duration_days}
+                        onChangeText={(v) =>
+                          updateStage(index, "duration_days", v)
+                        }
+                        keyboardType="numeric"
+                        maxLength={3}
+                      />
+                      <Text style={styles.daysUnit}>天</Text>
+                    </View>
                   </View>
-                </View>
-                <View style={[styles.stageField, styles.stageFieldHalf]}>
-                  <Text style={styles.stageFieldLabel}>关键任务</Text>
-                  <TextInput
-                    style={styles.stageInput}
-                    placeholder="如：浇水、施肥"
-                    placeholderTextColor={colors.textTertiary}
-                    value={stage.key_tasks}
-                    onChangeText={(v) =>
-                      updateStage(index, "key_tasks", v)
-                    }
-                  />
+                  <View style={[styles.stageCol, { flex: 2 }]}>
+                    <Text style={styles.stageColLabel}>关键任务</Text>
+                    <TextInput
+                      style={styles.stageInput}
+                      placeholder="如：浇水施肥"
+                      placeholderTextColor={colors.textTertiary}
+                      value={stage.key_tasks}
+                      onChangeText={(v) =>
+                        updateStage(index, "key_tasks", v)
+                      }
+                    />
+                  </View>
                 </View>
               </View>
             </View>
@@ -300,11 +353,12 @@ export const CropTemplateCreateScreen: React.FC = () => {
           style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
           onPress={handleSave}
           disabled={saving}
+          activeOpacity={0.8}
         >
           {saving ? (
-            <ActivityIndicator size="small" color={colors.textInverse} />
+            <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.saveBtnText}>保存</Text>
+            <Text style={styles.saveBtnText}>保存模板</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -321,55 +375,64 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: spacingV2.xl,
-    paddingBottom: spacingV2.xxxl,
+    paddingBottom: spacingV2.xxl,
   },
-  aiCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xl,
-    padding: spacingV2.lg,
-    marginBottom: spacingV2.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+
+  /* AI 智能输入区 */
+  aiSection: {
+    paddingHorizontal: spacingV2.xl,
+    paddingTop: spacingV2.xl,
+    paddingBottom: spacingV2.lg,
+  },
+  aiHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacingV2.md,
+  },
+  aiIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadiusV2.md,
+    backgroundColor: colors.primaryMuted,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacingV2.sm,
   },
   aiTitle: {
-    fontSize: fontSizeV2.lg,
+    fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
-    marginBottom: spacingV2.xs,
+    lineHeight: 22,
   },
   aiSubtitle: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    marginBottom: spacingV2.md,
+    lineHeight: 18,
   },
-  aiInputRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacingV2.sm,
-    marginBottom: spacingV2.md,
+  aiInputWrap: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacingV2.md,
   },
   aiInput: {
-    flex: 1,
-    borderRadius: borderRadiusV2.lg,
-    padding: spacingV2.md,
     fontSize: fontSizeV2.md,
     color: colors.text,
-    backgroundColor: colors.surfaceMuted,
-    minHeight: 60,
+    minHeight: 56,
     textAlignVertical: "top",
+    lineHeight: 22,
+    padding: 0,
   },
   aiParseBtn: {
-    borderRadius: borderRadiusV2.lg,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacingV2.md,
-    paddingVertical: spacingV2.md,
-    justifyContent: "center",
+    alignSelf: "flex-end",
+    flexDirection: "row",
     alignItems: "center",
-    minHeight: 60,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadiusV2.full,
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: 8,
+    marginTop: spacingV2.sm,
   },
   aiParseBtnDisabled: {
     backgroundColor: colors.disabled,
@@ -377,32 +440,39 @@ const styles = StyleSheet.create({
   aiParseBtnText: {
     fontSize: fontSizeV2.sm,
     fontWeight: "600",
-    color: colors.textInverse,
+    color: "#fff",
   },
-  examplesContainer: {
+  examplesRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacingV2.sm,
-    paddingRight: spacingV2.lg,
+    marginTop: spacingV2.md,
   },
   exampleChip: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.full,
+    borderWidth: 1,
+    borderColor: colors.border,
     paddingHorizontal: spacingV2.md,
     paddingVertical: 6,
   },
   exampleText: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
+    fontWeight: "500",
   },
-  formCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xl,
-    padding: spacingV2.lg,
-    marginBottom: spacingV2.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+
+  /* 分隔线 */
+  divider: {
+    height: 8,
+    backgroundColor: colors.surfaceMuted,
+    marginVertical: spacingV2.sm,
+  },
+
+  /* 表单区 */
+  section: {
+    paddingHorizontal: spacingV2.xl,
+    paddingVertical: spacingV2.lg,
   },
   sectionTitle: {
     fontSize: fontSizeV2.md,
@@ -410,7 +480,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacingV2.md,
   },
-  field: {
+  fieldRow: {
     marginBottom: spacingV2.md,
   },
   fieldLabel: {
@@ -423,22 +493,33 @@ const styles = StyleSheet.create({
     color: colors.danger,
   },
   textInput: {
-    borderRadius: borderRadiusV2.lg,
-    padding: spacingV2.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm + 2,
     fontSize: fontSizeV2.md,
     color: colors.text,
-    backgroundColor: colors.surfaceMuted,
+    height: 44,
   },
-  stageHeader: {
+
+  /* 生长阶段 */
+  stageSectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacingV2.md,
   },
+  stageCount: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textTertiary,
+    fontWeight: "400",
+  },
   addStageBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacingV2.xs,
+    gap: 4,
     backgroundColor: colors.primaryMuted,
     borderRadius: borderRadiusV2.full,
     paddingHorizontal: spacingV2.md,
@@ -449,27 +530,71 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.primary,
   },
+
+  /* 空状态 */
   emptyStage: {
     alignItems: "center",
-    paddingVertical: spacingV2.xl,
+    paddingVertical: spacingV2.xxl,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
   },
-  emptyStageText: {
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.surfaceMuted,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacingV2.md,
+  },
+  emptyTitle: {
     fontSize: fontSizeV2.md,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginBottom: spacingV2.xs,
+  },
+  emptySubtitle: {
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
   },
+
+  /* 阶段卡片 */
   stageCard: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.lg,
-    padding: spacingV2.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginBottom: spacingV2.md,
+    overflow: "hidden",
   },
   stageCardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacingV2.sm,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
+    backgroundColor: colors.surfaceMuted,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
   },
-  stageIndex: {
+  stageBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacingV2.xs,
+  },
+  stageBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  stageCardTitle: {
+    flex: 1,
     fontSize: fontSizeV2.sm,
     fontWeight: "600",
     color: colors.textSecondary,
@@ -477,56 +602,68 @@ const styles = StyleSheet.create({
   deleteBtn: {
     padding: spacingV2.xs,
   },
-  stageField: {
-    marginBottom: spacingV2.sm,
-  },
-  stageFieldLabel: {
-    fontSize: fontSizeV2.sm,
-    color: colors.textSecondary,
-    marginBottom: spacingV2.xs,
+  stageBody: {
+    padding: spacingV2.md,
+    gap: spacingV2.md,
   },
   stageInput: {
+    backgroundColor: colors.surfaceMuted,
     borderRadius: borderRadiusV2.md,
-    padding: spacingV2.sm,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm + 2,
     fontSize: fontSizeV2.md,
     color: colors.text,
-    backgroundColor: colors.surface,
+    height: 44,
   },
   stageRow: {
     flexDirection: "row",
     gap: spacingV2.md,
   },
-  stageFieldHalf: {
+  stageCol: {
     flex: 1,
+    gap: spacingV2.xs,
   },
-  daysInputWrap: {
+  stageColLabel: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "500",
+  },
+  daysWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceMuted,
     borderRadius: borderRadiusV2.md,
-    paddingRight: spacingV2.sm,
+    paddingHorizontal: spacingV2.md,
+    height: 44,
   },
   daysInput: {
     flex: 1,
-    backgroundColor: "transparent",
-  },
-  daysSuffix: {
     fontSize: fontSizeV2.md,
-    color: colors.textSecondary,
+    color: colors.text,
+    padding: 0,
   },
+  daysUnit: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    marginLeft: 2,
+  },
+
+  /* 底部保存 */
   footer: {
     backgroundColor: colors.surface,
     paddingHorizontal: spacingV2.xl,
     paddingTop: spacingV2.md,
-    paddingBottom: spacingV2.lg,
+    paddingBottom: spacingV2.lg + 4,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderLight,
   },
   saveBtn: {
     backgroundColor: colors.primary,
-    borderRadius: borderRadiusV2.xl,
-    paddingVertical: spacingV2.md,
+    borderRadius: borderRadiusV2.lg,
+    paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
+    height: 48,
   },
   saveBtnDisabled: {
     backgroundColor: colors.disabled,
@@ -534,6 +671,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: fontSizeV2.md,
     fontWeight: "700",
-    color: colors.textInverse,
+    color: "#fff",
   },
 });

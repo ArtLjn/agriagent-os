@@ -6,15 +6,20 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import { useCycleStore } from "../../stores/cycleStore";
-import { BigButton } from "../../components/BigButton";
 import { Loading } from "../../components/Loading";
+import { DatePickerModal } from "../cost/components/DatePickerModal";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize } from "../../theme/spacing";
+import { spacing, fontSize, borderRadius, shadows } from "../../theme/spacing";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import dayjs from "dayjs";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -28,6 +33,8 @@ export const CycleCreateScreen: React.FC = () => {
     null
   );
   const [startDate, setStartDate] = useState("");
+  const [recordDate, setRecordDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [fieldName, setFieldName] = useState("");
 
   useEffect(() => {
@@ -58,74 +65,256 @@ export const CycleCreateScreen: React.FC = () => {
     return <Loading />;
   }
 
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.label}>茬口名称</Text>
-      <TextInput
-        style={styles.input}
-        value={name}
-        onChangeText={setName}
-        placeholder="例如：2024春季西瓜"
-        placeholderTextColor={colors.textSecondary}
-      />
-      <Text style={styles.label}>选择作物</Text>
-      <View style={styles.templateList}>
-        {templates.map((t) => (
-          <BigButton
-            key={t.id}
-            title={`${t.name} ${t.variety || ""}`}
-            variant={selectedTemplateId === t.id ? "primary" : "secondary"}
-            onPress={() => setSelectedTemplateId(t.id)}
-            style={styles.templateButton}
-          />
-        ))}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.card}>
+          <View style={styles.field}>
+            <Text style={styles.label}>茬口名称</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="例如：2024春季西瓜"
+              placeholderTextColor={colors.textTertiary}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>选择作物</Text>
+            {selectedTemplate ? (
+              <View style={styles.selectedChip}>
+                <Text style={styles.selectedChipText}>
+                  {selectedTemplate.name}
+                  {selectedTemplate.variety
+                    ? ` · ${selectedTemplate.variety}`
+                    : ""}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setSelectedTemplateId(null)}
+                  style={styles.clearChip}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Icon name="close" size={16} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.chipGrid}>
+                {templates.map((t) => (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={styles.chip}
+                    onPress={() => setSelectedTemplateId(t.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.chipText}>{t.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>开始日期</Text>
+            <TouchableOpacity
+              style={styles.dateTrigger}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.dateTriggerText,
+                  !startDate && styles.dateTriggerPlaceholder,
+                ]}
+              >
+                {startDate || "选择日期"}
+              </Text>
+              <Icon
+                name="calendar-outline"
+                size={20}
+                color={colors.textTertiary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldLast}>
+            <Text style={styles.label}>
+              地块名称 <Text style={styles.optional}>可选</Text>
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={fieldName}
+              onChangeText={setFieldName}
+              placeholder="例如：东大棚"
+              placeholderTextColor={colors.textTertiary}
+            />
+          </View>
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[
+            styles.submitButton,
+            (!name.trim() || !selectedTemplateId || !startDate.trim()) &&
+              styles.submitButtonDisabled,
+          ]}
+          onPress={handleSubmit}
+          activeOpacity={0.8}
+          disabled={!name.trim() || !selectedTemplateId || !startDate.trim()}
+        >
+          <Text style={styles.submitText}>创建茬口</Text>
+        </TouchableOpacity>
       </View>
-      <Text style={styles.label}>开始日期（YYYY-MM-DD）</Text>
-      <TextInput
-        style={styles.input}
-        value={startDate}
-        onChangeText={setStartDate}
-        placeholder="2024-03-15"
-        placeholderTextColor={colors.textSecondary}
-        keyboardType="numbers-and-punctuation"
+
+      <DatePickerModal
+        visible={showDatePicker}
+        date={recordDate}
+        onConfirm={(d) => {
+          setRecordDate(d);
+          setStartDate(dayjs(d).format("YYYY-MM-DD"));
+          setShowDatePicker(false);
+        }}
+        onCancel={() => setShowDatePicker(false)}
+        disableFuture={false}
       />
-      <Text style={styles.label}>地块名称（可选）</Text>
-      <TextInput
-        style={styles.input}
-        value={fieldName}
-        onChangeText={setFieldName}
-        placeholder="例如：东大棚"
-        placeholderTextColor={colors.textSecondary}
-      />
-      <BigButton
-        title="创建茬口"
-        onPress={handleSubmit}
-        style={styles.submitButton}
-      />
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.md, paddingBottom: spacing.xxl },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.lg,
+    ...shadows.md,
+  },
+  field: {
+    marginBottom: spacing.xl,
+  },
+  fieldLast: {
+    marginBottom: 0,
+  },
   label: {
-    fontSize: fontSize.lg,
-    fontWeight: "600",
-    color: colors.text,
-    marginTop: spacing.lg,
+    fontSize: fontSize.sm,
+    fontWeight: "500",
+    color: colors.textSecondary,
     marginBottom: spacing.sm,
+  },
+  optional: {
+    fontWeight: "400",
+    color: colors.textTertiary,
   },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    padding: spacing.md,
-    fontSize: fontSize.lg,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    fontSize: fontSize.md,
     backgroundColor: colors.surface,
     color: colors.text,
+    minHeight: 52,
   },
-  templateList: { gap: spacing.sm },
-  templateButton: { marginBottom: spacing.sm },
-  submitButton: { marginTop: spacing.xl },
+  dateTrigger: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    backgroundColor: colors.surface,
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  dateTriggerText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  dateTriggerPlaceholder: {
+    color: colors.textTertiary,
+  },
+  chipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  chip: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  chipText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: "500",
+  },
+  selectedChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primaryMuted,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(74, 123, 247, 0.15)",
+  },
+  selectedChipText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: "600",
+  },
+  clearChip: {
+    marginLeft: spacing.sm,
+  },
+  footer: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  submitButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.xxl,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+  submitButtonDisabled: {
+    backgroundColor: colors.disabled,
+  },
+  submitText: {
+    fontSize: fontSize.md,
+    fontWeight: "600",
+    color: colors.textInverse,
+  },
 });

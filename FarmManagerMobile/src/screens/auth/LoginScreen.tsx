@@ -160,7 +160,7 @@ export const LoginScreen: React.FC<{
         >
           {/* 头部渐变 */}
           <LinearGradient
-            colors={["#051024", "#0C2247", "#1A4A78"]}
+            colors={["#2563EB", "#4A7BF7", "#7BA4FF"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.headerGradient}
@@ -312,7 +312,7 @@ export const LoginScreen: React.FC<{
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#051024",
+    backgroundColor: "#2563EB",
   },
   flex: {
     flex: 1,
