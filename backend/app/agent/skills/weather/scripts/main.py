@@ -62,30 +62,76 @@ def _format_weather_reply(location: str, data: dict) -> str:
     times = daily.get("time", [])
     max_temps = daily.get("temperature_2m_max", [])
     min_temps = daily.get("temperature_2m_min", [])
+    feels_like_max = daily.get("apparent_temperature_max", [])
+    feels_like_min = daily.get("apparent_temperature_min", [])
     precips = daily.get("precipitation_sum", [])
+    precip_hours = daily.get("precipitation_hours", [])
+    winds = daily.get("windspeed_10m_max", [])
+    uv_index = daily.get("uv_index_max", [])
+    humidity = daily.get("relative_humidity_2m_mean", [])
 
     if not times:
         return "🌤️ 暂时获取不到天气数据，请稍后再试。"
 
+    # 当前天气
+    current = data.get("current_weather", {})
+    current_temp = current.get("temperature", None)
+
     count = min(3, len(times))
 
-    lines = [f"📍 {location} · 未来 {count} 天预报", ""]
-    lines.append("| 日期 | 天气 | 最高 | 最低 | 降水 |")
-    lines.append("|------|------|------|------|------|")
+    lines = [f"📍 {location} · 未来 {count} 天预报"]
+    if current_temp is not None:
+        lines.append(f"🌡️ 当前 {current_temp}℃")
+    lines.append("")
+    lines.append("| 日期 | 天气 | 最高 | 最低 | 体感 | 降水 | 风速 | 湿度 | UV |")
+    lines.append("|------|------|------|------|------|------|------|------|----|")
+
+    # 获取小时级数据
+    hourly = data.get("hourly", {})
+    hourly_time = hourly.get("time", [])
+    hourly_precip = hourly.get("precipitation", [])
+    hourly_prob = hourly.get("precipitation_probability", [])
+
+    # 计算今日降水时段
+    rain_times = []
+    if hourly_time and hourly_precip:
+        for t, rain, prob in zip(hourly_time[:24], hourly_precip[:24], hourly_prob[:24]):
+            if rain > 0 or prob >= 50:
+                hour = int(t.split("T")[1].split(":")[0])
+                rain_times.append(f"{hour}时({prob}%)")
 
     for i in range(count):
         day = _format_date_m_d(times[i])
         max_t = max_temps[i] if i < len(max_temps) else "-"
         min_t = min_temps[i] if i < len(min_temps) else "-"
         p = precips[i] if i < len(precips) else 0
+        ph = precip_hours[i] if i < len(precip_hours) else 0
+        w = winds[i] if i < len(winds) else "-"
+        uv = uv_index[i] if i < len(uv_index) else "-"
+        h = humidity[i] if i < len(humidity) else "-"
         emoji = _weather_emoji(float(p), float(max_t) if max_t != "-" else 20)
-        lines.append(f"| {day} | {emoji} | {max_t}℃ | {min_t}℃ | {p}mm |")
+
+        # 体感温度
+        if i < len(feels_like_max) and i < len(feels_like_min):
+            feels = f"{feels_like_min[i]:.0f}~{feels_like_max[i]:.0f}"
+        else:
+            feels = "-"
+
+        lines.append(f"| {day} | {emoji} | {max_t}℃ | {min_t}℃ | {feels}℃ | {p}mm({ph}h) | {w}m/s | {h}% | {uv} |")
+
+    # 降水时段详情
+    if rain_times:
+        lines.append("")
+        lines.append(f"**🌧️ 今日降水时段**: {', '.join(rain_times[:6])}")
+        if len(rain_times) > 6:
+            lines.append(f"... 还有 {len(rain_times) - 6} 个时段")
 
     warnings = check_weather_warnings(data)
     if warnings:
         lines.append("")
+        lines.append("### ⚠️ 天气预警")
         for w in warnings:
-            lines.append(f"⚠️ {w}")
+            lines.append(f"- {w}")
 
     return "\n".join(lines)
 

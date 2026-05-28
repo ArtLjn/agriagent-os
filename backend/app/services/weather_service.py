@@ -25,10 +25,16 @@ def fetch_weather(lat: float, lon: float, days: int = 7) -> dict:
         "daily": [
             "temperature_2m_max",
             "temperature_2m_min",
+            "apparent_temperature_max",
+            "apparent_temperature_min",
             "precipitation_sum",
+            "precipitation_hours",
             "windspeed_10m_max",
+            "uv_index_max",
+            "relative_humidity_2m_mean",
         ],
-        "hourly": "temperature_2m",
+        "hourly": ["temperature_2m", "precipitation", "precipitation_probability"],
+        "current_weather": True,
         "timezone": "auto",
         "forecast_days": days,
     }
