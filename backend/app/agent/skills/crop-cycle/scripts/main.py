@@ -14,8 +14,9 @@ class CropCycleSkill(Skill):
 
     def description(self) -> str:
         return (
-            "查询指定种植周期的详细信息，包括当前阶段和各阶段安排。"
-            "触发词: 周期、阶段、茬口"
+            "查询种植周期的详细信息。当用户问茬口状态、当前阶段、"
+            "周期进度、茬口详情、西瓜长到哪了时，调用此工具获取真实数据。"
+            "需要提供周期 ID。"
         )
 
     def parameters_schema(self) -> dict:
