@@ -45,25 +45,11 @@ const QUICK_ACTIONS = [
     route: "CycleCreate",
   },
   {
-    label: "农事提醒",
-    icon: "bell-ring",
-    iconBg: "#EEF4FF",
-    iconColor: "#5B8CFF",
-    route: "AgentChat",
-  },
-  {
-    label: "天气趋势",
-    icon: "weather-partly-cloudy",
+    label: "作物模板",
+    icon: "seed",
     iconBg: "#FFF8E8",
     iconColor: "#B48A3E",
-    route: "AgentChat",
-  },
-  {
-    label: "病虫害识别",
-    icon: "bug",
-    iconBg: "#FFF1F2",
-    iconColor: "#C45B5B",
-    route: "AgentChat",
+    route: "CropTemplateCreate",
   },
 ];
 
