@@ -120,14 +120,26 @@ def _parse_date(date_str: str | None) -> date:
         return date.today()
 
 
+def _format_date_m_d(date_val) -> str:
+    """将 date 对象或字符串转为 M/D 格式。"""
+    if isinstance(date_val, str):
+        parts = date_val.split("-")
+        return f"{int(parts[1])}/{int(parts[2])}"
+    if isinstance(date_val, date):
+        return f"{date_val.month}/{date_val.day}"
+    return str(date_val)
+
+
 def _format_reply(cycle) -> str:
-    """格式化成功回复消息，包含茬口名称和阶段列表。"""
+    """格式化成功回复，使用 emoji + 有序列表展示阶段。"""
+    sorted_stages = sorted(cycle.stages, key=lambda s: s.order_index)
     stage_lines = [
-        f"  {s.name}（{s.start_date} ~ {s.end_date}，{s.duration_days}天）"
-        for s in sorted(cycle.stages, key=lambda s: s.order_index)
+        f"{i+1}. {s.name}（{_format_date_m_d(s.start_date)} ~ "
+        f"{_format_date_m_d(s.end_date)}，{s.duration_days}天）"
+        for i, s in enumerate(sorted_stages)
     ]
     stages_text = "\n".join(stage_lines)
     return (
-        f"已建茬口「{cycle.name}」，"
-        f"开始日期 {cycle.start_date}\n阶段规划：\n{stages_text}"
+        f"✅ 茬口「{cycle.name}」已创建！\n\n"
+        f"📋 **阶段规划**\n{stages_text}"
     )

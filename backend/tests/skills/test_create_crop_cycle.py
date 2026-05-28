@@ -472,3 +472,49 @@ class TestCreateCropCycleError:
         cycle_create = call_args[0][1]
         # 验证名称中包含某个季节
         assert any(s in cycle_create.name for s in ("春季", "夏季", "秋季", "冬季"))
+
+
+# ── _format_reply 格式测试 ──────────────────────────────────────────────
+
+
+class TestCropCycleFormatReply:
+    """验证茬口创建回复使用 emoji + 有序列表格式。"""
+
+    def test_reply_starts_with_success_emoji(self):
+        """回复以 ✅ 开头。"""
+        cycle = _make_cycle(name="春季西瓜")
+        reply = _create_cycle_mod._format_reply(cycle)
+        assert reply.startswith("✅")
+
+    def test_reply_contains_cycle_name(self):
+        """回复包含茬口名称。"""
+        cycle = _make_cycle(name="春季西瓜")
+        reply = _create_cycle_mod._format_reply(cycle)
+        assert "春季西瓜" in reply
+
+    def test_reply_contains_ordered_list(self):
+        """阶段使用有序列表（1. 2. 3.）。"""
+        cycle = _make_cycle()
+        reply = _create_cycle_mod._format_reply(cycle)
+        assert "1." in reply
+        assert "2." in reply
+        assert "3." in reply
+
+    def test_reply_date_format_m_d(self):
+        """日期格式为 M/D。"""
+        cycle = _make_cycle()
+        reply = _create_cycle_mod._format_reply(cycle)
+        assert "5/26" in reply
+
+    def test_reply_contains_duration_days(self):
+        """每个阶段包含天数。"""
+        cycle = _make_cycle()
+        reply = _create_cycle_mod._format_reply(cycle)
+        assert "30天" in reply
+        assert "60天" in reply
+
+    def test_reply_contains_stage_emoji(self):
+        """包含阶段规划标题 emoji。"""
+        cycle = _make_cycle()
+        reply = _create_cycle_mod._format_reply(cycle)
+        assert "📋" in reply
