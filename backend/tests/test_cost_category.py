@@ -1,24 +1,30 @@
 """测试 CostCategory 模型的核心行为。"""
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import Base, engine, SessionLocal
+from app.core.database import Base, _set_sqlite_pragma
 from app.models.cost_category import CostCategory
+
+_test_engine = create_engine(
+    "sqlite:///tests/test_cost_category.db",
+    connect_args={"check_same_thread": False},
+)
+event.listen(_test_engine, "connect", _set_sqlite_pragma)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
 
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    """每个测试前清理并重置数据库。"""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.drop_all(bind=_test_engine)
+    Base.metadata.create_all(bind=_test_engine)
     yield
 
 
 @pytest.fixture
 def db():
-    """提供一个数据库会话。"""
-    session = SessionLocal()
+    session = _TestSession()
     yield session
     session.close()
 

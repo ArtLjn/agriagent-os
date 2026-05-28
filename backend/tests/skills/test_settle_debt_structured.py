@@ -3,11 +3,13 @@
 import importlib
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import Base, engine, SessionLocal
+from app.core.database import Base, _set_sqlite_pragma
 from app.models.cost import CostRecord
 from app.models.farm import Farm
 from app.schemas.cost import CostRecordCreate
@@ -16,23 +18,29 @@ from app.services.cost_service import create_record
 _settle_mod = importlib.import_module("app.agent.skills.settle-debt.scripts.main")
 SettleDebtSkill = _settle_mod.SettleDebtSkill
 
+_test_engine = create_engine(
+    "sqlite:///tests/test_settle_debt.db",
+    connect_args={"check_same_thread": False},
+)
+event.listen(_test_engine, "connect", _set_sqlite_pragma)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
+
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    """每个测试前清理并重置数据库并播种默认农场。"""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
+    Base.metadata.drop_all(bind=_test_engine)
+    Base.metadata.create_all(bind=_test_engine)
+    db = _TestSession()
     db.add(Farm(id=1, name="默认农场"))
     db.commit()
     db.close()
-    yield
+    with patch("app.agent.skills.settle-debt.scripts.main.SessionLocal", _TestSession):
+        yield
 
 
 @pytest.fixture
 def db():
-    """提供一个数据库会话。"""
-    session = SessionLocal()
+    session = _TestSession()
     yield session
     session.close()
 

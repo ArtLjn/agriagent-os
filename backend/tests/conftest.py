@@ -3,22 +3,30 @@
 import pytest
 from fastapi import Depends
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
 
 from app.api.deps import get_current_farm, get_current_user, get_db
-from app.core.database import Base, SessionLocal, engine
+from app.core.database import Base, _set_sqlite_pragma
 from app.core.security import create_access_token
 from app.main import app
 from app.models.farm import Farm
 from app.models.user import User
 
+_test_engine = create_engine(
+    "sqlite:///tests/test_farm_manager.db",
+    connect_args={"check_same_thread": False},
+)
+event.listen(_test_engine, "connect", _set_sqlite_pragma)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
+
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    """每个测试前重建表并播种默认用户和农场，同时覆盖依赖注入。"""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.drop_all(bind=_test_engine)
+    Base.metadata.create_all(bind=_test_engine)
 
-    db = SessionLocal()
+    db = _TestSession()
     user = User(
         id="test-user-001",
         phone="00000000000",
@@ -32,6 +40,13 @@ def clean_db():
     db.commit()
     db.close()
 
+    def _override_get_db():
+        db = _TestSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
     def override_get_current_user():
         return User(
             id="test-user-001",
@@ -42,9 +57,10 @@ def clean_db():
             status="active",
         )
 
-    def override_get_current_farm(db=Depends(get_db)):
+    def override_get_current_farm(db=Depends(_override_get_db)):
         return db.query(Farm).filter(Farm.id == 1).first()
 
+    app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_current_farm] = override_get_current_farm
 
