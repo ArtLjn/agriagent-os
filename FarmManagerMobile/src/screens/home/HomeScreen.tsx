@@ -49,7 +49,7 @@ const QUICK_ACTIONS = [
     icon: "seed",
     iconBg: "#FFF8E8",
     iconColor: "#B48A3E",
-    route: "CropTemplate",
+    route: "CropTemplateCreate",
   },
 ];
 
