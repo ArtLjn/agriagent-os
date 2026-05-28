@@ -60,7 +60,12 @@ class LLMIntentClassifier:
     """Layer 3 — LLM 意图分类兜底。"""
 
     def __init__(self, api_key: str, base_url: str, model: str, timeout: float = 5.0):
-        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+        self._client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=3,
+        )
         self._model = model
 
     def classify(self, user_message: str, all_tools: list[BaseTool]) -> list[str] | None:

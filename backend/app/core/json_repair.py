@@ -21,12 +21,16 @@ def extract_json(text: str) -> str | None:
 def repair_json(json_str: str) -> str:
     """自动修复常见 JSON 格式错误。
 
+    - 去除尾随多余闭合括号（LLM 常输出 }} 等）
     - 补全缺失的括号
     - 删除末尾多余逗号
     """
     s = json_str.strip()
     if not s:
         return s
+
+    # 去除尾随多余 } 或 ]
+    s = _strip_trailing_brackets(s)
 
     # 补全缺失的括号
     open_braces = s.count("{")
@@ -44,6 +48,37 @@ def repair_json(json_str: str) -> str:
     # 移除末尾多余逗号（对象和数组）
     s = re.sub(r",(\s*[}\]])", r"\1", s)
 
+    return s
+
+
+def _strip_trailing_brackets(s: str) -> str:
+    """去除 JSON 末尾多余的闭合括号。
+
+    LLM 有时输出 {"key": "val"}} 这类多了一个 } 的 JSON。
+    通过逐个尝试解析来找到最短的合法 JSON 前缀。
+    """
+    # 只处理末尾有额外 } 或 ] 的情况
+    stripped = s.rstrip()
+    if not stripped:
+        return s
+
+    # 快速检查：如果直接能解析就不处理
+    try:
+        json.loads(stripped)
+        return stripped
+    except json.JSONDecodeError:
+        pass
+
+    # 尝试逐个去掉末尾的 } 或 ]
+    while stripped and stripped[-1] in ("}", "]"):
+        stripped = stripped[:-1].rstrip()
+        try:
+            json.loads(stripped)
+            return stripped
+        except json.JSONDecodeError:
+            continue
+
+    # 所有尝试都失败，返回原始字符串
     return s
 
 
