@@ -10,12 +10,15 @@ from starlette.responses import Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_farm
+from app.api.deps import get_db, get_current_farm, get_current_user
+from app.models.user import User
 from app.infra.limiter import limiter
 from app.agent.llm import LlmNotConfiguredError
 from app.core.logger import request_id_var
 from app.models.agent_record import AgentRecord
+from app.models.conversation import Conversation
 from app.models.farm import Farm
+from app.models.trace import TraceRecord
 from app.schemas.agent import (
     ChatRequest,
     ChatResponse,
@@ -40,6 +43,8 @@ from app.services.agent_service import (
 from app.services.conversation_service import (
     list_conversations,
     get_conversation_messages,
+    get_or_create_conversation,
+    save_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,6 +83,7 @@ async def agent_chat(
             farm_id=farm.id,
             cycle_id=chat_request.cycle_id,
             session_id=chat_request.session_id,
+            request_id=rid,
         )
         logger.info(
             "[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符",
@@ -98,6 +104,7 @@ async def agent_chat_stream(
     chat_request: ChatRequest,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
+    user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     """流式与农事顾问 Agent 对话（SSE）。"""
     rid = _new_request_id()
@@ -115,23 +122,61 @@ async def agent_chat_stream(
                 cycle_id=chat_request.cycle_id,
                 db=db,
                 session_id=chat_request.session_id,
+                user_id=user.id,
+                request_id=rid,
             ):
                 full_reply += chunk
                 data = json.dumps({"content": chunk}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
+
+            # flush trace 队列确保 skill_call 记录已落盘
+            from app.infra.trace_collector import get_trace_dao
+            dao = get_trace_dao()
+            if dao and dao.queue_size > 0:
+                await dao.flush_now()
+
+            # 查询本次对话调用的 skill 列表
+            skills = (
+                db.query(TraceRecord.node_name)
+                .filter(TraceRecord.request_id == rid)
+                .filter(TraceRecord.node_type == "skill_call")
+                .distinct()
+                .all()
+            )
+            skill_names = [s[0] for s in skills if s[0]]
+
+            # 保存 AI 回复到 conversation_messages + AgentRecord
+            conversation = None
+            if chat_request.session_id:
+                conversation = (
+                    db.query(Conversation)
+                    .filter(Conversation.session_id == chat_request.session_id)
+                    .first()
+                )
+                if conversation:
+                    meta = json.dumps({"skills": skill_names}, ensure_ascii=False) if skill_names else None
+                    save_message(db, conversation.id, "assistant", full_reply, meta=meta)
+
             record = AgentRecord(
                 cycle_id=chat_request.cycle_id,
                 record_type="chat",
                 content=full_reply,
                 farm_id=farm.id,
+                user_id=user.id,
+                conversation_id=conversation.id if conversation else None,
             )
             db.add(record)
             db.commit()
+
+            if skill_names:
+                yield f"data: {json.dumps({'skills': skill_names}, ensure_ascii=False)}\n\n"
+
             logger.info(
-                "[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符",
+                "[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符 | skills=%s",
                 rid,
                 time.perf_counter() - start,
                 len(full_reply),
+                skill_names,
             )
         except LlmNotConfiguredError as exc:
             logger.error("[%s] /chat/stream 失败: %s", rid, exc)
@@ -182,15 +227,25 @@ def get_messages_by_session(
 ) -> list[ConversationMessageItem]:
     """获取指定会话的消息列表。"""
     messages = get_conversation_messages(db, session_id)
-    return [
-        ConversationMessageItem(
-            id=m.id,
-            role=m.role,
-            content=m.content,
-            created_at=m.created_at,
+    result = []
+    for m in messages:
+        skills = None
+        if m.meta:
+            try:
+                meta_obj = json.loads(m.meta)
+                skills = meta_obj.get("skills")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        result.append(
+            ConversationMessageItem(
+                id=m.id,
+                role=m.role,
+                content=m.content,
+                skills=skills,
+                created_at=m.created_at,
+            )
         )
-        for m in messages
-    ]
+    return result
 
 
 @router.get("/daily", response_model=DailyAdviceResponse)
