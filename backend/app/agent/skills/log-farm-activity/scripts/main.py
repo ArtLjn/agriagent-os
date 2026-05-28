@@ -22,8 +22,9 @@ class LogFarmActivitySkill(Skill):
 
     def description(self) -> str:
         return (
-            "记录一条农事操作。当用户说做了什么农活、浇了水、施了肥、"
-            "打药时使用。触发词: 记农事、浇水、施肥、打药、干了啥"
+            "记录一条农事操作。当用户说今天浇了水、施了肥、打了药、"
+            "干了什么农活、记录农事操作时，调用此工具。"
+            "需要提供操作类型（如浇水、施肥、打药），可选关联茬口。"
         )
 
     def parameters_schema(self) -> dict:

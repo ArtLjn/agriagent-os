@@ -59,7 +59,7 @@ class TestLogFarmActivityMeta:
         assert "浇水" in desc
         assert "施肥" in desc
         assert "打药" in desc
-        assert "记农事" in desc
+        assert "农事" in desc
 
     def test_parameters_schema_required_fields(self):
         skill = LogFarmActivitySkill()
