@@ -79,8 +79,9 @@ class TestCreateCropCycleMeta:
     def test_description_contains_trigger_words(self):
         skill = CreateCropCycleSkill()
         desc = skill.description()
-        assert "建茬口" in desc
-        assert "种" in desc
+        assert "创建" in desc
+        assert "种植" in desc
+        assert "茬口" in desc
 
     def test_parameters_schema_required_fields(self):
         skill = CreateCropCycleSkill()

@@ -21,9 +21,9 @@ class CreateCropCycleSkill(Skill):
 
     def description(self) -> str:
         return (
-            "创建一个新的种植茬口。当用户说建茬口、种什么、"
-            "开始种某作物时使用。"
-            "触发词: 建茬口、种、开始种"
+            "创建一个新的种植茬口（种植周期）。当用户说创建茬口、种植某作物、"
+            "建茬口、开始种西瓜/番茄/辣椒等、春茬种什么、秋茬种什么时，"
+            "调用此工具。需要提供作物名称，可选提供季节和开始日期。"
         )
 
     def parameters_schema(self) -> dict:
