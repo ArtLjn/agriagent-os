@@ -40,7 +40,10 @@ class WeatherSkill(Skill):
         return "get_weather_forecast"
 
     def description(self) -> str:
-        return "获取未来7天天气预报和灾害预警。触发词: 天气、预报、降雨"
+        return (
+            "获取未来7天天气预报和灾害预警。当用户问天气怎么样、明天天气、"
+            "最近有雨吗、气温多少、有没有极端天气时，调用此工具获取真实天气数据。"
+        )
 
     def parameters_schema(self) -> dict:
         return {
