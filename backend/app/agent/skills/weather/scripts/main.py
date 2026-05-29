@@ -9,8 +9,9 @@ from app.infra.skill_cache import cached
 from app.services.weather_service import check_weather_warnings, fetch_weather
 
 
-def _get_user_coords(farm_id: int) -> tuple[float, float]:
-    """从 user_settings 读取用户坐标，无记录时降级到默认值。"""
+def _get_user_location(farm_id: int) -> tuple[str, float, float]:
+    """从 user_settings 读取用户位置（城市名、坐标），无记录时降级到默认值。"""
+    default_city = "当前地块"
     default_lat = settings.weather_latitude
     default_lon = settings.weather_longitude
     try:
@@ -27,12 +28,13 @@ def _get_user_coords(farm_id: int) -> tuple[float, float]:
                     .first()
                 )
                 if setting and setting.default_lat and setting.default_lon:
-                    return setting.default_lat, setting.default_lon
+                    city = setting.default_city or default_city
+                    return city, setting.default_lat, setting.default_lon
         finally:
             db.close()
     except Exception:
         pass
-    return default_lat, default_lon
+    return default_city, default_lat, default_lon
 
 
 def _weather_emoji(precip: float, max_temp: float) -> str:
@@ -149,21 +151,14 @@ class WeatherSkill(Skill):
     def parameters_schema(self) -> dict:
         return {
             "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "地点描述（仅作标注，实际使用配置坐标）",
-                    "default": "当前地块",
-                },
-            },
+            "properties": {},
             "required": [],
         }
 
     @cached(ttl_seconds=1800)
     async def execute(self, params: dict, context) -> SkillResult:
-        location = params.get("location", "当前地块")
         farm_id = getattr(context, "farm_id", 1) or 1
-        lat, lon = _get_user_coords(farm_id)
-        data = fetch_weather(lat, lon, days=3)
+        location, lat, lon = _get_user_location(farm_id)
+        data = fetch_weather(location, days=3)
         reply = _format_weather_reply(location, data)
         return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
