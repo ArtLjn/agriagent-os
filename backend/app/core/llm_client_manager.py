@@ -51,6 +51,7 @@ class CircuitEntry:
 class ModelConfig:
     id: str
     priority: int = 1
+    enabled: bool = True
 
 
 @dataclass
@@ -59,6 +60,8 @@ class ProviderConfig:
     base_url: str
     api_keys: list[str]
     priority: int = 99
+    weight: int = 1
+    enabled: bool = True
     models: list[ModelConfig] = field(default_factory=list)
 
 
@@ -123,14 +126,23 @@ class LLMClientManager:
         default_name = data.get("default_provider", "")
 
         for p_raw in providers_raw:
+            if not p_raw.get("enabled", True):
+                continue
             provider = ProviderConfig(
                 name=p_raw["name"],
                 base_url=p_raw["base_url"],
                 api_keys=p_raw.get("api_keys", []),
                 priority=p_raw.get("priority", 99),
+                weight=p_raw.get("weight", 1),
+                enabled=p_raw.get("enabled", True),
                 models=[
-                    ModelConfig(id=m["id"], priority=m.get("priority", 1))
+                    ModelConfig(
+                        id=m["id"],
+                        priority=m.get("priority", 1),
+                        enabled=m.get("enabled", True),
+                    )
                     for m in p_raw.get("models", [])
+                    if m.get("enabled", True)
                 ],
             )
             for model in sorted(provider.models, key=lambda m: m.priority):
