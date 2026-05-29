@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 from app.core.llm_client_manager import (
     ErrorLevel,
+    LLMCircuitState,
     LLMClientManager,
     classify_error,
 )
@@ -105,6 +106,96 @@ class TestProviderConfig:
         manager = LLMClientManager(config_path=str(p))
         assert manager.fallback_mode is True
 
+    def test_default_provider_moves_to_front(self, tmp_path):
+        cfg = {
+            "default_provider": "nvidia",
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://ollama",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [{"id": "gemma3:12b", "priority": 1}],
+                },
+                {
+                    "name": "nvidia",
+                    "base_url": "http://nvidia",
+                    "api_keys": ["k"],
+                    "priority": 2,
+                    "models": [{"id": "llama-3.1-70b", "priority": 1}],
+                },
+                {
+                    "name": "dashscope",
+                    "base_url": "http://dashscope",
+                    "api_keys": ["k"],
+                    "priority": 3,
+                    "models": [{"id": "qwen", "priority": 1}],
+                },
+            ],
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        assert manager.chain[0][0].name == "nvidia"
+        assert manager.chain[1][0].name == "ollama"
+        assert manager.chain[2][0].name == "dashscope"
+
+    def test_default_provider_preserves_model_order(self, tmp_path):
+        cfg = {
+            "default_provider": "nvidia",
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://ollama",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [{"id": "gemma", "priority": 1}],
+                },
+                {
+                    "name": "nvidia",
+                    "base_url": "http://nvidia",
+                    "api_keys": ["k"],
+                    "priority": 2,
+                    "models": [
+                        {"id": "model-b", "priority": 2},
+                        {"id": "model-a", "priority": 1},
+                    ],
+                },
+            ],
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        assert manager.chain[0][1].id == "model-a"
+        assert manager.chain[1][1].id == "model-b"
+
+    def test_no_default_provider_uses_priority(self, tmp_path):
+        cfg = {
+            "providers": [
+                {
+                    "name": "low",
+                    "base_url": "http://low",
+                    "api_keys": ["k"],
+                    "priority": 10,
+                    "models": [{"id": "m1", "priority": 1}],
+                },
+                {
+                    "name": "high",
+                    "base_url": "http://high",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [{"id": "m2", "priority": 1}],
+                },
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        assert manager.chain[0][0].name == "high"
+
 
 class TestErrorClassification:
     """测试错误分类逻辑。"""
@@ -181,9 +272,10 @@ class TestCooldown:
     def test_cooldown_caps_at_24h(self, tmp_path):
         manager = self._make_manager(tmp_path)
         key = "test/m1"
-        for _ in range(20):
+        for _ in range(9):
             manager.record_failure(key)
         assert manager._cooldowns[key].cooldown_minutes == 1440
+        assert manager._cooldowns[key].state == LLMCircuitState.WARMING
 
     def test_success_resets_cooldown(self, tmp_path):
         manager = self._make_manager(tmp_path)

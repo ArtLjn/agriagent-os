@@ -97,7 +97,7 @@ class LLMClientManager:
 
     def __init__(self, config_path: str | None = None):
         self._chain: list[tuple[ProviderConfig, ModelConfig]] = []
-        self._cooldowns: dict[str, CooldownEntry] = {}
+        self._cooldowns: dict[str, CircuitEntry] = {}
         self._key_counters: dict[str, int] = {}
         self.fallback_mode: bool = False
 
@@ -239,19 +239,32 @@ class LLMClientManager:
         }
 
     def record_failure(self, key: str) -> None:
-        """记录失败并计算 cooldown。"""
-        entry = self._cooldowns.get(key, CooldownEntry())
+        """记录失败并分级升级熔断状态。"""
+        entry = self._cooldowns.get(key, CircuitEntry())
         entry.failures += 1
-        entry.cooldown_minutes = min(
-            _BASE_COOLDOWN_MINUTES * (2 ** (entry.failures - 1)),
-            _MAX_COOLDOWN_MINUTES,
-        )
-        entry.until = datetime.now() + timedelta(minutes=entry.cooldown_minutes)
+
+        if entry.failures >= 10:
+            entry.state = LLMCircuitState.DEAD
+            entry.cooldown_minutes = 0
+        elif entry.failures >= 4:
+            entry.state = LLMCircuitState.WARMING
+            entry.cooldown_minutes = 1440
+        else:
+            entry.state = LLMCircuitState.COOLING
+            entry.cooldown_minutes = min(
+                _BASE_COOLDOWN_MINUTES * (2 ** (entry.failures - 1)),
+                _MAX_COOLDOWN_MINUTES,
+            )
+
+        if entry.state != LLMCircuitState.DEAD:
+            entry.until = datetime.now() + timedelta(minutes=entry.cooldown_minutes)
+
         self._cooldowns[key] = entry
         logger.info(
-            "cooldown | key=%s | failures=%d | cooldown=%dmin",
+            "circuit | key=%s | failures=%d | state=%s | cooldown=%dmin",
             key,
             entry.failures,
+            entry.state.value,
             entry.cooldown_minutes,
         )
 
@@ -260,10 +273,12 @@ class LLMClientManager:
         self._cooldowns.pop(key, None)
 
     def is_cooled_down(self, key: str) -> bool:
-        """检查是否仍在 cooldown 期内。"""
+        """检查是否仍在 cooldown 期内（DEAD 永久返回 True）。"""
         entry = self._cooldowns.get(key)
         if not entry:
             return False
+        if entry.state == LLMCircuitState.DEAD:
+            return True
         return datetime.now() < entry.until
 
     def reload(self) -> None:

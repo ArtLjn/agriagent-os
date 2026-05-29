@@ -1,6 +1,7 @@
 """测试 LLM 加权路由、分级熔断、Provider 健康、enabled 字段。"""
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.core.llm_client_manager import LLMCircuitState, CircuitEntry, LLMClientManager
@@ -103,3 +104,74 @@ class TestWeightEnabledFields:
         mgr = LLMClientManager(config_path=str(p))
         assert len(mgr.chain) == 1
         assert mgr.chain[0][1].id == "m2"
+
+
+class TestTieredCircuit:
+    """测试 COOLING → WARMING → DEAD 状态升级。"""
+
+    def _make_manager(self, tmp_path) -> LLMClientManager:
+        cfg = {
+            "providers": [{
+                "name": "test",
+                "base_url": "http://test",
+                "api_keys": ["k"],
+                "priority": 1,
+                "weight": 1,
+                "models": [{"id": "m1", "priority": 1}],
+            }]
+        }
+        p = tmp_path / "providers.json"
+        _write_cfg(p, cfg)
+        return LLMClientManager(config_path=str(p))
+
+    def test_1_to_3_failures_are_cooling(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        key = "test/m1"
+        for i in range(1, 4):
+            mgr.record_failure(key)
+            entry = mgr._cooldowns[key]
+            assert entry.state == LLMCircuitState.COOLING, f"第{i}次失败应保持 COOLING"
+
+    def test_4_to_9_failures_are_warming(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        key = "test/m1"
+        for _ in range(3):
+            mgr.record_failure(key)
+        for i in range(4, 10):
+            mgr.record_failure(key)
+            entry = mgr._cooldowns[key]
+            assert entry.state == LLMCircuitState.WARMING, f"第{i}次失败应为 WARMING"
+
+    def test_10_failures_is_dead(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        key = "test/m1"
+        for _ in range(10):
+            mgr.record_failure(key)
+        entry = mgr._cooldowns[key]
+        assert entry.state == LLMCircuitState.DEAD
+
+    def test_dead_is_permanently_cooled_down(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        key = "test/m1"
+        for _ in range(10):
+            mgr.record_failure(key)
+        mgr._cooldowns[key].until = datetime.now() - timedelta(hours=48)
+        assert mgr.is_cooled_down(key) is True
+
+    def test_cooling_cooldown_exponential(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        key = "test/m1"
+        mgr.record_failure(key)
+        assert mgr._cooldowns[key].cooldown_minutes == 2
+        mgr.record_failure(key)
+        assert mgr._cooldowns[key].cooldown_minutes == 4
+        mgr.record_failure(key)
+        assert mgr._cooldowns[key].cooldown_minutes == 8
+
+    def test_warming_cooldown_is_24h(self, tmp_path):
+        mgr = self._make_manager(tmp_path)
+        key = "test/m1"
+        for _ in range(4):
+            mgr.record_failure(key)
+        assert mgr._cooldowns[key].cooldown_minutes == 1440
+        assert mgr._cooldowns[key].state == LLMCircuitState.WARMING
