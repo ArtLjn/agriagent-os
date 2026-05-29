@@ -2,28 +2,25 @@
 
 from fastapi import APIRouter
 
-from app.core.config import settings
-from app.services.weather_service import fetch_weather
+from app.services.weather_service import fetch_weather, check_weather_warnings
 
 router = APIRouter(prefix="/weather", tags=["weather"])
 
 
 @router.get("/forecast")
-def get_forecast(
+async def get_forecast(
     days: int = 7,
-    lat: float | None = None,
-    lon: float | None = None,
+    location: str = "当前地块",
 ):
-    """获取未来 N 天天气预报原始数据。
+    """获取未来 N 天天气预报。
 
     Args:
         days: 预报天数（默认 7 天）。
-        lat: 纬度（可选，默认使用服务端配置）。
-        lon: 经度（可选，默认使用服务端配置）。
+        location: 城市名（默认"当前地块"）。
     """
-    latitude = lat if lat is not None else settings.weather_latitude
-    longitude = lon if lon is not None else settings.weather_longitude
-    data = fetch_weather(latitude, longitude, days=days)
+    data = await fetch_weather(location, days)
+    warnings = check_weather_warnings(data)
+    data["warnings"] = warnings
     return data
 
 
