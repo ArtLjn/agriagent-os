@@ -192,3 +192,41 @@ def select_tools(
         len(all_tools),
     )
     return result
+
+
+TOOL_CHAIN_MAP: dict[str, list[str]] = {
+    "get_weather_forecast": ["get_farm_status"],
+    "get_cost_summary": ["get_farm_status"],
+    "get_cost_analytics": ["get_farm_status"],
+    "get_crop_cycle_info": ["get_farm_status"],
+    "get_recent_farm_logs": ["get_farm_status"],
+    "create_cost_record": [],
+    "create_crop_cycle": [],
+    "create_crop_template": [],
+    "log_farm_activity": [],
+    "update_crop_stage": [],
+    "settle_debt": [],
+    "get_farm_status": [],
+}
+
+
+def expand_by_chain(selected: set[str], max_tools: int = 5) -> set[str]:
+    """根据工具链关联扩展选中工具集。
+
+    当查询类工具被选中时，自动关联 get_farm_status，
+    因为查询结果通常需要农场整体上下文来解读。
+
+    max_tools 限制最终返回集合的最大大小（包含原始工具）。
+    """
+    if max_tools <= 0:
+        return set()
+    expanded = set(selected)
+    if len(expanded) >= max_tools:
+        return expanded
+    for tool_name in list(selected):
+        for related in TOOL_CHAIN_MAP.get(tool_name, []):
+            if related not in expanded:
+                expanded.add(related)
+                if len(expanded) >= max_tools:
+                    return expanded
+    return expanded
