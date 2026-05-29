@@ -45,13 +45,34 @@ _classifier_lock = threading.Lock()
 
 def _get_classifier() -> LLMIntentClassifier | None:
     global _classifier
-    if _classifier is None and settings.ai_api_key:
+    if _classifier is not None:
+        return _classifier
+
+    api_key = settings.ai_api_key
+    base_url = settings.ai_base_url
+    model = settings.ai_model
+
+    # 优先从 Manager 获取
+    try:
+        from app.core.llm_client_manager import get_llm_manager
+
+        manager = get_llm_manager()
+        if not manager.fallback_mode:
+            info = manager.get_model_info()
+            client = manager.get_sync_client()
+            api_key = client.api_key
+            base_url = client.base_url
+            model = info["model"]
+    except Exception as e:
+        logger.debug("从 Manager 获取 classifier 参数失败 | error=%s", e)
+
+    if api_key:
         with _classifier_lock:
             if _classifier is None:
                 _classifier = LLMIntentClassifier(
-                    api_key=settings.ai_api_key,
-                    base_url=settings.ai_base_url,
-                    model=settings.ai_model,
+                    api_key=api_key,
+                    base_url=base_url,
+                    model=model,
                 )
     return _classifier
 
@@ -140,7 +161,9 @@ def _llm_node(state: AgentState) -> dict:
         selected_tools = tools
     else:
         user_msg = _find_last_human_message(messages)
-        selected_names = select_tools(user_msg, tools, intent_classifier=_get_classifier())
+        selected_names = select_tools(
+            user_msg, tools, intent_classifier=_get_classifier()
+        )
         selected_tools = [t for t in tools if t.name in selected_names]
     if selected_tools:
         llm = raw_llm.bind_tools(selected_tools)

@@ -53,9 +53,7 @@ def classify_error(exc: Exception) -> ErrorLevel:
     if isinstance(exc, (APIConnectionError, ConnectionError)):
         return ErrorLevel.PROVIDER
 
-    status_code = getattr(
-        getattr(exc, "response", None), "status_code", None
-    )
+    status_code = getattr(getattr(exc, "response", None), "status_code", None)
     if status_code in (401, 403):
         return ErrorLevel.PROVIDER
     if status_code in (429, 404, 400):
