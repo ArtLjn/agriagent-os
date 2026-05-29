@@ -13,6 +13,13 @@ from openai import AsyncOpenAI, OpenAI
 
 from app.core.config import settings
 
+try:
+    from watchfiles import watch as _watchfiles_watch
+
+    _HAS_WATCHFILES = True
+except ImportError:
+    _HAS_WATCHFILES = False
+
 logger = logging.getLogger(__name__)
 
 _BASE_COOLDOWN_MINUTES = 2
@@ -97,6 +104,8 @@ class LLMClientManager:
             self.fallback_mode = True
             return
 
+        default_name = data.get("default_provider", "")
+
         for p_raw in providers_raw:
             provider = ProviderConfig(
                 name=p_raw["name"],
@@ -112,6 +121,15 @@ class LLMClientManager:
                 self._chain.append((provider, model))
 
         self._chain.sort(key=lambda item: (item[0].priority, item[1].priority))
+
+        if default_name:
+            default_chain = [
+                pair for pair in self._chain if pair[0].name == default_name
+            ]
+            rest_chain = [
+                pair for pair in self._chain if pair[0].name != default_name
+            ]
+            self._chain = default_chain + rest_chain
         logger.info(
             "LLMClientManager 初始化 | providers=%d | models=%d",
             len({p.name for p, _ in self._chain}),
@@ -220,16 +238,70 @@ class LLMClientManager:
             return False
         return datetime.now() < entry.until
 
+    def reload(self) -> None:
+        """热更新：重新加载 providers.json，保留 cooldown 状态。"""
+        path = str(Path(__file__).parent.parent.parent / "providers.json")
+        self._chain.clear()
+        self._key_counters.clear()
+        self.fallback_mode = False
+        self._load_config(path)
+        logger.info("LLMClientManager 热更新完成 | providers=%d | models=%d",
+                     len({p.name for p, _ in self._chain}), len(self._chain))
+
+    def start_file_watcher(self) -> None:
+        """启动后台线程监听 providers.json 变化，自动 reload。"""
+        if not _HAS_WATCHFILES:
+            logger.debug("watchfiles 未安装，跳过自动监听")
+            return
+        if getattr(self, "_watcher_started", False):
+            return
+        self._watcher_started = True
+
+        logging.getLogger("watchfiles").setLevel(logging.WARNING)
+
+        config_path = Path(__file__).parent.parent.parent / "providers.json"
+
+        def _watch():
+            logger.info("providers.json 文件监听已启动 | path=%s", config_path)
+            for changes in _watchfiles_watch(config_path.parent):
+                for _change_type, changed_path in changes:
+                    if Path(changed_path).name == config_path.name:
+                        logger.info("检测到 providers.json 变化，执行热更新")
+                        self.reload()
+                        import app.agent.llm as llm_module
+                        llm_module.LLM_INSTANCE = None
+
+        thread = threading.Thread(target=_watch, daemon=True, name="llm-config-watcher")
+        thread.start()
+
 
 _manager: LLMClientManager | None = None
 _manager_lock = threading.Lock()
 
 
 def get_llm_manager() -> LLMClientManager:
-    """获取全局 LLMClientManager 单例（线程安全）。"""
+    """获取全局 LLMClientManager 单例（线程安全），首次创建时启动文件监听。"""
     global _manager
     if _manager is None:
         with _manager_lock:
             if _manager is None:
                 _manager = LLMClientManager()
+                _manager.start_file_watcher()
     return _manager
+
+
+def reload_llm_config() -> dict:
+    """热更新 LLM 配置（Manager + LLM_INSTANCE 单例）。"""
+    global _manager
+    with _manager_lock:
+        if _manager is not None:
+            _manager.reload()
+        else:
+            _manager = LLMClientManager()
+
+    import app.agent.llm as llm_module
+    llm_module.LLM_INSTANCE = None
+
+    info = _manager.get_model_info()
+    logger.info("LLM 配置热更新 | provider=%s | model=%s", info["provider"], info["model"])
+    return info
