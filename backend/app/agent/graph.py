@@ -39,6 +39,7 @@ from app.agent.tool_selector import select_tools, LLMIntentClassifier
 logger = logging.getLogger(__name__)
 
 _KEEP_RECENT = 3
+_LLM_SEMAPHORE = asyncio.Semaphore(5)
 
 _classifier: LLMIntentClassifier | None = None
 _classifier_lock = threading.Lock()
@@ -145,7 +146,7 @@ def _extract_tokens_used(response: AIMessage) -> int | None:
     return None
 
 
-def _llm_node(state: AgentState) -> dict:
+async def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     messages = state["messages"]
 
@@ -241,18 +242,19 @@ def _llm_node(state: AgentState) -> dict:
 
     # LLM 调用 + 计时
     start = _time.perf_counter()
-    try:
-        response = llm.invoke([system] + messages)
-    except Exception as exc:
-        duration_ms = int((_time.perf_counter() - start) * 1000)
-        collector.record(
-            node_type="llm_call",
-            node_name=model_name,
-            input_data=input_summary,
-            duration_ms=duration_ms,
-            error_message=str(exc),
-        )
-        raise
+    async with _LLM_SEMAPHORE:
+        try:
+            response = await llm.ainvoke([system] + messages)
+        except Exception as exc:
+            duration_ms = int((_time.perf_counter() - start) * 1000)
+            collector.record(
+                node_type="llm_call",
+                node_name=model_name,
+                input_data=input_summary,
+                duration_ms=duration_ms,
+                error_message=str(exc),
+            )
+            raise
 
     duration_ms = int((_time.perf_counter() - start) * 1000)
 

@@ -1,7 +1,6 @@
 """端到端验证 function calling 链路。"""
 
-import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -30,7 +29,8 @@ class TestFunctionCallingE2E:
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
-    def test_weather_query_triggers_tool_call(
+    @pytest.mark.asyncio
+    async def test_weather_query_triggers_tool_call(
         self, mock_session, mock_summary, mock_get_llm, mock_get_tools
     ):
         """天气查询应触发 get_weather_forecast tool call。"""
@@ -53,23 +53,24 @@ class TestFunctionCallingE2E:
             ],
         )
         mock_llm.bind_tools.return_value = mock_llm
-        mock_llm.invoke.side_effect = [tool_call_msg, AIMessage(content="明天苏州晴")]
+        mock_llm.ainvoke = AsyncMock(side_effect=[tool_call_msg, AIMessage(content="明天苏州晴")])
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        result = asyncio.run(
-            graph.ainvoke({"messages": [HumanMessage(content="明天苏州什么天气")]})
+        result = await graph.ainvoke(
+            {"messages": [HumanMessage(content="明天苏州什么天气")]}
         )
 
         last_msg = result["messages"][-1]
         assert "苏州" in last_msg.content
-        mock_llm.invoke.assert_called()
+        mock_llm.ainvoke.assert_called()
 
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
-    def test_chat_query_does_not_trigger_tool_call(
+    @pytest.mark.asyncio
+    async def test_chat_query_does_not_trigger_tool_call(
         self, mock_session, mock_summary, mock_get_llm, mock_get_tools
     ):
         """闲聊不应触发 tool call，直接返回文本。"""
@@ -84,12 +85,12 @@ class TestFunctionCallingE2E:
 
         mock_llm = MagicMock()
         mock_llm.bind_tools.return_value = mock_llm
-        mock_llm.invoke.return_value = AIMessage(content="你好老李，有啥事？")
+        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="你好老李，有啥事？"))
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        result = asyncio.run(
-            graph.ainvoke({"messages": [HumanMessage(content="你好")]})
+        result = await graph.ainvoke(
+            {"messages": [HumanMessage(content="你好")]}
         )
 
         last_msg = result["messages"][-1]
@@ -99,7 +100,8 @@ class TestFunctionCallingE2E:
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
-    def test_pre_filter_reduces_tools_before_binding(
+    @pytest.mark.asyncio
+    async def test_pre_filter_reduces_tools_before_binding(
         self, mock_session, mock_summary, mock_get_llm, mock_get_tools
     ):
         """天气查询应只绑定 get_weather_forecast，不应绑定其他工具。"""
@@ -120,12 +122,12 @@ class TestFunctionCallingE2E:
 
         mock_llm = MagicMock()
         mock_llm.bind_tools.return_value = mock_llm
-        mock_llm.invoke.return_value = AIMessage(content="明天苏州晴")
+        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="明天苏州晴"))
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        asyncio.run(
-            graph.ainvoke({"messages": [HumanMessage(content="明天苏州什么天气")]})
+        await graph.ainvoke(
+            {"messages": [HumanMessage(content="明天苏州什么天气")]}
         )
 
         mock_llm.bind_tools.assert_called_once()
@@ -139,7 +141,8 @@ class TestFunctionCallingE2E:
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
-    def test_multi_turn_bypasses_pre_filter(
+    @pytest.mark.asyncio
+    async def test_multi_turn_bypasses_pre_filter(
         self, mock_session, mock_summary, mock_get_llm, mock_get_tools
     ):
         """多轮 tool call 场景下，第二轮应绑定全量工具。"""
@@ -166,12 +169,12 @@ class TestFunctionCallingE2E:
 
         mock_llm = MagicMock()
         mock_llm.bind_tools.return_value = mock_llm
-        mock_llm.invoke.side_effect = [tool_call_msg, final_msg]
+        mock_llm.ainvoke = AsyncMock(side_effect=[tool_call_msg, final_msg])
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        asyncio.run(
-            graph.ainvoke({"messages": [HumanMessage(content="看看天气")]})
+        await graph.ainvoke(
+            {"messages": [HumanMessage(content="看看天气")]}
         )
 
         bind_calls = mock_llm.bind_tools.call_args_list
