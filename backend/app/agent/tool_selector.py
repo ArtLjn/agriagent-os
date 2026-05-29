@@ -53,6 +53,9 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
     "get_recent_farm_logs": {
         "农事记录", "操作日志", "干了啥", "记录",
     },
+    "get_farm_status": {
+        "农场", "茬口状态", "种植情况", "农事", "综合状态", "整体情况",
+    },
 }
 
 
