@@ -219,6 +219,7 @@ def _build_debt_line(db: Session, farm_id: int) -> str:
             CostRecord.record_type == "cost",
             CostRecord.note.isnot(None),
             CostRecord.note != "",
+            CostRecord.deleted_at.is_(None),
         )
         .order_by(CostRecord.record_date.desc())
         .limit(_MAX_DEBTS)
@@ -262,6 +263,7 @@ def _build_cost_line(db: Session, farm_id: int) -> str:
         .filter(
             CostRecord.farm_id == farm_id,
             CostRecord.record_type == "cost",
+            CostRecord.deleted_at.is_(None),
             extract("year", CostRecord.record_date) == today.year,
             extract("month", CostRecord.record_date) == today.month,
         )
