@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -221,11 +222,14 @@ class LLMClientManager:
 
 
 _manager: LLMClientManager | None = None
+_manager_lock = threading.Lock()
 
 
 def get_llm_manager() -> LLMClientManager:
-    """获取全局 LLMClientManager 单例。"""
+    """获取全局 LLMClientManager 单例（线程安全）。"""
     global _manager
     if _manager is None:
-        _manager = LLMClientManager()
+        with _manager_lock:
+            if _manager is None:
+                _manager = LLMClientManager()
     return _manager
