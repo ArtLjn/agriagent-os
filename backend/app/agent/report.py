@@ -14,16 +14,10 @@ from app.agent.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
 
-_REPORT_LLM = None
-
-
 def _get_report_llm():
-    """获取绑定了工具的报告 LLM 实例。"""
-    global _REPORT_LLM
-    if _REPORT_LLM is None:
-        tools = get_langchain_tools()
-        _REPORT_LLM = get_llm().bind_tools(tools)
-    return _REPORT_LLM
+    """获取绑定了工具的报告 LLM 实例（每次返回新实例）。"""
+    tools = get_langchain_tools()
+    return get_llm().bind_tools(tools)
 
 
 async def generate_cycle_report(cycle_id: int) -> str:
