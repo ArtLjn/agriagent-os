@@ -133,6 +133,8 @@ class LLMClientManager:
     ) -> tuple[ProviderConfig, ModelConfig, str] | None:
         """获取第一个未 cooldown 的 provider+model+key 组合。"""
         for provider, model in self._chain:
+            if not provider.api_keys:
+                continue
             model_key = f"{provider.name}/{model.id}"
             if self.is_cooled_down(model_key):
                 continue
