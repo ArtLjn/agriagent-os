@@ -31,7 +31,6 @@ from app.infra.trace_context import increment_round
 from app.models.farm import Farm
 from app.models.user import User
 from app.models.user_setting import UserSetting
-from app.services import farm_context_service
 from app.services.quota_service import check_quota
 from app.agent.skills import get_langchain_tools
 from app.agent.tool_selector import select_tools, LLMIntentClassifier
@@ -178,10 +177,9 @@ async def _llm_node(state: AgentState) -> dict:
 
     farm_id = state.get("farm_id", 1)
 
-    # 获取农场上下文摘要和用户称呼
+    # 获取用户称呼和农场位置
     db = SessionLocal()
     try:
-        farm_context_summary = farm_context_service.build_summary(db, farm_id=farm_id)
         farm = db.query(Farm).filter(Farm.id == farm_id).first()
         display_name = "农友"
         user_city = ""
@@ -198,8 +196,7 @@ async def _llm_node(state: AgentState) -> dict:
                 user_city = user_setting.default_city
         farm_location = user_city or (farm.location if farm and farm.location else "")
     except Exception:
-        logger.warning("获取农场上下文失败，使用默认值", exc_info=True)
-        farm_context_summary = ""
+        logger.warning("获取用户信息失败，使用默认值", exc_info=True)
         display_name = "农友"
         farm_location = ""
     finally:
@@ -210,7 +207,6 @@ async def _llm_node(state: AgentState) -> dict:
     system_text = render_prompt(
         "system_base",
         variables={
-            "farm_context_summary": farm_context_summary,
             "display_name": display_name,
             "farm_location": farm_location,
             "current_season": current_season,
