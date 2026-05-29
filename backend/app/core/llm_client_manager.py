@@ -253,7 +253,7 @@ class LLMClientManager:
 
     def get_chat_model(self, **kwargs) -> ChatOpenAI:
         """获取 ChatOpenAI 实例（给 llm.py / graph.py 使用）。"""
-        result = self._get_first_available()
+        result = self._get_next_available()
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
         provider, model, api_key = result
@@ -273,7 +273,7 @@ class LLMClientManager:
 
     def get_sync_client(self) -> OpenAI:
         """获取同步 OpenAI 客户端（给 tool_selector 使用）。"""
-        result = self._get_first_available()
+        result = self._get_next_available()
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
         provider, model, api_key = result
@@ -281,7 +281,7 @@ class LLMClientManager:
 
     def get_async_client(self) -> AsyncOpenAI:
         """获取异步 OpenAI 客户端（给 skills 使用）。"""
-        result = self._get_first_available()
+        result = self._get_next_available()
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
         provider, model, api_key = result
@@ -289,7 +289,7 @@ class LLMClientManager:
 
     def get_model_info(self) -> dict:
         """返回当前使用的 provider/model 信息。"""
-        result = self._get_first_available()
+        result = self._get_next_available()
         if not result:
             return {"provider": "", "model": "", "base_url": ""}
         provider, model, _ = result
