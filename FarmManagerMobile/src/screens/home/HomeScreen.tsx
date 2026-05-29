@@ -22,18 +22,18 @@ import { colors } from "../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-const getGreeting = () => {
+const getGreeting = (displayName: string) => {
   const hour = new Date().getHours();
   if (hour < 11) {
-    return "早上好，农友";
+    return `早上好，${displayName}`;
   }
   if (hour < 14) {
-    return "中午好，农友";
+    return `中午好，${displayName}`;
   }
   if (hour < 18) {
-    return "下午好，农友";
+    return `下午好，${displayName}`;
   }
-  return "晚上好，农友";
+  return `晚上好，${displayName}`;
 };
 
 const QUICK_ACTIONS = [
@@ -86,7 +86,7 @@ export const HomeScreen: React.FC = () => {
     cityName,
     setCity,
   } = useAgentStore();
-  const { defaultCity, setDefaultCity, syncToServer, loadFromServer } = useSettingsStore();
+  const { defaultCity, displayName, setDefaultCity, syncToServer, loadFromServer } = useSettingsStore();
   const { isLoggedIn } = useAuthStore();
   const { fetchCycles } = useCycleStore();
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -125,7 +125,7 @@ export const HomeScreen: React.FC = () => {
     fetchCycles();
   }, [defaultCity, loadCachedWeather, fetchWeather, fetchDailyAdvice, fetchCycles]);
 
-  const greeting = getGreeting();
+  const greeting = getGreeting(displayName);
   const weatherCondition = getWeatherCondition(weather);
 
   const handleCitySelect = (city: {
