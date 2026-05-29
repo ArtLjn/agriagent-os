@@ -21,6 +21,14 @@ weather:
   latitude: 34.26    # 天气查询纬度（默认徐州）
   longitude: 117.18  # 天气查询经度（默认徐州）
 
+# 第三方 API 密钥集中管理
+secrets:
+  qweather_api_key: ""  # 和风天气 API key（免费版）
+  # qweather_appid: ""  # 和风天气 appid（商业版签名认证，备用）
+  # qweather_appsecret: ""  # 和风天气 appsecret（商业版签名认证，备用）
+  dashscope_api_key: ""
+  langsmith_api_key: ""
+
 rate_limiting:
   global_requests_per_minute: 30
   agent_requests_per_minute: 10
