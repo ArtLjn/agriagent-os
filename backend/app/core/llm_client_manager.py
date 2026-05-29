@@ -66,13 +66,6 @@ class ProviderConfig:
     models: list[ModelConfig] = field(default_factory=list)
 
 
-@dataclass
-class CooldownEntry:
-    failures: int = 0
-    until: datetime = field(default_factory=datetime.now)
-    cooldown_minutes: int = 0
-
-
 def classify_error(exc: Exception) -> ErrorLevel:
     """根据异常类型判断错误级别。"""
     from openai import APIConnectionError, AuthenticationError, RateLimitError
@@ -343,10 +336,11 @@ class LLMClientManager:
         return datetime.now() < entry.until
 
     def reload(self) -> None:
-        """热更新：重新加载 providers.json，保留 cooldown 状态。"""
+        """热更新：重新加载 providers.json，重置 cooldown 状态。"""
         path = str(Path(__file__).parent.parent.parent / "providers.json")
         self._chain.clear()
         self._key_counters.clear()
+        self._cooldowns.clear()
         self.fallback_mode = False
         self._load_config(path)
         logger.info("LLMClientManager 热更新完成 | providers=%d | models=%d",
