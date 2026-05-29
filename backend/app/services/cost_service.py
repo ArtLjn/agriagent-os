@@ -1,5 +1,5 @@
 from decimal import Decimal
-from sqlalchemy import extract
+from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from app.models.cost import CostRecord
@@ -62,7 +62,10 @@ def get_records(
     Returns:
         符合条件的 CostRecord 列表，按记录日期倒序排列。
     """
-    query = db.query(CostRecord).filter(CostRecord.farm_id == farm_id)
+    query = db.query(CostRecord).filter(
+        CostRecord.farm_id == farm_id,
+        CostRecord.deleted_at.is_(None),
+    )
     if cycle_id is not None:
         query = query.filter(CostRecord.cycle_id == cycle_id)
     if category is not None:
@@ -87,7 +90,10 @@ def count_records(
     Returns:
         符合条件的记录总数。
     """
-    query = db.query(CostRecord).filter(CostRecord.farm_id == farm_id)
+    query = db.query(CostRecord).filter(
+        CostRecord.farm_id == farm_id,
+        CostRecord.deleted_at.is_(None),
+    )
     if cycle_id is not None:
         query = query.filter(CostRecord.cycle_id == cycle_id)
     if category is not None:
@@ -108,7 +114,11 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
     """
     records = (
         db.query(CostRecord)
-        .filter(CostRecord.cycle_id == cycle_id, CostRecord.farm_id == farm_id)
+        .filter(
+            CostRecord.cycle_id == cycle_id,
+            CostRecord.farm_id == farm_id,
+            CostRecord.deleted_at.is_(None),
+        )
         .all()
     )
     total_cost = sum(
@@ -127,6 +137,29 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
     )
 
 
+def delete_record(db: Session, record_id: int, farm_id: int) -> CostRecord | None:
+    """软删除一条成本记录。"""
+    record = (
+        db.query(CostRecord)
+        .filter(
+            CostRecord.id == record_id,
+            CostRecord.farm_id == farm_id,
+            CostRecord.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not record:
+        return None
+    record.deleted_at = func.now()
+    try:
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        db.rollback()
+        raise
+    return record
+
+
 def get_yearly_summary(db: Session, year: int, farm_id: int) -> YearlySummary:
     """计算指定年度的收支汇总。
 
@@ -143,6 +176,7 @@ def get_yearly_summary(db: Session, year: int, farm_id: int) -> YearlySummary:
         .filter(
             extract("year", CostRecord.record_date) == year,
             CostRecord.farm_id == farm_id,
+            CostRecord.deleted_at.is_(None),
         )
         .all()
     )
@@ -173,4 +207,5 @@ __all__ = [
     "count_records",
     "get_cycle_profit",
     "get_yearly_summary",
+    "delete_record",
 ]

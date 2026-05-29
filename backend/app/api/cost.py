@@ -76,6 +76,19 @@ def get_yearly_summary(
     return cost_service.get_yearly_summary(db, year, farm_id=farm.id)
 
 
+@router.delete("/{record_id}", response_model=CostRecordResponse)
+def delete_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """软删除一条成本记录。"""
+    record = cost_service.delete_record(db, record_id, farm_id=farm.id)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在或已删除")
+    return record
+
+
 @router.post("/parse", response_model=CostParseResponse)
 async def parse_cost_record(
     req: CostParseRequest,
