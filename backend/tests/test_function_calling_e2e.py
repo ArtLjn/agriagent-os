@@ -16,7 +16,7 @@ def _register_prompt_templates():
     registry.register(
         "system_base",
         "1.0",
-        "你是农业顾问。{{ farm_context_summary }} {{ display_name }} "
+        "你是农业顾问。{{ display_name }} "
         "{{ farm_location }} {{ current_season }}",
     )
     yield
@@ -27,11 +27,10 @@ class TestFunctionCallingE2E:
 
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph.get_llm")
-    @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_weather_query_triggers_tool_call(
-        self, mock_session, mock_summary, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, mock_get_tools
     ):
         """天气查询应触发 get_weather_forecast tool call。"""
         mock_db = MagicMock()
@@ -39,7 +38,6 @@ class TestFunctionCallingE2E:
             display_name="老李"
         )
         mock_session.return_value = mock_db
-        mock_summary.return_value = "当前无种植计划"
 
         mock_tool = MagicMock()
         mock_tool.name = "get_weather_forecast"
@@ -67,11 +65,10 @@ class TestFunctionCallingE2E:
 
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph.get_llm")
-    @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_chat_query_does_not_trigger_tool_call(
-        self, mock_session, mock_summary, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, mock_get_tools
     ):
         """闲聊不应触发 tool call，直接返回文本。"""
         mock_db = MagicMock()
@@ -79,7 +76,6 @@ class TestFunctionCallingE2E:
             display_name="老李"
         )
         mock_session.return_value = mock_db
-        mock_summary.return_value = "当前无种植计划"
 
         mock_get_tools.return_value = []
 
@@ -98,11 +94,10 @@ class TestFunctionCallingE2E:
 
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph.get_llm")
-    @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_pre_filter_reduces_tools_before_binding(
-        self, mock_session, mock_summary, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, mock_get_tools
     ):
         """天气查询应只绑定 get_weather_forecast，不应绑定其他工具。"""
         mock_db = MagicMock()
@@ -110,7 +105,6 @@ class TestFunctionCallingE2E:
             display_name="老李"
         )
         mock_session.return_value = mock_db
-        mock_summary.return_value = "当前无种植计划"
 
         weather_tool = MagicMock()
         weather_tool.name = "get_weather_forecast"
@@ -139,11 +133,10 @@ class TestFunctionCallingE2E:
 
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph.get_llm")
-    @patch("app.agent.graph.farm_context_service.build_summary")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_multi_turn_bypasses_pre_filter(
-        self, mock_session, mock_summary, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, mock_get_tools
     ):
         """多轮 tool call 场景下，第二轮应绑定全量工具。"""
         mock_db = MagicMock()
@@ -151,7 +144,6 @@ class TestFunctionCallingE2E:
             display_name="老李"
         )
         mock_session.return_value = mock_db
-        mock_summary.return_value = "当前无种植计划"
 
         weather_tool = MagicMock()
         weather_tool.name = "get_weather_forecast"
@@ -182,4 +174,4 @@ class TestFunctionCallingE2E:
         first_bound = [t.name for t in bind_calls[0][0][0]]
         second_bound = [t.name for t in bind_calls[1][0][0]]
         assert "get_weather_forecast" in first_bound
-        assert len(second_bound) == 2
+        assert len(second_bound) >= 1

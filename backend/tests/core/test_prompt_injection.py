@@ -145,8 +145,8 @@ class TestBaseJ2TemplateContent:
         return template_path.read_text()
 
     def test_base_j2_contains_farm_context_summary(self, base_template):
-        """base.j2 包含 farm_context_summary 占位符。"""
-        assert "farm_context_summary" in base_template
+        """base.j2 不再包含 farm_context_summary 占位符（已由工具获取替代）。"""
+        assert "farm_context_summary" not in base_template
 
     def test_base_j2_contains_display_name(self, base_template):
         """base.j2 回复格式规则中包含 display_name 占位符。"""
@@ -157,8 +157,8 @@ class TestBaseJ2TemplateContent:
         assert "【回复格式】" in base_template
 
     def test_base_j2_contains_farm_status_section(self, base_template):
-        """base.j2 包含【农场现状】章节。"""
-        assert "【农场现状】" in base_template
+        """base.j2 包含【农场状态查询】章节。"""
+        assert "【农场状态查询】" in base_template
 
     def test_base_j2_response_format_rules_content(self, base_template):
         """base.j2 回复格式规则包含关键条目。"""
@@ -176,13 +176,11 @@ class TestBaseJ2TemplateContent:
         result = render_prompt(
             "system_base",
             {
-                "farm_context_summary": "茬口：西瓜(伸蔓期)\n本月花费：500元",
                 "display_name": "老王",
             },
             registry=reg,
             current_date=date(2026, 5, 25),
         )
-        assert "西瓜(伸蔓期)" in result
         assert "老王" in result
         assert "2026-05-25" in result
 
