@@ -1,93 +1,104 @@
-"""天气服务模块，使用 Open-Meteo 免费 API 获取天气预报与预警。"""
+"""天气服务模块，双 Provider 架构（和风天气 + Open-Meteo）。"""
 
-import httpx
+import logging
 
-OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+from app.services.weather.strategy import get_weather_strategy
+
+logger = logging.getLogger(__name__)
 
 
-def fetch_weather(lat: float, lon: float, days: int = 7) -> dict:
-    """获取指定坐标的未来 N 天天气预报。
+async def fetch_weather(location: str, days: int = 7) -> dict:
+    """获取指定地点的未来 N 天天气预报。
 
     Args:
-        lat: 纬度。
-        lon: 经度。
+        location: 城市名（如"苏州"）。
         days: 预报天数（默认 7 天）。
 
     Returns:
-        包含 daily 预报数据和 location 信息的字典。
+        包含 daily 预报数据和 location 信息的字典（兼容旧格式）。
 
     Raises:
-        RuntimeError: 网络请求失败时抛出。
+        RuntimeError: 请求失败时抛出。
     """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "daily": [
-            "temperature_2m_max",
-            "temperature_2m_min",
-            "apparent_temperature_max",
-            "apparent_temperature_min",
-            "precipitation_sum",
-            "precipitation_hours",
-            "windspeed_10m_max",
-            "uv_index_max",
-            "relative_humidity_2m_mean",
-        ],
-        "hourly": ["temperature_2m", "precipitation", "precipitation_probability"],
-        "current_weather": True,
-        "timezone": "auto",
-        "forecast_days": days,
-    }
+    strategy = get_weather_strategy()
     try:
-        response = httpx.get(OPEN_METEO_URL, params=params, timeout=10)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise RuntimeError(f"天气 API 请求失败: {exc}") from exc
+        data = await strategy.fetch(location, days)
+    except Exception as exc:
+        raise RuntimeError(f"天气数据获取失败: {exc}") from exc
 
-    data = response.json()
-    data["location"] = {"latitude": lat, "longitude": lon}
-    return data
+    # 转换为旧格式兼容
+    return _to_legacy_format(data)
+
+
+def _to_legacy_format(data) -> dict:
+    """将新 WeatherData 转换为旧格式（兼容现有前端/Skill）。"""
+    daily_times = []
+    temp_max = []
+    temp_min = []
+    precip_sum = []
+    precip_hours = []
+    wind_speed_max = []
+    uv_index_max = []
+    humidity_mean = []
+    apparent_temp_max = []
+    apparent_temp_min = []
+
+    for day in data.daily:
+        daily_times.append(day.date)
+        temp_max.append(day.temp_max)
+        temp_min.append(day.temp_min)
+        precip_sum.append(day.precipitation)
+        wind_speed_max.append(day.wind_speed)
+        # Open-Meteo 无数据时填默认值
+        precip_hours.append(0 if day.precipitation > 0 else 0)
+        uv_index_max.append(0)
+        humidity_mean.append(60)
+        apparent_temp_max.append(day.temp_max)
+        apparent_temp_min.append(day.temp_min)
+
+    warnings = []
+    for alert in data.alerts:
+        warnings.append(f"{alert.title}: {alert.description}")
+
+    result = {
+        "location": data.location,
+        "provider": data.provider,
+        "daily": {
+            "time": daily_times,
+            "temperature_2m_max": temp_max,
+            "temperature_2m_min": temp_min,
+            "precipitation_sum": precip_sum,
+            "precipitation_hours": precip_hours,
+            "windspeed_10m_max": wind_speed_max,
+            "uv_index_max": uv_index_max,
+            "relative_humidity_2m_mean": humidity_mean,
+            "apparent_temperature_max": apparent_temp_max,
+            "apparent_temperature_min": apparent_temp_min,
+        },
+        "hourly": {
+            "time": [],
+            "temperature_2m": [],
+            "precipitation": [],
+            "precipitation_probability": [],
+        },
+        "current_weather": {"temperature": data.current_temp},
+        "warnings": warnings,
+    }
+    return result
 
 
 def check_weather_warnings(weather_data: dict) -> list[str]:
     """检查天气数据中的灾害预警。
 
-    预警规则：
-    - 高温：日最高温 >= 35°C
-    - 霜冻：日最低温 <= 0°C
-    - 大雨：日降水量 >= 50mm
-    - 大风：日最大风速 >= 17 m/s（7 级风）
+    现在预警由 AlertScraper 从中国天气网获取，这里返回 warnings 字段。
 
     Args:
-        weather_data: Open-Meteo 返回的天气数据字典。
+        weather_data: 天气数据字典。
 
     Returns:
-        预警信息列表，每项格式为 "YYYY-MM-DD: 预警类型（数值）"。
+        预警信息列表。
     """
-    warnings: list[str] = []
-    daily = weather_data.get("daily", {})
-    times = daily.get("time", [])
-    max_temps = daily.get("temperature_2m_max", [])
-    min_temps = daily.get("temperature_2m_min", [])
-    precipitations = daily.get("precipitation_sum", [])
-    wind_speeds = daily.get("windspeed_10m_max", [])
-
-    for i, day in enumerate(times):
-        max_temp = max_temps[i] if i < len(max_temps) else None
-        min_temp = min_temps[i] if i < len(min_temps) else None
-        precip = precipitations[i] if i < len(precipitations) else None
-        wind = wind_speeds[i] if i < len(wind_speeds) else None
-
-        if max_temp is not None and max_temp >= 35:
-            warnings.append(f"{day}: 高温预警（{max_temp}°C）")
-        if min_temp is not None and min_temp <= 0:
-            warnings.append(f"{day}: 霜冻预警（{min_temp}°C）")
-        if precip is not None and precip >= 50:
-            warnings.append(f"{day}: 大雨预警（{precip}mm）")
-        if wind is not None and wind >= 17:
-            warnings.append(f"{day}: 大风预警（{wind}m/s）")
-
-    return warnings
+    return weather_data.get("warnings", [])
 
 
 __all__ = ["fetch_weather", "check_weather_warnings"]

@@ -34,6 +34,15 @@ class DatabaseConfig(BaseModel):
     url: str = f"sqlite:///{_PROJECT_ROOT / 'farm_manager.db'}"
 
 
+class SecretsConfig(BaseModel):
+    """统一密钥管理，所有第三方 API key 集中于此。"""
+    dashscope_api_key: str = ""
+    qweather_api_key: str = ""
+    qweather_appid: str = ""
+    qweather_appsecret: str = ""
+    langsmith_api_key: str = ""
+
+
 class AIConfig(BaseModel):
     model: str = "qwen3.6-flash-2026-04-16"
     api_key: str = ""
@@ -104,6 +113,7 @@ class Settings(BaseSettings):
     auth: AuthConfig = AuthConfig()
     trace: TraceConfig = TraceConfig()
     token_quota: TokenQuotaConfig = TokenQuotaConfig()
+    secrets: SecretsConfig = SecretsConfig()
     project_name: str = "Farm Manager API"
 
     def __init__(self, _config_path: Optional[str] = None, **kwargs):
