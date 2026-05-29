@@ -31,6 +31,22 @@ class ErrorLevel(Enum):
     MODEL = "model"
 
 
+class LLMCircuitState(Enum):
+    """LLM Provider/Model 熔断状态。"""
+    COOLING = "cooling"
+    WARMING = "warming"
+    DEAD = "dead"
+
+
+@dataclass
+class CircuitEntry:
+    """熔断条目 -- 替代旧的 CooldownEntry。"""
+    failures: int = 0
+    until: datetime = field(default_factory=datetime.now)
+    cooldown_minutes: int = 0
+    state: LLMCircuitState = LLMCircuitState.COOLING
+
+
 @dataclass
 class ModelConfig:
     id: str
