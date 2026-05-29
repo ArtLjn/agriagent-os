@@ -98,11 +98,12 @@ class QWeatherProvider(WeatherProvider):
     ) -> WeatherData:
         """获取天气预报。"""
         # 优先使用传入坐标，否则 lookup
+        _placeholder_names = ("当前地块", "地块", "")
         if lat is None or lon is None:
-            if location:
+            if location and location not in _placeholder_names:
                 city_id, lat, lon = await self._lookup_city(location)
             else:
-                city_id, lat, lon = "", 34.26, 117.18  # 默认徐州
+                raise ProviderError("未提供有效位置信息（需要城市名或 GPS 坐标）")
         else:
             city_id = ""
 

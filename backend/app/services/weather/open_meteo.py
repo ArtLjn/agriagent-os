@@ -50,11 +50,12 @@ class OpenMeteoProvider(WeatherProvider):
     ) -> WeatherData:
         """获取天气预报。"""
         # 优先使用传入的坐标，否则 geocoding
+        _placeholder_names = ("当前地块", "地块", "")
         if lat is None or lon is None:
-            if location:
+            if location and location not in _placeholder_names:
                 lat, lon = await self._geocode(location)
             else:
-                raise ProviderError("未提供位置信息")
+                raise ProviderError("未提供有效位置信息（需要城市名或 GPS 坐标）")
         else:
             location = location or f"{lat:.2f},{lon:.2f}"
 
