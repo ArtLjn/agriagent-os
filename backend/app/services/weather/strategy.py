@@ -1,10 +1,12 @@
 """WeatherStrategy — Provider 路由 + 兜底 + 预警注入。"""
 
+import asyncio
 import logging
 
 from app.core.config import settings
 from app.services.weather.alert_scraper import AlertScraper
 from app.services.weather.base import AirQuality, ProviderError, WeatherData
+from app.services.weather.cache import weather_cache
 from app.services.weather.open_meteo import OpenMeteoProvider
 from app.services.weather.qweather import QWeatherProvider
 
@@ -34,8 +36,16 @@ class WeatherStrategy:
         lat: float | None = None,
         lon: float | None = None,
     ) -> WeatherData:
-        """获取天气数据（含路由、兜底、预警注入）。"""
+        """获取天气数据（缓存优先，Provider + 预警并行获取）。"""
+        # 缓存查询
+        cache_key = weather_cache.make_key(location, days, lat, lon)
+        cached, hit = weather_cache.get(cache_key)
+        if hit:
+            logger.debug("缓存命中 key=%s", cache_key)
+            return cached
+
         last_error: Exception | None = None
+        need_alerts = location and location not in ("当前地块", "地块")
 
         for provider in self._providers:
             try:
@@ -51,17 +61,28 @@ class WeatherStrategy:
                 continue
 
             try:
-                data = await provider.fetch_daily(location, days, lat, lon)
-                # 预警爬虫仅支持真实城市名
-                if location and location not in ("当前地块", "地块"):
-                    try:
-                        alerts = self._alert_scraper.fetch_alerts(location)
+                daily_coro = provider.fetch_daily(location, days, lat, lon)
+                if need_alerts:
+                    cached_alerts, alert_hit = weather_cache.get_alert(location)
+                    if alert_hit:
+                        data = await daily_coro
+                        data.alerts = cached_alerts
+                    else:
+                        data, alerts = await asyncio.gather(
+                            daily_coro,
+                            asyncio.to_thread(
+                                self._alert_scraper.fetch_alerts, location
+                            ),
+                            return_exceptions=True,
+                        )
+                        alerts = alerts if isinstance(alerts, list) else []
                         data.alerts = alerts
-                    except Exception as exc:
-                        logger.warning("预警爬取失败，使用空列表: %s", exc)
-                        data.alerts = []
+                        weather_cache.set_alert(location, alerts)
                 else:
+                    data = await daily_coro
                     data.alerts = []
+                # 成功获取后写入缓存
+                weather_cache.set(cache_key, data, ttl=600)
                 return data
             except ProviderError as exc:
                 logger.warning(
@@ -72,14 +93,10 @@ class WeatherStrategy:
                 last_error = exc
 
         if last_error:
-            raise ProviderError(
-                f"所有天气 Provider 均不可用: {last_error}"
-            )
+            raise ProviderError(f"所有天气 Provider 均不可用: {last_error}")
         raise ProviderError("没有可用的天气 Provider")
 
-    async def fetch_air_quality(
-        self, location: str
-    ) -> AirQuality | None:
+    async def fetch_air_quality(self, location: str) -> AirQuality | None:
         """获取空气质量（优先第一个能服务的 provider）。"""
         for provider in self._providers:
             try:
@@ -114,9 +131,7 @@ def get_weather_strategy() -> WeatherStrategy:
         if settings.secrets.qweather_api_key:
             providers.insert(
                 0,
-                QWeatherProvider(
-                    api_key=settings.secrets.qweather_api_key
-                ),
+                QWeatherProvider(api_key=settings.secrets.qweather_api_key),
             )
         # 降级：签名认证（已弃用，仅作为备用）
         elif settings.secrets.qweather_appid and settings.secrets.qweather_appsecret:

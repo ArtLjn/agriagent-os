@@ -12,8 +12,8 @@ import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useCycleStore } from "../../stores/cycleStore";
 import { useAuthStore } from "../../stores/authStore";
-import { CITIES } from "../../data/cities";
-import { WeatherCardApple } from "../../components/WeatherCardApple";
+import { ALL_CITIES } from "../../data/cities";
+import { WeatherCardV2 } from "../../components/WeatherCardV2";
 import { AdviceCard } from "../../components/AdviceCard";
 import { CityPicker } from "../../components/CityPicker";
 import { FadeInSlideUp } from "../../components/animations/FadeInSlideUp";
@@ -81,6 +81,7 @@ export const HomeScreen: React.FC = () => {
     fetchWeather,
     fetchDailyAdvice,
     refreshDailyAdvice,
+    loadCachedWeather,
     loading: agentLoading,
     cityName,
     setCity,
@@ -112,16 +113,17 @@ export const HomeScreen: React.FC = () => {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (defaultCity !== cityName) {
-      const cityData = CITIES.find((c) => c.name === defaultCity);
+    if (defaultCity && defaultCity !== cityName) {
+      const cityData = ALL_CITIES.find((c) => c.name === defaultCity);
       if (cityData) {
         setCity(cityData.name, cityData.lat, cityData.lon);
       }
     }
+    loadCachedWeather();
     fetchWeather();
     fetchDailyAdvice();
     fetchCycles();
-  }, [fetchWeather, fetchDailyAdvice, fetchCycles]);
+  }, [defaultCity, loadCachedWeather, fetchWeather, fetchDailyAdvice, fetchCycles]);
 
   const greeting = getGreeting();
   const weatherCondition = getWeatherCondition(weather);
@@ -176,7 +178,7 @@ export const HomeScreen: React.FC = () => {
 
         {/* Weather Card */}
         <FadeInSlideUp delay={80} style={styles.section}>
-          <WeatherCardApple data={weather} cityName={cityName} />
+          <WeatherCardV2 data={weather} />
         </FadeInSlideUp>
 
         {/* AI Briefing Card */}

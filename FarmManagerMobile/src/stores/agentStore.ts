@@ -27,9 +27,10 @@ interface AgentState {
   fetchDailyAdvice: (cycleId?: number) => Promise<void>;
   refreshDailyAdvice: (cycleId?: number) => Promise<void>;
   generateReport: (reportType: string, cycleId?: number) => Promise<void>;
-  fetchWeather: () => Promise<void>;
+  fetchWeather: (days?: number) => Promise<void>;
   fetchReports: () => Promise<void>;
-  setCity: (name: string, lat?: number, lon?: number) => void;
+  loadCachedWeather: () => Promise<void>;
+  setCity: (name: string, lat?: number, lon?: number) => Promise<void>;
   clearChat: () => void;
   clearError: () => void;
 }
@@ -142,23 +143,45 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
         }
       },
 
-      fetchWeather: async () => {
-        set({ loading: true, error: null });
+      fetchWeather: async (days?: number) => {
+        const currentWeather = useAgentStore.getState().weather;
+        if (!currentWeather) {
+          set({ loading: true, error: null });
+        }
         try {
           const state = useAgentStore.getState();
           const res = await weatherApi.getForecast(
-            3,
+            days ?? 3,
             state.cityLat,
-            state.cityLon
+            state.cityLon,
+            state.cityName
           );
+          const cacheKey = `weather_cache_${state.cityName}`;
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(res.data));
           set({ weather: res.data, loading: false });
         } catch (err: any) {
           set({ error: err.message, loading: false });
         }
       },
 
-      setCity: (name, lat, lon) =>
-        set({ cityName: name, cityLat: lat, cityLon: lon }),
+      loadCachedWeather: async () => {
+        try {
+          const cityName = useAgentStore.getState().cityName;
+          const cacheKey = `weather_cache_${cityName}`;
+          const cached = await AsyncStorage.getItem(cacheKey);
+          if (cached) {
+            set({ weather: JSON.parse(cached) });
+          }
+        } catch (_e) {
+          // 缓存读取失败不影响主流程
+        }
+      },
+
+      setCity: async (name, lat, lon) => {
+        set({ cityName: name, cityLat: lat, cityLon: lon });
+        await useAgentStore.getState().loadCachedWeather();
+        useAgentStore.getState().fetchWeather();
+      },
 
       clearChat: () => set({
         messages: [],
