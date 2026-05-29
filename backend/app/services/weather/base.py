@@ -56,12 +56,20 @@ class WeatherProvider(ABC):
     """天气 Provider 抽象基类。"""
 
     @abstractmethod
-    async def fetch_daily(self, location: str, days: int = 7) -> WeatherData:
+    async def fetch_daily(
+        self,
+        location: str = "",
+        days: int = 7,
+        lat: float | None = None,
+        lon: float | None = None,
+    ) -> WeatherData:
         """获取指定地点的未来 N 天天气预报。
 
         Args:
             location: 城市名（如"苏州"）。
             days: 预报天数。
+            lat: 纬度（提供时跳过 geocoding）。
+            lon: 经度（提供时跳过 geocoding）。
 
         Returns:
             WeatherData 聚合数据。

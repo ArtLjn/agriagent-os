@@ -7,12 +7,19 @@ from app.services.weather.strategy import get_weather_strategy
 logger = logging.getLogger(__name__)
 
 
-async def fetch_weather(location: str, days: int = 7) -> dict:
+async def fetch_weather(
+    location: str = "",
+    days: int = 7,
+    lat: float | None = None,
+    lon: float | None = None,
+) -> dict:
     """获取指定地点的未来 N 天天气预报。
 
     Args:
         location: 城市名（如"苏州"）。
         days: 预报天数（默认 7 天）。
+        lat: 纬度（优先使用坐标）。
+        lon: 经度（优先使用坐标）。
 
     Returns:
         包含 daily 预报数据和 location 信息的字典（兼容旧格式）。
@@ -22,7 +29,7 @@ async def fetch_weather(location: str, days: int = 7) -> dict:
     """
     strategy = get_weather_strategy()
     try:
-        data = await strategy.fetch(location, days)
+        data = await strategy.fetch(location, days, lat, lon)
     except Exception as exc:
         raise RuntimeError(f"天气数据获取失败: {exc}") from exc
 

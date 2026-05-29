@@ -27,7 +27,13 @@ class WeatherStrategy:
         self._providers = providers
         self._alert_scraper = alert_scraper or AlertScraper()
 
-    async def fetch(self, location: str, days: int = 7) -> WeatherData:
+    async def fetch(
+        self,
+        location: str = "",
+        days: int = 7,
+        lat: float | None = None,
+        lon: float | None = None,
+    ) -> WeatherData:
         """获取天气数据（含路由、兜底、预警注入）。"""
         last_error: Exception | None = None
 
@@ -45,12 +51,16 @@ class WeatherStrategy:
                 continue
 
             try:
-                data = await provider.fetch_daily(location, days)
-                try:
-                    alerts = self._alert_scraper.fetch_alerts(location)
-                    data.alerts = alerts
-                except Exception as exc:
-                    logger.warning("预警爬取失败，使用空列表: %s", exc)
+                data = await provider.fetch_daily(location, days, lat, lon)
+                # 预警爬虫仅支持真实城市名
+                if location and location not in ("当前地块", "地块"):
+                    try:
+                        alerts = self._alert_scraper.fetch_alerts(location)
+                        data.alerts = alerts
+                    except Exception as exc:
+                        logger.warning("预警爬取失败，使用空列表: %s", exc)
+                        data.alerts = []
+                else:
                     data.alerts = []
                 return data
             except ProviderError as exc:

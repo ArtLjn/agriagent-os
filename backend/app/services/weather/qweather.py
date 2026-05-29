@@ -89,12 +89,26 @@ class QWeatherProvider(WeatherProvider):
         # 回退：使用默认经纬度（徐州）
         return "", 34.26, 117.18
 
-    async def fetch_daily(self, location: str, days: int = 7) -> WeatherData:
+    async def fetch_daily(
+        self,
+        location: str = "",
+        days: int = 7,
+        lat: float | None = None,
+        lon: float | None = None,
+    ) -> WeatherData:
         """获取天气预报。"""
-        city_id, lat, lon = await self._lookup_city(location)
+        # 优先使用传入坐标，否则 lookup
+        if lat is None or lon is None:
+            if location:
+                city_id, lat, lon = await self._lookup_city(location)
+            else:
+                city_id, lat, lon = "", 34.26, 117.18  # 默认徐州
+        else:
+            city_id = ""
 
         # 优先使用经纬度（更可靠）
         location_param = f"{lon},{lat}" if lat and lon else city_id
+        location = location or f"{lat:.2f},{lon:.2f}"
 
         try:
             async with httpx.AsyncClient(timeout=10) as client:
@@ -135,7 +149,7 @@ class QWeatherProvider(WeatherProvider):
             location=location,
             provider="qweather",
             daily=forecasts,
-            alerts=[],  # 预警由 AlertScraper 独立获取
+            alerts=[],
             air_quality=None,
             current_temp=current_temp,
         )

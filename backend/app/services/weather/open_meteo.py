@@ -41,9 +41,22 @@ class OpenMeteoProvider(WeatherProvider):
         except httpx.HTTPError as exc:
             raise ProviderError(f"Open-Meteo 地理编码失败: {exc}") from exc
 
-    async def fetch_daily(self, location: str, days: int = 7) -> WeatherData:
+    async def fetch_daily(
+        self,
+        location: str = "",
+        days: int = 7,
+        lat: float | None = None,
+        lon: float | None = None,
+    ) -> WeatherData:
         """获取天气预报。"""
-        lat, lon = await self._geocode(location)
+        # 优先使用传入的坐标，否则 geocoding
+        if lat is None or lon is None:
+            if location:
+                lat, lon = await self._geocode(location)
+            else:
+                raise ProviderError("未提供位置信息")
+        else:
+            location = location or f"{lat:.2f},{lon:.2f}"
 
         try:
             async with httpx.AsyncClient(timeout=10) as client:

@@ -159,6 +159,6 @@ class WeatherSkill(Skill):
     async def execute(self, params: dict, context) -> SkillResult:
         farm_id = getattr(context, "farm_id", 1) or 1
         location, lat, lon = _get_user_location(farm_id)
-        data = await fetch_weather(location, days=3)
+        data = await fetch_weather(location, days=3, lat=lat, lon=lon)
         reply = _format_weather_reply(location, data)
         return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
