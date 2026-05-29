@@ -356,6 +356,7 @@ class LLMClientManager:
         self._watcher_started = True
 
         logging.getLogger("watchfiles").setLevel(logging.WARNING)
+        logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
 
         config_path = Path(__file__).parent.parent.parent / "providers.json"
 
@@ -366,8 +367,6 @@ class LLMClientManager:
                     if Path(changed_path).name == config_path.name:
                         logger.info("检测到 providers.json 变化，执行热更新")
                         self.reload()
-                        import app.agent.llm as llm_module
-                        llm_module.LLM_INSTANCE = None
 
         thread = threading.Thread(target=_watch, daemon=True, name="llm-config-watcher")
         thread.start()
@@ -389,16 +388,13 @@ def get_llm_manager() -> LLMClientManager:
 
 
 def reload_llm_config() -> dict:
-    """热更新 LLM 配置（Manager + LLM_INSTANCE 单例）。"""
+    """热更新 LLM 配置（Manager 单例）。"""
     global _manager
     with _manager_lock:
         if _manager is not None:
             _manager.reload()
         else:
             _manager = LLMClientManager()
-
-    import app.agent.llm as llm_module
-    llm_module.LLM_INSTANCE = None
 
     info = _manager.get_model_info()
     logger.info("LLM 配置热更新 | provider=%s | model=%s", info["provider"], info["model"])

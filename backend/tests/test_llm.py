@@ -13,11 +13,9 @@ def _make_fallback_manager():
 
 
 def _reset_llm_singletons():
-    """重置 llm.py 和 llm_client_manager.py 的单例。"""
-    import app.agent.llm as llm_module
+    """重置 llm_client_manager.py 的单例。"""
     import app.core.llm_client_manager as mgr_module
 
-    llm_module.LLM_INSTANCE = None
     mgr_module._manager = None
 
 
