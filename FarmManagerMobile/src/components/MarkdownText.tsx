@@ -27,17 +27,20 @@ const tableRules = {
 export const MarkdownText: React.FC<MarkdownTextProps> = ({
   text,
   baseStyle,
-}) => (
-  <View style={[{ minHeight: 1, flexGrow: 1 }, baseStyle]}>
-    <Markdown
-      style={styles}
-      markdownit={MarkdownIt({ typographer: true })}
-      rules={tableRules}
-    >
-      {text}
-    </Markdown>
-  </View>
-);
+}) => {
+  const processed = text.replace(/\\n/g, "\n");
+  return (
+    <View style={[{ minHeight: 1, flexGrow: 1 }, baseStyle]}>
+      <Markdown
+        style={styles}
+        markdownit={MarkdownIt({ typographer: true })}
+        rules={tableRules}
+      >
+        {processed}
+      </Markdown>
+    </View>
+  );
+};
 
 const h = (size: number, weight: string, color: string) => ({
   fontSize: size,
