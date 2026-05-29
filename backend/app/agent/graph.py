@@ -30,6 +30,7 @@ from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round
 from app.models.farm import Farm
 from app.models.user import User
+from app.models.user_setting import UserSetting
 from app.services import farm_context_service
 from app.services.quota_service import check_quota
 from app.agent.skills import get_langchain_tools
@@ -181,13 +182,20 @@ def _llm_node(state: AgentState) -> dict:
     try:
         farm_context_summary = farm_context_service.build_summary(db, farm_id=farm_id)
         farm = db.query(Farm).filter(Farm.id == farm_id).first()
-        # 从 Farm.user_id 查 User.nickname
         display_name = "农友"
+        user_city = ""
         if farm and farm.user_id:
             user = db.query(User).filter(User.id == farm.user_id).first()
             if user:
                 display_name = user.nickname
-        farm_location = farm.location if farm and farm.location else ""
+            user_setting = (
+                db.query(UserSetting)
+                .filter(UserSetting.user_id == farm.user_id)
+                .first()
+            )
+            if user_setting and user_setting.default_city:
+                user_city = user_setting.default_city
+        farm_location = user_city or (farm.location if farm and farm.location else "")
     except Exception:
         logger.warning("获取农场上下文失败，使用默认值", exc_info=True)
         farm_context_summary = ""
