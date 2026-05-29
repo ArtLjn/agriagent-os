@@ -33,7 +33,7 @@ from app.models.user import User
 from app.models.user_setting import UserSetting
 from app.services.quota_service import check_quota
 from app.agent.skills import get_langchain_tools
-from app.agent.tool_selector import select_tools, LLMIntentClassifier
+from app.agent.tool_selector import expand_by_chain, select_tools, LLMIntentClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,12 @@ async def _llm_node(state: AgentState) -> dict:
     raw_llm = get_llm()
     has_tool_results = any(isinstance(m, ToolMessage) for m in messages)
     if has_tool_results:
-        selected_tools = tools
+        user_msg = _find_last_human_message(messages)
+        selected_names = select_tools(
+            user_msg, tools, intent_classifier=_get_classifier()
+        )
+        selected_names_set = expand_by_chain(set(selected_names))
+        selected_tools = [t for t in tools if t.name in selected_names_set]
     else:
         user_msg = _find_last_human_message(messages)
         selected_names = select_tools(
