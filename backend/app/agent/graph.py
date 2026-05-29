@@ -37,7 +37,6 @@ from app.agent.tool_selector import expand_by_chain, select_tools, LLMIntentClas
 
 logger = logging.getLogger(__name__)
 
-_KEEP_RECENT = 3
 _LLM_SEMAPHORE = asyncio.Semaphore(5)
 
 _classifier: LLMIntentClassifier | None = None
@@ -93,22 +92,39 @@ def _get_season(current_date: date | None = None) -> str:
         return "冬季"
 
 
-def micro_compact(messages: list) -> list:
-    """压缩历史消息中旧的 tool result，只保留最近 N 个完整内容。"""
-    tool_results = [
-        (i, msg) for i, msg in enumerate(messages) if isinstance(msg, ToolMessage)
-    ]
-    if len(tool_results) <= _KEEP_RECENT:
+def sliding_window_compact(
+    messages: list, keep_rounds: int = 5
+) -> list:
+    """Sliding window 消息压缩：最近 N 轮完整保留，旧 ToolMessage 截断。
+
+    一轮 = 从 HumanMessage 到下一个 HumanMessage 之前的所有消息。
+    """
+    if not messages:
         return messages
 
+    round_starts = []
+    for i, msg in enumerate(messages):
+        if isinstance(msg, HumanMessage):
+            round_starts.append(i)
+
+    if len(round_starts) <= keep_rounds:
+        return messages
+
+    compress_up_to = round_starts[-keep_rounds]
+
     result = list(messages)
-    for _idx, (i, msg) in enumerate(tool_results[:-_KEEP_RECENT]):
-        content = msg.content or ""
-        if len(content) > 100:
-            tool_name = getattr(msg, "name", "unknown")
-            result[i] = ToolMessage(
-                content=f"[已执行 {tool_name}]", tool_call_id=msg.tool_call_id
-            )
+    for i, msg in enumerate(result):
+        if i >= compress_up_to:
+            break
+        if isinstance(msg, ToolMessage):
+            content = msg.content or ""
+            if len(content) > 50:
+                tool_name = getattr(msg, "name", "unknown")
+                result[i] = ToolMessage(
+                    content=f"[已执行 {tool_name}]",
+                    tool_call_id=msg.tool_call_id,
+                )
+
     return result
 
 
@@ -229,7 +245,7 @@ async def _llm_node(state: AgentState) -> dict:
     )
 
     system = HumanMessage(content=system_text)
-    messages = micro_compact(state["messages"])
+    messages = sliding_window_compact(state["messages"])
     input_summary = _find_last_human_message(state["messages"])[:200]
 
     # Token 配额检查
