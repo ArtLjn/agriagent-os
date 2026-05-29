@@ -1,5 +1,7 @@
 """天气预报 Skill。"""
 
+import re
+
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
@@ -8,10 +10,27 @@ from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.services.weather_service import check_weather_warnings, fetch_weather
 
+# 常见城市名列表（用于从消息中提取）
+_CITIES = {
+    "北京", "上海", "天津", "重庆", "哈尔滨", "长春", "沈阳", "大连", "石家庄",
+    "太原", "呼和浩特", "济南", "青岛", "郑州", "西安", "兰州", "银川", "西宁",
+    "乌鲁木齐", "合肥", "南京", "苏州", "无锡", "杭州", "宁波", "福州", "厦门",
+    "宁德", "南昌", "济南", "武汉", "长沙", "广州", "深圳", "南宁", "海口", "成都",
+    "贵阳", "昆明", "拉萨", "杭州", "金华", "温州", "嘉兴", "台州", "绍兴",
+}
+
+
+def _extract_city(text: str) -> str | None:
+    """从文本中提取城市名。"""
+    for city in _CITIES:
+        if city in text:
+            return city
+    return None
+
 
 def _get_user_location(farm_id: int) -> tuple[str, float, float]:
     """从 user_settings 读取用户位置（城市名、坐标），无记录时降级到默认值。"""
-    default_city = "当前地块"
+    default_city = "苏州"
     default_lat = settings.weather_latitude
     default_lon = settings.weather_longitude
     try:
@@ -151,14 +170,27 @@ class WeatherSkill(Skill):
     def parameters_schema(self) -> dict:
         return {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "description": "要查询的城市名，如'北京'、'上海'、'宁德'等。",
+                }
+            },
             "required": [],
         }
 
     @cached(ttl_seconds=1800)
     async def execute(self, params: dict, context) -> SkillResult:
         farm_id = getattr(context, "farm_id", 1) or 1
-        location, lat, lon = _get_user_location(farm_id)
+
+        # 优先使用参数中的城市名
+        city = params.get("city", "").strip()
+        if city:
+            location, lat, lon = city, None, None
+        else:
+            # 降级到用户设置的位置
+            location, lat, lon = _get_user_location(farm_id)
+
         data = await fetch_weather(location, days=3, lat=lat, lon=lon)
         reply = _format_weather_reply(location, data)
         return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
