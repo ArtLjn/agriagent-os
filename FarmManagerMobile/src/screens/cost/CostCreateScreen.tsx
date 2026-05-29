@@ -156,6 +156,7 @@ export const CostCreateScreen: React.FC = () => {
           due_date: dueDate.trim() || undefined,
           note: note.trim() || undefined,
         });
+        await useCostStore.getState().fetchRecords();
       } else {
         await createRecord({
           record_type: recordType,

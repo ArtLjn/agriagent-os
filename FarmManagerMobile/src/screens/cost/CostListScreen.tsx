@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import dayjs from "dayjs";
 import { useCostStore } from "../../stores/costStore";
@@ -95,9 +95,11 @@ export const CostListScreen: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<CostRecord | null>(null);
 
-  useEffect(() => {
-    fetchRecords();
-  }, [fetchRecords]);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchRecords();
+    }, [fetchRecords])
+  );
 
   const currentMonth = dayjs(selectedMonth).format("YYYY-MM");
 
