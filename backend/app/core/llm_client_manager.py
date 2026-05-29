@@ -2,6 +2,7 @@
 
 import json
 import logging
+import random
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -173,6 +174,66 @@ class LLMClientManager:
         key = provider.api_keys[idx % len(provider.api_keys)]
         self._key_counters[provider.name] = idx + 1
         return key
+
+    def _is_provider_healthy(self, provider_name: str) -> bool:
+        """检查 provider 是否健康（<50% 模型处于 WARMING/DEAD）。"""
+        provider_models = [
+            m for p, m in self._chain if p.name == provider_name
+        ]
+        if not provider_models:
+            return True
+        bad_count = 0
+        for m in provider_models:
+            key = f"{provider_name}/{m.id}"
+            entry = self._cooldowns.get(key)
+            if entry and entry.state in (
+                LLMCircuitState.WARMING,
+                LLMCircuitState.DEAD,
+            ):
+                bad_count += 1
+        return bad_count < len(provider_models) / 2
+
+    def _weighted_random_choice(
+        self, candidates: list[tuple[ProviderConfig, ModelConfig, str, int]]
+    ) -> tuple[ProviderConfig, ModelConfig, str] | None:
+        """按权重随机选择一个候选。"""
+        if not candidates:
+            return None
+        total = sum(w for _, _, _, w in candidates)
+        r = random.random() * total
+        cumulative = 0
+        for provider, model, api_key, weight in candidates:
+            cumulative += weight
+            if r <= cumulative:
+                return provider, model, api_key
+        return candidates[-1][:3]
+
+    def _get_next_available(
+        self,
+    ) -> tuple[ProviderConfig, ModelConfig, str] | None:
+        """获取下一个可用的 provider+model+key（加权随机）。"""
+        seen_providers: set[str] = set()
+        candidates: list[tuple[ProviderConfig, ModelConfig, str, int]] = []
+
+        for provider, model in self._chain:
+            if not provider.enabled or not model.enabled:
+                continue
+            if not provider.api_keys:
+                continue
+            model_key = f"{provider.name}/{model.id}"
+            if self.is_cooled_down(model_key):
+                continue
+            if not self._is_provider_healthy(provider.name):
+                continue
+            if provider.name in seen_providers:
+                continue
+            seen_providers.add(provider.name)
+            api_key = self._get_api_key(provider)
+            if not api_key:
+                continue
+            candidates.append((provider, model, api_key, provider.weight))
+
+        return self._weighted_random_choice(candidates)
 
     def _get_first_available(
         self,
