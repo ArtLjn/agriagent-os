@@ -164,7 +164,28 @@ async def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     messages = state["messages"]
 
-    pending_msgs = [m for m in messages if is_pending_tool_message(m)]
+    tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
+    pending_msgs = [m for m in tool_msgs if is_pending_tool_message(m)]
+    normal_msgs = [m for m in tool_msgs if not is_pending_tool_message(m)]
+
+    if pending_msgs and normal_msgs:
+        summaries = []
+        for m in normal_msgs:
+            content = str(m.content or "")
+            if content:
+                summaries.append(content[:200])
+        confirm_parts = []
+        for m in pending_msgs:
+            confirm = m.content.replace(PENDING_MARKER, "").strip()
+            confirm_parts.append(confirm)
+        combined = "\n\n".join(summaries) + "\n\n" + "\n\n".join(confirm_parts)
+        logger.info(
+            "混合 ToolMessage | pending=%d normal=%d | 跳过 LLM 合并回复",
+            len(pending_msgs),
+            len(normal_msgs),
+        )
+        return {"messages": [AIMessage(content=combined)]}
+
     if pending_msgs:
         confirm = pending_msgs[-1].content.replace(PENDING_MARKER, "").strip()
         logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
@@ -172,7 +193,7 @@ async def _llm_node(state: AgentState) -> dict:
 
     tools = get_langchain_tools()
     raw_llm = get_llm()
-    has_tool_results = any(isinstance(m, ToolMessage) for m in messages)
+    has_tool_results = bool(tool_msgs)
     if has_tool_results:
         user_msg = _find_last_human_message(messages)
         selected_names = select_tools(
