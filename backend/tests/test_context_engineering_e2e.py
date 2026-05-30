@@ -2,11 +2,12 @@
 
 验证三步改造的整体效果：
 1. get_farm_status Skill 被 skillify 自动发现
-2. base.j2 不再包含 farm_context_summary 变量
+2. system_base 由 Composer snippets 组合渲染，不含 farm_context_summary
 3. TOOL_CHAIN_MAP + expand_by_chain 正确扩展工具链
 4. sliding_window_compact 函数存在且可调用
 """
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -16,15 +17,14 @@ _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
 @pytest.fixture()
-def _registry_with_base():
-    """从 prompts/ 目录加载 base.j2 并注册 system_base 别名的 registry。"""
+def _composer():
+    """从 prompts/ 目录初始化的 PromptComposer。"""
+    from app.agent.prompt_composer import PromptComposer
     from app.agent.prompt_registry import PromptRegistry
 
     reg = PromptRegistry()
     reg.reload(_PROMPTS_DIR)
-    base_content = reg.get("base")
-    reg.register("system_base", "1.0", base_content)
-    return reg
+    return PromptComposer(reg, _PROMPTS_DIR)
 
 
 class TestSkillRegistration:
@@ -51,52 +51,40 @@ class TestSkillRegistration:
 
 
 class TestBasePromptNoFarmContext:
-    """验证 system prompt 不再嵌入 farm_context_summary。"""
+    """验证 Composer 组合的 system prompt 不再嵌入 farm_context_summary。"""
 
-    def test_base_prompt_no_farm_context_variable(self, _registry_with_base):
-        """base.j2 渲染后不包含 farm_context_summary 占位文本。"""
-        from app.agent.prompt_renderer import render_prompt
-        from datetime import date
-
-        text = render_prompt(
+    def test_base_prompt_no_farm_context_variable(self, _composer):
+        """Composer 组合后不包含 farm_context_summary 占位文本。"""
+        text = _composer.compose(
             "system_base",
             variables={
                 "display_name": "农友",
                 "farm_location": "苏州",
                 "current_season": "夏季",
             },
-            registry=_registry_with_base,
             current_date=date(2026, 5, 29),
         )
-        # 不应包含 farm_context_summary 变量引用
         assert "farm_context_summary" not in text
 
-    def test_base_prompt_contains_farm_status_guidance(self, _registry_with_base):
-        """base.j2 应包含 get_farm_status 工具引导。"""
-        from app.agent.prompt_renderer import render_prompt
-        from datetime import date
-
-        text = render_prompt(
+    def test_base_prompt_no_hardcoded_tool_routing(self, _composer):
+        """Composer 组合结果不硬编码具体工具名。"""
+        text = _composer.compose(
             "system_base",
             variables={
                 "display_name": "农友",
                 "farm_location": "苏州",
                 "current_season": "夏季",
             },
-            registry=_registry_with_base,
             current_date=date(2026, 5, 29),
         )
-        assert "get_farm_status" in text
+        assert "get_farm_status" not in text
+        assert "get_weather_forecast" not in text
 
-    def test_base_prompt_renders_with_minimal_vars(self, _registry_with_base):
-        """base.j2 仅用最少变量即可正常渲染。"""
-        from app.agent.prompt_renderer import render_prompt
-        from datetime import date
-
-        text = render_prompt(
+    def test_base_prompt_renders_with_minimal_vars(self, _composer):
+        """Composer 组合结果仅用最少变量即可正常渲染。"""
+        text = _composer.compose(
             "system_base",
             variables={"display_name": "农友"},
-            registry=_registry_with_base,
             current_date=date(2026, 5, 29),
         )
         assert len(text) > 100
@@ -244,21 +232,22 @@ class TestCrossCuttingIntegration:
             expanded = expand_by_chain({tool})
             assert "get_farm_status" in expanded
 
-    def test_prompt_guides_farm_status_tool_call(self, _registry_with_base):
-        """system prompt 中明确引导 Agent 调用 get_farm_status。"""
-        from app.agent.prompt_renderer import render_prompt
-        from datetime import date
+    def test_tool_chain_handles_farm_status_routing(self, _composer):
+        """get_farm_status 路由由 TOOL_CHAIN_MAP 自动处理，prompt 不硬编码。"""
+        from app.agent.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
 
-        text = render_prompt(
+        text = _composer.compose(
             "system_base",
             variables={"display_name": "农友"},
-            registry=_registry_with_base,
             current_date=date(2026, 5, 29),
         )
-        # prompt 应提到 get_farm_status
-        assert "get_farm_status" in text
-        # prompt 不应包含旧的内嵌上下文变量
+        # prompt 不硬编码工具名
+        assert "get_farm_status" not in text
         assert "farm_context_summary" not in text
+        # TOOL_CHAIN_MAP 确保查询工具能获取农场状态
+        for tool in ["get_weather_forecast", "get_cost_summary", "get_crop_cycle_info"]:
+            expanded = expand_by_chain({tool})
+            assert "get_farm_status" in expanded
 
     def test_sliding_window_preserves_recent_context(self):
         """sliding_window_compact 保留最近 N 轮完整上下文。"""

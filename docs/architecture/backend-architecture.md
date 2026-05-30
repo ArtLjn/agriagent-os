@@ -101,7 +101,7 @@ flowchart TB
 
     subgraph "数据层"
         SQLite[("SQLite<br/>farm_manager.db<br/>16 张表")]
-        PromptFiles["prompts/<br/>Jinja2 模板"]
+        PromptFiles["prompts/<br/>snippets/ + templates<br/>config.yaml"]
         ProvidersJSON["providers.json<br/>LLM 路由配置"]
     end
 
@@ -244,7 +244,7 @@ sequenceDiagram
     G-->>Adv: 通过
 
     Adv->>Adv: 加载对话历史
-    Adv->>Adv: 渲染系统 Prompt
+    Adv->>Adv: Composer 组合系统 Prompt（snippets + priority stack）
 
     loop LangGraph 循环 (max 15 步)
         Adv->>TS: 三层工具预过滤
@@ -307,9 +307,10 @@ flowchart TB
     subgraph "Prompt 系统"
         Registry["PromptRegistry<br/>线程安全 · 版本管理<br/>热重载"]
         Renderer["PromptRenderer<br/>Jinja2 · 内置日期变量"]
-        Composer["PromptComposer<br/>snippet 组合 · Priority Stack<br/>场景配置"]
-        Templates["prompts/<br/>base.j2 · config.yaml · snippets/<br/>crop_template_parse.j2<br/>cycle_parse.j2"]
-        Composer --> Registry & Renderer & Templates
+        Composer["PromptComposer<br/>snippet 组合 · Priority Stack<br/>场景配置 · 去重"]
+        Snippets["prompts/snippets/<br/>p1-language · p1-tool-guardrails<br/>p2-role · p2-capability<br/>p3-format · p3-style<br/>p4-context"]
+        TaskTemplates["prompts/<br/>cost_parse · crop_template_parse<br/>cycle_parse · report<br/>config.yaml"]
+        Composer --> Registry & Renderer & Snippets & TaskTemplates
     end
 
     subgraph "上下文工程"
@@ -351,8 +352,75 @@ flowchart TB
 | `guardrails.py` | 输入安全（注入检测、敏感词）+ 输出 PII 过滤 |
 | `prompt_registry.py` | 线程安全 Prompt 模板注册中心，支持版本管理和热重载 |
 | `prompt_renderer.py` | Jinja2 渲染器，内置日期/时间变量 |
-| `prompt_composer.py` | Prompt 组合器，按场景组合 snippet 片段渲染最终 prompt，支持 Priority Stack |
+| `prompt_composer.py` | Prompt 组合器，按场景组合 snippet 片段渲染最终 prompt。Priority Stack 排序（P1-P4），snippet 去重，全局单例。设计参考 Anthropic Tool Design + PE Collective |
 | `report.py` | 种植周期报告生成，通过 LLM + Tool 调用 |
+
+### Prompt 加载流程
+
+#### 三层架构总览
+
+```mermaid
+flowchart LR
+    Composer["PromptComposer<br/>场景路由 · snippet 组合 · priority 排序"]
+    Renderer["PromptRenderer<br/>Jinja2 渲染 · 变量注入"]
+    Registry["PromptRegistry<br/>模板注册 · 热重载"]
+    Composer --> Renderer --> Registry
+```
+
+#### 启动阶段（服务启动时执行一次）
+
+```mermaid
+flowchart LR
+    A["get_registry()"] --> B["registry.reload(prompts_dir)"]
+    B --> C["读取 config.yaml"]
+    C --> D["加载 4 个 .j2 模板"]
+    D --> E["get_composer()"]
+    E --> F["扫描 snippets/ 目录"]
+    E --> G["读取 compositions 段"]
+    F --> H["Prompt 系统就绪"]
+    G --> H
+
+    style H fill:#22c55e,color:#fff
+```
+
+#### 运行时：两种组合模式
+
+```mermaid
+flowchart TB
+    subgraph "模式 A：完整组合 system_base（graph.py）"
+        direction LR
+        A1["compose('system_base')"] --> A2["查 compositions 配置"]
+        A2 --> A3["取 7 个 snippets"]
+        A3 --> A4["去重 → 渲染 → 排序 P1→P4"]
+        A4 --> A5["拼接 → 标题去重"]
+        A5 --> A6["最终 system prompt"]
+    end
+
+    subgraph "模式 B：模板组合 cost_parse（cost.py）"
+        direction LR
+        B1["compose('cost_parse')"] --> B2["查 compositions 配置"]
+        B2 --> B3["取 p1-language snippet"]
+        B3 --> B4["渲染 snippet"]
+        B4 --> B5["Registry 取任务模板"]
+        B5 --> B6["渲染模板"]
+        B6 --> B7["snippet + template 拼接"]
+        B7 --> B8["标题去重"]
+        B8 --> B9["最终 cost_parse prompt"]
+    end
+
+    style A6 fill:#22c55e,color:#fff
+    style B9 fill:#22c55e,color:#fff
+```
+
+**5 个调用点：**
+
+| 调用位置 | 场景 | Snippets | Task Template |
+|----------|------|----------|---------------|
+| `graph.py:227` | `system_base` | 7 个（完整组合） | — |
+| `report.py:33` | `report` | p1-language | report.j2 |
+| `cost.py:120` | `cost_parse` | p1-language | cost_parse.j2 |
+| `crop.py:123` | `crop_template_parse` | p1-language | crop_template_parse.j2 |
+| `cycle.py:152` | `cycle_parse` | p1-language | cycle_parse.j2 |
 
 ---
 
@@ -875,14 +943,39 @@ erDiagram
 | `trace_cleaner.py` | TTL 清理：Trace 7天，Token 统计 90天，每日执行 |
 | `skill_cache.py` | Skill 结果 TTL 缓存装饰器 |
 
-### prompts/ — Prompt 模板
+### prompts/ — Prompt 模板（Composer + Snippet 架构）
+
+**设计理念：** 基于 Anthropic Tool Design、LangChain Context Engineering、PE Collective Priority Stack 等成熟实践。
+
+核心原则：
+- **工具路由不在 prompt 中** — tool_selector.py 三层过滤 + Tool.description 自动注入已覆盖，prompt 只保留行为约束（"禁止编造数据"）
+- **可组合 Snippet** — 按关注点拆分为 p1-p4 优先级片段，PromptComposer 按场景组合
+- **Priority Stack** — P1 Safety > P2 Accuracy > P3 Format > P4 Context，消除多个"最高优先级"矛盾
 
 | 文件 | 职责 |
 |------|------|
-| `base.j2` | Agent 系统主 Prompt 模板 |
-| `config.yaml` | Prompt 配置（变量、版本号） |
-| `crop_template_parse.j2` | 作物模板解析 Prompt |
-| `cycle_parse.j2` | 种植周期解析 Prompt |
+| `config.yaml` | Prompt 配置：templates（任务模板）+ compositions（场景组合） |
+| `cost_parse.j2` | 记账解析任务模板 |
+| `crop_template_parse.j2` | 作物模板解析任务模板 |
+| `cycle_parse.j2` | 种植周期解析任务模板 |
+| `report.j2` | 报告生成任务模板 |
+| `snippets/p1-language.j2` | P1 Safety：语言规则（全程中文） |
+| `snippets/p1-tool-guardrails.j2` | P1 Safety：工具调用安全护栏（禁止编造数据） |
+| `snippets/p2-role.j2` | P2 Accuracy：角色定义（农业技术顾问） |
+| `snippets/p2-capability.j2` | P2 Accuracy：能力范围 |
+| `snippets/p3-format.j2` | P3 Format：回复格式约束 |
+| `snippets/p3-style.j2` | P3 Format：回复风格 |
+| `snippets/p4-context.j2` | P4 Context：动态上下文（时间/用户信息，Jinja2 变量注入） |
+
+**场景组合示例：**
+
+| 场景 | Snippets | Task Template |
+|------|----------|---------------|
+| `system_base` | p1-language + p1-tool-guardrails + p2-role + p2-capability + p3-format + p3-style + p4-context | — |
+| `cost_parse` | p1-language | cost_parse.j2 |
+| `crop_template_parse` | p1-language | crop_template_parse.j2 |
+| `cycle_parse` | p1-language | cycle_parse.j2 |
+| `report` | p1-language | report.j2 |
 
 ### 其他
 
