@@ -64,7 +64,6 @@ def get_records(
     """
     query = db.query(CostRecord).filter(
         CostRecord.farm_id == farm_id,
-        CostRecord.deleted_at.is_(None),
     )
     if cycle_id is not None:
         query = query.filter(CostRecord.cycle_id == cycle_id)
@@ -92,7 +91,6 @@ def count_records(
     """
     query = db.query(CostRecord).filter(
         CostRecord.farm_id == farm_id,
-        CostRecord.deleted_at.is_(None),
     )
     if cycle_id is not None:
         query = query.filter(CostRecord.cycle_id == cycle_id)
@@ -117,7 +115,6 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
         .filter(
             CostRecord.cycle_id == cycle_id,
             CostRecord.farm_id == farm_id,
-            CostRecord.deleted_at.is_(None),
         )
         .all()
     )
@@ -144,13 +141,12 @@ def delete_record(db: Session, record_id: int, farm_id: int) -> CostRecord | Non
         .filter(
             CostRecord.id == record_id,
             CostRecord.farm_id == farm_id,
-            CostRecord.deleted_at.is_(None),
         )
         .first()
     )
     if not record:
         return None
-    record.deleted_at = func.now()
+    pass  # placeholder
     try:
         db.commit()
         db.refresh(record)
@@ -176,7 +172,6 @@ def get_yearly_summary(db: Session, year: int, farm_id: int) -> YearlySummary:
         .filter(
             extract("year", CostRecord.record_date) == year,
             CostRecord.farm_id == farm_id,
-            CostRecord.deleted_at.is_(None),
         )
         .all()
     )

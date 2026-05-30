@@ -56,3 +56,18 @@ class CropCycleListResponse(BaseModel):
     status: str
     current_stage_name: str | None = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class CycleParseRequest(BaseModel):
+    """AI 解析茬口请求 Schema。"""
+
+    description: str
+
+
+class CycleParseResponse(BaseModel):
+    """AI 解析茬口响应 Schema。"""
+
+    name: str
+    crop_template_id: int | None = None
+    start_date: str
+    field_name: str | None = None
