@@ -94,7 +94,11 @@ const styles = {
     marginRight: spacing.sm,
     minWidth: 20,
   },
-  list_item: textBase,
+  list_item: {
+    ...textBase,
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+  },
   blockquote: {
     borderLeftWidth: 3,
     borderLeftColor: colors.primary,
