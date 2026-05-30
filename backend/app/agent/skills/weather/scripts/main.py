@@ -78,7 +78,7 @@ def _format_date_m_d(date_str: str) -> str:
 
 
 def _format_weather_reply(location: str, data: dict) -> str:
-    """将天气数据格式化为 Markdown 表格回复。"""
+    """将天气数据格式化为结构化文本，由 LLM 决定最终呈现方式。"""
     daily = data.get("daily", {})
     times = daily.get("time", [])
     max_temps = daily.get("temperature_2m_max", [])
@@ -92,34 +92,16 @@ def _format_weather_reply(location: str, data: dict) -> str:
     humidity = daily.get("relative_humidity_2m_mean", [])
 
     if not times:
-        return "🌤️ 暂时获取不到天气数据，请稍后再试。"
+        return "暂时获取不到天气数据，请稍后再试。"
 
-    # 当前天气
     current = data.get("current_weather", {})
     current_temp = current.get("temperature", None)
-
     count = min(3, len(times))
 
-    lines = [f"📍 {location} · 未来 {count} 天预报"]
+    lines = [f"城市: {location}", f"未来天数: {count}天"]
     if current_temp is not None:
-        lines.append(f"🌡️ 当前 {current_temp}℃")
+        lines.append(f"当前温度: {current_temp}℃")
     lines.append("")
-    lines.append("| 日期 | 天气 | 最高 | 最低 | 体感 | 降水 | 风速 | 湿度 | UV |")
-    lines.append("|------|------|------|------|------|------|------|------|----|")
-
-    # 获取小时级数据
-    hourly = data.get("hourly", {})
-    hourly_time = hourly.get("time", [])
-    hourly_precip = hourly.get("precipitation", [])
-    hourly_prob = hourly.get("precipitation_probability", [])
-
-    # 计算今日降水时段
-    rain_times = []
-    if hourly_time and hourly_precip:
-        for t, rain, prob in zip(hourly_time[:24], hourly_precip[:24], hourly_prob[:24]):
-            if rain > 0 or prob >= 50:
-                hour = int(t.split("T")[1].split(":")[0])
-                rain_times.append(f"{hour}时({prob}%)")
 
     for i in range(count):
         day = _format_date_m_d(times[i])
@@ -132,25 +114,38 @@ def _format_weather_reply(location: str, data: dict) -> str:
         h = humidity[i] if i < len(humidity) else "-"
         emoji = _weather_emoji(float(p), float(max_t) if max_t != "-" else 20)
 
-        # 体感温度
         if i < len(feels_like_max) and i < len(feels_like_min):
             feels = f"{feels_like_min[i]:.0f}~{feels_like_max[i]:.0f}"
         else:
             feels = "-"
 
-        lines.append(f"| {day} | {emoji} | {max_t}℃ | {min_t}℃ | {feels}℃ | {p}mm({ph}h) | {w}m/s | {h}% | {uv} |")
+        lines.append(
+            f"{day}: 天气{emoji}, 最高{max_t}℃, 最低{min_t}℃, "
+            f"体感{feels}℃, 降水{p}mm({ph}h), 风速{w}m/s, 湿度{h}%, UV{uv}"
+        )
 
-    # 降水时段详情
+    hourly = data.get("hourly", {})
+    hourly_time = hourly.get("time", [])
+    hourly_precip = hourly.get("precipitation", [])
+    hourly_prob = hourly.get("precipitation_probability", [])
+
+    rain_times = []
+    if hourly_time and hourly_precip:
+        for t, rain, prob in zip(hourly_time[:24], hourly_precip[:24], hourly_prob[:24]):
+            if rain > 0 or prob >= 50:
+                hour = int(t.split("T")[1].split(":")[0])
+                rain_times.append(f"{hour}时({prob}%)")
+
     if rain_times:
         lines.append("")
-        lines.append(f"**🌧️ 今日降水时段**: {', '.join(rain_times[:6])}")
+        lines.append(f"今日降水时段: {', '.join(rain_times[:6])}")
         if len(rain_times) > 6:
-            lines.append(f"... 还有 {len(rain_times) - 6} 个时段")
+            lines.append(f"还有 {len(rain_times) - 6} 个时段")
 
     warnings = check_weather_warnings(data)
     if warnings:
         lines.append("")
-        lines.append("### ⚠️ 天气预警")
+        lines.append("天气预警:")
         for w in warnings:
             lines.append(f"- {w}")
 
