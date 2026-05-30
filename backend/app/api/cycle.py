@@ -25,6 +25,49 @@ from app.services import crop_service, cycle_service
 router = APIRouter(prefix="/cycles", tags=["cycles"])
 
 
+async def _parse_cycle_with_llm(
+    llm,
+    prompt: str,
+    logger: logging.Logger,
+) -> CycleParseResponse:
+    """通过 LLM 解析茬口，优先用 structured output，失败则 fallback 到 JSON 解析。"""
+    try:
+        structured_llm = llm.with_structured_output(
+            CycleParseResponse, method="function_calling"
+        )
+        response = await structured_llm.ainvoke([HumanMessage(content=prompt)])
+    except Exception as structured_err:
+        logger.warning(
+            "with_structured_output 失败，回退到 JSON 解析: %s",
+            structured_err,
+            exc_info=True,
+        )
+        try:
+            result = await llm.ainvoke([HumanMessage(content=prompt)])
+            reply = result.content
+        except Exception as e:
+            logger.error("AI 调用失败: %s", e)
+            raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
+
+        try:
+            data = safe_parse_json(reply)
+        except ValueError:
+            logger.error("AI 返回无法解析: %s", reply[:200])
+            raise HTTPException(
+                status_code=422, detail=f"AI 返回格式异常: {reply[:100]}"
+            )
+
+        try:
+            response = CycleParseResponse.model_validate(data)
+        except Exception as e:
+            logger.error("AI 返回数据校验失败: %s", e)
+            raise HTTPException(
+                status_code=422,
+                detail="无法识别茬口信息，请描述种植计划，例如：春季种番茄、秋茬种西瓜",
+            )
+    return response
+
+
 @router.post("", response_model=CropCycleResponse)
 def create_cycle(
     cycle: CropCycleCreate,
@@ -156,35 +199,15 @@ async def parse_cycle(
     logger.info("AI 解析茬口 | farm=%s | input: %s", farm.id, req.description)
 
     llm = get_llm()
-    try:
-        result = await llm.ainvoke([HumanMessage(content=prompt)])
-        reply = result.content
-    except Exception as e:
-        logger.error("AI 调用失败: %s", e)
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
+    response = await _parse_cycle_with_llm(llm, prompt, logger)
 
-    try:
-        data = safe_parse_json(reply)
-    except ValueError:
-        logger.error("AI 返回无法解析: %s", reply[:200])
-        raise HTTPException(status_code=422, detail=f"AI 返回格式异常: {reply[:100]}")
-
-    if data.get("crop_template_id") is not None:
-        template_id = data["crop_template_id"]
-        found = any(t.id == template_id for t in templates)
+    # cross-validate: crop_template_id 必须来自真实模板
+    if response.crop_template_id is not None:
+        found = any(t.id == response.crop_template_id for t in templates)
         if not found:
-            data["crop_template_id"] = None
+            response.crop_template_id = None
 
-    if not data.get("name"):
-        raise HTTPException(
-            status_code=422,
-            detail="无法识别茬口信息，请描述种植计划，例如：春季种番茄、秋茬种西瓜",
-        )
-
-    try:
-        response = CycleParseResponse.model_validate(data)
-    except Exception as e:
-        logger.error("AI 返回数据校验失败: %s", e)
+    if not response.name:
         raise HTTPException(
             status_code=422,
             detail="无法识别茬口信息，请描述种植计划，例如：春季种番茄、秋茬种西瓜",
