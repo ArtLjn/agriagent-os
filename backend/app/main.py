@@ -76,6 +76,11 @@ async def lifespan(app: FastAPI):
     registry.reload(settings.prompts_dir)
     logger.info("Prompt 模板已加载 | dir=%s", settings.prompts_dir)
 
+    # 初始化 PromptComposer 全局单例
+    from app.agent.prompt_composer import get_composer
+    get_composer()
+    logger.info("PromptComposer 初始化完成")
+
     # 启动 Trace 后台 worker
     await start_trace_system()
 
