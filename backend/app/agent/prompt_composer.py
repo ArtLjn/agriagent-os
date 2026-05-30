@@ -136,9 +136,8 @@ def get_composer() -> PromptComposer:
     global _composer
     if _composer is None:
         from app.agent.prompt_registry import get_registry
-        from app.core.config import get_settings
+        from app.core.config import settings
 
-        settings = get_settings()
         _composer = PromptComposer(get_registry(), settings.prompts_dir)
     return _composer
 
