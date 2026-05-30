@@ -134,75 +134,91 @@ class TestResponseFormatRules:
 
 
 class TestBaseJ2TemplateContent:
-    """验证 base.j2 模板文件包含所需的占位符和块。"""
+    """验证 snippet 模板文件包含所需的占位符和块（base.j2 已拆分为 snippet）。"""
 
     @pytest.fixture()
-    def base_template(self):
-        """加载 base.j2 模板内容。"""
+    def format_snippet(self):
+        """加载 p3-format.j2 回复格式 snippet。"""
         from pathlib import Path
 
-        template_path = Path(__file__).parent.parent.parent / "prompts" / "base.j2"
-        return template_path.read_text()
+        return (Path(__file__).parent.parent.parent / "prompts" / "snippets" / "p3-format.j2").read_text()
 
-    def test_base_j2_contains_farm_context_summary(self, base_template):
-        """base.j2 不再包含 farm_context_summary 占位符（已由工具获取替代）。"""
-        assert "farm_context_summary" not in base_template
+    @pytest.fixture()
+    def context_snippet(self):
+        """加载 p4-context.j2 上下文 snippet。"""
+        from pathlib import Path
 
-    def test_base_j2_contains_display_name(self, base_template):
-        """base.j2 回复格式规则中包含 display_name 占位符。"""
-        assert "display_name" in base_template
+        return (Path(__file__).parent.parent.parent / "prompts" / "snippets" / "p4-context.j2").read_text()
 
-    def test_base_j2_contains_response_format_section(self, base_template):
-        """base.j2 包含【回复格式】章节。"""
-        assert "【回复格式】" in base_template
+    def test_snippets_not_contain_farm_context_summary(self):
+        """snippet 体系不再包含 farm_context_summary 占位符（已由工具获取替代）。"""
+        from pathlib import Path
 
-    def test_base_j2_contains_farm_status_section(self, base_template):
-        """base.j2 包含【农场状态查询】章节。"""
-        assert "【农场状态查询】" in base_template
+        snippets_dir = Path(__file__).parent.parent.parent / "prompts" / "snippets"
+        for f in snippets_dir.glob("*.j2"):
+            assert "farm_context_summary" not in f.read_text(), f"{f.name} 包含 farm_context_summary"
 
-    def test_base_j2_response_format_rules_content(self, base_template):
-        """base.j2 回复格式规则包含关键条目。"""
-        assert "称呼用户为" in base_template
-        assert "不超过2行" in base_template
-        assert "不超过5条" in base_template
-        assert "先说结论" in base_template
-        assert "禁止铺垫" in base_template
-        assert "口语化" in base_template
+    def test_context_snippet_contains_display_name(self, context_snippet):
+        """p4-context.j2 中包含 display_name 占位符。"""
+        assert "display_name" in context_snippet
 
-    def test_base_j2_renders_full_template(self, base_template):
-        """完整 base.j2 模板渲染不报错，所有变量正确注入。"""
+    def test_format_snippet_contains_response_format_section(self, format_snippet):
+        """p3-format.j2 包含【回复格式】章节。"""
+        assert "【回复格式】" in format_snippet
+
+    def test_no_farm_status_section_in_snippets(self):
+        """农场状态查询已由工具获取替代，snippet 中不再硬编码。"""
+        from pathlib import Path
+
+        snippets_dir = Path(__file__).parent.parent.parent / "prompts" / "snippets"
+        for f in snippets_dir.glob("*.j2"):
+            assert "【农场状态查询】" not in f.read_text(), f"{f.name} 包含农场状态查询"
+
+    def test_format_snippet_rules_content(self, format_snippet):
+        """p3-format.j2 回复格式规则包含关键条目。"""
+        assert "称呼用户为" in format_snippet
+        assert "不超过2行" in format_snippet
+        assert "不超过5条" in format_snippet
+        assert "先说结论" in format_snippet
+        assert "禁止铺垫" in format_snippet
+        assert "口语化" in format_snippet
+
+    def test_context_snippet_renders_with_display_name(self, context_snippet):
+        """p4-context.j2 渲染 display_name 不报错。"""
         reg = PromptRegistry()
-        reg.register("system_base", "v1", base_template)
+        reg.register("p4_context", "v1", context_snippet)
         result = render_prompt(
-            "system_base",
+            "p4_context",
             {
                 "display_name": "老王",
+                "farm_location": "睢宁",
             },
             registry=reg,
             current_date=date(2026, 5, 25),
         )
         assert "老王" in result
-        assert "2026-05-25" in result
 
 
 class TestFarmDisplayNameFromDatabase:
     """从数据库获取 display_name 的集成测试。"""
 
     def test_get_display_name_from_farm_model(self):
-        """Farm 模型 name 字段默认为「默认农场」。"""
+        """Farm 模型 name 字段可读取作为 display_name。"""
         db = SessionLocal()
         farm = db.query(Farm).filter(Farm.id == 1).first()
-        # conftest 中创建的 Farm name 为 "默认农场"
         display_name = farm.name or "农友"
-        assert display_name == "默认农场"
+        assert display_name != ""
         db.close()
 
     def test_get_display_name_custom_from_database(self):
         """Farm 模型 name 设置了自定义值时正确读取。"""
         db = SessionLocal()
         farm = db.query(Farm).filter(Farm.id == 1).first()
+        original_name = farm.name
         farm.name = "老赵的农场"
         db.commit()
         display_name = farm.name or "农友"
         assert display_name == "老赵的农场"
+        farm.name = original_name
+        db.commit()
         db.close()

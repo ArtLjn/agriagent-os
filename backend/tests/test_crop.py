@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -12,6 +12,13 @@ if not _registry.list_versions("crop_template_parse"):
     _registry.reload(Path(__file__).parent.parent / "prompts")
 
 client = TestClient(app)
+
+
+def _mock_llm_response(text: str):
+    """构造一个模拟 LLM 返回的 response 对象。"""
+    mock_resp = AsyncMock()
+    mock_resp.content = text
+    return mock_resp
 
 
 def test_create_crop_template():
@@ -155,14 +162,18 @@ def test_delete_template_not_found():
 class TestParseCropTemplate:
     """测试作物模板解析端点。"""
 
-    @patch("app.api.crop.invoke_advisor")
-    def test_parse_normal(self, mock_invoke):
+    @patch("app.api.crop.get_llm")
+    def test_parse_normal(self, mock_get_llm):
         """正常解析：返回结构化作物模板数据。"""
-        mock_invoke.return_value = (
-            '{"name": "西瓜", "variety": null, '
-            '"stages": [{"name": "育苗期", "duration_days": 30, '
-            '"order_index": 0, "key_tasks": "温湿度管理"}]}'
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=_mock_llm_response(
+                '{"name": "西瓜", "variety": null, '
+                '"stages": [{"name": "育苗期", "duration_days": 30, '
+                '"order_index": 0, "key_tasks": "温湿度管理"}]}'
+            )
         )
+        mock_get_llm.return_value = mock_llm
 
         response = client.post("/crops/templates/parse", json={"description": "我要种西瓜"})
 
@@ -172,18 +183,22 @@ class TestParseCropTemplate:
         assert data["variety"] is None
         assert len(data["stages"]) == 1
         assert data["stages"][0]["name"] == "育苗期"
-        mock_invoke.assert_called_once()
+        mock_llm.ainvoke.assert_called_once()
 
-    @patch("app.api.crop.invoke_advisor")
-    def test_parse_with_variety(self, mock_invoke):
+    @patch("app.api.crop.get_llm")
+    def test_parse_with_variety(self, mock_get_llm):
         """含品种解析：正确提取品种信息。"""
-        mock_invoke.return_value = (
-            '{"name": "西瓜", "variety": "8424", '
-            '"stages": [{"name": "育苗期", "duration_days": 30, '
-            '"order_index": 0, "key_tasks": "温湿度管理"}, '
-            '{"name": "定植期", "duration_days": 1, '
-            '"order_index": 1, "key_tasks": "浇定根水"}]}'
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=_mock_llm_response(
+                '{"name": "西瓜", "variety": "8424", '
+                '"stages": [{"name": "育苗期", "duration_days": 30, '
+                '"order_index": 0, "key_tasks": "温湿度管理"}, '
+                '{"name": "定植期", "duration_days": 1, '
+                '"order_index": 1, "key_tasks": "浇定根水"}]}'
+            )
         )
+        mock_get_llm.return_value = mock_llm
 
         response = client.post(
             "/crops/templates/parse", json={"description": "我要种8424西瓜"}
@@ -195,10 +210,14 @@ class TestParseCropTemplate:
         assert data["variety"] == "8424"
         assert len(data["stages"]) == 2
 
-    @patch("app.api.crop.invoke_advisor")
-    def test_parse_invalid_json(self, mock_invoke):
+    @patch("app.api.crop.get_llm")
+    def test_parse_invalid_json(self, mock_get_llm):
         """解析失败回退：AI 返回无效 JSON 时返回 422。"""
-        mock_invoke.return_value = "这不是有效的 JSON"
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=_mock_llm_response("这不是有效的 JSON")
+        )
+        mock_get_llm.return_value = mock_llm
 
         response = client.post(
             "/crops/templates/parse", json={"description": "随便说点什么"}
@@ -206,14 +225,18 @@ class TestParseCropTemplate:
 
         assert response.status_code == 422
 
-    @patch("app.api.crop.invoke_advisor")
-    def test_parse_idempotency_cache(self, mock_invoke):
+    @patch("app.api.crop.get_llm")
+    def test_parse_idempotency_cache(self, mock_get_llm):
         """幂等键缓存：相同 key 直接返回缓存结果，不重复调用 AI。"""
-        mock_invoke.return_value = (
-            '{"name": "番茄", "variety": null, '
-            '"stages": [{"name": "育苗期", "duration_days": 25, '
-            '"order_index": 0, "key_tasks": "保温保湿"}]}'
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=_mock_llm_response(
+                '{"name": "番茄", "variety": null, '
+                '"stages": [{"name": "育苗期", "duration_days": 25, '
+                '"order_index": 0, "key_tasks": "保温保湿"}]}'
+            )
         )
+        mock_get_llm.return_value = mock_llm
 
         idempotency_key = "test-key-abc123"
         headers = {"X-Idempotency-Key": idempotency_key}
@@ -225,7 +248,7 @@ class TestParseCropTemplate:
             headers=headers,
         )
         assert response1.status_code == 200
-        assert mock_invoke.call_count == 1
+        assert mock_llm.ainvoke.call_count == 1
 
         # 第二次请求（相同 key）
         response2 = client.post(
@@ -235,5 +258,5 @@ class TestParseCropTemplate:
         )
         assert response2.status_code == 200
         # 缓存命中，不再调用 AI
-        assert mock_invoke.call_count == 1
+        assert mock_llm.ainvoke.call_count == 1
         assert response2.json() == response1.json()
