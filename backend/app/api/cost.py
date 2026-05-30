@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_farm, get_db
 from app.core.json_repair import safe_parse_json
-from app.agent.prompt_registry import get_registry
-from app.agent.prompt_renderer import render_prompt
+from app.agent.prompt_composer import get_composer
 from app.core.date_context import get_request_date
 from app.models.farm import Farm
 from app.models.idempotency_key import IdempotencyKey
@@ -118,17 +117,23 @@ async def parse_cost_record(
                 logger.warning("幂等缓存解析失败，重新执行 | key=%s", idempotency_key)
 
     current_date = get_request_date()
-    prompt = render_prompt(
+    prompt = get_composer().compose(
         "cost_parse",
         {"description": req.description},
-        registry=get_registry(),
         current_date=current_date,
     )
     logger.info("AI 解析记账 | farm=%s | input: %s", farm.id, req.description)
 
-    from app.agent.advisor import invoke_advisor
+    from app.agent.llm import get_llm
+    from langchain_core.messages import HumanMessage
 
-    reply = await invoke_advisor(prompt, farm_id=farm.id)
+    llm = get_llm()
+    try:
+        result = await llm.ainvoke([HumanMessage(content=prompt)])
+        reply = result.content
+    except Exception as e:
+        logger.error("AI 调用失败: %s", e)
+        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
 
     # JSON 解析（提取代码块 + 修复）
     try:
@@ -137,10 +142,17 @@ async def parse_cost_record(
         logger.error("AI 返回无法解析: %s", reply[:200])
         raise HTTPException(status_code=422, detail=f"AI 返回格式异常: {reply[:100]}")
 
-    # Pydantic 校验（非法值自动替换为默认值）
-    result = CostParseResult.model_validate(data)
+    # Pydantic 校验
+    try:
+        result = CostParseResult.model_validate(data)
+    except Exception as e:
+        logger.warning("AI 解析结果校验失败: %s", e)
+        raise HTTPException(status_code=422, detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块")
 
-    # 构建响应
+    # amount 为 0 说明未识别出有效金额
+    if result.amount in ("0", "0.0", "0.00"):
+        raise HTTPException(status_code=422, detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块")
+
     response = CostParseResponse(
         record_type=result.record_type,
         category=result.category,

@@ -4,9 +4,9 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.agent.advisor import invoke_advisor
-from app.agent.prompt_registry import get_registry
-from app.agent.prompt_renderer import render_prompt
+from app.agent.llm import get_llm
+from langchain_core.messages import HumanMessage
+from app.agent.prompt_composer import get_composer
 from app.api.deps import get_db, get_current_farm
 from app.core.json_repair import safe_parse_json
 from app.models.farm import Farm
@@ -120,14 +120,19 @@ async def parse_crop_template(
                     "幂等缓存解析失败，重新执行 | key=%s", idempotency_key
                 )
 
-    prompt = render_prompt(
+    prompt = get_composer().compose(
         "crop_template_parse",
         {"description": req.description},
-        registry=get_registry(),
     )
     logger.info("AI 解析作物模板 | farm=%s | input: %s", farm.id, req.description)
 
-    reply = await invoke_advisor(prompt, farm_id=farm.id)
+    llm = get_llm()
+    try:
+        result = await llm.ainvoke([HumanMessage(content=prompt)])
+        reply = result.content
+    except Exception as e:
+        logger.error("AI 调用失败: %s", e)
+        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
 
     # JSON 解析（提取代码块 + 修复）
     try:
@@ -144,7 +149,14 @@ async def parse_crop_template(
     except Exception as e:
         logger.error("AI 返回数据校验失败: %s", e)
         raise HTTPException(
-            status_code=422, detail=f"AI 返回数据格式不正确: {str(e)[:100]}"
+            status_code=422,
+            detail="无法识别作物信息，请描述作物名称，例如：我要种8424西瓜、种番茄",
+        )
+
+    if not response.stages:
+        raise HTTPException(
+            status_code=422,
+            detail="无法识别作物信息，请描述作物名称，例如：我要种8424西瓜、种番茄",
         )
 
     # 缓存幂等键
