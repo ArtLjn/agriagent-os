@@ -17,3 +17,37 @@ templates:
   crop_template_parse:
     file: crop_template_parse.j2
     description: "作物模板解析 prompt，从自然语言描述提取结构化作物数据"
+  cycle_parse:
+    file: cycle_parse.j2
+    description: "茬口解析 prompt，从自然语言描述提取结构化种植计划"
+compositions:
+  system_base:
+    snippets:
+      - p1-language
+      - p1-tool-guardrails
+      - p2-role
+      - p2-capability
+      - p3-format
+      - p3-style
+      - p4-context
+    separator: "\n\n"
+  cost_parse:
+    snippets:
+      - p1-language
+    template: cost_parse
+    separator: "\n\n"
+  crop_template_parse:
+    snippets:
+      - p1-language
+    template: crop_template_parse
+    separator: "\n\n"
+  cycle_parse:
+    snippets:
+      - p1-language
+    template: cycle_parse
+    separator: "\n\n"
+  report:
+    snippets:
+      - p1-language
+    template: report
+    separator: "\n\n"
