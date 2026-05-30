@@ -65,6 +65,11 @@ class CreateCostRecordSkill(Skill):
             SkillResult 包含成功/失败状态和回复消息。
         """
         amount = params.get("amount")
+        if isinstance(amount, str):
+            try:
+                amount = float(amount)
+            except (ValueError, TypeError):
+                pass
         category = params.get("category")
 
         # 校验必填参数
