@@ -222,6 +222,10 @@ async def stream_advisor(
         logger.error("Agent 流式步数超限 | farm_id=%s", farm_id)
         yield "Agent 处理步数超出限制，请简化您的问题后重试。"
         return
+    except Exception as e:
+        logger.error("Agent 流式异常 | farm_id=%s | error=%s", farm_id, e)
+        yield "抱歉，AI 服务暂时不可用，请稍后重试。"
+        return
     finally:
         clear_trace()
 
