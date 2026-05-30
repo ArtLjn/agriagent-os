@@ -83,6 +83,20 @@ class TestStreamAdvisorGuardrails:
             assert len(results) == 1
             assert "步数超出限制" in results[0]
 
+    @pytest.mark.asyncio
+    async def test_stream_generic_exception_fallback(self):
+        with patch("app.agent.advisor._get_advisor_graph") as mock_get:
+            mock_graph = MagicMock()
+            mock_graph.astream = _make_mock_astream(
+                RuntimeError("LLM connection failed")
+            )
+            mock_get.return_value = mock_graph
+            results = []
+            async for chunk in stream_advisor("正常问题", farm_id=1):
+                results.append(chunk)
+            assert len(results) == 1
+            assert "AI 服务暂时不可用" in results[0]
+
 
 class TestReportGuardrails:
     @pytest.mark.asyncio
