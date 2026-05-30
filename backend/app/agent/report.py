@@ -7,8 +7,7 @@ from langchain_core.messages import HumanMessage
 
 from app.agent.guardrails import filter_output
 from app.agent.llm import get_llm
-from app.agent.prompt_registry import get_registry
-from app.agent.prompt_renderer import render_prompt
+from app.agent.prompt_composer import get_composer
 from app.core.date_context import get_request_date
 from app.agent.skills import get_langchain_tools
 
@@ -31,9 +30,7 @@ async def generate_cycle_report(cycle_id: int) -> str:
         "整理成一份包含进度、成本分析和下一步建议的报告。"
     )
     current_date = get_request_date()
-    system_text = render_prompt(
-        "report", registry=get_registry(), current_date=current_date
-    )
+    system_text = get_composer().compose("report", current_date=current_date)
     system = HumanMessage(content=system_text)
     response = await llm.ainvoke(
         [system, HumanMessage(content=prompt)],

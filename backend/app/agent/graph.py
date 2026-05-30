@@ -21,8 +21,7 @@ from app.infra.pending_actions import (
     build_confirm_message,
     store_pending,
 )
-from app.agent.prompt_registry import get_registry
-from app.agent.prompt_renderer import render_prompt
+from app.agent.prompt_composer import get_composer
 from app.core.date_context import get_request_date
 from app.core.database import SessionLocal
 from app.core.config import settings
@@ -225,14 +224,13 @@ async def _llm_node(state: AgentState) -> dict:
 
     current_date = get_request_date()
     current_season = _get_season(current_date)
-    system_text = render_prompt(
+    system_text = get_composer().compose(
         "system_base",
         variables={
             "display_name": display_name,
             "farm_location": farm_location,
             "current_season": current_season,
         },
-        registry=get_registry(),
         current_date=current_date,
     )
 
