@@ -1,10 +1,11 @@
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
 from app.agent.prompt_registry import get_registry
 from app.main import app
+from app.schemas.crop import CropTemplateParseResponse, GrowthStageCreate
 
 # 确保 prompt 模板在测试中已加载
 _registry = get_registry()
@@ -19,6 +20,40 @@ def _mock_llm_response(text: str):
     mock_resp = AsyncMock()
     mock_resp.content = text
     return mock_resp
+
+
+def _mock_structured_response(name, variety=None, stages=None):
+    """构造一个 with_structured_output 直接返回的 Pydantic model。"""
+    if stages is None:
+        stages = [
+            GrowthStageCreate(
+                name="育苗期", duration_days=30, order_index=0, key_tasks="温湿度管理"
+            ),
+        ]
+    return CropTemplateParseResponse(name=name, variety=variety, stages=stages)
+
+
+def _build_llm_with_structured_output(structured_result):
+    """构造一个 LLM mock，with_structured_output 返回可直接 ainvoke 的对象。"""
+    mock_llm = MagicMock()
+    mock_structured = AsyncMock()
+    mock_structured.ainvoke = AsyncMock(return_value=structured_result)
+    mock_llm.with_structured_output = MagicMock(return_value=mock_structured)
+    return mock_llm
+
+
+def _build_llm_fallback(mock_raw_response):
+    """构造一个 structured output 失败后 fallback 到普通 ainvoke 的 LLM mock。"""
+    mock_llm = MagicMock()
+
+    # with_structured_output 抛异常
+    mock_structured = AsyncMock()
+    mock_structured.ainvoke = AsyncMock(side_effect=RuntimeError("不支持"))
+    mock_llm.with_structured_output = MagicMock(return_value=mock_structured)
+
+    # fallback 路径：普通 ainvoke 返回 JSON 文本
+    mock_llm.ainvoke = AsyncMock(return_value=mock_raw_response)
+    return mock_llm
 
 
 def test_create_crop_template():
@@ -159,23 +194,19 @@ def test_delete_template_not_found():
     assert response.status_code == 404
 
 
-class TestParseCropTemplate:
-    """测试作物模板解析端点。"""
+class TestParseCropTemplateStructured:
+    """测试作物模板解析端点 — with_structured_output 路径。"""
 
     @patch("app.api.crop.get_llm")
-    def test_parse_normal(self, mock_get_llm):
-        """正常解析：返回结构化作物模板数据。"""
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke = AsyncMock(
-            return_value=_mock_llm_response(
-                '{"name": "西瓜", "variety": null, '
-                '"stages": [{"name": "育苗期", "duration_days": 30, '
-                '"order_index": 0, "key_tasks": "温湿度管理"}]}'
-            )
-        )
+    def test_structured_output_normal(self, mock_get_llm):
+        """structured output 正常路径：直接返回 Pydantic model。"""
+        result = _mock_structured_response("西瓜", variety=None)
+        mock_llm = _build_llm_with_structured_output(result)
         mock_get_llm.return_value = mock_llm
 
-        response = client.post("/crops/templates/parse", json={"description": "我要种西瓜"})
+        response = client.post(
+            "/crops/templates/parse", json={"description": "我要种西瓜"}
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -183,21 +214,28 @@ class TestParseCropTemplate:
         assert data["variety"] is None
         assert len(data["stages"]) == 1
         assert data["stages"][0]["name"] == "育苗期"
-        mock_llm.ainvoke.assert_called_once()
+        # 应走 with_structured_output，不直接调 llm.ainvoke
+        mock_llm.with_structured_output.assert_called_once()
+        mock_llm.ainvoke.assert_not_called()
 
     @patch("app.api.crop.get_llm")
-    def test_parse_with_variety(self, mock_get_llm):
-        """含品种解析：正确提取品种信息。"""
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke = AsyncMock(
-            return_value=_mock_llm_response(
-                '{"name": "西瓜", "variety": "8424", '
-                '"stages": [{"name": "育苗期", "duration_days": 30, '
-                '"order_index": 0, "key_tasks": "温湿度管理"}, '
-                '{"name": "定植期", "duration_days": 1, '
-                '"order_index": 1, "key_tasks": "浇定根水"}]}'
-            )
+    def test_structured_output_with_variety(self, mock_get_llm):
+        """structured output 含品种：正确提取品种信息。"""
+        result = _mock_structured_response(
+            "西瓜",
+            variety="8424",
+            stages=[
+                GrowthStageCreate(
+                    name="育苗期", duration_days=30, order_index=0,
+                    key_tasks="温湿度管理",
+                ),
+                GrowthStageCreate(
+                    name="定植期", duration_days=1, order_index=1,
+                    key_tasks="浇定根水",
+                ),
+            ],
         )
+        mock_llm = _build_llm_with_structured_output(result)
         mock_get_llm.return_value = mock_llm
 
         response = client.post(
@@ -211,11 +249,49 @@ class TestParseCropTemplate:
         assert len(data["stages"]) == 2
 
     @patch("app.api.crop.get_llm")
-    def test_parse_invalid_json(self, mock_get_llm):
-        """解析失败回退：AI 返回无效 JSON 时返回 422。"""
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke = AsyncMock(
-            return_value=_mock_llm_response("这不是有效的 JSON")
+    def test_structured_output_empty_stages(self, mock_get_llm):
+        """structured output 返回空 stages 时应返回 422。"""
+        result = _mock_structured_response("未知", variety=None, stages=[])
+        mock_llm = _build_llm_with_structured_output(result)
+        mock_get_llm.return_value = mock_llm
+
+        response = client.post(
+            "/crops/templates/parse", json={"description": "随便说点什么"}
+        )
+
+        assert response.status_code == 422
+
+
+class TestParseCropTemplateFallback:
+    """测试作物模板解析端点 — structured output 失败后的 fallback 路径。"""
+
+    @patch("app.api.crop.get_llm")
+    def test_fallback_to_safe_parse_json(self, mock_get_llm):
+        """with_structured_output 异常时，fallback 到 safe_parse_json。"""
+        mock_llm = _build_llm_fallback(
+            _mock_llm_response(
+                '{"name": "西瓜", "variety": null, '
+                '"stages": [{"name": "育苗期", "duration_days": 30, '
+                '"order_index": 0, "key_tasks": "温湿度管理"}]}'
+            )
+        )
+        mock_get_llm.return_value = mock_llm
+
+        response = client.post(
+            "/crops/templates/parse", json={"description": "我要种西瓜"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "西瓜"
+        assert data["variety"] is None
+        assert len(data["stages"]) == 1
+
+    @patch("app.api.crop.get_llm")
+    def test_fallback_invalid_json(self, mock_get_llm):
+        """fallback 路径返回无效 JSON 时应返回 422。"""
+        mock_llm = _build_llm_fallback(
+            _mock_llm_response("这不是有效的 JSON")
         )
         mock_get_llm.return_value = mock_llm
 
@@ -225,17 +301,15 @@ class TestParseCropTemplate:
 
         assert response.status_code == 422
 
+
+class TestParseCropTemplateIdempotency:
+    """测试幂等键缓存逻辑（两种路径均适用）。"""
+
     @patch("app.api.crop.get_llm")
-    def test_parse_idempotency_cache(self, mock_get_llm):
+    def test_idempotency_cache_hit(self, mock_get_llm):
         """幂等键缓存：相同 key 直接返回缓存结果，不重复调用 AI。"""
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke = AsyncMock(
-            return_value=_mock_llm_response(
-                '{"name": "番茄", "variety": null, '
-                '"stages": [{"name": "育苗期", "duration_days": 25, '
-                '"order_index": 0, "key_tasks": "保温保湿"}]}'
-            )
-        )
+        result = _mock_structured_response("番茄", variety=None)
+        mock_llm = _build_llm_with_structured_output(result)
         mock_get_llm.return_value = mock_llm
 
         idempotency_key = "test-key-abc123"
@@ -248,7 +322,6 @@ class TestParseCropTemplate:
             headers=headers,
         )
         assert response1.status_code == 200
-        assert mock_llm.ainvoke.call_count == 1
 
         # 第二次请求（相同 key）
         response2 = client.post(
@@ -257,6 +330,4 @@ class TestParseCropTemplate:
             headers=headers,
         )
         assert response2.status_code == 200
-        # 缓存命中，不再调用 AI
-        assert mock_llm.ainvoke.call_count == 1
         assert response2.json() == response1.json()

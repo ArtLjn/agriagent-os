@@ -2,8 +2,10 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from langchain_core.messages import HumanMessage
 from sqlalchemy.orm import Session
 
+from app.agent.llm import get_llm
 from app.api.deps import get_current_farm, get_db
 from app.core.json_repair import safe_parse_json
 from app.agent.prompt_composer import get_composer
@@ -88,6 +90,50 @@ def delete_record(
     return record
 
 
+async def _parse_cost_with_llm(
+    llm, prompt: str, logger: logging.Logger,
+) -> CostParseResult:
+    """通过 LLM 解析记账描述，优先用 structured output，失败则 fallback 到 JSON 解析。"""
+    try:
+        structured_llm = llm.with_structured_output(
+            CostParseResult, method="function_calling"
+        )
+        result = await structured_llm.ainvoke([HumanMessage(content=prompt)])
+        return result
+    except Exception as structured_err:
+        logger.warning(
+            "with_structured_output 失败，回退到 JSON 解析: %s",
+            structured_err,
+            exc_info=True,
+        )
+        try:
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            reply = response.content
+        except Exception as e:
+            logger.error("AI 调用失败: %s", e)
+            raise HTTPException(
+                status_code=503, detail="AI 服务暂时不可用，请稍后重试"
+            )
+
+        try:
+            data = safe_parse_json(reply)
+        except ValueError:
+            logger.error("AI 返回无法解析: %s", reply[:200])
+            raise HTTPException(
+                status_code=422, detail=f"AI 返回格式异常: {reply[:100]}"
+            )
+
+        try:
+            result = CostParseResult.model_validate(data)
+        except Exception as e:
+            logger.error("AI 返回数据校验失败: %s", e)
+            raise HTTPException(
+                status_code=422,
+                detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块",
+            )
+        return result
+
+
 @router.post("/parse", response_model=CostParseResponse)
 async def parse_cost_record(
     req: CostParseRequest,
@@ -124,34 +170,15 @@ async def parse_cost_record(
     )
     logger.info("AI 解析记账 | farm=%s | input: %s", farm.id, req.description)
 
-    from app.agent.llm import get_llm
-    from langchain_core.messages import HumanMessage
-
     llm = get_llm()
-    try:
-        result = await llm.ainvoke([HumanMessage(content=prompt)])
-        reply = result.content
-    except Exception as e:
-        logger.error("AI 调用失败: %s", e)
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
-
-    # JSON 解析（提取代码块 + 修复）
-    try:
-        data = safe_parse_json(reply)
-    except ValueError:
-        logger.error("AI 返回无法解析: %s", reply[:200])
-        raise HTTPException(status_code=422, detail=f"AI 返回格式异常: {reply[:100]}")
-
-    # Pydantic 校验
-    try:
-        result = CostParseResult.model_validate(data)
-    except Exception as e:
-        logger.warning("AI 解析结果校验失败: %s", e)
-        raise HTTPException(status_code=422, detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块")
+    result = await _parse_cost_with_llm(llm, prompt, logger)
 
     # amount 为 0 说明未识别出有效金额
     if result.amount in ("0", "0.0", "0.00"):
-        raise HTTPException(status_code=422, detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块")
+        raise HTTPException(
+            status_code=422,
+            detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块",
+        )
 
     response = CostParseResponse(
         record_type=result.record_type,
@@ -174,3 +201,6 @@ async def parse_cost_record(
             logger.warning("幂等键缓存写入失败 | key=%s", idempotency_key)
 
     return response
+
+
+__all__ = ["router"]

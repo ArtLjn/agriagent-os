@@ -90,6 +90,52 @@ def delete_template(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+async def _parse_crop_with_llm(
+    llm, prompt: str, logger: logging.Logger,
+) -> CropTemplateParseResponse:
+    """通过 LLM 解析作物模板，优先用 structured output，失败则 fallback 到 JSON 解析。"""
+    try:
+        structured_llm = llm.with_structured_output(
+            CropTemplateParseResponse, method="function_calling"
+        )
+        response = await structured_llm.ainvoke(
+            [HumanMessage(content=prompt)]
+        )
+    except Exception as structured_err:
+        logger.warning(
+            "with_structured_output 失败，回退到 JSON 解析: %s",
+            structured_err,
+            exc_info=True,
+        )
+        try:
+            result = await llm.ainvoke([HumanMessage(content=prompt)])
+            reply = result.content
+        except Exception as e:
+            logger.error("AI 调用失败: %s", e)
+            raise HTTPException(
+                status_code=503, detail="AI 服务暂时不可用，请稍后重试"
+            )
+
+        try:
+            data = safe_parse_json(reply)
+        except ValueError:
+            logger.error("AI 返回无法解析: %s", reply[:200])
+            raise HTTPException(
+                status_code=422, detail=f"AI 返回格式异常: {reply[:100]}"
+            )
+
+        try:
+            response = CropTemplateParseResponse.model_validate(data)
+        except Exception as e:
+            logger.error("AI 返回数据校验失败: %s", e)
+            raise HTTPException(
+                status_code=422,
+                detail="无法识别作物信息，请描述作物名称，"
+                "例如：我要种8424西瓜、种番茄",
+            )
+    return response
+
+
 @router.post("/templates/parse", response_model=CropTemplateParseResponse)
 async def parse_crop_template(
     req: CropTemplateParseRequest,
@@ -127,31 +173,7 @@ async def parse_crop_template(
     logger.info("AI 解析作物模板 | farm=%s | input: %s", farm.id, req.description)
 
     llm = get_llm()
-    try:
-        result = await llm.ainvoke([HumanMessage(content=prompt)])
-        reply = result.content
-    except Exception as e:
-        logger.error("AI 调用失败: %s", e)
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
-
-    # JSON 解析（提取代码块 + 修复）
-    try:
-        data = safe_parse_json(reply)
-    except ValueError:
-        logger.error("AI 返回无法解析: %s", reply[:200])
-        raise HTTPException(
-            status_code=422, detail=f"AI 返回格式异常: {reply[:100]}"
-        )
-
-    # Pydantic 校验
-    try:
-        response = CropTemplateParseResponse.model_validate(data)
-    except Exception as e:
-        logger.error("AI 返回数据校验失败: %s", e)
-        raise HTTPException(
-            status_code=422,
-            detail="无法识别作物信息，请描述作物名称，例如：我要种8424西瓜、种番茄",
-        )
+    response = await _parse_crop_with_llm(llm, prompt, logger)
 
     if not response.stages:
         raise HTTPException(
