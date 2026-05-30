@@ -35,12 +35,14 @@ class DatabaseConfig(BaseModel):
 
 
 class SecretsConfig(BaseModel):
-    """统一密钥管理，所有第三方 API key 集中于此。"""
+    """统一密钥管理，所有第三方 API key 及服务地址集中于此。"""
     dashscope_api_key: str = ""
     qweather_api_key: str = ""
     qweather_appid: str = ""
     qweather_appsecret: str = ""
+    langsearch_api_key: str = ""
     langsmith_api_key: str = ""
+    searxng_url: str = ""
 
 
 class AIConfig(BaseModel):

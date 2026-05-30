@@ -56,6 +56,10 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
     "get_farm_status": {
         "农场", "茬口状态", "种植情况", "农事", "综合状态", "整体情况",
     },
+    "web_search": {
+        "最新", "新闻", "价格", "上市", "政策", "热点", "搜索",
+        "查一下", "最近", "实时", "网上", "网上说",
+    },
 }
 
 
@@ -123,13 +127,14 @@ class LLMIntentClassifier:
                 latency_ms,
             )
             return matched
-        except Exception:
+        except Exception as e:
             latency_ms = int((time.perf_counter() - start) * 1000)
             logger.warning(
-                "llm_intent 分类失败 | input=%r | latency_ms=%d",
+                "llm_intent 分类失败 | input=%r | latency_ms=%d | error=%s: %s",
                 user_message[:80],
                 latency_ms,
-                exc_info=True,
+                type(e).__name__,
+                e,
             )
             return None
 
@@ -210,6 +215,7 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "update_crop_stage": [],
     "settle_debt": [],
     "get_farm_status": [],
+    "web_search": [],
 }
 
 
