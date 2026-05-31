@@ -101,3 +101,28 @@ class TestBindToolsParallel:
         mock_llm.bind_tools.assert_called_once()
         call_kwargs = mock_llm.bind_tools.call_args[1]
         assert "parallel_tool_calls" not in call_kwargs or call_kwargs.get("parallel_tool_calls") is False
+
+
+class TestParallelToolSnippet:
+    """并行调用引导 snippet 加载与渲染。"""
+
+    def test_snippet_loaded(self):
+        from app.agent.prompt_composer import get_composer
+
+        composer = get_composer()
+        assert "p1-parallel-tool" in composer.list_snippets()
+
+    def test_system_base_contains_parallel_guidance(self):
+        from app.agent.prompt_composer import get_composer
+
+        composer = get_composer()
+        rendered = composer.compose(
+            "system_base",
+            variables={
+                "display_name": "农友",
+                "farm_location": "徐州",
+                "current_season": "夏季",
+            },
+        )
+        assert "并行工具调用" in rendered
+        assert "同时返回所有需要的工具调用" in rendered

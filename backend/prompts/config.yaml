@@ -21,6 +21,7 @@ compositions:
     snippets:
       - p1-language
       - p1-tool-guardrails
+      - p1-parallel-tool
       - p2-role
       - p2-capability
       - p3-format
