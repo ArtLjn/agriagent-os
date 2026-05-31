@@ -84,6 +84,7 @@ export const AdviceDetailScreen: React.FC = () => {
       <LinearGradient {...weatherConf.gradient} style={StyleSheet.absoluteFill} />
 
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -151,7 +152,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
+    flexGrow: 1,
     paddingBottom: spacingV2.xxl,
   },
 
