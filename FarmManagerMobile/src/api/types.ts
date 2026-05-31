@@ -109,6 +109,7 @@ export interface ChatResponse {
 
 export interface DailyAdvice {
   cycle_id: number | null;
+  preview: string;
   advice: string;
   items: AdviceItem[];
   created_at: string;
