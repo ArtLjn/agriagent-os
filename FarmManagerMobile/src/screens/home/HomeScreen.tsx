@@ -14,7 +14,7 @@ import { useCycleStore } from "../../stores/cycleStore";
 import { useAuthStore } from "../../stores/authStore";
 import { ALL_CITIES } from "../../data/cities";
 import { WeatherCardV2 } from "../../components/WeatherCardV2";
-import { AdviceCard } from "../../components/AdviceCard";
+import { CompactAdviceCard } from "../../components/CompactAdviceCard";
 import { CityPicker } from "../../components/CityPicker";
 import { FadeInSlideUp } from "../../components/animations/FadeInSlideUp";
 import { ScalePress } from "../../components/animations/ScalePress";
@@ -183,13 +183,20 @@ export const HomeScreen: React.FC = () => {
 
         {/* AI Briefing Card */}
         <FadeInSlideUp delay={160} style={styles.section}>
-          <AdviceCard
-            advice={dailyAdvice?.advice || null}
-            items={dailyAdvice?.items}
+          <CompactAdviceCard
+            preview={dailyAdvice?.preview || ""}
+            itemCount={dailyAdvice?.items?.length || 0}
             loading={agentLoading}
-            onPress={() => navigation.navigate("AgentChat" as never)}
-            onRefresh={() => refreshDailyAdvice()}
             weatherCondition={weatherCondition}
+            onPress={() =>
+              navigation.navigate("AdviceDetail" as never, {
+                items: dailyAdvice?.items,
+                preview: dailyAdvice?.preview,
+                weatherCondition,
+                createdAt: dailyAdvice?.created_at,
+              } as never)
+            }
+            onRefresh={() => refreshDailyAdvice()}
           />
         </FadeInSlideUp>
 
