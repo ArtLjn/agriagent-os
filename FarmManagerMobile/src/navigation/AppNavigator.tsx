@@ -19,6 +19,7 @@ import { DebtCreateScreen } from "../screens/debt/DebtCreateScreen";
 import { CropTemplateScreen } from "../screens/crop/CropTemplateScreen";
 import { CropTemplateCreateScreen } from "../screens/crop/CropTemplateCreateScreen";
 import { WeatherDetailScreen } from "../screens/weather/WeatherDetailScreen";
+import { AdviceDetailScreen } from "../screens/advice/AdviceDetailScreen";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { RegisterScreen } from "../screens/auth/RegisterScreen";
 import { WelcomeScreen } from "../screens/auth/WelcomeScreen";
@@ -48,6 +49,12 @@ export type RootStackParamList = {
   CropTemplate: undefined;
   CropTemplateCreate: undefined;
   WeatherDetail: undefined;
+  AdviceDetail: {
+    items?: import("../api/types").AdviceItem[];
+    preview?: string;
+    weatherCondition?: "sunny" | "rainy" | "foggy" | "cold";
+    createdAt?: string;
+  };
   Settings: undefined;
   Welcome: undefined;
   Login: undefined;
@@ -188,6 +195,11 @@ export const AppNavigator: React.FC = () => {
               name="WeatherDetail"
               component={WeatherDetailScreen}
               options={{ title: "天气详情", headerShown: false }}
+            />
+            <Stack.Screen
+              name="AdviceDetail"
+              component={AdviceDetailScreen}
+              options={{ title: "农事建议", headerShown: false }}
             />
           </>
         ) : (
