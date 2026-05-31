@@ -45,14 +45,26 @@ def _truncate_title(title: str) -> str:
     return title
 
 
-def _parse_advice_items(raw: str) -> list[AdviceItem]:
-    """解析 LLM 返回的 JSON 数组为 AdviceItem 列表，失败则 fallback。"""
+def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
+    """解析 LLM 返回的 JSON 为 (preview, AdviceItem 列表)，失败则 fallback。"""
+    fallback_item = AdviceItem(
+        title="今日农事建议",
+        detail=raw[:50],
+        priority=2,
+        icon="📋",
+    )
     try:
         parsed = safe_parse_json(raw)
-        if isinstance(parsed, list):
+        if isinstance(parsed, dict):
+            if "items" in parsed:
+                items_raw = parsed["items"]
+                preview = str(parsed.get("preview", ""))[:20]
+            else:
+                items_raw = [parsed]
+                preview = ""
+        elif isinstance(parsed, list):
             items_raw = parsed
-        elif isinstance(parsed, dict):
-            items_raw = [parsed]
+            preview = ""
         else:
             raise ValueError("非预期的 JSON 结构")
 
@@ -68,17 +80,10 @@ def _parse_advice_items(raw: str) -> list[AdviceItem]:
                 )
             )
         items.sort(key=lambda x: x.priority)
-        return items
+        return preview, items
     except (ValueError, json.JSONDecodeError, KeyError, TypeError) as exc:
         logger.warning("建议 JSON 解析失败，fallback 为单条 | error=%s", exc)
-        return [
-            AdviceItem(
-                title="今日农事建议",
-                detail=raw[:50],
-                priority=2,
-                icon="📋",
-            )
-        ]
+        return "", [fallback_item]
 
 
 async def _execute_pending_action(farm_id: int, skill_name: str, params: dict) -> str:
@@ -266,17 +271,19 @@ async def get_daily_advice(
         .first()
     )
     if cached:
-        items = _parse_advice_items(cached.content)
+        preview, items = _parse_advice_items(cached.content)
         logger.info("缓存命中 | record_id=%s", cached.id)
         return DailyAdviceResponse(
             cycle_id=cached.cycle_id,
+            preview=preview,
             items=items,
             created_at=cached.created_at,
         )
 
     base_prompt = (
-        "请生成今天的农事建议。你必须以 JSON 数组格式回复，格式为："
-        '[{"title":"≤10字结论","detail":"≤40字原因","priority":1到3,"icon":"emoji"}]。'
+        "请生成今天的农事建议。以 JSON 格式回复："
+        '{"preview":"≤15字今日一句话总结","items":['
+        '{"title":"≤10字结论","detail":"≤40字原因","priority":1到3,"icon":"emoji"}]}。'
         "最多5条，按紧急程度排序。"
     )
     if cycle_id:
@@ -286,7 +293,7 @@ async def get_daily_advice(
     logger.info("生成每日建议 | farm=%s cycle=%s", farm_id, cycle_id)
     advice = await invoke_advisor(prompt, farm_id=farm_id)
 
-    items = _parse_advice_items(advice)
+    preview, items = _parse_advice_items(advice)
 
     record = AgentRecord(
         cycle_id=cycle_id, record_type="daily", content=advice, farm_id=farm_id
@@ -302,6 +309,7 @@ async def get_daily_advice(
 
     return DailyAdviceResponse(
         cycle_id=record.cycle_id,
+        preview=preview,
         items=items,
         created_at=record.created_at,
     )

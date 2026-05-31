@@ -197,7 +197,7 @@ class TestGetDailyAdvice:
     async def test_get_daily_advice_returns_structured_items(
         self, mock_invoke: AsyncMock
     ) -> None:
-        """验证每日建议生成结构化 items 并保存。"""
+        """验证每日建议生成结构化 items 并保存（旧数组格式）。"""
         mock_invoke.return_value = (
             '[{"title":"施肥","detail":"生长期需追肥","priority":1,"icon":"🌱"}]'
         )
@@ -207,8 +207,51 @@ class TestGetDailyAdvice:
 
         assert len(result.items) == 1
         assert result.items[0].title == "施肥"
+        assert result.preview == ""
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_new_format_with_preview(
+        self, mock_invoke: AsyncMock
+    ) -> None:
+        """验证新格式（含 preview + items）正确解析。"""
+        mock_invoke.return_value = (
+            '{"preview":"今日需浇水","items":['
+            '{"title":"浇水","detail":"土壤干燥需补水","priority":1,"icon":"💧"}'
+            ']}'
+        )
+        mock_db = _make_mock_db()
+
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        assert result.preview == "今日需浇水"
+        assert len(result.items) == 1
+        assert result.items[0].title == "浇水"
+        assert result.items[0].icon == "💧"
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_old_format_backward_compatible(
+        self, mock_invoke: AsyncMock
+    ) -> None:
+        """验证旧数组格式仍然兼容。"""
+        mock_invoke.return_value = (
+            '[{"title":"除草","detail":"杂草影响生长","priority":2,"icon":"🌿"},'
+            '{"title":"施肥","detail":"补充氮肥","priority":1,"icon":"🌱"}]'
+        )
+        mock_db = _make_mock_db()
+
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        assert result.preview == ""
+        assert len(result.items) == 2
+        # 按 priority 排序
+        assert result.items[0].priority == 1
+        assert result.items[0].title == "施肥"
+        assert result.items[1].priority == 2
+        assert result.items[1].title == "除草"
 
     @pytest.mark.asyncio
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
@@ -223,6 +266,7 @@ class TestGetDailyAdvice:
 
         assert len(result.items) == 1
         assert result.items[0].title == "今日农事建议"
+        assert result.preview == ""
         # 向后兼容：advice property 返回拼接文本
         assert "今日建议：施肥。" in result.advice
 
