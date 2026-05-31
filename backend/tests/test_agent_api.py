@@ -94,13 +94,15 @@ class TestAgentDaily:
 
         items = [AdviceItem(title="施肥", detail="追施复合肥", priority=1)]
         mock_daily.return_value = DailyAdviceResponse(
-            cycle_id=1, items=items, created_at=datetime.now()
+            cycle_id=1, preview="今日有雨", items=items, created_at=datetime.now()
         )
 
         response = client.get("/agent/daily?cycle_id=1")
 
         assert response.status_code == 200
-        assert "施肥" in response.json()["advice"]
+        data = response.json()
+        assert "施肥" in data["advice"]
+        assert data["preview"] == "今日有雨"
 
 
 class TestAgentReport:

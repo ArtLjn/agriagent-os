@@ -42,6 +42,7 @@ class DailyAdviceResponse(BaseModel):
     """每日建议响应。"""
 
     cycle_id: int | None = None
+    preview: str = Field(default="", max_length=20)
     items: list[AdviceItem]
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
