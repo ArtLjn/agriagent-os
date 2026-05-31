@@ -12,7 +12,7 @@ import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useCycleStore } from "../../stores/cycleStore";
 import { useAuthStore } from "../../stores/authStore";
-import { ALL_CITIES } from "../../data/cities";
+import { CITIES } from "../../data/cities";
 import { WeatherCardV2 } from "../../components/WeatherCardV2";
 import { CompactAdviceCard } from "../../components/CompactAdviceCard";
 import { CityPicker } from "../../components/CityPicker";
@@ -114,7 +114,7 @@ export const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     if (defaultCity && defaultCity !== cityName) {
-      const cityData = ALL_CITIES.find((c) => c.name === defaultCity);
+      const cityData = CITIES.find((c) => c.name === defaultCity);
       if (cityData) {
         setCity(cityData.name, cityData.lat, cityData.lon);
       }
