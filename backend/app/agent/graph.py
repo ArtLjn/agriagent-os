@@ -8,7 +8,7 @@ from typing import Annotated
 
 import time as _time
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
@@ -160,6 +160,86 @@ def _extract_tokens_used(response: AIMessage) -> int | None:
     return None
 
 
+def _build_circuit_key(llm_instance) -> str:
+    """从 LLM 实例构建 cooldown key（provider_name/model_id）。"""
+    model_id = getattr(llm_instance, "model_name", "") or getattr(llm_instance, "model", "")
+    base_url = ""
+    try:
+        base_url = getattr(llm_instance, "base_url", "") or llm_instance.openai_api_base
+    except Exception:
+        pass
+
+    # 从 Manager chain 中匹配 provider name
+    try:
+        from app.core.llm_client_manager import get_llm_manager
+        manager = get_llm_manager()
+        if not manager.fallback_mode:
+            for provider, model in manager.chain:
+                if model.id == model_id and base_url and provider.base_url in base_url:
+                    return f"{provider.name}/{model.id}"
+    except Exception:
+        pass
+    return model_id or "unknown"
+
+
+def _record_llm_failure(circuit_key: str, exc: Exception) -> None:
+    """LLM 调用失败，记录到 Manager cooldown。"""
+    try:
+        from app.core.llm_client_manager import get_llm_manager, classify_error
+        manager = get_llm_manager()
+        if not manager.fallback_mode:
+            manager.record_failure(circuit_key)
+            level = classify_error(exc)
+            logger.warning(
+                "LLM 故障记录 | key=%s | level=%s | error=%s",
+                circuit_key, level.value, str(exc)[:120],
+            )
+    except Exception as e:
+        logger.debug("记录 LLM 故障失败 | error=%s", e)
+
+
+def _record_llm_success(circuit_key: str) -> None:
+    """LLM 调用成功，清除 cooldown。"""
+    try:
+        from app.core.llm_client_manager import get_llm_manager
+        manager = get_llm_manager()
+        if not manager.fallback_mode:
+            manager.record_success(circuit_key)
+    except Exception:
+        pass
+
+
+async def _get_farm_context(farm_id: int) -> tuple[str, str]:
+    """异步获取农场位置和用户称呼，避免阻塞事件循环。"""
+
+    def _query() -> tuple[str, str]:
+        db = SessionLocal()
+        try:
+            farm = db.query(Farm).filter(Farm.id == farm_id).first()
+            display_name = "农友"
+            user_city = ""
+            if farm and farm.user_id:
+                user = db.query(User).filter(User.id == farm.user_id).first()
+                if user:
+                    display_name = user.nickname
+                user_setting = (
+                    db.query(UserSetting)
+                    .filter(UserSetting.user_id == farm.user_id)
+                    .first()
+                )
+                if user_setting and user_setting.default_city:
+                    user_city = user_setting.default_city
+            farm_location = user_city or (farm.location if farm and farm.location else "")
+            return farm_location, display_name
+        except Exception:
+            logger.warning("获取用户信息失败，使用默认值", exc_info=True)
+            return "", "农友"
+        finally:
+            db.close()
+
+    return await asyncio.to_thread(_query)
+
+
 async def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     messages = state["messages"]
@@ -191,57 +271,37 @@ async def _llm_node(state: AgentState) -> dict:
         logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
         return {"messages": [AIMessage(content=confirm)]}
 
+    farm_id = state.get("farm_id", 1)
+
+    # 获取用户称呼和农场位置（提前到 select_tools 之前，用于地名检测）
+    farm_location = await _get_farm_context(farm_id)
+    display_name = farm_location[1]
+    farm_location = farm_location[0]
+
     tools = get_langchain_tools()
     raw_llm = get_llm()
+    # 获取当前 provider/model 的 cooldown key
+    _circuit_key = _build_circuit_key(raw_llm)
+    user_msg = _find_last_human_message(messages)
+    selected_names = select_tools(
+        user_msg, tools, intent_classifier=_get_classifier(),
+        user_location=farm_location,
+    )
     has_tool_results = bool(tool_msgs)
     if has_tool_results:
-        user_msg = _find_last_human_message(messages)
-        selected_names = select_tools(
-            user_msg, tools, intent_classifier=_get_classifier()
-        )
         selected_names_set = expand_by_chain(set(selected_names))
         selected_tools = [t for t in tools if t.name in selected_names_set]
     else:
-        user_msg = _find_last_human_message(messages)
-        selected_names = select_tools(
-            user_msg, tools, intent_classifier=_get_classifier()
-        )
         selected_tools = [t for t in tools if t.name in selected_names]
     if selected_tools:
-        llm = raw_llm.bind_tools(selected_tools)
+        parallel = {"parallel_tool_calls": True} if settings.ai.parallel_tool_calls else {}
+        llm = raw_llm.bind_tools(selected_tools, **parallel)
     else:
         llm = raw_llm
         logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
     model_name = getattr(raw_llm, "model_name", "unknown")
     _round_idx = increment_round()
     collector = get_collector()
-
-    farm_id = state.get("farm_id", 1)
-
-    # 获取用户称呼和农场位置
-    db = SessionLocal()
-    try:
-        farm = db.query(Farm).filter(Farm.id == farm_id).first()
-        display_name = "农友"
-        user_city = ""
-        if farm and farm.user_id:
-            user = db.query(User).filter(User.id == farm.user_id).first()
-            if user:
-                display_name = user.nickname
-            user_setting = (
-                db.query(UserSetting)
-                .filter(UserSetting.user_id == farm.user_id)
-                .first()
-            )
-            if user_setting and user_setting.default_city:
-                user_city = user_setting.default_city
-        farm_location = user_city or (farm.location if farm and farm.location else "")
-    except Exception:
-        logger.warning("获取用户信息失败，使用默认值", exc_info=True)
-        display_name = "农友"
-        farm_location = ""
-    finally:
-        db.close()
 
     current_date = get_request_date()
     current_season = _get_season(current_date)
@@ -263,7 +323,7 @@ async def _llm_node(state: AgentState) -> dict:
         output_data=system_text[:2000],
     )
 
-    system = HumanMessage(content=system_text)
+    system = SystemMessage(content=system_text)
     messages = sliding_window_compact(state["messages"])
     input_summary = _find_last_human_message(state["messages"])[:200]
 
@@ -290,9 +350,11 @@ async def _llm_node(state: AgentState) -> dict:
                 duration_ms=duration_ms,
                 error_message=str(exc),
             )
+            _record_llm_failure(_circuit_key, exc)
             raise
 
     duration_ms = int((_time.perf_counter() - start) * 1000)
+    _record_llm_success(_circuit_key)
 
     # 提取 token 用量
     tokens = _extract_tokens_used(response)
@@ -381,11 +443,20 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                 duration_ms,
                 summary,
             )
+            # 提取结构化 trace 数据（来自 _SkillResultWrapper）
+            trace_output = getattr(result, "trace_data", None)
+            if not trace_output:
+                trace_output = {
+                    "status": "success",
+                    "reply_preview": str(result)[:500],
+                }
+            else:
+                trace_output["reply_preview"] = str(result)[:500]
             collector.record(
                 node_type="skill_call",
                 node_name=name,
                 input_data=args,
-                output_data=str(result)[:200],
+                output_data=trace_output,
                 duration_ms=duration_ms,
             )
             return ToolMessage(content=str(result), tool_call_id=tool_call_id)
