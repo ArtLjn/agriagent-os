@@ -126,3 +126,94 @@ class TestParallelToolSnippet:
         )
         assert "并行工具调用" in rendered
         assert "同时返回所有需要的工具调用" in rendered
+
+
+class TestParallelBatchTrace:
+    """并行执行聚合 trace 日志测试。"""
+
+    @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.get_collector")
+    @pytest.mark.asyncio
+    async def test_parallel_batch_trace_recorded(
+        self, mock_get_collector, mock_get_tools
+    ):
+        """并行执行 2 个 Skill 时记录 parallel_batch 聚合 trace。"""
+        mock_collector = MagicMock()
+        mock_get_collector.return_value = mock_collector
+
+        weather_tool = MagicMock()
+        weather_tool.name = "get_weather_forecast"
+        weather_tool.ainvoke = AsyncMock(return_value="晴天 25度")
+
+        cost_tool = MagicMock()
+        cost_tool.name = "get_cost_summary"
+        cost_tool.ainvoke = AsyncMock(return_value="本月花费 500 元")
+
+        mock_get_tools.return_value = [weather_tool, cost_tool]
+
+        from app.agent.graph import _parallel_tool_node, AgentState
+
+        state: AgentState = {
+            "messages": [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {"name": "get_weather_forecast", "args": {"city": "徐州"}, "id": "tc1"},
+                        {"name": "get_cost_summary", "args": {}, "id": "tc2"},
+                    ],
+                )
+            ],
+            "farm_id": 1,
+        }
+
+        result = await _parallel_tool_node(state)
+        assert len(result["messages"]) == 2
+
+        # 验证 parallel_batch trace 被记录
+        batch_calls = [
+            c for c in mock_collector.record.call_args_list
+            if c[1].get("node_type") == "parallel_batch"
+        ]
+        assert len(batch_calls) == 1
+        batch_data = batch_calls[0][1]
+        assert batch_data["output_data"]["parallel_count"] == 2
+        assert len(batch_data["output_data"]["skills"]) == 2
+
+    @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.get_collector")
+    @pytest.mark.asyncio
+    async def test_single_skill_no_batch_trace(
+        self, mock_get_collector, mock_get_tools
+    ):
+        """单 Skill 执行时不记录 parallel_batch trace。"""
+        mock_collector = MagicMock()
+        mock_get_collector.return_value = mock_collector
+
+        weather_tool = MagicMock()
+        weather_tool.name = "get_weather_forecast"
+        weather_tool.ainvoke = AsyncMock(return_value="晴天 25度")
+        mock_get_tools.return_value = [weather_tool]
+
+        from app.agent.graph import _parallel_tool_node, AgentState
+
+        state: AgentState = {
+            "messages": [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {"name": "get_weather_forecast", "args": {"city": "徐州"}, "id": "tc1"},
+                    ],
+                )
+            ],
+            "farm_id": 1,
+        }
+
+        result = await _parallel_tool_node(state)
+        assert len(result["messages"]) == 1
+
+        # 验证没有 parallel_batch trace
+        batch_calls = [
+            c for c in mock_collector.record.call_args_list
+            if c[1].get("node_type") == "parallel_batch"
+        ]
+        assert len(batch_calls) == 0

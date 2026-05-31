@@ -480,7 +480,18 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         results = [await _call_one(last.tool_calls[0])]
     else:
         logger.info("并行执行 %d 个 Skill", len(last.tool_calls))
+        batch_start = _time.perf_counter()
         results = await asyncio.gather(*[_call_one(tc) for tc in last.tool_calls])
+        batch_duration = int((_time.perf_counter() - batch_start) * 1000)
+        collector.record(
+            node_type="parallel_batch",
+            node_name=f"parallel_{len(results)}_skills",
+            output_data={
+                "parallel_count": len(results),
+                "skills": [{"name": tc["name"]} for tc in last.tool_calls],
+            },
+            duration_ms=batch_duration,
+        )
 
     return {"messages": results}
 
