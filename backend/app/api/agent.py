@@ -103,13 +103,31 @@ async def agent_chat_stream(
     response: Response,
     chat_request: ChatRequest,
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
-    user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
-    """流式与农事顾问 Agent 对话（SSE）。"""
+    """流式与农事顾问 Agent 对话（SSE）。支持管理员模拟其他用户身份。"""
+    # 确定实际用户和农场
+    user = current_user
+    if chat_request.simulate_user_id:
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="需要管理员权限才能模拟用户")
+        simulated = (
+            db.query(User).filter(User.id == chat_request.simulate_user_id).first()
+        )
+        if not simulated:
+            raise HTTPException(status_code=404, detail="模拟用户不存在")
+        user = simulated
+
+    farm = db.query(Farm).filter(Farm.user_id == user.id).first()
+    if farm is None:
+        raise HTTPException(status_code=404, detail="未找到关联农场")
+
     rid = _new_request_id()
     logger.info(
-        "[%s] POST /agent/chat/stream | message=%s", rid, chat_request.message[:80]
+        "[%s] POST /agent/chat/stream | message=%s simulate_user=%s",
+        rid,
+        chat_request.message[:80],
+        chat_request.simulate_user_id,
     )
 
     async def event_generator():
@@ -131,6 +149,7 @@ async def agent_chat_stream(
 
             # flush trace 队列确保 skill_call 记录已落盘
             from app.infra.trace_collector import get_trace_dao
+
             dao = get_trace_dao()
             if dao and dao.queue_size > 0:
                 await dao.flush_now()
@@ -154,8 +173,14 @@ async def agent_chat_stream(
                     .first()
                 )
                 if conversation:
-                    meta = json.dumps({"skills": skill_names}, ensure_ascii=False) if skill_names else None
-                    save_message(db, conversation.id, "assistant", full_reply, meta=meta)
+                    meta = (
+                        json.dumps({"skills": skill_names}, ensure_ascii=False)
+                        if skill_names
+                        else None
+                    )
+                    save_message(
+                        db, conversation.id, "assistant", full_reply, meta=meta
+                    )
 
             record = AgentRecord(
                 cycle_id=chat_request.cycle_id,
@@ -173,8 +198,21 @@ async def agent_chat_stream(
 
             pending = get_pending(farm.id)
             if pending:
-                pa_event = json.dumps({'pending_action': {'action_id': pending.action_id, 'skill_name': pending.skill_name, 'params': pending.params}}, ensure_ascii=False)
-                logger.info("[%s] 发送 pending_action SSE 事件 | skill=%s", rid, pending.skill_name)
+                pa_event = json.dumps(
+                    {
+                        "pending_action": {
+                            "action_id": pending.action_id,
+                            "skill_name": pending.skill_name,
+                            "params": pending.params,
+                        }
+                    },
+                    ensure_ascii=False,
+                )
+                logger.info(
+                    "[%s] 发送 pending_action SSE 事件 | skill=%s",
+                    rid,
+                    pending.skill_name,
+                )
                 yield f"data: {pa_event}\n\n"
 
             logger.info(
