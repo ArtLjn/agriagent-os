@@ -1,6 +1,9 @@
 """网络搜索 Skill — 基于自建 SearXNG 获取实时网络信息。"""
 
+import asyncio
 import logging
+import re
+from html import unescape
 from urllib.parse import urlencode
 
 import httpx
@@ -74,9 +77,61 @@ async def _optimize_query(raw_query: str) -> tuple[str, str]:
     return raw_query, _detect_search_category(raw_query)
 
 
-def _format_results(query: str, data: dict) -> str:
+async def _fetch_page_content(url: str, max_length: int = 400) -> str | None:
+    """抓取网页正文，提取纯文本摘要。"""
+    try:
+        async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
+            resp = await client.get(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml",
+                },
+            )
+            resp.raise_for_status()
+            text = resp.text
+
+            # 优先提取 article/main 标签内容
+            body_match = re.search(
+                r"<article[^>]*>(.*?)</article>", text, re.DOTALL | re.IGNORECASE
+            )
+            if not body_match:
+                body_match = re.search(
+                    r"<main[^>]*>(.*?)</main>", text, re.DOTALL | re.IGNORECASE
+                )
+            if not body_match:
+                body_match = re.search(
+                    r"<body[^>]*>(.*?)</body>", text, re.DOTALL | re.IGNORECASE
+                )
+
+            if body_match:
+                content = body_match.group(1)
+                # 移除 script/style/nav/header/footer/aside 标签及内容
+                for tag in ["script", "style", "nav", "header", "footer", "aside"]:
+                    content = re.sub(
+                        rf"<{tag}[^>]*>.*?</{tag}>",
+                        " ",
+                        content,
+                        flags=re.DOTALL | re.IGNORECASE,
+                    )
+                # 移除所有 HTML 标签
+                content = re.sub(r"<[^>]+>", " ", content)
+                # 解码 HTML 实体
+                content = unescape(content)
+                # 清理空白
+                content = re.sub(r"\s+", " ", content).strip()
+                # 过滤掉太短的内容（可能是登录页/错误页）
+                if len(content) > 50:
+                    return content[:max_length]
+    except Exception:
+        pass
+    return None
+
+
+async def _format_results(query: str, data: dict) -> str:
     """将 SearXNG 完整响应格式化为带编号引用的结构化文本。
 
+    对摘要过短的结果尝试抓取网页补全内容。
     每条结果标注 [1] [2] 编号，LLM 回答时可引用对应来源。
     """
     lines: list[str] = []
@@ -112,12 +167,39 @@ def _format_results(query: str, data: dict) -> str:
         lines.append(f"搜索关键词: {query}")
         lines.append(f"找到 {len(items)} 条结果")
         lines.append("")
-        for i, item in enumerate(items[:10], 1):
+
+        # 过滤无效结果：标题为空或 URL 异常短的视为垃圾数据
+        valid_items = [
+            item for item in items
+            if item.get("title") and len(item.get("url", "")) > 4
+        ]
+
+        # 对前 5 条摘要过短的结果并行抓取网页补全
+        short_items = [
+            item for item in valid_items[:5]
+            if len(item.get("content", "") or "") < 80
+        ]
+        fetched_contents: dict[str, str] = {}
+        if short_items:
+            fetch_tasks = [
+                _fetch_page_content(item.get("url", ""), max_length=300)
+                for item in short_items
+            ]
+            results = await asyncio.gather(*fetch_tasks)
+            for item, fetched in zip(short_items, results):
+                if fetched:
+                    fetched_contents[item.get("url", "")] = fetched
+
+        for i, item in enumerate(valid_items[:15], 1):
             title = item.get("title", "无标题")
             url = item.get("url", "")
-            content = item.get("content", "")
+            content = item.get("content", "") or ""
             engines = item.get("engines", [])
             published = item.get("publishedDate", "")
+
+            # 用抓取的网页内容补全短摘要
+            if len(content) < 80 and url in fetched_contents:
+                content = fetched_contents[url]
 
             source_count = i
             lines.append(f"[{i}] {title}")
@@ -243,7 +325,7 @@ class WebSearchSkill(Skill):
                 reply=f"未找到与「{query}」相关的结果。",
             )
 
-        reply = _format_results(query, data)
+        reply = await _format_results(query, data)
         logger.info(
             "web_search 完成 | query=%r | results=%d | answers=%d",
             query,
