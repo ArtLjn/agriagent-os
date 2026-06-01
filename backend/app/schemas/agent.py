@@ -11,6 +11,7 @@ class ChatRequest(BaseModel):
     cycle_id: int | None = None
     message: str = Field(..., min_length=1, max_length=2000)
     session_id: str | None = Field(None, max_length=64)
+    simulate_user_id: str | None = Field(None, description="管理员模拟用户ID")
 
 
 class PendingActionResponse(BaseModel):
