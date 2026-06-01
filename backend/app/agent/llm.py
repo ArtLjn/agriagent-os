@@ -22,7 +22,7 @@ class LlmNotConfiguredError(Exception):
     pass
 
 
-def get_llm() -> BaseChatModel:
+def get_llm(*, role: str = "generation") -> BaseChatModel:
     """获取 LLM 实例（每次返回新实例以支持负载均衡）。"""
     cb = settings.circuit_breaker_config
     extra_body: dict = {}
@@ -36,16 +36,18 @@ def get_llm() -> BaseChatModel:
         manager = get_llm_manager()
         if not manager.fallback_mode:
             llm = manager.get_chat_model(
+                role=role,
                 temperature=0.7,
                 max_retries=cb.retry_max,
                 timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
                 extra_body=extra_body if extra_body else None,
             )
-            info = manager.get_model_info()
+            info = manager.get_model_info(role=role)
             logger.debug(
-                "LLM 客户端(Manager) | provider=%s | model=%s",
+                "LLM 客户端(Manager) | provider=%s | model=%s | role=%s",
                 info["provider"],
                 info["model"],
+                role,
             )
             return llm
     except Exception as e:
@@ -62,11 +64,14 @@ def get_llm() -> BaseChatModel:
         api_key=settings.ai_api_key,
         base_url=settings.ai_base_url,
         temperature=0.7,
+        streaming=True,
         max_retries=cb.retry_max,
         timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
         extra_body=extra_body if extra_body else None,
     )
-    logger.debug("LLM 客户端(config.yaml兜底) | model=%s", settings.ai_model)
+    logger.debug(
+        "LLM 客户端(config.yaml兜底) | model=%s | role=%s", settings.ai_model, role
+    )
     return llm
 
 
