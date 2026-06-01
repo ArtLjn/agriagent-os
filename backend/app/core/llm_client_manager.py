@@ -30,6 +30,7 @@ _MAX_COOLDOWN_MINUTES = 1440  # 24h
 class ErrorLevel(Enum):
     PROVIDER = "provider"
     MODEL = "model"
+    QUOTA_EXHAUSTED = "quota_exhausted"
 
 
 class LLMCircuitState(Enum):
@@ -260,6 +261,7 @@ class LLMClientManager:
             api_key=api_key,
             base_url=provider.base_url,
             temperature=kwargs.pop("temperature", 0.7),
+            streaming=True,
             extra_body=extra_body if extra_body else None,
             **kwargs,
         )

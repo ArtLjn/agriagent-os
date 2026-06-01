@@ -234,6 +234,10 @@ class TestErrorClassification:
         err = RuntimeError("something unexpected")
         assert classify_error(err) == ErrorLevel.PROVIDER
 
+    def test_error_level_has_quota_exhausted(self):
+        assert hasattr(ErrorLevel, "QUOTA_EXHAUSTED")
+        assert ErrorLevel.QUOTA_EXHAUSTED.value == "quota_exhausted"
+
 
 class TestCooldown:
     """测试指数退避 cooldown。"""
