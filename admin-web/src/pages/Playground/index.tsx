@@ -143,7 +143,7 @@ function formatJson(raw: string | null): string {
   try {
     return JSON.stringify(JSON.parse(raw), null, 2);
   } catch {
-    return raw;
+    return raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
   }
 }
 
@@ -636,7 +636,7 @@ export default function Playground() {
                     <pre style={{
                       backgroundColor: '#161b22', padding: 12, borderRadius: 6,
                       border: '1px solid #30363d', fontSize: 12, margin: 0,
-                      maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
+                      maxHeight: 500, overflow: 'auto', whiteSpace: 'pre-wrap',
                     }}>
                       {formatJson(nodeDetail.output_data)}
                     </pre>

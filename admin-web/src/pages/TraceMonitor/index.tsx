@@ -163,7 +163,7 @@ export default function TraceMonitor() {
     try {
       return JSON.stringify(JSON.parse(raw), null, 2);
     } catch {
-      return raw;
+      return raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
     }
   };
 
@@ -534,7 +534,7 @@ export default function TraceMonitor() {
                     border: '1px solid #30363d',
                     fontSize: 12,
                     margin: 0,
-                    maxHeight: 300,
+                    maxHeight: 500,
                     overflow: 'auto',
                     whiteSpace: 'pre-wrap',
                   }}>
