@@ -51,14 +51,14 @@ def _get_classifier() -> LLMIntentClassifier | None:
     base_url = settings.ai_base_url
     model = settings.ai_model
 
-    # 优先从 Manager 获取
+    # 优先从 Manager 获取轻量模型（tool-selection 角色）
     try:
         from app.core.llm_client_manager import get_llm_manager
 
         manager = get_llm_manager()
         if not manager.fallback_mode:
-            info = manager.get_model_info()
-            client = manager.get_sync_client()
+            info = manager.get_model_info(role="tool-selection")
+            client = manager.get_sync_client(role="tool-selection")
             api_key = client.api_key
             base_url = client.base_url
             model = info["model"]
