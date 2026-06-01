@@ -139,12 +139,19 @@ class LLMIntentClassifier:
             return None
 
 
+DISABLED_SKILLS: set[str] = {
+    "web_search",  # SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用
+}
+
+
 def select_tools(
     user_message: str,
     all_tools: list[BaseTool],
     top_k: int = 3,
     intent_classifier: LLMIntentClassifier | None = None,
 ) -> list[str]:
+    # 过滤掉禁用的 skill
+    all_tools = [t for t in all_tools if t.name not in DISABLED_SKILLS]
     candidates: set[str] = set()
 
     for tool_name, patterns in WRITE_PATTERNS.items():
