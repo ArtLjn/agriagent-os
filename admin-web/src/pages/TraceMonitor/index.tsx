@@ -11,7 +11,7 @@ import {
   Tag,
   Pagination,
 } from 'antd';
-import { SearchOutlined, ClearOutlined } from '@ant-design/icons';
+import { SearchOutlined, ClearOutlined, CopyOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import {
   listTraces,
@@ -167,6 +167,55 @@ export default function TraceMonitor() {
     }
   };
 
+  function computeTimingReport(timeline: TraceTimeline): string {
+    const typeStats = new Map<string, { duration: number; count: number }>();
+    let totalDuration = 0;
+
+    for (const round of timeline.rounds) {
+      for (const node of round.nodes) {
+        if (node.duration_ms && node.duration_ms > 0) {
+          const existing = typeStats.get(node.node_type) || { duration: 0, count: 0 };
+          existing.duration += node.duration_ms;
+          existing.count += 1;
+          typeStats.set(node.node_type, existing);
+          totalDuration += node.duration_ms;
+        }
+      }
+    }
+
+    const NODE_TYPE_LABELS: Record<string, string> = {
+      routing: '路由决策',
+      prompt_render: 'Prompt 渲染',
+      llm_call: 'LLM 调用',
+      skill_call: 'Skill 执行',
+      error: '错误',
+    };
+
+    let md = '### Trace 耗时分析\n\n';
+    md += '| 节点类型 | 累计耗时(ms) | 占比 | 节点数 |\n';
+    md += '|----------|-------------|------|--------|\n';
+
+    for (const [type, stats] of typeStats) {
+      const label = NODE_TYPE_LABELS[type] || type;
+      const pct = totalDuration > 0 ? ((stats.duration / totalDuration) * 100).toFixed(1) : '0.0';
+      md += `| ${label} | ${stats.duration} | ${pct}% | ${stats.count} |\n`;
+    }
+
+    md += `| **总计** | **${totalDuration}** | **100%** | **${Array.from(typeStats.values()).reduce((s, v) => s + v.count, 0)}** |\n`;
+
+    return md;
+  }
+
+  async function copyTimingReport(timeline: TraceTimeline) {
+    try {
+      const report = computeTimingReport(timeline);
+      await navigator.clipboard.writeText(report);
+      message.success('耗时分析已复制到剪贴板');
+    } catch {
+      message.error('复制失败');
+    }
+  }
+
   const handleCleanup = async () => {
     if (!cleanupDate) {
       message.warning('请选择清理日期');
@@ -294,6 +343,16 @@ export default function TraceMonitor() {
                 <span style={{ color: TEXT }}>{item.total_duration_ms}ms</span>
               </span>
               <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {expandedCards.has(item.request_id) && item.timeline && (
+                  <Button
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={(e) => { e.stopPropagation(); copyTimingReport(item.timeline!); }}
+                    style={{ background: 'transparent', borderColor: BORDER, color: TEXT_DIM, fontSize: 12 }}
+                  >
+                    复制耗时
+                  </Button>
+                )}
                 <span>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
                 <span style={{ color: ACCENT }}>
                   {expandedCards.has(item.request_id) ? '收起 ▲' : '展开 ▼'}
