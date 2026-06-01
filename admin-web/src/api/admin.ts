@@ -231,3 +231,26 @@ export async function clearCache(): Promise<ClearCacheResponse> {
   const res = await apiClient.post<ClearCacheResponse>('/admin/cache/clear');
   return res.data;
 }
+
+// ─── Users API ───────────────────────────────────────────────────────────────
+
+export interface AdminUserListItem {
+  id: string;
+  phone: string;
+  nickname: string | null;
+  avatar_url: string | null;
+  role: string;
+  status: string;
+  created_at: string;
+  farm_name: string | null;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUserListItem[];
+  total: number;
+}
+
+export async function listUsers(params?: { page?: number; size?: number; status?: string }): Promise<AdminUserListResponse> {
+  const res = await apiClient.get<AdminUserListResponse>('/admin/users', { params });
+  return res.data;
+}
