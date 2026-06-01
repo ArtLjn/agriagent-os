@@ -48,28 +48,48 @@ async def _optimize_query(raw_query: str) -> tuple[str, str]:
             [
                 SystemMessage(
                     content=(
-                        "你是搜索查询优化专家。分析用户查询并输出两部分结果：\n"
-                        "1. 改写后的搜索查询（补充时间、地点、专业术语）\n"
-                        "2. 搜索分类（general/news/images/videos 之一）\n\n"
-                        "输出格式严格为两行：\n"
-                        "QUERY: <改写后的查询>\n"
-                        "CATEGORY: <分类>"
+                        "你是搜索查询优化专家。分析用户查询并输出两部分结果。\n"
+                        "规则：\n"
+                        "1. 只输出两行，不要任何解释、标题或额外文字\n"
+                        "2. 第一行：改写后的搜索查询（补充时间、地点、专业术语）\n"
+                        "3. 第二行：搜索分类（只能是 general/news/images/videos 之一）\n\n"
+                        "严格格式（示例）：\n"
+                        "2026年6月济南西瓜批发市场价格走势\n"
+                        "general"
                     )
                 ),
                 HumanMessage(content=f"用户查询：{raw_query}"),
             ]
         )
         text = response.content.strip()
-        # 解析 LLM 输出
-        rewritten = raw_query
-        category = ""
-        for line in text.splitlines():
-            if line.strip().startswith("QUERY:"):
-                rewritten = line.split(":", 1)[1].strip()
-            elif line.strip().startswith("CATEGORY:"):
-                category = line.split(":", 1)[1].strip().lower()
-        # 校验
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+        # 防御：过滤掉包含内部标记的行（如模型把 prompt 也输出了）
+        lines = [
+            ln for ln in lines
+            if not any(bad in ln.lower() for bad in ["query:", "category:", "用户查询", "你是搜索", "规则：", "严格格式"])
+        ]
+
+        if len(lines) >= 2:
+            rewritten = lines[0]
+            category = lines[1].lower()
+            if category not in ("general", "news", "images", "videos"):
+                category = ""
+        elif len(lines) == 1:
+            rewritten = lines[0]
+            category = ""
+        else:
+            rewritten = raw_query
+            category = ""
+
+        # 校验：改写结果不能包含明显是格式泄露的内容
         if len(rewritten) >= 3 and category in ("general", "news", "images", "videos"):
+            logger.info("web_search 查询优化成功 | 原始=%r | 改写=%r | 分类=%s", raw_query, rewritten, category)
+            return rewritten, category
+        elif len(rewritten) >= 3 and not category:
+            # 有改写结果但没有分类，用规则补充分类
+            category = _detect_search_category(raw_query)
+            logger.info("web_search 查询改写成功 | 原始=%r | 改写=%r | 分类(规则)=%s", raw_query, rewritten, category)
             return rewritten, category
     except (LlmNotConfiguredError, Exception):
         pass
