@@ -83,6 +83,8 @@ export default function SkillOutputFormatter({ outputData }: SkillOutputFormatte
           fontSize: 13,
           lineHeight: 1.6,
           whiteSpace: 'pre-wrap',
+          maxHeight: 500,
+          overflow: 'auto',
         }}>
           {reply_preview}
         </div>
