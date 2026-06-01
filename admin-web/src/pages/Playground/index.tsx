@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Input, Button, Space, Collapse, Typography, Drawer, Tag, Tooltip, message } from 'antd';
+import { Input, Button, Space, Collapse, Typography, Drawer, Tag, Tooltip, message, Select } from 'antd';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { listTraces, getTimeline, type TraceTimeline, type TraceNodeDetail } from '../../api/admin';
+import { listTraces, getTimeline, type TraceTimeline, type TraceNodeDetail, listUsers, type AdminUserListItem } from '../../api/admin';
 import { listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
 import type { PendingAction } from '../../api/agent';
 import GanttTimeline from '../../components/GanttTimeline';
@@ -87,14 +87,14 @@ function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 
 type StreamChunk = { type: 'content'; data: string } | { type: 'skills'; data: string[] } | { type: 'pending_action'; data: PendingAction };
 
 /* ── SSE 流式对话 ── */
-async function* streamPlaygroundChat(message: string, sessionId: string): AsyncGenerator<StreamChunk> {
+async function* streamPlaygroundChat(message: string, sessionId: string, simulateUserId?: string | null): AsyncGenerator<StreamChunk> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = authStore.getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const resp = await fetch('/api/agent/chat/stream', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ message, session_id: sessionId }),
+    body: JSON.stringify({ message, session_id: sessionId, simulate_user_id: simulateUserId }),
   });
   if (!resp.ok || !resp.body) throw new Error(`stream error: ${resp.status}`);
   const reader = resp.body.getReader();
@@ -157,6 +157,8 @@ export default function Playground() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [nodeDetail, setNodeDetail] = useState<TraceNodeDetail | null>(null);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [users, setUsers] = useState<AdminUserListItem[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -170,9 +172,20 @@ export default function Playground() {
     }
   }, []);
 
+  /* ── 加载用户列表 ── */
+  const loadUsers = useCallback(async () => {
+    try {
+      const res = await listUsers({ size: 100 });
+      setUsers(res.items);
+    } catch {
+      // 静默失败
+    }
+  }, []);
+
   useEffect(() => {
     loadConversations();
-  }, [loadConversations]);
+    loadUsers();
+  }, [loadConversations, loadUsers]);
 
   /* ── 切换会话 ── */
   const switchConversation = useCallback(async (sid: string) => {
@@ -243,7 +256,7 @@ export default function Playground() {
     setMessages((prev) => { assistantIdx = prev.length - 1; return prev; });
 
     try {
-      for await (const chunk of streamPlaygroundChat(userMsg, sessionId)) {
+      for await (const chunk of streamPlaygroundChat(userMsg, sessionId, selectedUserId)) {
         if (chunk.type === 'content') {
           setMessages((prev) => {
             const next = [...prev];
@@ -289,7 +302,7 @@ export default function Playground() {
       setLoading(false);
       setTraceLoading(false);
     }
-  }, [input, scrollToBottom, sessionId, loadConversations]);
+  }, [input, scrollToBottom, sessionId, loadConversations, selectedUserId]);
 
   const isThinking = loading && messages.length > 0 && messages[messages.length - 1].content === '';
 
@@ -427,8 +440,28 @@ export default function Playground() {
           background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8,
           padding: '12px 16px', marginBottom: 16,
         }}>
-          <div style={{ color: TEXT_DIM, fontSize: 13 }}>
-            Session ID: <span style={{ color: TEXT, fontFamily: 'monospace' }}>{sessionId}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ color: TEXT_DIM, fontSize: 13 }}>
+              Session ID: <span style={{ color: TEXT, fontFamily: 'monospace' }}>{sessionId}</span>
+            </div>
+            <Select
+              placeholder="选择用户"
+              value={selectedUserId}
+              onChange={(value) => {
+                setSelectedUserId(value);
+                setMessages([]);
+                setTimeline(null);
+              }}
+              style={{ width: 180 }}
+              dropdownStyle={{ background: CARD }}
+              options={[
+                { value: null, label: '匿名用户' },
+                ...users.map((u) => ({
+                  value: u.id,
+                  label: u.nickname || u.phone,
+                })),
+              ]}
+            />
           </div>
           <Button
             size="small"
