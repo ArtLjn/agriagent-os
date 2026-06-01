@@ -279,15 +279,17 @@ async def _llm_node(state: AgentState) -> dict:
     farm_location = farm_location[0]
 
     tools = get_langchain_tools()
-    raw_llm = get_llm()
-    # 获取当前 provider/model 的 cooldown key
+    has_tool_results = bool(tool_msgs)
+
+    # 双阶段模型：工具选择用轻量模型，回复生成用高质量模型
+    llm_role = "generation" if has_tool_results else "tool-selection"
+    raw_llm = get_llm(role=llm_role)
     _circuit_key = _build_circuit_key(raw_llm)
     user_msg = _find_last_human_message(messages)
     selected_names = select_tools(
         user_msg, tools, intent_classifier=_get_classifier(),
         user_location=farm_location,
     )
-    has_tool_results = bool(tool_msgs)
     if has_tool_results:
         selected_names_set = expand_by_chain(set(selected_names))
         selected_tools = [t for t in tools if t.name in selected_names_set]
@@ -299,7 +301,6 @@ async def _llm_node(state: AgentState) -> dict:
     else:
         llm = raw_llm
         logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
-    model_name = getattr(raw_llm, "model_name", "unknown")
     _round_idx = increment_round()
     collector = get_collector()
 
@@ -336,25 +337,64 @@ async def _llm_node(state: AgentState) -> dict:
         elif action == "warn":
             logger.warning("Token 配额超限，继续调用（warn 模式）")
 
-    # LLM 调用 + 计时
+    # LLM 调用 + 计时 + 请求内重试
     start = _time.perf_counter()
+    max_retries = settings.ai.failover_max_retries
+    response = None
+
     async with _LLM_SEMAPHORE:
-        try:
-            response = await llm.ainvoke([system] + messages)
-        except Exception as exc:
-            duration_ms = int((_time.perf_counter() - start) * 1000)
-            collector.record(
-                node_type="llm_call",
-                node_name=model_name,
-                input_data=input_summary,
-                duration_ms=duration_ms,
-                error_message=str(exc),
-            )
-            _record_llm_failure(_circuit_key, exc)
-            raise
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    raw_llm = get_llm(role=llm_role)
+                    _circuit_key = _build_circuit_key(raw_llm)
+                    if selected_tools:
+                        parallel = {"parallel_tool_calls": True} if settings.ai.parallel_tool_calls else {}
+                        llm = raw_llm.bind_tools(selected_tools, **parallel)
+                    else:
+                        llm = raw_llm
+                response = await llm.ainvoke([system] + messages)
+                _record_llm_success(_circuit_key)
+                break
+            except Exception as exc:
+                duration_ms = int((_time.perf_counter() - start) * 1000)
+                model_name = getattr(raw_llm, "model_name", "unknown")
+                _record_llm_failure(_circuit_key, exc)
+
+                # 非可恢复错误（400 schema 错误等）不重试，直接抛出
+                from app.core.llm_client_manager import classify_error, ErrorLevel
+                error_level = classify_error(exc)
+                if error_level == ErrorLevel.MODEL:
+                    logger.warning(
+                        "LLM 不可恢复错误，跳过重试 | key=%s | model=%s | level=%s",
+                        _circuit_key, model_name, error_level.value,
+                    )
+                    collector.record(
+                        node_type="llm_call",
+                        node_name=model_name,
+                        input_data=input_summary,
+                        duration_ms=duration_ms,
+                        error_message=str(exc),
+                    )
+                    raise
+
+                logger.warning(
+                    "LLM 重试 | attempt=%d/%d | key=%s | model=%s | latency_ms=%d | error=%s",
+                    attempt + 1, max_retries, _circuit_key, model_name,
+                    duration_ms, str(exc)[:120],
+                )
+                if attempt == max_retries - 1:
+                    collector.record(
+                        node_type="llm_call",
+                        node_name=model_name,
+                        input_data=input_summary,
+                        duration_ms=duration_ms,
+                        error_message=str(exc),
+                    )
+                    raise
 
     duration_ms = int((_time.perf_counter() - start) * 1000)
-    _record_llm_success(_circuit_key)
+    model_name = getattr(raw_llm, "model_name", "unknown")
 
     # 提取 token 用量
     tokens = _extract_tokens_used(response)
