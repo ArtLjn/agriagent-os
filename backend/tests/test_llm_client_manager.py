@@ -238,6 +238,26 @@ class TestErrorClassification:
         assert hasattr(ErrorLevel, "QUOTA_EXHAUSTED")
         assert ErrorLevel.QUOTA_EXHAUSTED.value == "quota_exhausted"
 
+    def test_403_quota_exhausted_is_quota_level(self):
+        from openai import PermissionDeniedError
+
+        err = PermissionDeniedError(
+            message="AllocationQuota.FreeTierOnly",
+            response=MagicMock(status_code=403),
+            body=None,
+        )
+        assert classify_error(err) == ErrorLevel.QUOTA_EXHAUSTED
+
+    def test_403_without_quota_exhausted_is_provider_level(self):
+        from openai import PermissionDeniedError
+
+        err = PermissionDeniedError(
+            message="some other 403 error",
+            response=MagicMock(status_code=403),
+            body=None,
+        )
+        assert classify_error(err) == ErrorLevel.PROVIDER
+
 
 class TestCooldown:
     """测试指数退避 cooldown。"""

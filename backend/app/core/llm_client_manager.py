@@ -75,7 +75,12 @@ def classify_error(exc: Exception) -> ErrorLevel:
         return ErrorLevel.PROVIDER
 
     status_code = getattr(getattr(exc, "response", None), "status_code", None)
-    if status_code in (401, 403):
+    if status_code == 403:
+        err_msg = str(getattr(exc, "message", "")) or str(exc)
+        if "AllocationQuota.FreeTierOnly" in err_msg:
+            return ErrorLevel.QUOTA_EXHAUSTED
+        return ErrorLevel.PROVIDER
+    if status_code == 401:
         return ErrorLevel.PROVIDER
     if status_code in (429, 404, 400):
         return ErrorLevel.MODEL
