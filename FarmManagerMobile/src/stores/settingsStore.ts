@@ -4,23 +4,32 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 import { settingsApi } from '../api/client';
 
+interface CityInfo {
+  name: string;
+  lat: number;
+  lon: number;
+}
+
 interface SettingsState {
   defaultFarmName: string;
   defaultCity: string;
+  defaultLat: number;
+  defaultLon: number;
   crops: string[];
   reminderTime: string;
   notificationEnabled: boolean;
   weatherAlertEnabled: boolean;
   displayName: string;
   setDefaultFarmName: (name: string) => void;
-  setDefaultCity: (city: string) => void;
+  setCity: (city: CityInfo) => void;
   setCrops: (crops: string[]) => void;
   setReminderTime: (time: string) => void;
   setNotificationEnabled: (enabled: boolean) => void;
   setWeatherAlertEnabled: (enabled: boolean) => void;
   setDisplayName: (name: string) => void;
-  syncToServer: (city: string, lat: number, lon: number) => Promise<void>;
-  loadFromServer: () => Promise<string | null>;
+  syncToServer: () => Promise<void>;
+  loadFromServer: () => Promise<CityInfo | null>;
+  getCityInfo: () => CityInfo;
 }
 
 export const useSettingsStore = create<
@@ -28,9 +37,11 @@ export const useSettingsStore = create<
   [['zustand/persist', unknown]]
 >(
   persist(
-    (set) => ({
+    (set, get) => ({
       defaultFarmName: '睢宁农场',
       defaultCity: '苏州',
+      defaultLat: 31.3,
+      defaultLon: 120.6,
       crops: ['西瓜', '豆角'],
       reminderTime: '08:00',
       notificationEnabled: true,
@@ -38,7 +49,11 @@ export const useSettingsStore = create<
       displayName: '农友',
 
       setDefaultFarmName: (name) => set({ defaultFarmName: name }),
-      setDefaultCity: (city) => set({ defaultCity: city }),
+      setCity: (city) => set({
+        defaultCity: city.name,
+        defaultLat: city.lat,
+        defaultLon: city.lon,
+      }),
       setCrops: (crops) => set({ crops }),
       setReminderTime: (time) => set({ reminderTime: time }),
       setNotificationEnabled: (enabled) =>
@@ -47,14 +62,19 @@ export const useSettingsStore = create<
         set({ weatherAlertEnabled: enabled }),
       setDisplayName: (name) => set({ displayName: name }),
 
-      syncToServer: async (city: string, lat: number, lon: number) => {
+      getCityInfo: () => {
+        const s = get();
+        return { name: s.defaultCity, lat: s.defaultLat, lon: s.defaultLon };
+      },
+
+      syncToServer: async () => {
+        const s = get();
         try {
           await settingsApi.update({
-            default_city: city,
-            default_lat: lat,
-            default_lon: lon,
+            default_city: s.defaultCity,
+            default_lat: s.defaultLat,
+            default_lon: s.defaultLon,
           });
-          set({ defaultCity: city });
         } catch {
           // 网络失败时本地已更新，下次重试
         }
@@ -65,8 +85,17 @@ export const useSettingsStore = create<
           const res = await settingsApi.get();
           const data = res.data;
           if (data.default_city) {
-            set({ defaultCity: data.default_city });
-            return data.default_city;
+            const cityInfo: CityInfo = {
+              name: data.default_city,
+              lat: data.default_lat ?? 31.3,
+              lon: data.default_lon ?? 120.6,
+            };
+            set({
+              defaultCity: cityInfo.name,
+              defaultLat: cityInfo.lat,
+              defaultLon: cityInfo.lon,
+            });
+            return cityInfo;
           }
           return null;
         } catch {

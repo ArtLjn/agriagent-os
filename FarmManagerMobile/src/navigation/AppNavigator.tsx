@@ -23,6 +23,7 @@ import { CropTemplateCreateScreen } from "../screens/crop/CropTemplateCreateScre
 import { WeatherDetailScreen } from "../screens/weather/WeatherDetailScreen";
 import { WeatherAlertScreen } from "../screens/weather/WeatherAlertScreen";
 import { AdviceDetailScreen } from "../screens/advice/AdviceDetailScreen";
+import { FarmDashboardScreen } from "../screens/dashboard/FarmDashboardScreen";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { RegisterScreen } from "../screens/auth/RegisterScreen";
 import { WelcomeScreen } from "../screens/auth/WelcomeScreen";
@@ -60,6 +61,7 @@ export type RootStackParamList = {
     weatherCondition?: "sunny" | "rainy" | "foggy" | "cold";
     createdAt?: string;
   };
+  FarmDashboard: undefined;
   Settings: undefined;
   About: undefined;
   Welcome: undefined;
@@ -222,6 +224,11 @@ export const AppNavigator: React.FC = () => {
               name="AdviceDetail"
               component={AdviceDetailScreen}
               options={{ title: "农事建议", headerShown: false }}
+            />
+            <Stack.Screen
+              name="FarmDashboard"
+              component={FarmDashboardScreen}
+              options={{ headerShown: false }}
             />
           </>
         ) : (

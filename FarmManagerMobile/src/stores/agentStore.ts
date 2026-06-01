@@ -9,6 +9,7 @@ import type {
   PendingAction,
 } from '../api/types';
 import { agentApi, weatherApi } from '../api/client';
+import { useSettingsStore } from './settingsStore';
 
 interface AgentState {
   messages: ChatMessage[];
@@ -193,9 +194,8 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       name: 'agent-store',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
-        cityName: state.cityName,
-        cityLat: state.cityLat,
-        cityLon: state.cityLon,
+        // 城市信息从 settingsStore 统一管理，agentStore 只做运行时缓存
+        sessionId: state.sessionId,
       }),
     }
   )

@@ -10,7 +10,6 @@ import { MarkdownText } from "../../components/MarkdownText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRoute } from "@react-navigation/native";
 import { useAgentStore } from "../../stores/agentStore";
-import { Card } from "../../components/Card";
 import { Loading } from "../../components/Loading";
 import { colors } from "../../theme/colors";
 import { spacing, fontSize, borderRadius } from "../../theme/spacing";
@@ -45,7 +44,7 @@ export const AgentReportScreen: React.FC = () => {
                       ? "calendar-week"
                       : "calendar-month"
                   }
-                  size={16}
+                  size={14}
                   color={colors.primary}
                 />
                 <Text style={styles.viewHeaderTitle}>
@@ -58,16 +57,17 @@ export const AgentReportScreen: React.FC = () => {
               </View>
               {passedCreatedAt && (
                 <Text style={styles.viewHeaderDate}>
-                  {new Date(passedCreatedAt).toLocaleDateString("zh-CN")}
+                  {new Date(passedCreatedAt).toLocaleDateString("zh-CN", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
                 </Text>
               )}
             </View>
-            <Card style={styles.reportCard} padding="lg">
-              <MarkdownText
-                text={passedContent!}
-                baseStyle={styles.reportContent}
-              />
-            </Card>
+            <View style={styles.reportCard}>
+              <MarkdownText text={passedContent!} />
+            </View>
           </>
         ) : (
           <>
@@ -169,12 +169,9 @@ export const AgentReportScreen: React.FC = () => {
                     {reportType === "weekly" ? "本周农事报告" : "本月农事报告"}
                   </Text>
                 </View>
-                <Card style={styles.reportCard} padding="lg">
-                  <MarkdownText
-                    text={report.content}
-                    baseStyle={styles.reportContent}
-                  />
-                </Card>
+                <View style={styles.reportCard}>
+                  <MarkdownText text={report.content} />
+                </View>
               </>
             )}
           </>
@@ -197,7 +194,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.xs,
   },
   viewHeaderBadge: {
     flexDirection: "row",
@@ -215,7 +213,8 @@ const styles = StyleSheet.create({
   },
   viewHeaderDate: {
     fontSize: fontSize.sm,
-    color: colors.textSecondary,
+    color: colors.textTertiary,
+    fontWeight: "500",
   },
   pageHeader: {
     flexDirection: "row",
@@ -314,9 +313,13 @@ const styles = StyleSheet.create({
     color: colors.success,
   },
   reportCard: {
-    padding: spacing.md,
-  },
-  reportContent: {
-    lineHeight: 24,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
 });

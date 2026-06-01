@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from "react-native";
 import type { CostRecord } from "../../../api/types";
 import { colors } from "../../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import dayjs from "dayjs";
 
@@ -25,8 +25,8 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
   const isCost = record.record_type === "cost";
   const typeLabel = isCost ? "支出" : "收入";
-  const typeColor = isCost ? colors.danger : colors.success;
-  const typeBg = isCost ? colors.dangerLight : colors.successLight;
+  const typeColor = isCost ? colors.expense : colors.income;
+  const typeBg = isCost ? colors.expenseBg : colors.incomeBg;
   const prefix = isCost ? "-" : "+";
 
   return (
@@ -43,23 +43,19 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           activeOpacity={1}
         />
         <View style={styles.sheet}>
-          {/* 顶部指示条 */}
           <View style={styles.handle} />
 
-          {/* 类型标签 */}
           <View style={[styles.typeBadge, { backgroundColor: typeBg }]}>
             <Text style={[styles.typeText, { color: typeColor }]}>
               {typeLabel}
             </Text>
           </View>
 
-          {/* 金额 */}
           <Text style={[styles.amount, { color: typeColor }]}>
             {prefix}
             {record.amount}
           </Text>
 
-          {/* 详情列表 */}
           <View style={styles.details}>
             <View style={styles.detailRow}>
               <View style={styles.detailLeft}>
@@ -102,7 +98,6 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             ) : null}
           </View>
 
-          {/* 操作按钮 */}
           <View style={styles.actions}>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <Text style={styles.closeText}>关闭</Text>
@@ -129,59 +124,59 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
-    paddingTop: spacing.sm,
+    borderTopLeftRadius: borderRadiusV2.xxl,
+    borderTopRightRadius: borderRadiusV2.xxl,
+    paddingHorizontal: spacingV2.lg,
+    paddingBottom: spacingV2.xxxl,
+    paddingTop: spacingV2.sm,
     alignItems: "center",
   },
   handle: {
     width: 40,
     height: 4,
-    borderRadius: borderRadius.full,
+    borderRadius: borderRadiusV2.full,
     backgroundColor: colors.border,
-    marginBottom: spacing.md,
+    marginBottom: spacingV2.lg,
   },
   typeBadge: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.sm,
-    marginBottom: spacing.md,
+    paddingVertical: spacingV2.xs,
+    paddingHorizontal: spacingV2.md,
+    borderRadius: borderRadiusV2.sm,
+    marginBottom: spacingV2.md,
   },
   typeText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     fontWeight: "700",
   },
   amount: {
     fontSize: 36,
     fontWeight: "800",
-    marginBottom: spacing.lg,
+    marginBottom: spacingV2.lg,
   },
   details: {
     width: "100%",
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: spacingV2.md,
+    marginBottom: spacingV2.lg,
   },
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: spacing.sm,
+    paddingVertical: spacingV2.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
   detailLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacingV2.sm,
   },
   detailLabel: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.textSecondary,
   },
   detailValue: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
     fontWeight: "600",
     maxWidth: "60%",
@@ -190,32 +185,32 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     width: "100%",
-    gap: spacing.md,
+    gap: spacingV2.md,
   },
   closeBtn: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacingV2.md,
     backgroundColor: colors.surfaceMuted,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadiusV2.lg,
     alignItems: "center",
   },
   closeText: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
     fontWeight: "700",
   },
   deleteBtn: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacingV2.md,
     backgroundColor: colors.dangerLight,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadiusV2.lg,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
-    gap: spacing.xs,
+    gap: spacingV2.xs,
   },
   deleteText: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.danger,
     fontWeight: "700",
   },

@@ -80,13 +80,14 @@ export const AIHelper: React.FC<AIHelperProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xl,
+    borderRadius: borderRadiusV2.xxxl,
     padding: spacingV2.lg,
+    marginHorizontal: spacingV2.lg,
     marginBottom: spacingV2.md,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 2,
   },
   header: {

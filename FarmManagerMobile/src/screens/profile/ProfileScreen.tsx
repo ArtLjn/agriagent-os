@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -12,11 +12,9 @@ import type { CompositeNavigationProp } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuthStore } from "../../stores/authStore";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { useCycleStore } from "../../stores/cycleStore";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../theme/spacing";
-import { spacingV2, borderRadiusV2 } from "../../theme/spacing";
-import { shadowV2 } from "../../theme/designTokens";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import type { MainTabParamList } from "../../navigation/MainTabNavigator";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
@@ -26,73 +24,108 @@ type ProfileNavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-const MENU_ITEMS = [
+const FARM_MENU = [
+  {
+    icon: "view-dashboard",
+    iconColor: colors.primary,
+    label: "农场概览",
+    action: "dashboard" as const,
+  },
   {
     icon: "cash-multiple",
-    iconColor: colors.primary,
+    iconColor: colors.income,
     label: "我的账本",
     targetTab: "Costs" as const,
   },
   {
-    icon: "robot",
-    iconColor: colors.aiPurple,
-    label: "我的建议",
-    targetTab: "AgentChat" as const,
-  },
-  {
-    icon: "barn",
+    icon: "sprout",
     iconColor: colors.success,
-    label: "我的农场",
-    action: "farm" as const,
+    label: "种植规划",
+    targetTab: "CycleList" as const,
   },
   {
-    icon: "help-circle",
-    iconColor: colors.primary,
-    label: "帮助与反馈",
-    action: "guide" as const,
-  },
-  {
-    icon: "cog",
-    iconColor: colors.textTertiary,
-    label: "设置",
-    action: "settings" as const,
-  },
-  {
-    icon: "information",
-    iconColor: colors.primary,
-    label: "关于",
-    action: "about" as const,
+    icon: "seed",
+    iconColor: colors.warning,
+    label: "作物模板",
+    targetTab: "CropTemplate" as const,
   },
 ];
+
+const SETTINGS_ITEM = {
+  icon: "cog",
+  iconColor: colors.textSecondary,
+  label: "设置",
+  action: "settings" as const,
+};
+
+function getFarmAge(cycles: { start_date: string }[]): number {
+  if (cycles.length === 0) return 0;
+  const earliest = new Date(
+    Math.min(...cycles.map((c) => new Date(c.start_date).getTime()))
+  );
+  const diff = Date.now() - earliest.getTime();
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+}
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileNavigationProp>();
   const user = useAuthStore((s) => s.user);
+  const { cycles, fetchCycles } = useCycleStore();
 
-  const handleMenuPress = (item: (typeof MENU_ITEMS)[number]) => {
-    if (item.targetTab) {
+  useEffect(() => {
+    fetchCycles();
+  }, [fetchCycles]);
+
+  const activeCount = cycles.filter((c) => c.status === "active").length;
+  const farmAge = getFarmAge(cycles);
+
+  const handleFarmPress = (item: (typeof FARM_MENU)[number]) => {
+    if ("action" in item && item.action === "dashboard") {
+      const parentNav = navigation.getParent();
+      if (parentNav) parentNav.navigate("FarmDashboard");
+    } else if ("targetTab" in item && item.targetTab) {
       (navigation as any).navigate(item.targetTab);
-    } else if (item.action === "settings") {
-      // Settings 在 RootStack 中，需要通过 parent navigator 访问
-      const parentNav = navigation.getParent();
-      if (parentNav) {
-        parentNav.navigate("Settings");
-      }
-    } else if (item.action === "guide") {
-      // Guide 在 RootStack 中，需要通过 parent navigator 访问
-      const parentNav = navigation.getParent();
-      if (parentNav) {
-        parentNav.navigate("Guide");
-      }
-    } else if (item.action === "farm") {
-      // 我的农场 - 显示农场信息
-    } else if (item.action === "about") {
-      const parentNav = navigation.getParent();
-      if (parentNav) {
-        parentNav.navigate("About");
-      }
     }
   };
+
+  const handleFarmDashboardPress = () => {
+    const parentNav = navigation.getParent();
+    if (parentNav) parentNav.navigate("FarmDashboard");
+  };
+
+  const handleSettingsPress = () => {
+    const parentNav = navigation.getParent();
+    if (parentNav) parentNav.navigate("Settings");
+  };
+
+  const renderFarmMenu = () => (
+    <View style={styles.group}>
+      <Text style={styles.groupTitle}>农场管理</Text>
+      <View style={styles.menuCard}>
+        {FARM_MENU.map((item, index) => (
+          <TouchableOpacity
+            key={item.label}
+            style={[
+              styles.menuItem,
+              index < FARM_MENU.length - 1 && styles.menuItemBorder,
+            ]}
+            onPress={() => handleFarmPress(item)}
+            activeOpacity={0.6}
+          >
+            <View style={styles.menuLeft}>
+              <Icon name={item.icon} size={20} color={item.iconColor} />
+              <Text style={styles.menuText}>{item.label}</Text>
+            </View>
+            <Icon
+              name="chevron-right"
+              size={20}
+              color={colors.textTertiary}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -101,47 +134,57 @@ export const ProfileScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Icon name="account" size={40} color={colors.primary} />
+        <View style={styles.profileSection}>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatar}>
+              <Icon name="account" size={36} color={colors.primary} />
+            </View>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.nickname || "农友"}</Text>
-            <Text style={styles.profileSub}>让种植更简单</Text>
+          <Text style={styles.profileName}>
+            {user?.nickname || "农友"}
+          </Text>
+          {farmAge > 0 && (
+            <View style={styles.ageBadge}>
+              <Text style={styles.ageText}>已种植 {farmAge} 天</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Stats */}
+        <View style={styles.statsCard}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{cycles.length}</Text>
+            <Text style={styles.statLabel}>总茬口</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, styles.statActive]}>
+              {activeCount}
+            </Text>
+            <Text style={styles.statLabel}>进行中</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>—</Text>
+            <Text style={styles.statLabel}>本月花费</Text>
           </View>
         </View>
 
-        {/* Menu List */}
-        <View style={styles.menuCard}>
-          {MENU_ITEMS.map((item, index) => (
-            <TouchableOpacity
-              key={item.label}
-              style={[
-                styles.menuItem,
-                index < MENU_ITEMS.length - 1 && styles.menuItemBorder,
-              ]}
-              onPress={() => handleMenuPress(item)}
-              activeOpacity={0.6}
-            >
-              <View style={styles.menuLeft}>
-                <View
-                  style={[
-                    styles.menuIcon,
-                    { backgroundColor: item.iconColor + "12" },
-                  ]}
-                >
-                  <Icon name={item.icon} size={20} color={item.iconColor} />
-                </View>
-                <Text style={styles.menuText}>{item.label}</Text>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={20}
-                color={colors.textTertiary}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Farm Menu */}
+        {renderFarmMenu()}
+
+        {/* Settings Entry */}
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={handleSettingsPress}
+          activeOpacity={0.6}
+        >
+          <View style={styles.settingsLeft}>
+            <Icon name={SETTINGS_ITEM.icon} size={20} color={SETTINGS_ITEM.iconColor} />
+            <Text style={styles.menuText}>{SETTINGS_ITEM.label}</Text>
+          </View>
+          <Icon name="chevron-right" size={20} color={colors.textTertiary} />
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -150,55 +193,112 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.settingsBg,
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxxl,
     padding: spacingV2.lg,
-    ...shadowV2.light,
+    paddingBottom: spacingV2.xxxl,
+  },
+  // Profile Header
+  profileSection: {
+    alignItems: "center",
+    paddingVertical: spacingV2.xl,
+    gap: spacingV2.sm,
+  },
+  avatarWrap: {
+    marginBottom: spacingV2.sm,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacing.md,
-  },
-  profileInfo: {
-    flex: 1,
   },
   profileName: {
-    fontSize: fontSize.xl,
+    fontSize: fontSizeV2.xl,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  ageBadge: {
+    backgroundColor: colors.successMuted,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: borderRadiusV2.full,
+    marginTop: 2,
+  },
+  ageText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.success,
+  },
+  // Stats
+  statsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxxl,
+    paddingVertical: spacingV2.xl,
+    marginBottom: spacingV2.xxl,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  statItem: {
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: fontSizeV2.xxl,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: -0.5,
+  },
+  statActive: {
+    color: colors.success,
+  },
+  statLabel: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.borderLight,
+  },
+  // Menu Group
+  group: {
+    marginBottom: spacingV2.xl,
+  },
+  groupTitle: {
+    fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
-  },
-  profileSub: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: 4,
+    marginBottom: spacingV2.md,
+    marginLeft: 4,
   },
   menuCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxl,
+    borderRadius: borderRadiusV2.xxxl,
     overflow: "hidden",
-    ...shadowV2.light,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: spacingV2.md,
-    paddingHorizontal: spacingV2.md,
-    height: 64,
+    paddingVertical: spacingV2.md + 2,
+    paddingHorizontal: spacingV2.lg,
   },
   menuItemBorder: {
     borderBottomWidth: 1,
@@ -207,18 +307,31 @@ const styles = StyleSheet.create({
   menuLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-  },
-  menuIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
+    gap: spacingV2.md,
   },
   menuText: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
     fontWeight: "500",
+  },
+  // Settings Entry
+  settingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxxl,
+    paddingVertical: spacingV2.md + 2,
+    paddingHorizontal: spacingV2.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  settingsLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.md,
   },
 });

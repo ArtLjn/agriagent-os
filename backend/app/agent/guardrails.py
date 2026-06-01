@@ -66,12 +66,27 @@ def check_input(text: str) -> tuple[bool, str | None]:
     return True, None
 
 
+# 工具调用语法泄漏模式（LLM 错误地把 function call 写入 content）
+_TOOL_CALL_LEAK_RE = re.compile(
+    r"\[\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\([^\]]*\)\s*\]"
+)
+
+
 def filter_output(text: str) -> str:
-    """过滤输出中的 PII 信息。"""
+    """过滤输出中的不安全内容和 PII 信息。"""
     if not text or not isinstance(text, str):
         return text
 
     result = text
+
+    # 1. 过滤工具调用语法泄漏
+    result, count = _TOOL_CALL_LEAK_RE.subn("", result)
+    if count:
+        logger.info("Guardrails 过滤工具调用泄漏 | count=%d", count)
+        # 清理可能留下的多余空行
+        result = re.sub(r"\n{3,}", "\n\n", result).strip()
+
+    # 2. 过滤 PII
     for name, (pattern, replacement) in _PII_PATTERNS.items():
         result, count = pattern.subn(replacement, result)
         if count:

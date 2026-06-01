@@ -130,7 +130,7 @@ export const RegisterScreen: React.FC<{
 
   const register = useAuthStore((s) => s.register);
   const syncToServer = useSettingsStore((s) => s.syncToServer);
-  const setDefaultCity = useSettingsStore((s) => s.setDefaultCity);
+  const setCity = useSettingsStore((s) => s.setCity);
 
   const handleRegister = useCallback(async () => {
     if (!PHONE_REGEX.test(phone)) {
@@ -155,8 +155,8 @@ export const RegisterScreen: React.FC<{
       detectLocation().then((coords) => {
         if (coords) {
           const city = findNearestCity(coords.latitude, coords.longitude);
-          setDefaultCity(city.name);
-          syncToServer(city.name, city.lat, city.lon);
+          setCity({ name: city.name, lat: city.lat, lon: city.lon });
+          syncToServer();
         }
       });
     } catch (e: any) {

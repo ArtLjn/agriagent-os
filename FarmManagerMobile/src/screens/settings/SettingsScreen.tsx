@@ -10,23 +10,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { Card } from "../../components/Card";
 import { CityPicker } from "../../components/CityPicker";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useAuthStore } from "../../stores/authStore";
 import { colors } from "../../theme/colors";
-import {
-  spacing,
-  fontSize,
-  borderRadius,
-  spacingV2,
-  fontSizeV2,
-  borderRadiusV2,
-} from "../../theme/spacing";
-import { shadowV2 } from "../../theme/designTokens";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 const ALL_CROPS = [
   "西瓜",
   "豆角",
@@ -42,26 +34,23 @@ const showToast = (message: string) => {
   Alert.alert("提示", message, [{ text: "知道了" }]);
 };
 
-const SettingsSection: React.FC<{
-  title: string;
-  children: React.ReactNode;
-}> = ({ title, children }) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <Card elevated={false} style={styles.menuCard}>
-      {children}
-    </Card>
-  </View>
-);
-
-const MenuItem: React.FC<{
+interface MenuItemProps {
   icon: string;
   iconColor?: string;
   label: string;
   value?: string;
   onPress?: () => void;
   isLast?: boolean;
-}> = ({ icon, iconColor = colors.primary, label, value, onPress, isLast }) => (
+}
+
+const MenuItem: React.FC<MenuItemProps> = ({
+  icon,
+  iconColor = colors.textSecondary,
+  label,
+  value,
+  onPress,
+  isLast,
+}) => (
   <TouchableOpacity
     style={[styles.menuItem, !isLast && styles.menuItemBorder]}
     onPress={onPress}
@@ -69,9 +58,7 @@ const MenuItem: React.FC<{
     disabled={!onPress}
   >
     <View style={styles.menuLeft}>
-      <View style={[styles.menuIcon, { backgroundColor: iconColor + "12" }]}>
-        <Icon name={icon} size={20} color={iconColor} />
-      </View>
+      <Icon name={icon} size={20} color={iconColor} />
       <Text style={styles.menuText}>{label}</Text>
     </View>
     <View style={styles.menuRight}>
@@ -83,16 +70,18 @@ const MenuItem: React.FC<{
   </TouchableOpacity>
 );
 
-const ToggleItem: React.FC<{
+interface ToggleItemProps {
   icon: string;
   iconColor?: string;
   label: string;
   enabled: boolean;
   onToggle: (v: boolean) => void;
   isLast?: boolean;
-}> = ({
+}
+
+const ToggleItem: React.FC<ToggleItemProps> = ({
   icon,
-  iconColor = colors.primary,
+  iconColor = colors.textSecondary,
   label,
   enabled,
   onToggle,
@@ -100,9 +89,7 @@ const ToggleItem: React.FC<{
 }) => (
   <View style={[styles.menuItem, !isLast && styles.menuItemBorder]}>
     <View style={styles.menuLeft}>
-      <View style={[styles.menuIcon, { backgroundColor: iconColor + "12" }]}>
-        <Icon name={icon} size={20} color={iconColor} />
-      </View>
+      <Icon name={icon} size={20} color={iconColor} />
       <Text style={styles.menuText}>{label}</Text>
     </View>
     <Switch
@@ -128,7 +115,7 @@ export const SettingsScreen: React.FC = () => {
     notificationEnabled,
     weatherAlertEnabled,
     displayName,
-    setDefaultCity,
+    setCity,
     setCrops,
     setNotificationEnabled,
     setWeatherAlertEnabled,
@@ -230,11 +217,11 @@ export const SettingsScreen: React.FC = () => {
 
   const handleCitySelect = useCallback(
     (city: { name: string; lat: number; lon: number }) => {
-      setDefaultCity(city.name);
+      setCity({ name: city.name, lat: city.lat, lon: city.lon });
       useAgentStore.getState().setCity(city.name, city.lat, city.lon);
-      syncToServer(city.name, city.lat, city.lon);
+      syncToServer();
     },
-    [setDefaultCity, syncToServer]
+    [setCity, syncToServer]
   );
 
   const cropLabel = crops.length > 0 ? crops.join("、") : "未选择";
@@ -252,115 +239,130 @@ export const SettingsScreen: React.FC = () => {
             style={styles.backBtn}
             activeOpacity={0.6}
           >
-            <Icon name="chevron-left" size={28} color={colors.text} />
+            <Icon name="arrow-left" size={22} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>设置</Text>
           <View style={styles.backBtn} />
         </View>
 
         {/* Farm Settings */}
-        <SettingsSection title="农场设置">
-          <MenuItem
-            icon="barn"
-            iconColor={colors.success}
-            label="默认农场"
-            value={defaultFarmName}
-            onPress={handleFarmPress}
-          />
-          <MenuItem
-            icon="map-marker"
-            iconColor={colors.primary}
-            label="默认城市"
-            value={defaultCity}
-            onPress={() => setCityPickerVisible(true)}
-            isLast
-          />
-        </SettingsSection>
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>农场设置</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="barn"
+              iconColor={colors.success}
+              label="默认农场"
+              value={defaultFarmName}
+              onPress={handleFarmPress}
+            />
+            <MenuItem
+              icon="map-marker"
+              iconColor={colors.primary}
+              label="默认城市"
+              value={defaultCity}
+              onPress={() => setCityPickerVisible(true)}
+              isLast
+            />
+          </View>
+        </View>
 
         {/* Preference */}
-        <SettingsSection title="偏好设置">
-          <MenuItem
-            icon="account-heart"
-            iconColor={colors.aiPurple}
-            label="AI 称呼我"
-            value={displayName || "农友"}
-            onPress={handleDisplayNamePress}
-          />
-          <MenuItem
-            icon="sprout"
-            iconColor={colors.success}
-            label="常种作物"
-            value={cropLabel}
-            onPress={handleCropPress}
-          />
-          <MenuItem
-            icon="clock-outline"
-            iconColor="#14B8A6"
-            label="提醒时间"
-            value={reminderTime}
-            onPress={handleReminderTimePress}
-            isLast
-          />
-        </SettingsSection>
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>偏好设置</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="account-heart"
+              iconColor={colors.aiPurple}
+              label="AI 称呼我"
+              value={displayName || "农友"}
+              onPress={handleDisplayNamePress}
+            />
+            <MenuItem
+              icon="sprout"
+              iconColor={colors.success}
+              label="常种作物"
+              value={cropLabel}
+              onPress={handleCropPress}
+            />
+            <MenuItem
+              icon="clock-outline"
+              iconColor="#14B8A6"
+              label="提醒时间"
+              value={reminderTime}
+              onPress={handleReminderTimePress}
+              isLast
+            />
+          </View>
+        </View>
 
         {/* Notification */}
-        <SettingsSection title="通知设置">
-          <ToggleItem
-            icon="bell-outline"
-            iconColor={colors.aiPurple}
-            label="农事提醒"
-            enabled={notificationEnabled}
-            onToggle={setNotificationEnabled}
-          />
-          <ToggleItem
-            icon="weather-cloudy-alert"
-            iconColor={colors.primary}
-            label="天气预警"
-            enabled={weatherAlertEnabled}
-            onToggle={setWeatherAlertEnabled}
-            isLast
-          />
-        </SettingsSection>
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>通知设置</Text>
+          <View style={styles.menuCard}>
+            <ToggleItem
+              icon="bell-outline"
+              iconColor={colors.aiPurple}
+              label="农事提醒"
+              enabled={notificationEnabled}
+              onToggle={setNotificationEnabled}
+            />
+            <ToggleItem
+              icon="weather-cloudy-alert"
+              iconColor={colors.primary}
+              label="天气预警"
+              enabled={weatherAlertEnabled}
+              onToggle={setWeatherAlertEnabled}
+              isLast
+            />
+          </View>
+        </View>
 
         {/* Data */}
-        <SettingsSection title="数据管理">
-          <MenuItem
-            icon="database-export"
-            iconColor={colors.primary}
-            label="导出数据"
-            onPress={handleExportData}
-          />
-          <MenuItem
-            icon="trash-can-outline"
-            iconColor={colors.danger}
-            label="清除缓存"
-            onPress={handleClearCache}
-          />
-          <MenuItem
-            icon="logout"
-            iconColor={colors.danger}
-            label="退出登录"
-            onPress={handleLogout}
-            isLast
-          />
-        </SettingsSection>
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>数据管理</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="database-export"
+              iconColor={colors.primary}
+              label="导出数据"
+              onPress={handleExportData}
+            />
+            <MenuItem
+              icon="trash-can-outline"
+              iconColor={colors.danger}
+              label="清除缓存"
+              onPress={handleClearCache}
+            />
+            <MenuItem
+              icon="logout"
+              iconColor={colors.danger}
+              label="退出登录"
+              onPress={handleLogout}
+              isLast
+            />
+          </View>
+        </View>
 
         {/* About */}
-        <SettingsSection title="关于">
-          <MenuItem
-            icon="information"
-            iconColor={colors.primary}
-            label="关于"
-            onPress={() => navigation.navigate("About" as never)}
-          />
-          <MenuItem
-            icon="book-open-variant"
-            iconColor={colors.success}
-            label="使用指南"
-            onPress={() => navigation.navigate("Guide" as never)}
-            isLast
-          />
-        </SettingsSection>
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>关于</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="information"
+              iconColor={colors.info}
+              label="关于"
+              onPress={() => navigation.navigate("About" as never)}
+            />
+            <MenuItem
+              icon="book-open-variant"
+              iconColor={colors.success}
+              label="使用指南"
+              onPress={() => navigation.navigate("Guide" as never)}
+              isLast
+            />
+          </View>
+        </View>
       </ScrollView>
 
       <CityPicker
@@ -376,52 +378,57 @@ export const SettingsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.settingsBg,
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingBottom: spacing.xxl,
+    padding: spacingV2.lg,
+    paddingBottom: spacingV2.xxxl,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    marginBottom: spacingV2.xl,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadiusV2.md,
+    backgroundColor: colors.surfaceMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   headerTitle: {
-    fontSize: fontSize.lg,
+    fontSize: fontSizeV2.lg,
     fontWeight: "700",
     color: colors.text,
   },
-  section: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+  group: {
+    marginBottom: spacingV2.xl,
   },
-  sectionTitle: {
-    fontSize: fontSize.md,
+  groupTitle: {
+    fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
-    marginBottom: spacing.md,
+    marginBottom: spacingV2.md,
+    marginLeft: 4,
   },
   menuCard: {
-    padding: 0,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxxl,
     overflow: "hidden",
-    borderRadius: borderRadiusV2.xxl,
-    ...shadowV2.light,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: spacingV2.md,
-    paddingHorizontal: spacingV2.md,
-    height: 64,
+    paddingVertical: spacingV2.md + 2,
+    paddingHorizontal: spacingV2.lg,
   },
   menuItemBorder: {
     borderBottomWidth: 1,
@@ -430,27 +437,20 @@ const styles = StyleSheet.create({
   menuLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacingV2.md,
   },
   menuRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-  },
-  menuIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
+    gap: spacingV2.sm,
   },
   menuText: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
     fontWeight: "500",
   },
   menuValue: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     fontWeight: "500",
   },

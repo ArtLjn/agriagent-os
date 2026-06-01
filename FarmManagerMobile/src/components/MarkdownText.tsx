@@ -42,86 +42,97 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
   );
 };
 
-const h = (size: number, weight: string, color: string) => ({
-  fontSize: size,
-  fontWeight: weight as
-    | "normal"
-    | "bold"
-    | "100"
-    | "200"
-    | "300"
-    | "400"
-    | "500"
-    | "600"
-    | "700"
-    | "800"
-    | "900",
-  color,
-  marginTop: spacing.sm,
-  marginBottom: spacing.xs,
-});
-
 const code = {
   fontFamily: "monospace",
-  backgroundColor: "rgba(0,0,0,0.05)",
+  backgroundColor: "rgba(0,0,0,0.04)",
   borderRadius: borderRadius.sm,
 };
 
 const textBase = {
-  fontSize: fontSize.md,
-  color: colors.text,
-  lineHeight: 22,
+  fontSize: 15,
+  color: colors.textSecondary,
+  lineHeight: 26,
 };
 
 const styles = {
-  heading1: h(fontSize.lg, "800", colors.text),
-  heading2: h(fontSize.md, "700", colors.text),
-  heading3: h(fontSize.md, "600", colors.textSecondary),
-  heading4: h(fontSize.md, "600", colors.text),
-  paragraph: { ...textBase, marginBottom: spacing.xs },
-  bullet_list: { marginLeft: spacing.sm, marginVertical: spacing.xs },
-  ordered_list: { marginLeft: spacing.sm, marginVertical: spacing.xs },
+  heading1: {
+    fontSize: 22,
+    fontWeight: "800" as const,
+    color: colors.text,
+    marginTop: 0,
+    marginBottom: 20,
+    letterSpacing: -0.3,
+  },
+  heading2: {
+    fontSize: 17,
+    fontWeight: "700" as const,
+    color: colors.text,
+    marginTop: 28,
+    marginBottom: 12,
+    letterSpacing: -0.2,
+  },
+  heading3: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: colors.textSecondary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  heading4: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: colors.text,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  paragraph: { ...textBase, marginBottom: 12 },
+  bullet_list: { marginLeft: 4, marginVertical: 8 },
+  ordered_list: { marginLeft: 4, marginVertical: 8 },
   bullet_list_icon: {
     ...textBase,
-    color: colors.primary,
-    marginRight: spacing.sm,
+    color: colors.textTertiary,
+    fontSize: 7,
+    lineHeight: 26,
+    marginRight: 12,
+    marginLeft: 4,
   },
   ordered_list_icon: {
-    color: colors.primary,
-    fontSize: fontSize.sm,
-    fontWeight: "700" as const,
-    lineHeight: 22,
-    marginRight: spacing.sm,
+    color: colors.textTertiary,
+    fontSize: 14,
+    fontWeight: "600" as const,
+    lineHeight: 26,
+    marginRight: 10,
     minWidth: 20,
   },
   list_item: {
     ...textBase,
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
+    marginVertical: 4,
   },
   blockquote: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
+    borderLeftColor: colors.textTertiary,
     paddingLeft: spacing.md,
-    marginVertical: spacing.xs,
-    backgroundColor: colors.primaryMuted,
+    marginVertical: 12,
+    backgroundColor: colors.surfaceMuted,
     paddingVertical: spacing.sm,
     paddingRight: spacing.sm,
     borderRadius: borderRadius.sm,
   },
-  code_inline: { ...code, paddingHorizontal: 4, fontSize: fontSize.sm },
-  code_block: { ...code, padding: spacing.sm, fontSize: fontSize.sm },
+  code_inline: { ...code, paddingHorizontal: 4, fontSize: 14 },
+  code_block: { ...code, padding: spacing.md, fontSize: 14 },
   table: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.sm,
   },
-  thead: { backgroundColor: colors.primaryMuted },
+  thead: { backgroundColor: colors.surfaceMuted },
   th: {
-    fontSize: fontSize.xs,
+    fontSize: 13,
     fontWeight: "700" as const,
     color: colors.text,
-    padding: spacing.xs,
+    padding: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     minWidth: 85,
@@ -133,15 +144,19 @@ const styles = {
     flexDirection: "row" as const,
   },
   td: {
-    fontSize: fontSize.xs,
-    color: colors.text,
-    lineHeight: 18,
-    padding: spacing.xs,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    padding: spacing.sm,
     minWidth: 85,
     flexShrink: 0,
   },
-  strong: { fontWeight: "700" as const },
+  strong: { fontWeight: "700" as const, color: colors.text },
   em: { fontStyle: "italic" as const },
   link: { color: colors.primary, textDecorationLine: "underline" as const },
-  hr: { backgroundColor: colors.border, height: 1, marginVertical: spacing.sm },
+  hr: {
+    backgroundColor: colors.divider,
+    height: 1,
+    marginVertical: 20,
+  },
 };

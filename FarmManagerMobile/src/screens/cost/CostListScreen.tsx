@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ScrollView,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -30,53 +30,41 @@ type CostListNavigationProp = NativeStackNavigationProp<
   "CostCreate"
 >;
 
+interface Section {
+  title: string;
+  data: CostRecord[];
+  dayCost: number;
+  dayIncome: number;
+}
+
 const AssetCard: React.FC<{ income: number; cost: number }> = ({
   income,
   cost,
 }) => {
   const total = income - cost;
   const isPositive = total >= 0;
+  const accentColor = isPositive ? colors.income : colors.expense;
+  const bgColor = isPositive ? colors.incomeBg : colors.expenseBg;
+
   return (
-    <View style={assetStyles.card}>
+    <View style={[assetStyles.card, { backgroundColor: bgColor }]}>
       <View style={assetStyles.mainSection}>
         <Text style={assetStyles.label}>本月结余</Text>
-        <Text
-          style={[
-            assetStyles.total,
-            { color: isPositive ? colors.income : colors.expense },
-          ]}
-        >
+        <Text style={[assetStyles.total, { color: accentColor }]}>
           {isPositive ? "+" : ""}
           {total.toFixed(2)}
         </Text>
       </View>
-      <View style={assetStyles.divider} />
       <View style={assetStyles.subRow}>
         <View style={assetStyles.subItem}>
-          <View style={assetStyles.subItemInner}>
-            <View
-              style={[
-                assetStyles.dot,
-                { backgroundColor: colors.income },
-              ]}
-            />
-            <Text style={assetStyles.subLabel}>收入</Text>
-          </View>
+          <Text style={assetStyles.subLabel}>收入</Text>
           <Text style={[assetStyles.subAmount, { color: colors.income }]}>
             +{income.toFixed(2)}
           </Text>
         </View>
         <View style={assetStyles.subDivider} />
         <View style={assetStyles.subItem}>
-          <View style={assetStyles.subItemInner}>
-            <View
-              style={[
-                assetStyles.dot,
-                { backgroundColor: colors.expense },
-              ]}
-            />
-            <Text style={assetStyles.subLabel}>支出</Text>
-          </View>
+          <Text style={assetStyles.subLabel}>支出</Text>
           <Text style={[assetStyles.subAmount, { color: colors.expense }]}>
             -{cost.toFixed(2)}
           </Text>
@@ -85,6 +73,15 @@ const AssetCard: React.FC<{ income: number; cost: number }> = ({
     </View>
   );
 };
+
+function formatSectionTitle(dateStr: string): string {
+  const d = dayjs(dateStr);
+  const today = dayjs();
+  if (d.isSame(today, "day")) return "今天";
+  if (d.isSame(today.subtract(1, "day"), "day")) return "昨天";
+  if (d.year() === today.year()) return d.format("M月D日");
+  return d.format("YYYY年M月D日");
+}
 
 export const CostListScreen: React.FC = () => {
   const navigation = useNavigation<CostListNavigationProp>();
@@ -96,7 +93,7 @@ export const CostListScreen: React.FC = () => {
   const [selectedRecord, setSelectedRecord] = useState<CostRecord | null>(null);
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       fetchRecords();
     }, [fetchRecords])
   );
@@ -121,8 +118,7 @@ export const CostListScreen: React.FC = () => {
     return Array.from(categories);
   }, [records]);
 
-
-  const filteredRecords = useMemo(() => {
+  const sections = useMemo<Section[]>(() => {
     let result = records.filter((r) => r.record_date.startsWith(currentMonth));
     if (filter !== "all") {
       result = result.filter((r) => r.record_type === filter);
@@ -130,11 +126,34 @@ export const CostListScreen: React.FC = () => {
     if (categoryFilter) {
       result = result.filter((r) => r.category === categoryFilter);
     }
-    return result;
+
+    const groups: Record<string, CostRecord[]> = {};
+    for (const r of result) {
+      if (!groups[r.record_date]) groups[r.record_date] = [];
+      groups[r.record_date].push(r);
+    }
+
+    return Object.entries(groups)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, data]) => ({
+        title: formatSectionTitle(date),
+        data,
+        dayCost: data
+          .filter((r) => r.record_type === "cost")
+          .reduce((s, r) => s + parseFloat(r.amount), 0),
+        dayIncome: data
+          .filter((r) => r.record_type === "income")
+          .reduce((s, r) => s + parseFloat(r.amount), 0),
+      }));
   }, [records, currentMonth, filter, categoryFilter]);
 
   const handleCreate = () => {
     navigation.navigate("CostCreate");
+  };
+
+  const handleFilterChange = (newFilter: FilterType) => {
+    setFilter(newFilter);
+    setCategoryFilter(null);
   };
 
   const handlePreviousMonth = () => {
@@ -144,7 +163,6 @@ export const CostListScreen: React.FC = () => {
   const handleNextMonth = () => {
     const nextMonth = dayjs(selectedMonth).add(1, "month");
     const now = dayjs();
-    // 不允许选择未来月份
     const nextYM = nextMonth.year() * 12 + nextMonth.month();
     const nowYM = now.year() * 12 + now.month();
     if (nextYM <= nowYM) {
@@ -199,97 +217,121 @@ export const CostListScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Month Selector */}
-      <MonthlyStats
-        selectedMonth={selectedMonth}
-        onPreviousMonth={handlePreviousMonth}
-        onNextMonth={handleNextMonth}
-      />
-
-      {/* Asset Summary */}
-      <AssetCard income={stats.income} cost={stats.cost} />
-
-      {/* Filters: Type + Category in one row */}
-      <View style={styles.filterSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
-          {/* Type filters */}
-          {(
-            [
-              { key: "all", label: "全部" },
-              { key: "cost", label: "支出" },
-              { key: "income", label: "收入" },
-            ] as { key: FilterType; label: string }[]
-          ).map((item) => {
-            const isActive = filter === item.key;
-            return (
-              <TouchableOpacity
-                key={`type-${item.key}`}
-                style={[
-                  styles.filterChip,
-                  isActive && styles.filterChipActive,
-                ]}
-                onPress={() => setFilter(item.key)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    isActive && styles.filterChipTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* Divider */}
-          {categoryList.length > 0 && (
-            <View style={styles.filterDivider} />
-          )}
-
-          {/* Category filters */}
-          {categoryList.map((cat) => {
-            const isActive = categoryFilter === cat;
-            return (
-              <TouchableOpacity
-                key={`cat-${cat}`}
-                style={[
-                  styles.filterChip,
-                  isActive && styles.filterChipActive,
-                ]}
-                onPress={() =>
-                  setCategoryFilter(isActive ? null : cat)
-                }
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    isActive && styles.filterChipTextActive,
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* List */}
-      <FlatList
-        data={filteredRecords}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={[
           styles.listContent,
-          filteredRecords.length === 0 && styles.listEmpty,
+          sections.length === 0 && styles.listEmpty,
         ]}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <>
+            <MonthlyStats
+              selectedMonth={selectedMonth}
+              onPreviousMonth={handlePreviousMonth}
+              onNextMonth={handleNextMonth}
+            />
+            <AssetCard income={stats.income} cost={stats.cost} />
+
+            {/* Filters */}
+            <View style={styles.filterSection}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterScrollContent}
+              >
+                {(
+                  [
+                    { key: "all", label: "全部" },
+                    { key: "cost", label: "支出" },
+                    { key: "income", label: "收入" },
+                  ] as { key: FilterType; label: string }[]
+                ).map((item) => {
+                  const isActive = filter === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={`type-${item.key}`}
+                      style={[
+                        styles.filterChip,
+                        isActive && styles.filterChipActive,
+                      ]}
+                      onPress={() => handleFilterChange(item.key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          isActive && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {categoryList.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterCatScrollContent}
+                >
+                  {categoryList.map((cat) => {
+                    const isActive = categoryFilter === cat;
+                    return (
+                      <TouchableOpacity
+                        key={`cat-${cat}`}
+                        style={[
+                          styles.filterCatChip,
+                          isActive && styles.filterCatChipActive,
+                        ]}
+                        onPress={() =>
+                          setCategoryFilter(isActive ? null : cat)
+                        }
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.filterCatChipText,
+                            isActive && styles.filterCatChipTextActive,
+                          ]}
+                        >
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+          </>
+        }
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <View style={styles.sectionSummary}>
+              {section.dayIncome > 0 && (
+                <Text style={styles.sectionIncome}>
+                  +{section.dayIncome.toFixed(0)}
+                </Text>
+              )}
+              {section.dayCost > 0 && (
+                <Text style={styles.sectionCost}>
+                  -{section.dayCost.toFixed(0)}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+        renderItem={({ item }) => (
+          <RecordItem
+            item={item}
+            onPress={() => handleShowDetail(item)}
+            onLongPress={() => handleDelete(item)}
+          />
+        )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon
@@ -301,16 +343,10 @@ export const CostListScreen: React.FC = () => {
             <Text style={styles.emptySubtext}>点击右下角按钮记一笔</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <RecordItem
-            item={item}
-            onPress={() => handleShowDetail(item)}
-            onLongPress={() => handleDelete(item)}
-          />
-        )}
       />
+
       <TouchableOpacity style={styles.fab} onPress={handleCreate}>
-        <Icon name="plus" size={24} color={colors.textInverse} />
+        <Icon name="plus" size={22} color={colors.textInverse} />
       </TouchableOpacity>
 
       <RecordDetailModal
@@ -333,6 +369,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  listContent: {
+    paddingBottom: 100,
+  },
+  listEmpty: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   filterSection: {
     marginBottom: spacingV2.sm,
   },
@@ -346,7 +390,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.md,
     paddingVertical: 6,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   filterChipActive: {
     backgroundColor: colors.primaryMuted,
@@ -358,23 +407,58 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: colors.primary,
+    fontWeight: "700",
+  },
+  filterCatScrollContent: {
+    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.xs,
+    gap: spacingV2.xs,
+    alignItems: "center",
+  },
+  filterCatChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.surfaceMuted,
+  },
+  filterCatChipActive: {
+    backgroundColor: colors.primaryMuted,
+  },
+  filterCatChipText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: "500",
+  },
+  filterCatChipTextActive: {
+    color: colors.primary,
     fontWeight: "600",
   },
-  filterDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: colors.border,
-    marginHorizontal: spacingV2.xs,
-  },
-  listContent: {
-    paddingHorizontal: spacingV2.lg,
-    paddingTop: spacingV2.sm,
-    paddingBottom: spacingV2.xxxl,
-  },
-  listEmpty: {
-    flex: 1,
-    justifyContent: "center",
+  sectionHeader: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.md,
+    paddingBottom: spacingV2.sm,
+  },
+  sectionTitle: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
+  sectionSummary: {
+    flexDirection: "row",
+    gap: spacingV2.sm,
+  },
+  sectionIncome: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "600",
+    color: colors.income,
+  },
+  sectionCost: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "600",
+    color: colors.expense,
   },
   emptyContainer: {
     alignItems: "center",
@@ -401,71 +485,50 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#5B8CFF",
-    shadowOffset: { width: 0, height: 6 },
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowRadius: 10,
+    elevation: 5,
   },
 });
 
 const assetStyles = StyleSheet.create({
   card: {
     marginHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxl,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+    marginBottom: spacingV2.lg,
+    borderRadius: borderRadiusV2.xxxl,
     overflow: "hidden",
   },
   mainSection: {
-    padding: spacingV2.lg,
-    paddingBottom: spacingV2.md,
+    padding: spacingV2.xl,
+    paddingBottom: spacingV2.lg,
     alignItems: "center",
   },
   label: {
     fontSize: fontSizeV2.sm,
-    color: colors.textTertiary,
-    fontWeight: "500",
+    fontWeight: "600",
     marginBottom: spacingV2.xs,
   },
   total: {
-    fontSize: fontSizeV2.xxxl,
-    fontWeight: "700",
-    letterSpacing: -1,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "rgba(0,0,0,0.04)",
-    marginHorizontal: spacingV2.lg,
+    fontSize: fontSizeV2.xxxxl,
+    fontWeight: "800",
+    letterSpacing: -1.5,
   },
   subRow: {
     flexDirection: "row",
     paddingVertical: spacingV2.md,
     paddingHorizontal: spacingV2.lg,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.06)",
   },
   subItem: {
     flex: 1,
     alignItems: "center",
-  },
-  subItemInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingV2.xs,
-    marginBottom: 2,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    gap: 2,
   },
   subDivider: {
     width: 1,
-    backgroundColor: "rgba(0,0,0,0.06)",
   },
   subLabel: {
     fontSize: fontSizeV2.xs,
@@ -474,7 +537,7 @@ const assetStyles = StyleSheet.create({
   },
   subAmount: {
     fontSize: fontSizeV2.md,
-    fontWeight: "600",
+    fontWeight: "700",
     letterSpacing: -0.2,
   },
 });

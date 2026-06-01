@@ -11,78 +11,72 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCategoryStore } from "../../stores/categoryStore";
-import { Card } from "../../components/Card";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 const CATEGORY_ICONS: Record<string, string> = {
   种子: "seed",
   化肥: "flask",
   农药: "spray",
-  人工: "account-group",
+  人工: "account-hard-hat",
   机械: "tractor",
   水电: "flash",
   地租: "home-variant",
   销售: "cash-register",
-  其他支出: "dots-horizontal",
-  其他收入: "dots-horizontal",
+  其他: "dots-horizontal",
 };
 
 function getCategoryIcon(name: string): string {
   return CATEGORY_ICONS[name] || "tag-outline";
 }
 
+const TYPE_COLORS = {
+  cost: { dot: colors.expense, text: colors.text },
+  income: { dot: colors.income, text: colors.text },
+};
+
 const CategoryItem: React.FC<{
   name: string;
-  type: "expense" | "income";
+  type: "cost" | "income";
   isSystem: boolean;
   onDelete?: () => void;
-}> = ({ name, type, isSystem, onDelete }) => (
-  <Card style={localStyles.categoryItem}>
-    <View style={localStyles.categoryRow}>
-      <View style={localStyles.categoryLeft}>
-        <View
-          style={[
-            localStyles.categoryIcon,
-            {
-              backgroundColor:
-                type === "expense" ? colors.dangerLight : colors.successLight,
-            },
-          ]}
-        >
-          <Icon
-            name={getCategoryIcon(name)}
-            size={20}
-            color={type === "expense" ? colors.danger : colors.success}
-          />
-        </View>
-        <Text style={localStyles.categoryName}>{name}</Text>
+}> = ({ name, type, isSystem, onDelete }) => {
+  const theme = TYPE_COLORS[type];
+  return (
+    <View style={styles.categoryItem}>
+      <View style={styles.categoryLeft}>
+        <View style={[styles.categoryDot, { backgroundColor: theme.dot }]} />
+        <Icon
+          name={getCategoryIcon(name)}
+          size={18}
+          color={colors.textTertiary}
+          style={{ marginRight: spacingV2.sm }}
+        />
+        <Text style={styles.categoryName}>{name}</Text>
       </View>
-      <View style={localStyles.categoryTags}>
+      <View style={styles.categoryRight}>
         {isSystem && (
-          <View style={localStyles.systemTagBg}>
-            <Text style={localStyles.systemTag}>系统</Text>
-          </View>
+          <Text style={styles.systemTag}>系统预设</Text>
         )}
         {!isSystem && (
           <TouchableOpacity
-            style={localStyles.deleteBtn}
+            style={styles.deleteBtn}
             onPress={onDelete}
             activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Icon name="trash-can-outline" size={18} color={colors.danger} />
+            <Icon name="trash-can-outline" size={18} color={colors.textTertiary} />
           </TouchableOpacity>
         )}
       </View>
     </View>
-  </Card>
-);
+  );
+};
 
 export const CostCategoryScreen: React.FC = () => {
   const {
     categories,
-    loading,
     error,
     fetchCategories,
     createCategory,
@@ -120,7 +114,7 @@ export const CostCategoryScreen: React.FC = () => {
       setModalVisible(false);
       setCategoryName("");
       setCategoryType("cost");
-    } catch (err) {
+    } catch {
       // Error 已在 store 中处理
     }
   };
@@ -134,7 +128,7 @@ export const CostCategoryScreen: React.FC = () => {
         onPress: async () => {
           try {
             await deleteCategory(id);
-          } catch (err) {
+          } catch {
             // Error 已在 store 中处理
           }
         },
@@ -146,86 +140,95 @@ export const CostCategoryScreen: React.FC = () => {
   const incomeCategories = categories.filter((c) => c.type === "income");
 
   return (
-    <SafeAreaView style={localStyles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       {/* 页面头部 */}
-      <View style={localStyles.pageHeader}>
-        <View style={localStyles.pageHeaderIcon}>
-          <Icon name="tag-multiple" size={28} color={colors.primary} />
-        </View>
+      <View style={styles.pageHeader}>
         <View>
-          <Text style={localStyles.pageHeaderTitle}>收支分类</Text>
-          <Text style={localStyles.pageHeaderSub}>
+          <Text style={styles.pageHeaderTitle}>收支分类</Text>
+          <Text style={styles.pageHeaderSub}>
             管理记账所需的支出与收入分类
           </Text>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={localStyles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         {/* 支出分类 */}
-        <View style={localStyles.sectionHeader}>
+        <View style={styles.sectionHeader}>
           <View
-            style={[localStyles.sectionDot, { backgroundColor: colors.danger }]}
+            style={[styles.sectionDot, { backgroundColor: colors.expense }]}
           />
-          <Text style={localStyles.sectionTitle}>支出分类</Text>
-          <View style={localStyles.sectionCountBg}>
-            <Text style={localStyles.sectionCount}>
+          <Text style={styles.sectionTitle}>支出分类</Text>
+          <View style={styles.sectionCountBg}>
+            <Text style={styles.sectionCount}>
               {expenseCategories.length}
             </Text>
           </View>
         </View>
         {expenseCategories.length === 0 && (
-          <View style={localStyles.emptySection}>
-            <Text style={localStyles.emptySectionText}>暂无自定义支出分类</Text>
+          <View style={styles.emptySection}>
+            <Text style={styles.emptySectionText}>暂无自定义支出分类</Text>
           </View>
         )}
-        {expenseCategories.map((category) => (
-          <CategoryItem
-            key={category.id}
-            name={category.name}
-            type="expense"
-            isSystem={category.is_default}
-            onDelete={() => handleDelete(category.id, category.name)}
-          />
-        ))}
+        <View style={styles.listCard}>
+          {expenseCategories.map((category, index) => (
+            <View key={category.id}>
+              <CategoryItem
+                name={category.name}
+                type="cost"
+                isSystem={category.is_default}
+                onDelete={() => handleDelete(category.id, category.name)}
+              />
+              {index < expenseCategories.length - 1 && (
+                <View style={styles.divider} />
+              )}
+            </View>
+          ))}
+        </View>
 
         {/* 收入分类 */}
-        <View style={[localStyles.sectionHeader, { marginTop: spacing.lg }]}>
+        <View style={[styles.sectionHeader, { marginTop: spacingV2.lg }]}>
           <View
             style={[
-              localStyles.sectionDot,
-              { backgroundColor: colors.success },
+              styles.sectionDot,
+              { backgroundColor: colors.income },
             ]}
           />
-          <Text style={localStyles.sectionTitle}>收入分类</Text>
-          <View style={localStyles.sectionCountBg}>
-            <Text style={localStyles.sectionCount}>
+          <Text style={styles.sectionTitle}>收入分类</Text>
+          <View style={styles.sectionCountBg}>
+            <Text style={styles.sectionCount}>
               {incomeCategories.length}
             </Text>
           </View>
         </View>
         {incomeCategories.length === 0 && (
-          <View style={localStyles.emptySection}>
-            <Text style={localStyles.emptySectionText}>暂无自定义收入分类</Text>
+          <View style={styles.emptySection}>
+            <Text style={styles.emptySectionText}>暂无自定义收入分类</Text>
           </View>
         )}
-        {incomeCategories.map((category) => (
-          <CategoryItem
-            key={category.id}
-            name={category.name}
-            type="income"
-            isSystem={category.is_default}
-            onDelete={() => handleDelete(category.id, category.name)}
-          />
-        ))}
+        <View style={styles.listCard}>
+          {incomeCategories.map((category, index) => (
+            <View key={category.id}>
+              <CategoryItem
+                name={category.name}
+                type="income"
+                isSystem={category.is_default}
+                onDelete={() => handleDelete(category.id, category.name)}
+              />
+              {index < incomeCategories.length - 1 && (
+                <View style={styles.divider} />
+              )}
+            </View>
+          ))}
+        </View>
 
         {/* 新增按钮 */}
         <TouchableOpacity
-          style={localStyles.addBtn}
+          style={styles.addBtn}
           onPress={() => setModalVisible(true)}
           activeOpacity={0.7}
         >
           <Icon name="plus-circle" size={20} color="#FFFFFF" />
-          <Text style={localStyles.addBtnText}>新增分类</Text>
+          <Text style={styles.addBtnText}>新增分类</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -236,43 +239,40 @@ export const CostCategoryScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={localStyles.modalOverlay}>
-          <View style={localStyles.modalContent}>
-            <View style={localStyles.modalHandle} />
-            <View style={localStyles.modalHeader}>
-              <View style={localStyles.modalHeaderIcon}>
-                <Icon name="tag-plus" size={28} color={colors.primary} />
-              </View>
-              <Text style={localStyles.modalTitle}>新增分类</Text>
-              <Text style={localStyles.modalSubtitle}>添加自定义收支分类</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>新增分类</Text>
+              <Text style={styles.modalSubtitle}>添加自定义收支分类</Text>
             </View>
 
             {/* 类型选择 */}
-            <Text style={localStyles.label}>分类类型</Text>
-            <View style={localStyles.typeSelector}>
+            <Text style={styles.label}>分类类型</Text>
+            <View style={styles.typeSelector}>
               <TouchableOpacity
                 style={[
-                  localStyles.typeButton,
-                  categoryType === "expense" &&
-                    localStyles.typeButtonActiveExpense,
+                  styles.typeButton,
+                  categoryType === "cost" &&
+                    styles.typeButtonActiveCost,
                 ]}
-                onPress={() => setCategoryType("expense")}
+                onPress={() => setCategoryType("cost")}
                 activeOpacity={0.7}
               >
                 <Icon
                   name="arrow-down-circle"
                   size={20}
                   color={
-                    categoryType === "expense"
-                      ? colors.danger
+                    categoryType === "cost"
+                      ? colors.expense
                       : colors.textTertiary
                   }
                 />
                 <Text
                   style={[
-                    localStyles.typeButtonText,
-                    categoryType === "expense" &&
-                      localStyles.typeButtonTextActive,
+                    styles.typeButtonText,
+                    categoryType === "cost" &&
+                      styles.typeButtonTextActive,
                   ]}
                 >
                   支出
@@ -280,9 +280,9 @@ export const CostCategoryScreen: React.FC = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  localStyles.typeButton,
+                  styles.typeButton,
                   categoryType === "income" &&
-                    localStyles.typeButtonActiveIncome,
+                    styles.typeButtonActiveIncome,
                 ]}
                 onPress={() => setCategoryType("income")}
                 activeOpacity={0.7}
@@ -292,15 +292,15 @@ export const CostCategoryScreen: React.FC = () => {
                   size={20}
                   color={
                     categoryType === "income"
-                      ? colors.success
+                      ? colors.income
                       : colors.textTertiary
                   }
                 />
                 <Text
                   style={[
-                    localStyles.typeButtonText,
+                    styles.typeButtonText,
                     categoryType === "income" &&
-                      localStyles.typeButtonTextActive,
+                      styles.typeButtonTextActive,
                   ]}
                 >
                   收入
@@ -309,16 +309,16 @@ export const CostCategoryScreen: React.FC = () => {
             </View>
 
             {/* 名称输入 */}
-            <Text style={localStyles.label}>分类名称</Text>
-            <View style={localStyles.inputWrapper}>
+            <Text style={styles.label}>分类名称</Text>
+            <View style={styles.inputWrapper}>
               <Icon
                 name="pencil"
                 size={18}
                 color={colors.textTertiary}
-                style={{ marginRight: spacing.sm }}
+                style={{ marginRight: spacingV2.sm }}
               />
               <TextInput
-                style={localStyles.input}
+                style={styles.input}
                 value={categoryName}
                 onChangeText={setCategoryName}
                 placeholder="例如：种子、化肥、销售..."
@@ -327,23 +327,23 @@ export const CostCategoryScreen: React.FC = () => {
             </View>
 
             {/* 按钮组 */}
-            <View style={localStyles.modalButtons}>
+            <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[localStyles.modalButton, localStyles.modalButtonCancel]}
+                style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => setModalVisible(false)}
                 activeOpacity={0.7}
               >
-                <Text style={localStyles.modalButtonTextCancel}>取消</Text>
+                <Text style={styles.modalButtonTextCancel}>取消</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  localStyles.modalButton,
-                  localStyles.modalButtonConfirm,
+                  styles.modalButton,
+                  styles.modalButtonConfirm,
                 ]}
                 onPress={handleCreate}
                 activeOpacity={0.7}
               >
-                <Text style={localStyles.modalButtonTextConfirm}>确定</Text>
+                <Text style={styles.modalButtonTextConfirm}>确定</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -353,123 +353,129 @@ export const CostCategoryScreen: React.FC = () => {
   );
 };
 
-const localStyles = StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   pageHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    gap: spacing.md,
-  },
-  pageHeaderIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.lg,
   },
   pageHeaderTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: "700",
+    fontSize: fontSizeV2.xl,
+    fontWeight: "800",
     color: colors.text,
+    letterSpacing: -0.3,
   },
   pageHeaderSub: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: 4,
   },
   content: {
-    padding: spacing.md,
+    paddingHorizontal: spacingV2.lg,
+    paddingBottom: spacingV2.xxxl,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
+    marginBottom: spacingV2.sm,
+    gap: spacingV2.sm,
   },
   sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   sectionTitle: {
-    fontSize: fontSize.lg,
+    fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
   },
   sectionCountBg: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.sm,
+    paddingHorizontal: spacingV2.sm,
     paddingVertical: 2,
     marginLeft: "auto",
   },
   sectionCount: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
     fontWeight: "700",
   },
   emptySection: {
-    paddingVertical: spacing.xl,
+    paddingVertical: spacingV2.xl,
     alignItems: "center",
   },
   emptySectionText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
   },
-  categoryItem: {
-    marginBottom: spacing.sm,
+  listCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxxl,
+    paddingHorizontal: spacingV2.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  categoryRow: {
+  categoryItem: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacingV2.md,
   },
   categoryLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacingV2.sm,
     flex: 1,
   },
-  categoryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
+  categoryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   categoryName: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
-    fontWeight: "600",
+    fontWeight: "500",
     flex: 1,
   },
-  categoryTags: {
+  categoryRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-  },
-  systemTagBg: {
-    backgroundColor: colors.infoLight,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
   },
   systemTag: {
-    fontSize: fontSize.xs,
-    color: colors.info,
-    fontWeight: "600",
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    fontWeight: "500",
   },
   deleteBtn: {
-    padding: spacing.sm,
+    padding: spacingV2.xs,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+  },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    borderRadius: borderRadiusV2.lg,
+    paddingVertical: spacingV2.md,
+    marginTop: spacingV2.lg,
+    gap: spacingV2.sm,
+  },
+  addBtnText: {
+    color: "#FFFFFF",
+    fontSize: fontSizeV2.md,
+    fontWeight: "700",
   },
   modalOverlay: {
     flex: 1,
@@ -478,10 +484,10 @@ const localStyles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    borderTopLeftRadius: borderRadiusV2.xxxl,
+    borderTopRightRadius: borderRadiusV2.xxxl,
+    padding: spacingV2.lg,
+    paddingBottom: spacingV2.xxl,
   },
   modalHandle: {
     width: 40,
@@ -489,65 +495,56 @@ const localStyles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.border,
     alignSelf: "center",
-    marginBottom: spacing.md,
+    marginBottom: spacingV2.md,
   },
   modalHeader: {
     alignItems: "center",
-    marginBottom: spacing.lg,
-  },
-  modalHeaderIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.primaryMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.md,
+    marginBottom: spacingV2.lg,
   },
   modalTitle: {
-    fontSize: fontSize.lg,
+    fontSize: fontSizeV2.lg,
     fontWeight: "700",
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: spacingV2.xs,
   },
   modalSubtitle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
   },
   label: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     fontWeight: "700",
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    marginTop: spacing.lg,
+    marginBottom: spacingV2.sm,
+    marginTop: spacingV2.lg,
     letterSpacing: 0.5,
   },
   typeSelector: {
     flexDirection: "row",
-    gap: spacing.md,
+    gap: spacingV2.md,
   },
   typeButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+    gap: spacingV2.sm,
+    paddingVertical: spacingV2.md,
+    borderRadius: borderRadiusV2.lg,
     backgroundColor: colors.background,
     borderWidth: 1.5,
     borderColor: colors.borderLight,
   },
-  typeButtonActiveExpense: {
-    backgroundColor: colors.dangerLight,
-    borderColor: colors.danger,
+  typeButtonActiveCost: {
+    backgroundColor: colors.expenseBg,
+    borderColor: colors.expense,
   },
   typeButtonActiveIncome: {
-    backgroundColor: colors.successLight,
-    borderColor: colors.success,
+    backgroundColor: colors.incomeBg,
+    borderColor: colors.income,
   },
   typeButtonText: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.textSecondary,
     fontWeight: "600",
   },
@@ -560,25 +557,25 @@ const localStyles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
+    borderRadius: borderRadiusV2.lg,
+    paddingHorizontal: spacingV2.md,
     backgroundColor: colors.background,
   },
   input: {
     flex: 1,
-    paddingVertical: spacing.md,
-    fontSize: fontSize.md,
+    paddingVertical: spacingV2.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
   },
   modalButtons: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.xl,
+    gap: spacingV2.md,
+    marginTop: spacingV2.xl,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacingV2.md,
+    borderRadius: borderRadiusV2.lg,
     alignItems: "center",
   },
   modalButtonCancel: {
@@ -590,28 +587,13 @@ const localStyles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   modalButtonTextCancel: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.text,
     fontWeight: "600",
   },
   modalButtonTextConfirm: {
-    fontSize: fontSize.md,
+    fontSize: fontSizeV2.md,
     color: colors.textInverse,
-    fontWeight: "700",
-  },
-  addBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    marginTop: spacing.lg,
-    gap: spacing.sm,
-  },
-  addBtnText: {
-    color: "#FFFFFF",
-    fontSize: fontSize.md,
     fontWeight: "700",
   },
 });

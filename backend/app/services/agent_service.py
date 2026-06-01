@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.guardrails import filter_output
 from app.agent.llm import get_llm
 from app.agent.prompt_composer import get_composer
 from app.agent.report import generate_cycle_report
@@ -362,7 +363,7 @@ async def generate_report(
         response = await llm.ainvoke(
             [SystemMessage(content=system_text), HumanMessage(content=user_text)]
         )
-        content = response.content or ""
+        content = filter_output(response.content or "")
 
     record = AgentRecord(
         cycle_id=cycle_id, record_type=report_type, content=content, farm_id=farm_id
