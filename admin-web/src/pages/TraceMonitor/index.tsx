@@ -24,6 +24,7 @@ import {
 import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
+import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 
 const CARD = '#161b22';
 const BORDER = '#30363d';
@@ -464,19 +465,23 @@ export default function TraceMonitor() {
             {nodeDetail.output_data && (
               <div>
                 <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
-                <pre style={{
-                  backgroundColor: '#161b22',
-                  padding: 12,
-                  borderRadius: 6,
-                  border: '1px solid #30363d',
-                  fontSize: 12,
-                  margin: 0,
-                  maxHeight: 300,
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                }}>
-                  {formatJson(nodeDetail.output_data)}
-                </pre>
+                {nodeDetail.node_type === 'skill_call' ? (
+                  <SkillOutputFormatter outputData={nodeDetail.output_data} />
+                ) : (
+                  <pre style={{
+                    backgroundColor: '#161b22',
+                    padding: 12,
+                    borderRadius: 6,
+                    border: '1px solid #30363d',
+                    fontSize: 12,
+                    margin: 0,
+                    maxHeight: 300,
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {formatJson(nodeDetail.output_data)}
+                  </pre>
+                )}
               </div>
             )}
           </Space>
