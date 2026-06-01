@@ -36,11 +36,11 @@ def _detect_search_category(query: str) -> str:
     return "general"
 
 
-async def _optimize_query(raw_query: str) -> tuple[str, str]:
-    """用 LLM 同时完成查询改写和搜索分类判断，返回 (改写后查询, 分类)。
+async def _rewrite_query(raw_query: str) -> str:
+    """用 LLM 将用户查询改写成更精准的搜索关键词。
 
-    一次 LLM 调用同时完成两项任务，减少 API 开销。
-    若 LLM 不可用则回退到规则分类 + 原查询。
+    只要求输出改写后的查询，格式极简，降低模型跑偏概率。
+    若 LLM 不可用则回退到原查询。
     """
     try:
         llm = get_llm(role="generation")
@@ -48,53 +48,26 @@ async def _optimize_query(raw_query: str) -> tuple[str, str]:
             [
                 SystemMessage(
                     content=(
-                        "你是搜索查询优化专家。分析用户查询并输出两部分结果。\n"
-                        "规则：\n"
-                        "1. 只输出两行，不要任何解释、标题或额外文字\n"
-                        "2. 第一行：改写后的搜索查询（补充时间、地点、专业术语）\n"
-                        "3. 第二行：搜索分类（只能是 general/news/images/videos 之一）\n\n"
-                        "严格格式（示例）：\n"
-                        "2026年6月济南西瓜批发市场价格走势\n"
-                        "general"
+                        "将用户查询改写为适合搜索引擎的关键词。"
+                        "要求：补充时间、地点、专业术语；只返回改写后的查询，不要解释。"
                     )
                 ),
-                HumanMessage(content=f"用户查询：{raw_query}"),
+                HumanMessage(content=raw_query),
             ]
         )
-        text = response.content.strip()
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-
-        # 防御：过滤掉包含内部标记的行（如模型把 prompt 也输出了）
-        lines = [
-            ln for ln in lines
-            if not any(bad in ln.lower() for bad in ["query:", "category:", "用户查询", "你是搜索", "规则：", "严格格式"])
-        ]
-
-        if len(lines) >= 2:
-            rewritten = lines[0]
-            category = lines[1].lower()
-            if category not in ("general", "news", "images", "videos"):
-                category = ""
-        elif len(lines) == 1:
-            rewritten = lines[0]
-            category = ""
-        else:
-            rewritten = raw_query
-            category = ""
-
-        # 校验：改写结果不能包含明显是格式泄露的内容
-        if len(rewritten) >= 3 and category in ("general", "news", "images", "videos"):
-            logger.info("web_search 查询优化成功 | 原始=%r | 改写=%r | 分类=%s", raw_query, rewritten, category)
-            return rewritten, category
-        elif len(rewritten) >= 3 and not category:
-            # 有改写结果但没有分类，用规则补充分类
-            category = _detect_search_category(raw_query)
-            logger.info("web_search 查询改写成功 | 原始=%r | 改写=%r | 分类(规则)=%s", raw_query, rewritten, category)
-            return rewritten, category
+        rewritten = response.content.strip()
+        # 防御：过滤掉模型输出的解释性前缀/后缀
+        for prefix in ["改写后：", "改写：", "查询：", "关键词：", '"', "'"]:
+            if rewritten.startswith(prefix):
+                rewritten = rewritten[len(prefix):].strip()
+        # 只取第一行，防止模型输出多行导致内容混乱
+        rewritten = rewritten.splitlines()[0].strip()
+        if len(rewritten) >= 3 and rewritten != raw_query:
+            logger.info("web_search 查询改写 | 原始=%r | 改写=%r", raw_query, rewritten)
+            return rewritten
     except (LlmNotConfiguredError, Exception):
         pass
-    # 回退：规则分类 + 原查询
-    return raw_query, _detect_search_category(raw_query)
+    return raw_query
 
 
 async def _fetch_page_content(url: str, max_length: int = 400) -> str | None:
@@ -299,13 +272,11 @@ class WebSearchSkill(Skill):
                 status=ResultStatus.FAILED, reply="搜索服务未配置。"
             )
 
-        # 查询优化：一次 LLM 调用同时完成改写 + 分类
-        categories = params.get("categories")
-        if categories:
-            # 用户显式指定分类时只改写查询
-            rewritten = (await _optimize_query(query))[0]
-        else:
-            rewritten, categories = await _optimize_query(query)
+        # 1. 查询改写（LLM）
+        rewritten = await _rewrite_query(query)
+
+        # 2. 分类判断（规则，零成本）
+        categories = params.get("categories") or _detect_search_category(query)
 
         logger.info(
             "web_search 查询优化 | 原始=%r | 改写=%r | 分类=%s",
