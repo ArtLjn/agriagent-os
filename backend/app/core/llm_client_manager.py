@@ -211,8 +211,9 @@ class LLMClientManager:
 
     def _get_next_available(
         self,
+        role: str | None = None,
     ) -> tuple[ProviderConfig, ModelConfig, str] | None:
-        """获取下一个可用的 provider+model+key（加权随机）。"""
+        """获取下一个可用的 provider+model+key（加权随机，可选角色筛选）。"""
         seen_providers: set[str] = set()
         candidates: list[tuple[ProviderConfig, ModelConfig, str, int]] = []
 
@@ -220,6 +221,12 @@ class LLMClientManager:
             if not provider.enabled or not model.enabled:
                 continue
             if not provider.api_keys:
+                continue
+            if (
+                role is not None
+                and role not in model.roles
+                and "all" not in model.roles
+            ):
                 continue
             model_key = f"{provider.name}/{model.id}"
             if self.is_cooled_down(model_key):
@@ -252,9 +259,9 @@ class LLMClientManager:
             return provider, model, api_key
         return None
 
-    def get_chat_model(self, **kwargs) -> ChatOpenAI:
+    def get_chat_model(self, *, role: str | None = "generation", **kwargs) -> ChatOpenAI:
         """获取 ChatOpenAI 实例（给 llm.py / graph.py 使用）。"""
-        result = self._get_next_available()
+        result = self._get_next_available(role=role)
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
         provider, model, api_key = result
@@ -273,9 +280,9 @@ class LLMClientManager:
             **kwargs,
         )
 
-    def get_sync_client(self) -> OpenAI:
+    def get_sync_client(self, *, role: str | None = "generation") -> OpenAI:
         """获取同步 OpenAI 客户端（给 tool_selector 使用）。"""
-        result = self._get_next_available()
+        result = self._get_next_available(role=role)
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
         provider, model, api_key = result
@@ -289,9 +296,9 @@ class LLMClientManager:
         provider, model, api_key = result
         return AsyncOpenAI(api_key=api_key, base_url=provider.base_url)
 
-    def get_model_info(self) -> dict:
+    def get_model_info(self, *, role: str | None = "generation") -> dict:
         """返回当前使用的 provider/model 信息。"""
-        result = self._get_next_available()
+        result = self._get_next_available(role=role)
         if not result:
             return {"provider": "", "model": "", "base_url": ""}
         provider, model, _ = result

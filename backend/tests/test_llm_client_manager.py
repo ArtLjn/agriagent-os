@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.core.llm_client_manager import (
     ErrorLevel,
     LLMCircuitState,
@@ -490,6 +492,101 @@ class TestModelRoles:
 
         _, model = manager.chain[0]
         assert model.roles == []
+
+    # -- role 筛选辅助方法与测试 --
+
+    @staticmethod
+    def _make_multi_role_manager(tmp_path) -> LLMClientManager:
+        cfg = {
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://ollama",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "weight": 100,
+                    "models": [
+                        {
+                            "id": "gemma3:12b",
+                            "priority": 1,
+                            "roles": ["tool-selection"],
+                        },
+                        {
+                            "id": "gemma4:31b",
+                            "priority": 2,
+                            "roles": ["generation"],
+                        },
+                    ],
+                },
+                {
+                    "name": "nvidia",
+                    "base_url": "http://nvidia",
+                    "api_keys": ["k"],
+                    "priority": 2,
+                    "weight": 1,
+                    "models": [
+                        {"id": "glm-4.7", "priority": 1, "roles": ["all"]},
+                    ],
+                },
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        return LLMClientManager(config_path=str(p))
+
+    def test_get_chat_model_tool_selection(self, tmp_path):
+        manager = self._make_multi_role_manager(tmp_path)
+        llm = manager.get_chat_model(role="tool-selection")
+        # ollama(gemma3:12b, roles=["tool-selection"]) 匹配且权重 100
+        # nvidia(glm-4.7, roles=["all"]) 也匹配但权重 1
+        assert llm.model_name == "gemma3:12b"
+
+    def test_get_chat_model_generation(self, tmp_path):
+        manager = self._make_multi_role_manager(tmp_path)
+        llm = manager.get_chat_model(role="generation")
+        assert llm.model_name in ("gemma4:31b", "glm-4.7")
+
+    def test_get_model_info_by_role(self, tmp_path):
+        manager = self._make_multi_role_manager(tmp_path)
+        info = manager.get_model_info(role="tool-selection")
+        assert info["model"] == "gemma3:12b"
+
+    def test_get_sync_client_by_role(self, tmp_path):
+        manager = self._make_multi_role_manager(tmp_path)
+        client = manager.get_sync_client(role="tool-selection")
+        # 无法直接获取 model 名，但验证不抛异常即可
+        assert client is not None
+
+    def test_role_none_no_filtering(self, tmp_path):
+        """role=None 时不做角色筛选，保持向后兼容。"""
+        manager = self._make_multi_role_manager(tmp_path)
+        llm = manager.get_chat_model(role=None)
+        assert llm.model_name in ("gemma3:12b", "gemma4:31b", "glm-4.7")
+
+    def test_role_no_match_raises(self, tmp_path):
+        """请求不存在的 role 时应抛出异常（无 'all' 模型兜底时）。"""
+        cfg = {
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://ollama",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [
+                        {
+                            "id": "gemma3:12b",
+                            "priority": 1,
+                            "roles": ["tool-selection"],
+                        },
+                    ],
+                },
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+        with pytest.raises(RuntimeError, match="均不可用"):
+            manager.get_chat_model(role="nonexistent-role")
 
 
 class TestGetModelInfo:
