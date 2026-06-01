@@ -54,6 +54,7 @@ class ModelConfig:
     id: str
     priority: int = 1
     enabled: bool = True
+    roles: list[str] = field(default_factory=lambda: ["all"])
 
 
 @dataclass
@@ -140,6 +141,7 @@ class LLMClientManager:
                         id=m["id"],
                         priority=m.get("priority", 1),
                         enabled=m.get("enabled", True),
+                        roles=m.get("roles", ["all"]),
                     )
                     for m in p_raw.get("models", [])
                     if m.get("enabled", True)

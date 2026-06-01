@@ -404,6 +404,94 @@ class TestKeyRotation:
         assert manager._get_api_key(provider) == "only-key"
 
 
+class TestModelRoles:
+    """测试模型角色配置。"""
+
+    def test_model_with_roles(self, tmp_path):
+        cfg = {
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [
+                        {"id": "gemma3:12b", "priority": 1, "roles": ["tool-selection"]},
+                    ],
+                }
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        _, model = manager.chain[0]
+        assert model.roles == ["tool-selection"]
+
+    def test_model_without_roles_defaults_to_all(self, tmp_path):
+        cfg = {
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [{"id": "gemma3:12b", "priority": 1}],
+                }
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        _, model = manager.chain[0]
+        assert model.roles == ["all"]
+
+    def test_model_with_multiple_roles(self, tmp_path):
+        cfg = {
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [
+                        {
+                            "id": "gemma3:12b",
+                            "priority": 1,
+                            "roles": ["tool-selection", "generation"],
+                        },
+                    ],
+                }
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        _, model = manager.chain[0]
+        assert model.roles == ["tool-selection", "generation"]
+
+    def test_model_with_empty_roles_uses_all(self, tmp_path):
+        cfg = {
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [{"id": "gemma3:12b", "priority": 1, "roles": []}],
+                }
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        _, model = manager.chain[0]
+        assert model.roles == []
+
+
 class TestGetModelInfo:
     """测试 get_model_info。"""
 
