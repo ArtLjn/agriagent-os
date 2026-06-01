@@ -5,9 +5,11 @@ from urllib.parse import urlencode
 
 import httpx
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.llm import LlmNotConfiguredError, get_llm
 from app.core.config import settings
 from app.infra.skill_cache import cached
 
@@ -18,6 +20,39 @@ _REQUEST_TIMEOUT = 15.0
 
 def _get_searxng_url() -> str:
     return settings.secrets.searxng_url
+
+
+def _detect_search_category(query: str) -> str:
+    """根据查询内容自动判断最适合的搜索分类。"""
+    q = query.lower()
+    news_keywords = ["最新", "新闻", "今天", "近日", "刚刚", "报道", "事件", "发布会", "公告", "通知"]
+    if any(kw in q for kw in news_keywords):
+        return "news"
+    return "general"
+
+
+async def _rewrite_query(raw_query: str) -> str:
+    """用 LLM 将用户查询改写成更精准的搜索关键词。"""
+    try:
+        llm = get_llm(role="generation")
+        response = await llm.ainvoke(
+            [
+                SystemMessage(
+                    content=(
+                        "你是搜索查询优化专家。将用户查询改写为适合搜索引擎的关键词组合。"
+                        "要求：1.补充具体时间、地点信息；2.使用更正式/专业的表述；"
+                        "3.只返回改写后的查询，不要解释。"
+                    )
+                ),
+                HumanMessage(content=f"用户查询：{raw_query}\n改写后："),
+            ]
+        )
+        rewritten = response.content.strip()
+        if len(rewritten) >= 3 and rewritten != raw_query:
+            return rewritten
+    except (LlmNotConfiguredError, Exception):
+        pass
+    return raw_query
 
 
 def _format_results(query: str, data: dict) -> str:
@@ -143,8 +178,19 @@ class WebSearchSkill(Skill):
                 status=ResultStatus.FAILED, reply="搜索服务未配置。"
             )
 
-        categories = params.get("categories", "general")
-        data = await self._search(searxng_url, query, categories)
+        # 1. 自动分类检测（Focus Mode）
+        categories = params.get("categories") or _detect_search_category(query)
+
+        # 2. 查询重写优化
+        rewritten = await _rewrite_query(query)
+        logger.info(
+            "web_search 查询优化 | 原始=%r | 改写=%r | 分类=%s",
+            query,
+            rewritten,
+            categories,
+        )
+
+        data = await self._search(searxng_url, rewritten, categories)
 
         # 非通用分类无结果时 fallback 到 general
         if (
@@ -156,9 +202,9 @@ class WebSearchSkill(Skill):
             logger.info(
                 "web_search fallback | categories=%s → general | query=%r",
                 categories,
-                query,
+                rewritten,
             )
-            data = await self._search(searxng_url, query, "general")
+            data = await self._search(searxng_url, rewritten, "general")
 
         if data is None:
             return SkillResult(
