@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient } from "./client";
 
 export interface VersionInfo {
   latest_version: string;
@@ -10,14 +10,15 @@ export interface VersionInfo {
 
 export const versionApi = {
   check: (currentVersionCode: number) =>
-    apiClient.get<VersionInfo>('/app/version', {
+    apiClient.get<VersionInfo>("/api/app/version", {
       params: { current_version_code: currentVersionCode },
     }),
 };
 
-/** 当前应用版本号，与 VERSION 文件及 build.gradle 保持一致。 */
-const APP_VERSION_CODE = 3;
+import { Platform } from "react-native";
 
-export async function getAppVersionCode(): Promise<number> {
-  return APP_VERSION_CODE;
-}
+/** 当前应用版本名，与 build.gradle versionName 同步。 */
+export const APP_VERSION = "1.0.3";
+
+/** 当前应用构建号，与 build.gradle versionCode + VERSION 文件同步。 */
+export const APP_BUILD_NUMBER = 5;

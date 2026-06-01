@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -14,6 +14,7 @@ import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
 import { AgentReportScreen } from "../screens/agent/AgentReportScreen";
 import { GuideScreen } from "../screens/settings/GuideScreen";
 import { SettingsScreen } from "../screens/settings/SettingsScreen";
+import { AboutScreen } from "../screens/settings/AboutScreen";
 import { DebtListScreen } from "../screens/debt/DebtListScreen";
 import { DebtCreateScreen } from "../screens/debt/DebtCreateScreen";
 import { CropTemplateScreen } from "../screens/crop/CropTemplateScreen";
@@ -56,6 +57,7 @@ export type RootStackParamList = {
     createdAt?: string;
   };
   Settings: undefined;
+  About: undefined;
   Welcome: undefined;
   Login: undefined;
   Register: undefined;
@@ -98,6 +100,7 @@ export const AppNavigator: React.FC = () => {
 
   return (
     <NavigationContainer
+      key={isLoggedIn ? "main" : "auth"}
       ref={(ref) => {
         if (ref) {
           setOnUnauthorized(() => {
@@ -170,6 +173,11 @@ export const AppNavigator: React.FC = () => {
               name="Settings"
               component={SettingsScreen}
               options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="About"
+              component={AboutScreen}
+              options={{ title: "关于" }}
             />
             <Stack.Screen
               name="DebtList"

@@ -24,6 +24,7 @@ from app.api import (  # noqa: E402
     admin_trace,
     admin_users,
     agent,
+    app_version,
     auth,
     cost,
     cost_categories,
@@ -213,6 +214,7 @@ app.include_router(admin_users.router)
 app.include_router(user_settings.router)
 app.include_router(debt.router)
 app.include_router(feedback.router)
+app.include_router(app_version.router)
 
 
 @app.get("/health")

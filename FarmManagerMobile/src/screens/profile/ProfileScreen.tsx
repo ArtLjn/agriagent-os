@@ -57,6 +57,12 @@ const MENU_ITEMS = [
     label: "设置",
     action: "settings" as const,
   },
+  {
+    icon: "information",
+    iconColor: colors.primary,
+    label: "关于",
+    action: "about" as const,
+  },
 ];
 
 export const ProfileScreen: React.FC = () => {
@@ -80,6 +86,11 @@ export const ProfileScreen: React.FC = () => {
       }
     } else if (item.action === "farm") {
       // 我的农场 - 显示农场信息
+    } else if (item.action === "about") {
+      const parentNav = navigation.getParent();
+      if (parentNav) {
+        parentNav.navigate("About");
+      }
     }
   };
 

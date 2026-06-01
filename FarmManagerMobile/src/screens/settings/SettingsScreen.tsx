@@ -348,22 +348,16 @@ export const SettingsScreen: React.FC = () => {
         {/* About */}
         <SettingsSection title="关于">
           <MenuItem
-            icon="tag"
-            iconColor={colors.textTertiary}
-            label="版本"
-            value="v1.0"
+            icon="information"
+            iconColor={colors.primary}
+            label="关于"
+            onPress={() => navigation.navigate("About" as never)}
           />
           <MenuItem
             icon="book-open-variant"
             iconColor={colors.success}
             label="使用指南"
             onPress={() => navigation.navigate("Guide" as never)}
-          />
-          <MenuItem
-            icon="information"
-            iconColor={colors.primary}
-            label="关于"
-            value="智能种植管理平台"
             isLast
           />
         </SettingsSection>

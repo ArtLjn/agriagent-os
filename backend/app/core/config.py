@@ -84,6 +84,10 @@ class AuthConfig(BaseModel):
     admin_password: str = ""  # 初始管理员密码，启动时自动创建
 
 
+class AppConfig(BaseModel):
+    apk_download_url: str = ""
+
+
 class _YamlSettingsSource(PydanticBaseSettingsSource):
     """自定义 YAML 配置源，优先级低于环境变量。"""
 
@@ -117,6 +121,7 @@ class Settings(BaseSettings):
     trace: TraceConfig = TraceConfig()
     token_quota: TokenQuotaConfig = TokenQuotaConfig()
     secrets: SecretsConfig = SecretsConfig()
+    app: AppConfig = AppConfig()
     project_name: str = "Farm Manager API"
 
     def __init__(self, _config_path: Optional[str] = None, **kwargs):
