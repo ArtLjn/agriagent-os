@@ -22,37 +22,56 @@ def _get_searxng_url() -> str:
     return settings.secrets.searxng_url
 
 
+_NEWS_KEYWORDS = ["最新", "新闻", "今天", "近日", "刚刚", "报道", "事件", "发布会", "公告", "通知"]
+
+
 def _detect_search_category(query: str) -> str:
-    """根据查询内容自动判断最适合的搜索分类。"""
+    """基于关键词规则快速判断搜索分类（轻量 fallback）。"""
     q = query.lower()
-    news_keywords = ["最新", "新闻", "今天", "近日", "刚刚", "报道", "事件", "发布会", "公告", "通知"]
-    if any(kw in q for kw in news_keywords):
+    if any(kw in q for kw in _NEWS_KEYWORDS):
         return "news"
     return "general"
 
 
-async def _rewrite_query(raw_query: str) -> str:
-    """用 LLM 将用户查询改写成更精准的搜索关键词。"""
+async def _optimize_query(raw_query: str) -> tuple[str, str]:
+    """用 LLM 同时完成查询改写和搜索分类判断，返回 (改写后查询, 分类)。
+
+    一次 LLM 调用同时完成两项任务，减少 API 开销。
+    若 LLM 不可用则回退到规则分类 + 原查询。
+    """
     try:
         llm = get_llm(role="generation")
         response = await llm.ainvoke(
             [
                 SystemMessage(
                     content=(
-                        "你是搜索查询优化专家。将用户查询改写为适合搜索引擎的关键词组合。"
-                        "要求：1.补充具体时间、地点信息；2.使用更正式/专业的表述；"
-                        "3.只返回改写后的查询，不要解释。"
+                        "你是搜索查询优化专家。分析用户查询并输出两部分结果：\n"
+                        "1. 改写后的搜索查询（补充时间、地点、专业术语）\n"
+                        "2. 搜索分类（general/news/images/videos 之一）\n\n"
+                        "输出格式严格为两行：\n"
+                        "QUERY: <改写后的查询>\n"
+                        "CATEGORY: <分类>"
                     )
                 ),
-                HumanMessage(content=f"用户查询：{raw_query}\n改写后："),
+                HumanMessage(content=f"用户查询：{raw_query}"),
             ]
         )
-        rewritten = response.content.strip()
-        if len(rewritten) >= 3 and rewritten != raw_query:
-            return rewritten
+        text = response.content.strip()
+        # 解析 LLM 输出
+        rewritten = raw_query
+        category = ""
+        for line in text.splitlines():
+            if line.strip().startswith("QUERY:"):
+                rewritten = line.split(":", 1)[1].strip()
+            elif line.strip().startswith("CATEGORY:"):
+                category = line.split(":", 1)[1].strip().lower()
+        # 校验
+        if len(rewritten) >= 3 and category in ("general", "news", "images", "videos"):
+            return rewritten, category
     except (LlmNotConfiguredError, Exception):
         pass
-    return raw_query
+    # 回退：规则分类 + 原查询
+    return raw_query, _detect_search_category(raw_query)
 
 
 def _format_results(query: str, data: dict) -> str:
@@ -178,11 +197,14 @@ class WebSearchSkill(Skill):
                 status=ResultStatus.FAILED, reply="搜索服务未配置。"
             )
 
-        # 1. 自动分类检测（Focus Mode）
-        categories = params.get("categories") or _detect_search_category(query)
+        # 查询优化：一次 LLM 调用同时完成改写 + 分类
+        categories = params.get("categories")
+        if categories:
+            # 用户显式指定分类时只改写查询
+            rewritten = (await _optimize_query(query))[0]
+        else:
+            rewritten, categories = await _optimize_query(query)
 
-        # 2. 查询重写优化
-        rewritten = await _rewrite_query(query)
         logger.info(
             "web_search 查询优化 | 原始=%r | 改写=%r | 分类=%s",
             query,
