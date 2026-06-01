@@ -98,12 +98,16 @@ const HourlyTemperatureChart: React.FC<HourlyChartProps> = ({ data }) => {
   const maxT = Math.max(...temps) + 2;
   const range = maxT - minT || 1;
 
-  const points = data.map((d, i) => ({
-    x: hPadding + i * pointSpacing + pointSpacing / 2,
-    y: padding.top + chartHeight - ((d.temp - minT) / range) * chartHeight,
-    temp: d.temp,
-    hour: d.hour,
-  }));
+  const points = data.map((d, i) => {
+    const x = hPadding + i * pointSpacing + pointSpacing / 2;
+    const y = padding.top + chartHeight - ((d.temp - minT) / range) * chartHeight;
+    return {
+      x: isNaN(x) ? 0 : x,
+      y: isNaN(y) ? padding.top + chartHeight / 2 : y,
+      temp: d.temp ?? 20,
+      hour: d.hour ?? 0,
+    };
+  });
 
   const linePath = React.useMemo(() => {
     if (points.length < 2) {
@@ -206,19 +210,21 @@ export const WeatherDetailScreen: React.FC = () => {
 
   // 使用真实的 hourly 数据，如果没有则回退到模拟数据
   const hourlyData = React.useMemo(() => {
-    if (weather.hourly?.time && weather.hourly?.temperature_2m) {
+    if (weather.hourly?.time && weather.hourly?.temperature_2m && weather.hourly.time.length > 0) {
       const times: string[] = weather.hourly.time;
       const temps: number[] = weather.hourly.temperature_2m;
-      return times.slice(0, 24).map((t, i) => ({
+      const data = times.slice(0, 24).map((t, i) => ({
         hour: new Date(t).getHours(),
-        temp: Math.round(temps[i]),
+        temp: temps[i] !== undefined && temps[i] !== null ? Math.round(temps[i]) : 20,
       }));
+      // 过滤掉无效数据
+      return data.filter(d => !isNaN(d.temp) && !isNaN(d.hour));
     }
     return generateHourlyData(today.minTemp, today.maxTemp);
   }, [weather.hourly, today.minTemp, today.maxTemp]);
 
-  const weekMin = Math.min(...temperature_2m_min.slice(0, 7));
-  const weekMax = Math.max(...temperature_2m_max.slice(0, 7));
+  const weekMin = temperature_2m_min.length > 0 ? Math.min(...temperature_2m_min.slice(0, 7)) : 0;
+  const weekMax = temperature_2m_max.length > 0 ? Math.max(...temperature_2m_max.slice(0, 7)) : 30;
   const weekRange = weekMax - weekMin || 1;
 
   const weekDays = time.slice(0, 7).map((t, i) => {

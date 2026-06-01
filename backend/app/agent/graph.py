@@ -288,7 +288,7 @@ async def _llm_node(state: AgentState) -> dict:
     user_msg = _find_last_human_message(messages)
     selected_names = select_tools(
         user_msg, tools, intent_classifier=_get_classifier(),
-        user_location=farm_location,
+        # user_location=farm_location,
     )
     if has_tool_results:
         selected_names_set = expand_by_chain(set(selected_names))
