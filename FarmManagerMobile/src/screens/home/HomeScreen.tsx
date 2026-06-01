@@ -87,7 +87,7 @@ export const HomeScreen: React.FC = () => {
     setCity,
   } = useAgentStore();
   const { defaultCity, displayName, setDefaultCity, syncToServer, loadFromServer } = useSettingsStore();
-  const { isLoggedIn } = useAuthStore();
+  const { isLoggedIn, user } = useAuthStore();
   const { fetchCycles } = useCycleStore();
   const [pickerVisible, setPickerVisible] = useState(false);
 
@@ -125,7 +125,8 @@ export const HomeScreen: React.FC = () => {
     fetchCycles();
   }, [defaultCity, loadCachedWeather, fetchWeather, fetchDailyAdvice, fetchCycles]);
 
-  const greeting = getGreeting(displayName);
+  const nickname = user?.nickname || displayName;
+  const greeting = getGreeting(nickname);
   const weatherCondition = getWeatherCondition(weather);
 
   const handleCitySelect = (city: {

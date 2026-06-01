@@ -217,3 +217,10 @@ export interface CreateTemplateRequest {
     key_tasks?: string | null;
   }[];
 }
+
+export interface CycleParseResponse {
+  name: string;
+  crop_template_id: number | null;
+  start_date: string;
+  field_name: string | null;
+}

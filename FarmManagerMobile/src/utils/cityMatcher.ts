@@ -1,4 +1,4 @@
-import { CITIES, type City } from '../data/cities';
+import { CITIES, type FlatCity } from "../data/cities";
 
 /**
  * Haversine 公式计算两点间距离（千米）。
@@ -7,7 +7,7 @@ function haversineDistance(
   lat1: number,
   lon1: number,
   lat2: number,
-  lon2: number,
+  lon2: number
 ): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -24,10 +24,7 @@ function haversineDistance(
 /**
  * 从城市列表中找到距离给定坐标最近的城市。
  */
-export function findNearestCity(
-  lat: number,
-  lon: number,
-): City {
+export function findNearestCity(lat: number, lon: number): FlatCity {
   let nearest = CITIES[0];
   let minDist = haversineDistance(lat, lon, nearest.lat, nearest.lon);
 

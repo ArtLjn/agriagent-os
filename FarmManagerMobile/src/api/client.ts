@@ -252,8 +252,8 @@ export const debtApi = {
 
 // 天气
 export const weatherApi = {
-  getForecast: (days: number = 3, lat?: number, lon?: number) =>
-    apiClient.get('/weather/forecast', { params: { days, lat, lon } }),
+  getForecast: (days: number = 3, lat?: number, lon?: number, location?: string) =>
+    apiClient.get('/weather/forecast', { params: { days, lat, lon, location } }),
 };
 
 // 用户设置

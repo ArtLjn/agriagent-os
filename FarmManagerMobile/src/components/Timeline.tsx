@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../theme/colors";
-import { spacing, fontSize } from "../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
 
 interface TimelineItem {
   id: string;
@@ -23,8 +23,20 @@ export const Timeline: React.FC<TimelineProps> = ({ items }) => {
         return (
           <View key={item.id} style={styles.row}>
             <View style={styles.leftColumn}>
-              <View style={[styles.dot, item.isCurrent && styles.dotCurrent]} />
-              {!isLast && <View style={styles.line} />}
+              <View
+                style={[
+                  styles.dot,
+                  item.isCurrent && styles.dotCurrent,
+                ]}
+              />
+              {!isLast && (
+                <View
+                  style={[
+                    styles.line,
+                    item.isCurrent && styles.lineActive,
+                  ]}
+                />
+              )}
             </View>
 
             <View
@@ -34,7 +46,10 @@ export const Timeline: React.FC<TimelineProps> = ({ items }) => {
               ]}
             >
               <Text
-                style={[styles.title, item.isCurrent && styles.titleCurrent]}
+                style={[
+                  styles.title,
+                  item.isCurrent && styles.titleCurrent,
+                ]}
               >
                 {item.title}
               </Text>
@@ -50,8 +65,8 @@ export const Timeline: React.FC<TimelineProps> = ({ items }) => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.sm,
   },
   row: {
     flexDirection: "row",
@@ -61,53 +76,57 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: colors.border,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.borderLight,
   },
   dotCurrent: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   line: {
     width: 2,
     flex: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xs,
+    backgroundColor: colors.borderLight,
+    marginVertical: spacingV2.xs,
+  },
+  lineActive: {
+    backgroundColor: "rgba(74, 123, 247, 0.2)",
   },
   contentCard: {
     flex: 1,
-    marginLeft: spacing.sm,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "transparent",
+    marginLeft: spacingV2.md,
+    marginBottom: spacingV2.lg,
+    padding: spacingV2.md,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.lg,
   },
   contentCardCurrent: {
-    backgroundColor: colors.primaryLight,
-    borderLeftColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
   },
   title: {
-    fontSize: fontSize.md,
-    fontWeight: "600",
+    fontSize: fontSizeV2.md,
+    fontWeight: "700",
     color: colors.text,
-    marginBottom: spacing.xs,
+    marginBottom: spacingV2.xs,
   },
   titleCurrent: {
     color: colors.primary,
   },
   subtitle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    marginBottom: spacingV2.xs,
+    lineHeight: 20,
   },
   dateRange: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
   },
 });

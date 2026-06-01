@@ -24,6 +24,7 @@ interface WeatherCardV2Props {
       temperature_2m_min: number[];
       precipitation_sum: number[];
     };
+    warnings?: string[];
   } | null;
 }
 
@@ -149,6 +150,26 @@ export const WeatherCardV2: React.FC<WeatherCardV2Props> = ({ data }) => {
             );
           })}
         </View>
+
+        {/* 预警横幅 */}
+        {data?.warnings && data.warnings.length > 0 && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() =>
+              navigation.navigate("WeatherAlert" as never, {
+                warnings: data.warnings,
+                cityName: "本地天气",
+              } as never)
+            }
+            style={styles.warningBanner}
+          >
+            <Icon name="alert-circle" size={16} color="#FFF" />
+            <Text style={styles.warningText} numberOfLines={1}>
+              {data.warnings.length} 条天气预警
+            </Text>
+            <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+        )}
       </LinearGradient>
     </TouchableOpacity>
   );
@@ -235,5 +256,20 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.md,
     color: "#FFFFFF",
     fontWeight: "700",
+  },
+  warningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: borderRadiusV2.md,
+    paddingVertical: 8,
+    marginTop: spacingV2.lg,
+  },
+  warningText: {
+    fontSize: fontSizeV2.sm,
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 });

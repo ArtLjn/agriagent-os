@@ -47,7 +47,7 @@ module.exports = {
   resolve: {
     extensions: ['.web.js', '.web.jsx', '.web.ts', '.web.tsx', '.js', '.jsx', '.ts', '.tsx', '.json'],
     alias: {
-      'react-native$': 'react-native-web',
+      'react-native$': path.join(appDirectory, 'web', 'react-native-polyfill.js'),
     },
   },
   plugins: [

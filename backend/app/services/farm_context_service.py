@@ -71,7 +71,7 @@ def clear_context_cache() -> None:
     logger.info("农场上下文缓存已清除")
 
 
-def build_summary(db: Session, farm_id: int) -> str:
+async def build_summary(db: Session, farm_id: int) -> str:
     """组装农场现状摘要文本（≤300字）。
 
     查询数据库获取活跃茬口、近期农事、债务、月度成本，
@@ -98,7 +98,7 @@ def build_summary(db: Session, farm_id: int) -> str:
     log_line = _build_log_line(db, farm_id)
     debt_line = _build_debt_line(db, farm_id)
     cost_line = _build_cost_line(db, farm_id)
-    weather_line = _build_weather_line(db, farm_id)
+    weather_line = await _build_weather_line(db, farm_id)
 
     # 拼接摘要
     parts = [
@@ -274,7 +274,7 @@ def _build_cost_line(db: Session, farm_id: int) -> str:
     return f"{_format_amount(total)}元"
 
 
-def _build_weather_line(db: Session, farm_id: int) -> str:
+async def _build_weather_line(db: Session, farm_id: int) -> str:
     """组装天气行，取未来 3 天。
 
     优先从 user_settings 读取用户坐标，无记录时降级到默认坐标。
@@ -295,7 +295,7 @@ def _build_weather_line(db: Session, farm_id: int) -> str:
     except Exception:
         logger.warning("读取用户设置失败，使用默认坐标")
     try:
-        data = weather_service.fetch_weather(
+        data = await weather_service.fetch_weather(
             lat=lat, lon=lon, days=_MAX_WEATHER_DAYS
         )
         return _format_weather_line(data, days=_MAX_WEATHER_DAYS)

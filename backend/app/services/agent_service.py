@@ -9,9 +9,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.llm import get_llm
+from app.agent.prompt_composer import get_composer
 from app.agent.report import generate_cycle_report
 from app.agent.skills import get_langchain_tools
 from app.core.json_repair import safe_parse_json
+from langchain_core.messages import HumanMessage, SystemMessage
 from app.infra.pending_actions import (
     detect_user_intent,
     get_pending,
@@ -29,6 +32,7 @@ from app.services.conversation_service import (
     get_or_create_conversation,
     save_message,
 )
+from app.services import farm_context_service
 
 logger = logging.getLogger(__name__)
 
@@ -280,16 +284,13 @@ async def get_daily_advice(
             created_at=cached.created_at,
         )
 
-    base_prompt = (
-        "请生成今天的农事建议。以 JSON 格式回复："
-        '{"preview":"≤15字今日一句话总结","items":['
-        '{"title":"≤10字结论","detail":"≤40字原因","priority":1到3,"icon":"emoji"}]}。'
-        "最多5条，按紧急程度排序。"
+    # 注入农场上下文，通过 PromptComposer 渲染模板
+    context = await farm_context_service.build_summary(db, farm_id)
+    prompt = get_composer().compose(
+        "daily_advice",
+        variables={"farm_context": context, "cycle_id": cycle_id},
     )
-    if cycle_id:
-        prompt = f"请为周期 ID={cycle_id} 生成今天的农事建议。{base_prompt}"
-    else:
-        prompt = base_prompt
+
     logger.info("生成每日建议 | farm=%s cycle=%s", farm_id, cycle_id)
     advice = await invoke_advisor(prompt, farm_id=farm_id)
 
@@ -346,10 +347,22 @@ async def generate_report(
     if cycle_id:
         content = await generate_cycle_report(cycle_id)
     else:
-        content = await invoke_advisor(
-            f"请生成一份{report_type}综合报告，查询所有活跃周期的信息。",
-            farm_id=farm_id,
+        context = await farm_context_service.build_summary(db, farm_id)
+        system_text = get_composer().compose(
+            "report",
+            variables={"report_type": report_type},
+            current_date=datetime.now().date(),
         )
+        user_text = (
+            f"请基于以下农场现状生成一份{report_type}综合报告。\n\n"
+            f"{context}\n\n"
+            "请整理成一份包含进度、成本分析和下一步建议的报告。"
+        )
+        llm = get_llm()
+        response = await llm.ainvoke(
+            [SystemMessage(content=system_text), HumanMessage(content=user_text)]
+        )
+        content = response.content or ""
 
     record = AgentRecord(
         cycle_id=cycle_id, record_type=report_type, content=content, farm_id=farm_id

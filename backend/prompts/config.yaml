@@ -10,6 +10,9 @@ templates:
   report:
     file: report.j2
     description: "报告生成 prompt"
+  daily_advice:
+    file: daily_advice.j2
+    description: "每日农事建议生成 prompt，注入农场上下文"
   crop_template_parse:
     file: crop_template_parse.j2
     description: "作物模板解析 prompt，从自然语言描述提取结构化作物数据"
@@ -47,4 +50,9 @@ compositions:
     snippets:
       - p1-language
     template: report
+    separator: "\n\n"
+  daily_advice:
+    snippets:
+      - p1-language
+    template: daily_advice
     separator: "\n\n"

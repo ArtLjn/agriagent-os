@@ -90,7 +90,7 @@ class ReportHistoryItem(BaseModel):
 
     id: int
     cycle_id: int | None = None
-    record_type: str
+    report_type: str
     content: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

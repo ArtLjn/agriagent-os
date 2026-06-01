@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MainTabNavigator } from "./MainTabNavigator";
+import { CycleListScreen } from "../screens/cycle/CycleListScreen";
 import { CycleDetailScreen } from "../screens/cycle/CycleDetailScreen";
 import { CycleCreateScreen } from "../screens/cycle/CycleCreateScreen";
 import { LogListScreen } from "../screens/log/LogListScreen";
@@ -20,6 +21,7 @@ import { DebtCreateScreen } from "../screens/debt/DebtCreateScreen";
 import { CropTemplateScreen } from "../screens/crop/CropTemplateScreen";
 import { CropTemplateCreateScreen } from "../screens/crop/CropTemplateCreateScreen";
 import { WeatherDetailScreen } from "../screens/weather/WeatherDetailScreen";
+import { WeatherAlertScreen } from "../screens/weather/WeatherAlertScreen";
 import { AdviceDetailScreen } from "../screens/advice/AdviceDetailScreen";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { RegisterScreen } from "../screens/auth/RegisterScreen";
@@ -29,6 +31,7 @@ import { colors } from "../theme/colors";
 
 export type RootStackParamList = {
   Main: undefined;
+  CycleList: undefined;
   CycleDetail: { cycleId: number };
   CycleCreate: undefined;
   LogList: { cycleId: number };
@@ -50,6 +53,7 @@ export type RootStackParamList = {
   CropTemplate: undefined;
   CropTemplateCreate: undefined;
   WeatherDetail: undefined;
+  WeatherAlert: { warnings: string[]; cityName: string };
   AdviceDetail: {
     items?: import("../api/types").AdviceItem[];
     preview?: string;
@@ -118,6 +122,11 @@ export const AppNavigator: React.FC = () => {
               name="Main"
               component={MainTabNavigator}
               options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="CycleList"
+              component={CycleListScreen}
+              options={{ title: "种植规划" }}
             />
             <Stack.Screen
               name="CycleDetail"
@@ -203,6 +212,11 @@ export const AppNavigator: React.FC = () => {
               name="WeatherDetail"
               component={WeatherDetailScreen}
               options={{ title: "天气详情", headerShown: false }}
+            />
+            <Stack.Screen
+              name="WeatherAlert"
+              component={WeatherAlertScreen}
+              options={{ title: "天气预警", headerShown: false }}
             />
             <Stack.Screen
               name="AdviceDetail"

@@ -180,7 +180,11 @@ const HourlyTemperatureChart: React.FC<HourlyChartProps> = ({ data }) => {
 
 export const WeatherDetailScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { weather, cityName } = useAgentStore();
+  const { weather, cityName, fetchWeather } = useAgentStore();
+
+  React.useEffect(() => {
+    fetchWeather(7);
+  }, [fetchWeather]);
 
   if (!weather?.daily) {
     return (
@@ -207,6 +211,32 @@ export const WeatherDetailScreen: React.FC = () => {
 
   const todayLabel = getWeatherLabel(today.precipitation, today.maxTemp);
   const todayIcon = getWeatherIcon(today.precipitation, today.maxTemp);
+
+  // 预警数据
+  const warnings = (weather as any)?.warnings as string[] | undefined;
+
+  // 解析第一条预警的严重级别
+  const getFirstAlertInfo = (warnings: string[]) => {
+    const first = warnings[0];
+    const match = first.match(/^\[(RED|ORANGE|YELLOW|BLUE)\]\s*/);
+    let severity = match?.[1] ?? "BLUE";
+    let title = match ? first.replace(match[0], "") : first;
+    if (!match) {
+      if (title.includes("红色")) severity = "RED";
+      else if (title.includes("橙色")) severity = "ORANGE";
+      else if (title.includes("黄色")) severity = "YELLOW";
+    }
+    // 取标题前部分作为预览
+    const preview = title.split("[")[0]?.trim() ?? title;
+    return { severity, preview };
+  };
+
+  const alertConfig: Record<string, { color: string; bgColor: string; icon: string }> = {
+    RED: { color: "#C0392B", bgColor: "#FDEBEB", icon: "alert-octagon" },
+    ORANGE: { color: "#E67E22", bgColor: "#FEF3E2", icon: "alert" },
+    YELLOW: { color: "#D4A017", bgColor: "#FEF9E7", icon: "alert-circle" },
+    BLUE: { color: "#2E86C1", bgColor: "#EBF5FB", icon: "information" },
+  };
 
   // 使用真实的 hourly 数据，如果没有则回退到模拟数据
   const hourlyData = React.useMemo(() => {
@@ -270,6 +300,65 @@ export const WeatherDetailScreen: React.FC = () => {
             </Text>
           </View>
         </FadeInSlideUp>
+
+        {/* 预警横幅 */}
+        {warnings && warnings.length > 0 && (
+          <FadeInSlideUp delay={60}>
+            {(() => {
+              const { severity, preview } = getFirstAlertInfo(warnings);
+              const cfg = alertConfig[severity] ?? alertConfig.BLUE;
+              return (
+                <View style={styles.alertSection}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[
+                      styles.alertBanner,
+                      { backgroundColor: cfg.bgColor },
+                      shadowV2.light,
+                    ]}
+                    onPress={() =>
+                      navigation.navigate("WeatherAlert" as never, {
+                        warnings,
+                        cityName,
+                      } as never)
+                    }
+                  >
+                    <View
+                      style={[
+                        styles.alertIconWrap,
+                        { backgroundColor: cfg.color },
+                      ]}
+                    >
+                      <Icon name={cfg.icon as any} size={20} color="#FFF" />
+                    </View>
+                    <View style={styles.alertTextWrap}>
+                      <Text
+                        style={[styles.alertTitle, { color: cfg.color }]}
+                        numberOfLines={1}
+                      >
+                        {cfg.color === "#C0392B"
+                          ? "红色预警"
+                          : cfg.color === "#E67E22"
+                            ? "橙色预警"
+                            : cfg.color === "#D4A017"
+                              ? "黄色预警"
+                              : "蓝色预警"}
+                      </Text>
+                      <Text style={styles.alertDesc} numberOfLines={1}>
+                        {preview}
+                      </Text>
+                    </View>
+                    <Icon
+                      name="chevron-right"
+                      size={20}
+                      color={colors.textTertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+          </FadeInSlideUp>
+        )}
 
         <FadeInSlideUp delay={80}>
           <View style={styles.section}>
@@ -473,5 +562,37 @@ const styles = StyleSheet.create({
     height: 4,
     backgroundColor: colors.primaryLight,
     borderRadius: 2,
+  },
+  alertSection: {
+    paddingHorizontal: spacingV2.lg,
+    marginBottom: spacingV2.xl,
+  },
+  alertBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xl,
+    padding: spacingV2.lg,
+  },
+  alertIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadiusV2.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacingV2.md,
+  },
+  alertTextWrap: {
+    flex: 1,
+  },
+  alertTitle: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  alertDesc: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

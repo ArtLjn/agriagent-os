@@ -46,7 +46,7 @@ class SecretsConfig(BaseModel):
 
 
 class AIConfig(BaseModel):
-    model: str = "qwen3.6-flash-2026-04-16"
+    model: str = "qwen3.6-35b-a3b"
     api_key: str = ""
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     enable_thinking: bool = False

@@ -14,7 +14,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { cropApi } from "../../api/client";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 
 interface GrowthStage {
   id: number;
@@ -32,6 +32,19 @@ interface CropTemplate {
 }
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+function getCropEmoji(name: string): string {
+  if (name.includes("西瓜")) return "🍉";
+  if (name.includes("辣椒")) return "🌶️";
+  if (name.includes("番茄") || name.includes("西红柿")) return "🍅";
+  if (name.includes("黄瓜")) return "🥒";
+  if (name.includes("茄子")) return "🍆";
+  if (name.includes("白菜")) return "🥬";
+  if (name.includes("玉米")) return "🌽";
+  if (name.includes("土豆")) return "🥔";
+  if (name.includes("萝卜")) return "🥕";
+  return "🌱";
+}
 
 export const CropTemplateScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -68,111 +81,238 @@ export const CropTemplateScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const renderTemplateItem = ({ item }: { item: CropTemplate }) => (
-    <View style={styles.templateCard}>
-      <View style={styles.templateHeader}>
-        <Text style={styles.templateName}>{item.name}</Text>
-        {item.variety && (
-          <Text style={styles.templateVariety}>品种：{item.variety}</Text>
+  const renderTemplateItem = ({ item }: { item: CropTemplate }) => {
+    const totalDays = item.stages.reduce(
+      (sum, s) => sum + s.duration_days,
+      0
+    );
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.emoji}>{getCropEmoji(item.name)}</Text>
+          <View style={styles.nameSection}>
+            <Text style={styles.templateName}>{item.name}</Text>
+            {item.variety && (
+              <Text style={styles.variety}>{item.variety}</Text>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>全周期</Text>
+          <Text style={styles.totalValue}>
+            {totalDays}
+            <Text style={styles.totalUnit}> 天</Text>
+          </Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.stageList}>
+          {item.stages.map((stage, index) => (
+            <View key={stage.id}>
+              <View style={styles.stageRow}>
+                <View style={styles.stageLeft}>
+                  <View
+                    style={[
+                      styles.stageDot,
+                      index === 0 && styles.stageDotFirst,
+                      index === item.stages.length - 1 &&
+                        styles.stageDotLast,
+                    ]}
+                  />
+                  <Text style={styles.stageName}>{stage.name}</Text>
+                </View>
+                <Text style={styles.stageDuration}>
+                  {stage.duration_days}天
+                </Text>
+              </View>
+              {index < item.stages.length - 1 && (
+                <View style={styles.stageConnector} />
+              )}
+            </View>
+          ))}
+        </View>
+
+        {item.stages.length === 0 && (
+          <Text style={styles.emptyStage}>暂无阶段信息</Text>
         )}
       </View>
-      <Text style={styles.stageTitle}>生长阶段：</Text>
-      {item.stages.map((stage) => (
-        <View key={stage.id} style={styles.stageRow}>
-          <Text style={styles.stageName}>
-            {stage.order_index + 1}. {stage.name}
-          </Text>
-          <Text style={styles.stageDuration}>{stage.duration_days}天</Text>
-        </View>
-      ))}
-      {item.stages.length === 0 && (
-        <Text style={styles.emptyStage}>暂无阶段信息</Text>
-      )}
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>作物模板</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate("CropTemplateCreate")}
-        >
-          <Icon name="plus" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-
       <FlatList
         data={templates}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderTemplateItem}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyContainer}>
+              <Text style={styles.emptyEmoji}>🌱</Text>
               <Text style={styles.emptyText}>暂无作物模板</Text>
             </View>
           ) : null
         }
       />
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate("CropTemplateCreate" as never)}
+        activeOpacity={0.8}
+      >
+        <Icon name="plus" size={24} color={colors.textInverse} />
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  headerTitle: { fontSize: fontSize.xl, fontWeight: "700", color: colors.text },
-  addButton: { padding: spacing.sm },
-  listContent: { padding: spacing.md },
-  templateCard: {
+  listContent: {
+    padding: spacingV2.lg,
+    paddingBottom: 100,
+  },
+  card: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: borderRadiusV2.xxxl,
+    padding: spacingV2.lg,
+    marginBottom: spacingV2.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  templateHeader: { marginBottom: spacing.sm },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacingV2.md,
+  },
+  emoji: {
+    fontSize: 32,
+    marginRight: spacingV2.md,
+  },
+  nameSection: {
+    flex: 1,
+  },
   templateName: {
-    fontSize: fontSize.lg,
+    fontSize: fontSizeV2.xl,
     fontWeight: "700",
     color: colors.text,
   },
-  templateVariety: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+  variety: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textTertiary,
+    marginTop: 2,
   },
-  stageTitle: {
-    fontSize: fontSize.md,
+  totalRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacingV2.sm,
+    marginBottom: spacingV2.md,
+  },
+  totalLabel: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textTertiary,
+  },
+  totalValue: {
+    fontSize: fontSizeV2.xl,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  totalUnit: {
+    fontSize: fontSizeV2.sm,
     fontWeight: "600",
-    marginTop: spacing.sm,
-    color: colors.text,
+    color: colors.primary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginBottom: spacingV2.md,
+  },
+  stageList: {
+    paddingLeft: spacingV2.xs,
   },
   stageRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: spacing.xs,
+    alignItems: "center",
+    paddingVertical: spacingV2.sm,
   },
-  stageName: { fontSize: fontSize.sm, color: colors.text },
-  stageDuration: { fontSize: fontSize.sm, color: colors.textSecondary },
+  stageLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.md,
+  },
+  stageDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.border,
+  },
+  stageDotFirst: {
+    backgroundColor: colors.primary,
+  },
+  stageDotLast: {
+    backgroundColor: colors.success,
+  },
+  stageConnector: {
+    width: 2,
+    height: 16,
+    backgroundColor: colors.borderLight,
+    marginLeft: 3,
+  },
+  stageName: {
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+  },
+  stageDuration: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textTertiary,
+    fontWeight: "500",
+  },
   emptyStage: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    fontSize: fontSizeV2.sm,
+    color: colors.textTertiary,
+    marginTop: spacingV2.sm,
   },
-  emptyContainer: { alignItems: "center", paddingVertical: spacing.xl },
-  emptyText: { color: colors.textSecondary, fontSize: fontSize.md },
+  emptyContainer: {
+    alignItems: "center",
+    paddingVertical: spacingV2.xxxl,
+  },
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: spacingV2.md,
+  },
+  emptyText: {
+    color: colors.textTertiary,
+    fontSize: fontSizeV2.md,
+  },
+  fab: {
+    position: "absolute",
+    right: spacingV2.lg,
+    bottom: spacingV2.lg,
+    width: 56,
+    height: 56,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
 });

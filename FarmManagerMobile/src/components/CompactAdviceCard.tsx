@@ -8,7 +8,6 @@ import {
 } from "react-native";
 import { colors } from "../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
-import { shadowV2 } from "../theme/designTokens";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 export interface CompactAdviceCardProps {
@@ -21,10 +20,10 @@ export interface CompactAdviceCardProps {
 }
 
 const WEATHER_CONFIG = {
-  sunny: { emoji: "🌾", bg: "#FDF6E3" },
-  rainy: { emoji: "🌧️", bg: "#E8F1FF" },
-  foggy: { emoji: "🌫️", bg: "#F0F4F8" },
-  cold: { emoji: "❄️", bg: "#E8F4FF" },
+  sunny: { icon: "white-balance-sunny", bg: "#FDF6E3", color: "#C9A03F" },
+  rainy: { icon: "weather-pouring", bg: "#E8F1FF", color: "#5B8DB8" },
+  foggy: { icon: "weather-fog", bg: "#F0F4F8", color: "#7A8B9A" },
+  cold: { icon: "snowflake", bg: "#E8F4FF", color: "#6B9AD8" },
 };
 
 const DEFAULT_FALLBACK = {
@@ -50,53 +49,55 @@ export const CompactAdviceCard: React.FC<CompactAdviceCardProps> = ({
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
-      style={[styles.card, shadowV2.light]}
+      style={styles.card}
     >
-      {/* Left: Weather Emoji Circle */}
-      <View style={[styles.iconCircle, { backgroundColor: config.bg }]}>
-        <Text style={styles.emoji}>{config.emoji}</Text>
-      </View>
+      <View style={styles.contentRow}>
+        <View style={[styles.iconCircle, { backgroundColor: config.bg }]}>
+          <Icon name={config.icon} size={24} color={config.color} />
+        </View>
 
-      {/* Middle: Preview Text + Item Count */}
-      <View style={styles.middle}>
-        {loading ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.loadingText}>AI 正在分析...</Text>
+        <View style={styles.middle}>
+          <View style={styles.labelRow}>
+            <View style={styles.aiIndicator}>
+              <View style={styles.aiDot} />
+              <Text style={styles.aiLabel}>AI 每日建议</Text>
+            </View>
           </View>
-        ) : (
-          <>
-            <Text style={styles.previewText} numberOfLines={1}>
-              {displayText}
-            </Text>
-            <Text style={styles.itemCountText}>
-              {itemCount > 0 ? `${itemCount} 条建议` : "暂无建议"}
-            </Text>
-          </>
-        )}
-      </View>
 
-      {/* Right: Chevron or Refresh */}
-      <View style={styles.right}>
-        {onRefresh && !loading && (
-          <TouchableOpacity
-            onPress={onRefresh}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={styles.refreshBtn}
-          >
-            <Icon
-              name="refresh"
-              size={16}
-              color={colors.textTertiary}
-            />
-          </TouchableOpacity>
-        )}
-        <Icon
-          name="chevron-right"
-          size={20}
-          color={colors.textTertiary}
-        />
+          {loading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.loadingText}>正在分析农事数据...</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.previewText} numberOfLines={1}>
+                {displayText}
+              </Text>
+              <Text style={styles.metaText}>
+                {itemCount > 0 ? `${itemCount} 条建议待查看` : "暂无建议"}
+              </Text>
+            </>
+          )}
+        </View>
+
+        <View style={styles.right}>
+          {onRefresh && !loading && (
+            <TouchableOpacity
+              onPress={onRefresh}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.refreshBtn}
+            >
+              <Icon name="refresh" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+          <Icon
+            name="chevron-right"
+            size={20}
+            color={colors.textTertiary}
+          />
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -104,46 +105,66 @@ export const CompactAdviceCard: React.FC<CompactAdviceCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 88,
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxxl,
-    paddingHorizontal: spacingV2.lg,
-    paddingVertical: spacingV2.md,
+    padding: spacingV2.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  contentRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacingV2.md,
   },
   iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: borderRadiusV2.lg,
     alignItems: "center",
     justifyContent: "center",
-  },
-  emoji: {
-    fontSize: 28,
-    lineHeight: 32,
   },
   middle: {
     flex: 1,
     justifyContent: "center",
+  },
+  labelRow: {
+    marginBottom: 4,
+  },
+  aiIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  aiDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.aiPurple,
+  },
+  aiLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.aiPurple,
+    letterSpacing: 0.3,
   },
   previewText: {
     fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
     lineHeight: 22,
+    marginBottom: 2,
   },
-  itemCountText: {
+  metaText: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 18,
   },
   right: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacingV2.sm,
+    gap: spacingV2.xs,
   },
   refreshBtn: {
     padding: spacingV2.xs,
@@ -156,6 +177,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: fontSizeV2.md,
     color: colors.textSecondary,
-    fontWeight: "600",
+    fontWeight: "500",
   },
 });

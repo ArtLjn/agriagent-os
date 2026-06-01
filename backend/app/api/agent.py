@@ -410,7 +410,7 @@ async def list_reports(
 
     offset = (page - 1) * size
     query = db.query(AgentRecord).filter(AgentRecord.farm_id == farm.id)
-    query = query.filter(AgentRecord.record_type == "report")
+    query = query.filter(AgentRecord.record_type.in_(["report", "weekly", "monthly"]))
     total = query.with_entities(sqlfunc.count(AgentRecord.id)).scalar() or 0
     records = (
         query.order_by(AgentRecord.created_at.desc()).offset(offset).limit(size).all()
@@ -419,7 +419,7 @@ async def list_reports(
         ReportHistoryItem(
             id=r.id,
             cycle_id=r.cycle_id,
-            record_type=r.record_type,
+            report_type=r.record_type,
             content=r.content,
             created_at=r.created_at,
         )

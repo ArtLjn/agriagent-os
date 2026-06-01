@@ -31,7 +31,7 @@ class FarmStatusSkill(Skill):
         farm_id = getattr(context, "farm_id", 1) or 1
         db = SessionLocal()
         try:
-            summary = farm_context_service.build_summary(db, farm_id=farm_id)
+            summary = await farm_context_service.build_summary(db, farm_id=farm_id)
             return SkillResult(status=ResultStatus.SUCCESS, reply=summary)
         except Exception as e:
             logger.error("get_farm_status 失败 | farm_id=%d | error=%s", farm_id, e)

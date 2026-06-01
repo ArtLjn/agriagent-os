@@ -38,5 +38,18 @@ FarmManagerMobile/android/android/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
+
+# Generated
+model_list.json
+
+# Personal
+bug.todo.md
+
+# Root temp (not part of any project)
+/package.json
+/package-lock.json
+
 .github/workflows/
 .worktrees/
