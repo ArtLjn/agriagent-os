@@ -325,6 +325,39 @@ class TestCooldown:
         manager._cooldowns[key].until = datetime.now() - timedelta(minutes=1)
         assert manager.is_cooled_down(key) is False
 
+    def test_quota_exhausted_immediate_dead(self, tmp_path):
+        """QUOTA_EXHAUSTED 应立即将熔断设为 DEAD，跳过指数退避。"""
+        manager = self._make_manager(tmp_path)
+        key = "test/m1"
+        manager.record_failure(key, error_level=ErrorLevel.QUOTA_EXHAUSTED)
+        entry = manager._cooldowns[key]
+        assert entry.state == LLMCircuitState.DEAD
+        assert entry.failures == 1
+
+    def test_quota_exhausted_skips_exponential_backoff(self, tmp_path):
+        """QUOTA_EXHAUSTED 应跳过指数退避，cooldown_minutes 为 0。"""
+        manager = self._make_manager(tmp_path)
+        key = "test/m1"
+        manager.record_failure(key, error_level=ErrorLevel.QUOTA_EXHAUSTED)
+        entry = manager._cooldowns[key]
+        assert entry.cooldown_minutes == 0
+
+    def test_quota_exhausted_is_permanently_dead(self, tmp_path):
+        """QUOTA_EXHAUSTED 设为 DEAD 后，is_cooled_down 应永久返回 True。"""
+        manager = self._make_manager(tmp_path)
+        key = "test/m1"
+        manager.record_failure(key, error_level=ErrorLevel.QUOTA_EXHAUSTED)
+        assert manager.is_cooled_down(key) is True
+
+    def test_none_error_level_preserves_existing_behavior(self, tmp_path):
+        """error_level=None 时应保持原有指数退避逻辑。"""
+        manager = self._make_manager(tmp_path)
+        key = "test/m1"
+        manager.record_failure(key, error_level=None)
+        entry = manager._cooldowns[key]
+        assert entry.state == LLMCircuitState.COOLING
+        assert entry.cooldown_minutes == 2
+
 
 class TestKeyRotation:
     """测试 API key 轮询。"""

@@ -299,12 +299,15 @@ class LLMClientManager:
             "base_url": provider.base_url,
         }
 
-    def record_failure(self, key: str) -> None:
+    def record_failure(self, key: str, error_level: ErrorLevel | None = None) -> None:
         """记录失败并分级升级熔断状态。"""
         entry = self._cooldowns.get(key, CircuitEntry())
         entry.failures += 1
 
-        if entry.failures >= 10:
+        if error_level == ErrorLevel.QUOTA_EXHAUSTED:
+            entry.state = LLMCircuitState.DEAD
+            entry.cooldown_minutes = 0
+        elif entry.failures >= 10:
             entry.state = LLMCircuitState.DEAD
             entry.cooldown_minutes = 0
         elif entry.failures >= 4:

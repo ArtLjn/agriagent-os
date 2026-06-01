@@ -188,8 +188,8 @@ def _record_llm_failure(circuit_key: str, exc: Exception) -> None:
         from app.core.llm_client_manager import get_llm_manager, classify_error
         manager = get_llm_manager()
         if not manager.fallback_mode:
-            manager.record_failure(circuit_key)
             level = classify_error(exc)
+            manager.record_failure(circuit_key, error_level=level)
             logger.warning(
                 "LLM 故障记录 | key=%s | level=%s | error=%s",
                 circuit_key, level.value, str(exc)[:120],
