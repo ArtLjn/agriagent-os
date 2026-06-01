@@ -51,6 +51,7 @@ class AIConfig(BaseModel):
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     enable_thinking: bool = False
     parallel_tool_calls: bool = True
+    failover_max_retries: int = 3
 
 
 class WeatherConfig(BaseModel):
