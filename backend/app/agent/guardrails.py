@@ -71,6 +71,32 @@ _TOOL_CALL_LEAK_RE = re.compile(
     r"\[\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\([^\]]*\)\s*\]"
 )
 
+# JSON 格式工具调用泄漏（LLM 在 content 中输出伪 function call JSON）
+_JSON_TOOL_CALL_RE = re.compile(
+    r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}',
+    re.DOTALL,
+)
+
+# 更通用的 JSON action 泄漏
+_JSON_ACTION_RE = re.compile(
+    r'\{\s*"(?:name|action|tool|function)"\s*:\s*"[^"]+"\s*,'
+    r'\s*"(?:parameters|params|args|arguments)"\s*:\s*\{',
+    re.DOTALL,
+)
+
+_FALLBACK_TOOL_CALL_REPLY = "我来为您处理这个请求，请稍等。"
+
+
+def _is_mostly_json_tool_call(text: str) -> bool:
+    """判断文本是否主要由 JSON 工具调用组成。"""
+    if not text:
+        return False
+    # 如果文本匹配 JSON 工具调用正则，且去除后剩余内容很少
+    cleaned = _JSON_TOOL_CALL_RE.sub("", text).strip()
+    # 去除 emoji 和标点
+    cleaned = re.sub(r"[\s -⁯⸀-⹿\\'!\"#$%&()*+,./:;<=>?@[\]^_`{|}~]", "", cleaned)
+    return len(cleaned) < 10
+
 
 def filter_output(text: str) -> str:
     """过滤输出中的不安全内容和 PII 信息。"""
@@ -79,14 +105,24 @@ def filter_output(text: str) -> str:
 
     result = text
 
-    # 1. 过滤工具调用语法泄漏
+    # 1. 过滤工具调用语法泄漏 [tool(args)]
     result, count = _TOOL_CALL_LEAK_RE.subn("", result)
     if count:
         logger.info("Guardrails 过滤工具调用泄漏 | count=%d", count)
-        # 清理可能留下的多余空行
         result = re.sub(r"\n{3,}", "\n\n", result).strip()
 
-    # 2. 过滤 PII
+    # 2. 过滤 JSON 格式工具调用泄漏
+    if _JSON_TOOL_CALL_RE.search(result) or _JSON_ACTION_RE.search(result):
+        logger.warning("Guardrails 检测到 JSON 工具调用泄漏 | text=%s", result[:200])
+        if _is_mostly_json_tool_call(result):
+            logger.warning("Guardrails 拦截纯 JSON 工具调用回复，返回 fallback")
+            return _FALLBACK_TOOL_CALL_REPLY
+        # 如果只是包含部分 JSON，尝试移除
+        result, count = _JSON_TOOL_CALL_RE.subn("", result)
+        if count:
+            result = re.sub(r"\n{3,}", "\n\n", result).strip()
+
+    # 3. 过滤 PII
     for name, (pattern, replacement) in _PII_PATTERNS.items():
         result, count = pattern.subn(replacement, result)
         if count:
