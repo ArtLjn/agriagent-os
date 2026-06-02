@@ -85,10 +85,17 @@ export interface AdviceItem {
   icon: string;
 }
 
+export interface PendingActionContext {
+  original_input: string;
+  extracted_params: Record<string, unknown>;
+  notes: string[];
+}
+
 export interface PendingAction {
   action_id: string;
   skill_name: string;
   params: Record<string, any>;
+  context?: PendingActionContext | null;
 }
 
 export interface ChatMessage {

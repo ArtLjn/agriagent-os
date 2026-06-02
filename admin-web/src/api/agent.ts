@@ -54,10 +54,17 @@ export async function chat(data: ChatRequest): Promise<ChatResponse> {
   return res.data;
 }
 
+export interface PendingActionContext {
+  original_input: string;
+  extracted_params: Record<string, unknown>;
+  notes: string[];
+}
+
 export interface PendingAction {
   action_id: string;
   skill_name: string;
   params: Record<string, any>;
+  context?: PendingActionContext | null;
 }
 
 export type StreamChunk =

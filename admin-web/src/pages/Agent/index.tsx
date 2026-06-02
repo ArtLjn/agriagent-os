@@ -74,6 +74,16 @@ function ChatBubble({ role, content, pendingAction, onAction }: { role: string; 
         wordBreak: 'break-word',
       }}>
         {isUser ? content : <MarkdownContent content={content} />}
+        {!isUser && pendingAction?.context && (
+          <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(139,148,158,0.08)', borderRadius: 8, fontSize: 13, color: '#8b949e' }}>
+            {pendingAction.context.original_input && (
+              <div style={{ marginBottom: 4 }}>📝 理解：您说的是「{pendingAction.context.original_input}」</div>
+            )}
+            {pendingAction.context.notes?.map((note, i) => (
+              <div key={i} style={{ marginBottom: i < pendingAction.context!.notes.length - 1 ? 4 : 0 }}>{note}</div>
+            ))}
+          </div>
+        )}
         {!isUser && pendingAction && onAction && (
           <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
             <Button size="small" type="primary" onClick={() => onAction('确认')}>确认</Button>

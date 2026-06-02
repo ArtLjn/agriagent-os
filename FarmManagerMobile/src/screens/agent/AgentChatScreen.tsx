@@ -102,6 +102,18 @@ export const AgentChatScreen: React.FC = () => {
               <MarkdownText text={item.content} baseStyle={styles.agentText} />
             </View>
           )}
+          {hasPendingAction && item.pending_action?.context && (
+            <View style={styles.contextBox}>
+              {item.pending_action.context.original_input ? (
+                <Text style={styles.contextText}>
+                  📝 理解：您说的是「{item.pending_action.context.original_input}」
+                </Text>
+              ) : null}
+              {item.pending_action.context.notes?.map((note, i) => (
+                <Text key={i} style={styles.contextText}>{note}</Text>
+              ))}
+            </View>
+          )}
           {hasPendingAction && (
             <View style={styles.confirmBar}>
               <TouchableOpacity
@@ -590,6 +602,19 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: colors.disabledBg,
+  },
+
+  // ─── Context box ───
+  contextBox: {
+    marginTop: spacingV2.sm,
+    padding: spacingV2.sm,
+    backgroundColor: "rgba(139,148,158,0.08)",
+    borderRadius: borderRadiusV2.md,
+  },
+  contextText: {
+    fontSize: 13,
+    color: colors.textTertiary,
+    lineHeight: 18,
   },
 
   // ─── Confirm bar ───
