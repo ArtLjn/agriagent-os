@@ -24,6 +24,7 @@ from app.infra.pending_actions import (
     store_pending,
 )
 from app.agent.prompt_composer import get_composer
+from app.agent.prompt_cache import get_farm_ctx_cache, get_prompt_cache
 from app.core.date_context import get_request_date
 from app.core.database import SessionLocal
 from app.core.config import settings
@@ -313,7 +314,11 @@ def _record_llm_success(circuit_key: str) -> None:
 
 
 async def _get_farm_context(farm_id: int) -> dict:
-    """异步获取农场上下文（位置、坐标、称呼、种植信息），避免阻塞事件循环。"""
+    """异步获取农场上下文（位置、坐标、称呼、种植信息），带 5 分钟 TTL 缓存。"""
+    cache = get_farm_ctx_cache()
+    cached = cache.get(farm_id)
+    if cached is not None:
+        return cached
 
     def _query() -> dict:
         db = SessionLocal()
@@ -387,7 +392,9 @@ async def _get_farm_context(farm_id: int) -> dict:
         finally:
             db.close()
 
-    return await asyncio.to_thread(_query)
+    result = await asyncio.to_thread(_query)
+    cache.set(farm_id, result)
+    return result
 
 
 async def _llm_node(state: AgentState) -> dict:
@@ -453,18 +460,26 @@ async def _llm_node(state: AgentState) -> dict:
     collector = get_collector()
 
     current_date = get_request_date()
-    current_season = _get_season(current_date)
-    system_text = get_composer().compose(
-        "system_base",
-        variables={
-            "display_name": display_name,
-            "farm_location": farm_location,
-            "farm_coords": farm_ctx["farm_coords"],
-            "current_season": current_season,
-            "active_crops": farm_ctx["active_crops"],
-        },
-        current_date=current_date,
-    )
+    date_str = str(current_date)
+    prompt_cache = get_prompt_cache()
+
+    cached_prompt = prompt_cache.get(farm_id=farm_id, date_str=date_str)
+    if cached_prompt is not None:
+        system_text = cached_prompt
+    else:
+        current_season = _get_season(current_date)
+        system_text = get_composer().compose(
+            "system_base",
+            variables={
+                "display_name": display_name,
+                "farm_location": farm_location,
+                "farm_coords": farm_ctx["farm_coords"],
+                "current_season": current_season,
+                "active_crops": farm_ctx["active_crops"],
+            },
+            current_date=current_date,
+        )
+        prompt_cache.set(farm_id=farm_id, date_str=date_str, value=system_text)
 
     # 记录 prompt_render trace
     collector.record(
