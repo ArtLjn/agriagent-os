@@ -16,6 +16,7 @@ import Playground from './pages/Playground';
 import SkillRegistry from './pages/SkillRegistry';
 import PromptInspector from './pages/PromptInspector';
 import ConfigKeys from './pages/ConfigKeys';
+import Simulation from './pages/Simulation';
 import Users from './pages/Users';
 import Login from './pages/Login';
 import { authStore } from './stores/authStore';
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
           <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
           <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />
+          <Route path="/dev/simulation" element={<AuthGuard><Simulation /></AuthGuard>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

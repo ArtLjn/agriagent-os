@@ -11,6 +11,7 @@ import {
   SettingOutlined,
   TeamOutlined,
   LogoutOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authStore } from '../stores/authStore';
@@ -32,6 +33,7 @@ const menuItems = [
   { key: '/dev/playground', icon: <MessageOutlined />, label: 'Playground' },
   { key: '/dev/skills', icon: <AppstoreOutlined />, label: 'Skill 注册表' },
   { key: '/dev/prompts', icon: <FileSearchOutlined />, label: 'Prompt 检查器' },
+  { key: '/dev/simulation', icon: <ExperimentOutlined />, label: '仿真测试' },
   { key: '/dev/config', icon: <SettingOutlined />, label: '配置管理' },
 ];
 
@@ -42,6 +44,7 @@ const pageTitles: Record<string, string> = {
   '/dev/playground': 'Playground',
   '/dev/skills': 'Skill 注册表',
   '/dev/prompts': 'Prompt 检查器',
+  '/dev/simulation': '仿真测试',
   '/dev/config': '配置管理',
 };
 
