@@ -23,6 +23,7 @@ from app.schemas.agent import (
     ChatRequest,
     ChatResponse,
     DailyAdviceResponse,
+    PendingActionContext,
     PendingActionResponse,
     ReportRequest,
     ReportResponse,
@@ -89,10 +90,18 @@ async def agent_chat(
         # 非流式端点也需要返回 pending_action（供仿真测试等调用方使用）
         pending = get_pending(farm.id)
         if pending:
+            notes = []
+            if pending.original_input:
+                notes.append(f"理解：您说的是「{pending.original_input}」")
             result.pending_action = PendingActionResponse(
                 action_id=pending.action_id,
                 skill_name=pending.skill_name,
                 params=pending.params,
+                context=PendingActionContext(
+                    original_input=pending.original_input,
+                    extracted_params=pending.params,
+                    notes=notes,
+                ),
             )
         logger.info(
             "[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符 | pending=%s",
@@ -208,12 +217,20 @@ async def agent_chat_stream(
 
             pending = get_pending(farm.id)
             if pending:
+                notes = []
+                if pending.original_input:
+                    notes.append(f"理解：您说的是「{pending.original_input}」")
                 pa_event = json.dumps(
                     {
                         "pending_action": {
                             "action_id": pending.action_id,
                             "skill_name": pending.skill_name,
                             "params": pending.params,
+                            "context": {
+                                "original_input": pending.original_input,
+                                "extracted_params": pending.params,
+                                "notes": notes,
+                            },
                         }
                     },
                     ensure_ascii=False,

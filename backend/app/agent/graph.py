@@ -639,6 +639,13 @@ async def _parallel_tool_node(state: AgentState) -> dict:
     tool_map = {t.name: t for t in get_langchain_tools(farm_id=farm_id)}
     collector = get_collector()
 
+    # 获取用户原始输入（最近一条 HumanMessage）
+    original_input = ""
+    for msg in reversed(state.get("messages", [])):
+        if isinstance(msg, HumanMessage):
+            original_input = msg.content[:200]
+            break
+
     async def _call_one(tc: dict) -> ToolMessage:
         name = tc["name"]
         args = tc["args"]
@@ -664,7 +671,9 @@ async def _parallel_tool_node(state: AgentState) -> dict:
 
         # 写操作 Skill 拦截：存储 pending action，不直接执行
         if is_write_skill(name):
-            action_id = store_pending(farm_id, name, args)
+            action_id = store_pending(
+                farm_id, name, args, original_input=original_input
+            )
             logger.info(
                 "写操作 Skill 已拦截 | farm=%s action_id=%s skill=%s",
                 farm_id,
@@ -678,7 +687,9 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                 output_data="已拦截为 pending action",
                 duration_ms=0,
             )
-            confirm_text = build_confirm_message(name, args)
+            confirm_text = build_confirm_message(
+                name, args, original_input=original_input
+            )
             return ToolMessage(
                 content=f"{PENDING_MARKER} {confirm_text}",
                 tool_call_id=tool_call_id,

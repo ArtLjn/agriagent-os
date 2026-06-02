@@ -63,13 +63,16 @@ class PendingAction:
     params: dict
     created_at: float
     farm_id: int
+    original_input: str = ""
 
 
 # 内存字典：farm_id -> PendingAction
 _pending: dict[int, PendingAction] = {}
 
 
-def store_pending(farm_id: int, skill_name: str, params: dict) -> str:
+def store_pending(
+    farm_id: int, skill_name: str, params: dict, original_input: str = ""
+) -> str:
     """存储 pending action，返回 action_id。"""
     action_id = uuid.uuid4().hex
     _pending[farm_id] = PendingAction(
@@ -78,6 +81,7 @@ def store_pending(farm_id: int, skill_name: str, params: dict) -> str:
         params=params,
         created_at=time.time(),
         farm_id=farm_id,
+        original_input=original_input,
     )
     logger.info(
         "Pending action 已存储 | farm_id=%d | action_id=%s | skill=%s",
@@ -123,27 +127,42 @@ def is_write_skill(skill_name: str) -> bool:
 PENDING_MARKER = "[PENDING_ACTION]"
 
 
-def build_confirm_message(skill_name: str, params: dict) -> str:
+def build_confirm_message(
+    skill_name: str, params: dict, original_input: str = ""
+) -> str:
     emoji = _SKILL_EMOJI.get(skill_name, "❓")
     action = _SKILL_DISPLAY.get(skill_name, skill_name)
 
     param_keys = _SKILL_PARAM_FORMAT.get(skill_name, list(params.keys()))
     parts = []
+    param_details = []
     for k in param_keys:
         v = params.get(k)
         if v is not None:
             if k == "amount":
                 parts.append(f"{v}元")
+                param_details.append(f"{k}={v}")
             elif k == "record_type":
                 label = "收入" if v == "income" else "支出"
                 parts.append(label)
+                param_details.append(f"{k}={label}")
             else:
                 parts.append(str(v))
+                param_details.append(f"{k}={v}")
 
     detail = " ".join(parts) if parts else ""
-    if detail:
-        return f"{emoji} 确认{action}：{detail}，确认吗？"
-    return f"{emoji} 确认{action}，确认吗？"
+
+    lines = []
+    lines.append(f"{emoji} 确认{action}：{detail}")
+
+    if original_input:
+        lines.append(f"理解：您说的是「{original_input}」")
+
+    if param_details:
+        lines.append(f"参数：{', '.join(param_details)}")
+
+    lines.append("确认吗？")
+    return "\n".join(lines)
 
 
 def is_pending_tool_message(message) -> bool:

@@ -87,6 +87,18 @@ class TestPendingActionStorage:
         assert len(action_id) == 32
         assert all(c in "0123456789abcdef" for c in action_id)
 
+    def test_store_with_context(self):
+        """存储带上下文的 pending action。"""
+        store_pending(
+            farm_id=1,
+            skill_name="create_cost_record",
+            params={"amount": 200, "category": "化肥"},
+            original_input="昨天买了200块化肥",
+        )
+        result = get_pending(farm_id=1)
+        assert result is not None
+        assert result.original_input == "昨天买了200块化肥"
+
 
 class TestPendingActionTimeout:
     """测试 pending action 超时清理。"""
@@ -415,3 +427,18 @@ class TestBuildConfirmMessageFormat:
 
         msg = build_confirm_message("unknown_skill", {"foo": "bar"})
         assert "确认" in msg
+
+    def test_confirm_message_with_context(self):
+        """三层确认消息包含理解/参数/操作。"""
+        from app.infra.pending_actions import build_confirm_message
+
+        msg = build_confirm_message(
+            "create_cost_record",
+            {"amount": 200, "category": "化肥", "record_type": "cost"},
+            original_input="昨天买了200块化肥",
+        )
+        assert "理解" in msg
+        assert "昨天买了200块化肥" in msg
+        assert "参数" in msg
+        assert "200" in msg
+        assert "化肥" in msg

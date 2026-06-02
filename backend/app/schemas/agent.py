@@ -14,12 +14,21 @@ class ChatRequest(BaseModel):
     simulate_user_id: str | None = Field(None, description="管理员模拟用户ID")
 
 
+class PendingActionContext(BaseModel):
+    """确认消息上下文。"""
+
+    original_input: str = ""
+    extracted_params: dict = {}
+    notes: list[str] = []
+
+
 class PendingActionResponse(BaseModel):
     """待确认操作信息，供前端展示确认 UI。"""
 
     action_id: str
     skill_name: str
     params: dict
+    context: PendingActionContext | None = None
 
 
 class ChatResponse(BaseModel):
