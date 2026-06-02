@@ -428,7 +428,7 @@ async def _llm_node(state: AgentState) -> dict:
     display_name = farm_ctx["display_name"]
     farm_location = farm_ctx["farm_location"]
 
-    tools = get_langchain_tools()
+    tools = get_langchain_tools(farm_id=farm_id)
     has_tool_results = bool(tool_msgs)
 
     raw_llm = get_llm(role="generation")
@@ -635,8 +635,8 @@ async def _parallel_tool_node(state: AgentState) -> dict:
     if not isinstance(last, AIMessage) or not last.tool_calls:
         return {"messages": []}
 
-    tool_map = {t.name: t for t in get_langchain_tools()}
     farm_id = state.get("farm_id", 1)
+    tool_map = {t.name: t for t in get_langchain_tools(farm_id=farm_id)}
     collector = get_collector()
 
     async def _call_one(tc: dict) -> ToolMessage:

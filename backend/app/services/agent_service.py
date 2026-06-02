@@ -96,7 +96,7 @@ async def _execute_pending_action(farm_id: int, skill_name: str, params: dict) -
     error_msg = None
     result_str = ""
     try:
-        tool_map = {t.name: t for t in get_langchain_tools()}
+        tool_map = {t.name: t for t in get_langchain_tools(farm_id=farm_id)}
         tool = tool_map.get(skill_name)
         if not tool:
             return f"未知工具: {skill_name}"

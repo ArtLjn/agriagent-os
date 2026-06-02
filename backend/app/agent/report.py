@@ -13,17 +13,17 @@ from app.agent.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
 
-def _get_report_llm():
+def _get_report_llm(farm_id: int = 1):
     """获取绑定了工具的报告 LLM 实例（每次返回新实例）。"""
-    tools = get_langchain_tools()
+    tools = get_langchain_tools(farm_id=farm_id)
     return get_llm().bind_tools(tools)
 
 
-async def generate_cycle_report(cycle_id: int) -> str:
+async def generate_cycle_report(cycle_id: int, farm_id: int = 1) -> str:
     """生成指定种植周期的综合报告。"""
     start = time.perf_counter()
     logger.info("报告生成开始 | type=cycle | cycle_id=%d", cycle_id)
-    llm = _get_report_llm()
+    llm = _get_report_llm(farm_id=farm_id)
     prompt = (
         f"请为 ID={cycle_id} 的种植周期生成一份综合报告。"
         "请查询该周期的基本信息、最近农事记录和成本收支，"

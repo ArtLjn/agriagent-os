@@ -2,12 +2,15 @@
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, create_model
 from skillify.core.context import SkillContext
 from skillify.manager import SkillManager
+
+from app.core.database import SessionLocal
+from app.services import cost_category_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,12 @@ def get_skill_manager() -> SkillManager:
     return _manager
 
 
-def _schema_to_pydantic(name: str, schema: dict[str, Any]) -> type[BaseModel]:
+def _schema_to_pydantic(
+    name: str,
+    schema: dict[str, Any],
+    *,
+    enums: dict[str, list[str]] | None = None,
+) -> type[BaseModel]:
     """将 JSON Schema 转为 Pydantic BaseModel。"""
     properties = schema.get("properties", {})
     required = set(schema.get("required", []))
@@ -42,14 +50,58 @@ def _schema_to_pydantic(name: str, schema: dict[str, Any]) -> type[BaseModel]:
     type_map = {"string": str, "integer": int, "number": float, "boolean": bool}
 
     for field_name, field_def in properties.items():
-        py_type = type_map.get(field_def.get("type", "string"), str)
+        original_type = type_map.get(field_def.get("type", "string"), str)
+        py_type = original_type
         if field_name not in required:
             py_type = py_type | None
         default = field_def.get("default") if field_name not in required else ...
         desc = field_def.get("description", "")
+
+        enum_values = field_def.get("enum")
+        if enums and field_name in enums:
+            enum_values = enums[field_name]
+
+        if enum_values and original_type is str:
+            literal_type = Literal[tuple(enum_values)]
+            py_type = literal_type if field_name in required else literal_type | None
+
         fields[field_name] = (py_type, Field(default=default, description=desc))
 
     return create_model(f"{name}Schema", **fields)
+
+
+_DEFAULT_CATEGORY_ENUM = ["化肥", "种子", "农药", "人工", "其他"]
+_category_cache: dict[int, list[str]] = {}
+
+
+def get_category_enum(farm_id: int) -> list[str]:
+    """从数据库加载 farm 的分类标签列表，结果缓存。"""
+    if farm_id in _category_cache:
+        return _category_cache[farm_id]
+    try:
+        db = SessionLocal()
+        try:
+            categories = cost_category_service.get_categories(db, farm_id)
+            names = [c.name for c in categories]
+        finally:
+            db.close()
+        if not names:
+            names = list(_DEFAULT_CATEGORY_ENUM)
+        _category_cache[farm_id] = names
+        return names
+    except Exception:
+        logger.warning("分类加载失败，使用默认 enum | farm_id=%d", farm_id)
+        default = list(_DEFAULT_CATEGORY_ENUM)
+        _category_cache[farm_id] = default
+        return default
+
+
+def clear_category_cache(farm_id: int | None = None) -> None:
+    """清除分类缓存。farm_id=None 时清除全部。"""
+    if farm_id is None:
+        _category_cache.clear()
+    else:
+        _category_cache.pop(farm_id, None)
 
 
 def _make_sync_fn(skill):
@@ -76,14 +128,21 @@ def _make_async_fn(skill):
     return coro
 
 
-def skills_to_langchain_tools(manager: SkillManager) -> list[StructuredTool]:
+def skills_to_langchain_tools(
+    manager: SkillManager, farm_id: int = 1
+) -> list[StructuredTool]:
     """将 skillify Skills 转为 LangChain StructuredTool 列表。"""
+    category_enum = get_category_enum(farm_id)
+    enums_map = {"category": category_enum} if category_enum else {}
+
     tools = []
     for skill_def in manager.list_skills():
         skill = manager.get_skill(skill_def.name)
         if not skill:
             continue
-        args_schema = _schema_to_pydantic(skill.name(), skill.parameters_schema())
+        args_schema = _schema_to_pydantic(
+            skill.name(), skill.parameters_schema(), enums=enums_map
+        )
         tools.append(
             StructuredTool(
                 name=skill.name(),
@@ -96,9 +155,9 @@ def skills_to_langchain_tools(manager: SkillManager) -> list[StructuredTool]:
     return tools
 
 
-def get_langchain_tools() -> list[StructuredTool]:
+def get_langchain_tools(farm_id: int = 1) -> list[StructuredTool]:
     """获取 LangChain Tool 列表（供 LangGraph 使用）。"""
-    return skills_to_langchain_tools(get_skill_manager())
+    return skills_to_langchain_tools(get_skill_manager(), farm_id=farm_id)
 
 
 _SKILL_REGISTRY: dict = {}
@@ -172,4 +231,6 @@ __all__ = [
     "get_skill_registry",
     "clear_skill_cache",
     "build_skill_context",
+    "get_category_enum",
+    "clear_category_cache",
 ]
