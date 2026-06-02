@@ -220,10 +220,7 @@ export const CostListScreen: React.FC = () => {
       <SectionList
         sections={sections}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={[
-          styles.listContent,
-          sections.length === 0 && styles.listEmpty,
-        ]}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
@@ -372,11 +369,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 100,
   },
-  listEmpty: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   filterSection: {
     marginBottom: spacingV2.sm,
   },
@@ -462,7 +454,9 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacingV2.xxxl,
+    minHeight: 280,
   },
   emptyText: {
     fontSize: fontSizeV2.lg,

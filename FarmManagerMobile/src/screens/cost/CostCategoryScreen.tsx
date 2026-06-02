@@ -31,45 +31,47 @@ function getCategoryIcon(name: string): string {
   return CATEGORY_ICONS[name] || "tag-outline";
 }
 
-const TYPE_COLORS = {
-  cost: { dot: colors.expense, text: colors.text },
-  income: { dot: colors.income, text: colors.text },
+const TAB_CONFIG = {
+  cost: {
+    label: "支出",
+    color: colors.expense,
+    bg: colors.expenseBg,
+    icon: "arrow-down-circle",
+  },
+  income: {
+    label: "收入",
+    color: colors.income,
+    bg: colors.incomeBg,
+    icon: "arrow-up-circle",
+  },
 };
 
-const CategoryItem: React.FC<{
+const CategoryRow: React.FC<{
   name: string;
   type: "cost" | "income";
   isSystem: boolean;
   onDelete?: () => void;
 }> = ({ name, type, isSystem, onDelete }) => {
-  const theme = TYPE_COLORS[type];
+  const config = TAB_CONFIG[type];
   return (
-    <View style={styles.categoryItem}>
-      <View style={styles.categoryLeft}>
-        <View style={[styles.categoryDot, { backgroundColor: theme.dot }]} />
-        <Icon
-          name={getCategoryIcon(name)}
-          size={18}
-          color={colors.textTertiary}
-          style={{ marginRight: spacingV2.sm }}
-        />
-        <Text style={styles.categoryName}>{name}</Text>
+    <View style={styles.row}>
+      <View style={styles.rowLeft}>
+        <View style={[styles.rowIcon, { backgroundColor: config.bg }]}>
+          <Icon name={getCategoryIcon(name)} size={20} color={config.color} />
+        </View>
+        <Text style={styles.rowName}>{name}</Text>
       </View>
-      <View style={styles.categoryRight}>
-        {isSystem && (
-          <Text style={styles.systemTag}>系统预设</Text>
-        )}
-        {!isSystem && (
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={onDelete}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Icon name="trash-can-outline" size={18} color={colors.textTertiary} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {isSystem ? (
+        <Text style={styles.rowSystem}>系统</Text>
+      ) : (
+        <TouchableOpacity
+          onPress={onDelete}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Icon name="close" size={18} color={colors.textTertiary} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -84,9 +86,10 @@ export const CostCategoryScreen: React.FC = () => {
     clearError,
   } = useCategoryStore();
 
+  const [activeTab, setActiveTab] = useState<"cost" | "income">("cost");
   const [modalVisible, setModalVisible] = useState(false);
-  const [categoryType, setCategoryType] = useState<"cost" | "income">("cost");
-  const [categoryName, setCategoryName] = useState("");
+  const [newType, setNewType] = useState<"cost" | "income">("cost");
+  const [newName, setNewName] = useState("");
 
   useEffect(() => {
     fetchCategories();
@@ -99,28 +102,27 @@ export const CostCategoryScreen: React.FC = () => {
     }
   }, [error]);
 
+  const filtered = categories.filter((c) => c.type === activeTab);
+  const config = TAB_CONFIG[activeTab];
+
   const handleCreate = async () => {
-    if (!categoryName.trim()) {
+    const name = newName.trim();
+    if (!name) {
       Alert.alert("提示", "请输入分类名称");
       return;
     }
-
     try {
-      await createCategory({
-        name: categoryName.trim(),
-        type: categoryType,
-        icon: "tag",
-      });
+      await createCategory({ name, type: newType, icon: "tag" });
       setModalVisible(false);
-      setCategoryName("");
-      setCategoryType("cost");
+      setNewName("");
+      setNewType("cost");
     } catch {
-      // Error 已在 store 中处理
+      // store 已处理
     }
   };
 
   const handleDelete = (id: number, name: string) => {
-    Alert.alert("确认删除", `确定要删除分类"${name}"吗？`, [
+    Alert.alert("确认删除", `确定要删除"${name}"吗？`, [
       { text: "取消", style: "cancel" },
       {
         text: "删除",
@@ -129,110 +131,126 @@ export const CostCategoryScreen: React.FC = () => {
           try {
             await deleteCategory(id);
           } catch {
-            // Error 已在 store 中处理
+            // store 已处理
           }
         },
       },
     ]);
   };
 
-  const expenseCategories = categories.filter((c) => c.type === "cost");
-  const incomeCategories = categories.filter((c) => c.type === "income");
+  const openModal = () => {
+    setNewType(activeTab);
+    setNewName("");
+    setModalVisible(true);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      {/* 页面头部 */}
-      <View style={styles.pageHeader}>
-        <View>
-          <Text style={styles.pageHeaderTitle}>收支分类</Text>
-          <Text style={styles.pageHeaderSub}>
-            管理记账所需的支出与收入分类
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 描述 */}
+        <Text style={styles.subtitle}>
+          自定义记账分类，让收支更清晰
+        </Text>
+
+        {/* 分段切换 */}
+        <View style={styles.segmentBg}>
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              activeTab === "cost" && styles.segmentBtnActive,
+            ]}
+            onPress={() => setActiveTab("cost")}
+            activeOpacity={0.8}
+          >
+            <Icon
+              name="arrow-down-circle"
+              size={16}
+              color={activeTab === "cost" ? colors.expense : colors.textTertiary}
+            />
+            <Text
+              style={[
+                styles.segmentText,
+                activeTab === "cost" && { color: colors.expense, fontWeight: "700" },
+              ]}
+            >
+              支出
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.segmentBtn,
+              activeTab === "income" && styles.segmentBtnActive,
+            ]}
+            onPress={() => setActiveTab("income")}
+            activeOpacity={0.8}
+          >
+            <Icon
+              name="arrow-up-circle"
+              size={16}
+              color={activeTab === "income" ? colors.income : colors.textTertiary}
+            />
+            <Text
+              style={[
+                styles.segmentText,
+                activeTab === "income" && { color: colors.income, fontWeight: "700" },
+              ]}
+            >
+              收入
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 分类数量 */}
+        <View style={styles.countRow}>
+          <Text style={styles.countLabel}>
+            {config.label}分类
+          </Text>
+          <Text style={[styles.countValue, { color: config.color }]}>
+            {filtered.length}
           </Text>
         </View>
-      </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* 支出分类 */}
-        <View style={styles.sectionHeader}>
-          <View
-            style={[styles.sectionDot, { backgroundColor: colors.expense }]}
-          />
-          <Text style={styles.sectionTitle}>支出分类</Text>
-          <View style={styles.sectionCountBg}>
-            <Text style={styles.sectionCount}>
-              {expenseCategories.length}
+        {/* 列表 */}
+        {filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <View style={[styles.emptyIcon, { backgroundColor: config.bg }]}>
+              <Icon name={config.icon} size={32} color={config.color} />
+            </View>
+            <Text style={styles.emptyTitle}>
+              暂无{config.label}分类
+            </Text>
+            <Text style={styles.emptySub}>
+              点击右下角按钮添加第一个分类
             </Text>
           </View>
-        </View>
-        {expenseCategories.length === 0 && (
-          <View style={styles.emptySection}>
-            <Text style={styles.emptySectionText}>暂无自定义支出分类</Text>
+        ) : (
+          <View style={styles.listCard}>
+            {filtered.map((cat, i) => (
+              <View key={cat.id}>
+                <CategoryRow
+                  name={cat.name}
+                  type={cat.type as "cost" | "income"}
+                  isSystem={cat.is_default}
+                  onDelete={() => handleDelete(cat.id, cat.name)}
+                />
+                {i < filtered.length - 1 && <View style={styles.divider} />}
+              </View>
+            ))}
           </View>
         )}
-        <View style={styles.listCard}>
-          {expenseCategories.map((category, index) => (
-            <View key={category.id}>
-              <CategoryItem
-                name={category.name}
-                type="cost"
-                isSystem={category.is_default}
-                onDelete={() => handleDelete(category.id, category.name)}
-              />
-              {index < expenseCategories.length - 1 && (
-                <View style={styles.divider} />
-              )}
-            </View>
-          ))}
-        </View>
 
-        {/* 收入分类 */}
-        <View style={[styles.sectionHeader, { marginTop: spacingV2.lg }]}>
-          <View
-            style={[
-              styles.sectionDot,
-              { backgroundColor: colors.income },
-            ]}
-          />
-          <Text style={styles.sectionTitle}>收入分类</Text>
-          <View style={styles.sectionCountBg}>
-            <Text style={styles.sectionCount}>
-              {incomeCategories.length}
-            </Text>
-          </View>
-        </View>
-        {incomeCategories.length === 0 && (
-          <View style={styles.emptySection}>
-            <Text style={styles.emptySectionText}>暂无自定义收入分类</Text>
-          </View>
-        )}
-        <View style={styles.listCard}>
-          {incomeCategories.map((category, index) => (
-            <View key={category.id}>
-              <CategoryItem
-                name={category.name}
-                type="income"
-                isSystem={category.is_default}
-                onDelete={() => handleDelete(category.id, category.name)}
-              />
-              {index < incomeCategories.length - 1 && (
-                <View style={styles.divider} />
-              )}
-            </View>
-          ))}
-        </View>
-
-        {/* 新增按钮 */}
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setModalVisible(true)}
-          activeOpacity={0.7}
-        >
-          <Icon name="plus-circle" size={20} color="#FFFFFF" />
-          <Text style={styles.addBtnText}>新增分类</Text>
-        </TouchableOpacity>
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* 新增分类弹窗 */}
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={openModal} activeOpacity={0.8}>
+        <Icon name="plus" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* 新增弹窗 */}
       <Modal
         visible={modalVisible}
         transparent
@@ -240,39 +258,37 @@ export const CostCategoryScreen: React.FC = () => {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            onPress={() => setModalVisible(false)}
+            activeOpacity={1}
+          />
+          <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>新增分类</Text>
-              <Text style={styles.modalSubtitle}>添加自定义收支分类</Text>
-            </View>
 
-            {/* 类型选择 */}
-            <Text style={styles.label}>分类类型</Text>
-            <View style={styles.typeSelector}>
+            <Text style={styles.modalTitle}>新增{TAB_CONFIG[newType].label}分类</Text>
+
+            {/* 类型切换 */}
+            <View style={styles.modalTabs}>
               <TouchableOpacity
                 style={[
-                  styles.typeButton,
-                  categoryType === "cost" &&
-                    styles.typeButtonActiveCost,
+                  styles.modalTab,
+                  newType === "cost" && {
+                    backgroundColor: colors.expenseBg,
+                    borderColor: colors.expense,
+                  },
                 ]}
-                onPress={() => setCategoryType("cost")}
-                activeOpacity={0.7}
+                onPress={() => setNewType("cost")}
               >
                 <Icon
                   name="arrow-down-circle"
-                  size={20}
-                  color={
-                    categoryType === "cost"
-                      ? colors.expense
-                      : colors.textTertiary
-                  }
+                  size={18}
+                  color={newType === "cost" ? colors.expense : colors.textTertiary}
                 />
                 <Text
                   style={[
-                    styles.typeButtonText,
-                    categoryType === "cost" &&
-                      styles.typeButtonTextActive,
+                    styles.modalTabText,
+                    newType === "cost" && { color: colors.expense, fontWeight: "700" },
                   ]}
                 >
                   支出
@@ -280,27 +296,23 @@ export const CostCategoryScreen: React.FC = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.typeButton,
-                  categoryType === "income" &&
-                    styles.typeButtonActiveIncome,
+                  styles.modalTab,
+                  newType === "income" && {
+                    backgroundColor: colors.incomeBg,
+                    borderColor: colors.income,
+                  },
                 ]}
-                onPress={() => setCategoryType("income")}
-                activeOpacity={0.7}
+                onPress={() => setNewType("income")}
               >
                 <Icon
                   name="arrow-up-circle"
-                  size={20}
-                  color={
-                    categoryType === "income"
-                      ? colors.income
-                      : colors.textTertiary
-                  }
+                  size={18}
+                  color={newType === "income" ? colors.income : colors.textTertiary}
                 />
                 <Text
                   style={[
-                    styles.typeButtonText,
-                    categoryType === "income" &&
-                      styles.typeButtonTextActive,
+                    styles.modalTabText,
+                    newType === "income" && { color: colors.income, fontWeight: "700" },
                   ]}
                 >
                   收入
@@ -308,44 +320,27 @@ export const CostCategoryScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            {/* 名称输入 */}
-            <Text style={styles.label}>分类名称</Text>
-            <View style={styles.inputWrapper}>
-              <Icon
-                name="pencil"
-                size={18}
-                color={colors.textTertiary}
-                style={{ marginRight: spacingV2.sm }}
-              />
+            {/* 输入 */}
+            <View style={styles.inputWrap}>
               <TextInput
                 style={styles.input}
-                value={categoryName}
-                onChangeText={setCategoryName}
-                placeholder="例如：种子、化肥、销售..."
+                value={newName}
+                onChangeText={setNewName}
+                placeholder={`输入${TAB_CONFIG[newType].label}分类名称`}
+                placeholderTextColor={colors.textTertiary}
                 autoFocus
+                maxLength={20}
               />
             </View>
 
-            {/* 按钮组 */}
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setModalVisible(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalButtonTextCancel}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.modalButtonConfirm,
-                ]}
-                onPress={handleCreate}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalButtonTextConfirm}>确定</Text>
-              </TouchableOpacity>
-            </View>
+            {/* 按钮 */}
+            <TouchableOpacity
+              style={[styles.createBtn, { backgroundColor: colors.primary }]}
+              onPress={handleCreate}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.createBtnText}>创建</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -358,136 +353,159 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  pageHeader: {
+  scroll: {
     paddingHorizontal: spacingV2.lg,
-    paddingVertical: spacingV2.lg,
-  },
-  pageHeaderTitle: {
-    fontSize: fontSizeV2.xl,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.3,
-  },
-  pageHeaderSub: {
-    fontSize: fontSizeV2.sm,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  content: {
-    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.md,
     paddingBottom: spacingV2.xxxl,
   },
-  sectionHeader: {
+  subtitle: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    marginBottom: spacingV2.lg,
+  },
+  // 分段控制器
+  segmentBg: {
+    flexDirection: "row",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadiusV2.lg,
+    padding: 4,
+    marginBottom: spacingV2.lg,
+  },
+  segmentBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacingV2.sm,
-    gap: spacingV2.sm,
+    justifyContent: "center",
+    gap: spacingV2.xs,
+    paddingVertical: 10,
+    borderRadius: borderRadiusV2.md,
   },
-  sectionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  segmentBtnActive: {
+    backgroundColor: colors.surface,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  sectionTitle: {
+  segmentText: {
+    fontSize: fontSizeV2.md,
+    color: colors.textSecondary,
+    fontWeight: "500",
+  },
+  // 数量
+  countRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    marginBottom: spacingV2.md,
+  },
+  countLabel: {
     fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
   },
-  sectionCountBg: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: borderRadiusV2.sm,
-    paddingHorizontal: spacingV2.sm,
-    paddingVertical: 2,
-    marginLeft: "auto",
+  countValue: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "800",
   },
-  sectionCount: {
-    fontSize: fontSizeV2.xs,
-    color: colors.textTertiary,
-    fontWeight: "700",
-  },
-  emptySection: {
-    paddingVertical: spacingV2.xl,
-    alignItems: "center",
-  },
-  emptySectionText: {
-    fontSize: fontSizeV2.sm,
-    color: colors.textTertiary,
-  },
+  // 列表
   listCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxxl,
-    paddingHorizontal: spacingV2.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    overflow: "hidden",
   },
-  categoryItem: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: spacingV2.md,
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.md + 2,
   },
-  categoryLeft: {
+  rowLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacingV2.sm,
+    gap: spacingV2.md,
     flex: 1,
   },
-  categoryDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  rowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  categoryName: {
+  rowName: {
     fontSize: fontSizeV2.md,
+    fontWeight: "600",
     color: colors.text,
-    fontWeight: "500",
-    flex: 1,
   },
-  categoryRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  systemTag: {
+  rowSystem: {
     fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
     fontWeight: "500",
-  },
-  deleteBtn: {
-    padding: spacingV2.xs,
   },
   divider: {
     height: 1,
     backgroundColor: colors.borderLight,
+    marginLeft: spacingV2.lg + 40 + spacingV2.md,
   },
-  addBtn: {
-    flexDirection: "row",
+  // 空状态
+  empty: {
+    alignItems: "center",
+    paddingVertical: spacingV2.xxxl,
+  },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary,
-    borderRadius: borderRadiusV2.lg,
-    paddingVertical: spacingV2.md,
-    marginTop: spacingV2.lg,
-    gap: spacingV2.sm,
+    marginBottom: spacingV2.lg,
   },
-  addBtnText: {
-    color: "#FFFFFF",
-    fontSize: fontSizeV2.md,
+  emptyTitle: {
+    fontSize: fontSizeV2.lg,
     fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacingV2.xs,
   },
+  emptySub: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textTertiary,
+  },
+  // FAB
+  fab: {
+    position: "absolute",
+    right: spacingV2.lg,
+    bottom: spacingV2.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  // 弹窗
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
-  modalContent: {
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  modalSheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: borderRadiusV2.xxxl,
     borderTopRightRadius: borderRadiusV2.xxxl,
-    padding: spacingV2.lg,
-    paddingBottom: spacingV2.xxl,
+    paddingHorizontal: spacingV2.lg,
+    paddingBottom: spacingV2.xxxl,
+    paddingTop: spacingV2.sm,
   },
   modalHandle: {
     width: 40,
@@ -495,35 +513,21 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.border,
     alignSelf: "center",
-    marginBottom: spacingV2.md,
-  },
-  modalHeader: {
-    alignItems: "center",
     marginBottom: spacingV2.lg,
   },
   modalTitle: {
     fontSize: fontSizeV2.lg,
     fontWeight: "700",
     color: colors.text,
-    marginBottom: spacingV2.xs,
+    textAlign: "center",
+    marginBottom: spacingV2.lg,
   },
-  modalSubtitle: {
-    fontSize: fontSizeV2.sm,
-    color: colors.textSecondary,
-  },
-  label: {
-    fontSize: fontSizeV2.sm,
-    fontWeight: "700",
-    color: colors.textSecondary,
-    marginBottom: spacingV2.sm,
-    marginTop: spacingV2.lg,
-    letterSpacing: 0.5,
-  },
-  typeSelector: {
+  modalTabs: {
     flexDirection: "row",
     gap: spacingV2.md,
+    marginBottom: spacingV2.lg,
   },
-  typeButton: {
+  modalTab: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -535,65 +539,32 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.borderLight,
   },
-  typeButtonActiveCost: {
-    backgroundColor: colors.expenseBg,
-    borderColor: colors.expense,
-  },
-  typeButtonActiveIncome: {
-    backgroundColor: colors.incomeBg,
-    borderColor: colors.income,
-  },
-  typeButtonText: {
+  modalTabText: {
     fontSize: fontSizeV2.md,
     color: colors.textSecondary,
     fontWeight: "600",
   },
-  typeButtonTextActive: {
-    color: colors.text,
-    fontWeight: "700",
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
+  inputWrap: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadiusV2.lg,
     paddingHorizontal: spacingV2.md,
     backgroundColor: colors.background,
+    marginBottom: spacingV2.lg,
   },
   input: {
-    flex: 1,
     paddingVertical: spacingV2.md,
     fontSize: fontSizeV2.md,
     color: colors.text,
   },
-  modalButtons: {
-    flexDirection: "row",
-    gap: spacingV2.md,
-    marginTop: spacingV2.xl,
-  },
-  modalButton: {
-    flex: 1,
+  createBtn: {
     paddingVertical: spacingV2.md,
     borderRadius: borderRadiusV2.lg,
     alignItems: "center",
   },
-  modalButtonCancel: {
-    backgroundColor: colors.background,
-    borderWidth: 1.5,
-    borderColor: colors.borderLight,
-  },
-  modalButtonConfirm: {
-    backgroundColor: colors.primary,
-  },
-  modalButtonTextCancel: {
+  createBtnText: {
     fontSize: fontSizeV2.md,
-    color: colors.text,
-    fontWeight: "600",
-  },
-  modalButtonTextConfirm: {
-    fontSize: fontSizeV2.md,
-    color: colors.textInverse,
+    color: "#FFFFFF",
     fontWeight: "700",
   },
 });

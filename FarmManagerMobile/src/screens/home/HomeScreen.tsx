@@ -86,7 +86,7 @@ export const HomeScreen: React.FC = () => {
     cityName,
     setCity,
   } = useAgentStore();
-  const { defaultCity, displayName, setDefaultCity, syncToServer, loadFromServer } = useSettingsStore();
+  const { defaultCity, displayName, setCity: setSettingsCity, syncToServer, loadFromServer } = useSettingsStore();
   const { isLoggedIn, user } = useAuthStore();
   const { fetchCycles } = useCycleStore();
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -103,8 +103,8 @@ export const HomeScreen: React.FC = () => {
           detectLocation().then((coords: any) => {
             if (coords) {
               const city = findNearestCity(coords.latitude, coords.longitude);
-              setDefaultCity(city.name);
-              syncToServer(city.name, city.lat, city.lon);
+              setSettingsCity({ name: city.name, lat: city.lat, lon: city.lon });
+              syncToServer();
             }
           });
         }
@@ -135,7 +135,7 @@ export const HomeScreen: React.FC = () => {
     lon: number;
   }) => {
     setCity(city.name, city.lat, city.lon);
-    setDefaultCity(city.name);
+    setSettingsCity({ name: city.name, lat: city.lat, lon: city.lon });
     fetchWeather();
   };
 
