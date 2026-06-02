@@ -6,6 +6,7 @@ import logging
 import time
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.simulation.models import (
@@ -147,6 +148,37 @@ class SimulationRunner:
         after = await self._snapshot.take(case.verify_tables)
         db_diff = self._snapshot.compute_diff(before, after)
 
+        # 强制 flush trace 到数据库
+        skill_traces: list[dict] = []
+        if self._db:
+            from app.infra.trace_collector import get_trace_dao
+
+            dao = get_trace_dao()
+            if dao:
+                await dao.flush_now()
+
+            # 查询该 session 的 skill_call trace
+            from app.models.trace import TraceRecord
+
+            records = (
+                self._db.query(TraceRecord)
+                .filter(
+                    TraceRecord.session_id == session_id,
+                    TraceRecord.node_type == "skill_call",
+                )
+                .all()
+            )
+            skill_traces = [
+                {
+                    "node_name": r.node_name,
+                    "status": r.status,
+                    "error_message": r.error_message,
+                    "input_data": r.input_data,
+                    "output_data": r.output_data,
+                }
+                for r in records
+            ]
+
         claims = extract_claims(combined_reply)
 
         if pending and not claims:
@@ -162,7 +194,9 @@ class SimulationRunner:
                     )
                 )
 
-        errors = check_consistency(combined_reply, claims, db_diff, case)
+        errors = check_consistency(
+            combined_reply, claims, db_diff, case, pending, skill_traces
+        )
         passed = len(errors) == 0
 
         latency_ms = int((time.perf_counter() - start_time) * 1000)
@@ -188,6 +222,7 @@ class SimulationRunner:
             user_input=case.user_input,
             pending_action=pending,
             expected_db_changes=case.expected_db_changes,
+            skill_traces=skill_traces,
         )
 
     async def run_batch(
@@ -195,7 +230,9 @@ class SimulationRunner:
     ) -> list[SimulationResult]:
         """批量执行测试用例。
 
-        每两个用例之间延迟 6 秒，避免触发 /agent/chat 的 10/min 限流。
+        每两个用例之间延迟 12 秒，避免触发 /agent/chat 的 10/min 限流。
+        每个用例最多 2 次请求（初始 + confirm/cancel），12 秒延迟确保
+        平均速率低于 10/分钟。
         """
         results: list[SimulationResult] = []
         for i, case in enumerate(cases):
@@ -214,14 +251,78 @@ class SimulationRunner:
                     )
                 )
             # 限流保护：避免连续请求触发 429
+            # 每个用例最多 2 次请求，12 秒间隔确保 < 10/min
             if i < len(cases) - 1:
-                await asyncio.sleep(6)
+                await asyncio.sleep(12)
         return results
 
     def _setup_precondition(self, precondition: dict) -> None:
         """
         设置前置条件。
-        例如：precondition = {"ensure_template_exists": "西瓜"} — 确保西瓜模板已存在。
-        目前先实现空方法，留扩展接口。
+        目前支持：
+        - clean_tables: ["table1", "table2"] — 删除指定表中当前 farm_id 的数据
+        - ensure_template_exists: "作物名" — 确保作物模板已存在（预留接口）
         """
         logger.info("设置前置条件: %s", precondition)
+
+        clean_tables = precondition.get("clean_tables", [])
+        if clean_tables:
+            self._clean_tables(clean_tables)
+
+    def _clean_tables(self, tables: list[str]) -> None:
+        """删除指定表中与当前 farm_id 关联的数据。
+
+        按外键依赖顺序删除：先删子表（被引用的），再删父表（引用的），
+        避免 FOREIGN KEY constraint failed。
+        """
+        # 外键依赖深度：子表（被引用方）先删，父表（引用方）后删
+        _DELETE_ORDER = {
+            "growth_stages": 0,   # 子表：引用 crop_templates
+            "cycle_stages": 0,    # 子表：引用 crop_cycles
+            "cost_records": 1,
+            "crop_templates": 1,  # 父表：被 growth_stages 引用
+            "crop_cycles": 1,     # 父表：被 cycle_stages 引用
+            "farm_logs": 1,
+        }
+        sorted_tables = sorted(tables, key=lambda t: _DELETE_ORDER.get(t, 0))
+
+        for table in sorted_tables:
+            delete_sql = self._build_delete_sql(table)
+            if delete_sql:
+                try:
+                    self._db.execute(text(delete_sql), {"farm_id": self._farm_id})
+                    logger.info("已清理表 %s 中 farm_id=%s 的数据", table, self._farm_id)
+                except Exception:
+                    logger.exception("清理表 %s 失败", table)
+            else:
+                logger.warning("未找到表 %s 的清理策略，跳过", table)
+        self._db.commit()
+
+    def _build_delete_sql(self, table: str) -> str | None:
+        """根据表名构建 DELETE SQL。"""
+        direct_farm_id_tables = {
+            "cost_records": "farm_id",
+            "crop_templates": "farm_id",
+            "crop_cycles": "farm_id",
+            "farm_logs": "farm_id",
+        }
+
+        if table in direct_farm_id_tables:
+            farm_col = direct_farm_id_tables[table]
+            return f"DELETE FROM {table} WHERE {farm_col} = :farm_id"
+
+        if table == "growth_stages":
+            return (
+                "DELETE FROM growth_stages WHERE crop_template_id IN ("
+                "SELECT id FROM crop_templates WHERE farm_id = :farm_id"
+                ")"
+            )
+
+        if table == "cycle_stages":
+            return (
+                "DELETE FROM cycle_stages WHERE cycle_id IN ("
+                "SELECT id FROM crop_cycles WHERE farm_id = :farm_id"
+                ")"
+            )
+
+        return None

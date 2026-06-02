@@ -60,6 +60,7 @@ def _result_to_dict(result: SimulationResult) -> dict:
         "user_input": result.user_input,
         "pending_action": result.pending_action,
         "expected_db_changes": result.expected_db_changes,
+        "skill_traces": result.skill_traces,
     }
 
 
@@ -129,6 +130,7 @@ def _result_record_to_dict(r: SimulationResultRecord) -> dict:
         "user_input": r.user_input or "",
         "pending_action": r.pending_action,
         "expected_db_changes": r.expected_db_changes or {},
+        "skill_traces": getattr(r, "skill_traces", None) or [],
     }
 
 
@@ -226,12 +228,9 @@ async def start_run(
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
 
-    agent_client = AgentClient(base_url=agent_url, token=token)
-    task_runner = SimulationRunner(
-        agent_client=agent_client, db=db, farm_id=farm.id
+    task = asyncio.create_task(
+        _execute_run(run_id, cases, agent_url, token, farm.id)
     )
-
-    task = asyncio.create_task(_execute_run(run_id, cases, task_runner, farm.id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     logger.info("仿真测试已启动 | run_id=%s total=%d", run_id, total)
@@ -242,14 +241,20 @@ async def start_run(
 async def _execute_run(
     run_id: str,
     cases: list,
-    runner: SimulationRunner,
+    agent_url: str,
+    token: str,
     farm_id: int,
 ) -> None:
-    """后台执行仿真测试。"""
+    """后台执行仿真测试。内部独立管理 session，不依赖请求级 session。"""
     from app.core.database import SessionLocal
 
     db = SessionLocal()
     try:
+        agent_client = AgentClient(base_url=agent_url, token=token)
+        runner = SimulationRunner(
+            agent_client=agent_client, db=db, farm_id=farm_id
+        )
+
         results = await runner.run_batch(cases, run_id=run_id)
 
         # 保存每个结果到 DB
@@ -272,7 +277,8 @@ async def _execute_run(
             db.add(record)
 
         # 更新进度
-        _progress_cache[run_id]["current"] = len(cases)
+        if run_id in _progress_cache:
+            _progress_cache[run_id]["current"] = len(cases)
 
         # 生成报告
         reporter = SimulationReporter()

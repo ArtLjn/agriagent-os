@@ -58,6 +58,7 @@ class SimulationResult:
     user_input: str = ""
     pending_action: dict | None = None
     expected_db_changes: dict[str, dict] = field(default_factory=dict)
+    skill_traces: list[dict] = field(default_factory=list)
 
 
 @dataclass

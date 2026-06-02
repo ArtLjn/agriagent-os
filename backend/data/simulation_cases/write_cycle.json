@@ -12,9 +12,7 @@
     },
     "verify_tables": ["crop_cycles", "cycle_stages"],
     "category": "basic",
-    "precondition": {
-      "ensure_template_exists": "西瓜"
-    }
+    "precondition": {"clean_tables": ["crop_cycles", "cycle_stages"], "ensure_template_exists": "西瓜"}
   },
   {
     "case_id": "TC-WRITE-021",
@@ -24,6 +22,6 @@
     "expected_db_changes": {},
     "verify_tables": ["crop_cycles"],
     "category": "error",
-    "precondition": {}
+    "precondition": {"clean_tables": ["crop_cycles", "cycle_stages"]}
   }
 ]

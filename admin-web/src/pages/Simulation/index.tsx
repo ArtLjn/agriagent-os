@@ -225,6 +225,20 @@ function ExpectedVsActual({ expected, actual }: { expected: Record<string, unkno
   );
 }
 
+function getErrorTag(err: string): { color: string; label: string } {
+  const type = err.split(':')[0];
+  const map: Record<string, { color: string; label: string }> = {
+    hallucination: { color: 'red', label: '幻觉' },
+    execution_failure: { color: 'orange', label: '执行失败' },
+    state_mismatch: { color: 'gold', label: '状态不匹配' },
+    response_mismatch: { color: 'blue', label: '响应不匹配' },
+    attribution_error: { color: 'purple', label: '错误归因' },
+    silent_mutation: { color: 'magenta', label: '静默变更' },
+    runner_exception: { color: 'default', label: '引擎异常' },
+  };
+  return map[type] || { color: 'default', label: '其他' };
+}
+
 function ResultDetail({ result }: { result: SimulationResult }) {
   return (
     <div style={{ padding: '16px 0' }}>
@@ -267,9 +281,15 @@ function ResultDetail({ result }: { result: SimulationResult }) {
           message={`错误列表 (${result.errors.length})`}
           description={
             <ul style={{ margin: 0, paddingLeft: 20 }}>
-              {result.errors.map((err, i) => (
-                <li key={i}><Text type="danger">{err}</Text></li>
-              ))}
+              {result.errors.map((err, i) => {
+                const tag = getErrorTag(err);
+                return (
+                  <li key={i} style={{ marginBottom: 4 }}>
+                    <Tag color={tag.color} size="small">{tag.label}</Tag>
+                    <Text type="danger" style={{ marginLeft: 8 }}>{err}</Text>
+                  </li>
+                );
+              })}
             </ul>
           }
           type="error"

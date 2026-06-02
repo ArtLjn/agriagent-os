@@ -14,6 +14,8 @@ def check_consistency(
     claims: list[Claim],
     db_diff: DbDiff,
     test_case: SimulationTestCase,
+    pending_action: dict | None = None,
+    skill_traces: list[dict] | None = None,
 ) -> list[str]:
     """
     对比 LLM 声称的操作和数据库实际变化，返回错误列表。
@@ -27,7 +29,9 @@ def check_consistency(
     """
     errors: list[str] = []
 
-    errors.extend(_check_hallucination(claims, db_diff))
+    is_cancel_scenario = not test_case.expected_db_changes and pending_action is not None
+    if not is_cancel_scenario:
+        errors.extend(_check_hallucination(claims, db_diff, skill_traces))
     errors.extend(_check_attribution_error(agent_reply, claims, db_diff))
     errors.extend(_check_silent_mutation(agent_reply, claims, db_diff))
     errors.extend(_check_expected_changes(db_diff, test_case.expected_db_changes))
@@ -36,16 +40,46 @@ def check_consistency(
     return errors
 
 
-def _check_hallucination(claims: list[Claim], db_diff: DbDiff) -> list[str]:
-    """LLM 声称执行但 DB 无变化 → hallucination。"""
+# op_type 到 skill_name 的反向映射（用于 trace 查询）
+_OP_TYPE_TO_SKILL_NAME: dict[str, str] = {
+    "create_cost": "create_cost_record",
+    "create_template": "create_crop_template",
+    "create_cycle": "create_crop_cycle",
+    "update_stage": "update_cycle_stage",
+    "log_activity": "log_farm_activity",
+    "settle_debt": "settle_debt",
+}
+
+
+def _check_hallucination(
+    claims: list[Claim], db_diff: DbDiff, skill_traces: list[dict] | None = None
+) -> list[str]:
+    """LLM 声称执行但 DB 无变化 → hallucination 或 execution_failure。"""
     errors: list[str] = []
     for claim in claims:
         table = get_table_for_op(claim.op_type)
         if table and not db_diff.has_changes_for_table(table):
-            errors.append(
-                f"hallucination: LLM 声称执行了 {claim.op_type}，"
-                f"但表 {table} 无实际变化"
-            )
+            # 检查是否有对应的 skill_call trace
+            skill_called = False
+            if skill_traces:
+                expected_skill = _OP_TYPE_TO_SKILL_NAME.get(
+                    claim.op_type, claim.op_type
+                )
+                for trace in skill_traces:
+                    if trace.get("node_name") == expected_skill:
+                        skill_called = True
+                        break
+
+            if skill_called:
+                errors.append(
+                    f"execution_failure: LLM 声称执行了 {claim.op_type}，"
+                    f"skill 已被调用但数据库写入失败"
+                )
+            else:
+                errors.append(
+                    f"hallucination: LLM 声称执行了 {claim.op_type}，"
+                    f"但表 {table} 无实际变化"
+                )
     return errors
 
 
@@ -120,7 +154,7 @@ def _check_expected_changes(
             for field, expected_value in match_fields.items():
                 found = False
                 for record in table_added:
-                    if record.get(field) == expected_value:
+                    if _match_field_value(record.get(field), expected_value):
                         found = True
                         break
                 if not found:
@@ -130,6 +164,27 @@ def _check_expected_changes(
                     )
 
     return errors
+
+
+def _match_field_value(actual_value, expected_value) -> bool:
+    """匹配字段值，支持数字等值和字符串子串匹配。"""
+    if actual_value is None:
+        return False
+
+    # 数字等值匹配（int == float）
+    if isinstance(actual_value, (int, float)) and isinstance(expected_value, (int, float)):
+        return actual_value == expected_value
+
+    # 字符串子串匹配
+    if isinstance(expected_value, str) and isinstance(actual_value, str):
+        return expected_value in actual_value
+
+    # 布尔严格相等
+    if isinstance(expected_value, bool) and isinstance(actual_value, bool):
+        return actual_value == expected_value
+
+    # 兜底：严格相等
+    return actual_value == expected_value
 
 
 def _check_response_matches(

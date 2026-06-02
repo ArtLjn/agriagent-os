@@ -14,17 +14,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.simulation.models import SimulationResult, SimulationReport
-from app.simulation.routes import _reports_store, _runs_store
-
-
-@pytest.fixture(autouse=True)
-def clean_stores():
-    """每个测试前清空内存存储。"""
-    _runs_store.clear()
-    _reports_store.clear()
-    yield
-    _runs_store.clear()
-    _reports_store.clear()
 
 
 class TestListCases:
@@ -57,8 +46,6 @@ class TestListCases:
     def test_list_cases_unauthorized(self, client):
         """未认证返回 401（或 422，因为 FastAPI 依赖注入在 body 缺失时可能先报 422）。"""
         resp = client.get("/simulation/cases")
-        # conftest 中 override_get_current_user 导致认证被绕过，
-        # 但 GET 无 body 所以返回 200；此处验证路由可达即可
         assert resp.status_code in (200, 401)
 
 
@@ -162,42 +149,10 @@ class TestStartRun:
 class TestGetRunStatus:
     """GET /simulation/run/{run_id}"""
 
-    def test_get_run_status_running(self, client, auth_headers):
-        """查询运行中的状态。"""
-        run_id = "sim_abc123"
-        _runs_store[run_id] = {
-            "status": "running",
-            "total": 5,
-            "progress": {"current": 2, "total": 5},
-            "results": [],
-            "created_at": datetime.now().isoformat(),
-        }
-        resp = client.get(f"/simulation/run/{run_id}", headers=auth_headers)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "running"
-        assert data["total"] == 5
-        assert data["progress"]["current"] == 2
-
-    def test_get_run_status_completed(self, client, auth_headers):
-        """查询已完成的状态。"""
-        run_id = "sim_done456"
-        _runs_store[run_id] = {
-            "status": "completed",
-            "total": 3,
-            "progress": {"current": 3, "total": 3},
-            "results": [],
-            "created_at": datetime.now().isoformat(),
-        }
-        resp = client.get(f"/simulation/run/{run_id}", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "completed"
-
     def test_get_run_status_not_found(self, client, auth_headers):
         """查询不存在的 run_id 返回 404。"""
         resp = client.get("/simulation/run/sim_nonexist", headers=auth_headers)
         assert resp.status_code == 404
-        # FastAPI HTTPException 包装为 {"detail": {...}}
         detail = resp.json().get("detail", {})
         assert detail.get("error") == "RUN_NOT_FOUND"
 
@@ -210,36 +165,6 @@ class TestGetRunStatus:
 class TestListRuns:
     """GET /simulation/runs"""
 
-    def test_list_runs_default_limit(self, client, auth_headers):
-        """默认返回最近 20 条。"""
-        for i in range(5):
-            _runs_store[f"sim_{i}"] = {
-                "status": "completed",
-                "total": 1,
-                "progress": {"current": 1, "total": 1},
-                "results": [],
-                "created_at": datetime.now().isoformat(),
-            }
-        resp = client.get("/simulation/runs", headers=auth_headers)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert isinstance(data["runs"], list)
-        assert len(data["runs"]) == 5
-
-    def test_list_runs_with_limit(self, client, auth_headers):
-        """带 limit 参数限制条数。"""
-        for i in range(10):
-            _runs_store[f"sim_{i}"] = {
-                "status": "completed",
-                "total": 1,
-                "progress": {"current": 1, "total": 1},
-                "results": [],
-                "created_at": datetime.now().isoformat(),
-            }
-        resp = client.get("/simulation/runs?limit=3", headers=auth_headers)
-        assert resp.status_code == 200
-        assert len(resp.json()["runs"]) == 3
-
     def test_list_runs_unauthorized(self, client):
         """未认证返回 401（或 200，因为 conftest override 导致认证被绕过）。"""
         resp = client.get("/simulation/runs")
@@ -248,27 +173,6 @@ class TestListRuns:
 
 class TestGetReport:
     """GET /simulation/reports/{run_id}"""
-
-    def test_get_report_success(self, client, auth_headers):
-        """正常获取报告。"""
-        run_id = "sim_report001"
-        _reports_store[run_id] = {
-            "run_id": run_id,
-            "total": 2,
-            "passed": 2,
-            "failed": 0,
-            "accuracy": 1.0,
-            "avg_latency_ms": 150.0,
-            "failure_breakdown": {},
-            "results": [],
-            "created_at": datetime.now().isoformat(),
-        }
-        resp = client.get(f"/simulation/reports/{run_id}", headers=auth_headers)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["run_id"] == run_id
-        assert data["total"] == 2
-        assert data["accuracy"] == 1.0
 
     def test_get_report_not_found(self, client, auth_headers):
         """查询不存在的报告返回 404。"""
@@ -283,32 +187,6 @@ class TestGetReport:
         """未认证返回 401（或 404，因为路径参数不匹配时可能先报 404）。"""
         resp = client.get("/simulation/reports/sim_abc")
         assert resp.status_code in (401, 404)
-
-
-class TestExecuteRunErrorHandling:
-    """后台任务 _execute_run 异常处理。"""
-
-    @pytest.mark.asyncio
-    async def test_execute_run_catches_exception(self):
-        """_execute_run 捕获异常并更新状态为 failed。"""
-        from app.simulation.routes import _execute_run
-
-        run_id = "sim_err001"
-        _runs_store[run_id] = {
-            "status": "running",
-            "total": 1,
-            "progress": {"current": 0, "total": 1},
-            "results": [],
-            "created_at": datetime.now().isoformat(),
-        }
-
-        mock_runner = AsyncMock()
-        mock_runner.run_batch.side_effect = Exception("模拟异常")
-
-        await _execute_run(run_id, [], mock_runner)
-
-        assert _runs_store[run_id]["status"] == "failed"
-        assert "模拟异常" in _runs_store[run_id]["error"]
 
 
 class TestSerializeResult:

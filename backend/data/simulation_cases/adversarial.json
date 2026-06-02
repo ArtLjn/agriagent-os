@@ -12,7 +12,7 @@
     },
     "verify_tables": ["crop_templates", "growth_stages"],
     "category": "pending",
-    "precondition": {}
+    "precondition": {"clean_tables": ["crop_templates", "growth_stages"]}
   },
   {
     "case_id": "TC-ADV-002",
@@ -22,7 +22,7 @@
     "expected_db_changes": {},
     "verify_tables": ["crop_templates"],
     "category": "pending",
-    "precondition": {}
+    "precondition": {"clean_tables": ["crop_templates"]}
   },
   {
     "case_id": "TC-ADV-003",
@@ -32,7 +32,7 @@
     "expected_db_changes": {},
     "verify_tables": ["cost_records"],
     "category": "hallucination",
-    "precondition": {}
+    "precondition": {"clean_tables": ["cost_records"]}
   },
   {
     "case_id": "TC-ADV-004",
@@ -47,6 +47,6 @@
     },
     "verify_tables": ["cost_records"],
     "category": "partial",
-    "precondition": {}
+    "precondition": {"clean_tables": ["cost_records"]}
   }
 ]
