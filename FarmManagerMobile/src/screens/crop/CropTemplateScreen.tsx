@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+ 
   RefreshControl,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -59,7 +60,7 @@ export const CropTemplateScreen: React.FC = () => {
       const data = res.data as any;
       setTemplates(data.items ?? data ?? []);
     } catch (err: any) {
-      Alert.alert("加载失败", err.message || "请稍后重试");
+      showAlert("加载失败", err.message || "请稍后重试");
     } finally {
       setLoading(false);
     }

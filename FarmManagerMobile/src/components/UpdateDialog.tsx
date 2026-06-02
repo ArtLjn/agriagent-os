@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { showAlert } from "../utils/alert";
 import {
-  Alert,
+ 
   Linking,
   Modal,
   StyleSheet,
@@ -36,7 +37,7 @@ export function UpdateDialog() {
     if (!info) return;
     setVisible(false);
     Linking.openURL(info.download_url).catch(() => {
-      Alert.alert("提示", "无法打开下载链接，请手动访问下载页面");
+      showAlert("提示", "无法打开下载链接，请手动访问下载页面");
     });
   };
 

@@ -173,7 +173,16 @@ async def parse_crop_template(
     logger.info("AI 解析作物模板 | farm=%s | input: %s", farm.id, req.description)
 
     llm = get_llm()
-    response = await _parse_crop_with_llm(llm, prompt, logger)
+    try:
+        response = await _parse_crop_with_llm(llm, prompt, logger)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning("AI 返回数据无法通过校验 | input=%s", req.description)
+        raise HTTPException(
+            status_code=422,
+            detail="无法识别作物信息，请描述作物名称，例如：我要种8424西瓜、种番茄",
+        )
 
     if not response.stages:
         raise HTTPException(

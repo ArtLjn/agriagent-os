@@ -1,0 +1,72 @@
+[
+  {
+    "case_id": "TC-WRITE-001",
+    "description": "记账 — 用户说买了200块化肥",
+    "user_input": "昨天买了200块化肥",
+    "expected_response_matches": ["已记账", "化肥", "200"],
+    "expected_db_changes": {
+      "cost_records": {
+        "added": 1,
+        "match_fields": { "amount": 200, "category": "化肥" }
+      }
+    },
+    "verify_tables": ["cost_records"],
+    "category": "basic",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-WRITE-002",
+    "description": "收入记账 — 卖了番茄赚了5000",
+    "user_input": "卖了番茄赚了5000块",
+    "expected_response_matches": ["已记账", "番茄", "5000"],
+    "expected_db_changes": {
+      "cost_records": {
+        "added": 1,
+        "match_fields": { "amount": 5000, "category": "番茄销售", "record_type": "income" }
+      }
+    },
+    "verify_tables": ["cost_records"],
+    "category": "basic",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-WRITE-003",
+    "description": "赊账记账 — 在农资店赊了3000块大棚膜",
+    "user_input": "在农资店老王那赊了3000块大棚膜",
+    "expected_response_matches": ["已记账", "大棚膜", "3000", "赊账"],
+    "expected_db_changes": {
+      "cost_records": {
+        "added": 1,
+        "match_fields": { "amount": 3000, "category": "大棚膜" }
+      }
+    },
+    "verify_tables": ["cost_records"],
+    "category": "basic",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-WRITE-004",
+    "description": "记账 — 指定日期",
+    "user_input": "5月1号买了100块种子",
+    "expected_response_matches": ["已记账", "种子", "100"],
+    "expected_db_changes": {
+      "cost_records": {
+        "added": 1,
+        "match_fields": { "amount": 100, "category": "种子" }
+      }
+    },
+    "verify_tables": ["cost_records"],
+    "category": "basic",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-WRITE-005",
+    "description": "记账 — 缺少金额参数应失败",
+    "user_input": "记一笔账",
+    "expected_response_matches": ["金额", "失败"],
+    "expected_db_changes": {},
+    "verify_tables": ["cost_records"],
+    "category": "error",
+    "precondition": {}
+  }
+]

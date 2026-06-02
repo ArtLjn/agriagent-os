@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
+import LinearGradient from "react-native-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { CompositeNavigationProp } from "@react-navigation/native";
@@ -134,7 +135,17 @@ export const ProfileScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Header */}
-        <View style={styles.profileSection}>
+        <LinearGradient
+          colors={["#B8D0FF", "#DBE5FF", "#F6F8FC"]}
+          locations={[0, 0.6, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.profileSection}
+        >
+          {/* Decorative circles */}
+          <View style={styles.decoCircleLarge} />
+          <View style={styles.decoCircleSmall} />
+
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
               <Icon name="account" size={36} color={colors.primary} />
@@ -148,7 +159,7 @@ export const ProfileScreen: React.FC = () => {
               <Text style={styles.ageText}>已种植 {farmAge} 天</Text>
             </View>
           )}
-        </View>
+        </LinearGradient>
 
         {/* Stats */}
         <View style={styles.statsCard}>
@@ -202,8 +213,29 @@ const styles = StyleSheet.create({
   // Profile Header
   profileSection: {
     alignItems: "center",
-    paddingVertical: spacingV2.xl,
+    paddingVertical: spacingV2.xl + 8,
     gap: spacingV2.sm,
+    borderRadius: borderRadiusV2.xxxl,
+    marginBottom: spacingV2.lg,
+    overflow: "hidden",
+  },
+  decoCircleLarge: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: "rgba(74, 123, 247, 0.10)",
+    top: -60,
+    right: -40,
+  },
+  decoCircleSmall: {
+    position: "absolute",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(74, 123, 247, 0.08)",
+    top: 20,
+    left: 20,
   },
   avatarWrap: {
     marginBottom: spacingV2.sm,
@@ -212,9 +244,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.primaryMuted,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(74, 123, 247, 0.15)",
   },
   profileName: {
     fontSize: fontSizeV2.xl,

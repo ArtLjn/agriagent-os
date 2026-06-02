@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
+ 
   Modal,
   StyleSheet,
 } from "react-native";
@@ -97,7 +98,7 @@ export const CostCategoryScreen: React.FC = () => {
 
   useEffect(() => {
     if (error) {
-      Alert.alert("错误", error);
+      showAlert("错误", error);
       clearError();
     }
   }, [error]);
@@ -108,7 +109,7 @@ export const CostCategoryScreen: React.FC = () => {
   const handleCreate = async () => {
     const name = newName.trim();
     if (!name) {
-      Alert.alert("提示", "请输入分类名称");
+      showAlert("提示", "请输入分类名称");
       return;
     }
     try {
@@ -122,7 +123,7 @@ export const CostCategoryScreen: React.FC = () => {
   };
 
   const handleDelete = (id: number, name: string) => {
-    Alert.alert("确认删除", `确定要删除"${name}"吗？`, [
+    showAlert("确认删除", `确定要删除"${name}"吗？`, [
       { text: "取消", style: "cancel" },
       {
         text: "删除",

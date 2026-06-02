@@ -1,0 +1,44 @@
+[
+  {
+    "case_id": "TC-WRITE-010",
+    "description": "创建作物模板 — 橘子",
+    "user_input": "帮我创建橘子模版",
+    "expected_response_matches": ["已创建", "橘子", "模板"],
+    "expected_db_changes": {
+      "crop_templates": {
+        "added": 1,
+        "match_fields": { "name": "橘子" }
+      }
+    },
+    "verify_tables": ["crop_templates", "growth_stages"],
+    "category": "basic",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-WRITE-011",
+    "description": "创建已有模板 — 应返回已存在",
+    "user_input": "帮我创建西瓜模版",
+    "expected_response_matches": ["已存在", "西瓜"],
+    "expected_db_changes": {},
+    "verify_tables": ["crop_templates"],
+    "category": "basic",
+    "precondition": {
+      "ensure_template_exists": "西瓜"
+    }
+  },
+  {
+    "case_id": "TC-WRITE-012",
+    "description": "创建作物模板 — 番茄",
+    "user_input": "帮我创建番茄模版",
+    "expected_response_matches": ["已创建", "番茄"],
+    "expected_db_changes": {
+      "crop_templates": {
+        "added": 1,
+        "match_fields": { "name": "番茄" }
+      }
+    },
+    "verify_tables": ["crop_templates", "growth_stages"],
+    "category": "basic",
+    "precondition": {}
+  }
+]

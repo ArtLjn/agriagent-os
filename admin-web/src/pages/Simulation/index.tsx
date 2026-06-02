@@ -7,7 +7,7 @@ import {
   ExperimentOutlined, PlayCircleOutlined, ReloadOutlined,
   CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
-import axios from 'axios';
+import apiClient from '../../api/client';
 
 const { Text, Title } = Typography;
 const { Panel } = Collapse;
@@ -46,6 +46,9 @@ interface SimulationResult {
   extracted_claims: ExtractedClaim[];
   latency_ms: number;
   category: string;
+  user_input: string;
+  pending_action: Record<string, unknown> | null;
+  expected_db_changes: Record<string, unknown>;
 }
 
 interface RunStatus {
@@ -152,13 +155,87 @@ function ClaimComparisonTable({ claims, dbDiff }: { claims: ExtractedClaim[]; db
   );
 }
 
+function MetaTags({ result }: { result: SimulationResult }) {
+  const added = result.db_diff.added.length;
+  const removed = result.db_diff.removed.length;
+  const modified = result.db_diff.modified.length;
+  const hasPending = !!result.pending_action;
+
+  return (
+    <Space wrap style={{ marginTop: 8 }}>
+      <Tag icon={<ClockCircleOutlined />} color="default">{result.latency_ms}ms</Tag>
+      <Tag color={CATEGORY_COLORS[result.category] || 'default'}>{result.category}</Tag>
+      {hasPending && (
+        <Tag color="purple">
+          pending: {(result.pending_action as Record<string, string>)?.skill_name}
+        </Tag>
+      )}
+      <Tag color={added > 0 ? 'success' : 'default'}>新增 {added}</Tag>
+      <Tag color={modified > 0 ? 'warning' : 'default'}>修改 {modified}</Tag>
+      <Tag color={removed > 0 ? 'error' : 'default'}>删除 {removed}</Tag>
+    </Space>
+  );
+}
+
+function ExpectedVsActual({ expected, actual }: { expected: Record<string, unknown>; actual: DbDiff }) {
+  if (!expected || Object.keys(expected).length === 0) {
+    return (
+      <Alert
+        style={{ marginTop: 12 }}
+        message="预期变化"
+        description="无预期变化（预期 DB 应保持不变）"
+        type="info"
+        showIcon
+      />
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <Title level={5}>预期变化 vs 实际变化</Title>
+      {Object.entries(expected).map(([table, expect]) => {
+        const exp = expect as Record<string, unknown>;
+        const expectedAdded = (exp?.added as number) || 0;
+        const actualAdded = actual.added.filter(r => r.__table__ === table).length;
+        const match = expectedAdded === actualAdded;
+
+        return (
+          <Card
+            key={table}
+            size="small"
+            style={{ marginBottom: 8 }}
+            title={
+              <Space>
+                <Text strong>{table}</Text>
+                <Tag color={match ? 'success' : 'error'}>
+                  预期新增 {expectedAdded} / 实际新增 {actualAdded}
+                </Tag>
+              </Space>
+            }
+          >
+            {exp?.match_fields && (
+              <Text type="secondary">
+                匹配字段: {JSON.stringify(exp.match_fields)}
+              </Text>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 function ResultDetail({ result }: { result: SimulationResult }) {
   return (
     <div style={{ padding: '16px 0' }}>
-      <Row gutter={[24, 16]}>
+      {/* 元信息 */}
+      <MetaTags result={result} />
+
+      {/* 输入 / 回复 */}
+      <Row gutter={[24, 16]} style={{ marginTop: 16 }}>
         <Col span={12}>
           <Card size="small" title="用户输入" style={{ height: '100%' }}>
-            <Text>{result.case_id}</Text>
+            <Text style={{ whiteSpace: 'pre-wrap' }}>{result.user_input}</Text>
           </Card>
         </Col>
         <Col span={12}>
@@ -168,10 +245,26 @@ function ResultDetail({ result }: { result: SimulationResult }) {
         </Col>
       </Row>
 
+      {/* Pending Action */}
+      {result.pending_action && (
+        <Alert
+          style={{ marginTop: 16 }}
+          message="Pending Action"
+          description={
+            <pre style={{ margin: 0, fontSize: 12 }}>
+              {JSON.stringify(result.pending_action, null, 2)}
+            </pre>
+          }
+          type="warning"
+          showIcon
+        />
+      )}
+
+      {/* 错误列表 */}
       {result.errors.length > 0 && (
         <Alert
           style={{ marginTop: 16 }}
-          message="错误列表"
+          message={`错误列表 (${result.errors.length})`}
           description={
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               {result.errors.map((err, i) => (
@@ -184,6 +277,10 @@ function ResultDetail({ result }: { result: SimulationResult }) {
         />
       )}
 
+      {/* 预期 vs 实际 */}
+      <ExpectedVsActual expected={result.expected_db_changes} actual={result.db_diff} />
+
+      {/* 声称 vs 现实 */}
       <ClaimComparisonTable claims={result.extracted_claims} dbDiff={result.db_diff} />
     </div>
   );
@@ -196,7 +293,7 @@ export default function Simulation() {
   const [cases, setCases] = useState<SimulationCase[]>([]);
   const [selectedCaseIds, setSelectedCaseIds] = useState<Set<string>>(new Set());
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [agentUrl, setAgentUrl] = useState('http://localhost:8000');
+  const [agentUrl, setAgentUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
 
@@ -211,7 +308,7 @@ export default function Simulation() {
     try {
       setLoading(true);
       const url = category ? `/simulation/cases?category=${category}` : '/simulation/cases';
-      const resp = await axios.get(url);
+      const resp = await apiClient.get(url);
       setCases(resp.data.cases || []);
     } catch {
       message.error('加载测试用例失败');
@@ -222,7 +319,7 @@ export default function Simulation() {
 
   const fetchRuns = useCallback(async () => {
     try {
-      const resp = await axios.get('/simulation/runs');
+      const resp = await apiClient.get('/simulation/runs');
       setRunHistory(resp.data.runs || []);
     } catch {
       // 静默失败，历史记录不是关键功能
@@ -231,7 +328,7 @@ export default function Simulation() {
 
   const fetchRunStatus = useCallback(async (runId: string) => {
     try {
-      const resp = await axios.get(`/simulation/run/${runId}`);
+      const resp = await apiClient.get(`/simulation/run/${runId}`);
       const run: RunStatus = resp.data;
       setCurrentRun(run);
 
@@ -266,7 +363,7 @@ export default function Simulation() {
   const startRun = async (caseIds: string[] | null) => {
     try {
       setRunning(true);
-      const resp = await axios.post('/simulation/run', {
+      const resp = await apiClient.post('/simulation/run', {
         case_ids: caseIds,
         agent_url: agentUrl,
       });
@@ -380,7 +477,7 @@ export default function Simulation() {
         <Col>
           <Space>
             <Input
-              placeholder="Agent 地址"
+              placeholder="留空使用当前服务地址"
               value={agentUrl}
               onChange={e => setAgentUrl(e.target.value)}
               style={{ width: 240 }}
@@ -400,7 +497,7 @@ export default function Simulation() {
       {/* Main Content */}
       <Row gutter={[24, 24]}>
         {/* Left: Case List */}
-        <Col xs={24} lg={8}>
+        <Col xs={24} lg={8} style={{ position: 'sticky', top: 24, alignSelf: 'start' }}>
           <Card
             title={
               <Space>
@@ -558,7 +655,15 @@ export default function Simulation() {
                 dataSource={runHistory}
                 pagination={false}
                 columns={[
-                  { title: 'Run ID', dataIndex: 'run_id' },
+                  {
+                    title: 'Run ID',
+                    dataIndex: 'run_id',
+                    render: (run_id: string) => (
+                      <Button type="link" onClick={() => fetchRunStatus(run_id)}>
+                        {run_id}
+                      </Button>
+                    ),
+                  },
                   {
                     title: '状态',
                     dataIndex: 'status',

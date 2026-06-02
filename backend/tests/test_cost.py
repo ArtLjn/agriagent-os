@@ -146,3 +146,23 @@ def test_cycle_profit_empty():
 def test_parse_cost_record():
     """测试 AI 帮记解析接口（需要 LLM 配置，默认跳过）。"""
     pytest.skip("需要 LLM 配置")
+
+
+def test_parse_cost_record_returns_422_on_invalid_amount():
+    """当 LLM 返回不合法 amount 时，应返回 422 而非 500。"""
+    from unittest.mock import patch
+    from app.schemas.cost import CostParseResult
+
+    with patch(
+        "app.api.cost._parse_cost_with_llm"
+    ) as mock_parse:
+        mock_parse.return_value = CostParseResult(
+            record_type="cost",
+            category="其他",
+            amount="未知",
+            record_date="2025-06-01",
+        )
+        response = client.post("/costs/parse", json={"description": "hhhhhh"})
+
+    assert response.status_code == 422
+    assert "无法识别记账内容" in response.json()["detail"]

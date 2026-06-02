@@ -52,6 +52,11 @@ class PromptRegistry:
             self._defaults[name] = version
             logger.info("Prompt 版本切换 | name=%s version=%s", name, version)
 
+    def list_names(self) -> list[str]:
+        """列出所有已注册模板名称。"""
+        with self._lock:
+            return list(self._templates.keys())
+
     def list_versions(self, name: str) -> list[str]:
         """列出某模板的所有版本。"""
         with self._lock:

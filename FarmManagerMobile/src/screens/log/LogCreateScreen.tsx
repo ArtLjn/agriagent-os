@@ -1,11 +1,12 @@
 import React, { useState } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   ScrollView,
-  Alert,
+ 
 } from "react-native";
 import {
   useNavigation,
@@ -45,7 +46,7 @@ export const LogCreateScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!selectedType) {
-      Alert.alert("提示", "请选择农事类型");
+      showAlert("提示", "请选择农事类型");
       return;
     }
     await createLog({
@@ -57,7 +58,7 @@ export const LogCreateScreen: React.FC = () => {
     if (!error) {
       navigation.goBack();
     } else {
-      Alert.alert("错误", error);
+      showAlert("错误", error);
       clearError();
     }
   };

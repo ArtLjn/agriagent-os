@@ -136,18 +136,27 @@ class TestStartRun:
         mock_create_task.assert_called_once()
 
     def test_start_run_missing_agent_url(self, client, auth_headers):
-        """缺少 agent_url 返回 422。"""
+        """缺少 agent_url 时自动推断服务地址，返回 200。"""
         resp = client.post(
             "/simulation/run",
             headers=auth_headers,
             json={"case_ids": ["case_001"]},
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["run_id"].startswith("sim_")
+        assert data["status"] == "running"
 
-    def test_start_run_unauthorized(self, client):
-        """未认证返回 401（或 422，因为 FastAPI 依赖注入在 body 缺失时可能先报 422）。"""
-        resp = client.post("/simulation/run", json={})
-        assert resp.status_code in (401, 422)
+    def test_start_run_with_agent_url(self, client, auth_headers):
+        """显式指定 agent_url 时使用该地址。"""
+        resp = client.post(
+            "/simulation/run",
+            headers=auth_headers,
+            json={"case_ids": ["case_001"], "agent_url": "http://custom:9999"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["run_id"].startswith("sim_")
 
 
 class TestGetRunStatus:

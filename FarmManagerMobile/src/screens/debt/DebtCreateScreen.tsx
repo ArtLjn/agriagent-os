@@ -1,11 +1,12 @@
 import React, { useState } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+ 
   ScrollView,
   Platform,
 } from "react-native";
@@ -41,12 +42,12 @@ export const DebtCreateScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!amount || !counterparty) {
-      Alert.alert("请填写完整", "金额和债权人名称必填");
+      showAlert("请填写完整", "金额和债权人名称必填");
       return;
     }
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      Alert.alert("金额无效", "请输入大于 0 的金额");
+      showAlert("金额无效", "请输入大于 0 的金额");
       return;
     }
 

@@ -180,13 +180,20 @@ async def parse_cost_record(
             detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块",
         )
 
-    response = CostParseResponse(
-        record_type=result.record_type,
-        category=result.category,
-        amount=result.amount,
-        record_date=result.record_date,
-        note=result.note,
-    )
+    try:
+        response = CostParseResponse(
+            record_type=result.record_type,
+            category=result.category,
+            amount=result.amount,
+            record_date=result.record_date,
+            note=result.note,
+        )
+    except Exception:
+        logger.warning("AI 返回数据无法通过校验 | input=%s", req.description)
+        raise HTTPException(
+            status_code=422,
+            detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块",
+        )
 
     # 缓存幂等键
     if idempotency_key:

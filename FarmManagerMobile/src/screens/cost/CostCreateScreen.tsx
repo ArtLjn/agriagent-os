@@ -5,11 +5,11 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
-  Alert,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { showAlert } from "../../utils/alert";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import dayjs from "dayjs";
@@ -103,7 +103,7 @@ export const CostCreateScreen: React.FC = () => {
       setNote(data.note || aiInput.trim());
       setAiInput("");
     } catch (err: any) {
-      Alert.alert("解析失败", err.message || "请稍后重试");
+      showAlert("解析失败", err.message || "请稍后重试");
     } finally {
       setAiLoading(false);
     }
@@ -123,20 +123,20 @@ export const CostCreateScreen: React.FC = () => {
   const handleSubmit = async () => {
     if (submitting) return;
     if (!category) {
-      Alert.alert("提示", "请选择分类");
+      showAlert("提示", "请选择分类");
       return;
     }
     if (!amount || isNaN(Number(amount))) {
-      Alert.alert("提示", "请输入有效金额");
+      showAlert("提示", "请输入有效金额");
       return;
     }
     if (recordType === "cost" && isDebt) {
       if (!counterparty.trim()) {
-        Alert.alert("提示", "请填写债权人");
+        showAlert("提示", "请填写债权人");
         return;
       }
       if (!dueDate) {
-        Alert.alert("提示", "请选择预计还款日");
+        showAlert("提示", "请选择预计还款日");
         return;
       }
     }
@@ -166,7 +166,7 @@ export const CostCreateScreen: React.FC = () => {
       }
 
       if (error) {
-        Alert.alert("创建失败", error);
+        showAlert("创建失败", error);
         clearError();
         return;
       }

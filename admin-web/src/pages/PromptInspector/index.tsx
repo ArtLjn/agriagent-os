@@ -160,26 +160,53 @@ export default function PromptInspector() {
         }}
       >
         {previewPrompt && (
-          <Descriptions
-            column={1}
-            labelStyle={{ color: TEXT_DIM, width: 100 }}
-            contentStyle={{ color: TEXT }}
-          >
-            <Descriptions.Item label="名称">
-              {previewPrompt.name}
-            </Descriptions.Item>
-            <Descriptions.Item label="版本">
-              {previewPrompt.version}
-            </Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color={previewPrompt.active ? 'success' : 'default'}>
-                {previewPrompt.active ? '启用' : '禁用'}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="内容长度">
-              {previewPrompt.content_length.toLocaleString()} 字符
-            </Descriptions.Item>
-          </Descriptions>
+          <div>
+            <Descriptions
+              column={1}
+              labelStyle={{ color: TEXT_DIM, width: 100 }}
+              contentStyle={{ color: TEXT }}
+            >
+              <Descriptions.Item label="名称">
+                {previewPrompt.name}
+              </Descriptions.Item>
+              <Descriptions.Item label="版本">
+                {previewPrompt.version}
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag color={previewPrompt.active ? 'success' : 'default'}>
+                  {previewPrompt.active ? '启用' : '禁用'}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="内容长度">
+                {previewPrompt.content_length.toLocaleString()} 字符
+              </Descriptions.Item>
+            </Descriptions>
+            <div
+              style={{
+                marginTop: 16,
+                padding: 12,
+                backgroundColor: '#0d1117',
+                border: `1px solid ${BORDER}`,
+                borderRadius: 6,
+                maxHeight: 400,
+                overflow: 'auto',
+              }}
+            >
+              <pre
+                style={{
+                  color: TEXT,
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  margin: 0,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {previewPrompt.content}
+              </pre>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

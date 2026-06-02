@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+ 
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -134,15 +135,15 @@ export const RegisterScreen: React.FC<{
 
   const handleRegister = useCallback(async () => {
     if (!PHONE_REGEX.test(phone)) {
-      Alert.alert("提示", "请输入正确的11位手机号");
+      showAlert("提示", "请输入正确的11位手机号");
       return;
     }
     if (password.length < 8) {
-      Alert.alert("提示", "密码至少8位");
+      showAlert("提示", "密码至少8位");
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert("提示", "两次密码不一致");
+      showAlert("提示", "两次密码不一致");
       return;
     }
     setLoading(true);
@@ -160,7 +161,7 @@ export const RegisterScreen: React.FC<{
         }
       });
     } catch (e: any) {
-      Alert.alert("注册失败", e.message || "注册失败，请重试");
+      showAlert("注册失败", e.message || "注册失败，请重试");
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+ 
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -127,18 +128,18 @@ export const LoginScreen: React.FC<{
 
   const handleLogin = useCallback(async () => {
     if (!PHONE_REGEX.test(phone)) {
-      Alert.alert("提示", "请输入正确的11位手机号");
+      showAlert("提示", "请输入正确的11位手机号");
       return;
     }
     if (!password) {
-      Alert.alert("提示", "请输入密码");
+      showAlert("提示", "请输入密码");
       return;
     }
     setLoading(true);
     try {
       await login({ phone, password });
     } catch (e: any) {
-      Alert.alert("登录失败", e.message || "手机号或密码错误");
+      showAlert("登录失败", e.message || "手机号或密码错误");
     } finally {
       setLoading(false);
     }

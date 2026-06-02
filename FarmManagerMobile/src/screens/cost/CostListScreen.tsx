@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
@@ -6,7 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+ 
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -176,7 +177,7 @@ export const CostListScreen: React.FC = () => {
   };
 
   const handleDelete = (record: CostRecord) => {
-    Alert.alert("确认删除", "确定要删除这条记录吗？", [
+    showAlert("确认删除", "确定要删除这条记录吗？", [
       { text: "取消", style: "cancel" },
       {
         text: "删除",

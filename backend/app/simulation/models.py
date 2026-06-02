@@ -55,6 +55,9 @@ class SimulationResult:
     category: str = "basic"
     run_id: str = ""
     created_at: datetime = field(default_factory=datetime.now)
+    user_input: str = ""
+    pending_action: dict | None = None
+    expected_db_changes: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass

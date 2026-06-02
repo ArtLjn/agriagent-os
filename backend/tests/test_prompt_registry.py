@@ -99,6 +99,28 @@ class TestUserContextInPrompt:
         assert "<location>" not in result
 
 
+class TestPromptRegistry:
+    """PromptRegistry 核心方法测试。"""
+
+    def test_list_names_returns_registered_templates(self):
+        """list_names 返回所有已注册模板名称。"""
+        from app.agent.prompt_registry import PromptRegistry
+
+        reg = PromptRegistry()
+        reg.register("cost_parse", "1.0", "test content")
+        reg.register("report", "1.0", "report content")
+
+        names = reg.list_names()
+        assert sorted(names) == ["cost_parse", "report"]
+
+    def test_list_names_returns_empty_when_no_templates(self):
+        """list_names 在无模板时返回空列表。"""
+        from app.agent.prompt_registry import PromptRegistry
+
+        reg = PromptRegistry()
+        assert reg.list_names() == []
+
+
 class TestGetSeason:
     """_get_season 季节计算函数测试。"""
 

@@ -239,7 +239,10 @@ class TestRunSingle:
             result = await runner.run_single(case, run_id="run-001")
 
         assert result.passed is True
-        mock_agent.send_confirm.assert_awaited_once_with("", "a1")
+        mock_agent.send_confirm.assert_awaited_once()
+        call_args = mock_agent.send_confirm.await_args
+        assert call_args[0][0].startswith("sim-")  # session_id
+        assert call_args[0][1] == "a1"
 
     @pytest.mark.asyncio
     async def test_run_single_failed(self):

@@ -199,7 +199,16 @@ async def parse_cycle(
     logger.info("AI 解析茬口 | farm=%s | input: %s", farm.id, req.description)
 
     llm = get_llm()
-    response = await _parse_cycle_with_llm(llm, prompt, logger)
+    try:
+        response = await _parse_cycle_with_llm(llm, prompt, logger)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning("AI 返回数据无法通过校验 | input=%s", req.description)
+        raise HTTPException(
+            status_code=422,
+            detail="无法识别茬口信息，请描述种植计划，例如：春季种番茄、秋茬种西瓜",
+        )
 
     # cross-validate: crop_template_id 必须来自真实模板
     if response.crop_template_id is not None:

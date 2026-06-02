@@ -37,22 +37,19 @@ def list_skills() -> dict:
 def list_prompts() -> dict:
     """列出所有 Prompt 模板。"""
     registry = get_registry()
-    known_names = ["system_base", "cost_parse", "report"]
     items = []
-    for name in known_names:
-        try:
-            content = registry.get(name)
-            versions = registry.list_versions(name)
-            items.append(
-                {
-                    "name": name,
-                    "version": versions[0] if versions else "unknown",
-                    "active": True,
-                    "content_length": len(content),
-                }
-            )
-        except (KeyError, FileNotFoundError):
-            continue
+    for name in registry.list_names():
+        content = registry.get(name)
+        versions = registry.list_versions(name)
+        items.append(
+            {
+                "name": name,
+                "version": versions[0] if versions else "unknown",
+                "active": True,
+                "content_length": len(content),
+                "content": content,
+            }
+        )
     return {"items": items, "total": len(items)}
 
 

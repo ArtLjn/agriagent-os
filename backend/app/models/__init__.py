@@ -17,6 +17,7 @@ from app.models.conversation import (
 )
 from app.models.feedback import FeedbackRecord
 from app.models.user_setting import UserSetting
+from app.models.simulation import SimulationRun, SimulationResultRecord
 
 __all__ = [
     "Farm",
@@ -38,4 +39,6 @@ __all__ = [
     "ConversationStatus",
     "FeedbackRecord",
     "UserSetting",
+    "SimulationRun",
+    "SimulationResultRecord",
 ]

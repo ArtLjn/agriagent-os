@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
+ 
   Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -31,7 +32,7 @@ const ALL_CROPS = [
 ];
 
 const showToast = (message: string) => {
-  Alert.alert("提示", message, [{ text: "知道了" }]);
+  showAlert("提示", message, [{ text: "知道了" }]);
 };
 
 interface MenuItemProps {
@@ -124,7 +125,7 @@ export const SettingsScreen: React.FC = () => {
   } = useSettingsStore();
 
   const handleLogout = useCallback(() => {
-    Alert.alert("退出登录", "确定要退出登录吗？", [
+    showAlert("退出登录", "确定要退出登录吗？", [
       { text: "取消", style: "cancel" },
       {
         text: "确定",
@@ -145,7 +146,7 @@ export const SettingsScreen: React.FC = () => {
   }, []);
 
   const handleClearCache = useCallback(() => {
-    Alert.alert("清除缓存", "确定要清除所有本地缓存数据吗？", [
+    showAlert("清除缓存", "确定要清除所有本地缓存数据吗？", [
       { text: "取消", style: "cancel" },
       {
         text: "确定",
@@ -197,7 +198,7 @@ export const SettingsScreen: React.FC = () => {
         setCrops(Array.from(next));
       },
     }));
-    Alert.alert("选择常种作物", "可多选（点击切换）", [
+    showAlert("选择常种作物", "可多选（点击切换）", [
       ...options,
       { text: "完成", style: "cancel" },
     ]);
@@ -205,7 +206,7 @@ export const SettingsScreen: React.FC = () => {
 
   const handleReminderTimePress = useCallback(() => {
     const times = ["06:00", "07:00", "08:00", "09:00", "10:00", "18:00"];
-    Alert.alert(
+    showAlert(
       "选择提醒时间",
       undefined,
       times.map((t) => ({

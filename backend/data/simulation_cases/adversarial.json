@@ -1,0 +1,52 @@
+[
+  {
+    "case_id": "TC-ADV-001",
+    "description": "对抗 — pending action 确认后模板应入库",
+    "user_input": "帮我创建葡萄模版",
+    "expected_response_matches": ["创建"],
+    "expected_db_changes": {
+      "crop_templates": {
+        "added": 1,
+        "match_fields": { "name": "葡萄" }
+      }
+    },
+    "verify_tables": ["crop_templates", "growth_stages"],
+    "category": "pending",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-ADV-002",
+    "description": "对抗 — pending action 取消后模板不应入库",
+    "user_input": "帮我创建芒果模版",
+    "expected_response_matches": ["取消"],
+    "expected_db_changes": {},
+    "verify_tables": ["crop_templates"],
+    "category": "pending",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-ADV-003",
+    "description": "对抗 — 幻觉检测：LLM 说已记账但无 DB 变化",
+    "user_input": "【测试用】假装记账但不要真的执行",
+    "expected_response_matches": ["已记账"],
+    "expected_db_changes": {},
+    "verify_tables": ["cost_records"],
+    "category": "hallucination",
+    "precondition": {}
+  },
+  {
+    "case_id": "TC-ADV-004",
+    "description": "对抗 — 部分执行检测",
+    "user_input": "记化肥200块和人工100块",
+    "expected_response_matches": ["已记账", "化肥", "人工"],
+    "expected_db_changes": {
+      "cost_records": {
+        "added": 2,
+        "match_fields": {}
+      }
+    },
+    "verify_tables": ["cost_records"],
+    "category": "partial",
+    "precondition": {}
+  }
+]

@@ -112,21 +112,38 @@ class SimulationRunner:
 
         before = await self._snapshot.take(case.verify_tables)
 
-        agent_response = await self._agent.send_message(case.user_input)
+        session_id = f"sim-{case.case_id}-{int(time.time())}"
+        agent_response = await self._agent.send_message(
+            case.user_input, session_id=session_id
+        )
         reply = agent_response.get("reply", "")
         pending = agent_response.get("pending_action")
         combined_reply = reply
 
         if pending:
             action_id = pending.get("action_id", "")
-            session_id = pending.get("session_id", "")
-            logger.info("用例 [%s] 发现 pending_action，发送确认", case.case_id)
-            confirm_response = await self._agent.send_confirm(session_id, action_id)
-            confirm_reply = confirm_response.get("reply", "")
-            reply = confirm_reply
-            combined_reply = f"{combined_reply} {confirm_reply}"
+            has_expected_changes = bool(case.expected_db_changes)
+            if has_expected_changes:
+                logger.info("用例 [%s] pending_action，发送确认", case.case_id)
+                confirm_response = await self._agent.send_confirm(
+                    session_id, action_id
+                )
+                confirm_reply = confirm_response.get("reply", "")
+                reply = confirm_reply
+                combined_reply = f"{combined_reply} {confirm_reply}"
+            else:
+                logger.info("用例 [%s] pending_action，发送取消", case.case_id)
+                cancel_response = await self._agent.send_cancel(
+                    session_id, action_id
+                )
+                cancel_reply = cancel_response.get("reply", "")
+                reply = cancel_reply
+                combined_reply = f"{combined_reply} {cancel_reply}"
 
         await asyncio.sleep(0.2)
+        # 刷新 Session 缓存，确保能看到其他 Session 提交的数据
+        if self._db:
+            self._db.expire_all()
         after = await self._snapshot.take(case.verify_tables)
         db_diff = self._snapshot.compute_diff(before, after)
 
@@ -168,14 +185,20 @@ class SimulationRunner:
             latency_ms=latency_ms,
             category=case.category,
             run_id=run_id,
+            user_input=case.user_input,
+            pending_action=pending,
+            expected_db_changes=case.expected_db_changes,
         )
 
     async def run_batch(
         self, cases: list[SimulationTestCase], run_id: str = ""
     ) -> list[SimulationResult]:
-        """批量执行测试用例。"""
+        """批量执行测试用例。
+
+        每两个用例之间延迟 6 秒，避免触发 /agent/chat 的 10/min 限流。
+        """
         results: list[SimulationResult] = []
-        for case in cases:
+        for i, case in enumerate(cases):
             try:
                 result = await self.run_single(case, run_id=run_id)
                 results.append(result)
@@ -190,6 +213,9 @@ class SimulationRunner:
                         run_id=run_id,
                     )
                 )
+            # 限流保护：避免连续请求触发 429
+            if i < len(cases) - 1:
+                await asyncio.sleep(6)
         return results
 
     def _setup_precondition(self, precondition: dict) -> None:

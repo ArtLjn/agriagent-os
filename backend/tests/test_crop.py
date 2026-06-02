@@ -331,3 +331,20 @@ class TestParseCropTemplateIdempotency:
         )
         assert response2.status_code == 200
         assert response2.json() == response1.json()
+
+
+def test_parse_crop_template_returns_422_on_invalid_data():
+    """当 LLM 返回不合法数据时，应返回 422 而非 500。"""
+    from unittest.mock import patch
+    from app.schemas.crop import CropTemplateParseResponse
+
+    with patch("app.api.crop._parse_crop_with_llm") as mock_parse:
+        mock_parse.return_value = CropTemplateParseResponse(
+            name="未知作物", variety=None, stages=[]
+        )
+        response = client.post(
+            "/crops/templates/parse", json={"description": "hhhhhh"}
+        )
+
+    assert response.status_code == 422
+    assert "无法识别作物信息" in response.json()["detail"]

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+ 
   RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -30,7 +31,7 @@ export const DebtListScreen: React.FC = () => {
 
   useEffect(() => {
     if (error) {
-      Alert.alert("错误", error);
+      showAlert("错误", error);
       clearError();
     }
   }, [error]);
@@ -42,7 +43,7 @@ export const DebtListScreen: React.FC = () => {
   };
 
   const handleSettle = (counterparty: string) => {
-    Alert.alert("确认还款", `确认结清 ${counterparty} 的欠款？`, [
+    showAlert("确认还款", `确认结清 ${counterparty} 的欠款？`, [
       { text: "取消", style: "cancel" },
       {
         text: "确认",

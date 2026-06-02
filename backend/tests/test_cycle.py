@@ -188,3 +188,18 @@ def test_advance_stage_not_found():
     """测试对不存在的茬口推进阶段返回 400。"""
     response = client.post("/cycles/99999/advance-stage")
     assert response.status_code == 400
+
+
+def test_parse_cycle_returns_422_on_invalid_data():
+    """当 LLM 返回不合法数据时，应返回 422 而非 500。"""
+    from unittest.mock import patch
+    from app.schemas.cycle import CycleParseResponse
+
+    with patch("app.api.cycle._parse_cycle_with_llm") as mock_parse:
+        mock_parse.return_value = CycleParseResponse(
+            name="", crop_template_id=None, start_date=""
+        )
+        response = client.post("/cycles/parse", json={"description": "hhhhhh"})
+
+    assert response.status_code == 422
+    assert "无法识别茬口信息" in response.json()["detail"]

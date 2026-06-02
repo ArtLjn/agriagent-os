@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { showAlert } from "../../utils/alert";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -74,7 +74,7 @@ export const CropTemplateCreateScreen: React.FC = () => {
       );
       setAiInput("");
     } catch (err: any) {
-      Alert.alert("解析失败", err.message || "请稍后重试");
+      showAlert("解析失败", err.message || "请稍后重试");
     } finally {
       setAiLoading(false);
     }
@@ -114,7 +114,7 @@ export const CropTemplateCreateScreen: React.FC = () => {
   const handleSave = useCallback(async () => {
     const error = validate();
     if (error) {
-      Alert.alert("提示", error);
+      showAlert("提示", error);
       return;
     }
     setSaving(true);
@@ -131,7 +131,7 @@ export const CropTemplateCreateScreen: React.FC = () => {
       });
       navigation.goBack();
     } catch (err: any) {
-      Alert.alert("创建失败", err.message || "请稍后重试");
+      showAlert("创建失败", err.message || "请稍后重试");
     } finally {
       setSaving(false);
     }

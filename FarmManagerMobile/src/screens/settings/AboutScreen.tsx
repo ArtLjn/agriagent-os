@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
@@ -6,7 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
-  Alert,
+ 
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -49,7 +50,7 @@ export const AboutScreen: React.FC = () => {
     if (updateInfo.force_update) {
       doDownload();
     } else {
-      Alert.alert(
+      showAlert(
         `发现新版本 v${updateInfo.latest_version}`,
         updateInfo.changelog,
         [
@@ -63,7 +64,7 @@ export const AboutScreen: React.FC = () => {
   const doDownload = () => {
     if (!updateInfo) return;
     Linking.openURL(updateInfo.download_url).catch(() => {
-      Alert.alert("提示", "无法打开下载链接");
+      showAlert("提示", "无法打开下载链接");
     });
   };
 

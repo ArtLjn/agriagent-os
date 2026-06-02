@@ -5,7 +5,7 @@ import os
 import sys
 import time
 from contextvars import ContextVar
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
@@ -28,7 +28,7 @@ def _ensure_log_dir(log_dir: Path) -> Path:
 def setup_logging() -> None:
     """初始化全局日志配置。
 
-    同时输出到 stdout（带颜色）和文件（纯文本，自动轮转）。
+    同时输出到 stdout（带颜色）和文件（纯文本，按天自动轮转）。
     日志目录可通过环境变量 ``LOG_DIR`` 自定义，默认 ``backend/logs/``。
     """
     root = logging.getLogger()
@@ -50,21 +50,23 @@ def setup_logging() -> None:
     )
     file_fmt = "%(asctime)s │ %(request_id)s │ %(name)s │ %(levelname)s │ %(message)s"
 
-    # 2a. 全量日志 app.log（INFO 及以上）
-    app_handler = RotatingFileHandler(
+    # 2a. 全量日志 app.log（INFO 及以上），每天零点自动轮转
+    app_handler = TimedRotatingFileHandler(
         log_dir / "app.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
+        when="midnight",
+        interval=1,
+        backupCount=30,
         encoding="utf-8",
     )
     app_handler.setFormatter(logging.Formatter(file_fmt))
     root.addHandler(app_handler)
 
-    # 2b. 错误日志 error.log（WARNING 及以上）
-    error_handler = RotatingFileHandler(
+    # 2b. 错误日志 error.log（WARNING 及以上），每天零点自动轮转
+    error_handler = TimedRotatingFileHandler(
         log_dir / "error.log",
-        maxBytes=5 * 1024 * 1024,
-        backupCount=3,
+        when="midnight",
+        interval=1,
+        backupCount=30,
         encoding="utf-8",
     )
     error_handler.setFormatter(logging.Formatter(file_fmt))

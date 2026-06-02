@@ -23,6 +23,7 @@ from app.schemas.agent import (
     ChatRequest,
     ChatResponse,
     DailyAdviceResponse,
+    PendingActionResponse,
     ReportRequest,
     ReportResponse,
     AdviceHistoryItem,
@@ -85,11 +86,20 @@ async def agent_chat(
             session_id=chat_request.session_id,
             request_id=rid,
         )
+        # 非流式端点也需要返回 pending_action（供仿真测试等调用方使用）
+        pending = get_pending(farm.id)
+        if pending:
+            result.pending_action = PendingActionResponse(
+                action_id=pending.action_id,
+                skill_name=pending.skill_name,
+                params=pending.params,
+            )
         logger.info(
-            "[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符",
+            "[%s] /agent/chat 完成 | 耗时 %.2fs | reply %d 字符 | pending=%s",
             rid,
             time.perf_counter() - start,
             len(result.reply),
+            bool(pending),
         )
         return result
     except LlmNotConfiguredError as e:

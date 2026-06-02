@@ -161,6 +161,7 @@ export interface PromptItem {
   version: string;
   active: boolean;
   content_length: number;
+  content: string;
 }
 
 export interface ListPromptsResponse {

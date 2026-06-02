@@ -5,12 +5,12 @@ import {
   TextInput,
   StyleSheet,
   ScrollView,
-  Alert,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { showAlert } from "../../utils/alert";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
@@ -61,7 +61,7 @@ export const CycleCreateScreen: React.FC = () => {
 
   useEffect(() => {
     if (error) {
-      Alert.alert("错误", error);
+      showAlert("错误", error);
       clearError();
     }
   }, [error]);
@@ -81,7 +81,7 @@ export const CycleCreateScreen: React.FC = () => {
       }
       setAiInput("");
     } catch (err: any) {
-      Alert.alert("解析失败", err.message || "请稍后重试");
+      showAlert("解析失败", err.message || "请稍后重试");
     } finally {
       setAiLoading(false);
     }
@@ -89,7 +89,7 @@ export const CycleCreateScreen: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!name.trim() || !selectedTemplateId || !startDate.trim()) {
-      Alert.alert("提示", "请填写茬口名称、选择作物模板和开始日期");
+      showAlert("提示", "请填写茬口名称、选择作物模板和开始日期");
       return;
     }
     await createCycle({
