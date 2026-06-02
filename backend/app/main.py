@@ -36,6 +36,7 @@ from app.api import (  # noqa: E402
     user_settings,
     weather,
 )
+from app.simulation.routes import router as simulation_router  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.database import engine, Base, SessionLocal  # noqa: E402
 from app.core.date_context import set_request_date  # noqa: E402
@@ -215,6 +216,7 @@ app.include_router(user_settings.router)
 app.include_router(debt.router)
 app.include_router(feedback.router)
 app.include_router(app_version.router)
+app.include_router(simulation_router)
 
 
 @app.get("/health")
