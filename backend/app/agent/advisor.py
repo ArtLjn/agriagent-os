@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
+from app.agent.intent_router import IntentType, classify_intent, get_greeting_reply
 from app.agent.skills import get_skill_manager, build_skill_context
 from app.infra.pending_actions import (
     get_pending,
@@ -67,13 +68,18 @@ async def invoke_advisor(
         logger.warning("Agent 输入被拦截 | farm_id=%s, reason=%s", farm_id, reason)
         return f"输入内容包含不安全信息，已被拦截。原因：{reason}"
 
+    # 意图路由：问候语直接回复，跳过 LangGraph
+    intent = classify_intent(user_input)
+    if intent == IntentType.GREETING:
+        return filter_output(get_greeting_reply(user_input))
+
     init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
 
     pending = get_pending(farm_id)
     if pending:
-        intent = detect_user_intent(user_input)
-        if intent == "confirm":
+        pending_intent = detect_user_intent(user_input)
+        if pending_intent == "confirm":
             logger.info(
                 "用户确认执行 pending action | farm_id=%s | skill=%s",
                 farm_id,
@@ -90,7 +96,7 @@ async def invoke_advisor(
             finally:
                 remove_pending(farm_id)
             return filter_output(reply)
-        if intent == "cancel":
+        if pending_intent == "cancel":
             logger.info("用户取消 pending action | farm_id=%s", farm_id)
             remove_pending(farm_id)
             return "好的，已取消。"
@@ -142,13 +148,19 @@ async def stream_advisor(
         yield f"输入内容包含不安全信息，已被拦截。原因：{reason}"
         return
 
+    # 意图路由：问候语直接回复，跳过 LangGraph
+    intent = classify_intent(user_input)
+    if intent == IntentType.GREETING:
+        yield filter_output(get_greeting_reply(user_input))
+        return
+
     init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
 
     pending = get_pending(farm_id)
     if pending:
-        intent = detect_user_intent(user_input)
-        if intent == "confirm":
+        pending_intent = detect_user_intent(user_input)
+        if pending_intent == "confirm":
             logger.info(
                 "用户确认执行 pending action | farm_id=%s | skill=%s",
                 farm_id,
@@ -166,7 +178,7 @@ async def stream_advisor(
                 remove_pending(farm_id)
             yield filter_output(reply)
             return
-        if intent == "cancel":
+        if pending_intent == "cancel":
             logger.info("用户取消 pending action | farm_id=%s", farm_id)
             remove_pending(farm_id)
             yield "好的，已取消。"
