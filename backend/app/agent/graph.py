@@ -1,7 +1,9 @@
 """LangGraph 图编译模块 — 自定义 StateGraph 实现并行 Skill 执行。"""
 
 import asyncio
+import json
 import logging
+import re
 import threading
 from datetime import date
 from typing import Annotated
@@ -146,6 +148,46 @@ def _find_last_human_message(messages: list) -> str:
         if isinstance(msg, HumanMessage):
             return msg.content or ""
     return ""
+
+
+def _extract_tool_calls_from_content(content: str) -> list[dict] | None:
+    """从 LLM content 中解析 JSON 格式的伪工具调用，转换为 LangChain tool_calls 格式。
+
+    兼容以下格式：
+      {"name": "xxx", "parameters": {...}}
+      {"action": "xxx", "args": {...}}
+      {"tool": "xxx", "arguments": {...}}
+    """
+    if not content:
+        return None
+
+    # 匹配 content 中的 JSON 对象（支持前面有 emoji/文本前缀）
+    json_pattern = re.compile(
+        r'\{[ \t]*"(?:name|action|tool|function)"[ \t]*:[ \t]*"([^"]+)"[ \t]*,'
+        r'[ \t]*"(?:parameters|params|args|arguments)"[ \t]*:[ \t]*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})[ \t]*\}',
+        re.DOTALL,
+    )
+
+    matches = list(json_pattern.finditer(content))
+    if not matches:
+        return None
+
+    tool_calls: list[dict] = []
+    for idx, m in enumerate(matches):
+        tool_name = m.group(1)
+        params_json = m.group(2)
+        try:
+            args = json.loads(params_json)
+        except json.JSONDecodeError:
+            logger.warning("Content JSON 参数解析失败 | tool=%s | raw=%s", tool_name, params_json[:200])
+            continue
+        tool_calls.append({
+            "id": f"call_content_{idx}_{_time.time_ns()}",
+            "name": tool_name,
+            "args": args,
+        })
+
+    return tool_calls if tool_calls else None
 
 
 def _extract_tokens_used(response: AIMessage) -> int | None:
@@ -395,6 +437,25 @@ async def _llm_node(state: AgentState) -> dict:
 
     duration_ms = int((_time.perf_counter() - start) * 1000)
     model_name = getattr(raw_llm, "model_name", "unknown")
+
+    # 兼容层：部分 provider（如 nvidia llama-3.1）不支持 bind_tools，
+    # LLM 会把工具调用 JSON 直接写进 content 而不是通过 tool_calls API。
+    # 这里检测并手动解析，确保 graph 能正确路由到 tools 节点。
+    if not response.tool_calls:
+        parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
+        if parsed_tool_calls:
+            logger.info(
+                "LLM content 中检测到工具调用 JSON，手动构造 tool_calls | tools=%s | model=%s",
+                [tc["name"] for tc in parsed_tool_calls],
+                model_name,
+            )
+            # 重建 AIMessage，保留原 metadata，注入 tool_calls
+            response = AIMessage(
+                content="",
+                tool_calls=parsed_tool_calls,
+                response_metadata=response.response_metadata,
+                id=response.id,
+            )
 
     # 提取 token 用量
     tokens = _extract_tokens_used(response)
