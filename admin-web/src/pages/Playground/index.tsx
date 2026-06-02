@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Input, Button, Space, Collapse, Typography, Drawer, Tag, Tooltip, message, Select } from 'antd';
+import { Input, Button, Space, Typography, Drawer, Tag, Tooltip, message, Select } from 'antd';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { listTraces, getTimeline, type TraceTimeline, type TraceNodeDetail, listUsers, type AdminUserListItem } from '../../api/admin';
+import { listTraces, getTimeline, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
 import { listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
 import type { PendingAction } from '../../api/agent';
 import GanttTimeline from '../../components/GanttTimeline';
@@ -40,6 +40,38 @@ function MarkdownContent({ content }: { content: string }) {
   );
 }
 
+/* ── 执行状态标签 ── */
+function ExecutionStatus({ skills, pendingAction }: { skills?: string[]; pendingAction?: PendingAction | null }) {
+  if (pendingAction) {
+    return (
+      <span style={{
+        fontSize: 11, color: '#faad14', background: 'rgba(250,173,20,0.12)',
+        padding: '2px 8px', borderRadius: 4, border: '1px solid #faad14',
+      }}>
+        ⏳ 待确认执行
+      </span>
+    );
+  }
+  if (skills && skills.length > 0) {
+    return (
+      <span style={{
+        fontSize: 11, color: '#52c41a', background: 'rgba(82,196,26,0.12)',
+        padding: '2px 8px', borderRadius: 4, border: '1px solid #52c41a',
+      }} title={skills.join(', ')}>
+        ✅ 真实执行了 {skills.length} 个函数
+      </span>
+    );
+  }
+  return (
+    <span style={{
+      fontSize: 11, color: TEXT_DIM, background: 'rgba(139,148,158,0.12)',
+      padding: '2px 8px', borderRadius: 4, border: `1px solid ${TEXT_DIM}`,
+    }}>
+      💬 纯文本生成
+    </span>
+  );
+}
+
 /* ── 聊天气泡组件 ── */
 function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
@@ -61,9 +93,10 @@ function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 
         wordBreak: 'break-word',
       }}>
         {isUser ? content : <MarkdownContent content={content} />}
-        {!isUser && skills && skills.length > 0 && (
-          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {skills.map((s) => (
+        {!isUser && (
+          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <ExecutionStatus skills={skills} pendingAction={pendingAction} />
+            {skills && skills.length > 0 && skills.map((s) => (
               <span key={s} style={{
                 fontSize: 11, color: ACCENT, background: 'rgba(88,166,255,0.12)',
                 padding: '2px 8px', borderRadius: 4, border: `1px solid ${ACCENT}`,
@@ -154,6 +187,7 @@ export default function Playground() {
   const [loading, setLoading] = useState(false);
   const [timeline, setTimeline] = useState<TraceTimeline | null>(null);
   const [traceLoading, setTraceLoading] = useState(false);
+  const [traceExpanded, setTraceExpanded] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [nodeDetail, setNodeDetail] = useState<TraceNodeDetail | null>(null);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -503,51 +537,59 @@ export default function Playground() {
           )}
         </div>
 
-        {/* Trace Overlay */}
+        {/* 执行摘要 */}
         {(timeline !== null || traceLoading) && (
-          <div style={{ marginBottom: 16 }}>
-            <Collapse
-              bordered={false}
-              style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8 }}
-              items={[
-                {
-                  key: 'trace',
-                  label: (
-                    <span style={{ color: ACCENT, fontSize: 14, fontWeight: 500 }}>
-                      执行链路 {traceLoading && '(加载中...)'}
-                    </span>
-                  ),
-                  children: timeline ? (
-                    timeline.rounds && timeline.rounds.length > 0 ? (
-                      <GanttTimeline
-                        rounds={timeline.rounds.map((r) => ({
-                          round_index: r.round_index,
-                          nodes: r.nodes.map((n) => ({
-                            node_type: n.node_type,
-                            node_name: n.node_name,
-                            duration_ms: n.duration_ms,
-                            status: n.status,
-                            start_time: n.start_time,
-                            input_data: n.input_data,
-                            output_data: n.output_data,
-                            error_message: n.error_message,
-                          })),
-                        }))}
-                        onNodeClick={handleNodeClick}
-                      />
-                    ) : (
-                      <div style={{ color: TEXT_DIM, textAlign: 'center', padding: '24px 0' }}>
-                        暂无执行链路数据
-                      </div>
-                    )
-                  ) : (
-                    <div style={{ color: TEXT_DIM, textAlign: 'center', padding: '24px 0' }}>
-                      暂无执行链路数据
-                    </div>
-                  ),
-                },
-              ]}
-            />
+          <div style={{
+            marginBottom: 16,
+            background: CARD,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 8,
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+              <span style={{ color: ACCENT, fontSize: 14, fontWeight: 500 }}>执行摘要</span>
+              {traceLoading ? (
+                <span style={{ color: TEXT_DIM, fontSize: 13 }}>加载中...</span>
+              ) : timeline && timeline.rounds ? (
+                <>
+                  <span style={{ color: TEXT_DIM, fontSize: 13 }}>
+                    节点: <span style={{ color: TEXT }}>{timeline.rounds.reduce((s, r) => s + r.nodes.length, 0)}</span>
+                  </span>
+                  <span style={{ color: TEXT_DIM, fontSize: 13 }}>
+                    轮次: <span style={{ color: TEXT }}>{timeline.rounds.length}</span>
+                  </span>
+                  <span style={{ color: TEXT_DIM, fontSize: 13 }}>
+                    耗时: <span style={{ color: TEXT }}>{timeline.rounds.reduce((s, r) => s + r.nodes.reduce((ns, n) => ns + (n.duration_ms || 0), 0), 0)}ms</span>
+                  </span>
+                  {/* Skill 标签 */}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {(() => {
+                      const skillNodes = timeline.rounds.flatMap(r => r.nodes).filter(n => n.node_type === 'skill_call');
+                      return skillNodes.slice(0, 3).map((n, i) => (
+                        <Tag key={i} color="success" style={{ fontSize: 11, margin: 0 }}>{n.node_name}</Tag>
+                      ));
+                    })()}
+                  </div>
+                </>
+              ) : (
+                <span style={{ color: TEXT_DIM, fontSize: 13 }}>暂无数据</span>
+              )}
+            </div>
+            <Button
+              size="small"
+              type="primary"
+              ghost
+              onClick={() => {
+                window.open('/dev/traces', '_blank');
+              }}
+              style={{ borderColor: ACCENT, color: ACCENT }}
+            >
+              在链路追踪页面查看详情 →
+            </Button>
           </div>
         )}
 
@@ -573,80 +615,98 @@ export default function Playground() {
             发送
           </Button>
         </Space.Compact>
+      </div>
 
-        {/* 节点详情 Drawer */}
-        <Drawer
-          title="节点详情"
-          placement="right"
-          width={640}
-          onClose={() => setDrawerOpen(false)}
-          open={drawerOpen}
-        >
-          {nodeDetail ? (
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <Tag color={nodeDetail.status === 'success' ? 'success' : 'error'}>
-                  {nodeDetail.status}
-                </Tag>
-                <Tag color="processing">{getNodeLabel(nodeDetail.node_type)}</Tag>
-                <span style={{ color: TEXT_DIM }}>
-                  {nodeDetail.duration_ms?.toLocaleString() ?? '-'} ms
-                </span>
+      {/* ── 右侧节点详情浮窗 ── */}
+      <Drawer
+        title="节点详情"
+        placement="right"
+        width={480}
+        onClose={() => setDrawerOpen(false)}
+        open={drawerOpen}
+        styles={{
+          body: { background: '#0d1117', padding: 0 },
+          header: { background: '#161b22', borderBottom: '1px solid #30363d', color: '#e6edf3' },
+          mask: { background: 'rgba(0,0,0,0.6)' },
+        }}
+      >
+        {nodeDetail ? (
+          <div style={{ padding: 16, color: TEXT }}>
+            {/* 头部信息 */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+              <Tag color={nodeDetail.status === 'success' ? 'success' : 'error'}>
+                {nodeDetail.status}
+              </Tag>
+              <Tag color="processing">{getNodeLabel(nodeDetail.node_type)}</Tag>
+              <span style={{ color: TEXT_DIM, fontSize: 13 }}>
+                {nodeDetail.duration_ms?.toLocaleString() ?? '-'} ms
+              </span>
+            </div>
+
+            {/* 节点名称 */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>节点名称</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: ACCENT }}>{nodeDetail.node_name}</div>
+            </div>
+
+            {/* 开始时间 */}
+            {nodeDetail.start_time && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>开始时间</div>
+                <div style={{ fontSize: 13 }}>{new Date(nodeDetail.start_time).toLocaleString('zh-CN')}</div>
               </div>
+            )}
+
+            {/* 错误信息 */}
+            {nodeDetail.error_message && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ color: '#ff4d4f', fontSize: 12, marginBottom: 4 }}>错误信息</div>
+                <pre style={{
+                  backgroundColor: '#2a1215', padding: 12, borderRadius: 6,
+                  border: '1px solid #58181c', color: '#ff4d4f', fontSize: 12,
+                  margin: 0, whiteSpace: 'pre-wrap',
+                }}>
+                  {nodeDetail.error_message}
+                </pre>
+              </div>
+            )}
+
+            {/* 输入数据 */}
+            {nodeDetail.input_data && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>输入数据</div>
+                <pre style={{
+                  backgroundColor: '#161b22', padding: 12, borderRadius: 6,
+                  border: '1px solid #30363d', fontSize: 12, margin: 0,
+                  maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
+                  color: TEXT,
+                }}>
+                  {formatJson(nodeDetail.input_data)}
+                </pre>
+              </div>
+            )}
+
+            {/* 输出数据 */}
+            {nodeDetail.output_data && (
               <div>
-                <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>节点名称</div>
-                <div style={{ fontSize: 15, fontWeight: 500 }}>{nodeDetail.node_name}</div>
-              </div>
-              {nodeDetail.start_time && (
-                <div>
-                  <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>开始时间</div>
-                  <div>{new Date(nodeDetail.start_time).toLocaleString('zh-CN')}</div>
-                </div>
-              )}
-              {nodeDetail.error_message && (
-                <div>
-                  <div style={{ color: '#ff4d4f', marginBottom: 4, fontSize: 12 }}>错误信息</div>
-                  <pre style={{
-                    backgroundColor: '#2a1215', padding: 12, borderRadius: 6,
-                    border: '1px solid #58181c', color: '#ff4d4f', fontSize: 12,
-                    margin: 0, whiteSpace: 'pre-wrap',
-                  }}>
-                    {nodeDetail.error_message}
-                  </pre>
-                </div>
-              )}
-              {nodeDetail.input_data && (
-                <div>
-                  <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输入数据</div>
+                <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>输出数据</div>
+                {nodeDetail.node_type === 'skill_call' ? (
+                  <SkillOutputFormatter outputData={nodeDetail.output_data} />
+                ) : (
                   <pre style={{
                     backgroundColor: '#161b22', padding: 12, borderRadius: 6,
                     border: '1px solid #30363d', fontSize: 12, margin: 0,
-                    maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
+                    maxHeight: 500, overflow: 'auto', whiteSpace: 'pre-wrap',
+                    color: TEXT,
                   }}>
-                    {formatJson(nodeDetail.input_data)}
+                    {formatJson(nodeDetail.output_data)}
                   </pre>
-                </div>
-              )}
-              {nodeDetail.output_data && (
-                <div>
-                  <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
-                  {nodeDetail.node_type === 'skill_call' ? (
-                    <SkillOutputFormatter outputData={nodeDetail.output_data} />
-                  ) : (
-                    <pre style={{
-                      backgroundColor: '#161b22', padding: 12, borderRadius: 6,
-                      border: '1px solid #30363d', fontSize: 12, margin: 0,
-                      maxHeight: 500, overflow: 'auto', whiteSpace: 'pre-wrap',
-                    }}>
-                      {formatJson(nodeDetail.output_data)}
-                    </pre>
-                  )}
-                </div>
-              )}
-            </Space>
-          ) : null}
-        </Drawer>
-      </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Drawer>
     </div>
   );
 }

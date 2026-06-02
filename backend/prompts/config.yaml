@@ -27,6 +27,7 @@ compositions:
       - p1-parallel-tool
       - p2-role
       - p2-capability
+      - p2-tool-guide
       - p3-format
       - p3-style
       - p4-context

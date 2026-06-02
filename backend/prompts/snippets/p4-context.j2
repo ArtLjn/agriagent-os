@@ -3,11 +3,13 @@
 今天是 {{ current_date }}，星期{{ current_weekday }}。当前时间 {{ current_time }}。
 {% endif %}
 
-{% if farm_location or current_season %}
+{% if farm_location or current_season or farm_coords or active_crops %}
 【用户信息】
 <user_context>
   {% if farm_location %}<location>{{ farm_location }}</location>{% endif %}
+  {% if farm_coords %}<coords>{{ farm_coords }}</coords>{% endif %}
   {% if display_name %}<name>{{ display_name }}</name>{% endif %}
   {% if current_season %}<season>{{ current_season }}</season>{% endif %}
+  {% if active_crops %}<planting>{{ active_crops }}</planting>{% endif %}
 </user_context>
 {% endif %}

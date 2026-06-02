@@ -384,6 +384,20 @@ def advice_history(
     return get_advice_history(db, farm_id=farm.id, cycle_id=cycle_id, limit=limit)
 
 
+def _parse_structured_data(meta: str | None) -> dict | None:
+    """从 meta 字段解析结构化数据。"""
+    if not meta:
+        return None
+    try:
+        import json
+        parsed = json.loads(meta)
+        if isinstance(parsed, dict) and "overview" in parsed:
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
 @router.get("/report-history", response_model=list[ReportHistoryItem])
 @limiter.limit("10/minute")
 def report_history(
@@ -395,7 +409,20 @@ def report_history(
     farm: Farm = Depends(get_current_farm),
 ) -> list[ReportHistoryItem]:
     """查询报告历史记录。"""
-    return get_report_history(db, farm_id=farm.id, cycle_id=cycle_id, limit=limit)
+    records = get_report_history(
+        db, farm_id=farm.id, cycle_id=cycle_id, limit=limit
+    )
+    return [
+        ReportHistoryItem(
+            id=r.id,
+            cycle_id=r.cycle_id,
+            report_type=r.record_type,
+            content=r.content,
+            structured_data=_parse_structured_data(r.meta),
+            created_at=r.created_at,
+        )
+        for r in records
+    ]
 
 
 @router.get("/reports", response_model=ReportListResponse)
@@ -421,6 +448,7 @@ async def list_reports(
             cycle_id=r.cycle_id,
             report_type=r.record_type,
             content=r.content,
+            structured_data=_parse_structured_data(r.meta),
             created_at=r.created_at,
         )
         for r in records

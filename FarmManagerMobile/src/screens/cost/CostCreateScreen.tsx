@@ -61,7 +61,8 @@ export const CostCreateScreen: React.FC = () => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [isDebt, setIsDebt] = useState(false);
   const [counterparty, setCounterparty] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
 
   const isIncome = recordType === "income";
   const theme = useMemo(() => {
@@ -129,9 +130,15 @@ export const CostCreateScreen: React.FC = () => {
       Alert.alert("提示", "请输入有效金额");
       return;
     }
-    if (recordType === "cost" && isDebt && !counterparty.trim()) {
-      Alert.alert("提示", "请填写债权人");
-      return;
+    if (recordType === "cost" && isDebt) {
+      if (!counterparty.trim()) {
+        Alert.alert("提示", "请填写债权人");
+        return;
+      }
+      if (!dueDate) {
+        Alert.alert("提示", "请选择预计还款日");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -144,7 +151,7 @@ export const CostCreateScreen: React.FC = () => {
           record_date: dayjs(recordDate).format("YYYY-MM-DD"),
           record_subtype: "赊账",
           counterparty: counterparty.trim(),
-          due_date: dueDate.trim() || undefined,
+          due_date: dueDate ? dayjs(dueDate).format("YYYY-MM-DD") : undefined,
           note: note.trim() || undefined,
         });
         await useCostStore.getState().fetchRecords();
@@ -354,16 +361,24 @@ export const CostCreateScreen: React.FC = () => {
                   onChangeText={setCounterparty}
                 />
               </View>
-              <View style={styles.debtField}>
-                <Text style={styles.debtLabel}>到期日（可选）</Text>
-                <TextInput
-                  style={styles.debtInput}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textTertiary}
-                  value={dueDate}
-                  onChangeText={setDueDate}
-                />
-              </View>
+              <TouchableOpacity
+                style={styles.debtField}
+                onPress={() => setShowDueDatePicker(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.debtLabel}>预计还款日</Text>
+                <View style={styles.debtDateRow}>
+                  <Text
+                    style={[
+                      styles.debtDateValue,
+                      !dueDate && { color: colors.textTertiary },
+                    ]}
+                  >
+                    {dueDate ? dayjs(dueDate).format("YYYY-MM-DD") : "请选择预计还款日"}
+                  </Text>
+                  <Icon name="chevron-right" size={18} color={colors.textTertiary} />
+                </View>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -411,6 +426,17 @@ export const CostCreateScreen: React.FC = () => {
           setShowDatePicker(false);
         }}
         onCancel={() => setShowDatePicker(false)}
+      />
+
+      <DatePickerModal
+        visible={showDueDatePicker}
+        date={dueDate || new Date()}
+        onConfirm={(d) => {
+          setDueDate(d);
+          setShowDueDatePicker(false);
+        }}
+        onCancel={() => setShowDueDatePicker(false)}
+        disableFuture={false}
       />
 
       <CategoryModal
@@ -596,12 +622,18 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: "500",
   },
-  debtInput: {
+  debtDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderRadius: borderRadiusV2.lg,
     padding: spacingV2.md,
+    backgroundColor: colors.surface,
+  },
+  debtDateValue: {
     fontSize: fontSizeV2.md,
     color: colors.text,
-    backgroundColor: colors.surface,
+    fontWeight: "500",
   },
   noteSection: {
     marginTop: spacingV2.md,

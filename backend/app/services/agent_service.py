@@ -12,10 +12,9 @@ from app.agent.advisor import invoke_advisor, stream_advisor
 from app.agent.guardrails import filter_output
 from app.agent.llm import get_llm
 from app.agent.prompt_composer import get_composer
-from app.agent.report import generate_cycle_report
 from app.agent.skills import get_langchain_tools
 from app.core.json_repair import safe_parse_json
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from app.infra.pending_actions import (
     detect_user_intent,
     get_pending,
@@ -235,12 +234,43 @@ async def stream_chat_with_agent(
     user_id: str | None = None,
     request_id: str = "",
 ) -> AsyncGenerator[str, None]:
-    """流式与 Agent 对话，逐 token 返回。"""
+    """流式与 Agent 对话，逐 token 返回。支持写操作确认流程。"""
     # 如果有 session_id 和 db，获取或创建会话并保存用户消息
     conversation = None
     if db and session_id:
         conversation = get_or_create_conversation(db, farm_id, session_id, user_id=user_id)
         save_message(db, conversation.id, "user", message)
+
+    # 检查是否有 pending action（写操作确认流程）
+    pending = get_pending(farm_id)
+    if pending is not None:
+        intent = detect_user_intent(message)
+
+        if intent == "confirm":
+            logger.info(
+                "用户确认执行 | farm=%s skill=%s params=%s",
+                farm_id, pending.skill_name, pending.params,
+            )
+            try:
+                result = await _execute_pending_action(
+                    farm_id, pending.skill_name, pending.params
+                )
+                reply = f"已执行：{result}"
+            except Exception as exc:
+                logger.error("执行 pending action 失败: %s", exc)
+                reply = f"执行失败：{exc}"
+            finally:
+                remove_pending(farm_id)
+            yield reply
+            return
+
+        if intent == "cancel":
+            logger.info("用户取消操作 | farm=%s skill=%s", farm_id, pending.skill_name)
+            remove_pending(farm_id)
+            yield "已取消操作。"
+            return
+
+        # intent == "modify"：继续走 LangGraph，让 LLM 根据上下文重新决策
 
     # 统一走 LangGraph Function Calling 流式路由
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
@@ -343,30 +373,124 @@ async def generate_report(
     cycle_id: int | None = None,
     report_type: str = "weekly",
 ) -> ReportResponse:
-    """生成种植周期报告并保存。"""
+    """生成结构化种植报告并保存。"""
     logger.info("生成报告 | type=%s cycle=%s farm=%s", report_type, cycle_id, farm_id)
-    if cycle_id:
-        content = await generate_cycle_report(cycle_id)
+
+    from app.services import report_data_service
+    from app.schemas.structured_report import (
+        StructuredReportData,
+        ReportOverviewMetrics,
+        ReportCycleItem,
+        ReportCostItem,
+        ReportLogItem,
+        ReportAdviceItem,
+    )
+    from pathlib import Path
+    from jinja2 import Template
+
+    # 1. 获取结构化数据（数据库精确计算）
+    if report_type == "monthly":
+        report_data = await report_data_service.get_monthly_report_data(db, farm_id)
     else:
-        context = await farm_context_service.build_summary(db, farm_id)
-        system_text = get_composer().compose(
-            "report",
-            variables={"report_type": report_type},
-            current_date=datetime.now().date(),
-        )
-        user_text = (
-            f"请基于以下农场现状生成一份{report_type}综合报告。\n\n"
-            f"{context}\n\n"
-            "请整理成一份包含进度、成本分析和下一步建议的报告。"
-        )
-        llm = get_llm()
-        response = await llm.ainvoke(
-            [SystemMessage(content=system_text), HumanMessage(content=user_text)]
-        )
-        content = filter_output(response.content or "")
+        report_data = await report_data_service.get_weekly_report_data(db, farm_id)
+
+    # 如果指定了 cycle_id，过滤数据只保留该茬口
+    if cycle_id is not None:
+        report_data.cycles = [c for c in report_data.cycles if c["cycle_id"] == cycle_id]
+        report_data.costs = [c for c in report_data.costs if c.get("cycle_id") == cycle_id]
+        report_data.logs = [log for log in report_data.logs if log.get("cycle_id") == cycle_id]
+
+    # 2. 调用 LLM 生成总结和建议
+    import json
+    data_json = json.dumps(
+        {
+            "report_type": report_data.report_type,
+            "period": f"{report_data.period_start.isoformat()} ~ {report_data.period_end.isoformat()}",
+            "overview": report_data.overview,
+            "cycles": report_data.cycles,
+            "costs": report_data.costs,
+            "logs": report_data.logs,
+        },
+        ensure_ascii=False,
+        default=str,
+    )
+
+    prompts_dir = Path(__file__).parent.parent.parent / "prompts"
+    template_path = prompts_dir / "structured_report.j2"
+    prompt_text = Template(template_path.read_text()).render(
+        report_data_json=data_json
+    )
+
+    llm = get_llm()
+    response = await llm.ainvoke([HumanMessage(content=prompt_text)])
+    raw = filter_output(response.content or "")
+
+    # 3. 解析 LLM 返回的 JSON
+    summary = ""
+    advice_items: list[ReportAdviceItem] = []
+    try:
+        parsed = safe_parse_json(raw)
+        if isinstance(parsed, dict):
+            summary = str(parsed.get("summary", ""))[:200]
+            for item in parsed.get("advice_items", []):
+                advice_items.append(
+                    ReportAdviceItem(
+                        title=str(item.get("title", ""))[:20],
+                        detail=str(item.get("detail", ""))[:100],
+                        priority=int(item.get("priority", 2)),
+                    )
+                )
+    except Exception as exc:
+        logger.warning("报告建议解析失败，使用 fallback | error=%s", exc)
+        summary = raw[:100] if raw else "报告生成完成"
+        advice_items = [
+            ReportAdviceItem(
+                title="农事建议",
+                detail=summary[:100],
+                priority=2,
+            )
+        ]
+
+    # 4. 组装结构化数据
+    structured_data = StructuredReportData(
+        report_type=report_data.report_type,
+        period_start=report_data.period_start,
+        period_end=report_data.period_end,
+        overview=ReportOverviewMetrics(**report_data.overview),
+        cycles=[ReportCycleItem(**c) for c in report_data.cycles],
+        costs=[ReportCostItem(**c) for c in report_data.costs],
+        logs=[ReportLogItem(**log) for log in report_data.logs],
+        advice=advice_items,
+        summary=summary,
+    )
+
+    # 5. 组装纯文本内容（兼容旧版 + 便于人类阅读）
+    type_label = "周报" if report_type == "weekly" else "月报"
+    content_lines = [
+        f"## {type_label} ({report_data.period_start} ~ {report_data.period_end})",
+        "",
+        f"**农场概览**：活跃茬口 {structured_data.overview.active_cycles} 个，"
+        f"农事 {structured_data.overview.log_count} 次，"
+        f"净收支 {structured_data.overview.net_profit} 元",
+        "",
+        f"**总结**：{summary}",
+        "",
+        "**建议**：",
+    ]
+    for item in advice_items:
+        priority_label = {1: "【高】", 2: "【中】", 3: "【低】"}.get(item.priority, "")
+        content_lines.append(f"- {priority_label}{item.title}：{item.detail}")
+    content = "\n".join(content_lines)
+
+    # 6. 保存到数据库（content 存纯文本，meta 存结构化数据 JSON）
+    import json
 
     record = AgentRecord(
-        cycle_id=cycle_id, record_type=report_type, content=content, farm_id=farm_id
+        cycle_id=cycle_id,
+        record_type=report_type,
+        content=content,
+        meta=json.dumps(structured_data.model_dump(mode="json"), ensure_ascii=False),
+        farm_id=farm_id,
     )
     db.add(record)
     try:
@@ -381,6 +505,7 @@ async def generate_report(
         cycle_id=record.cycle_id,
         report_type=record.record_type,
         content=record.content,
+        structured_data=structured_data.model_dump(mode="json"),
         created_at=record.created_at,
     )
 

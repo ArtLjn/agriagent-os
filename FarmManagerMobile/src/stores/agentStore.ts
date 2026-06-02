@@ -8,6 +8,7 @@ import type {
   ReportListItem,
   PendingAction,
 } from '../api/types';
+import type { AxiosResponse } from 'axios';
 import { agentApi, weatherApi } from '../api/client';
 import { useSettingsStore } from './settingsStore';
 

@@ -84,7 +84,7 @@ _JSON_ACTION_RE = re.compile(
     re.DOTALL,
 )
 
-_FALLBACK_TOOL_CALL_REPLY = "我来为您处理这个请求，请稍等。"
+_FALLBACK_TOOL_CALL_REPLY = "检测到工具调用格式异常，正在重新处理。请稍等片刻。"
 
 
 def _is_mostly_json_tool_call(text: str) -> bool:
@@ -108,25 +108,26 @@ def filter_output(text: str) -> str:
     # 1. 过滤工具调用语法泄漏 [tool(args)]
     result, count = _TOOL_CALL_LEAK_RE.subn("", result)
     if count:
-        logger.info("Guardrails 过滤工具调用泄漏 | count=%d", count)
+        logger.info("Guardrails 过滤工具调用泄漏 | category=tool_leak_bracket | count=%d", count)
         result = re.sub(r"\n{3,}", "\n\n", result).strip()
 
     # 2. 过滤 JSON 格式工具调用泄漏
     if _JSON_TOOL_CALL_RE.search(result) or _JSON_ACTION_RE.search(result):
-        logger.warning("Guardrails 检测到 JSON 工具调用泄漏 | text=%s", result[:200])
+        logger.warning("Guardrails 检测到 JSON 工具调用泄漏 | category=tool_leak_json | text=%s", result[:200])
         if _is_mostly_json_tool_call(result):
-            logger.warning("Guardrails 拦截纯 JSON 工具调用回复，返回 fallback")
+            logger.warning("Guardrails 拦截纯 JSON 工具调用回复，返回 fallback | category=tool_leak_json_pure")
             return _FALLBACK_TOOL_CALL_REPLY
         # 如果只是包含部分 JSON，尝试移除
         result, count = _JSON_TOOL_CALL_RE.subn("", result)
         if count:
+            logger.info("Guardrails 移除部分 JSON 工具调用 | category=tool_leak_json_partial | count=%d", count)
             result = re.sub(r"\n{3,}", "\n\n", result).strip()
 
     # 3. 过滤 PII
     for name, (pattern, replacement) in _PII_PATTERNS.items():
         result, count = pattern.subn(replacement, result)
         if count:
-            logger.info("Guardrails 过滤输出 PII | type=%s, count=%d", name, count)
+            logger.info("Guardrails 过滤输出 PII | category=pii_%s | count=%d", name, count)
 
     return result
 

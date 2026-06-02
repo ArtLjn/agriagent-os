@@ -298,6 +298,7 @@ export const AgentChatScreen: React.FC = () => {
               reportType: r.report_type,
               createdAt: r.created_at,
               reportId: r.id,
+              structuredData: r.structured_data,
             })
           }
         />

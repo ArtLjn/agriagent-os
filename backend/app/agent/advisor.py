@@ -191,6 +191,7 @@ async def stream_advisor(
                 "run_name": "advisor_stream",
                 "metadata": {"farm_id": farm_id, "request_type": "stream_chat"},
             },
+            stream_mode="updates",
         ):
             for node, state in event.items():
                 step += 1

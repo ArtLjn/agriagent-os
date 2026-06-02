@@ -1,6 +1,6 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse } from './types';
+import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse, ReportResponse, ReportListResponse } from './types';
 
 const API_BASE_URL = 'http://172.16.57.244:8099';
 
@@ -219,11 +219,11 @@ export const agentApi = {
       params: { cycle_id: cycleId },
     }),
   generateReport: (data: { cycle_id?: number; report_type: string }) =>
-    apiClient.post('/agent/report', data),
+    apiClient.post<ReportResponse>('/agent/report', data),
   getAdviceHistory: (cycleId?: number) =>
     apiClient.get('/agent/advice-history', { params: { cycle_id: cycleId } }),
   getReportHistory: (page: number = 1, size: number = 10) =>
-    apiClient.get('/agent/reports', { params: { page, size } }),
+    apiClient.get<ReportListResponse>('/agent/reports', { params: { page, size } }),
 };
 
 // 债务管理

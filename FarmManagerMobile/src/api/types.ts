@@ -120,10 +120,64 @@ export interface ReportRequest {
   report_type: string;
 }
 
+export interface ReportOverviewMetrics {
+  active_cycles: number;
+  log_count: number;
+  total_cost: string;
+  total_income: string;
+  net_profit: string;
+}
+
+export interface ReportCycleItem {
+  cycle_id: number;
+  name: string;
+  field_name: string | null;
+  current_stage: string;
+  progress_percent: number;
+  period_log_count: number;
+  total_stages: number;
+  current_stage_index: number;
+  days_elapsed: number;
+}
+
+export interface ReportCostItem {
+  category: string;
+  amount: string;
+  record_type: string;
+  record_date: string;
+  note: string | null;
+}
+
+export interface ReportLogItem {
+  operation_type: string;
+  operation_date: string;
+  note: string | null;
+  cycle_name: string | null;
+}
+
+export interface ReportAdviceItem {
+  title: string;
+  detail: string;
+  priority: number;
+}
+
+export interface StructuredReportData {
+  report_type: string;
+  period_start: string;
+  period_end: string;
+  overview: ReportOverviewMetrics;
+  cycles: ReportCycleItem[];
+  costs: ReportCostItem[];
+  logs: ReportLogItem[];
+  advice: ReportAdviceItem[];
+  summary: string;
+}
+
 export interface ReportResponse {
   cycle_id: number | null;
   report_type: string;
   content: string;
+  structured_data: StructuredReportData | null;
   created_at: string;
 }
 
@@ -142,6 +196,7 @@ export interface ReportListItem {
   cycle_id: number | null;
   report_type: string;
   content: string;
+  structured_data: StructuredReportData | null;
   created_at: string;
 }
 

@@ -157,14 +157,25 @@ def _extract_tool_calls_from_content(content: str) -> list[dict] | None:
       {"name": "xxx", "parameters": {...}}
       {"action": "xxx", "args": {...}}
       {"tool": "xxx", "arguments": {...}}
+      🌱 {"name": "xxx", "parameters": {...}}  （emoji 前缀）
+      工具调用：{"name": "xxx", "parameters": {...}}  （文本前缀）
     """
     if not content:
         return None
 
-    # 匹配 content 中的 JSON 对象（支持前面有 emoji/文本前缀）
+    # 匹配 content 中的 JSON 对象（支持 emoji/文本前缀，支持多行）
+    # 使用更宽松的匹配：先找到完整的 {...} 块，再验证内部结构
+    # 前缀允许：行首、空白、emoji、任意非单词字符（覆盖中文文本前缀如"工具调用："）
     json_pattern = re.compile(
-        r'\{[ \t]*"(?:name|action|tool|function)"[ \t]*:[ \t]*"([^"]+)"[ \t]*,'
-        r'[ \t]*"(?:parameters|params|args|arguments)"[ \t]*:[ \t]*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})[ \t]*\}',
+        r'(?:^|\s|\W)'  # 行首、空白或任意非单词字符（覆盖中文前缀）
+        r'(\{[ \t\n\r]*"'  # 开始大括号
+        r'(?:name|action|tool|function)'  # 工具名键
+        r'"[ \t\n\r]*:[ \t\n\r]*"([^"]+)"'  # 工具名值
+        r'[ \t\n\r]*,[ \t\n\r]*'
+        r'"(?:parameters|params|args|arguments)"'  # 参数键
+        r'[ \t\n\r]*:[ \t\n\r]*'  # 冒号
+        r'(\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})'  # 嵌套参数对象
+        r'[ \t\n\r]*\})',  # 结束大括号
         re.DOTALL,
     )
 
@@ -174,8 +185,8 @@ def _extract_tool_calls_from_content(content: str) -> list[dict] | None:
 
     tool_calls: list[dict] = []
     for idx, m in enumerate(matches):
-        tool_name = m.group(1)
-        params_json = m.group(2)
+        tool_name = m.group(2)
+        params_json = m.group(3)
         try:
             args = json.loads(params_json)
         except json.JSONDecodeError:
@@ -188,6 +199,56 @@ def _extract_tool_calls_from_content(content: str) -> list[dict] | None:
         })
 
     return tool_calls if tool_calls else None
+
+
+def _detect_missed_tool_call(
+    user_msg: str,
+    llm_reply: str,
+    selected_tools: list,
+) -> tuple[bool, list]:
+    """检测 LLM 是否应该在调用工具但返回了纯文本。
+
+    启发式规则：
+    1. 用户消息包含工具选择器匹配到的关键词
+    2. LLM 回复包含"帮你"、"查询"等承诺性词汇但没有实际调用工具
+    3. 有 selected_tools 被绑定但 LLM 未调用
+    """
+    if not selected_tools:
+        return False, []
+
+    # 承诺性词汇 = LLM 说要做某事但实际上没做
+    promise_words = ["帮你", "为你", "查询", "查看", "获取", "调用", "处理"]
+    has_promise = any(w in llm_reply for w in promise_words)
+
+    # 如果 LLM 回复很短（<20字）且没有承诺词，可能是正常闲聊，不重试
+    if len(llm_reply) < 20 and not has_promise:
+        return False, []
+
+    # 如果用户消息明显匹配某个工具的关键词，且 LLM 没有调用
+    from app.agent.tool_selector import WRITE_PATTERNS, QUERY_TRIGGERS
+
+    matched_tools = []
+    for tool in selected_tools:
+        # 检查 write patterns
+        patterns = WRITE_PATTERNS.get(tool.name, [])
+        for pat in patterns:
+            if pat.search(user_msg):
+                matched_tools.append(tool)
+                break
+        if tool in matched_tools:
+            continue
+        # 检查 query triggers
+        triggers = QUERY_TRIGGERS.get(tool.name, set())
+        for trigger in triggers:
+            if trigger in user_msg:
+                matched_tools.append(tool)
+                break
+
+    # 如果用户消息匹配了工具关键词，且 LLM 回复包含承诺词但没有调用工具
+    if matched_tools and has_promise:
+        return True, matched_tools
+
+    return False, []
 
 
 def _extract_tokens_used(response: AIMessage) -> int | None:
@@ -251,31 +312,78 @@ def _record_llm_success(circuit_key: str) -> None:
         pass
 
 
-async def _get_farm_context(farm_id: int) -> tuple[str, str]:
-    """异步获取农场位置和用户称呼，避免阻塞事件循环。"""
+async def _get_farm_context(farm_id: int) -> dict:
+    """异步获取农场上下文（位置、坐标、称呼、种植信息），避免阻塞事件循环。"""
 
-    def _query() -> tuple[str, str]:
+    def _query() -> dict:
         db = SessionLocal()
         try:
             farm = db.query(Farm).filter(Farm.id == farm_id).first()
             display_name = "农友"
             user_city = ""
+            user_lat = None
+            user_lon = None
+            active_crops = ""
+
             if farm and farm.user_id:
                 user = db.query(User).filter(User.id == farm.user_id).first()
                 if user:
-                    display_name = user.nickname
+                    display_name = user.nickname or display_name
+
                 user_setting = (
                     db.query(UserSetting)
                     .filter(UserSetting.user_id == farm.user_id)
                     .first()
                 )
-                if user_setting and user_setting.default_city:
-                    user_city = user_setting.default_city
+                if user_setting:
+                    user_city = user_setting.default_city or ""
+                    user_lat = user_setting.default_lat
+                    user_lon = user_setting.default_lon
+
+                # 获取当前活跃的茬口信息
+                try:
+                    from app.models.cycle import CropCycle, CycleStage
+
+                    cycles = (
+                        db.query(CropCycle)
+                        .filter(CropCycle.farm_id == farm_id, CropCycle.status == "active")
+                        .all()
+                    )
+                    if cycles:
+                        crop_infos = []
+                        for cycle in cycles:
+                            crop_name = cycle.name or "未知作物"
+                            current_stage = (
+                                db.query(CycleStage)
+                                .filter(CycleStage.cycle_id == cycle.id, CycleStage.is_current == 1)
+                                .first()
+                            )
+                            stage_name = current_stage.name if current_stage else "未知阶段"
+                            crop_infos.append(f"{crop_name}({stage_name})")
+                        active_crops = "、".join(crop_infos[:3])  # 最多3个
+                except Exception:
+                    pass  # 种植信息非关键，失败不影响主流程
+
             farm_location = user_city or (farm.location if farm and farm.location else "")
-            return farm_location, display_name
+
+            farm_coords = ""
+            if user_lat is not None and user_lon is not None:
+                farm_coords = f"{user_lat:.4f},{user_lon:.4f}"
+
+            return {
+                "farm_location": farm_location,
+                "farm_coords": farm_coords,
+                "display_name": display_name,
+                "active_crops": active_crops,
+            }
         except Exception:
-            logger.warning("获取用户信息失败，使用默认值", exc_info=True)
-            return "", "农友"
+            logger.warning("获取农场上下文失败，使用默认值", exc_info=True)
+            return {
+                "farm_location": "",
+                "farm_coords": "",
+                "display_name": "农友",
+                "active_crops": "",
+            }
         finally:
             db.close()
 
@@ -315,17 +423,15 @@ async def _llm_node(state: AgentState) -> dict:
 
     farm_id = state.get("farm_id", 1)
 
-    # 获取用户称呼和农场位置（提前到 select_tools 之前，用于地名检测）
-    farm_location = await _get_farm_context(farm_id)
-    display_name = farm_location[1]
-    farm_location = farm_location[0]
+    # 获取农场上下文（位置、坐标、称呼、种植信息）
+    farm_ctx = await _get_farm_context(farm_id)
+    display_name = farm_ctx["display_name"]
+    farm_location = farm_ctx["farm_location"]
 
     tools = get_langchain_tools()
     has_tool_results = bool(tool_msgs)
 
-    # 双阶段模型：工具选择用轻量模型，回复生成用高质量模型
-    llm_role = "generation" if has_tool_results else "tool-selection"
-    raw_llm = get_llm(role=llm_role)
+    raw_llm = get_llm(role="generation")
     _circuit_key = _build_circuit_key(raw_llm)
     user_msg = _find_last_human_message(messages)
     selected_names = select_tools(
@@ -353,7 +459,9 @@ async def _llm_node(state: AgentState) -> dict:
         variables={
             "display_name": display_name,
             "farm_location": farm_location,
+            "farm_coords": farm_ctx["farm_coords"],
             "current_season": current_season,
+            "active_crops": farm_ctx["active_crops"],
         },
         current_date=current_date,
     )
@@ -388,7 +496,7 @@ async def _llm_node(state: AgentState) -> dict:
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    raw_llm = get_llm(role=llm_role)
+                    raw_llm = get_llm(role="generation")
                     _circuit_key = _build_circuit_key(raw_llm)
                     if selected_tools:
                         parallel = {"parallel_tool_calls": True} if settings.ai.parallel_tool_calls else {}
@@ -456,6 +564,37 @@ async def _llm_node(state: AgentState) -> dict:
                 response_metadata=response.response_metadata,
                 id=response.id,
             )
+
+    # 检测"应该调用工具但未调用"的情况：用户消息匹配工具关键词，但 LLM 返回了纯文本
+    if not response.tool_calls and response.content:
+        should_retry, _ = _detect_missed_tool_call(
+            user_msg, response.content, selected_tools
+        )
+        if should_retry and selected_tools:
+            logger.warning(
+                "检测到 LLM 应调用工具但未调用 | user_msg=%r | selected=%s | 尝试重试",
+                user_msg[:80],
+                [t.name for t in selected_tools],
+            )
+            retry_system = SystemMessage(
+                content=system_text + "\n\n【重要提醒】用户的问题需要调用工具获取真实数据，请直接输出工具调用 JSON，不要回复文本。"
+            )
+            retry_messages = [retry_system] + messages
+            try:
+                retry_response = await llm.ainvoke(retry_messages)
+                retry_parsed = _extract_tool_calls_from_content(retry_response.content or "")
+                if retry_parsed:
+                    logger.info("重试成功，LLM 输出了工具调用 | tools=%s", [tc["name"] for tc in retry_parsed])
+                    response = AIMessage(
+                        content="",
+                        tool_calls=retry_parsed,
+                        response_metadata=retry_response.response_metadata,
+                        id=retry_response.id,
+                    )
+                else:
+                    logger.warning("重试后 LLM 仍未输出工具调用，使用原回复")
+            except Exception as retry_exc:
+                logger.warning("重试调用失败 | error=%s", retry_exc)
 
     # 提取 token 用量
     tokens = _extract_tokens_used(response)

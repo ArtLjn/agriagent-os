@@ -70,6 +70,7 @@ class ReportResponse(BaseModel):
     cycle_id: int | None = None
     report_type: str
     content: str
+    structured_data: dict | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -92,6 +93,7 @@ class ReportHistoryItem(BaseModel):
     cycle_id: int | None = None
     report_type: str
     content: str
+    structured_data: dict | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 

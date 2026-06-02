@@ -6,26 +6,78 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
-import { MarkdownText } from "../../components/MarkdownText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRoute } from "@react-navigation/native";
 import { useAgentStore } from "../../stores/agentStore";
 import { Loading } from "../../components/Loading";
+import { MarkdownText } from "../../components/MarkdownText";
+import { ReportHeader } from "../../components/report/ReportHeader";
+import { ReportOverviewRow } from "../../components/report/ReportOverviewRow";
+import { CropProgressCard } from "../../components/report/CropProgressCard";
+import { CostBreakdownCard } from "../../components/report/CostBreakdownCard";
+import { FarmLogListCard } from "../../components/report/FarmLogListCard";
+import { AdviceCard } from "../../components/report/AdviceCard";
+import { Section } from "../../components/report/Section";
 import { colors } from "../../theme/colors";
 import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import type { StructuredReportData } from "../../api/types";
 
 type ReportType = "weekly" | "monthly";
+
+const ReportContent: React.FC<{
+  data: StructuredReportData;
+}> = ({ data }) => {
+  return (
+    <>
+      <ReportHeader
+        reportType={data.report_type}
+        periodStart={data.period_start}
+        periodEnd={data.period_end}
+        createdAt={new Date().toISOString()}
+      />
+      <ReportOverviewRow metrics={data.overview} />
+
+      {data.cycles.length > 0 && (
+        <Section title="茬口进度">
+          {data.cycles.map((c) => (
+            <CropProgressCard key={c.cycle_id} data={c} />
+          ))}
+        </Section>
+      )}
+
+      {data.costs.length > 0 && (
+        <Section title="收支明细">
+          <CostBreakdownCard costs={data.costs} />
+        </Section>
+      )}
+
+      {data.logs.length > 0 && (
+        <Section title="农事记录">
+          <FarmLogListCard logs={data.logs} />
+        </Section>
+      )}
+
+      <Section title="农事建议">
+        <AdviceCard items={data.advice} />
+      </Section>
+    </>
+  );
+};
 
 export const AgentReportScreen: React.FC = () => {
   const route = useRoute<any>();
   const [reportType, setReportType] = useState<ReportType>("weekly");
   const { report, generateReport, loading: isLoading } = useAgentStore();
 
+  // 路由参数：从报告历史页面传入
+  const passedStructuredData = route.params?.structuredData as
+    | StructuredReportData
+    | undefined;
   const passedContent = route.params?.content as string | undefined;
   const passedReportType = route.params?.reportType as string | undefined;
   const passedCreatedAt = route.params?.createdAt as string | undefined;
-  const isViewMode = !!passedContent;
+  const isViewMode = !!(passedStructuredData || passedContent);
 
   const handleGenerate = async () => {
     await generateReport(reportType);
@@ -36,38 +88,45 @@ export const AgentReportScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {isViewMode ? (
           <>
-            <View style={styles.viewHeader}>
-              <View style={styles.viewHeaderBadge}>
-                <Icon
-                  name={
-                    passedReportType === "weekly"
-                      ? "calendar-week"
-                      : "calendar-month"
-                  }
-                  size={14}
-                  color={colors.primary}
-                />
-                <Text style={styles.viewHeaderTitle}>
-                  {passedReportType === "weekly"
-                    ? "周报"
-                    : passedReportType === "monthly"
-                    ? "月报"
-                    : "农事报告"}
-                </Text>
-              </View>
-              {passedCreatedAt && (
-                <Text style={styles.viewHeaderDate}>
-                  {new Date(passedCreatedAt).toLocaleDateString("zh-CN", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </Text>
-              )}
-            </View>
-            <View style={styles.reportCard}>
-              <MarkdownText text={passedContent!} />
-            </View>
+            {/* 查看模式：优先用结构化数据，否则降级到 Markdown */}
+            {passedStructuredData ? (
+              <ReportContent data={passedStructuredData} />
+            ) : (
+              <>
+                <View style={styles.viewHeader}>
+                  <View style={styles.viewHeaderBadge}>
+                    <Icon
+                      name={
+                        passedReportType === "weekly"
+                          ? "calendar-week"
+                          : "calendar-month"
+                      }
+                      size={14}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.viewHeaderTitle}>
+                      {passedReportType === "weekly"
+                        ? "周报"
+                        : passedReportType === "monthly"
+                        ? "月报"
+                        : "农事报告"}
+                    </Text>
+                  </View>
+                  {passedCreatedAt && (
+                    <Text style={styles.viewHeaderDate}>
+                      {new Date(passedCreatedAt).toLocaleDateString("zh-CN", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.reportCard}>
+                  <MarkdownText text={passedContent!} />
+                </View>
+              </>
+            )}
           </>
         ) : (
           <>
@@ -163,15 +222,27 @@ export const AgentReportScreen: React.FC = () => {
 
             {!isLoading && report && (
               <>
-                <View style={styles.resultHeader}>
-                  <Icon name="check-circle" size={18} color={colors.success} />
-                  <Text style={styles.resultHeaderText}>
-                    {reportType === "weekly" ? "本周农事报告" : "本月农事报告"}
-                  </Text>
-                </View>
-                <View style={styles.reportCard}>
-                  <MarkdownText text={report.content} />
-                </View>
+                {report.structured_data ? (
+                  <ReportContent data={report.structured_data} />
+                ) : (
+                  <>
+                    <View style={styles.resultHeader}>
+                      <Icon
+                        name="check-circle"
+                        size={18}
+                        color={colors.success}
+                      />
+                      <Text style={styles.resultHeaderText}>
+                        {reportType === "weekly"
+                          ? "本周农事报告"
+                          : "本月农事报告"}
+                      </Text>
+                    </View>
+                    <View style={styles.reportCard}>
+                      <MarkdownText text={report.content} />
+                    </View>
+                  </>
+                )}
               </>
             )}
           </>
@@ -187,7 +258,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     flexGrow: 1,
   },
   viewHeader: {
@@ -314,7 +386,7 @@ const styles = StyleSheet.create({
   },
   reportCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.xxl,
     padding: spacing.lg,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
