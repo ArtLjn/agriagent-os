@@ -1,3 +1,3 @@
-VERSION_NAME=1.0.5
-VERSION_CODE=6
-CHANGELOG=新增结构化报告功能：支持 Agent 生成作物进度、成本分析、农事建议等报告
+VERSION_NAME=1.1.0
+VERSION_CODE=7
+CHANGELOG=Agent 仿真测试平台 + 移动端 CustomAlert 弹窗 + 多项改进

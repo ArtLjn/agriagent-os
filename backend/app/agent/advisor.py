@@ -1,5 +1,6 @@
 """建议 Agent 封装，提供每日建议和用户问答接口。"""
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 
@@ -218,7 +219,12 @@ async def stream_advisor(
                                 step,
                                 len(msg.content),
                             )
-                            yield filter_output(msg.content)
+                            filtered = filter_output(msg.content)
+                            chunk_size = 3
+                            delay = 0.02
+                            for i in range(0, len(filtered), chunk_size):
+                                yield filtered[i:i + chunk_size]
+                                await asyncio.sleep(delay)
     except GraphRecursionError:
         logger.error("Agent 流式步数超限 | farm_id=%s", farm_id)
         yield "Agent 处理步数超出限制，请简化您的问题后重试。"
