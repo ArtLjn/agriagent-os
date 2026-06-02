@@ -646,6 +646,22 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         logger.info("Skill 调用 %s(%s)", name, args)
         start = _time.perf_counter()
 
+        tool = tool_map.get(name)
+
+        # Pydantic 参数校验：在写操作拦截前校验，校验失败反馈 LLM 自纠错
+        if tool and hasattr(tool, "args_schema") and tool.args_schema:
+            try:
+                tool.args_schema.model_validate(args)
+            except Exception as e:
+                error_msg = f"参数校验失败: {e}"
+                logger.warning(
+                    "Tool 参数校验失败 | name=%s | error=%s", name, e
+                )
+                return ToolMessage(
+                    content=error_msg,
+                    tool_call_id=tool_call_id,
+                )
+
         # 写操作 Skill 拦截：存储 pending action，不直接执行
         if is_write_skill(name):
             action_id = store_pending(farm_id, name, args)
@@ -668,12 +684,12 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                 tool_call_id=tool_call_id,
             )
 
+        # 读操作执行
+        if not tool:
+            return ToolMessage(
+                content=f"未知工具: {name}", tool_call_id=tool_call_id
+            )
         try:
-            tool = tool_map.get(name)
-            if not tool:
-                return ToolMessage(
-                    content=f"未知工具: {name}", tool_call_id=tool_call_id
-                )
             result = await tool.ainvoke(args)
             duration_ms = int((_time.perf_counter() - start) * 1000)
             summary = str(result)[:120].replace("\n", " ")
@@ -683,7 +699,6 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                 duration_ms,
                 summary,
             )
-            # 提取结构化 trace 数据（来自 _SkillResultWrapper）
             trace_output = getattr(result, "trace_data", None)
             if not trace_output:
                 trace_output = {

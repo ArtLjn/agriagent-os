@@ -187,3 +187,136 @@ class TestSchemaToPydanticWithEnum:
         field_info = model.model_fields["amount"]
         # number 类型不使用 Literal，metadata 为空
         assert field_info.annotation is float
+
+
+class TestPydanticValidationInToolNode:
+    """测试 _parallel_tool_node 中的 Pydantic 参数校验。"""
+
+    def setup_method(self):
+        from app.infra.pending_actions import _pending
+        _pending.clear()
+
+    @pytest.mark.asyncio
+    async def test_missing_required_param_returns_error(self):
+        """缺少必填参数时返回错误 ToolMessage，不生成 pending action。"""
+        from app.agent.graph import _parallel_tool_node
+        from langchain_core.messages import AIMessage
+        from app.infra.pending_actions import get_pending
+
+        ai_msg = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "id": "tc1",
+                    "name": "create_cost_record",
+                    "args": {"category": "化肥"},  # 缺少 amount
+                },
+            ],
+        )
+        state = {"messages": [ai_msg], "farm_id": 1}
+
+        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
+            from pydantic import BaseModel, Field
+            from typing import Literal
+
+            class FakeSchema(BaseModel):
+                amount: float = Field(..., description="金额")
+                category: Literal["化肥", "种子", "人工", "其他"] = Field(
+                    ..., description="分类"
+                )
+
+            mock_tool = MagicMock()
+            mock_tool.name = "create_cost_record"
+            mock_tool.args_schema = FakeSchema
+            mock_tools.return_value = [mock_tool]
+
+            result = await _parallel_tool_node(state)
+
+        tool_msg = result["messages"][0]
+        assert (
+            "参数校验失败" in tool_msg.content
+            or "amount" in tool_msg.content.lower()
+        )
+        assert get_pending(farm_id=1) is None
+
+    @pytest.mark.asyncio
+    async def test_valid_params_proceed_normally(self):
+        """参数正确时正常走 pending action 流程。"""
+        from app.agent.graph import _parallel_tool_node
+        from langchain_core.messages import AIMessage
+        from app.infra.pending_actions import get_pending
+
+        ai_msg = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "id": "tc1",
+                    "name": "create_cost_record",
+                    "args": {"amount": 200, "category": "化肥"},
+                },
+            ],
+        )
+        state = {"messages": [ai_msg], "farm_id": 1}
+
+        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
+            from pydantic import BaseModel, Field
+            from typing import Literal
+
+            class FakeSchema(BaseModel):
+                amount: float = Field(..., description="金额")
+                category: Literal["化肥", "种子", "人工", "其他"] = Field(
+                    ..., description="分类"
+                )
+
+            mock_tool = MagicMock()
+            mock_tool.name = "create_cost_record"
+            mock_tool.args_schema = FakeSchema
+            mock_tools.return_value = [mock_tool]
+
+            result = await _parallel_tool_node(state)
+
+        tool_msg = result["messages"][0]
+        assert get_pending(farm_id=1) is not None
+        assert (
+            "PENDING_ACTION" in tool_msg.content or "确认" in tool_msg.content
+        )
+
+    @pytest.mark.asyncio
+    async def test_invalid_param_type_returns_error(self):
+        """参数类型错误时返回错误 ToolMessage。"""
+        from app.agent.graph import _parallel_tool_node
+        from langchain_core.messages import AIMessage
+        from app.infra.pending_actions import get_pending
+
+        ai_msg = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "id": "tc1",
+                    "name": "create_cost_record",
+                    "args": {"amount": "不是数字", "category": "化肥"},
+                },
+            ],
+        )
+        state = {"messages": [ai_msg], "farm_id": 1}
+
+        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
+            from pydantic import BaseModel, Field
+            from typing import Literal
+
+            class FakeSchema(BaseModel):
+                amount: float = Field(..., description="金额")
+                category: Literal["化肥", "种子", "人工", "其他"] = Field(
+                    ..., description="分类"
+                )
+
+            mock_tool = MagicMock()
+            mock_tool.name = "create_cost_record"
+            mock_tool.args_schema = FakeSchema
+            mock_tools.return_value = [mock_tool]
+
+            result = await _parallel_tool_node(state)
+
+        tool_msg = result["messages"][0]
+        assert "参数校验失败" in tool_msg.content or "amount" in tool_msg.content.lower()
+        assert get_pending(farm_id=1) is None
