@@ -389,6 +389,52 @@ async def _get_farm_context(farm_id: int) -> dict:
     return result
 
 
+_PRELOAD_MAP: dict[str, list[str]] = {
+    "get_weather_forecast": ["weather"],
+    "get_cost_summary": ["cost_summary"],
+    "get_cost_analytics": ["cost_analytics"],
+    "get_farm_status": ["farm_status"],
+    "get_crop_cycle_info": ["crop_cycle"],
+    "get_recent_farm_logs": ["farm_logs"],
+}
+
+
+async def _warm_tool_caches(
+    selected_names: list[str], farm_id: int, farm_ctx: dict,
+) -> None:
+    """并行预热已选 tool 的底层缓存，2s 超时，失败不影响主流程。"""
+    tasks = []
+    for name in selected_names:
+        data_types = _PRELOAD_MAP.get(name, [])
+        for dt in data_types:
+            if dt == "weather" and farm_ctx.get("farm_location"):
+                try:
+                    from app.services.weather_service import fetch_weather
+
+                    coords = farm_ctx.get("farm_coords", "")
+                    lat = float(coords.split(",")[0]) if coords else None
+                    lon = float(coords.split(",")[-1]) if coords else None
+                    tasks.append(fetch_weather(
+                        location=farm_ctx["farm_location"],
+                        lat=lat,
+                        lon=lon,
+                    ))
+                except ImportError:
+                    pass
+
+    if not tasks:
+        return
+
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*tasks, return_exceptions=True),
+            timeout=2.0,
+        )
+        logger.info("缓存预热完成 | tools=%s tasks=%d", selected_names, len(tasks))
+    except asyncio.TimeoutError:
+        logger.warning("缓存预热超时 2s | tools=%s", selected_names)
+
+
 async def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     messages = state["messages"]
@@ -497,6 +543,12 @@ async def _llm_node(state: AgentState) -> dict:
         elif action == "warn":
             logger.warning("Token 配额超限，继续调用（warn 模式）")
 
+    # 并行缓存预热（与 LLM 调用并行执行）
+    selected_names_for_preload = [t.name for t in selected_tools] if selected_tools else []
+    preload_task = asyncio.create_task(
+        _warm_tool_caches(selected_names_for_preload, farm_id, farm_ctx)
+    )
+
     # LLM 调用 + 计时 + 请求内重试
     start = _time.perf_counter()
     max_retries = settings.ai.failover_max_retries
@@ -555,6 +607,12 @@ async def _llm_node(state: AgentState) -> dict:
 
     duration_ms = int((_time.perf_counter() - start) * 1000)
     model_name = getattr(raw_llm, "model_name", "unknown")
+
+    # 等待预热完成（不阻塞，已并行运行）
+    try:
+        await asyncio.wait_for(preload_task, timeout=0.1)
+    except (asyncio.TimeoutError, Exception):
+        pass
 
     # 兼容层：部分 provider（如 nvidia llama-3.1）不支持 bind_tools，
     # LLM 会把工具调用 JSON 直接写进 content 而不是通过 tool_calls API。
