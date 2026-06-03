@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,11 +25,38 @@ import { appGradients } from "../../theme/gradients";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 const QUICK_PROMPTS = [
-  { text: "今日天气对作物有什么影响？", icon: "weather-partly-cloudy" },
-  { text: "给我一些种植建议", icon: "sprout" },
-  { text: "常见的病虫害怎么防治？", icon: "bug-outline" },
-  { text: "生成本周种植报告", icon: "file-document-outline" },
+  {
+    text: "天气判断",
+    prompt: "今日天气对作物有什么影响？",
+    icon: "weather-partly-cloudy",
+    tone: "sky",
+  },
+  {
+    text: "种植建议",
+    prompt: "给我一些种植建议",
+    icon: "sprout",
+    tone: "leaf",
+  },
+  {
+    text: "病虫害",
+    prompt: "常见的病虫害怎么防治？",
+    icon: "bug-outline",
+    tone: "amber",
+  },
+  {
+    text: "本周报告",
+    prompt: "生成本周种植报告",
+    icon: "file-document-outline",
+    tone: "slate",
+  },
 ];
+
+const PROMPT_TONES = {
+  sky: { bg: "#EEF6FF", icon: "#3D7BD9" },
+  leaf: { bg: "#ECFDF3", icon: "#21965F" },
+  amber: { bg: "#FFF7E8", icon: "#B7791F" },
+  slate: { bg: "#F1F5F9", icon: "#64748B" },
+} as const;
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -58,7 +87,7 @@ export const AgentChatScreen: React.FC = () => {
     if (activeTab === "report") {
       fetchReports();
     }
-  }, [activeTab]);
+  }, [activeTab, fetchReports]);
 
   const handleSend = async (text: string) => {
     if (!text.trim() || isLoading) {
@@ -78,6 +107,7 @@ export const AgentChatScreen: React.FC = () => {
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
     const hasPendingAction = !isUser && item.pending_action;
+    const showStreamingHint = !isUser && item.is_streaming && !item.content;
     return (
       <View
         style={[styles.messageRow, isUser ? styles.userRow : styles.agentRow]}
@@ -99,18 +129,32 @@ export const AgentChatScreen: React.FC = () => {
             </View>
           ) : (
             <View style={styles.agentBubbleInner}>
-              <MarkdownText text={item.content} baseStyle={styles.agentText} />
+              {showStreamingHint ? (
+                <View style={styles.inlineTyping}>
+                  <Text style={styles.inlineTypingText}>正在整理建议</Text>
+                  <View style={styles.typingDot} />
+                  <View style={[styles.typingDot, styles.typingDot2]} />
+                  <View style={[styles.typingDot, styles.typingDot3]} />
+                </View>
+              ) : (
+                <MarkdownText
+                  text={item.content}
+                  baseStyle={styles.agentText}
+                />
+              )}
             </View>
           )}
           {hasPendingAction && item.pending_action?.context && (
             <View style={styles.contextBox}>
               {item.pending_action.context.original_input ? (
                 <Text style={styles.contextText}>
-                  📝 理解：您说的是「{item.pending_action.context.original_input}」
+                  已理解为：{item.pending_action.context.original_input}
                 </Text>
               ) : null}
               {item.pending_action.context.notes?.map((note, i) => (
-                <Text key={i} style={styles.contextText}>{note}</Text>
+                <Text key={i} style={styles.contextText}>
+                  {note}
+                </Text>
               ))}
             </View>
           )}
@@ -122,7 +166,8 @@ export const AgentChatScreen: React.FC = () => {
                 activeOpacity={0.7}
                 disabled={isLoading}
               >
-                <Text style={styles.confirmBtnText}>确认</Text>
+                <Icon name="check" size={16} color="#FFFFFF" />
+                <Text style={styles.confirmBtnText}>确认执行</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.cancelBtn}
@@ -130,6 +175,7 @@ export const AgentChatScreen: React.FC = () => {
                 activeOpacity={0.7}
                 disabled={isLoading}
               >
+                <Icon name="close" size={16} color={colors.textSecondary} />
                 <Text style={styles.cancelBtnText}>取消</Text>
               </TouchableOpacity>
             </View>
@@ -145,26 +191,44 @@ export const AgentChatScreen: React.FC = () => {
 
     return (
       <View style={styles.welcomeContainer}>
-        <View style={styles.welcomeHeader}>
-          <View style={styles.welcomeAvatar}>
-            <Icon name="sprout" size={20} color={colors.success} />
-          </View>
-          <View style={styles.welcomeTextBlock}>
+        <View style={styles.heroBlock}>
+          <LinearGradient
+            colors={["rgba(59, 178, 115, 0.14)", "rgba(74, 123, 247, 0.08)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroIcon}
+          >
+            <Icon name="sprout" size={24} color={colors.success} />
+          </LinearGradient>
+          <View style={styles.heroCopy}>
+            <Text style={styles.welcomeEyebrow}>{greeting}</Text>
             <Text style={styles.welcomeTitle}>
-              {greeting}，{nickname}
+              今天想先处理什么，{nickname}？
             </Text>
             <Text style={styles.welcomeSubtitle}>
-              可以帮你分析天气、提供种植建议、生成报告
+              可以直接问，也可以点一个场景开始。
             </Text>
           </View>
         </View>
 
         <View style={styles.promptSection}>
+          <Text style={styles.promptTitle}>常用场景</Text>
           <View style={styles.promptCards}>
             {QUICK_PROMPTS.map((prompt, index) => (
-              <ScalePress key={index} onPress={() => handleSend(prompt.text)}>
+              <ScalePress key={index} onPress={() => handleSend(prompt.prompt)}>
                 <View style={styles.promptPill}>
-                  <Icon name={prompt.icon as any} size={13} color="#5B6370" />
+                  <View
+                    style={[
+                      styles.promptIconBox,
+                      { backgroundColor: PROMPT_TONES[prompt.tone].bg },
+                    ]}
+                  >
+                    <Icon
+                      name={prompt.icon as any}
+                      size={16}
+                      color={PROMPT_TONES[prompt.tone].icon}
+                    />
+                  </View>
                   <Text style={styles.promptPillText}>{prompt.text}</Text>
                 </View>
               </ScalePress>
@@ -231,7 +295,11 @@ export const AgentChatScreen: React.FC = () => {
       </View>
 
       {activeTab === "chat" ? (
-        <>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={8}
+        >
           {/* Messages Area */}
           <View style={styles.flex}>
             {hasMessages ? (
@@ -254,18 +322,20 @@ export const AgentChatScreen: React.FC = () => {
               </ScrollView>
             )}
 
-            {isLoading && hasMessages && (
-              <View style={styles.typingRow}>
-                <View style={styles.agentAvatarSmall}>
-                  <Icon name="sprout" size={10} color={colors.success} />
+            {isLoading &&
+              hasMessages &&
+              !messages[messages.length - 1]?.is_streaming && (
+                <View style={styles.typingRow}>
+                  <View style={styles.agentAvatarSmall}>
+                    <Icon name="sprout" size={10} color={colors.success} />
+                  </View>
+                  <View style={styles.typingBubble}>
+                    <View style={styles.typingDot} />
+                    <View style={[styles.typingDot, styles.typingDot2]} />
+                    <View style={[styles.typingDot, styles.typingDot3]} />
+                  </View>
                 </View>
-                <View style={styles.typingBubble}>
-                  <View style={styles.typingDot} />
-                  <View style={[styles.typingDot, styles.typingDot2]} />
-                  <View style={[styles.typingDot, styles.typingDot3]} />
-                </View>
-              </View>
-            )}
+              )}
           </View>
 
           {/* Input */}
@@ -275,7 +345,7 @@ export const AgentChatScreen: React.FC = () => {
                 style={styles.input}
                 value={inputText}
                 onChangeText={setInputText}
-                placeholder="请输入您的问题..."
+                placeholder="问农事、记一笔、生成报告..."
                 placeholderTextColor={colors.textTertiary}
                 multiline
                 maxLength={500}
@@ -290,16 +360,14 @@ export const AgentChatScreen: React.FC = () => {
                 activeOpacity={0.7}
               >
                 <Icon
-                  name="send"
+                  name="arrow-up"
                   size={18}
-                  color={
-                    !inputText.trim() || isLoading ? "#B0B8C1" : "#FFFFFF"
-                  }
+                  color={!inputText.trim() || isLoading ? "#B0B8C1" : "#FFFFFF"}
                 />
               </TouchableOpacity>
             </View>
           </View>
-        </>
+        </KeyboardAvoidingView>
       ) : (
         <ReportListView
           reports={reports}
@@ -341,10 +409,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: colors.primaryMuted,
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: colors.successMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacingV2.md,
@@ -376,15 +444,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginHorizontal: spacingV2.lg,
     marginBottom: spacingV2.sm,
-    backgroundColor: "rgba(241,243,245,0.8)",
-    borderRadius: borderRadiusV2.lg,
-    padding: 3,
+    backgroundColor: "rgba(235, 240, 247, 0.72)",
+    borderRadius: borderRadiusV2.tab,
+    padding: 4,
   },
   segBtn: {
     flex: 1,
-    paddingVertical: spacingV2.sm,
+    minHeight: 42,
     alignItems: "center",
-    borderRadius: borderRadiusV2.md,
+    justifyContent: "center",
+    borderRadius: borderRadiusV2.full,
   },
   segBtnActive: {
     backgroundColor: colors.surface,
@@ -403,77 +472,102 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   listContent: {
-    padding: spacingV2.md,
-    paddingBottom: spacingV2.sm,
+    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.lg,
+    paddingBottom: spacingV2.xxl,
   },
 
   // ─── Welcome — left-aligned ───
   welcomeScrollContent: {
     flexGrow: 1,
-    justifyContent: "center",
+    justifyContent: "flex-end",
   },
   welcomeContainer: {
     paddingHorizontal: spacingV2.lg,
-    paddingTop: spacingV2.xl,
-    paddingBottom: spacingV2.xxxl,
+    paddingTop: spacingV2.xxl,
+    paddingBottom: spacingV2.xxl,
   },
-  welcomeHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+  heroBlock: {
+    minHeight: 260,
+    justifyContent: "flex-end",
     marginBottom: spacingV2.xxl,
   },
-  welcomeAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.primaryMuted,
+  heroIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacingV2.md,
+    marginBottom: spacingV2.xl,
   },
-  welcomeTextBlock: {
-    flex: 1,
+  heroCopy: {
+    maxWidth: 320,
+  },
+  welcomeEyebrow: {
+    fontSize: fontSizeV2.sm,
+    color: colors.success,
+    fontWeight: "700",
+    marginBottom: spacingV2.sm,
   },
   welcomeTitle: {
-    fontSize: 22,
+    fontSize: fontSizeV2.xxl,
     fontWeight: "700",
     color: colors.text,
-    marginBottom: 4,
+    lineHeight: 34,
+    marginBottom: spacingV2.md,
   },
   welcomeSubtitle: {
-    fontSize: fontSizeV2.sm,
+    fontSize: fontSizeV2.md,
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: 24,
   },
 
   // ─── Prompt pills ───
   promptSection: {
     marginTop: spacingV2.sm,
   },
+  promptTitle: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    fontWeight: "700",
+    marginBottom: spacingV2.md,
+  },
   promptCards: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacingV2.sm,
+    gap: spacingV2.md,
   },
   promptPill: {
+    width: "47%",
+    minHeight: 86,
     flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xl,
+    padding: spacingV2.md,
+    gap: spacingV2.md,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.9)",
+  },
+  promptIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
     alignItems: "center",
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: borderRadiusV2.full,
-    paddingHorizontal: spacingV2.md,
-    paddingVertical: 10,
-    gap: 6,
+    justifyContent: "center",
   },
   promptPillText: {
-    fontSize: fontSizeV2.xs,
+    fontSize: fontSizeV2.sm,
     color: colors.text,
-    fontWeight: "500",
+    fontWeight: "600",
+    lineHeight: 20,
+    flex: 1,
   },
 
   // ─── Messages ───
   messageRow: {
     flexDirection: "row",
-    marginBottom: spacingV2.md,
+    marginBottom: spacingV2.lg,
     alignItems: "flex-end",
   },
   userRow: {
@@ -483,10 +577,10 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   agentAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 10,
-    backgroundColor: colors.primaryMuted,
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    backgroundColor: colors.successMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacingV2.sm,
@@ -501,35 +595,50 @@ const styles = StyleSheet.create({
     marginRight: spacingV2.sm,
   },
   messageBubble: {
-    maxWidth: "88%",
+    maxWidth: "86%",
   },
   userBubble: {
     alignSelf: "flex-end",
   },
   userBubbleInner: {
     backgroundColor: colors.primary,
-    borderRadius: borderRadiusV2.lg,
-    borderBottomRightRadius: 4,
-    padding: spacingV2.md,
+    borderRadius: borderRadiusV2.xxl,
+    borderBottomRightRadius: 8,
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.md,
   },
   agentBubble: {
     alignSelf: "flex-start",
   },
   agentBubbleInner: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: borderRadiusV2.lg,
-    borderBottomLeftRadius: 4,
-    padding: spacingV2.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
+    borderBottomLeftRadius: 8,
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.md,
+    borderWidth: 1,
+    borderColor: colors.chatAiBorder,
   },
   userText: {
     fontSize: fontSizeV2.md,
     color: "#FFFFFF",
-    lineHeight: 22,
+    lineHeight: 23,
   },
   agentText: {
     fontSize: fontSizeV2.md,
     color: colors.text,
-    lineHeight: 22,
+    lineHeight: 24,
+  },
+  inlineTyping: {
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  inlineTypingText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    marginRight: 2,
   },
 
   // ─── Typing indicator ───
@@ -566,61 +675,62 @@ const styles = StyleSheet.create({
 
   // ─── Input bar ───
   inputBar: {
-    paddingHorizontal: spacingV2.md,
-    paddingTop: spacingV2.sm,
-    paddingBottom: spacingV2.md,
-    backgroundColor: colors.surface,
+    paddingHorizontal: spacingV2.lg,
+    paddingTop: spacingV2.md,
+    paddingBottom: spacingV2.lg,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: "rgba(226, 232, 240, 0.76)",
   },
   inputWrapper: {
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: borderRadiusV2.full,
+    alignItems: "flex-end",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 28,
     paddingLeft: spacingV2.lg,
-    paddingRight: spacingV2.md,
-    paddingVertical: 2,
+    paddingRight: spacingV2.sm,
+    paddingVertical: spacingV2.sm,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: "rgba(226, 232, 240, 0.9)",
   },
   input: {
     flex: 1,
     maxHeight: 100,
     fontSize: fontSizeV2.md,
     color: colors.text,
-    paddingVertical: spacingV2.md,
+    paddingVertical: spacingV2.sm,
     paddingRight: spacingV2.sm,
+    minHeight: 38,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: borderRadiusV2.full,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary,
+    backgroundColor: colors.text,
   },
   sendBtnDisabled: {
-    backgroundColor: colors.disabledBg,
+    backgroundColor: "rgba(226, 232, 240, 0.88)",
   },
 
   // ─── Context box ───
   contextBox: {
     marginTop: spacingV2.sm,
-    padding: spacingV2.sm,
-    backgroundColor: "rgba(139,148,158,0.08)",
-    borderRadius: borderRadiusV2.md,
+    padding: spacingV2.md,
+    backgroundColor: colors.successMuted,
+    borderRadius: borderRadiusV2.lg,
   },
   contextText: {
     fontSize: 13,
-    color: colors.textTertiary,
-    lineHeight: 18,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
 
   // ─── Confirm bar ───
   confirmBar: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
     gap: spacingV2.sm,
     marginTop: spacingV2.md,
     paddingTop: spacingV2.sm,
@@ -628,10 +738,13 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
   },
   confirmBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: colors.primary,
-    paddingHorizontal: spacingV2.lg,
+    paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.md,
+    borderRadius: borderRadiusV2.full,
   },
   confirmBtnText: {
     color: "#FFFFFF",
@@ -639,10 +752,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   cancelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: colors.disabledBg,
-    paddingHorizontal: spacingV2.lg,
+    paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.md,
+    borderRadius: borderRadiusV2.full,
   },
   cancelBtnText: {
     color: colors.textSecondary,

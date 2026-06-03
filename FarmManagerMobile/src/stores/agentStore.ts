@@ -1,16 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   ChatMessage,
   DailyAdvice,
   ReportResponse,
   ReportListItem,
   PendingAction,
-} from '../api/types';
-import type { AxiosResponse } from 'axios';
-import { agentApi, weatherApi } from '../api/client';
-import { useSettingsStore } from './settingsStore';
+} from "../api/types";
+import { agentApi, weatherApi } from "../api/client";
 
 interface AgentState {
   messages: ChatMessage[];
@@ -37,7 +35,7 @@ interface AgentState {
   clearError: () => void;
 }
 
-export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
+export const useAgentStore = create<AgentState, [["zustand/persist", unknown]]>(
   persist(
     (set) => ({
       messages: [],
@@ -46,16 +44,22 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
       weather: null,
       loading: false,
       error: null,
-      cityName: '苏州',
+      cityName: "苏州",
       cityLat: 31.3,
       cityLon: 120.62,
       reports: [],
       pendingAction: null,
-      sessionId: `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sessionId: `session-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
 
       sendMessage: (message, cycleId) => {
         set((state) => ({
-          messages: [...state.messages, { role: 'user', content: message }],
+          messages: [
+            ...state.messages,
+            { role: "user", content: message },
+            { role: "agent", content: "", is_streaming: true },
+          ],
           loading: true,
           error: null,
           pendingAction: null,
@@ -67,25 +71,40 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
             set((state) => {
               const msgs = [...state.messages];
               const last = msgs[msgs.length - 1];
-              if (last?.role === 'agent') {
+              if (last?.role === "agent") {
                 msgs[msgs.length - 1] = {
                   ...last,
                   content: last.content + chunk,
+                  is_streaming: true,
                 };
               } else {
-                msgs.push({ role: 'agent', content: chunk });
+                msgs.push({
+                  role: "agent",
+                  content: chunk,
+                  is_streaming: true,
+                });
               }
               return { messages: msgs };
             });
           },
-          () => set({ loading: false }),
+          () => {
+            set((state) => {
+              const msgs = [...state.messages];
+              const last = msgs[msgs.length - 1];
+              if (last?.role === "agent") {
+                msgs[msgs.length - 1] = { ...last, is_streaming: false };
+              }
+              return { messages: msgs, loading: false };
+            });
+          },
           (err) => {
             set((state) => ({
               messages: [
-                ...state.messages.filter(
-                  (m) => m.role !== 'agent' || m.content
-                ),
-                { role: 'agent', content: `抱歉，出错了：${err}` },
+                ...state.messages.filter((m, index) => {
+                  const isLast = index === state.messages.length - 1;
+                  return !(isLast && m.role === "agent" && m.is_streaming);
+                }),
+                { role: "agent", content: `抱歉，出错了：${err}` },
               ],
               loading: false,
             }));
@@ -94,8 +113,12 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
             set((state) => {
               const msgs = [...state.messages];
               const last = msgs[msgs.length - 1];
-              if (last?.role === 'agent') {
-                msgs[msgs.length - 1] = { ...last, pending_action: action };
+              if (last?.role === "agent") {
+                msgs[msgs.length - 1] = {
+                  ...last,
+                  pending_action: action,
+                  is_streaming: false,
+                };
               }
               return { messages: msgs, pendingAction: action };
             });
@@ -185,14 +208,17 @@ export const useAgentStore = create<AgentState, [['zustand/persist', unknown]]>(
         useAgentStore.getState().fetchWeather();
       },
 
-      clearChat: () => set({
-        messages: [],
-        sessionId: `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      }),
+      clearChat: () =>
+        set({
+          messages: [],
+          sessionId: `session-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`,
+        }),
       clearError: () => set({ error: null }),
     }),
     {
-      name: 'agent-store',
+      name: "agent-store",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         // 城市信息从 settingsStore 统一管理，agentStore 只做运行时缓存

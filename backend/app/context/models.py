@@ -77,6 +77,24 @@ class ContextBlock:
             reason=reason,
         )
 
+    def with_metadata(self, **metadata: Any) -> "ContextBlock":
+        """返回合并 metadata 的副本。"""
+        return ContextBlock(
+            key=self.key,
+            source=self.source,
+            purpose=self.purpose,
+            content=self.content,
+            priority=self.priority,
+            token_estimate=self.token_estimate,
+            required=self.required,
+            compressible=self.compressible,
+            min_tokens=self.min_tokens,
+            ttl_seconds=self.ttl_seconds,
+            metadata={**self.metadata, **metadata},
+            is_compressed=self.is_compressed,
+            reason=self.reason,
+        )
+
     def summary(self) -> dict[str, Any]:
         """输出 trace 友好的摘要。"""
         return {
@@ -88,6 +106,10 @@ class ContextBlock:
             "required": self.required,
             "compressed": self.is_compressed,
             "reason": self.reason,
+            "layer": self.metadata.get("layer", ""),
+            "intent_tags": self.metadata.get("intent_tags", []),
+            "required_reason": self.metadata.get("required_reason", ""),
+            "cache_scope": self.metadata.get("cache_scope", ""),
         }
 
 

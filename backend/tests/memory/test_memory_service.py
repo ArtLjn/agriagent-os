@@ -1,5 +1,8 @@
 """Memory Service 骨架行为测试。"""
 
+from datetime import datetime, timedelta
+
+from app.core.compat import UTC
 from app.memory.models import MemoryMessage, PendingActionSnapshot, TemporaryTaskState
 from app.memory.schemas import MemoryObservationEvent, MemorySearchQuery
 from app.memory.service import InMemoryMemoryService
@@ -74,6 +77,24 @@ async def test_short_term_memory_keeps_recent_message_window_and_session_state()
     assert context.pending_action.action_id == "act-1"
     assert context.temporary_task_state is not None
     assert context.temporary_task_state.status == "pending"
+
+
+async def test_build_context_ignores_expired_pending_action_snapshot():
+    service = InMemoryMemoryService()
+    await service.short_term.set_pending_action(
+        user_id="user-1",
+        farm_id=1,
+        session_id="session-1",
+        pending_action=PendingActionSnapshot(
+            action_id="act-expired",
+            name="create_cost",
+            expires_at=datetime.now(UTC) - timedelta(seconds=1),
+        ),
+    )
+
+    context = await service.build_context("user-1", 1, "session-1")
+
+    assert context.pending_action is None
 
 
 async def test_observe_interaction_records_event_and_updates_short_term_memory():

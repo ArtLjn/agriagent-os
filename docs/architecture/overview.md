@@ -58,6 +58,8 @@ Agent 平台由 `agent/`、`prompt/`、`context/`、`memory/`、`evaluation/`、
 - `evaluation/` 负责 Agent 回放、Prompt 回归、Context 质量、Skill 调用质量和结构化报告。
 - `observability/` 负责平台级 trace、token、延迟、tool call、memory observe 和 evaluation capture 事件。
 
+Context 工程边界：Agent 不直接拼接全量业务数据。Runtime 通过 `ContextPolicy -> ContextBuilder -> ContextBundle -> TokenBudget` 构建动态上下文；短时记忆由 Memory Service 提供 session 视图，并经 application 层适配进入 runtime；详细账务、天气、日志和作物数据由 tool 按需查询。
+
 ## 标准请求生命周期
 
 ```text

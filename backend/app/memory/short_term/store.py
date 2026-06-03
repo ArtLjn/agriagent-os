@@ -81,7 +81,12 @@ class InMemoryShortTermMemory:
         farm_id: int,
         session_id: str | None,
     ) -> PendingActionSnapshot | None:
-        return self._pending_actions.get(self._key(user_id, farm_id, session_id))
+        key = self._key(user_id, farm_id, session_id)
+        pending_action = self._pending_actions.get(key)
+        if pending_action is not None and pending_action.is_expired():
+            self._pending_actions.pop(key, None)
+            return None
+        return pending_action
 
     async def set_temporary_task_state(
         self,

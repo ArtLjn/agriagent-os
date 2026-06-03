@@ -14,14 +14,21 @@ class TokenBudget:
         kept: list[ContextBlock] = []
         compressed: list[ContextBlock] = []
         dropped: list[ContextBlock] = []
+        over_budget_required_blocks: list[str] = []
         used = 0
 
         ordered = sorted(blocks, key=lambda block: (-block.priority, block.key))
         for block in ordered:
             tokens = block.token_estimate or 0
-            if used + tokens <= self.max_tokens or block.required:
+            if used + tokens <= self.max_tokens:
                 kept.append(block)
                 used += tokens
+                continue
+
+            if block.required:
+                kept.append(block)
+                used += tokens
+                over_budget_required_blocks.append(block.key)
                 continue
 
             remaining = self.max_tokens - used
@@ -40,6 +47,10 @@ class TokenBudget:
             token_estimate=used,
             compressed_blocks=compressed,
             dropped_blocks=dropped,
+            metadata={
+                "budget_exceeded": used > self.max_tokens,
+                "over_budget_required_blocks": over_budget_required_blocks,
+            },
         )
 
 

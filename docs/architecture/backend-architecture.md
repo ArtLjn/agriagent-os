@@ -832,6 +832,18 @@ erDiagram
 
 ## 9. 模块职责清单
 
+### Context 与短时记忆策略
+
+Agent Runtime 使用三层上下文：
+
+- 热上下文：每次注入，包含用户称呼、默认位置、坐标、当前 farm 和活跃茬口摘要。
+- 工作记忆：session 级短时记忆，包含最近消息窗口、会话摘要、pending action 和临时任务状态。
+- 按需检索上下文：由 intent 和 selected tools 触发，包括账务摘要、天气摘要、长期记忆命中和外部检索结果。
+
+`ContextPolicy` 负责选择 selector 和 token 预算，`ContextBuilder` 负责构建 `ContextBundle`，`TokenBudget` 负责保留、压缩或丢弃 block。Runtime 保留 `build_farm_runtime_context()` 兼容字段用于 `system_base` 渲染，再把 `ContextBundle.render_text()` 追加到 `<runtime_context>`。详细业务数据仍通过 skills/tools 主动获取，避免全量注入导致 token 膨胀。
+
+写操作成功后通过 `context.invalidation.invalidate_farm_context()` 清理 prompt cache 和 farm context cache；API 层通过 application helper 调用，避免直接依赖 Context 平台实现。
+
 ### app/core/ — 核心层
 
 | 文件 | 职责 |

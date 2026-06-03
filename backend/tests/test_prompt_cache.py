@@ -9,6 +9,7 @@ from app.agent.prompt_cache import (
     get_prompt_cache,
     get_farm_ctx_cache,
 )
+from app.context.invalidation import invalidate_farm_context
 
 
 class TestPromptCache:
@@ -91,3 +92,30 @@ class TestClearAllCaches:
         clear_all_caches()
         assert pc.get(farm_id=1, date_str="2026-06-02") is None
         assert fc.get(farm_id=1) is None
+
+
+class TestInvalidateFarmContext:
+    """农场上下文失效 helper。"""
+
+    def test_invalidate_global_prompt_and_farm_context_caches(self):
+        pc = get_prompt_cache()
+        fc = get_farm_ctx_cache()
+        clear_all_caches()
+        pc.set(farm_id=1, date_str="2026-06-02", value="prompt")
+        pc.set(farm_id=1, date_str="2026-06-03", value="prompt next")
+        pc.set(farm_id=2, date_str="2026-06-02", value="other farm")
+        fc.set(farm_id=1, value={"display_name": "张三"})
+        fc.set(farm_id=2, value={"display_name": "李四"})
+
+        result = invalidate_farm_context(1)
+
+        assert result == {
+            "prompt_invalidated": 2,
+            "farm_context_invalidated": True,
+        }
+        assert pc.get(farm_id=1, date_str="2026-06-02") is None
+        assert pc.get(farm_id=1, date_str="2026-06-03") is None
+        assert fc.get(farm_id=1) is None
+        assert pc.get(farm_id=2, date_str="2026-06-02") == "other farm"
+        assert fc.get(farm_id=2) == {"display_name": "李四"}
+        clear_all_caches()

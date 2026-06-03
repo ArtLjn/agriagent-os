@@ -1,6 +1,7 @@
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
+from app.context.invalidation import invalidate_farm_context
 from app.models.cycle import CropCycle
 from app.models.log import FarmLog
 from app.schemas.log import FarmLogCreate
@@ -24,6 +25,7 @@ def create_log(db: Session, log: FarmLogCreate, farm_id: int) -> FarmLog:
     db.add(db_log)
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(db_log)
     except Exception:
         db.rollback()
@@ -99,6 +101,7 @@ def update_log(
 
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(db_log)
     except Exception:
         db.rollback()
@@ -119,6 +122,7 @@ def delete_log(db: Session, log_id: int, farm_id: int) -> None:
     db.delete(db_log)
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
     except Exception:
         db.rollback()
         raise

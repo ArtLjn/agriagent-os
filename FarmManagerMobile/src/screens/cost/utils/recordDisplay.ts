@@ -18,6 +18,10 @@ function toAmountNumber(amount: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getCreatedAt(record: CostRecord): string | null {
+  return record.created_at || record.createdAt || null;
+}
+
 export function formatRecordAmount(amount: string): string {
   const value = toAmountNumber(amount);
   const abs = Math.abs(value);
@@ -37,27 +41,50 @@ export function formatRecordTimestamp(
 ): string {
   const now = nowInput ? dayjs(nowInput) : dayjs();
   const recordDay = dayjs(record.record_date);
-  const createdAt = record.created_at ? dayjs(record.created_at) : null;
-  const timeText = createdAt?.isValid() ? createdAt.format("HH:mm") : "--:--";
+  const createdAtInput = getCreatedAt(record);
+  const createdAt = createdAtInput ? dayjs(createdAtInput) : null;
+  const timeText = createdAt?.isValid() ? createdAt.format("HH:mm") : null;
+
+  const withTime = (dateText: string): string =>
+    timeText ? `${dateText} ${timeText}` : dateText;
 
   if (recordDay.isSame(now, "day")) {
-    return `今天 ${timeText}`;
+    return withTime("今天");
   }
   if (recordDay.isSame(now.subtract(1, "day"), "day")) {
-    return `昨天 ${timeText}`;
+    return withTime("昨天");
   }
   if (recordDay.year() === now.year()) {
-    return `${recordDay.format("M月D日")} ${timeText}`;
+    return withTime(recordDay.format("M月D日"));
   }
-  return `${recordDay.format("YYYY年M月D日")} ${timeText}`;
+  return withTime(recordDay.format("YYYY年M月D日"));
 }
 
-export function getRecordTimeText(record: CostRecord): string {
-  if (!record.created_at) {
-    return "--:--";
+export function getRecordTimeText(record: CostRecord): string | null {
+  const createdAtInput = getCreatedAt(record);
+  if (!createdAtInput) {
+    return null;
   }
-  const createdAt = dayjs(record.created_at);
-  return createdAt.isValid() ? createdAt.format("HH:mm") : "--:--";
+  const createdAt = dayjs(createdAtInput);
+  return createdAt.isValid() ? createdAt.format("HH:mm") : null;
+}
+
+export function getRecordCreatedAtText(record: CostRecord): string | null {
+  const createdAtInput = getCreatedAt(record);
+  if (!createdAtInput) {
+    return null;
+  }
+
+  const createdAt = dayjs(createdAtInput);
+  return createdAt.isValid() ? createdAt.format("YYYY年M月D日 HH:mm") : null;
+}
+
+export function getRecordNoteText(record: CostRecord): string | null {
+  const note = record.note?.trim();
+  if (!note || note.toUpperCase() === "NULL") {
+    return null;
+  }
+  return note;
 }
 
 function isDebtRecord(record: CostRecord): boolean {
@@ -95,7 +122,7 @@ function matchesQuery(record: CostRecord, query: string): boolean {
     .payment_method;
   return [
     record.category,
-    record.note,
+    getRecordNoteText(record),
     record.counterparty,
     record.amount,
     paymentMethod,

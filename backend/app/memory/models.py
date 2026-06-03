@@ -41,6 +41,13 @@ class PendingActionSnapshot:
     name: str
     payload: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=utc_now)
+    expires_at: datetime | None = None
+
+    def is_expired(self, now: datetime | None = None) -> bool:
+        """判断等待动作是否已过期。"""
+        if self.expires_at is None:
+            return False
+        return self.expires_at <= (now or utc_now())
 
 
 @dataclass(frozen=True)

@@ -49,6 +49,7 @@ def test_create_cost_record(cycle_id):
     data = response.json()
     assert data["category"] == "肥料"
     assert data["amount"] == "800.00"
+    assert data["created_at"]
 
 
 def test_create_income_record(cycle_id):

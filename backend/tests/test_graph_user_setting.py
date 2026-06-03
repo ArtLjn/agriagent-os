@@ -6,6 +6,8 @@ import pytest
 
 from app.agent.graph import _llm_node
 from app.agent.prompt_cache import clear_all_caches
+from app.context.models import ContextBundle
+from app.memory.models import MemoryContext, MemoryMessage
 
 
 class _FakeFarm:
@@ -57,6 +59,7 @@ def _make_query_side_effect(*results):
         mock_q = MagicMock()
         mock_filter = MagicMock()
         mock_filter.first = caller.first
+        mock_filter.order_by.return_value.limit.return_value.all.return_value = []
         mock_q.filter.return_value = mock_filter
         return mock_q
 
@@ -108,11 +111,49 @@ def mock_env():
 async def _run_llm_node(mock_render, *query_results):
     """运行 _llm_node 并返回 render_prompt 的 variables。"""
     mock_session = _build_mock_session(*query_results)
-    with patch("app.agent.runtime.llm_support.SessionLocal", return_value=mock_session):
+    empty_bundle = ContextBundle(blocks=[], token_budget=0, token_estimate=0)
+    with (
+        patch("app.agent.runtime.llm_support.SessionLocal", return_value=mock_session),
+        patch(
+            "app.agent.runtime.nodes._get_runtime_context_bundle",
+            return_value=(
+                empty_bundle,
+                {
+                    "farm_location": "",
+                    "farm_coords": "",
+                    "display_name": "农友",
+                    "active_crops": "",
+                },
+            ),
+        ),
+    ):
         state = {"messages": [], "farm_id": 1}
         await _llm_node(state)
     _, kwargs = mock_render.call_args
     return kwargs["variables"]
+
+
+class _FakeMemoryService:
+    def __init__(self) -> None:
+        self.called_with = None
+
+    async def build_context(
+        self,
+        user_id: str,
+        farm_id: int,
+        session_id: str | None = None,
+    ) -> MemoryContext:
+        self.called_with = {
+            "user_id": user_id,
+            "farm_id": farm_id,
+            "session_id": session_id,
+        }
+        return MemoryContext(
+            user_id=user_id,
+            farm_id=farm_id,
+            session_id=session_id,
+            recent_messages=[MemoryMessage(role="user", content="上次说要控水")],
+        )
 
 
 # ── 正常流程 ──────────────────────────────────────────────────
@@ -140,6 +181,62 @@ class TestUserSettingCityPriority:
 
         variables = await _run_llm_node(mock_env, farm, user, user_setting)
         assert variables["farm_location"] == "农场地址"
+
+
+class TestRuntimeContextBundleHelper:
+    @pytest.mark.asyncio
+    async def test_runtime_context_bundle_includes_user_setting_and_policy(
+        self,
+        db_session,
+    ):
+        """helper 应构建包含用户设置、记忆和策略元数据的 ContextBundle。"""
+        from sqlalchemy.orm import sessionmaker
+
+        from app.agent.runtime.llm_support import _get_runtime_context_bundle
+        from app.models.farm import Farm
+        from app.models.user_setting import UserSetting
+
+        db_session.query(Farm).filter(Farm.id == 1).update({"location": "旧地址"})
+        db_session.add(
+            UserSetting(
+                user_id="test-user-001",
+                default_city="广州",
+                default_lat=23.1291,
+                default_lon=113.2644,
+            )
+        )
+        db_session.commit()
+        test_session_local = sessionmaker(bind=db_session.get_bind())
+        memory_service = _FakeMemoryService()
+
+        with (
+            patch(
+                "app.agent.runtime.llm_support.SessionLocal",
+                test_session_local,
+            ),
+        ):
+            bundle, farm_ctx = await _get_runtime_context_bundle(
+                farm_id=1,
+                intent="query",
+                selected_tool_names=["get_cost_summary"],
+                user_id="test-user-001",
+                session_id="session-1",
+                memory_context_loader=memory_service.build_context,
+            )
+
+        block_keys = {block.key for block in bundle.blocks}
+        assert {"user_settings", "short_term_recent", "ledger"}.issubset(block_keys)
+        assert "默认城市：广州" in bundle.render_text()
+        assert "上次说要控水" in bundle.render_text()
+        assert bundle.metadata["policy"]["intent"] == "query"
+        assert bundle.metadata["policy"]["selected_tool_names"] == ["get_cost_summary"]
+        assert farm_ctx["farm_location"] == "广州"
+        assert farm_ctx["farm_coords"] == "23.1291,113.2644"
+        assert memory_service.called_with == {
+            "user_id": "test-user-001",
+            "farm_id": 1,
+            "session_id": "session-1",
+        }
 
     @pytest.mark.asyncio
     async def test_no_user_setting_record(self, mock_env):

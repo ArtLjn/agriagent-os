@@ -15,6 +15,7 @@ from app.agent.runtime.llm_support import (
     _build_circuit_key,
     _get_classifier,
     _get_farm_context,
+    _get_runtime_context_bundle,
     _get_season,
     _record_llm_failure,
     _record_llm_success,
@@ -57,7 +58,9 @@ def _filter_tool_calls_by_selected(
         return []
 
     filtered = [tc for tc in tool_calls if tc.get("name") in allowed_names]
-    dropped = [tc.get("name") for tc in tool_calls if tc.get("name") not in allowed_names]
+    dropped = [
+        tc.get("name") for tc in tool_calls if tc.get("name") not in allowed_names
+    ]
     if dropped:
         logger.warning(
             "过滤未绑定工具调用 | dropped=%s | allowed=%s",
@@ -141,11 +144,6 @@ async def _llm_node(state: AgentState) -> dict:
         )
         return {"messages": [AIMessage(content="", tool_calls=tool_calls)]}
 
-    # 获取农场上下文（位置、坐标、称呼、种植信息）
-    farm_ctx = await _get_farm_context(farm_id)
-    display_name = farm_ctx["display_name"]
-    farm_location = farm_ctx["farm_location"]
-
     model_role = "lightweight" if intent == "query" else "generation"
     raw_llm = get_llm(role=model_role)
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
@@ -170,6 +168,20 @@ async def _llm_node(state: AgentState) -> dict:
     else:
         llm = raw_llm
         logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
+
+    selected_tool_names = [t.name for t in selected_tools] if selected_tools else []
+    context_bundle, farm_ctx = await _get_runtime_context_bundle(
+        farm_id=farm_id,
+        intent=intent,
+        selected_tool_names=selected_tool_names,
+        user_id=state.get("user_id"),
+        session_id=state.get("session_id"),
+    )
+    if not context_bundle.blocks and farm_ctx.get("display_name") == "农友":
+        farm_ctx = await _get_farm_context(farm_id)
+    display_name = farm_ctx["display_name"]
+    farm_location = farm_ctx["farm_location"]
+
     _round_idx = increment_round()
     collector = get_collector()
 
@@ -195,11 +207,23 @@ async def _llm_node(state: AgentState) -> dict:
         )
         prompt_cache.set(farm_id=farm_id, date_str=date_str, value=system_text)
 
+    runtime_context_text = context_bundle.render_text()
+    if runtime_context_text:
+        system_text = (
+            f"{system_text}\n\n<runtime_context>\n"
+            f"{runtime_context_text}\n"
+            f"</runtime_context>"
+        )
+
     # 记录 prompt_render trace
     collector.record(
         node_type="prompt_render",
         node_name="system_prompt",
-        input_data={"template": "system_base", "variables_count": 2},
+        input_data={
+            "template": "system_base",
+            "variables_count": 5,
+            "context_blocks": [block.key for block in context_bundle.blocks],
+        },
         output_data=system_text[:2000],
     )
 
@@ -217,11 +241,8 @@ async def _llm_node(state: AgentState) -> dict:
             logger.warning("Token 配额超限，继续调用（warn 模式）")
 
     # 并行缓存预热（与 LLM 调用并行执行）
-    selected_names_for_preload = (
-        [t.name for t in selected_tools] if selected_tools else []
-    )
     preload_task = asyncio.create_task(
-        _warm_tool_caches(selected_names_for_preload, farm_id, farm_ctx)
+        _warm_tool_caches(selected_tool_names, farm_id, farm_ctx)
     )
 
     # LLM 调用 + 计时 + 请求内重试

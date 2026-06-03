@@ -2,6 +2,8 @@ import {
   filterCostRecords,
   formatRecordAmount,
   formatRecordTimestamp,
+  getRecordNoteText,
+  getRecordTimeText,
 } from "../recordDisplay";
 import type { CostRecord } from "../../../../api/types";
 
@@ -34,6 +36,32 @@ describe("recordDisplay", () => {
         "2026-06-03T16:00:00"
       )
     ).toBe("昨天 14:32");
+  });
+
+  it("兼容接口返回的 createdAt 字段并清理空备注占位", () => {
+    const record = {
+      ...baseRecord,
+      created_at: undefined,
+      createdAt: "2026-06-03T08:05:00",
+      note: "NULL",
+    } as CostRecord & { createdAt: string };
+
+    expect(getRecordTimeText(record)).toBe("08:05");
+    expect(formatRecordTimestamp(record, "2026-06-03T16:00:00")).toBe(
+      "今天 08:05"
+    );
+    expect(getRecordNoteText(record)).toBeNull();
+  });
+
+  it("缺少创建时间时只显示业务日期，不显示时间占位", () => {
+    const record = {
+      ...baseRecord,
+      created_at: undefined,
+      createdAt: undefined,
+    };
+
+    expect(getRecordTimeText(record)).toBeNull();
+    expect(formatRecordTimestamp(record, "2026-06-03T16:00:00")).toBe("今天");
   });
 
   it("按关键词、类型和快捷时间筛选账单", () => {

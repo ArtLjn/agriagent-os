@@ -69,6 +69,7 @@ export interface CostRecord {
   settled_at?: string;
   parent_record_id?: number;
   created_at?: string;
+  createdAt?: string;
 }
 
 export interface CycleProfit {
@@ -99,9 +100,10 @@ export interface PendingAction {
 }
 
 export interface ChatMessage {
-  role: 'user' | 'agent';
+  role: "user" | "agent";
   content: string;
   pending_action?: PendingAction | null;
+  is_streaming?: boolean;
 }
 
 export interface ChatRequest {

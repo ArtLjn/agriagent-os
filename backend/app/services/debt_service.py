@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.context.invalidation import invalidate_farm_context
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordCreate, DebtSummary
 
@@ -42,6 +43,7 @@ def create_debt_record(
     db.add(db_record)
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(db_record)
     except Exception:
         db.rollback()
@@ -221,6 +223,7 @@ def settle_debt(
 
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(repay_record)
     except Exception:
         db.rollback()

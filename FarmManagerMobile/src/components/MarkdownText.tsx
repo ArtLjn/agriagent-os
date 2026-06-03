@@ -2,7 +2,7 @@ import React from "react";
 import Markdown, { MarkdownIt } from "react-native-markdown-display";
 import { View, ScrollView } from "react-native";
 import { colors } from "../theme/colors";
-import { spacing, fontSize, borderRadius } from "../theme/spacing";
+import { spacing, borderRadius } from "../theme/spacing";
 
 interface MarkdownTextProps {
   text: string;
@@ -15,7 +15,7 @@ const tableRules = {
       key={node.key}
       horizontal
       showsHorizontalScrollIndicator
-      style={{ marginVertical: spacing.sm }}
+      style={{ marginVertical: spacing.sm, maxWidth: "100%" }}
     >
       <View style={[styles.table, { alignSelf: "flex-start" }]}>
         {children}
@@ -44,39 +44,37 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
 
 const code = {
   fontFamily: "monospace",
-  backgroundColor: "rgba(0,0,0,0.04)",
+  backgroundColor: "rgba(15, 23, 42, 0.05)",
   borderRadius: borderRadius.sm,
 };
 
 const textBase = {
   fontSize: 15,
   color: colors.textSecondary,
-  lineHeight: 26,
+  lineHeight: 24,
 };
 
 const styles = {
   heading1: {
-    fontSize: 22,
-    fontWeight: "800" as const,
-    color: colors.text,
-    marginTop: 0,
-    marginBottom: 20,
-    letterSpacing: -0.3,
-  },
-  heading2: {
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: "700" as const,
     color: colors.text,
-    marginTop: 28,
+    marginTop: 0,
     marginBottom: 12,
-    letterSpacing: -0.2,
+  },
+  heading2: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: colors.text,
+    marginTop: 18,
+    marginBottom: 8,
   },
   heading3: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: colors.textSecondary,
-    marginTop: 16,
-    marginBottom: 8,
+    color: colors.text,
+    marginTop: 14,
+    marginBottom: 6,
   },
   heading4: {
     fontSize: 15,
@@ -85,43 +83,43 @@ const styles = {
     marginTop: 12,
     marginBottom: 6,
   },
-  paragraph: { ...textBase, marginBottom: 12 },
-  bullet_list: { marginLeft: 4, marginVertical: 8 },
-  ordered_list: { marginLeft: 4, marginVertical: 8 },
+  paragraph: { ...textBase, marginBottom: 8 },
+  bullet_list: { marginLeft: 0, marginVertical: 6 },
+  ordered_list: { marginLeft: 0, marginVertical: 6 },
   bullet_list_icon: {
     ...textBase,
-    color: colors.textTertiary,
+    color: colors.success,
     fontSize: 7,
-    lineHeight: 26,
-    marginRight: 12,
-    marginLeft: 4,
+    lineHeight: 24,
+    marginRight: 10,
+    marginLeft: 2,
   },
   ordered_list_icon: {
-    color: colors.textTertiary,
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: 13,
     fontWeight: "600" as const,
-    lineHeight: 26,
-    marginRight: 10,
-    minWidth: 20,
+    lineHeight: 24,
+    marginRight: 8,
+    minWidth: 22,
   },
   list_item: {
     ...textBase,
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    marginVertical: 4,
+    marginVertical: 2,
   },
   blockquote: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.textTertiary,
-    paddingLeft: spacing.md,
-    marginVertical: 12,
-    backgroundColor: colors.surfaceMuted,
+    borderLeftColor: colors.success,
+    paddingLeft: spacing.sm,
+    marginVertical: 8,
+    backgroundColor: colors.successMuted,
     paddingVertical: spacing.sm,
     paddingRight: spacing.sm,
     borderRadius: borderRadius.sm,
   },
-  code_inline: { ...code, paddingHorizontal: 4, fontSize: 14 },
-  code_block: { ...code, padding: spacing.md, fontSize: 14 },
+  code_inline: { ...code, paddingHorizontal: 4, fontSize: 13 },
+  code_block: { ...code, padding: spacing.md, fontSize: 13 },
   table: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -129,7 +127,7 @@ const styles = {
   },
   thead: { backgroundColor: colors.surfaceMuted },
   th: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700" as const,
     color: colors.text,
     padding: spacing.sm,
@@ -144,9 +142,9 @@ const styles = {
     flexDirection: "row" as const,
   },
   td: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: 18,
     padding: spacing.sm,
     minWidth: 85,
     flexShrink: 0,
