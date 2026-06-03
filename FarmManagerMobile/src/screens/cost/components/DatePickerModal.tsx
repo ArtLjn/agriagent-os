@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ interface DatePickerModalProps {
   onConfirm: (date: Date) => void;
   onCancel: () => void;
   disableFuture?: boolean;
+  showTimePicker?: boolean;
 }
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -29,11 +30,25 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   onConfirm,
   onCancel,
   disableFuture = true,
+  showTimePicker = false,
 }) => {
   const [viewMonth, setViewMonth] = useState(dayjs(date));
   const [selectedDate, setSelectedDate] = useState(dayjs(date));
+  const [selectedHour, setSelectedHour] = useState(dayjs(date).hour());
+  const [selectedMinute, setSelectedMinute] = useState(dayjs(date).minute());
 
   const today = dayjs();
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    const nextDate = dayjs(date);
+    setViewMonth(nextDate);
+    setSelectedDate(nextDate);
+    setSelectedHour(nextDate.hour());
+    setSelectedMinute(nextDate.minute());
+  }, [date, visible]);
 
   const days = useMemo(() => {
     const startOfMonth = viewMonth.startOf("month");
@@ -97,8 +112,18 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     setSelectedDate(d);
   };
 
+  const adjustTime = (unit: "hour" | "minute", step: number) => {
+    if (unit === "hour") {
+      setSelectedHour((current) => (current + step + 24) % 24);
+      return;
+    }
+    setSelectedMinute((current) => (current + step + 60) % 60);
+  };
+
   const handleConfirm = () => {
-    onConfirm(selectedDate.toDate());
+    onConfirm(
+      selectedDate.hour(selectedHour).minute(selectedMinute).second(0).toDate()
+    );
   };
 
   return (
@@ -167,6 +192,64 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
             })}
           </View>
 
+          {showTimePicker && (
+            <View style={styles.timeSection}>
+              <View style={styles.timeTitleRow}>
+                <Icon
+                  name="clock-outline"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.timeTitle}>选择时间</Text>
+              </View>
+              <View style={styles.timePickerRow}>
+                <View style={styles.timeStepper}>
+                  <TouchableOpacity
+                    style={styles.timeStepBtn}
+                    onPress={() => adjustTime("hour", 1)}
+                  >
+                    <Icon name="chevron-up" size={22} color={colors.primary} />
+                  </TouchableOpacity>
+                  <Text style={styles.timeValue}>
+                    {String(selectedHour).padStart(2, "0")}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.timeStepBtn}
+                    onPress={() => adjustTime("hour", -1)}
+                  >
+                    <Icon
+                      name="chevron-down"
+                      size={22}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.timeColon}>:</Text>
+                <View style={styles.timeStepper}>
+                  <TouchableOpacity
+                    style={styles.timeStepBtn}
+                    onPress={() => adjustTime("minute", 5)}
+                  >
+                    <Icon name="chevron-up" size={22} color={colors.primary} />
+                  </TouchableOpacity>
+                  <Text style={styles.timeValue}>
+                    {String(selectedMinute).padStart(2, "0")}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.timeStepBtn}
+                    onPress={() => adjustTime("minute", -5)}
+                  >
+                    <Icon
+                      name="chevron-down"
+                      size={22}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
           <View style={styles.actions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
               <Text style={styles.cancelText}>取消</Text>
@@ -181,7 +264,10 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   );
 };
 
-const DAY_CELL_SIZE = (SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2) / 7;
+const DAY_CELL_SIZE = Math.min(
+  56,
+  (SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2) / 7
+);
 
 const styles = StyleSheet.create({
   overlay: {
@@ -222,6 +308,7 @@ const styles = StyleSheet.create({
   daysGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    justifyContent: "center",
   },
   dayCell: {
     width: DAY_CELL_SIZE,
@@ -251,6 +338,52 @@ const styles = StyleSheet.create({
   },
   dayTextDisabled: {
     color: colors.disabled,
+  },
+  timeSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  timeTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  timeTitle: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: "700",
+  },
+  timePickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+  },
+  timeStepper: {
+    alignItems: "center",
+    minWidth: 72,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surfaceMuted,
+  },
+  timeStepBtn: {
+    width: 48,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timeValue: {
+    fontSize: 28,
+    color: colors.text,
+    fontWeight: "800",
+  },
+  timeColon: {
+    fontSize: 28,
+    color: colors.textSecondary,
+    fontWeight: "800",
   },
   actions: {
     flexDirection: "row",

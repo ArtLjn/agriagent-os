@@ -5,6 +5,7 @@ import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import dayjs from "dayjs";
+import { formatRecordTimestamp } from "../utils/recordDisplay";
 
 interface RecordDetailModalProps {
   visible: boolean;
@@ -79,9 +80,25 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 <Text style={styles.detailLabel}>日期</Text>
               </View>
               <Text style={styles.detailValue}>
-                {dayjs(record.record_date).format("YYYY年M月D日")}
+                {formatRecordTimestamp(record)}
               </Text>
             </View>
+
+            {record.created_at ? (
+              <View style={styles.detailRow}>
+                <View style={styles.detailLeft}>
+                  <Icon
+                    name="clock-outline"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.detailLabel}>创建时间</Text>
+                </View>
+                <Text style={styles.detailValue}>
+                  {dayjs(record.created_at).format("YYYY年M月D日 HH:mm")}
+                </Text>
+              </View>
+            ) : null}
 
             {record.note ? (
               <View style={styles.detailRow}>

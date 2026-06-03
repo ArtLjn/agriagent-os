@@ -24,7 +24,15 @@ import { AIHelper } from "./components/AIHelper";
 import { CategoryModal } from "./components/CategoryModal";
 import { DatePickerModal } from "./components/DatePickerModal";
 
-const COST_CATEGORIES = ["种子", "化肥", "农药", "人工", "水电", "地租", "其他"];
+const COST_CATEGORIES = [
+  "种子",
+  "化肥",
+  "农药",
+  "人工",
+  "水电",
+  "地租",
+  "其他",
+];
 const INCOME_CATEGORIES = ["销售", "补贴", "其他"];
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -38,6 +46,8 @@ const CATEGORY_ICONS: Record<string, string> = {
   补贴: "gift",
   其他: "dots-horizontal",
 };
+
+const QUICK_AMOUNTS = ["50", "100", "200", "500"];
 
 type CostCreateNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -91,7 +101,9 @@ export const CostCreateScreen: React.FC = () => {
   }, [categories, recordType]);
 
   const handleAiParse = async () => {
-    if (!aiInput.trim()) return;
+    if (!aiInput.trim()) {
+      return;
+    }
     setAiLoading(true);
     try {
       const res = await costApi.parseRecord(aiInput.trim());
@@ -117,11 +129,12 @@ export const CostCreateScreen: React.FC = () => {
   const handleTypeChange = (type: "cost" | "income") => {
     setRecordType(type);
     setCategory("");
-    setIsDebt(false);
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting) {
+      return;
+    }
     if (!category) {
       showAlert("提示", "请选择分类");
       return;
@@ -130,9 +143,9 @@ export const CostCreateScreen: React.FC = () => {
       showAlert("提示", "请输入有效金额");
       return;
     }
-    if (recordType === "cost" && isDebt) {
+    if (isDebt) {
       if (!counterparty.trim()) {
-        showAlert("提示", "请填写债权人");
+        showAlert("提示", isIncome ? "请填写欠款人" : "请填写债权人");
         return;
       }
       if (!dueDate) {
@@ -143,9 +156,9 @@ export const CostCreateScreen: React.FC = () => {
 
     setSubmitting(true);
     try {
-      if (recordType === "cost" && isDebt) {
+      if (isDebt) {
         await debtApi.createDebt({
-          record_type: "cost",
+          record_type: recordType,
           category,
           amount,
           record_date: dayjs(recordDate).format("YYYY-MM-DD"),
@@ -184,6 +197,7 @@ export const CostCreateScreen: React.FC = () => {
     >
       <ScrollView
         style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -192,14 +206,13 @@ export const CostCreateScreen: React.FC = () => {
           aiLoading={aiLoading}
           onInputChange={setAiInput}
           onParse={handleAiParse}
+          themeColor={theme.primary}
+          themeMuted={theme.primaryMuted}
         />
 
         {/* Amount Hero Card */}
         <View
-          style={[
-            styles.amountCard,
-            { backgroundColor: theme.primaryMuted },
-          ]}
+          style={[styles.amountCard, { backgroundColor: theme.primaryMuted }]}
         >
           <View style={styles.typeToggle}>
             <TouchableOpacity
@@ -253,6 +266,32 @@ export const CostCreateScreen: React.FC = () => {
               onChangeText={setAmount}
             />
           </View>
+          <View style={styles.quickAmountRow}>
+            {QUICK_AMOUNTS.map((value) => (
+              <TouchableOpacity
+                key={value}
+                style={styles.quickAmountChip}
+                onPress={() => setAmount(value)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[styles.quickAmountText, { color: theme.primary }]}
+                >
+                  ¥{value}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={styles.recordTimePill}
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
+          >
+            <Icon name="clock-outline" size={15} color={colors.textSecondary} />
+            <Text style={styles.recordTimeText}>
+              {dayjs(recordDate).format("M月D日 HH:mm")}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Category Grid */}
@@ -296,8 +335,17 @@ export const CostCreateScreen: React.FC = () => {
               onPress={() => setShowCategoryModal(true)}
               activeOpacity={0.7}
             >
-              <Icon name="dots-horizontal" size={18} color={colors.textTertiary} />
-              <Text style={[styles.categoryChipText, { color: colors.textTertiary }]}>
+              <Icon
+                name="dots-horizontal"
+                size={18}
+                color={colors.textTertiary}
+              />
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  { color: colors.textTertiary },
+                ]}
+              >
                 更多
               </Text>
             </TouchableOpacity>
@@ -311,51 +359,70 @@ export const CostCreateScreen: React.FC = () => {
             onPress={() => setShowDatePicker(true)}
           >
             <View style={styles.fieldLeft}>
-              <Icon name="calendar-outline" size={18} color={colors.textSecondary} />
-              <Text style={styles.fieldLabel}>日期</Text>
+              <Icon
+                name="calendar-clock"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.fieldLabel}>日期时间</Text>
             </View>
             <View style={styles.fieldRight}>
               <Text style={styles.fieldValue}>
-                {dayjs(recordDate).format("YYYY年M月D日")}
+                {dayjs(recordDate).format("YYYY年M月D日 HH:mm")}
               </Text>
-              <Icon name="chevron-right" size={18} color={colors.textTertiary} />
+              <Icon
+                name="chevron-right"
+                size={18}
+                color={colors.textTertiary}
+              />
             </View>
           </TouchableOpacity>
 
-          {recordType === "cost" && (
-            <TouchableOpacity
-              style={styles.fieldRow}
-              onPress={() => setIsDebt(!isDebt)}
-            >
-              <View style={styles.fieldLeft}>
-                <Icon name="account-clock-outline" size={18} color={colors.textSecondary} />
-                <Text style={styles.fieldLabel}>标记为赊账</Text>
+          <TouchableOpacity
+            style={styles.fieldRow}
+            onPress={() => setIsDebt(!isDebt)}
+          >
+            <View style={styles.fieldLeft}>
+              <Icon
+                name="account-clock-outline"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <View>
+                <Text style={styles.fieldLabel}>
+                  {isIncome ? "对方先欠着" : "这笔先赊着"}
+                </Text>
+                <Text style={styles.fieldHint}>
+                  {isIncome ? "收入未收款，记为应收" : "支出未付款，记为应付"}
+                </Text>
               </View>
-              <View style={styles.fieldRight}>
+            </View>
+            <View style={styles.fieldRight}>
+              <View
+                style={[
+                  styles.toggleTrack,
+                  isDebt && { backgroundColor: theme.primary },
+                ]}
+              >
                 <View
                   style={[
-                    styles.toggleTrack,
-                    isDebt && { backgroundColor: colors.primary },
+                    styles.toggleThumb,
+                    isDebt && styles.toggleThumbActive,
                   ]}
-                >
-                  <View
-                    style={[
-                      styles.toggleThumb,
-                      isDebt && styles.toggleThumbActive,
-                    ]}
-                  />
-                </View>
+                />
               </View>
-            </TouchableOpacity>
-          )}
+            </View>
+          </TouchableOpacity>
 
-          {recordType === "cost" && isDebt && (
+          {isDebt && (
             <View style={styles.debtFields}>
               <View style={styles.debtField}>
-                <Text style={styles.debtLabel}>债权人</Text>
+                <Text style={styles.debtLabel}>
+                  {isIncome ? "欠款人" : "债权人"}
+                </Text>
                 <TextInput
                   style={styles.debtInput}
-                  placeholder="如：老王农资店"
+                  placeholder={isIncome ? "如：收购商老李" : "如：老王农资店"}
                   placeholderTextColor={colors.textTertiary}
                   value={counterparty}
                   onChangeText={setCounterparty}
@@ -374,9 +441,15 @@ export const CostCreateScreen: React.FC = () => {
                       !dueDate && { color: colors.textTertiary },
                     ]}
                   >
-                    {dueDate ? dayjs(dueDate).format("YYYY-MM-DD") : "请选择预计还款日"}
+                    {dueDate
+                      ? dayjs(dueDate).format("YYYY-MM-DD")
+                      : "请选择预计还款日"}
                   </Text>
-                  <Icon name="chevron-right" size={18} color={colors.textTertiary} />
+                  <Icon
+                    name="chevron-right"
+                    size={18}
+                    color={colors.textTertiary}
+                  />
                 </View>
               </TouchableOpacity>
             </View>
@@ -397,7 +470,7 @@ export const CostCreateScreen: React.FC = () => {
           </View>
         </View>
 
-        <View style={{ height: 80 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       {/* Fixed Bottom Submit */}
@@ -426,6 +499,7 @@ export const CostCreateScreen: React.FC = () => {
           setShowDatePicker(false);
         }}
         onCancel={() => setShowDatePicker(false)}
+        showTimePicker
       />
 
       <DatePickerModal
@@ -458,11 +532,14 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
+  scrollContent: {
+    paddingBottom: 128,
+  },
   amountCard: {
     marginHorizontal: spacingV2.lg,
     marginBottom: spacingV2.lg,
     borderRadius: borderRadiusV2.xxxl,
-    paddingVertical: spacingV2.xxl,
+    paddingVertical: spacingV2.xl,
     paddingHorizontal: spacingV2.xl,
     alignItems: "center",
     shadowColor: colors.shadow,
@@ -476,7 +553,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.6)",
     borderRadius: borderRadiusV2.full,
     padding: 4,
-    marginBottom: spacingV2.xl,
+    marginBottom: spacingV2.lg,
+    alignSelf: "stretch",
   },
   typeToggleBtn: {
     flex: 1,
@@ -515,8 +593,41 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     padding: 0,
     minWidth: 120,
+    maxWidth: "78%",
     textAlign: "center",
     letterSpacing: -1,
+  },
+  quickAmountRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: spacingV2.xs,
+    marginTop: spacingV2.lg,
+  },
+  quickAmountChip: {
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: 7,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: "rgba(255,255,255,0.72)",
+  },
+  quickAmountText: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "700",
+  },
+  recordTimePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.xs,
+    marginTop: spacingV2.md,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: 7,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: "rgba(255,255,255,0.58)",
+  },
+  recordTimeText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "600",
   },
   sectionCard: {
     backgroundColor: colors.surface,
@@ -575,6 +686,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: "500",
   },
+  fieldHint: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    marginTop: 2,
+  },
   fieldRight: {
     flexDirection: "row",
     alignItems: "center",
@@ -622,6 +738,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: "500",
   },
+  debtInput: {
+    borderRadius: borderRadiusV2.lg,
+    padding: spacingV2.md,
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
   debtDateRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -662,6 +785,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
+  },
+  bottomSpacer: {
+    height: spacingV2.xxl,
   },
   submitBtn: {
     paddingVertical: 14,

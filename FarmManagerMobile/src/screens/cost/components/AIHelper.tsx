@@ -6,16 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 
-const AI_EXAMPLES = [
-  "买了50斤化肥花了120块",
-  "今天卖西瓜收入3000元",
-  "大棚租金5000",
-];
+const AI_EXAMPLES = ["化肥120块", "卖瓜3000元", "大棚租金5000"];
 
 interface AIHelperProps {
   aiInput: string;
@@ -36,14 +33,18 @@ export const AIHelper: React.FC<AIHelperProps> = ({
 }) => (
   <View style={styles.card}>
     <View style={styles.header}>
-      <Icon name="text-recognition" size={20} color={colors.primary} />
-      <Text style={styles.title}>智能记账</Text>
+      <View style={[styles.iconBadge, { backgroundColor: themeMuted }]}>
+        <Icon name="text-recognition" size={18} color={themeColor} />
+      </View>
+      <View style={styles.headerText}>
+        <Text style={styles.title}>智能记账</Text>
+        <Text style={styles.subtitle}>说一句话，自动识别类型和金额</Text>
+      </View>
     </View>
-    <Text style={styles.subtitle}>说一句话，自动识别类型和金额</Text>
     <View style={styles.inputRow}>
       <TextInput
         style={styles.input}
-        placeholder="例如：买了50斤化肥花了120块"
+        placeholder="例如：买化肥120块"
         placeholderTextColor={colors.textTertiary}
         value={aiInput}
         onChangeText={onInputChange}
@@ -52,7 +53,7 @@ export const AIHelper: React.FC<AIHelperProps> = ({
         onSubmitEditing={onParse}
       />
       <TouchableOpacity
-        style={styles.button}
+        style={[styles.button, { backgroundColor: themeColor }]}
         onPress={onParse}
         disabled={aiLoading}
       >
@@ -63,16 +64,24 @@ export const AIHelper: React.FC<AIHelperProps> = ({
         )}
       </TouchableOpacity>
     </View>
-    <View style={styles.examplesRow}>
-      {AI_EXAMPLES.map((example, index) => (
-        <TouchableOpacity
-          key={index}
-          style={styles.exampleChip}
-          onPress={() => onInputChange(example)}
-        >
-          <Text style={styles.exampleText}>{example}</Text>
-        </TouchableOpacity>
-      ))}
+    <View style={styles.examplesRail}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.examplesRow}
+      >
+        {AI_EXAMPLES.map((example, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.exampleChip}
+            onPress={() => onInputChange(example)}
+          >
+            <Text style={styles.exampleText} numberOfLines={1}>
+              {example}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   </View>
 );
@@ -80,8 +89,8 @@ export const AIHelper: React.FC<AIHelperProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxxl,
-    padding: spacingV2.lg,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.md,
     marginHorizontal: spacingV2.lg,
     marginBottom: spacingV2.md,
     shadowColor: colors.shadow,
@@ -93,29 +102,41 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacingV2.xs,
+    marginBottom: spacingV2.md,
     gap: spacingV2.sm,
+  },
+  iconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: borderRadiusV2.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: fontSizeV2.md,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.text,
   },
   subtitle: {
-    fontSize: fontSizeV2.sm,
+    fontSize: fontSizeV2.xs,
     color: colors.textSecondary,
-    marginBottom: spacingV2.md,
+    marginTop: 2,
   },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacingV2.md,
     gap: spacingV2.sm,
+    marginBottom: spacingV2.sm,
   },
   input: {
     flex: 1,
     borderRadius: borderRadiusV2.lg,
-    padding: spacingV2.md,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: 10,
     fontSize: fontSizeV2.md,
     color: colors.text,
     backgroundColor: colors.surfaceMuted,
@@ -124,20 +145,27 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: borderRadiusV2.lg,
-    backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
   },
+  examplesRail: {
+    height: 38,
+    justifyContent: "center",
+    overflow: "visible",
+  },
   examplesRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: spacingV2.xs,
+    paddingRight: spacingV2.md,
+    alignItems: "center",
   },
   exampleChip: {
     backgroundColor: colors.surfaceMuted,
     borderRadius: borderRadiusV2.full,
     paddingHorizontal: spacingV2.md,
-    paddingVertical: 6,
+    height: 32,
+    justifyContent: "center",
+    maxWidth: 220,
   },
   exampleText: {
     fontSize: fontSizeV2.sm,

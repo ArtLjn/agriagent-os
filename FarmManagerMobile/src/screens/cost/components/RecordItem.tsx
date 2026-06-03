@@ -4,12 +4,9 @@ import type { CostRecord } from "../../../api/types";
 import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import dayjs from "dayjs";
+import { formatRecordAmount, getRecordTimeText } from "../utils/recordDisplay";
 
-const TYPE_CONFIG: Record<
-  string,
-  { color: string; bgColor: string }
-> = {
+const TYPE_CONFIG: Record<string, { color: string; bgColor: string }> = {
   cost: {
     color: colors.expense,
     bgColor: colors.expenseBg,
@@ -32,13 +29,11 @@ const CATEGORY_ICONS: Record<string, string> = {
   其他: "dots-horizontal",
 };
 
-const formatDate = (dateStr: string): string => {
-  const d = dayjs(dateStr);
-  const today = dayjs();
-  if (d.isSame(today, "day")) return "今天";
-  if (d.isSame(today.subtract(1, "day"), "day")) return "昨天";
-  if (d.year() === today.year()) return d.format("M月D日");
-  return d.format("YYYY年M月D日");
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "现金",
+  wechat: "微信",
+  bank_card: "银行卡",
+  debt: "赊账",
 };
 
 interface RecordItemProps {
@@ -59,6 +54,15 @@ export const RecordItem: React.FC<RecordItemProps> = ({
   const catIcon = CATEGORY_ICONS[item.category] || "tag";
   const isCost = item.record_type === "cost";
   const prefix = isCost ? "-" : "+";
+  const paymentMethod = (item as CostRecord & { payment_method?: string })
+    .payment_method;
+  const isDebt = Boolean(item.record_subtype || item.counterparty);
+  const metaParts = [
+    getRecordTimeText(item),
+    paymentMethod ? PAYMENT_LABELS[paymentMethod] || paymentMethod : null,
+    isDebt ? item.counterparty || "赊账" : null,
+    item.note,
+  ].filter(Boolean);
 
   return (
     <TouchableOpacity
@@ -69,21 +73,24 @@ export const RecordItem: React.FC<RecordItemProps> = ({
       style={styles.container}
     >
       <View style={styles.left}>
-        <View
-          style={[styles.iconCircle, { backgroundColor: config.bgColor }]}
-        >
+        <View style={[styles.iconCircle, { backgroundColor: config.bgColor }]}>
           <Icon name={catIcon} size={18} color={config.color} />
         </View>
         <View style={styles.info}>
           <Text style={styles.category}>{item.category}</Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {formatDate(item.record_date)}
-            {item.note ? ` · ${item.note}` : ""}
+            {metaParts.join(" · ")}
           </Text>
         </View>
       </View>
-      <Text style={[styles.amount, { color: config.color }]}>
-        {prefix}{item.amount}
+      <Text
+        style={[styles.amount, { color: config.color }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.72}
+      >
+        {prefix}
+        {formatRecordAmount(item.amount)}
       </Text>
     </TouchableOpacity>
   );
@@ -119,6 +126,7 @@ const styles = StyleSheet.create({
   },
   info: {
     flex: 1,
+    minWidth: 0,
   },
   category: {
     fontSize: fontSizeV2.md,
@@ -134,5 +142,8 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.lg,
     fontWeight: "700",
     letterSpacing: -0.3,
+    maxWidth: 132,
+    flexShrink: 0,
+    textAlign: "right",
   },
 });
