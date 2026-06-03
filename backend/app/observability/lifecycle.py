@@ -1,6 +1,6 @@
 """Agent 生命周期事件定义。"""
 
-from enum import StrEnum
+from app.core.compat import StrEnum
 
 
 class AgentLifecycleEvent(StrEnum):

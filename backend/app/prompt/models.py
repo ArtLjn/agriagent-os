@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Mapping
+
+from app.core.compat import StrEnum
 
 
 class PromptLayer(StrEnum):
