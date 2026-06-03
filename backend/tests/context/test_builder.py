@@ -2,6 +2,8 @@
 
 from app.context.builder import ContextBuilder
 from app.context.models import ContextBlock
+from app.context.policy import ContextBuildRequest, ContextPolicy
+from app.memory.models import MemoryContext, MemoryMessage
 
 
 class StaticSelector:
@@ -79,3 +81,38 @@ def test_builder_legacy_farm_context_adapter_returns_runtime_shape(db_session) -
         "active_crops",
     }
     assert farm_context["display_name"] == "测试用户"
+
+
+def test_builder_builds_runtime_context_bundle_with_policy_and_memory(
+    db_session,
+) -> None:
+    memory_context = MemoryContext(
+        user_id="test-user-001",
+        farm_id=1,
+        session_id="session-1",
+        recent_messages=[MemoryMessage(role="user", content="后天呢")],
+    )
+    builder = ContextBuilder(policy=ContextPolicy(), max_tokens=256)
+
+    bundle = builder.build_runtime_context_bundle(
+        db=db_session,
+        request=ContextBuildRequest(
+            intent="query",
+            selected_tool_names=["get_cost_summary"],
+            farm_id=1,
+            user_id="test-user-001",
+            session_id="session-1",
+        ),
+        memory_context=memory_context,
+    )
+
+    block_keys = {block.key for block in bundle.blocks}
+    assert {
+        "farm",
+        "user_settings",
+        "cycle",
+        "ledger",
+        "short_term_recent",
+    }.issubset(block_keys)
+    assert bundle.metadata["policy"]["intent"] == "query"
+    assert bundle.metadata["policy"]["selected_tool_names"] == ["get_cost_summary"]

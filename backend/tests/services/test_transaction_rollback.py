@@ -9,6 +9,7 @@ import pytest
 from app.services.cost_service import create_record
 from app.services.crop_service import create_crop_template
 from app.services.cycle_service import (
+    advance_stage,
     create_crop_cycle,
     update_stage,
     _recalculate_stages,
@@ -137,19 +138,40 @@ class TestCycleServiceRollback:
 
         mock_db.rollback.assert_called_once()
 
-    def test_recalculate_stages_rollback_on_commit_failure(self) -> None:
-        """commit 失败时应调用 rollback 并重新抛出异常。"""
+    def test_recalculate_stages_does_not_commit_or_rollback(self) -> None:
+        """阶段重算只更新内存对象，事务由外层写操作统一管理。"""
         mock_db = MagicMock()
         mock_cycle = MagicMock()
         mock_cycle.stages = []
         mock_cycle.start_date = date(2025, 3, 15)
         mock_db.query.return_value.filter.return_value.first.return_value = mock_cycle
-        mock_db.commit.side_effect = RuntimeError("DB error")
 
-        with pytest.raises(RuntimeError, match="DB error"):
-            _recalculate_stages(mock_db, cycle_id=1)
+        _recalculate_stages(mock_db, cycle_id=1)
 
-        mock_db.rollback.assert_called_once()
+        mock_db.commit.assert_not_called()
+        mock_db.rollback.assert_not_called()
+
+    @patch("app.services.cycle_service.invalidate_farm_context")
+    def test_advance_stage_invalidates_context_after_commit(
+        self, mock_invalidate: MagicMock
+    ) -> None:
+        """推进阶段成功提交后应清理上下文缓存。"""
+        mock_db = MagicMock()
+        current_stage = MagicMock()
+        current_stage.order_index = 0
+        current_stage.is_current = 1
+        next_stage = MagicMock()
+        next_stage.order_index = 1
+        next_stage.is_current = 0
+        mock_cycle = MagicMock()
+        mock_cycle.stages = [current_stage, next_stage]
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_cycle
+
+        advance_stage(mock_db, cycle_id=1, farm_id=9)
+
+        mock_db.commit.assert_called_once()
+        mock_invalidate.assert_called_once_with(9)
+        mock_db.refresh.assert_called_once_with(mock_cycle)
 
 
 class TestLogServiceRollback:

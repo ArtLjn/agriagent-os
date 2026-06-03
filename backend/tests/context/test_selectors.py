@@ -9,6 +9,7 @@ from app.context.selectors.ledger import LedgerSelector
 from app.context.selectors.memory import MemorySelector
 from app.context.selectors.retrieval import RetrievalSelector
 from app.context.selectors.user_settings import UserSettingsSelector
+from app.memory.models import MemoryContext, MemoryMessage, PendingActionSnapshot
 from app.models.cost import CostRecord
 from app.models.farm import Farm
 from app.models.user_setting import UserSetting
@@ -74,3 +75,38 @@ def test_in_memory_selectors_are_independently_testable() -> None:
     assert conversation[0].source == "conversation"
     assert memory[0].source == "memory"
     assert retrieval[0].source == "retrieval"
+
+
+def test_memory_selector_returns_short_term_memory_blocks() -> None:
+    memory_context = MemoryContext(
+        user_id="user-1",
+        farm_id=1,
+        session_id="session-1",
+        recent_messages=[
+            MemoryMessage(role="user", content="今天浇水了吗？"),
+            MemoryMessage(role="assistant", content="昨天已记录浇水。"),
+        ],
+        session_summary="本轮正在确认农事记录。",
+        pending_action=PendingActionSnapshot(
+            action_id="act-1",
+            name="create_log",
+            payload={"content": "记录浇水"},
+        ),
+    )
+
+    blocks = MemorySelector().select(memory_context=memory_context)
+    blocks_by_key = {block.key: block for block in blocks}
+
+    assert set(blocks_by_key) == {
+        "short_term_recent",
+        "short_term_summary",
+        "pending_action",
+    }
+    assert "今天浇水了吗？" in blocks_by_key["short_term_recent"].content
+    assert "create_log" in blocks_by_key["pending_action"].content
+    assert "记录浇水" in blocks_by_key["pending_action"].content
+    assert blocks_by_key["short_term_recent"].metadata["layer"] == "working"
+    assert (
+        blocks_by_key["short_term_recent"].metadata
+        is not blocks_by_key["short_term_summary"].metadata
+    )
