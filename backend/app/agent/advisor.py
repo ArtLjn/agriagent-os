@@ -90,6 +90,20 @@ async def invoke_advisor(
                 ctx = build_skill_context(farm_id)
                 exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
                 reply = exec_result.result.reply if exec_result.result else "操作完成。"
+
+                # 写操作后清除相关 skill 缓存
+                from app.infra.pending_actions import get_cache_groups_for_skill
+                from app.infra.skill_cache import clear_cache as clear_skill_cache
+
+                for group in get_cache_groups_for_skill(pending.skill_name):
+                    cleared = clear_skill_cache(group)
+                    if cleared:
+                        logger.info(
+                            "写操作后清除缓存 | skill=%s group=%s cleared=%d",
+                            pending.skill_name,
+                            group,
+                            cleared,
+                        )
             except Exception as e:
                 logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
                 reply = "操作执行失败，请重试。"
@@ -171,6 +185,20 @@ async def stream_advisor(
                 ctx = build_skill_context(farm_id)
                 exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
                 reply = exec_result.result.reply if exec_result.result else "操作完成。"
+
+                # 写操作后清除相关 skill 缓存
+                from app.infra.pending_actions import get_cache_groups_for_skill
+                from app.infra.skill_cache import clear_cache as clear_skill_cache
+
+                for group in get_cache_groups_for_skill(pending.skill_name):
+                    cleared = clear_skill_cache(group)
+                    if cleared:
+                        logger.info(
+                            "写操作后清除缓存 | skill=%s group=%s cleared=%d",
+                            pending.skill_name,
+                            group,
+                            cleared,
+                        )
             except Exception as e:
                 logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
                 reply = "操作执行失败，请重试。"

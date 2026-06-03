@@ -22,6 +22,21 @@ WRITE_SKILLS = frozenset(
     }
 )
 
+# 写操作 skill -> 需要失效的 skill 缓存组
+_CACHE_INVALIDATION_MAP: dict[str, list[str]] = {
+    "create_cost_record": ["cost_analytics", "cost_summary", "get_farm_status"],
+    "create_crop_cycle": ["crop_cycle", "get_farm_status"],
+    "create_crop_template": [],
+    "log_farm_activity": ["farm_logs", "get_farm_status"],
+    "settle_debt": ["cost_analytics", "cost_summary", "get_farm_status"],
+    "update_crop_stage": ["crop_cycle", "get_farm_status"],
+}
+
+
+def get_cache_groups_for_skill(skill_name: str) -> list[str]:
+    """返回写操作 skill 执行后需要清除的 skill 缓存组。"""
+    return _CACHE_INVALIDATION_MAP.get(skill_name, [])
+
 _SKILL_DISPLAY: dict[str, str] = {
     "create_cost_record": "记账",
     "create_crop_cycle": "创建茬口",
@@ -220,4 +235,5 @@ __all__ = [
     "PENDING_MARKER",
     "_pending",
     "WRITE_SKILLS",
+    "get_cache_groups_for_skill",
 ]
