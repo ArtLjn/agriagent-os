@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.agent.application.context_invalidation import invalidate_user_farm_context
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.models.user_setting import UserSetting
@@ -63,6 +64,7 @@ def update_settings(
                 setattr(setting, field, value)
 
     db.commit()
+    invalidate_user_farm_context(db, user.id)
 
     return UserSettingsResponse(
         display_name=user.nickname or "农友",

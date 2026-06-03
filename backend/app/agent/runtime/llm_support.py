@@ -8,6 +8,7 @@ from datetime import date
 
 from app.agent.prompt_cache import get_farm_ctx_cache
 from app.agent.tool_selector import LLMIntentClassifier
+from app.context.models import ContextBundle
 from app.core.config import settings
 from app.core.database import SessionLocal
 
@@ -171,6 +172,74 @@ async def _get_farm_context(farm_id: int) -> dict:
     return result
 
 
+async def _get_runtime_context_bundle(
+    farm_id: int,
+    intent: str,
+    selected_tool_names: list[str],
+    user_id: str | None = None,
+    session_id: str | None = None,
+    memory_context_loader=None,
+) -> tuple[ContextBundle, dict]:
+    """构建 Runtime ContextBundle，并返回兼容旧 prompt 的 farm context。"""
+
+    def _query() -> tuple[ContextBundle, dict]:
+        db = SessionLocal()
+        try:
+            from app.context.builder import ContextBuilder
+            from app.context.policy import ContextBuildRequest
+
+            memory_context = None
+            if user_id:
+                loader = memory_context_loader
+                if loader is None:
+                    from app.agent.application.context_memory import load_memory_context
+
+                    loader = load_memory_context
+                memory_context = asyncio.run(
+                    loader(
+                        user_id=user_id,
+                        farm_id=farm_id,
+                        session_id=session_id,
+                    )
+                )
+
+            context_builder = ContextBuilder()
+            request = ContextBuildRequest(
+                intent=intent,
+                selected_tool_names=list(selected_tool_names),
+                farm_id=farm_id,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            bundle = context_builder.build_runtime_context_bundle(
+                db=db,
+                request=request,
+                memory_context=memory_context,
+            )
+            farm_ctx = context_builder.build_farm_runtime_context(
+                db=db,
+                farm_id=farm_id,
+            )
+            return bundle, farm_ctx
+        finally:
+            db.close()
+
+    try:
+        return await asyncio.to_thread(_query)
+    except Exception:
+        logger.warning("构建 Runtime ContextBundle 失败，使用降级上下文", exc_info=True)
+        farm_ctx = await _get_farm_context(farm_id)
+        return (
+            ContextBundle(
+                blocks=[],
+                token_budget=0,
+                token_estimate=0,
+                metadata={"fallback": True},
+            ),
+            farm_ctx,
+        )
+
+
 async def _warm_tool_caches(
     selected_names: list[str],
     farm_id: int,
@@ -187,6 +256,7 @@ __all__ = [
     "_build_circuit_key",
     "_get_classifier",
     "_get_farm_context",
+    "_get_runtime_context_bundle",
     "_get_season",
     "_record_llm_failure",
     "_record_llm_success",
