@@ -4,8 +4,11 @@ import type { CostRecord } from "../../../api/types";
 import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import dayjs from "dayjs";
-import { formatRecordTimestamp } from "../utils/recordDisplay";
+import {
+  formatRecordTimestamp,
+  getRecordCreatedAtText,
+  getRecordNoteText,
+} from "../utils/recordDisplay";
 
 interface RecordDetailModalProps {
   visible: boolean;
@@ -29,6 +32,8 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const typeColor = isCost ? colors.expense : colors.income;
   const typeBg = isCost ? colors.expenseBg : colors.incomeBg;
   const prefix = isCost ? "-" : "+";
+  const createdAtText = getRecordCreatedAtText(record);
+  const noteText = getRecordNoteText(record);
 
   return (
     <Modal
@@ -84,7 +89,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               </Text>
             </View>
 
-            {record.created_at ? (
+            {createdAtText ? (
               <View style={styles.detailRow}>
                 <View style={styles.detailLeft}>
                   <Icon
@@ -94,13 +99,11 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                   />
                   <Text style={styles.detailLabel}>创建时间</Text>
                 </View>
-                <Text style={styles.detailValue}>
-                  {dayjs(record.created_at).format("YYYY年M月D日 HH:mm")}
-                </Text>
+                <Text style={styles.detailValue}>{createdAtText}</Text>
               </View>
             ) : null}
 
-            {record.note ? (
+            {noteText ? (
               <View style={styles.detailRow}>
                 <View style={styles.detailLeft}>
                   <Icon
@@ -110,7 +113,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                   />
                   <Text style={styles.detailLabel}>备注</Text>
                 </View>
-                <Text style={styles.detailValue}>{record.note}</Text>
+                <Text style={styles.detailValue}>{noteText}</Text>
               </View>
             ) : null}
           </View>

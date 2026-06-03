@@ -4,7 +4,11 @@ import type { CostRecord } from "../../../api/types";
 import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { formatRecordAmount, getRecordTimeText } from "../utils/recordDisplay";
+import {
+  formatRecordAmount,
+  getRecordNoteText,
+  getRecordTimeText,
+} from "../utils/recordDisplay";
 
 const TYPE_CONFIG: Record<string, { color: string; bgColor: string }> = {
   cost: {
@@ -61,7 +65,7 @@ export const RecordItem: React.FC<RecordItemProps> = ({
     getRecordTimeText(item),
     paymentMethod ? PAYMENT_LABELS[paymentMethod] || paymentMethod : null,
     isDebt ? item.counterparty || "赊账" : null,
-    item.note,
+    getRecordNoteText(item),
   ].filter(Boolean);
 
   return (

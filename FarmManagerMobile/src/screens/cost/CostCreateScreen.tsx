@@ -364,11 +364,11 @@ export const CostCreateScreen: React.FC = () => {
                 size={18}
                 color={colors.textSecondary}
               />
-              <Text style={styles.fieldLabel}>日期时间</Text>
+              <Text style={styles.fieldLabel}>日期</Text>
             </View>
             <View style={styles.fieldRight}>
               <Text style={styles.fieldValue}>
-                {dayjs(recordDate).format("YYYY年M月D日 HH:mm")}
+                {dayjs(recordDate).format("YYYY年M月D日")}
               </Text>
               <Icon
                 name="chevron-right"
