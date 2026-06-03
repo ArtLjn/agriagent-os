@@ -84,11 +84,24 @@ _check_ssh() {
   echo "  ✓ SSH连接正常"
 }
 
+_read_version_file() {
+  VERSION_NAME=""
+  VERSION_CODE=""
+  VERSION_CHANGELOG=""
+  while IFS='=' read -r key value; do
+    case "$key" in
+      VERSION_NAME) VERSION_NAME="$value" ;;
+      VERSION_CODE) VERSION_CODE="$value" ;;
+      CHANGELOG)    VERSION_CHANGELOG="$value" ;;
+    esac
+  done < "$VERSION_FILE"
+}
+
 # === 主流程 ===
 
 if [ "$TAG_ONLY" = true ]; then
   # 只打tag模式
-  source "$VERSION_FILE"
+  _read_version_file
   VERSION="${VERSION_NAME}"
   CODE="${VERSION_CODE}"
   git tag -a "v${VERSION}" -m "release: v${VERSION} (${CODE})" || true
@@ -102,7 +115,7 @@ if [ ! -f "$VERSION_FILE" ]; then
   echo "错误: 找不到 VERSION 文件"
   exit 1
 fi
-source "$VERSION_FILE"
+_read_version_file
 OLD_VERSION="${VERSION_NAME:-1.0.0}"
 OLD_CODE="${VERSION_CODE:-1}"
 
