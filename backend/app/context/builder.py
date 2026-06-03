@@ -1,7 +1,7 @@
 """Context Builder。"""
 
 import time
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,10 @@ from app.models.farm import Farm
 from app.models.user import User
 from app.models.user_setting import UserSetting
 
+if TYPE_CHECKING:
+    from app.context.policy import ContextBuildRequest, ContextPolicy
+    from app.memory.models import MemoryContext
+
 
 class ContextSelector(Protocol):
     """Context selector 协议。"""
@@ -36,6 +40,7 @@ class ContextBuilder:
         self,
         selectors: list[ContextSelector] | None = None,
         max_tokens: int = 1200,
+        policy: "ContextPolicy | None" = None,
         trace_collector: Any | None = None,
     ) -> None:
         self.selectors = selectors or [
@@ -48,6 +53,7 @@ class ContextBuilder:
             MemorySelector(),
             RetrievalSelector(),
         ]
+        self.policy = policy
         self.budget = TokenBudget(max_tokens=max_tokens)
         self.trace_collector = trace_collector
 
@@ -85,6 +91,43 @@ class ContextBuilder:
         bundle = self.budget.apply(blocks)
         bundle.metadata["selector_errors"] = selector_errors
         self._record_trace(bundle, start)
+        return bundle
+
+    def build_runtime_context_bundle(
+        self,
+        db: Session,
+        request: "ContextBuildRequest",
+        memory_context: "MemoryContext | None" = None,
+    ) -> ContextBundle:
+        """按策略构建 Runtime ContextBundle。"""
+        from app.context.policy import ContextPolicy
+
+        policy = self.policy or ContextPolicy()
+        policy_result = policy.resolve(request)
+        previous_selectors = self.selectors
+        previous_budget = self.budget
+
+        try:
+            self.selectors = policy_result.selectors
+            self.budget = TokenBudget(max_tokens=policy_result.max_tokens)
+            bundle = self.build(
+                db=db,
+                farm_id=request.farm_id,
+                user_id=request.user_id,
+                session_id=request.session_id,
+                memory_context=memory_context,
+            )
+        finally:
+            self.selectors = previous_selectors
+            self.budget = previous_budget
+
+        bundle.metadata["policy"] = {
+            "intent": request.intent,
+            "selected_tool_names": list(request.selected_tool_names),
+            "enabled_layers": sorted(
+                layer.value for layer in policy_result.enabled_layers
+            ),
+        }
         return bundle
 
     def build_farm_runtime_context(self, db: Session, farm_id: int) -> dict:
