@@ -39,26 +39,62 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
 
 QUERY_TRIGGERS: dict[str, set[str]] = {
     "get_weather_forecast": {
-        "天气", "预报", "降雨", "温度", "极端天气",
+        "天气",
+        "预报",
+        "降雨",
+        "温度",
+        "极端天气",
     },
     "get_cost_summary": {
-        "余额", "收支", "成本", "利润", "花了多少", "赚了多少", "账单", "月额",
+        "余额",
+        "收支",
+        "成本",
+        "利润",
+        "花了多少",
+        "赚了多少",
+        "账单",
+        "月额",
     },
     "get_cost_analytics": {
-        "趋势", "对比", "比去年", "比上月", "收支分析",
+        "趋势",
+        "对比",
+        "比去年",
+        "比上月",
+        "收支分析",
     },
     "get_crop_cycle_info": {
-        "茬口", "当前阶段", "周期进度", "阶段",
+        "茬口",
+        "当前阶段",
+        "周期进度",
+        "阶段",
     },
     "get_recent_farm_logs": {
-        "农事记录", "操作日志", "干了啥", "记录",
+        "农事记录",
+        "操作日志",
+        "干了啥",
+        "记录",
     },
     "get_farm_status": {
-        "农场", "茬口状态", "种植情况", "农事", "综合状态", "整体情况",
+        "农场",
+        "茬口状态",
+        "种植情况",
+        "农事",
+        "综合状态",
+        "整体情况",
     },
     "web_search": {
-        "最新", "新闻", "价格", "上市", "政策", "热点", "搜索",
-        "查一下", "最近", "实时", "网上", "网上说",
+        "最新",
+        "新闻",
+        "价格",
+        "上市",
+        "政策",
+        "热点",
+        "搜索",
+        "查一下",
+        "最近",
+        "实时",
+        "网上",
+        "网上说",
     },
 }
 
@@ -75,7 +111,9 @@ class LLMIntentClassifier:
         )
         self._model = model
 
-    def classify(self, user_message: str, all_tools: list[BaseTool]) -> list[str] | None:
+    def classify(
+        self, user_message: str, all_tools: list[BaseTool]
+    ) -> list[str] | None:
         tool_lines = []
         for t in all_tools:
             desc = (getattr(t, "description", "") or "")[:100]

@@ -126,8 +126,12 @@ def delete_crop_template(db: Session, template_id: int, farm_id: int) -> None:
         db.query(AgentRecord).filter(AgentRecord.cycle_id == cycle.id).update(
             {"cycle_id": None}, synchronize_session=False
         )
-        db.query(FarmLog).filter(FarmLog.cycle_id == cycle.id).delete(synchronize_session=False)
-        db.query(CostRecord).filter(CostRecord.cycle_id == cycle.id).delete(synchronize_session=False)
+        db.query(FarmLog).filter(FarmLog.cycle_id == cycle.id).delete(
+            synchronize_session=False
+        )
+        db.query(CostRecord).filter(CostRecord.cycle_id == cycle.id).delete(
+            synchronize_session=False
+        )
         for stage in cycle.stages:
             db.delete(stage)
         db.delete(cycle)

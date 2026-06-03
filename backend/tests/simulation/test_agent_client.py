@@ -103,7 +103,10 @@ class TestSendConfirm:
     async def test_send_confirm(self):
         client = AgentClient(base_url="http://localhost:8000", token="tk")
         mock_response = MagicMock()
-        mock_response.json.return_value = {"reply": "已确认执行", "pending_action": None}
+        mock_response.json.return_value = {
+            "reply": "已确认执行",
+            "pending_action": None,
+        }
         mock_response.raise_for_status = MagicMock()
 
         mock_client = MagicMock()

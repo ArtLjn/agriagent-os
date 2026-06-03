@@ -58,9 +58,7 @@ class AlertScraper:
 
         return self._parse_alerts(resp.text, city_name)
 
-    def _parse_alerts(
-        self, json_text: str, city_name: str
-    ) -> list[WeatherAlert]:
+    def _parse_alerts(self, json_text: str, city_name: str) -> list[WeatherAlert]:
         """解析中国气象局 API 返回的预警数据。
 
         Args:
@@ -87,10 +85,16 @@ class AlertScraper:
             # 检查是否包含目标城市名
             headline = item.get("headline", "")
             title = item.get("title", "")
-            if city_name and city_name not in (
-                "当前地块",
-                "地块",
-            ) and city_name not in headline and city_name not in title:
+            if (
+                city_name
+                and city_name
+                not in (
+                    "当前地块",
+                    "地块",
+                )
+                and city_name not in headline
+                and city_name not in title
+            ):
                 continue
 
             # 从 type 提取严重程度（最后一位）

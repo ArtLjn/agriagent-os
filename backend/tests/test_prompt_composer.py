@@ -44,7 +44,11 @@ class TestComposerCompose:
         """system_base 场景组合包含所有必要段。"""
         result = _composer.compose(
             "system_base",
-            variables={"display_name": "老李", "farm_location": "苏州", "current_season": "夏季"},
+            variables={
+                "display_name": "老李",
+                "farm_location": "苏州",
+                "current_season": "夏季",
+            },
             current_date=date(2026, 5, 29),
         )
         assert "【语言规则】" in result

@@ -226,11 +226,15 @@ class TestParseCropTemplateStructured:
             variety="8424",
             stages=[
                 GrowthStageCreate(
-                    name="育苗期", duration_days=30, order_index=0,
+                    name="育苗期",
+                    duration_days=30,
+                    order_index=0,
                     key_tasks="温湿度管理",
                 ),
                 GrowthStageCreate(
-                    name="定植期", duration_days=1, order_index=1,
+                    name="定植期",
+                    duration_days=1,
+                    order_index=1,
                     key_tasks="浇定根水",
                 ),
             ],
@@ -290,9 +294,7 @@ class TestParseCropTemplateFallback:
     @patch("app.api.crop.get_llm")
     def test_fallback_invalid_json(self, mock_get_llm):
         """fallback 路径返回无效 JSON 时应返回 422。"""
-        mock_llm = _build_llm_fallback(
-            _mock_llm_response("这不是有效的 JSON")
-        )
+        mock_llm = _build_llm_fallback(_mock_llm_response("这不是有效的 JSON"))
         mock_get_llm.return_value = mock_llm
 
         response = client.post(
@@ -342,9 +344,7 @@ def test_parse_crop_template_returns_422_on_invalid_data():
         mock_parse.return_value = CropTemplateParseResponse(
             name="未知作物", variety=None, stages=[]
         )
-        response = client.post(
-            "/crops/templates/parse", json={"description": "hhhhhh"}
-        )
+        response = client.post("/crops/templates/parse", json={"description": "hhhhhh"})
 
     assert response.status_code == 422
     assert "无法识别作物信息" in response.json()["detail"]

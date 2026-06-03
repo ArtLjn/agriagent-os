@@ -245,7 +245,7 @@ class TestGetDailyAdvice:
         mock_invoke.return_value = (
             '{"preview":"今日需浇水","items":['
             '{"title":"浇水","detail":"土壤干燥需补水","priority":1,"icon":"💧"}'
-            ']}'
+            "]}"
         )
         mock_db = _make_mock_db()
 

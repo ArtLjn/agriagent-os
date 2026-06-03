@@ -1,6 +1,5 @@
 """天气预报 Skill。"""
 
-
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
@@ -11,11 +10,52 @@ from app.services.weather_service import check_weather_warnings, fetch_weather
 
 # 常见城市名列表（用于从消息中提取）
 _CITIES = {
-    "北京", "上海", "天津", "重庆", "哈尔滨", "长春", "沈阳", "大连", "石家庄",
-    "太原", "呼和浩特", "济南", "青岛", "郑州", "西安", "兰州", "银川", "西宁",
-    "乌鲁木齐", "合肥", "南京", "苏州", "无锡", "杭州", "宁波", "福州", "厦门",
-    "宁德", "南昌", "济南", "武汉", "长沙", "广州", "深圳", "南宁", "海口", "成都",
-    "贵阳", "昆明", "拉萨", "杭州", "金华", "温州", "嘉兴", "台州", "绍兴",
+    "北京",
+    "上海",
+    "天津",
+    "重庆",
+    "哈尔滨",
+    "长春",
+    "沈阳",
+    "大连",
+    "石家庄",
+    "太原",
+    "呼和浩特",
+    "济南",
+    "青岛",
+    "郑州",
+    "西安",
+    "兰州",
+    "银川",
+    "西宁",
+    "乌鲁木齐",
+    "合肥",
+    "南京",
+    "苏州",
+    "无锡",
+    "杭州",
+    "宁波",
+    "福州",
+    "厦门",
+    "宁德",
+    "南昌",
+    "济南",
+    "武汉",
+    "长沙",
+    "广州",
+    "深圳",
+    "南宁",
+    "海口",
+    "成都",
+    "贵阳",
+    "昆明",
+    "拉萨",
+    "杭州",
+    "金华",
+    "温州",
+    "嘉兴",
+    "台州",
+    "绍兴",
 }
 
 
@@ -130,7 +170,9 @@ def _format_weather_reply(location: str, data: dict) -> str:
 
     rain_times = []
     if hourly_time and hourly_precip:
-        for t, rain, prob in zip(hourly_time[:24], hourly_precip[:24], hourly_prob[:24]):
+        for t, rain, prob in zip(
+            hourly_time[:24], hourly_precip[:24], hourly_prob[:24]
+        ):
             if rain > 0 or prob >= 50:
                 hour = int(t.split("T")[1].split(":")[0])
                 rain_times.append(f"{hour}时({prob}%)")

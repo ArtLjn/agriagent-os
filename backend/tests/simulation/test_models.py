@@ -2,7 +2,13 @@
 
 from datetime import datetime
 
-from app.simulation.models import Claim, DbDiff, SimulationReport, SimulationResult, SimulationTestCase
+from app.simulation.models import (
+    Claim,
+    DbDiff,
+    SimulationReport,
+    SimulationResult,
+    SimulationTestCase,
+)
 
 
 class TestClaim:

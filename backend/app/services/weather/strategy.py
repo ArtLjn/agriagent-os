@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from app.core.config import settings
+from app.infra.settings import settings
 from app.services.weather.alert_scraper import AlertScraper
 from app.services.weather.base import AirQuality, ProviderError, WeatherData
 from app.services.weather.cache import weather_cache

@@ -9,7 +9,7 @@ def _make_messages(rounds: int) -> list:
     """构建 N 轮对话消息列表。每轮 = Human + AI(tool_call) + Tool(result) + AI(reply)。"""
     messages = []
     for i in range(rounds):
-        messages.append(HumanMessage(content=f"第{i+1}轮问题"))
+        messages.append(HumanMessage(content=f"第{i + 1}轮问题"))
         messages.append(
             AIMessage(
                 content="",
@@ -22,9 +22,9 @@ def _make_messages(rounds: int) -> list:
                 ],
             )
         )
-        content = f"工具返回结果第{i+1}轮，包含很长的数据内容" * 10
+        content = f"工具返回结果第{i + 1}轮，包含很长的数据内容" * 10
         messages.append(ToolMessage(content=content, tool_call_id=f"tc{i}"))
-        messages.append(AIMessage(content=f"第{i+1}轮回答"))
+        messages.append(AIMessage(content=f"第{i + 1}轮回答"))
     return messages
 
 
@@ -40,9 +40,7 @@ class TestSlidingWindow:
         msgs = _make_messages(8)
         result = sliding_window_compact(msgs, keep_rounds=5)
         assert len(result) == len(msgs)
-        old_tool_msgs = [
-            m for m in result[:8] if isinstance(m, ToolMessage)
-        ]
+        old_tool_msgs = [m for m in result[:8] if isinstance(m, ToolMessage)]
         for m in old_tool_msgs:
             assert len(m.content) < 50
 
@@ -50,9 +48,7 @@ class TestSlidingWindow:
         """最近 keep_rounds 轮完整保留。"""
         msgs = _make_messages(8)
         result = sliding_window_compact(msgs, keep_rounds=5)
-        recent_tool_msgs = [
-            m for m in result[-20:] if isinstance(m, ToolMessage)
-        ]
+        recent_tool_msgs = [m for m in result[-20:] if isinstance(m, ToolMessage)]
         for m in recent_tool_msgs:
             assert "很长的数据内容" in m.content
 

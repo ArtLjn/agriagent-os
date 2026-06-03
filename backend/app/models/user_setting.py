@@ -11,9 +11,7 @@ class UserSetting(Base):
     __tablename__ = "user_settings"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(
-        String(36), unique=True, nullable=False, index=True
-    )
+    user_id = Column(String(36), unique=True, nullable=False, index=True)
     default_city = Column(String(50), nullable=True)
     default_lat = Column(Float, nullable=True)
     default_lon = Column(Float, nullable=True)

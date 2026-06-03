@@ -351,7 +351,7 @@ class TestGraphToolNodeIntegration:
         )
         state = {"messages": [ai_msg]}
 
-        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
+        with patch("app.agent.runtime.tool_executor.get_langchain_tools") as mock_tools:
             mock_tool = MagicMock()
             mock_tool.name = "get_cost_summary"
             mock_tool.ainvoke = AsyncMock(return_value="本月支出：2000元")

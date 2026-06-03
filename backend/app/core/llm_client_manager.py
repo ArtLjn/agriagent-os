@@ -35,6 +35,7 @@ class ErrorLevel(Enum):
 
 class LLMCircuitState(Enum):
     """LLM Provider/Model 熔断状态。"""
+
     COOLING = "cooling"
     WARMING = "warming"
     DEAD = "dead"
@@ -43,6 +44,7 @@ class LLMCircuitState(Enum):
 @dataclass
 class CircuitEntry:
     """熔断条目 -- 替代旧的 CooldownEntry。"""
+
     failures: int = 0
     until: datetime = field(default_factory=datetime.now)
     cooldown_minutes: int = 0
@@ -156,9 +158,7 @@ class LLMClientManager:
             default_chain = [
                 pair for pair in self._chain if pair[0].name == default_name
             ]
-            rest_chain = [
-                pair for pair in self._chain if pair[0].name != default_name
-            ]
+            rest_chain = [pair for pair in self._chain if pair[0].name != default_name]
             self._chain = default_chain + rest_chain
         logger.info(
             "LLMClientManager 初始化 | providers=%d | models=%d",
@@ -178,9 +178,7 @@ class LLMClientManager:
 
     def _is_provider_healthy(self, provider_name: str) -> bool:
         """检查 provider 是否健康（<50% 模型处于 WARMING/DEAD）。"""
-        provider_models = [
-            m for p, m in self._chain if p.name == provider_name
-        ]
+        provider_models = [m for p, m in self._chain if p.name == provider_name]
         if not provider_models:
             return True
         bad_count = 0
@@ -259,7 +257,9 @@ class LLMClientManager:
             return provider, model, api_key
         return None
 
-    def get_chat_model(self, *, role: str | None = "generation", **kwargs) -> ChatOpenAI:
+    def get_chat_model(
+        self, *, role: str | None = "generation", **kwargs
+    ) -> ChatOpenAI:
         """获取 ChatOpenAI 实例（给 llm.py / graph.py 使用）。"""
         result = self._get_next_available(role=role)
         if not result:
@@ -362,8 +362,11 @@ class LLMClientManager:
         self._cooldowns.clear()
         self.fallback_mode = False
         self._load_config(path)
-        logger.info("LLMClientManager 热更新完成 | providers=%d | models=%d",
-                     len({p.name for p, _ in self._chain}), len(self._chain))
+        logger.info(
+            "LLMClientManager 热更新完成 | providers=%d | models=%d",
+            len({p.name for p, _ in self._chain}),
+            len(self._chain),
+        )
 
     def start_file_watcher(self) -> None:
         """启动后台线程监听 providers.json 变化，自动 reload。"""
@@ -416,5 +419,7 @@ def reload_llm_config() -> dict:
             _manager = LLMClientManager()
 
     info = _manager.get_model_info()
-    logger.info("LLM 配置热更新 | provider=%s | model=%s", info["provider"], info["model"])
+    logger.info(
+        "LLM 配置热更新 | provider=%s | model=%s", info["provider"], info["model"]
+    )
     return info

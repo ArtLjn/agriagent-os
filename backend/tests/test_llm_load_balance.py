@@ -32,14 +32,16 @@ class TestWeightEnabledFields:
 
     def test_provider_weight_parsed(self, tmp_path):
         cfg = {
-            "providers": [{
-                "name": "ollama",
-                "base_url": "http://test",
-                "api_keys": ["k"],
-                "priority": 1,
-                "weight": 8,
-                "models": [{"id": "m1", "priority": 1}],
-            }]
+            "providers": [
+                {
+                    "name": "ollama",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "weight": 8,
+                    "models": [{"id": "m1", "priority": 1}],
+                }
+            ]
         }
         p = tmp_path / "providers.json"
         _write_cfg(p, cfg)
@@ -48,13 +50,15 @@ class TestWeightEnabledFields:
 
     def test_provider_weight_default_is_1(self, tmp_path):
         cfg = {
-            "providers": [{
-                "name": "test",
-                "base_url": "http://test",
-                "api_keys": ["k"],
-                "priority": 1,
-                "models": [{"id": "m1", "priority": 1}],
-            }]
+            "providers": [
+                {
+                    "name": "test",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [{"id": "m1", "priority": 1}],
+                }
+            ]
         }
         p = tmp_path / "providers.json"
         _write_cfg(p, cfg)
@@ -89,16 +93,18 @@ class TestWeightEnabledFields:
 
     def test_model_enabled_false_skipped(self, tmp_path):
         cfg = {
-            "providers": [{
-                "name": "test",
-                "base_url": "http://test",
-                "api_keys": ["k"],
-                "priority": 1,
-                "models": [
-                    {"id": "m1", "priority": 1, "enabled": False},
-                    {"id": "m2", "priority": 2},
-                ],
-            }]
+            "providers": [
+                {
+                    "name": "test",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [
+                        {"id": "m1", "priority": 1, "enabled": False},
+                        {"id": "m2", "priority": 2},
+                    ],
+                }
+            ]
         }
         p = tmp_path / "providers.json"
         _write_cfg(p, cfg)
@@ -112,14 +118,16 @@ class TestTieredCircuit:
 
     def _make_manager(self, tmp_path) -> LLMClientManager:
         cfg = {
-            "providers": [{
-                "name": "test",
-                "base_url": "http://test",
-                "api_keys": ["k"],
-                "priority": 1,
-                "weight": 1,
-                "models": [{"id": "m1", "priority": 1}],
-            }]
+            "providers": [
+                {
+                    "name": "test",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "weight": 1,
+                    "models": [{"id": "m1", "priority": 1}],
+                }
+            ]
         }
         p = tmp_path / "providers.json"
         _write_cfg(p, cfg)
@@ -257,14 +265,16 @@ class TestWeightedRouting:
 
     def test_returns_none_when_no_api_keys(self, tmp_path):
         cfg = {
-            "providers": [{
-                "name": "empty",
-                "base_url": "http://test",
-                "api_keys": [],
-                "priority": 1,
-                "weight": 1,
-                "models": [{"id": "m1", "priority": 1}],
-            }]
+            "providers": [
+                {
+                    "name": "empty",
+                    "base_url": "http://test",
+                    "api_keys": [],
+                    "priority": 1,
+                    "weight": 1,
+                    "models": [{"id": "m1", "priority": 1}],
+                }
+            ]
         }
         p = tmp_path / "providers.json"
         _write_cfg(p, cfg)
@@ -277,17 +287,19 @@ class TestProviderHealth:
 
     def test_unhealthy_when_half_models_down(self, tmp_path):
         cfg = {
-            "providers": [{
-                "name": "test",
-                "base_url": "http://test",
-                "api_keys": ["k"],
-                "priority": 1,
-                "weight": 1,
-                "models": [
-                    {"id": "m1", "priority": 1},
-                    {"id": "m2", "priority": 2},
-                ],
-            }]
+            "providers": [
+                {
+                    "name": "test",
+                    "base_url": "http://test",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "weight": 1,
+                    "models": [
+                        {"id": "m1", "priority": 1},
+                        {"id": "m2", "priority": 2},
+                    ],
+                }
+            ]
         }
         p = tmp_path / "providers.json"
         _write_cfg(p, cfg)

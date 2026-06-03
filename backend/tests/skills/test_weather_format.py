@@ -2,9 +2,7 @@
 
 import importlib
 
-_weather_mod = importlib.import_module(
-    "app.agent.skills.weather.scripts.main"
-)
+_weather_mod = importlib.import_module("app.agent.skills.weather.scripts.main")
 WeatherSkill = _weather_mod.WeatherSkill
 
 

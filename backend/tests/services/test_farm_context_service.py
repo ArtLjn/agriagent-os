@@ -469,7 +469,9 @@ class TestWeatherFallback:
         with patch(
             "app.services.farm_context_service.weather_service"
         ) as mock_weather_svc:
-            mock_weather_svc.fetch_weather = AsyncMock(side_effect=RuntimeError("API 超时"))
+            mock_weather_svc.fetch_weather = AsyncMock(
+                side_effect=RuntimeError("API 超时")
+            )
             clear_context_cache()
 
             db = _make_db_session(monthly_cost=Decimal("0"))

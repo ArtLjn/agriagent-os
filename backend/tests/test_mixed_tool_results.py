@@ -57,7 +57,7 @@ class TestMixedToolMessages:
             "farm_id": 1,
         }
 
-        with patch("app.agent.graph.get_llm") as mock_get_llm:
+        with patch("app.agent.runtime.nodes.get_llm") as mock_get_llm:
             result = await _llm_node(state)
             assert isinstance(result["messages"][0], AIMessage)
             mock_get_llm.assert_not_called()
@@ -128,15 +128,15 @@ class TestPureNormalPath:
 
         # 需要完整 mock 因为会走 LLM
         with (
-            patch("app.agent.graph.get_llm") as mock_get_llm,
-            patch("app.agent.graph.get_langchain_tools", return_value=[]),
-            patch("app.agent.graph.get_composer") as mock_get_composer,
-            patch("app.agent.graph.get_request_date") as mock_get_date,
-            patch("app.agent.graph.get_collector") as mock_collector,
-            patch("app.agent.graph.check_quota", return_value=True),
-            patch("app.agent.graph.select_tools", return_value=[]),
-            patch("app.agent.graph._get_classifier", return_value=None),
-            patch("app.agent.graph.SessionLocal") as mock_session,
+            patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+            patch("app.agent.runtime.nodes.get_langchain_tools", return_value=[]),
+            patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+            patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+            patch("app.agent.runtime.nodes.get_collector") as mock_collector,
+            patch("app.agent.runtime.nodes.check_quota", return_value=True),
+            patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+            patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+            patch("app.agent.runtime.llm_support.SessionLocal") as mock_session,
         ):
             mock_get_date.return_value = __import__("datetime").date(2026, 5, 30)
             mock_composer = MagicMock()
@@ -232,15 +232,15 @@ class TestMixedEdgeCases:
         state = {"messages": [], "farm_id": 1}
 
         with (
-            patch("app.agent.graph.get_llm") as mock_get_llm,
-            patch("app.agent.graph.get_langchain_tools", return_value=[]),
-            patch("app.agent.graph.get_composer") as mock_get_composer,
-            patch("app.agent.graph.get_request_date") as mock_get_date,
-            patch("app.agent.graph.get_collector") as mock_collector,
-            patch("app.agent.graph.check_quota", return_value=True),
-            patch("app.agent.graph.select_tools", return_value=[]),
-            patch("app.agent.graph._get_classifier", return_value=None),
-            patch("app.agent.graph.SessionLocal") as mock_session,
+            patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+            patch("app.agent.runtime.nodes.get_langchain_tools", return_value=[]),
+            patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+            patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+            patch("app.agent.runtime.nodes.get_collector") as mock_collector,
+            patch("app.agent.runtime.nodes.check_quota", return_value=True),
+            patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+            patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+            patch("app.agent.runtime.llm_support.SessionLocal") as mock_session,
         ):
             mock_get_date.return_value = __import__("datetime").date(2026, 5, 30)
             mock_composer = MagicMock()

@@ -1,55 +1,8 @@
-"""认证服务 — 注册、登录、用户查询。"""
+"""认证服务兼容入口。
 
-import uuid
-import logging
+具体实现已迁移到 Auth 模块。
+"""
 
-from sqlalchemy.orm import Session
+from app.modules.auth.service import get_user_by_id, login, register
 
-from app.core.security import create_access_token, hash_password, verify_password
-from app.models.farm import Farm
-from app.models.user import User
-
-logger = logging.getLogger(__name__)
-
-
-def register(
-    db: Session, phone: str, password: str, nickname: str = "农友"
-) -> tuple[User, str]:
-    """注册新用户并创建默认农场。"""
-    user_id = str(uuid.uuid4())
-    user = User(
-        id=user_id,
-        phone=phone,
-        password_hash=hash_password(password),
-        nickname=nickname,
-    )
-    db.add(user)
-
-    farm = Farm(name=f"{nickname}的农场", user_id=user_id)
-    db.add(farm)
-
-    db.commit()
-    db.refresh(user)
-
-    token = create_access_token(user_id=user_id)
-    logger.info("用户注册 | phone=%s user_id=%s", phone, user_id)
-    return user, token
-
-
-def login(db: Session, phone: str, password: str) -> tuple[User, str] | None:
-    """登录验证，成功返回 (user, token)。"""
-    user = db.query(User).filter(User.phone == phone).first()
-    if user is None:
-        return None
-    if not verify_password(password, user.password_hash):
-        return None
-    if user.status != "active":
-        return None
-    token = create_access_token(user_id=user.id)
-    logger.info("用户登录 | phone=%s", phone)
-    return user, token
-
-
-def get_user_by_id(db: Session, user_id: str) -> User | None:
-    """通过 ID 查询用户。"""
-    return db.query(User).filter(User.id == user_id).first()
+__all__ = ["get_user_by_id", "login", "register"]

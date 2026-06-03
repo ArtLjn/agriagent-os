@@ -29,7 +29,6 @@ def _make_tools(names=None):
 
 
 class TestWritePatternMatching:
-
     def test_cost_record_with_amount(self):
         result = select_tools("卖了西瓜5000块", _make_tools())
         assert "create_cost_record" in result
@@ -88,7 +87,6 @@ class TestWritePatternMatching:
 
 
 class TestQueryKeywordMatching:
-
     def test_weather_query(self):
         result = select_tools("今天天气", _make_tools())
         assert "get_weather_forecast" in result
@@ -112,7 +110,6 @@ class TestQueryKeywordMatching:
 
 
 class TestFallback:
-
     def test_greeting_returns_all(self):
         result = select_tools("你好", _make_tools())
         assert result == ALL_TOOL_NAMES

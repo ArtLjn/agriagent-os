@@ -4,6 +4,7 @@ from datetime import date
 
 import pytest
 
+
 def test_system_base_prompt_contains_tool_calling_rule():
     """p1-tool-guardrails snippet 包含工具调用硬约束规则。"""
     from pathlib import Path

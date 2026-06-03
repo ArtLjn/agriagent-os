@@ -65,16 +65,8 @@ class TestDeleteCostRecord:
         resp = client.get("/costs")
         items = resp.json()["items"]
 
-        cost = sum(
-            float(r["amount"])
-            for r in items
-            if r["record_type"] == "cost"
-        )
-        income = sum(
-            float(r["amount"])
-            for r in items
-            if r["record_type"] == "income"
-        )
+        cost = sum(float(r["amount"]) for r in items if r["record_type"] == "cost")
+        income = sum(float(r["amount"]) for r in items if r["record_type"] == "income")
         assert cost == 100.00
         assert income == 0.00
 

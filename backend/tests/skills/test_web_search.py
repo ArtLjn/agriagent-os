@@ -158,8 +158,18 @@ class TestRerankResults:
     def test_relevance_overrides_searx_score(self):
         """高相关低 SearXNG 得分的结果应排在低相关高得分前面。"""
         items = [
-            {"title": "睢宁县百科", "content": "睢宁历史简介", "score": 5.0, "url": "https://a.com"},
-            {"title": "睢宁西瓜价格", "content": "睢宁西瓜价格0.7元/斤", "score": 1.0, "url": "https://b.com"},
+            {
+                "title": "睢宁县百科",
+                "content": "睢宁历史简介",
+                "score": 5.0,
+                "url": "https://a.com",
+            },
+            {
+                "title": "睢宁西瓜价格",
+                "content": "睢宁西瓜价格0.7元/斤",
+                "score": 1.0,
+                "url": "https://b.com",
+            },
         ]
         result = _rerank_results(items, "睢宁西瓜价格")
         assert result[0]["title"] == "睢宁西瓜价格"
@@ -170,12 +180,25 @@ class TestRerankResults:
     def test_time_bonus_for_recent(self):
         """近期发布的结果应获得加分。"""
         from datetime import datetime, timedelta, timezone
+
         recent = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
         old = (datetime.now(timezone.utc) - timedelta(days=400)).isoformat()
 
         items = [
-            {"title": "旧结果", "content": "西瓜价格", "score": 2.0, "url": "https://a.com", "publishedDate": old},
-            {"title": "新结果", "content": "西瓜价格", "score": 2.0, "url": "https://b.com", "publishedDate": recent},
+            {
+                "title": "旧结果",
+                "content": "西瓜价格",
+                "score": 2.0,
+                "url": "https://a.com",
+                "publishedDate": old,
+            },
+            {
+                "title": "新结果",
+                "content": "西瓜价格",
+                "score": 2.0,
+                "url": "https://b.com",
+                "publishedDate": recent,
+            },
         ]
         result = _rerank_results(items, "西瓜价格")
         assert result[0]["title"] == "新结果"
@@ -388,9 +411,27 @@ class TestFormatResults:
         """标题为空或 URL 异常短的结果应被过滤。"""
         data = {
             "results": [
-                {"title": "正常结果", "url": "https://example.com", "content": "正常内容" * 20, "engines": [], "score": 2.0},
-                {"title": "URL太短", "url": "h", "content": "被过滤", "engines": [], "score": 1.5},
-                {"title": "", "url": "https://example.com/other", "content": "也被过滤", "engines": [], "score": 1.0},
+                {
+                    "title": "正常结果",
+                    "url": "https://example.com",
+                    "content": "正常内容" * 20,
+                    "engines": [],
+                    "score": 2.0,
+                },
+                {
+                    "title": "URL太短",
+                    "url": "h",
+                    "content": "被过滤",
+                    "engines": [],
+                    "score": 1.5,
+                },
+                {
+                    "title": "",
+                    "url": "https://example.com/other",
+                    "content": "也被过滤",
+                    "engines": [],
+                    "score": 1.0,
+                },
             ],
             "answers": [],
             "infoboxes": [],
@@ -412,7 +453,12 @@ class TestFormatResults:
         """最多展示 15 条有效结果。"""
         data = {
             "results": [
-                {"title": f"结果{i}", "url": f"https://ex.com/{i}", "engines": [], "score": float(20 - i)}
+                {
+                    "title": f"结果{i}",
+                    "url": f"https://ex.com/{i}",
+                    "engines": [],
+                    "score": float(20 - i),
+                }
                 for i in range(20)
             ],
             "answers": [],
@@ -457,7 +503,9 @@ class TestFormatResults:
     @pytest.mark.asyncio
     async def test_suggestions_displayed(self):
         data = {
-            "results": [{"title": "t", "engines": [], "score": 1, "url": "https://a.com"}],
+            "results": [
+                {"title": "t", "engines": [], "score": 1, "url": "https://a.com"}
+            ],
             "answers": [],
             "infoboxes": [],
             "suggestions": ["西瓜价格", "西瓜种植"],
@@ -540,10 +588,19 @@ class TestWebSearchNormal:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="西瓜价格"),
-            patch("app.agent.skills.web_search.scripts.main._fetch_page_content", return_value=None),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="西瓜价格",
+            ),
+            patch(
+                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
         ):
             result = await self.skill.execute({"query": "西瓜价格"}, None)
 
@@ -570,9 +627,15 @@ class TestWebSearchNormal:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="不存在的关键词"),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="不存在的关键词",
+            ),
         ):
             result = await self.skill.execute({"query": "不存在的关键词"}, None)
 
@@ -585,7 +648,14 @@ class TestWebSearchNormal:
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
-            "results": [{"title": "t", "engines": ["bing"], "score": 1.0, "url": "https://a.com"}],
+            "results": [
+                {
+                    "title": "t",
+                    "engines": ["bing"],
+                    "score": 1.0,
+                    "url": "https://a.com",
+                }
+            ],
             "answers": [],
             "infoboxes": [],
         }
@@ -599,10 +669,19 @@ class TestWebSearchNormal:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="test"),
-            patch("app.agent.skills.web_search.scripts.main._fetch_page_content", return_value=None),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="test",
+            ),
+            patch(
+                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
         ):
             await self.skill.execute({"query": "test", "categories": "news"}, None)
 
@@ -616,7 +695,14 @@ class TestWebSearchNormal:
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
-            "results": [{"title": "新闻", "engines": ["bing"], "score": 1.0, "url": "https://a.com"}],
+            "results": [
+                {
+                    "title": "新闻",
+                    "engines": ["bing"],
+                    "score": 1.0,
+                    "url": "https://a.com",
+                }
+            ],
             "answers": [],
             "infoboxes": [],
         }
@@ -630,10 +716,19 @@ class TestWebSearchNormal:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="最新西瓜新闻"),
-            patch("app.agent.skills.web_search.scripts.main._fetch_page_content", return_value=None),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="最新西瓜新闻",
+            ),
+            patch(
+                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
         ):
             await self.skill.execute({"query": "最新西瓜新闻"}, None)
 
@@ -647,7 +742,10 @@ class TestWebSearchNormal:
 
         with (
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="test"),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="test",
+            ),
         ):
             result = await self.skill.execute({"query": "test"}, None)
 
@@ -687,9 +785,15 @@ class TestWebSearchError:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="test"),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="test",
+            ),
         ):
             result = await self.skill.execute({"query": "test"}, None)
 
@@ -717,9 +821,15 @@ class TestWebSearchError:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="test"),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="test",
+            ),
         ):
             result = await self.skill.execute({"query": "test"}, None)
 
@@ -737,9 +847,15 @@ class TestWebSearchError:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="test"),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="test",
+            ),
         ):
             result = await self.skill.execute({"query": "test"}, None)
 
@@ -763,7 +879,12 @@ class TestWebSearchError:
         fallback_response.raise_for_status = MagicMock()
         fallback_response.json.return_value = {
             "results": [
-                {"title": "fallback结果", "engines": ["bing"], "score": 1.0, "url": "https://a.com"}
+                {
+                    "title": "fallback结果",
+                    "engines": ["bing"],
+                    "score": 1.0,
+                    "url": "https://a.com",
+                }
             ],
             "answers": [],
             "infoboxes": [],
@@ -778,10 +899,19 @@ class TestWebSearchError:
         mock_settings.secrets.searxng_url = "http://test:8888"
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                return_value=mock_client,
+            ),
             patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
-            patch("app.agent.skills.web_search.scripts.main._rewrite_query", return_value="fallback_test_unique"),
-            patch("app.agent.skills.web_search.scripts.main._fetch_page_content", return_value=None),
+            patch(
+                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                return_value="fallback_test_unique",
+            ),
+            patch(
+                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                return_value=None,
+            ),
         ):
             result = await self.skill.execute(
                 {"query": "fallback_test_unique", "categories": "news"}, None

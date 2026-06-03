@@ -10,7 +10,9 @@ farm-manager，FastAPI 后端 + React+TS 前端
 |-----------|---------|
 | 了解系统架构 | docs/architecture/overview.md |
 | 了解系统演进路线图 | docs/architecture/evolution-roadmap.md |
+| 了解 Agent 平台目标架构 | docs/architecture/overview.md#agent-平台边界 |
 | 了解模块边界和依赖规则 | docs/architecture/boundaries.md |
+| 了解兼容入口保留理由 | docs/architecture/compatibility-entries.md |
 | 了解 Python 编码规范 | .Codex/rules/python-style.md |
 | 了解前端编码规范 | .Codex/rules/frontend-style.md |
 | 了解安全规范 | .Codex/rules/security.md |
@@ -22,7 +24,7 @@ farm-manager，FastAPI 后端 + React+TS 前端
 <!-- Guide+Sensor 配对说明：以下每条规则都应对应 scripts/ 中的检查脚本。
      运行 bash scripts/check-guide-sensor-pairing.sh 验证配对完整性。 -->
 ## 硬性规则（CI 会验证）
-1. 依赖方向：schemas/ → agent/ → api/ → infra/ → core/ → models/ → services/（后端），api/ → components/ → layouts/ → pages/（前端）
+1. 依赖方向：后端以 api → application/modules/platform → shared/core/models/infra 为目标，兼容期旧分层由 check-layer-deps.sh 检查；前端 api → components → layouts → pages
 2. 横切关注点（auth/log/telemetry）只通过依赖注入
 3. 单文件 ≤ 500 行，单方法 ≤ 50 行
 4. 新增代码必须有对应测试

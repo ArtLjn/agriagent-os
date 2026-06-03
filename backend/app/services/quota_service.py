@@ -5,8 +5,8 @@ from datetime import date
 
 from sqlalchemy import func
 
-from app.core.config import settings
-from app.core.database import SessionLocal
+from app.infra.database import SessionLocal
+from app.infra.settings import settings
 from app.models.token_stats import TokenDailyStats
 
 logger = logging.getLogger(__name__)

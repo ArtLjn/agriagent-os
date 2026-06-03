@@ -9,9 +9,7 @@ from app.infra.skill_cache import clear_cache
 from skillify.models.schemas import ResultStatus
 
 # kebab-case 目录名需要通过 importlib 导入
-_mod = importlib.import_module(
-    "app.agent.skills.farm-status.scripts.main"
-)
+_mod = importlib.import_module("app.agent.skills.farm-status.scripts.main")
 FarmStatusSkill = _mod.FarmStatusSkill
 
 SKILL_NAME = "get_farm_status"

@@ -91,7 +91,9 @@ def delete_record(
 
 
 async def _parse_cost_with_llm(
-    llm, prompt: str, logger: logging.Logger,
+    llm,
+    prompt: str,
+    logger: logging.Logger,
 ) -> CostParseResult:
     """通过 LLM 解析记账描述，优先用 structured output，失败则 fallback 到 JSON 解析。"""
     try:
@@ -111,9 +113,7 @@ async def _parse_cost_with_llm(
             reply = response.content
         except Exception as e:
             logger.error("AI 调用失败: %s", e)
-            raise HTTPException(
-                status_code=503, detail="AI 服务暂时不可用，请稍后重试"
-            )
+            raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
 
         try:
             data = safe_parse_json(reply)

@@ -29,13 +29,17 @@ def check_consistency(
     """
     errors: list[str] = []
 
-    is_cancel_scenario = not test_case.expected_db_changes and pending_action is not None
+    is_cancel_scenario = (
+        not test_case.expected_db_changes and pending_action is not None
+    )
     if not is_cancel_scenario:
         errors.extend(_check_hallucination(claims, db_diff, skill_traces))
     errors.extend(_check_attribution_error(agent_reply, claims, db_diff))
     errors.extend(_check_silent_mutation(agent_reply, claims, db_diff))
     errors.extend(_check_expected_changes(db_diff, test_case.expected_db_changes))
-    errors.extend(_check_response_matches(agent_reply, test_case.expected_response_matches))
+    errors.extend(
+        _check_response_matches(agent_reply, test_case.expected_response_matches)
+    )
 
     return errors
 
@@ -94,9 +98,7 @@ def _check_attribution_error(
     has_db_changes = bool(db_diff.added or db_diff.removed or db_diff.modified)
 
     if has_failure_words and has_db_changes:
-        errors.append(
-            "attribution_error: LLM 回复暗示操作失败，但数据库实际有变化"
-        )
+        errors.append("attribution_error: LLM 回复暗示操作失败，但数据库实际有变化")
     return errors
 
 
@@ -123,9 +125,7 @@ def _check_silent_mutation(
     return errors
 
 
-def _check_expected_changes(
-    db_diff: DbDiff, expected: dict[str, dict]
-) -> list[str]:
+def _check_expected_changes(db_diff: DbDiff, expected: dict[str, dict]) -> list[str]:
     """验证 DB 变化是否与预期一致。"""
     errors: list[str] = []
     if not expected:
@@ -172,7 +172,9 @@ def _match_field_value(actual_value, expected_value) -> bool:
         return False
 
     # 数字等值匹配（int == float）
-    if isinstance(actual_value, (int, float)) and isinstance(expected_value, (int, float)):
+    if isinstance(actual_value, (int, float)) and isinstance(
+        expected_value, (int, float)
+    ):
         return actual_value == expected_value
 
     # 字符串子串匹配
@@ -187,9 +189,7 @@ def _match_field_value(actual_value, expected_value) -> bool:
     return actual_value == expected_value
 
 
-def _check_response_matches(
-    agent_reply: str, expected_matches: list[str]
-) -> list[str]:
+def _check_response_matches(agent_reply: str, expected_matches: list[str]) -> list[str]:
     """验证 LLM 回复是否包含预期关键词。"""
     errors: list[str] = []
     if not expected_matches:
@@ -197,7 +197,5 @@ def _check_response_matches(
 
     for keyword in expected_matches:
         if keyword not in agent_reply:
-            errors.append(
-                f"response_mismatch: LLM 回复未包含预期关键词 '{keyword}'"
-            )
+            errors.append(f"response_mismatch: LLM 回复未包含预期关键词 '{keyword}'")
     return errors

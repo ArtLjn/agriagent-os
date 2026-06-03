@@ -21,7 +21,10 @@ def test_create_and_verify_token():
     token = create_access_token(user_id="abc-123")
     payload = verify_token(token)
     assert payload["sub"] == "abc-123"
+    assert payload["type"] == "access"
+    assert "iat" in payload
     assert "exp" in payload
+    assert "jti" in payload
 
 
 def test_verify_invalid_token_returns_none():

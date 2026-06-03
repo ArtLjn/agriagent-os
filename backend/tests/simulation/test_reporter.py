@@ -24,8 +24,12 @@ class TestSimulationReporterGenerate:
     def test_all_passed(self):
         reporter = SimulationReporter()
         results = [
-            SimulationResult(case_id="tc-001", passed=True, latency_ms=100, category="basic"),
-            SimulationResult(case_id="tc-002", passed=True, latency_ms=200, category="basic"),
+            SimulationResult(
+                case_id="tc-001", passed=True, latency_ms=100, category="basic"
+            ),
+            SimulationResult(
+                case_id="tc-002", passed=True, latency_ms=200, category="basic"
+            ),
         ]
         report = reporter.generate(results, run_id="run-002")
 

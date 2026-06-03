@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 class TestBuildAdvisorAgent:
     """测试建议 Agent 构建。"""
 
-    @patch("app.agent.graph.get_llm")
+    @patch("app.agent.runtime.nodes.get_llm")
     def test_build_advisor_agent_returns_graph(self, mock_get_llm: MagicMock) -> None:
         """验证 build_advisor_agent 返回编译后的图。"""
         mock_llm = MagicMock()

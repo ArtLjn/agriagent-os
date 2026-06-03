@@ -25,11 +25,13 @@ def mock_db() -> MagicMock:
 
 async def _call_chat(db, message, **kwargs):
     from app.services.agent_service import chat_with_agent
+
     return await chat_with_agent(db, message, **kwargs)
 
 
 async def _stream_chat(message, **kwargs):
     from app.services.agent_service import stream_chat_with_agent
+
     return stream_chat_with_agent(message, **kwargs)
 
 
@@ -38,18 +40,19 @@ class TestSkillifyRouteRemoved:
 
     def test_try_skillify_route_does_not_exist(self):
         import app.services.agent_service as mod
+
         assert not hasattr(mod, "_try_skillify_route"), (
             "_try_skillify_route 仍然存在，需要移除"
         )
 
     def test_execute_skill_does_not_exist(self):
         import app.services.agent_service as mod
-        assert not hasattr(mod, "_execute_skill"), (
-            "_execute_skill 仍然存在，需要移除"
-        )
+
+        assert not hasattr(mod, "_execute_skill"), "_execute_skill 仍然存在，需要移除"
 
     def test_build_skill_context_not_in_source(self):
         import app.services.agent_service as mod
+
         source = inspect.getsource(mod)
         assert "build_skill_context" not in source, (
             "build_skill_context 引用仍然存在于源码中"
@@ -57,6 +60,7 @@ class TestSkillifyRouteRemoved:
 
     def test_get_skill_manager_not_in_source(self):
         import app.services.agent_service as mod
+
         source = inspect.getsource(mod)
         assert "get_skill_manager" not in source, (
             "get_skill_manager 引用仍然存在于源码中"
@@ -70,7 +74,10 @@ class TestChatWithAgentRouting:
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_routes_through_invoke_advisor(
-        self, mock_get_pending: MagicMock, mock_invoke: AsyncMock, mock_db: MagicMock,
+        self,
+        mock_get_pending: MagicMock,
+        mock_invoke: AsyncMock,
+        mock_db: MagicMock,
     ):
         mock_invoke.return_value = "LLM 回复"
         result = await _call_chat(mock_db, "今天天气怎样", farm_id=1)
@@ -81,7 +88,10 @@ class TestChatWithAgentRouting:
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_no_skillify_pre_route(
-        self, mock_get_pending: MagicMock, mock_invoke: AsyncMock, mock_db: MagicMock,
+        self,
+        mock_get_pending: MagicMock,
+        mock_invoke: AsyncMock,
+        mock_db: MagicMock,
     ):
         mock_invoke.return_value = "回复"
         await _call_chat(mock_db, "查询成本记录", farm_id=1)
@@ -105,9 +115,7 @@ class TestChatWithAgentRouting:
         mock_conv.id = 1
         mock_get_conv.return_value = mock_conv
 
-        result = await _call_chat(
-            mock_db, "问题", farm_id=1, session_id="s1"
-        )
+        result = await _call_chat(mock_db, "问题", farm_id=1, session_id="s1")
         assert result.reply == "回复"
         mock_invoke.assert_called_once()
 
@@ -140,7 +148,9 @@ class TestPendingActionPreserved:
         result = await _call_chat(mock_db, "确认", farm_id=1)
 
         assert "已创建成本记录" in result.reply or "已执行" in result.reply
-        mock_exec.assert_called_once_with(1, "create_cost_record", {"category": "化肥", "amount": 200})
+        mock_exec.assert_called_once_with(
+            1, "create_cost_record", {"category": "化肥", "amount": 200}
+        )
         mock_remove.assert_called_once_with(1)
         mock_invoke.assert_not_called()
 
@@ -180,7 +190,9 @@ class TestStreamChatWithAgentRouting:
     @patch("app.services.agent_service.stream_advisor")
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_routes_through_stream_advisor(
-        self, mock_get_pending: MagicMock, mock_stream: MagicMock,
+        self,
+        mock_get_pending: MagicMock,
+        mock_stream: MagicMock,
     ):
         async def _fake_stream(*args, **kwargs):
             yield "chunk1"
@@ -200,7 +212,9 @@ class TestStreamChatWithAgentRouting:
     @patch("app.services.agent_service.stream_advisor")
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_no_skillify_pre_route_in_stream(
-        self, mock_get_pending: MagicMock, mock_stream: MagicMock,
+        self,
+        mock_get_pending: MagicMock,
+        mock_stream: MagicMock,
     ):
         async def _fake_stream(*args, **kwargs):
             yield "result"

@@ -134,12 +134,9 @@ def _format_reply(cycle) -> str:
     """格式化成功回复，使用 emoji + 有序列表展示阶段。"""
     sorted_stages = sorted(cycle.stages, key=lambda s: s.order_index)
     stage_lines = [
-        f"{i+1}. {s.name}（{_format_date_m_d(s.start_date)} ~ "
+        f"{i + 1}. {s.name}（{_format_date_m_d(s.start_date)} ~ "
         f"{_format_date_m_d(s.end_date)}，{s.duration_days}天）"
         for i, s in enumerate(sorted_stages)
     ]
     stages_text = "\n".join(stage_lines)
-    return (
-        f"✅ 茬口「{cycle.name}」已创建！\n\n"
-        f"📋 **阶段规划**\n{stages_text}"
-    )
+    return f"✅ 茬口「{cycle.name}」已创建！\n\n📋 **阶段规划**\n{stages_text}"

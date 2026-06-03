@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 class SimulationReporter:
     """仿真测试报告生成器。"""
 
-    def generate(self, results: list[SimulationResult], run_id: str = "") -> SimulationReport:
+    def generate(
+        self, results: list[SimulationResult], run_id: str = ""
+    ) -> SimulationReport:
         """
         根据执行结果生成汇总报告。
         统计：总数、通过数、失败数、准确率、平均延迟、失败分类 breakdown。

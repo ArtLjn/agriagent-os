@@ -35,16 +35,20 @@ class TestGetCategoryEnum:
             _make_category("种子"),
             _make_category("人工"),
         ]
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = mock_cats
             result = get_category_enum(farm_id=1)
         assert result == ["化肥", "种子", "人工"]
 
     def test_returns_default_when_no_categories(self):
         """数据库无分类时返回默认列表。"""
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = []
             result = get_category_enum(farm_id=1)
         assert "化肥" in result
@@ -54,8 +58,10 @@ class TestGetCategoryEnum:
     def test_caches_result_for_same_farm(self):
         """同一 farm_id 的第二次调用使用缓存。"""
         mock_cats = [_make_category("化肥")]
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
             get_category_enum(farm_id=1)
@@ -65,8 +71,10 @@ class TestGetCategoryEnum:
     def test_different_farms_separate_cache(self):
         """不同 farm_id 查询不同次数。"""
         mock_cats = [_make_category("化肥")]
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
             get_category_enum(farm_id=2)
@@ -92,15 +100,19 @@ class TestClearCategoryCache:
     def test_clear_specific_farm(self):
         """清除指定 farm 的缓存。"""
         mock_cats = [_make_category("化肥")]
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
 
         clear_category_cache(farm_id=1)
 
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
 
@@ -109,16 +121,20 @@ class TestClearCategoryCache:
     def test_clear_all(self):
         """清除全部缓存。"""
         mock_cats = [_make_category("化肥")]
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
             get_category_enum(farm_id=2)
 
         clear_category_cache()
 
-        with patch("app.agent.skills.cost_category_service") as mock_svc, \
-             patch("app.agent.skills.SessionLocal"):
+        with (
+            patch("app.agent.skills.cost_category_service") as mock_svc,
+            patch("app.agent.skills.SessionLocal"),
+        ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
             get_category_enum(farm_id=2)
@@ -194,6 +210,7 @@ class TestPydanticValidationInToolNode:
 
     def setup_method(self):
         from app.infra.pending_actions import _pending
+
         _pending.clear()
 
     @pytest.mark.asyncio
@@ -215,7 +232,7 @@ class TestPydanticValidationInToolNode:
         )
         state = {"messages": [ai_msg], "farm_id": 1}
 
-        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
+        with patch("app.agent.runtime.tool_executor.get_langchain_tools") as mock_tools:
             from pydantic import BaseModel, Field
             from typing import Literal
 
@@ -234,8 +251,7 @@ class TestPydanticValidationInToolNode:
 
         tool_msg = result["messages"][0]
         assert (
-            "参数校验失败" in tool_msg.content
-            or "amount" in tool_msg.content.lower()
+            "参数校验失败" in tool_msg.content or "amount" in tool_msg.content.lower()
         )
         assert get_pending(farm_id=1) is None
 
@@ -258,7 +274,7 @@ class TestPydanticValidationInToolNode:
         )
         state = {"messages": [ai_msg], "farm_id": 1}
 
-        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
+        with patch("app.agent.runtime.tool_executor.get_langchain_tools") as mock_tools:
             from pydantic import BaseModel, Field
             from typing import Literal
 
@@ -277,9 +293,7 @@ class TestPydanticValidationInToolNode:
 
         tool_msg = result["messages"][0]
         assert get_pending(farm_id=1) is not None
-        assert (
-            "PENDING_ACTION" in tool_msg.content or "确认" in tool_msg.content
-        )
+        assert "PENDING_ACTION" in tool_msg.content or "确认" in tool_msg.content
 
     @pytest.mark.asyncio
     async def test_invalid_param_type_returns_error(self):
@@ -300,7 +314,7 @@ class TestPydanticValidationInToolNode:
         )
         state = {"messages": [ai_msg], "farm_id": 1}
 
-        with patch("app.agent.graph.get_langchain_tools") as mock_tools:
+        with patch("app.agent.runtime.tool_executor.get_langchain_tools") as mock_tools:
             from pydantic import BaseModel, Field
             from typing import Literal
 
@@ -318,5 +332,7 @@ class TestPydanticValidationInToolNode:
             result = await _parallel_tool_node(state)
 
         tool_msg = result["messages"][0]
-        assert "参数校验失败" in tool_msg.content or "amount" in tool_msg.content.lower()
+        assert (
+            "参数校验失败" in tool_msg.content or "amount" in tool_msg.content.lower()
+        )
         assert get_pending(farm_id=1) is None

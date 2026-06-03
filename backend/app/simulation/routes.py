@@ -22,7 +22,11 @@ logger = logging.getLogger(__name__)
 
 def _get_service_base_url() -> str:
     """获取当前服务的完整 base URL。"""
-    host = "127.0.0.1" if settings.server.host in ("0.0.0.0", "::") else settings.server.host
+    host = (
+        "127.0.0.1"
+        if settings.server.host in ("0.0.0.0", "::")
+        else settings.server.host
+    )
     return f"http://{host}:{settings.server.port}"
 
 
@@ -102,12 +106,18 @@ def _run_to_dict(run: SimulationRun) -> dict:
         "passed": run.passed,
         "failed": run.failed,
         "profile": run.profile,
-        "progress": _progress_cache.get(run.run_id, {"current": run.total, "total": run.total}),
-        "created_at": run.created_at.isoformat() if run.created_at else datetime.now().isoformat(),
+        "progress": _progress_cache.get(
+            run.run_id, {"current": run.total, "total": run.total}
+        ),
+        "created_at": run.created_at.isoformat()
+        if run.created_at
+        else datetime.now().isoformat(),
     }
 
 
-def _run_with_results_to_dict(run: SimulationRun, results: list[SimulationResultRecord]) -> dict:
+def _run_with_results_to_dict(
+    run: SimulationRun, results: list[SimulationResultRecord]
+) -> dict:
     """将 SimulationRun + 结果列表 转为完整 dict。"""
     d = _run_to_dict(run)
     d["results"] = [_result_record_to_dict(r) for r in results]
@@ -141,7 +151,9 @@ def _report_from_run(run: SimulationRun, results: list[SimulationResultRecord]) 
     passed = sum(1 for r in results if r.passed)
     failed = total - passed
     accuracy = round(passed / total, 4) if total > 0 else 0.0
-    avg_latency = round(sum(r.latency_ms for r in results) / total, 2) if total > 0 else 0.0
+    avg_latency = (
+        round(sum(r.latency_ms for r in results) / total, 2) if total > 0 else 0.0
+    )
 
     # 失败分类统计
     failure_breakdown: dict[str, int] = {}
@@ -160,7 +172,9 @@ def _report_from_run(run: SimulationRun, results: list[SimulationResultRecord]) 
         "avg_latency_ms": avg_latency,
         "failure_breakdown": failure_breakdown,
         "results": result_dicts,
-        "created_at": run.created_at.isoformat() if run.created_at else datetime.now().isoformat(),
+        "created_at": run.created_at.isoformat()
+        if run.created_at
+        else datetime.now().isoformat(),
     }
 
 
@@ -170,9 +184,7 @@ async def list_cases(
     farm: Farm = Depends(get_current_farm),
 ):
     """列出所有测试用例。"""
-    runner = SimulationRunner(
-        agent_client=AgentClient(), db=None, farm_id=farm.id
-    )
+    runner = SimulationRunner(agent_client=AgentClient(), db=None, farm_id=farm.id)
     cases = runner.load_cases(category)
     return {"cases": [_case_to_dict(c) for c in cases]}
 
@@ -196,9 +208,7 @@ async def start_run(
     case_ids = body.get("case_ids")
     profile = body.get("profile", "default")
 
-    runner = SimulationRunner(
-        agent_client=AgentClient(), db=db, farm_id=farm.id
-    )
+    runner = SimulationRunner(agent_client=AgentClient(), db=db, farm_id=farm.id)
     all_cases = runner.load_cases()
 
     if case_ids:
@@ -228,9 +238,7 @@ async def start_run(
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
 
-    task = asyncio.create_task(
-        _execute_run(run_id, cases, agent_url, token, farm.id)
-    )
+    task = asyncio.create_task(_execute_run(run_id, cases, agent_url, token, farm.id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     logger.info("仿真测试已启动 | run_id=%s total=%d", run_id, total)
@@ -251,9 +259,7 @@ async def _execute_run(
     db = SessionLocal()
     try:
         agent_client = AgentClient(base_url=agent_url, token=token)
-        runner = SimulationRunner(
-            agent_client=agent_client, db=db, farm_id=farm_id
-        )
+        runner = SimulationRunner(agent_client=agent_client, db=db, farm_id=farm_id)
 
         results = await runner.run_batch(cases, run_id=run_id)
 
@@ -321,32 +327,48 @@ async def get_run_status(
     """查询测试运行状态。"""
     # 优先从内存缓存获取 running 状态
     if run_id in _progress_cache:
-        db_run = db.query(SimulationRun).filter(
-            SimulationRun.run_id == run_id,
-            SimulationRun.farm_id == farm.id,
-        ).first()
+        db_run = (
+            db.query(SimulationRun)
+            .filter(
+                SimulationRun.run_id == run_id,
+                SimulationRun.farm_id == farm.id,
+            )
+            .first()
+        )
         if db_run:
-            results = db.query(SimulationResultRecord).filter(
-                SimulationResultRecord.run_id == run_id,
-                SimulationResultRecord.farm_id == farm.id,
-            ).all()
+            results = (
+                db.query(SimulationResultRecord)
+                .filter(
+                    SimulationResultRecord.run_id == run_id,
+                    SimulationResultRecord.farm_id == farm.id,
+                )
+                .all()
+            )
             return _run_with_results_to_dict(db_run, results)
 
     # 从 DB 查询
-    db_run = db.query(SimulationRun).filter(
-        SimulationRun.run_id == run_id,
-        SimulationRun.farm_id == farm.id,
-    ).first()
+    db_run = (
+        db.query(SimulationRun)
+        .filter(
+            SimulationRun.run_id == run_id,
+            SimulationRun.farm_id == farm.id,
+        )
+        .first()
+    )
     if db_run is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "RUN_NOT_FOUND", "message": "运行记录不存在"},
         )
 
-    results = db.query(SimulationResultRecord).filter(
-        SimulationResultRecord.run_id == run_id,
-        SimulationResultRecord.farm_id == farm.id,
-    ).all()
+    results = (
+        db.query(SimulationResultRecord)
+        .filter(
+            SimulationResultRecord.run_id == run_id,
+            SimulationResultRecord.farm_id == farm.id,
+        )
+        .all()
+    )
     return _run_with_results_to_dict(db_run, results)
 
 
@@ -357,9 +379,15 @@ async def list_runs(
     farm: Farm = Depends(get_current_farm),
 ):
     """列出历史运行记录。"""
-    runs = db.query(SimulationRun).filter(
-        SimulationRun.farm_id == farm.id,
-    ).order_by(SimulationRun.created_at.desc()).limit(limit).all()
+    runs = (
+        db.query(SimulationRun)
+        .filter(
+            SimulationRun.farm_id == farm.id,
+        )
+        .order_by(SimulationRun.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     return {"runs": [_run_to_dict(r) for r in runs]}
 
 
@@ -370,19 +398,27 @@ async def get_report(
     farm: Farm = Depends(get_current_farm),
 ):
     """获取测试报告。"""
-    db_run = db.query(SimulationRun).filter(
-        SimulationRun.run_id == run_id,
-        SimulationRun.farm_id == farm.id,
-    ).first()
+    db_run = (
+        db.query(SimulationRun)
+        .filter(
+            SimulationRun.run_id == run_id,
+            SimulationRun.farm_id == farm.id,
+        )
+        .first()
+    )
     if db_run is None:
         raise HTTPException(
             status_code=404,
             detail={"error": "REPORT_NOT_FOUND", "message": "测试报告不存在"},
         )
 
-    results = db.query(SimulationResultRecord).filter(
-        SimulationResultRecord.run_id == run_id,
-        SimulationResultRecord.farm_id == farm.id,
-    ).all()
+    results = (
+        db.query(SimulationResultRecord)
+        .filter(
+            SimulationResultRecord.run_id == run_id,
+            SimulationResultRecord.farm_id == farm.id,
+        )
+        .all()
+    )
 
     return _report_from_run(db_run, results)

@@ -30,5 +30,3 @@ class User(Base):
     role = Column(String(20), nullable=False, default=UserRole.USER.value)
     status = Column(String(20), nullable=False, default=UserStatus.ACTIVE.value)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-

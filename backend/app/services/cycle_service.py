@@ -165,8 +165,12 @@ def delete_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> None:
     db.query(AgentRecord).filter(AgentRecord.cycle_id == cycle_id).update(
         {"cycle_id": None}, synchronize_session=False
     )
-    db.query(FarmLog).filter(FarmLog.cycle_id == cycle_id).delete(synchronize_session=False)
-    db.query(CostRecord).filter(CostRecord.cycle_id == cycle_id).delete(synchronize_session=False)
+    db.query(FarmLog).filter(FarmLog.cycle_id == cycle_id).delete(
+        synchronize_session=False
+    )
+    db.query(CostRecord).filter(CostRecord.cycle_id == cycle_id).delete(
+        synchronize_session=False
+    )
     db.flush()
 
     for stage in cycle.stages:

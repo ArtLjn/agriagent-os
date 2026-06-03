@@ -75,14 +75,14 @@ def mock_env():
     """mock 掉所有外部依赖：LLM、collector、quota、prompt 渲染等。"""
     clear_all_caches()
     with (
-        patch("app.agent.graph.get_llm") as mock_get_llm,
-        patch("app.agent.graph.get_langchain_tools") as mock_get_tools,
-        patch("app.agent.graph.get_composer") as mock_get_composer,
-        patch("app.agent.graph.get_collector") as mock_get_collector,
-        patch("app.agent.graph.get_request_date") as mock_get_date,
-        patch("app.agent.graph.check_quota", return_value=True),
-        patch("app.agent.graph.select_tools", return_value=[]),
-        patch("app.agent.graph._get_classifier", return_value=None),
+        patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+        patch("app.agent.runtime.nodes.get_langchain_tools") as mock_get_tools,
+        patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+        patch("app.agent.runtime.nodes.get_collector") as mock_get_collector,
+        patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+        patch("app.agent.runtime.nodes._get_classifier", return_value=None),
     ):
         mock_get_tools.return_value = []
         mock_get_date.return_value = __import__("datetime").date(2026, 5, 29)
@@ -108,7 +108,7 @@ def mock_env():
 async def _run_llm_node(mock_render, *query_results):
     """运行 _llm_node 并返回 render_prompt 的 variables。"""
     mock_session = _build_mock_session(*query_results)
-    with patch("app.agent.graph.SessionLocal", return_value=mock_session):
+    with patch("app.agent.runtime.llm_support.SessionLocal", return_value=mock_session):
         state = {"messages": [], "farm_id": 1}
         await _llm_node(state)
     _, kwargs = mock_render.call_args

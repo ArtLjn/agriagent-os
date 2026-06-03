@@ -17,8 +17,7 @@ def _register_prompt_templates():
     registry.register(
         "system_base",
         "1.0",
-        "你是农业顾问。{{ display_name }} "
-        "{{ farm_location }} {{ current_season }}",
+        "你是农业顾问。{{ display_name }} {{ farm_location }} {{ current_season }}",
     )
     yield
 
@@ -38,10 +37,10 @@ class TestAIConfigParallel:
 class TestBindToolsParallel:
     """bind_tools 根据 parallel_tool_calls 配置传入参数。"""
 
-    @patch("app.agent.graph.get_langchain_tools")
-    @patch("app.agent.graph.check_quota", return_value=True)
-    @patch("app.agent.graph.get_llm")
-    @patch("app.agent.graph.SessionLocal")
+    @patch("app.agent.runtime.nodes.get_langchain_tools")
+    @patch("app.agent.runtime.nodes.check_quota", return_value=True)
+    @patch("app.agent.runtime.nodes.get_llm")
+    @patch("app.agent.runtime.llm_support.SessionLocal")
     @pytest.mark.asyncio
     async def test_bind_tools_passes_parallel_true_by_default(
         self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
@@ -61,18 +60,16 @@ class TestBindToolsParallel:
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        await graph.ainvoke(
-            {"messages": [HumanMessage(content="明天天气")]}
-        )
+        await graph.ainvoke({"messages": [HumanMessage(content="明天天气")]})
 
         mock_llm.bind_tools.assert_called_once()
         call_kwargs = mock_llm.bind_tools.call_args[1]
         assert call_kwargs.get("parallel_tool_calls") is True
 
-    @patch("app.agent.graph.get_langchain_tools")
-    @patch("app.agent.graph.check_quota", return_value=True)
-    @patch("app.agent.graph.get_llm")
-    @patch("app.agent.graph.SessionLocal")
+    @patch("app.agent.runtime.nodes.get_langchain_tools")
+    @patch("app.agent.runtime.nodes.check_quota", return_value=True)
+    @patch("app.agent.runtime.nodes.get_llm")
+    @patch("app.agent.runtime.llm_support.SessionLocal")
     @pytest.mark.asyncio
     async def test_bind_tools_omits_parallel_when_disabled(
         self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
@@ -91,18 +88,19 @@ class TestBindToolsParallel:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="明天晴"))
         mock_get_llm.return_value = mock_llm
 
-        with patch("app.agent.graph.settings") as mock_settings:
+        with patch("app.agent.runtime.nodes.settings") as mock_settings:
             mock_settings.ai.parallel_tool_calls = False
             mock_settings.ai.enable_thinking = False
             mock_settings.token_quota.over_quota_action = "warn"
             graph = compile_advisor_graph()
-            await graph.ainvoke(
-                {"messages": [HumanMessage(content="明天天气")]}
-            )
+            await graph.ainvoke({"messages": [HumanMessage(content="明天天气")]})
 
         mock_llm.bind_tools.assert_called_once()
         call_kwargs = mock_llm.bind_tools.call_args[1]
-        assert "parallel_tool_calls" not in call_kwargs or call_kwargs.get("parallel_tool_calls") is False
+        assert (
+            "parallel_tool_calls" not in call_kwargs
+            or call_kwargs.get("parallel_tool_calls") is False
+        )
 
 
 class TestParallelToolSnippet:
@@ -133,8 +131,8 @@ class TestParallelToolSnippet:
 class TestParallelBatchTrace:
     """并行执行聚合 trace 日志测试。"""
 
-    @patch("app.agent.graph.get_langchain_tools")
-    @patch("app.agent.graph.get_collector")
+    @patch("app.agent.runtime.tool_executor.get_langchain_tools")
+    @patch("app.agent.runtime.tool_executor.get_collector")
     @pytest.mark.asyncio
     async def test_parallel_batch_trace_recorded(
         self, mock_get_collector, mock_get_tools
@@ -160,7 +158,11 @@ class TestParallelBatchTrace:
                 AIMessage(
                     content="",
                     tool_calls=[
-                        {"name": "get_weather_forecast", "args": {"city": "徐州"}, "id": "tc1"},
+                        {
+                            "name": "get_weather_forecast",
+                            "args": {"city": "徐州"},
+                            "id": "tc1",
+                        },
                         {"name": "get_cost_summary", "args": {}, "id": "tc2"},
                     ],
                 )
@@ -173,7 +175,8 @@ class TestParallelBatchTrace:
 
         # 验证 parallel_batch trace 被记录
         batch_calls = [
-            c for c in mock_collector.record.call_args_list
+            c
+            for c in mock_collector.record.call_args_list
             if c[1].get("node_type") == "parallel_batch"
         ]
         assert len(batch_calls) == 1
@@ -181,8 +184,8 @@ class TestParallelBatchTrace:
         assert batch_data["output_data"]["parallel_count"] == 2
         assert len(batch_data["output_data"]["skills"]) == 2
 
-    @patch("app.agent.graph.get_langchain_tools")
-    @patch("app.agent.graph.get_collector")
+    @patch("app.agent.runtime.tool_executor.get_langchain_tools")
+    @patch("app.agent.runtime.tool_executor.get_collector")
     @pytest.mark.asyncio
     async def test_single_skill_no_batch_trace(
         self, mock_get_collector, mock_get_tools
@@ -203,7 +206,11 @@ class TestParallelBatchTrace:
                 AIMessage(
                     content="",
                     tool_calls=[
-                        {"name": "get_weather_forecast", "args": {"city": "徐州"}, "id": "tc1"},
+                        {
+                            "name": "get_weather_forecast",
+                            "args": {"city": "徐州"},
+                            "id": "tc1",
+                        },
                     ],
                 )
             ],
@@ -215,7 +222,8 @@ class TestParallelBatchTrace:
 
         # 验证没有 parallel_batch trace
         batch_calls = [
-            c for c in mock_collector.record.call_args_list
+            c
+            for c in mock_collector.record.call_args_list
             if c[1].get("node_type") == "parallel_batch"
         ]
         assert len(batch_calls) == 0

@@ -91,16 +91,16 @@ def delete_template(
 
 
 async def _parse_crop_with_llm(
-    llm, prompt: str, logger: logging.Logger,
+    llm,
+    prompt: str,
+    logger: logging.Logger,
 ) -> CropTemplateParseResponse:
     """通过 LLM 解析作物模板，优先用 structured output，失败则 fallback 到 JSON 解析。"""
     try:
         structured_llm = llm.with_structured_output(
             CropTemplateParseResponse, method="function_calling"
         )
-        response = await structured_llm.ainvoke(
-            [HumanMessage(content=prompt)]
-        )
+        response = await structured_llm.ainvoke([HumanMessage(content=prompt)])
     except Exception as structured_err:
         logger.warning(
             "with_structured_output 失败，回退到 JSON 解析: %s",
@@ -112,9 +112,7 @@ async def _parse_crop_with_llm(
             reply = result.content
         except Exception as e:
             logger.error("AI 调用失败: %s", e)
-            raise HTTPException(
-                status_code=503, detail="AI 服务暂时不可用，请稍后重试"
-            )
+            raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试")
 
         try:
             data = safe_parse_json(reply)
@@ -130,8 +128,7 @@ async def _parse_crop_with_llm(
             logger.error("AI 返回数据校验失败: %s", e)
             raise HTTPException(
                 status_code=422,
-                detail="无法识别作物信息，请描述作物名称，"
-                "例如：我要种8424西瓜、种番茄",
+                detail="无法识别作物信息，请描述作物名称，例如：我要种8424西瓜、种番茄",
             )
     return response
 
@@ -162,9 +159,7 @@ async def parse_crop_template(
                 data = json.loads(cached.response)
                 return CropTemplateParseResponse(**data)
             except Exception:
-                logger.warning(
-                    "幂等缓存解析失败，重新执行 | key=%s", idempotency_key
-                )
+                logger.warning("幂等缓存解析失败，重新执行 | key=%s", idempotency_key)
 
     prompt = get_composer().compose(
         "crop_template_parse",

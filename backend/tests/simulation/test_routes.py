@@ -35,9 +35,7 @@ class TestListCases:
             "app.simulation.routes.SimulationRunner.load_cases",
             return_value=[],
         ) as mock_load:
-            resp = client.get(
-                "/simulation/cases?category=basic", headers=auth_headers
-            )
+            resp = client.get("/simulation/cases?category=basic", headers=auth_headers)
         assert resp.status_code == 200
         mock_load.assert_called_once_with("basic")
 
@@ -52,12 +50,13 @@ class TestStartRun:
 
     def test_start_run_with_case_ids(self, client, auth_headers):
         """指定 case_ids 启动运行。"""
-        with patch(
-            "app.simulation.routes.SimulationRunner.load_cases",
-            return_value=[],
-        ), patch(
-            "app.simulation.routes.asyncio.create_task"
-        ) as mock_create_task:
+        with (
+            patch(
+                "app.simulation.routes.SimulationRunner.load_cases",
+                return_value=[],
+            ),
+            patch("app.simulation.routes.asyncio.create_task") as mock_create_task,
+        ):
             mock_task = MagicMock()
             mock_create_task.return_value = mock_task
             resp = client.post(
@@ -78,12 +77,13 @@ class TestStartRun:
 
     def test_start_run_all_cases(self, client, auth_headers):
         """case_ids 为 null 时执行全部用例。"""
-        with patch(
-            "app.simulation.routes.SimulationRunner.load_cases",
-            return_value=[],
-        ), patch(
-            "app.simulation.routes.asyncio.create_task"
-        ) as mock_create_task:
+        with (
+            patch(
+                "app.simulation.routes.SimulationRunner.load_cases",
+                return_value=[],
+            ),
+            patch("app.simulation.routes.asyncio.create_task") as mock_create_task,
+        ):
             mock_create_task.return_value = MagicMock()
             resp = client.post(
                 "/simulation/run",
@@ -100,12 +100,13 @@ class TestStartRun:
 
     def test_start_run_empty_case_ids(self, client, auth_headers):
         """case_ids 为空数组时执行全部用例。"""
-        with patch(
-            "app.simulation.routes.SimulationRunner.load_cases",
-            return_value=[],
-        ), patch(
-            "app.simulation.routes.asyncio.create_task"
-        ) as mock_create_task:
+        with (
+            patch(
+                "app.simulation.routes.SimulationRunner.load_cases",
+                return_value=[],
+            ),
+            patch("app.simulation.routes.asyncio.create_task") as mock_create_task,
+        ):
             mock_create_task.return_value = MagicMock()
             resp = client.post(
                 "/simulation/run",
@@ -174,9 +175,7 @@ class TestGetReport:
 
     def test_get_report_not_found(self, client, auth_headers):
         """查询不存在的报告返回 404。"""
-        resp = client.get(
-            "/simulation/reports/sim_nonexist", headers=auth_headers
-        )
+        resp = client.get("/simulation/reports/sim_nonexist", headers=auth_headers)
         assert resp.status_code == 404
         detail = resp.json().get("detail", {})
         assert detail.get("error") == "REPORT_NOT_FOUND"
@@ -211,9 +210,7 @@ class TestSerializeResult:
         """SimulationReport 转为可 JSON 序列化的 dict。"""
         from app.simulation.routes import _report_to_dict
 
-        result = SimulationResult(
-            case_id="c1", passed=True, latency_ms=100
-        )
+        result = SimulationResult(case_id="c1", passed=True, latency_ms=100)
         report = SimulationReport(
             run_id="r1",
             total=1,

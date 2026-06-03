@@ -46,9 +46,7 @@ def _make_provider(
     if fetch_daily_result is not None:
         provider.fetch_daily = AsyncMock(return_value=fetch_daily_result)
     else:
-        provider.fetch_daily = AsyncMock(
-            return_value=_make_weather_data()
-        )
+        provider.fetch_daily = AsyncMock(return_value=_make_weather_data())
     return provider
 
 
@@ -121,9 +119,7 @@ class TestFetchCacheHit:
         provider = _make_provider()
         strategy = _make_strategy([provider])
 
-        result = await strategy.fetch(
-            location="苏州", days=7, lat=31.299, lon=120.585
-        )
+        result = await strategy.fetch(location="苏州", days=7, lat=31.299, lon=120.585)
 
         assert result is cached_data
         provider.fetch_daily.assert_not_called()
@@ -141,9 +137,7 @@ class TestFetchCacheHit:
         provider = _make_provider(fetch_daily_result=new_data)
         strategy = _make_strategy([provider])
 
-        result = await strategy.fetch(
-            location="苏州", days=7, lat=31.300, lon=120.586
-        )
+        result = await strategy.fetch(location="苏州", days=7, lat=31.300, lon=120.586)
 
         assert result is new_data
         provider.fetch_daily.assert_called_once()
@@ -171,9 +165,7 @@ class TestFetchCacheWrite:
         result = await strategy.fetch(location="苏州", days=7)
 
         assert result is data
-        cached, hit = weather_cache.get(
-            WeatherCache.make_key("苏州", days=7)
-        )
+        cached, hit = weather_cache.get(WeatherCache.make_key("苏州", days=7))
         assert hit is True
         assert cached is data
 
@@ -186,9 +178,7 @@ class TestFetchCacheWrite:
         """
         provider = MagicMock()
         provider.can_serve = AsyncMock(return_value=True)
-        provider.fetch_daily = AsyncMock(
-            side_effect=ProviderError("API 限流")
-        )
+        provider.fetch_daily = AsyncMock(side_effect=ProviderError("API 限流"))
         strategy = _make_strategy([provider])
 
         with pytest.raises(ProviderError, match="所有天气 Provider"):
@@ -212,6 +202,7 @@ class TestFetchCacheWrite:
         assert hit is True
         # 验证 TTL 通过检查存储结构中的过期时间
         import time
+
         value, expire_at = weather_cache._store[key]
         assert expire_at - time.time() <= 600
         assert expire_at - time.time() > 590
@@ -223,9 +214,7 @@ class TestFetchCacheWrite:
         provider = _make_provider(fetch_daily_result=data)
         strategy = _make_strategy([provider])
 
-        await strategy.fetch(
-            location="苏州", days=7, lat=31.299, lon=120.585
-        )
+        await strategy.fetch(location="苏州", days=7, lat=31.299, lon=120.585)
 
         key = WeatherCache.make_key("苏州", days=7, lat=31.299, lon=120.585)
         cached, hit = weather_cache.get(key)
@@ -262,9 +251,7 @@ class TestFetchCacheMissFallback:
         """
         fail_provider = MagicMock()
         fail_provider.can_serve = AsyncMock(return_value=True)
-        fail_provider.fetch_daily = AsyncMock(
-            side_effect=ProviderError("超时")
-        )
+        fail_provider.fetch_daily = AsyncMock(side_effect=ProviderError("超时"))
 
         success_data = _make_weather_data()
         success_provider = _make_provider(fetch_daily_result=success_data)

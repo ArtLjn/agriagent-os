@@ -4,7 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
+from app.core.security import create_access_token
 from app.main import app
+from app.models.user import User
 
 
 @pytest.fixture
@@ -131,6 +133,43 @@ class TestAuthMe:
         resp = client.get("/auth/me")
 
         assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "AUTH_MISSING_TOKEN"
+
+    def test_get_me_with_expired_token(self, client, clean_db):
+        """过期 token 访问 /auth/me 返回稳定错误码。"""
+        token = create_access_token(user_id="test-user-001", expires_minutes=-1)
+        resp = client.get(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "AUTH_EXPIRED_TOKEN"
+
+    def test_get_me_disabled_user(self, client, clean_db):
+        """禁用用户访问 /auth/me 返回稳定错误码。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138005", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+        from app.api.deps import get_db
+
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            user = db.query(User).filter(User.phone == "13800138005").first()
+            user.status = "disabled"
+            db.commit()
+        finally:
+            db.close()
+
+        resp = client.get(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "AUTH_USER_DISABLED"
 
 
 class TestAuthUpdateMe:
@@ -160,3 +199,4 @@ class TestAuthUpdateMe:
         )
 
         assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "AUTH_MISSING_TOKEN"

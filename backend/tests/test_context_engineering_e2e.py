@@ -42,9 +42,7 @@ class TestSkillRegistration:
         """get_farm_status Skill 无必填参数。"""
         import importlib
 
-        _mod = importlib.import_module(
-            "app.agent.skills.farm-status.scripts.main"
-        )
+        _mod = importlib.import_module("app.agent.skills.farm-status.scripts.main")
         skill = _mod.FarmStatusSkill()
         schema = skill.parameters_schema()
         assert schema.get("required") == []
@@ -121,29 +119,25 @@ class TestSlidingWindowCompact:
         # 构建 6 轮完整对话，超过 keep_rounds=3
         expanded = []
         for i in range(6):
-            expanded.append(HumanMessage(content=f"第{i+1}轮问题"))
+            expanded.append(HumanMessage(content=f"第{i + 1}轮问题"))
             expanded.append(
                 AIMessage(
                     content="",
-                    tool_calls=[
-                        {"name": f"tool_{i}", "args": {}, "id": f"tc{i}"}
-                    ],
+                    tool_calls=[{"name": f"tool_{i}", "args": {}, "id": f"tc{i}"}],
                 )
             )
             expanded.append(
                 ToolMessage(
-                    content=f"工具返回结果第{i+1}轮，包含很长的数据内容" * 10,
+                    content=f"工具返回结果第{i + 1}轮，包含很长的数据内容" * 10,
                     tool_call_id=f"tc{i}",
                 )
             )
-            expanded.append(AIMessage(content=f"第{i+1}轮回答"))
+            expanded.append(AIMessage(content=f"第{i + 1}轮回答"))
 
         result = sliding_window_compact(expanded, keep_rounds=3)
         assert len(result) == len(expanded)
         # 旧 ToolMessage 应被截断
-        old_tool_msgs = [
-            m for m in result[:12] if isinstance(m, ToolMessage)
-        ]
+        old_tool_msgs = [m for m in result[:12] if isinstance(m, ToolMessage)]
         for m in old_tool_msgs:
             assert len(m.content) < 50
 
@@ -261,9 +255,7 @@ class TestCrossCuttingIntegration:
             msgs.append(
                 AIMessage(
                     content="",
-                    tool_calls=[
-                        {"name": f"tool_{i}", "args": {}, "id": f"tc{i}"}
-                    ],
+                    tool_calls=[{"name": f"tool_{i}", "args": {}, "id": f"tc{i}"}],
                 )
             )
             msgs.append(
@@ -276,8 +268,6 @@ class TestCrossCuttingIntegration:
 
         result = sliding_window_compact(msgs, keep_rounds=2)
         # 最近 2 轮的 ToolMessage 应保留完整内容
-        recent_tool_msgs = [
-            m for m in result[-8:] if isinstance(m, ToolMessage)
-        ]
+        recent_tool_msgs = [m for m in result[-8:] if isinstance(m, ToolMessage)]
         for m in recent_tool_msgs:
             assert "详细结果数据" in m.content

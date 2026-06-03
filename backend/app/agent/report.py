@@ -13,6 +13,7 @@ from app.agent.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
 
+
 def _get_report_llm(farm_id: int = 1):
     """获取绑定了工具的报告 LLM 实例（每次返回新实例）。"""
     tools = get_langchain_tools(farm_id=farm_id)

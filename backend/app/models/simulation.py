@@ -63,24 +63,38 @@ class SimulationResultRecord(Base):
 
     @property
     def extracted_claims(self):
-        return json.loads(self.extracted_claims_json) if self.extracted_claims_json else []
+        return (
+            json.loads(self.extracted_claims_json) if self.extracted_claims_json else []
+        )
 
     @extracted_claims.setter
     def extracted_claims(self, value):
-        self.extracted_claims_json = json.dumps(value, ensure_ascii=False) if value else None
+        self.extracted_claims_json = (
+            json.dumps(value, ensure_ascii=False) if value else None
+        )
 
     @property
     def pending_action(self):
-        return json.loads(self.pending_action_json) if self.pending_action_json else None
+        return (
+            json.loads(self.pending_action_json) if self.pending_action_json else None
+        )
 
     @pending_action.setter
     def pending_action(self, value):
-        self.pending_action_json = json.dumps(value, ensure_ascii=False) if value else None
+        self.pending_action_json = (
+            json.dumps(value, ensure_ascii=False) if value else None
+        )
 
     @property
     def expected_db_changes(self):
-        return json.loads(self.expected_db_changes_json) if self.expected_db_changes_json else {}
+        return (
+            json.loads(self.expected_db_changes_json)
+            if self.expected_db_changes_json
+            else {}
+        )
 
     @expected_db_changes.setter
     def expected_db_changes(self, value):
-        self.expected_db_changes_json = json.dumps(value, ensure_ascii=False) if value else None
+        self.expected_db_changes_json = (
+            json.dumps(value, ensure_ascii=False) if value else None
+        )

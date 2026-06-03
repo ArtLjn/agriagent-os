@@ -37,6 +37,7 @@ def get_cache_groups_for_skill(skill_name: str) -> list[str]:
     """返回写操作 skill 执行后需要清除的 skill 缓存组。"""
     return _CACHE_INVALIDATION_MAP.get(skill_name, [])
 
+
 _SKILL_DISPLAY: dict[str, str] = {
     "create_cost_record": "记账",
     "create_crop_cycle": "创建茬口",
@@ -181,7 +182,9 @@ def build_confirm_message(
 
 
 def is_pending_tool_message(message) -> bool:
-    return isinstance(message, ToolMessage) and PENDING_MARKER in (message.content or "")
+    return isinstance(message, ToolMessage) and PENDING_MARKER in (
+        message.content or ""
+    )
 
 
 def detect_user_intent(message: str) -> str:

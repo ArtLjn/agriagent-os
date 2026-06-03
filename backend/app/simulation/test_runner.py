@@ -126,17 +126,13 @@ class SimulationRunner:
             has_expected_changes = bool(case.expected_db_changes)
             if has_expected_changes:
                 logger.info("用例 [%s] pending_action，发送确认", case.case_id)
-                confirm_response = await self._agent.send_confirm(
-                    session_id, action_id
-                )
+                confirm_response = await self._agent.send_confirm(session_id, action_id)
                 confirm_reply = confirm_response.get("reply", "")
                 reply = confirm_reply
                 combined_reply = f"{combined_reply} {confirm_reply}"
             else:
                 logger.info("用例 [%s] pending_action，发送取消", case.case_id)
-                cancel_response = await self._agent.send_cancel(
-                    session_id, action_id
-                )
+                cancel_response = await self._agent.send_cancel(session_id, action_id)
                 cancel_reply = cancel_response.get("reply", "")
                 reply = cancel_reply
                 combined_reply = f"{combined_reply} {cancel_reply}"
@@ -277,11 +273,11 @@ class SimulationRunner:
         """
         # 外键依赖深度：子表（被引用方）先删，父表（引用方）后删
         _DELETE_ORDER = {
-            "growth_stages": 0,   # 子表：引用 crop_templates
-            "cycle_stages": 0,    # 子表：引用 crop_cycles
+            "growth_stages": 0,  # 子表：引用 crop_templates
+            "cycle_stages": 0,  # 子表：引用 crop_cycles
             "cost_records": 1,
             "crop_templates": 1,  # 父表：被 growth_stages 引用
-            "crop_cycles": 1,     # 父表：被 cycle_stages 引用
+            "crop_cycles": 1,  # 父表：被 cycle_stages 引用
             "farm_logs": 1,
         }
         sorted_tables = sorted(tables, key=lambda t: _DELETE_ORDER.get(t, 0))
@@ -291,7 +287,9 @@ class SimulationRunner:
             if delete_sql:
                 try:
                     self._db.execute(text(delete_sql), {"farm_id": self._farm_id})
-                    logger.info("已清理表 %s 中 farm_id=%s 的数据", table, self._farm_id)
+                    logger.info(
+                        "已清理表 %s 中 farm_id=%s 的数据", table, self._farm_id
+                    )
                 except Exception:
                     logger.exception("清理表 %s 失败", table)
             else:

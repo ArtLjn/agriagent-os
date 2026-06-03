@@ -1,11 +1,10 @@
-"""Agent 输入输出安全审核模块 — 注入检测 + 敏感词 + PII 过滤。"""
+"""Agent 输入输出安全审核模块。"""
 
 import logging
 import re
 
 logger = logging.getLogger(__name__)
 
-# 输入注入检测模式
 _INJECTION_PATTERNS = [
     r"忽略(之前|上述|以上).*?指令",
     r"ignore\s+(previous|above|prior)\s+instructions?",
@@ -16,7 +15,6 @@ _INJECTION_PATTERNS = [
     r"jailbreak",
 ]
 
-# 敏感词黑名单
 _SENSITIVE_KEYWORDS = [
     "密码",
     "password",
@@ -31,7 +29,6 @@ _SENSITIVE_KEYWORDS = [
     "pin",
 ]
 
-# PII 正则模式
 _PII_PATTERNS = {
     "id_card": (re.compile(r"\d{17}[\dXx]|\d{15}"), "[身份证号已隐藏]"),
     "mobile": (re.compile(r"1[3-9]\d{9}"), "[手机号已隐藏]"),
@@ -43,6 +40,18 @@ _PII_PATTERNS = {
 }
 
 _INJECTION_REGEX = [re.compile(p, re.IGNORECASE) for p in _INJECTION_PATTERNS]
+_TOOL_CALL_LEAK_RE = re.compile(r"\[\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\([^\]]*\)\s*\]")
+_JSON_TOOL_CALL_RE = re.compile(
+    r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}',
+    re.DOTALL,
+)
+_JSON_ACTION_RE = re.compile(
+    r'\{\s*"(?:name|action|tool|function)"\s*:\s*"[^"]+"\s*,'
+    r'\s*"(?:parameters|params|args|arguments)"\s*:\s*\{',
+    re.DOTALL,
+)
+
+_FALLBACK_TOOL_CALL_REPLY = "检测到工具调用格式异常，正在重新处理。请稍等片刻。"
 
 
 def check_input(text: str) -> tuple[bool, str | None]:
@@ -66,69 +75,18 @@ def check_input(text: str) -> tuple[bool, str | None]:
     return True, None
 
 
-# 工具调用语法泄漏模式（LLM 错误地把 function call 写入 content）
-_TOOL_CALL_LEAK_RE = re.compile(
-    r"\[\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\([^\]]*\)\s*\]"
-)
-
-# JSON 格式工具调用泄漏（LLM 在 content 中输出伪 function call JSON）
-_JSON_TOOL_CALL_RE = re.compile(
-    r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}',
-    re.DOTALL,
-)
-
-# 更通用的 JSON action 泄漏
-_JSON_ACTION_RE = re.compile(
-    r'\{\s*"(?:name|action|tool|function)"\s*:\s*"[^"]+"\s*,'
-    r'\s*"(?:parameters|params|args|arguments)"\s*:\s*\{',
-    re.DOTALL,
-)
-
-_FALLBACK_TOOL_CALL_REPLY = "检测到工具调用格式异常，正在重新处理。请稍等片刻。"
-
-
-def _is_mostly_json_tool_call(text: str) -> bool:
-    """判断文本是否主要由 JSON 工具调用组成。"""
-    if not text:
-        return False
-    # 如果文本匹配 JSON 工具调用正则，且去除后剩余内容很少
-    cleaned = _JSON_TOOL_CALL_RE.sub("", text).strip()
-    # 去除 emoji 和标点
-    cleaned = re.sub(r"[\s -⁯⸀-⹿\\'!\"#$%&()*+,./:;<=>?@[\]^_`{|}~]", "", cleaned)
-    return len(cleaned) < 10
-
-
 def filter_output(text: str) -> str:
     """过滤输出中的不安全内容和 PII 信息。"""
     if not text or not isinstance(text, str):
         return text
 
-    result = text
-
-    # 1. 过滤工具调用语法泄漏 [tool(args)]
-    result, count = _TOOL_CALL_LEAK_RE.subn("", result)
-    if count:
-        logger.info("Guardrails 过滤工具调用泄漏 | category=tool_leak_bracket | count=%d", count)
-        result = re.sub(r"\n{3,}", "\n\n", result).strip()
-
-    # 2. 过滤 JSON 格式工具调用泄漏
-    if _JSON_TOOL_CALL_RE.search(result) or _JSON_ACTION_RE.search(result):
-        logger.warning("Guardrails 检测到 JSON 工具调用泄漏 | category=tool_leak_json | text=%s", result[:200])
-        if _is_mostly_json_tool_call(result):
-            logger.warning("Guardrails 拦截纯 JSON 工具调用回复，返回 fallback | category=tool_leak_json_pure")
-            return _FALLBACK_TOOL_CALL_REPLY
-        # 如果只是包含部分 JSON，尝试移除
-        result, count = _JSON_TOOL_CALL_RE.subn("", result)
-        if count:
-            logger.info("Guardrails 移除部分 JSON 工具调用 | category=tool_leak_json_partial | count=%d", count)
-            result = re.sub(r"\n{3,}", "\n\n", result).strip()
-
-    # 3. 过滤 PII
+    result = _filter_tool_leaks(text)
     for name, (pattern, replacement) in _PII_PATTERNS.items():
         result, count = pattern.subn(replacement, result)
         if count:
-            logger.info("Guardrails 过滤输出 PII | category=pii_%s | count=%d", name, count)
-
+            logger.info(
+                "Guardrails 过滤输出 PII | category=pii_%s | count=%d", name, count
+            )
     return result
 
 
@@ -149,6 +107,43 @@ def cleanup_old_logs(db=None, days: int = 30) -> None:
         logger.info("Guardrails 日志清理完成 | cutoff=%s", cutoff)
     except Exception:
         logger.exception("Guardrails 日志清理失败")
+
+
+def _filter_tool_leaks(text: str) -> str:
+    result, count = _TOOL_CALL_LEAK_RE.subn("", text)
+    if count:
+        logger.info(
+            "Guardrails 过滤工具调用泄漏 | category=tool_leak_bracket | count=%d", count
+        )
+        result = re.sub(r"\n{3,}", "\n\n", result).strip()
+
+    if _JSON_TOOL_CALL_RE.search(result) or _JSON_ACTION_RE.search(result):
+        logger.warning(
+            "Guardrails 检测到 JSON 工具调用泄漏 | category=tool_leak_json | text=%s",
+            result[:200],
+        )
+        if _is_mostly_json_tool_call(result):
+            logger.warning(
+                "Guardrails 拦截纯 JSON 工具调用回复，返回 fallback | category=tool_leak_json_pure"
+            )
+            return _FALLBACK_TOOL_CALL_REPLY
+        result, count = _JSON_TOOL_CALL_RE.subn("", result)
+        if count:
+            logger.info(
+                "Guardrails 移除部分 JSON 工具调用 | category=tool_leak_json_partial | count=%d",
+                count,
+            )
+            result = re.sub(r"\n{3,}", "\n\n", result).strip()
+    return result
+
+
+def _is_mostly_json_tool_call(text: str) -> bool:
+    """判断文本是否主要由 JSON 工具调用组成。"""
+    if not text:
+        return False
+    cleaned = _JSON_TOOL_CALL_RE.sub("", text).strip()
+    cleaned = re.sub(r"[\s -⁯⸀-⹿\\'!\"#$%&()*+,./:;<=>?@[\]^_`{|}~]", "", cleaned)
+    return len(cleaned) < 10
 
 
 __all__ = ["check_input", "filter_output", "cleanup_old_logs"]

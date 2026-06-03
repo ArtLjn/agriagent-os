@@ -418,7 +418,11 @@ class TestModelRoles:
                     "api_keys": ["k"],
                     "priority": 1,
                     "models": [
-                        {"id": "gemma3:12b", "priority": 1, "roles": ["tool-selection"]},
+                        {
+                            "id": "gemma3:12b",
+                            "priority": 1,
+                            "roles": ["tool-selection"],
+                        },
                     ],
                 }
             ]

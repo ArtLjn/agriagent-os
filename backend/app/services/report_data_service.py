@@ -47,9 +47,7 @@ def _calc_progress(cycle: CropCycle) -> int:
 
     基于已完成阶段的 duration 占总 duration 的比例。
     """
-    stages: list[CycleStage] = sorted(
-        cycle.stages, key=lambda s: s.order_index
-    )
+    stages: list[CycleStage] = sorted(cycle.stages, key=lambda s: s.order_index)
     if not stages:
         return 0
 
@@ -75,9 +73,7 @@ def _calc_progress(cycle: CropCycle) -> int:
             current_stage_idx = len(stages) - 1
 
     # 已完成阶段的 duration 之和
-    completed_duration = sum(
-        s.duration_days for s in stages[:current_stage_idx]
-    )
+    completed_duration = sum(s.duration_days for s in stages[:current_stage_idx])
 
     # 当前阶段已进行天数
     current_stage = stages[current_stage_idx]
@@ -211,9 +207,7 @@ def _build_report_data(
     cycle_items = []
     for c in cycles:
         # 该茬口本周期内的农事数
-        cycle_log_count = sum(
-            1 for log in logs if log.cycle_id == c.id
-        )
+        cycle_log_count = sum(1 for log in logs if log.cycle_id == c.id)
         stages = sorted(c.stages, key=lambda s: s.order_index)
         cycle_items.append(
             {
@@ -266,7 +260,11 @@ def _build_report_data(
 
     logger.info(
         "报告数据构建完成 | type=%s farm=%s cycles=%d logs=%d costs=%d",
-        report_type, farm_id, len(cycles), len(logs), len(costs)
+        report_type,
+        farm_id,
+        len(cycles),
+        len(logs),
+        len(costs),
     )
 
     return ReportData(
@@ -283,17 +281,13 @@ def _build_report_data(
 async def get_weekly_report_data(db: Session, farm_id: int) -> ReportData:
     """获取本周报告数据。"""
     week_start, week_end = _get_week_range()
-    return _build_report_data(
-        db, farm_id, week_start, week_end, "weekly"
-    )
+    return _build_report_data(db, farm_id, week_start, week_end, "weekly")
 
 
 async def get_monthly_report_data(db: Session, farm_id: int) -> ReportData:
     """获取本月报告数据。"""
     month_start, month_end = _get_month_range()
-    return _build_report_data(
-        db, farm_id, month_start, month_end, "monthly"
-    )
+    return _build_report_data(db, farm_id, month_start, month_end, "monthly")
 
 
 __all__ = [

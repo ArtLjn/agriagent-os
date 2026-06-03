@@ -14,7 +14,9 @@ class AgentRecord(Base):
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False)
     user_id = Column(String(36), nullable=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True)
-    cycle_id = Column(Integer, ForeignKey("crop_cycles.id", ondelete="SET NULL"), nullable=True)
+    cycle_id = Column(
+        Integer, ForeignKey("crop_cycles.id", ondelete="SET NULL"), nullable=True
+    )
     record_type = Column(String(20), nullable=False)  # chat / daily / report
     content = Column(Text, nullable=False)
     meta = Column(Text, nullable=True)  # JSON: token_usage, latency_ms 等

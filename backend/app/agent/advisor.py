@@ -88,7 +88,9 @@ async def invoke_advisor(
             try:
                 manager = get_skill_manager()
                 ctx = build_skill_context(farm_id)
-                exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
+                exec_result = await manager.execute(
+                    pending.skill_name, pending.params, ctx
+                )
                 reply = exec_result.result.reply if exec_result.result else "操作完成。"
 
                 # 写操作后清除相关 skill 缓存
@@ -105,7 +107,9 @@ async def invoke_advisor(
                             cleared,
                         )
             except Exception as e:
-                logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
+                logger.error(
+                    "pending action 执行失败 | farm_id=%s | error=%s", farm_id, e
+                )
                 reply = "操作执行失败，请重试。"
             finally:
                 remove_pending(farm_id)
@@ -183,7 +187,9 @@ async def stream_advisor(
             try:
                 manager = get_skill_manager()
                 ctx = build_skill_context(farm_id)
-                exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
+                exec_result = await manager.execute(
+                    pending.skill_name, pending.params, ctx
+                )
                 reply = exec_result.result.reply if exec_result.result else "操作完成。"
 
                 # 写操作后清除相关 skill 缓存
@@ -200,7 +206,9 @@ async def stream_advisor(
                             cleared,
                         )
             except Exception as e:
-                logger.error("pending action 执行失败 | farm_id=%s | error=%s", farm_id, e)
+                logger.error(
+                    "pending action 执行失败 | farm_id=%s | error=%s", farm_id, e
+                )
                 reply = "操作执行失败，请重试。"
             finally:
                 remove_pending(farm_id)
@@ -263,7 +271,7 @@ async def stream_advisor(
                             chunk_size = 3
                             delay = 0.02
                             for i in range(0, len(filtered), chunk_size):
-                                yield filtered[i:i + chunk_size]
+                                yield filtered[i : i + chunk_size]
                                 await asyncio.sleep(delay)
     except GraphRecursionError:
         logger.error("Agent 流式步数超限 | farm_id=%s", farm_id)

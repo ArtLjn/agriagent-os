@@ -7,58 +7,158 @@ set -e
 ERRORS=0
 WARNINGS=0
 
+if ! command -v rg >/dev/null 2>&1; then
+  echo "❌ ERROR: 缺少 rg（ripgrep），架构检查无法可靠执行"
+  echo "✅ FIX: 请先安装 ripgrep，例如 macOS 执行: brew install ripgrep"
+  echo "📖 See: docs/architecture/boundaries.md"
+  exit 1
+fi
+
+check_python_imports() {
+  DIR="$1"
+  PATTERN="$2"
+  MESSAGE="$3"
+  FIX="$4"
+
+  if [ ! -d "$DIR" ]; then
+    return 0
+  fi
+
+  MATCHES=$(find "$DIR" -maxdepth 1 -name "*.py" -type f 2>/dev/null \
+    | while IFS= read -r file; do
+        rg -n --with-filename "$PATTERN" "$file" 2>/dev/null | grep -v "# harness-exempt:" || true
+      done)
+
+  if [ -n "$MATCHES" ]; then
+    echo "$MATCHES"
+    echo "❌ ERROR: $MESSAGE"
+    echo "✅ FIX: $FIX"
+    echo "📖 See: docs/architecture/boundaries.md"
+    ERRORS=$((ERRORS + 1))
+  fi
+}
+
+check_python_imports_recursive() {
+  DIR="$1"
+  PATTERN="$2"
+  MESSAGE="$3"
+  FIX="$4"
+
+  if [ ! -d "$DIR" ]; then
+    return 0
+  fi
+
+  MATCHES=$(find "$DIR" -name "*.py" -type f 2>/dev/null \
+    | while IFS= read -r file; do
+        rg -n --with-filename "$PATTERN" "$file" 2>/dev/null | grep -v "# harness-exempt:" || true
+      done)
+
+  if [ -n "$MATCHES" ]; then
+    echo "$MATCHES"
+    echo "❌ ERROR: $MESSAGE"
+    echo "✅ FIX: $FIX"
+    echo "📖 See: docs/architecture/boundaries.md"
+    ERRORS=$((ERRORS + 1))
+  fi
+}
+
+check_python_imports_recursive_excluding() {
+  DIR="$1"
+  PATTERN="$2"
+  MESSAGE="$3"
+  FIX="$4"
+
+  if [ ! -d "$DIR" ]; then
+    return 0
+  fi
+
+  MATCHES=$(find "$DIR" \
+    \( -name "__pycache__" -o -name ".venv" -o -name "skillify-sdk" -o -name "build" -o -name "vendor" -o -name "_vendor" \) -prune \
+    -o -name "*.py" -type f -print 2>/dev/null \
+    | while IFS= read -r file; do
+        rg -n --with-filename "$PATTERN" "$file" 2>/dev/null | grep -v "# harness-exempt:" || true
+      done)
+
+  if [ -n "$MATCHES" ]; then
+    echo "$MATCHES"
+    echo "❌ ERROR: $MESSAGE"
+    echo "✅ FIX: $FIX"
+    echo "📖 See: docs/architecture/boundaries.md"
+    ERRORS=$((ERRORS + 1))
+  fi
+}
+
 # ── 后端检查 ──
 # 层级（从低到高）: schemas → agents → api → core → models → services
 BACKEND="backend/app"
 if [ -d "$BACKEND" ]; then
   echo "🔍 检查后端分层依赖..."
   # schemas/ 层不能引用 agents, api, core, models, services
-  if grep -rn "from.*(agents\|api\|core\|models\|services)\|import.*(agents\|api\|core\|models\|services)" "$BACKEND/schemas/" 2>/dev/null | grep -v "__pycache__" | grep -v "# harness-exempt:"; then
-    echo "❌ ERROR: schemas/ 层违规引用了其他层"
-    echo "✅ FIX: 只允许导入: schemas"
-    echo "📖 See: docs/architecture/boundaries.md"
-    ERRORS=$((ERRORS + 1))
-  fi
+  check_python_imports_recursive_excluding \
+    "$BACKEND/schemas" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.(agent|agents|api|core|models|services)(\\.|[[:space:]]|$)" \
+    "schemas/ 层违规引用了其他层" \
+    "只允许导入: schemas"
 
   # agents/ 层不能引用 api, schemas
-  if grep -rn "from.*(api\|schemas)\|import.*(api\|schemas)" "$BACKEND/agents/" 2>/dev/null | grep -v "__pycache__" | grep -v "# harness-exempt:"; then
-    echo "❌ ERROR: agents/ 层违规引用了其他层"
-    echo "✅ FIX: 只允许导入: agents, core, models, services"
-    echo "📖 See: docs/architecture/boundaries.md"
-    ERRORS=$((ERRORS + 1))
-  fi
+  check_python_imports_recursive_excluding \
+    "$BACKEND/agents" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.(api|schemas)(\\.|[[:space:]]|$)" \
+    "agents/ 层违规引用了其他层" \
+    "只允许导入: agents, core, models, services"
 
   # api/ 层不能引用 agents
-  if grep -rn "from.*(agents)\|import.*(agents)" "$BACKEND/api/" 2>/dev/null | grep -v "__pycache__" | grep -v "# harness-exempt:"; then
-    echo "❌ ERROR: api/ 层违规引用了其他层"
-    echo "✅ FIX: 只允许导入: api, core, models, schemas, services"
-    echo "📖 See: docs/architecture/boundaries.md"
-    ERRORS=$((ERRORS + 1))
-  fi
+  check_python_imports_recursive_excluding \
+    "$BACKEND/api" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.agents(\\.|[[:space:]]|$)" \
+    "api/ 层违规引用了其他层" \
+    "只允许导入: api, core, models, schemas, services"
 
   # core/ 层不能引用 agents, api, schemas, services
-  if grep -rn "from.*(agents\|api\|schemas\|services)\|import.*(agents\|api\|schemas\|services)" "$BACKEND/core/" 2>/dev/null | grep -v "__pycache__" | grep -v "# harness-exempt:"; then
-    echo "❌ ERROR: core/ 层违规引用了其他层"
-    echo "✅ FIX: 只允许导入: core, models"
-    echo "📖 See: docs/architecture/boundaries.md"
-    ERRORS=$((ERRORS + 1))
-  fi
+  check_python_imports_recursive_excluding \
+    "$BACKEND/core" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.(agent|agents|api|schemas|services)(\\.|[[:space:]]|$)" \
+    "core/ 层违规引用了其他层" \
+    "只允许导入: core, models"
 
   # models/ 层不能引用 agents, api, schemas, services
-  if grep -rn "from.*(agents\|api\|schemas\|services)\|import.*(agents\|api\|schemas\|services)" "$BACKEND/models/" 2>/dev/null | grep -v "__pycache__" | grep -v "# harness-exempt:"; then
-    echo "❌ ERROR: models/ 层违规引用了其他层"
-    echo "✅ FIX: 只允许导入: core, models"
-    echo "📖 See: docs/architecture/boundaries.md"
-    ERRORS=$((ERRORS + 1))
-  fi
+  check_python_imports_recursive_excluding \
+    "$BACKEND/models" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.(agent|agents|api|schemas|services)(\\.|[[:space:]]|$)" \
+    "models/ 层违规引用了其他层" \
+    "只允许导入: core, models"
 
   # services/ 层不能引用 api, core
-  if grep -rn "from.*(api\|core)\|import.*(api\|core)" "$BACKEND/services/" 2>/dev/null | grep -v "__pycache__" | grep -v "# harness-exempt:"; then
-    echo "❌ ERROR: services/ 层违规引用了其他层"
-    echo "✅ FIX: 只允许导入: agents, models, schemas, services"
-    echo "📖 See: docs/architecture/boundaries.md"
-    ERRORS=$((ERRORS + 1))
-  fi
+  check_python_imports_recursive_excluding \
+    "$BACKEND/services" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.(api|core)(\\.|[[:space:]]|$)" \
+    "services/ 层违规引用了其他层" \
+    "只允许导入: agents, models, schemas, services"
+
+  echo "🔍 检查 Agent 平台边界..."
+  check_python_imports \
+    "$BACKEND/api" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.(memory|prompt|context)(\\.|[[:space:]]|$)" \
+    "api/ 层直接引用了 Memory、Prompt 或 Context 平台模块" \
+    "API 只做请求校验、依赖注入和调用 application use case"
+
+  check_python_imports_recursive_excluding \
+    "$BACKEND/agent/runtime" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.memory(\\.|[[:space:]]|$)" \
+    "agent/runtime/ 直接引用了 Memory 模块" \
+    "通过 application 注入端口或 Memory Service 接口，不在 Runtime 访问记忆实现"
+
+  check_python_imports_recursive_excluding \
+    "$BACKEND/agent/runtime" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.context\\.(selectors|retrieval|compressors|preload|cache)(\\.|[[:space:]]|$)" \
+    "agent/runtime/ 直接引用了 Context 平台实现细节" \
+    "由 Context Builder 在进入 Runtime 前产出 ContextBundle"
+
+  check_python_imports_recursive_excluding \
+    "$BACKEND/agent/runtime" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.prompt\\.(registry|versions|snippets|snapshots|renderer|composer)(\\.|[[:space:]]|$)" \
+    "agent/runtime/ 直接引用了 Prompt 平台治理实现细节" \
+    "由 Prompt Composer 在进入 Runtime 前产出已渲染 Prompt"
 
 fi
 
@@ -106,7 +206,9 @@ fi
 echo "🔍 检查文件大小..."
 
 # Python 文件
-for f in $(find backend/ -name "*.py" 2>/dev/null | grep -v __pycache__ | grep -v ".venv"); do
+for f in $(find backend/app \
+  \( -name "__pycache__" -o -name ".venv" -o -name "skillify-sdk" -o -name "build" -o -name "vendor" -o -name "_vendor" \) -prune \
+  -o -name "*.py" -type f -print 2>/dev/null); do
   lines=$(wc -l < "$f")
   if [ "$lines" -gt 500 ]; then
     echo "❌ ERROR: $f 有 ${lines} 行（上限 500）"
@@ -127,10 +229,29 @@ done
 
 # ── TODO/FIXME 检查 ──
 echo "🔍 检查 TODO/FIXME 残留..."
-TODO_COUNT=$(grep -rn "TODO\|FIXME\|NotImplemented\|pass  # TODO" backend/ frontend/src/ 2>/dev/null | grep -v __pycache__ | grep -v node_modules | wc -l | tr -d ' ')
+TODO_TARGETS=""
+if [ -d "backend/app" ]; then
+  TODO_TARGETS="$TODO_TARGETS backend/app"
+fi
+if [ -d "frontend/src" ]; then
+  TODO_TARGETS="$TODO_TARGETS frontend/src"
+fi
+
+TODO_MATCHES=""
+if [ -n "$TODO_TARGETS" ]; then
+  TODO_MATCHES=$(rg -n "TODO|FIXME|NotImplemented|pass  # TODO" $TODO_TARGETS \
+    --glob '!**/__pycache__/**' \
+    --glob '!**/.venv/**' \
+    --glob '!**/skillify-sdk/**' \
+    --glob '!**/build/**' \
+    --glob '!**/vendor/**' \
+    --glob '!**/_vendor/**' \
+    --glob '!**/node_modules/**' 2>/dev/null || true)
+fi
+TODO_COUNT=$(printf "%s" "$TODO_MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
 if [ "$TODO_COUNT" -gt 0 ]; then
   echo "⚠️  发现 $TODO_COUNT 处 TODO/FIXME 残留："
-  grep -rn "TODO\|FIXME\|NotImplemented\|pass  # TODO" backend/ frontend/src/ 2>/dev/null | grep -v __pycache__ | grep -v node_modules | head -20
+  printf "%s\n" "$TODO_MATCHES" | head -20
   WARNINGS=$((WARNINGS + 1))
 fi
 

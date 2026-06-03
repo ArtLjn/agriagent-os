@@ -20,12 +20,11 @@ _SYSTEM_PROMPT = (
     '- "order_index": 顺序（从 0 开始）\n'
     '- "key_tasks": 该阶段主要农事（一句话）\n\n'
     "只返回 JSON 数组，不要其他文字。\n"
-    "示例：[{\"name\":\"播种期\",\"duration_days\":7,\"order_index\":0,\"key_tasks\":\"催芽播种\"}]"
+    '示例：[{"name":"播种期","duration_days":7,"order_index":0,"key_tasks":"催芽播种"}]'
 )
 
 
 class CreateCropTemplateSkill(Skill):
-
     def name(self) -> str:
         return "create_crop_template"
 
@@ -66,7 +65,9 @@ class CreateCropTemplateSkill(Skill):
         try:
             existing = crop_service.find_template_by_name(db, crop_name, farm_id)
             if existing:
-                stage_names = "→".join(s.name for s in sorted(existing.stages, key=lambda s: s.order_index))
+                stage_names = "→".join(
+                    s.name for s in sorted(existing.stages, key=lambda s: s.order_index)
+                )
                 return SkillResult(
                     status=ResultStatus.SUCCESS,
                     reply=f"📋 {crop_name}模板已存在，阶段：{stage_names}。可以直接建茬口了。",
@@ -84,12 +85,16 @@ class CreateCropTemplateSkill(Skill):
                 variety=variety,
                 stages=stages,
             )
-            created = crop_service.create_crop_template(db, template_create, farm_id=farm_id)
+            created = crop_service.create_crop_template(
+                db, template_create, farm_id=farm_id
+            )
 
             stage_lines = [
-                f"{i+1}. {s.name}（{s.duration_days}天）"
+                f"{i + 1}. {s.name}（{s.duration_days}天）"
                 + (f"— {s.key_tasks}" if s.key_tasks else "")
-                for i, s in enumerate(sorted(created.stages, key=lambda s: s.order_index))
+                for i, s in enumerate(
+                    sorted(created.stages, key=lambda s: s.order_index)
+                )
             ]
             stages_text = "\n".join(stage_lines)
             reply = f"✅ {crop_name}模板已创建！\n\n📋 **生长阶段**\n{stages_text}"
@@ -103,7 +108,9 @@ class CreateCropTemplateSkill(Skill):
         finally:
             db.close()
 
-    async def _generate_stages(self, context, crop_name: str) -> list[GrowthStageCreate]:
+    async def _generate_stages(
+        self, context, crop_name: str
+    ) -> list[GrowthStageCreate]:
         client = getattr(context, "llm_client", None)
         model = getattr(context, "llm_model", "") or ""
         if not client or not model:
@@ -125,22 +132,36 @@ class CreateCropTemplateSkill(Skill):
 
             stages = []
             for idx, s in enumerate(raw_stages):
-                stages.append(GrowthStageCreate(
-                    name=str(s.get("name", f"阶段{idx+1}")),
-                    duration_days=int(s.get("duration_days", 15)),
-                    order_index=int(s.get("order_index", idx)),
-                    key_tasks=str(s.get("key_tasks", "")) if s.get("key_tasks") else None,
-                ))
+                stages.append(
+                    GrowthStageCreate(
+                        name=str(s.get("name", f"阶段{idx + 1}")),
+                        duration_days=int(s.get("duration_days", 15)),
+                        order_index=int(s.get("order_index", idx)),
+                        key_tasks=str(s.get("key_tasks", ""))
+                        if s.get("key_tasks")
+                        else None,
+                    )
+                )
             return stages
         except Exception:
-            logger.warning("LLM 生成阶段失败，使用默认模板 | crop=%s", crop_name, exc_info=True)
+            logger.warning(
+                "LLM 生成阶段失败，使用默认模板 | crop=%s", crop_name, exc_info=True
+            )
             return self._fallback_stages()
 
     @staticmethod
     def _fallback_stages() -> list[GrowthStageCreate]:
         return [
-            GrowthStageCreate(name="播种期", duration_days=10, order_index=0, key_tasks="播种"),
-            GrowthStageCreate(name="苗期", duration_days=20, order_index=1, key_tasks="育苗管理"),
-            GrowthStageCreate(name="生长期", duration_days=40, order_index=2, key_tasks="水肥管理"),
-            GrowthStageCreate(name="采收期", duration_days=20, order_index=3, key_tasks="采收"),
+            GrowthStageCreate(
+                name="播种期", duration_days=10, order_index=0, key_tasks="播种"
+            ),
+            GrowthStageCreate(
+                name="苗期", duration_days=20, order_index=1, key_tasks="育苗管理"
+            ),
+            GrowthStageCreate(
+                name="生长期", duration_days=40, order_index=2, key_tasks="水肥管理"
+            ),
+            GrowthStageCreate(
+                name="采收期", duration_days=20, order_index=3, key_tasks="采收"
+            ),
         ]

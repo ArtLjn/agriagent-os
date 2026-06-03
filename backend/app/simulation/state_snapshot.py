@@ -119,8 +119,12 @@ class DbStateSnapshot:
 
         all_tables = set(before.keys()) | set(after.keys())
         for table in all_tables:
-            before_records = {self._record_key(table, r): r for r in before.get(table, [])}
-            after_records = {self._record_key(table, r): r for r in after.get(table, [])}
+            before_records = {
+                self._record_key(table, r): r for r in before.get(table, [])
+            }
+            after_records = {
+                self._record_key(table, r): r for r in after.get(table, [])
+            }
 
             before_keys = set(before_records.keys())
             after_keys = set(after_records.keys())

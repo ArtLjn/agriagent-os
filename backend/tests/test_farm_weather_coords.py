@@ -1,6 +1,5 @@
 """farm_context_service 天气坐标来源测试。"""
 
-
 import pytest
 
 from app.models.user_setting import UserSetting

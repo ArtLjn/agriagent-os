@@ -21,7 +21,11 @@ def submit_feedback(
     """提交一条反馈。如果 message_id 对应的消息不存在则置空。"""
     actual_message_id = message_id
     if message_id is not None:
-        exists = db.query(ConversationMessage).filter(ConversationMessage.id == message_id).first()
+        exists = (
+            db.query(ConversationMessage)
+            .filter(ConversationMessage.id == message_id)
+            .first()
+        )
         if not exists:
             actual_message_id = None
 

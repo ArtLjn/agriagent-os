@@ -140,14 +140,24 @@ class TestBaseJ2TemplateContent:
         """加载 p3-format.j2 回复格式 snippet。"""
         from pathlib import Path
 
-        return (Path(__file__).parent.parent.parent / "prompts" / "snippets" / "p3-format.j2").read_text()
+        return (
+            Path(__file__).parent.parent.parent
+            / "prompts"
+            / "snippets"
+            / "p3-format.j2"
+        ).read_text()
 
     @pytest.fixture()
     def context_snippet(self):
         """加载 p4-context.j2 上下文 snippet。"""
         from pathlib import Path
 
-        return (Path(__file__).parent.parent.parent / "prompts" / "snippets" / "p4-context.j2").read_text()
+        return (
+            Path(__file__).parent.parent.parent
+            / "prompts"
+            / "snippets"
+            / "p4-context.j2"
+        ).read_text()
 
     def test_snippets_not_contain_farm_context_summary(self):
         """snippet 体系不再包含 farm_context_summary 占位符（已由工具获取替代）。"""
@@ -155,7 +165,9 @@ class TestBaseJ2TemplateContent:
 
         snippets_dir = Path(__file__).parent.parent.parent / "prompts" / "snippets"
         for f in snippets_dir.glob("*.j2"):
-            assert "farm_context_summary" not in f.read_text(), f"{f.name} 包含 farm_context_summary"
+            assert "farm_context_summary" not in f.read_text(), (
+                f"{f.name} 包含 farm_context_summary"
+            )
 
     def test_context_snippet_contains_display_name(self, context_snippet):
         """p4-context.j2 中包含 display_name 占位符。"""

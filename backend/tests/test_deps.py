@@ -11,6 +11,7 @@ from app.api.deps import (
     get_current_farm,
     get_current_user,
     get_db,
+    require_admin,
     verify_resource_owner,
 )
 from app.core.security import create_access_token
@@ -66,6 +67,7 @@ def test_get_current_user_no_token():
     client = TestClient(app)
     resp = client.get("/test")
     assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_MISSING_TOKEN"
 
 
 def test_get_current_user_invalid_token():
@@ -79,6 +81,45 @@ def test_get_current_user_invalid_token():
     client = TestClient(app)
     resp = client.get("/test", headers={"Authorization": "Bearer invalid"})
     assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_INVALID_TOKEN"
+
+
+def test_get_current_user_expired_token(db_session):
+    """过期 token 返回 401 和稳定错误码。"""
+    user, _ = _create_user_and_farm(db_session)
+    token = create_access_token(user_id=user.id, expires_minutes=-1)
+
+    app = FastAPI()
+    _override_db(app, db_session)
+
+    @app.get("/test")
+    def endpoint(u=Depends(get_current_user)):
+        return {"id": u.id}
+
+    client = TestClient(app)
+    resp = client.get("/test", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_EXPIRED_TOKEN"
+
+
+def test_get_current_user_disabled_user(db_session):
+    """禁用用户返回 401 和稳定错误码。"""
+    user, _ = _create_user_and_farm(db_session)
+    user.status = "disabled"
+    db_session.commit()
+    token = create_access_token(user_id=user.id)
+
+    app = FastAPI()
+    _override_db(app, db_session)
+
+    @app.get("/test")
+    def endpoint(u=Depends(get_current_user)):
+        return {"id": u.id}
+
+    client = TestClient(app)
+    resp = client.get("/test", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_USER_DISABLED"
 
 
 def test_get_current_farm_success(db_session):
@@ -106,3 +147,20 @@ def test_verify_resource_owner_mismatch(db_session):
     with pytest.raises(Exception) as exc_info:
         verify_resource_owner(resource_farm_id=999, current_farm=farm)
     assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "FARM_RESOURCE_FORBIDDEN"
+
+
+def test_require_admin_allows_admin():
+    """管理员依赖允许 admin 用户。"""
+    user = User(id="admin-id", phone="13800138001", password_hash="h", role="admin")
+    assert require_admin(user) == user
+
+
+def test_require_admin_rejects_user():
+    """普通用户访问管理员依赖返回 403。"""
+    user = User(id="user-id", phone="13800138002", password_hash="h", role="user")
+
+    with pytest.raises(Exception) as exc_info:
+        require_admin(user)
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "AUTH_ADMIN_REQUIRED"

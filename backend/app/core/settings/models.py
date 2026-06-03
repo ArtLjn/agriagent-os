@@ -1,8 +1,7 @@
 from pydantic import BaseModel
 
 DEFAULT_DATABASE_URL = (
-    "mysql+pymysql://farm_manager:password@localhost:3306/"
-    "farm_manager?charset=utf8mb4"
+    "mysql+pymysql://farm_manager:password@localhost:3306/farm_manager?charset=utf8mb4"
 )
 
 

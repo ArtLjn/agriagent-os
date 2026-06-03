@@ -74,9 +74,7 @@ class TestLoadCases:
             )
         )
 
-        monkeypatch.setattr(
-            "app.simulation.test_runner.CASES_DIR", cases_dir
-        )
+        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)
@@ -115,9 +113,7 @@ class TestLoadCases:
             )
         )
 
-        monkeypatch.setattr(
-            "app.simulation.test_runner.CASES_DIR", cases_dir
-        )
+        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)
@@ -130,9 +126,7 @@ class TestLoadCases:
         cases_dir = tmp_path / "simulation_cases"
         cases_dir.mkdir()
 
-        monkeypatch.setattr(
-            "app.simulation.test_runner.CASES_DIR", cases_dir
-        )
+        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)
@@ -146,9 +140,7 @@ class TestLoadCases:
         cases_file = cases_dir / "bad.json"
         cases_file.write_text("not json")
 
-        monkeypatch.setattr(
-            "app.simulation.test_runner.CASES_DIR", cases_dir
-        )
+        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)
@@ -178,10 +170,14 @@ class TestRunSingle:
         runner = SimulationRunner(mock_agent, mock_db, farm_id=1)
 
         before_snapshot = {"cost_records": []}
-        after_snapshot = {"cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]}
+        after_snapshot = {
+            "cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]
+        }
 
         with patch.object(
-            runner._snapshot, "take", AsyncMock(side_effect=[before_snapshot, after_snapshot])
+            runner._snapshot,
+            "take",
+            AsyncMock(side_effect=[before_snapshot, after_snapshot]),
         ):
             case = SimulationTestCase(
                 case_id="tc-001",
@@ -223,10 +219,14 @@ class TestRunSingle:
         runner = SimulationRunner(mock_agent, mock_db, farm_id=1)
 
         before_snapshot = {"cost_records": []}
-        after_snapshot = {"cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]}
+        after_snapshot = {
+            "cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]
+        }
 
         with patch.object(
-            runner._snapshot, "take", AsyncMock(side_effect=[before_snapshot, after_snapshot])
+            runner._snapshot,
+            "take",
+            AsyncMock(side_effect=[before_snapshot, after_snapshot]),
         ):
             case = SimulationTestCase(
                 case_id="tc-002",
@@ -258,7 +258,9 @@ class TestRunSingle:
         after_snapshot = {"cost_records": []}
 
         with patch.object(
-            runner._snapshot, "take", AsyncMock(side_effect=[before_snapshot, after_snapshot])
+            runner._snapshot,
+            "take",
+            AsyncMock(side_effect=[before_snapshot, after_snapshot]),
         ):
             case = SimulationTestCase(
                 case_id="tc-003",
@@ -284,10 +286,14 @@ class TestRunSingle:
         runner = SimulationRunner(mock_agent, mock_db, farm_id=1)
 
         before_snapshot = {"cost_records": []}
-        after_snapshot = {"cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]}
+        after_snapshot = {
+            "cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]
+        }
 
         with patch.object(
-            runner._snapshot, "take", AsyncMock(side_effect=[before_snapshot, after_snapshot])
+            runner._snapshot,
+            "take",
+            AsyncMock(side_effect=[before_snapshot, after_snapshot]),
         ):
             case = SimulationTestCase(
                 case_id="tc-004",
@@ -315,10 +321,14 @@ class TestRunBatch:
         runner = SimulationRunner(mock_agent, mock_db, farm_id=1)
 
         before_snapshot = {"cost_records": []}
-        after_snapshot = {"cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]}
+        after_snapshot = {
+            "cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]
+        }
 
         with patch.object(
-            runner._snapshot, "take", AsyncMock(side_effect=[before_snapshot, after_snapshot] * 2)
+            runner._snapshot,
+            "take",
+            AsyncMock(side_effect=[before_snapshot, after_snapshot] * 2),
         ):
             cases = [
                 SimulationTestCase(

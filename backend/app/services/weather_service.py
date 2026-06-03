@@ -121,9 +121,7 @@ def check_weather_warnings(weather_data: dict) -> list[str]:
     for index, day in enumerate(times):
         max_temp = max_temps[index] if index < len(max_temps) else None
         min_temp = min_temps[index] if index < len(min_temps) else None
-        precipitation = (
-            precipitations[index] if index < len(precipitations) else None
-        )
+        precipitation = precipitations[index] if index < len(precipitations) else None
         wind = winds[index] if index < len(winds) else None
 
         if max_temp is not None and max_temp >= 35:
