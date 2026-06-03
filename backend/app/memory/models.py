@@ -1,8 +1,10 @@
 """Memory 领域模型。"""
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Literal
+
+from app.core.compat import UTC
 
 
 MemoryRole = Literal["user", "assistant", "system", "tool"]
