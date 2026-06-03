@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
+from app.context.invalidation import invalidate_farm_context
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary
 
@@ -36,6 +37,7 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
     db.add(db_record)
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(db_record)
     except Exception:
         db.rollback()
@@ -155,6 +157,7 @@ def delete_record(db: Session, record_id: int, farm_id: int) -> CostRecord | Non
     record.deleted_at = datetime.now(timezone.utc)
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(record)
     except Exception:
         db.rollback()

@@ -7,6 +7,7 @@ from app.models.cost import CostRecord
 from app.models.crop import CropTemplate
 from app.models.cycle import CropCycle, CycleStage
 from app.models.log import FarmLog
+from app.context.invalidation import invalidate_farm_context
 from app.schemas.cycle import CropCycleCreate
 
 
@@ -52,6 +53,7 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> Crop
 
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(db_cycle)
     except Exception:
         db.rollback()
@@ -96,6 +98,12 @@ def update_stage(
     stage = db.query(CycleStage).filter(CycleStage.id == stage_id).first()
     if not stage:
         raise ValueError("Stage not found")
+    farm_id = stage.cycle.farm_id if stage.cycle else None
+    if farm_id is None:
+        cycle = db.query(CropCycle).filter(CropCycle.id == stage.cycle_id).first()
+        if not cycle:
+            raise ValueError("Cycle not found")
+        farm_id = cycle.farm_id
 
     if name is not None:
         stage.name = name
@@ -105,6 +113,7 @@ def update_stage(
 
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(stage)
     except Exception:
         db.rollback()
@@ -127,12 +136,6 @@ def _recalculate_stages(db: Session, cycle_id: int) -> None:
         stage.is_current = 1 if stage.start_date <= today <= stage.end_date else 0
         current_date = stage.end_date + timedelta(days=1)
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-
 
 def update_crop_cycle(
     db: Session, cycle_id: int, update: CropCycleCreate, farm_id: int
@@ -149,6 +152,7 @@ def update_crop_cycle(
 
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(cycle)
     except Exception:
         db.rollback()
@@ -179,6 +183,7 @@ def delete_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> None:
 
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
     except Exception:
         db.rollback()
         raise
@@ -203,6 +208,7 @@ def advance_stage(db: Session, cycle_id: int, farm_id: int) -> CropCycle:
 
     try:
         db.commit()
+        invalidate_farm_context(farm_id)
         db.refresh(cycle)
     except Exception:
         db.rollback()

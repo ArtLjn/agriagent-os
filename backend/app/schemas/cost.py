@@ -47,6 +47,7 @@ class CostRecordResponse(CostRecordBase):
     """成本记账记录响应 Schema。"""
 
     id: int
+    created_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
