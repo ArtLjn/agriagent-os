@@ -77,7 +77,9 @@ class TestGetLlm:
 
     @patch("app.core.llm_client_manager.get_llm_manager")
     @patch("app.agent.llm.settings")
-    def test_get_llm_uses_manager_when_available(self, mock_settings, mock_get_manager):
+    def test_get_llm_uses_manager_when_available(
+        self, mock_settings, mock_get_manager, caplog
+    ):
         """验证 get_llm 优先使用 Manager 而非 config.yaml。"""
         mock_settings.circuit_breaker_config = MagicMock(
             retry_max=1, retry_backoff_base=1
@@ -86,23 +88,34 @@ class TestGetLlm:
 
         mock_manager = MagicMock()
         mock_manager.fallback_mode = False
-        mock_manager.get_model_info.return_value = {
-            "provider": "ollama",
-            "model": "gemma3:12b",
-            "base_url": "https://ollama.com/v1",
-        }
         mock_llm = MagicMock()
-        mock_manager.get_chat_model.return_value = mock_llm
+        mock_manager.get_chat_model_with_info.return_value = (
+            mock_llm,
+            {
+                "provider": "ollama",
+                "model": "gemma3:12b",
+                "base_url": "https://ollama.com/v1",
+                "role": "generation",
+                "api_key_index": 0,
+                "api_key_count": 1,
+                "circuit_key": "ollama/gemma3:12b",
+            },
+        )
         mock_get_manager.return_value = mock_manager
 
         _reset_llm_singletons()
 
         from app.agent.llm import get_llm
 
-        llm = get_llm()
+        with caplog.at_level("INFO", logger="app.agent.llm"):
+            llm = get_llm()
 
         assert llm is mock_llm
-        mock_manager.get_chat_model.assert_called_once()
+        mock_manager.get_chat_model_with_info.assert_called_once()
+        assert "LLM 请求模型选择" in caplog.text
+        assert "provider=ollama" in caplog.text
+        assert "model=gemma3:12b" in caplog.text
+        assert "api_key_slot=1/1" in caplog.text
 
 
 class TestEnableThinking:

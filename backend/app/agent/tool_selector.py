@@ -21,6 +21,7 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
     "create_crop_cycle": [
         re.compile(r"(?:创建|建|开)\s*.*茬口"),
         re.compile(r"(?:种植|种[了上下]?)\s*(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米)"),
+        re.compile(r"(?:我想|我要|想要|准备|打算)\s*种\s*[\u4e00-\u9fa5]{1,12}$"),
         re.compile(r"(?:春茬|秋茬|夏茬|冬茬)"),
     ],
     "create_crop_template": [
@@ -98,11 +99,32 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
     },
 }
 
+PLANTING_ADVICE_HINTS = (
+    "怎么",
+    "如何",
+    "注意",
+    "建议",
+    "技术",
+    "方法",
+    "适合",
+    "可以吗",
+    "能不能",
+    "什么时候",
+)
+
 
 class LLMIntentClassifier:
     """Layer 3 — LLM 意图分类兜底。"""
 
-    def __init__(self, api_key: str, base_url: str, model: str, timeout: float = 5.0):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        model: str,
+        timeout: float = 5.0,
+        provider: str = "config.yaml",
+        role: str = "tool-selection",
+    ):
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -110,6 +132,8 @@ class LLMIntentClassifier:
             max_retries=3,
         )
         self._model = model
+        self._provider = provider
+        self._role = role
 
     def classify(
         self, user_message: str, all_tools: list[BaseTool]
@@ -144,7 +168,13 @@ class LLMIntentClassifier:
 
             if content == "none":
                 logger.info(
-                    "llm_intent | input=%r | raw=%r | matched=[] | latency_ms=%d",
+                    (
+                        "tool_select LLM intent | provider=%s | model=%s | role=%s | "
+                        "input=%r | raw=%r | matched=[] | latency_ms=%d"
+                    ),
+                    self._provider,
+                    self._model,
+                    self._role,
                     user_message[:80],
                     content,
                     latency_ms,
@@ -158,7 +188,13 @@ class LLMIntentClassifier:
                     break
 
             logger.info(
-                "llm_intent | input=%r | raw=%r | matched=%s | latency_ms=%d",
+                (
+                    "tool_select LLM intent | provider=%s | model=%s | role=%s | "
+                    "input=%r | raw=%r | matched=%s | latency_ms=%d"
+                ),
+                self._provider,
+                self._model,
+                self._role,
                 user_message[:80],
                 content,
                 matched,
@@ -168,7 +204,13 @@ class LLMIntentClassifier:
         except Exception as e:
             latency_ms = int((time.perf_counter() - start) * 1000)
             logger.warning(
-                "llm_intent 分类失败 | input=%r | latency_ms=%d | error=%s: %s",
+                (
+                    "tool_select LLM intent failed | provider=%s | model=%s | "
+                    "role=%s | input=%r | latency_ms=%d | error=%s: %s"
+                ),
+                self._provider,
+                self._model,
+                self._role,
                 user_message[:80],
                 latency_ms,
                 type(e).__name__,
@@ -191,8 +233,11 @@ def select_tools(
     # 过滤掉禁用的 skill
     all_tools = [t for t in all_tools if t.name not in DISABLED_SKILLS]
     candidates: set[str] = set()
+    is_planting_advice = any(hint in user_message for hint in PLANTING_ADVICE_HINTS)
 
     for tool_name, patterns in WRITE_PATTERNS.items():
+        if tool_name == "create_crop_cycle" and is_planting_advice:
+            continue
         for pat in patterns:
             if pat.search(user_message):
                 candidates.add(tool_name)
@@ -204,13 +249,15 @@ def select_tools(
                 candidates.add(tool_name)
                 break
 
+    candidates.difference_update(DISABLED_SKILLS)
+
     if not candidates:
         if intent_classifier is not None:
             llm_result = intent_classifier.classify(user_message, all_tools)
             if llm_result is not None:
                 if len(llm_result) == 0:
                     logger.info(
-                        "tool_pre_filter | layer=llm_intent_none | input=%r | total=%d",
+                        "tool_select | layer=llm_intent_none | input=%r | total=%d",
                         user_message[:80],
                         len(all_tools),
                     )
@@ -218,16 +265,19 @@ def select_tools(
                 ordered = [t.name for t in all_tools if t.name in llm_result]
                 result = ordered[:top_k]
                 logger.info(
-                    "tool_pre_filter | layer=llm_intent | input=%r | returned=%d | total=%d",
+                    (
+                        "tool_select | layer=llm_intent | input=%r | returned=%s | "
+                        "total=%d"
+                    ),
                     user_message[:80],
-                    len(result),
+                    result,
                     len(all_tools),
                 )
                 return result
 
         tool_names = [t.name for t in all_tools]
         logger.info(
-            "tool_pre_filter | input=%r | candidates=%s | total=%d | fallback=True",
+            "tool_select | layer=fallback_all | input=%r | returned=%s | total=%d",
             user_message[:80],
             tool_names,
             len(tool_names),
@@ -238,10 +288,10 @@ def select_tools(
     result = ordered[:top_k]
 
     logger.info(
-        "tool_pre_filter | input=%r | candidates=%s | returned=%d | total=%d",
+        "tool_select | layer=rule | input=%r | candidates=%s | returned=%s | total=%d",
         user_message[:80],
         ordered,
-        len(result),
+        result,
         len(all_tools),
     )
     return result

@@ -34,13 +34,23 @@ def _get_classifier() -> LLMIntentClassifier | None:
 
         manager = get_llm_manager()
         if not manager.fallback_mode:
-            info = manager.get_model_info(role="tool-selection")
-            client = manager.get_sync_client(role="tool-selection")
+            client, info = manager.get_sync_client_with_info(role="tool-selection")
             api_key = client.api_key
             base_url = client.base_url
             model = info["model"]
+            provider = str(info["provider"])
+            logger.info(
+                "tool_select 模型选择 | provider=%s | model=%s | role=%s | base_url=%s",
+                provider,
+                model,
+                info["role"],
+                info["base_url"],
+            )
+        else:
+            provider = "config.yaml"
     except Exception as e:
         logger.debug("从 Manager 获取 classifier 参数失败 | error=%s", e)
+        provider = "config.yaml"
 
     if api_key:
         with _classifier_lock:
@@ -49,6 +59,8 @@ def _get_classifier() -> LLMIntentClassifier | None:
                     api_key=api_key,
                     base_url=base_url,
                     model=model,
+                    provider=provider,
+                    role="tool-selection",
                 )
     return _classifier
 

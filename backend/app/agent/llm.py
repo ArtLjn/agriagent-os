@@ -35,19 +35,25 @@ def get_llm(*, role: str = "generation") -> BaseChatModel:
 
         manager = get_llm_manager()
         if not manager.fallback_mode:
-            llm = manager.get_chat_model(
+            llm, info = manager.get_chat_model_with_info(
                 role=role,
                 temperature=0.7,
                 max_retries=cb.retry_max,
                 timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
                 extra_body=extra_body if extra_body else None,
             )
-            info = manager.get_model_info(role=role)
-            logger.debug(
-                "LLM 客户端(Manager) | provider=%s | model=%s | role=%s",
+            logger.info(
+                (
+                    "LLM 请求模型选择 | provider=%s | model=%s | role=%s | "
+                    "api_key_slot=%s/%s | circuit_key=%s | base_url=%s"
+                ),
                 info["provider"],
                 info["model"],
-                role,
+                info["role"],
+                int(info["api_key_index"]) + 1,
+                info["api_key_count"],
+                info["circuit_key"],
+                info["base_url"],
             )
             return llm
     except Exception as e:
@@ -69,8 +75,11 @@ def get_llm(*, role: str = "generation") -> BaseChatModel:
         timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
         extra_body=extra_body if extra_body else None,
     )
-    logger.debug(
-        "LLM 客户端(config.yaml兜底) | model=%s | role=%s", settings.ai_model, role
+    logger.info(
+        "LLM 请求模型选择 | provider=config.yaml | model=%s | role=%s | base_url=%s",
+        settings.ai_model,
+        role,
+        settings.ai_base_url,
     )
     return llm
 

@@ -207,8 +207,7 @@ def build_skill_context(farm_id: int) -> SkillContext:
 
         manager = get_llm_manager()
         if not manager.fallback_mode:
-            info = manager.get_model_info()
-            client = manager.get_async_client()
+            client, info = manager.get_async_client_with_info()
             api_key = client.api_key
             base_url = client.base_url
             model = info["model"]

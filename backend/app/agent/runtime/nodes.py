@@ -40,6 +40,32 @@ from app.services.quota_service import check_quota
 
 logger = logging.getLogger(__name__)
 
+_DIRECT_READ_TOOLS: set[str] = {
+    "get_weather_forecast",
+    "get_cost_summary",
+    "get_farm_status",
+}
+
+
+def _filter_tool_calls_by_selected(
+    tool_calls: list[dict],
+    selected_tools: list,
+) -> list[dict]:
+    """只保留本轮绑定给 LLM 的工具调用，避免手动 JSON 解析越权执行。"""
+    allowed_names = {tool.name for tool in selected_tools}
+    if not allowed_names:
+        return []
+
+    filtered = [tc for tc in tool_calls if tc.get("name") in allowed_names]
+    dropped = [tc.get("name") for tc in tool_calls if tc.get("name") not in allowed_names]
+    if dropped:
+        logger.warning(
+            "过滤未绑定工具调用 | dropped=%s | allowed=%s",
+            dropped,
+            sorted(allowed_names),
+        )
+    return filtered
+
 
 def _should_continue(state: AgentState) -> str:
     """判断是否需要继续调用工具。"""
@@ -82,26 +108,55 @@ async def _llm_node(state: AgentState) -> dict:
 
     farm_id = state.get("farm_id", 1)
 
+    tools = get_langchain_tools(farm_id=farm_id)
+    has_tool_results = bool(tool_msgs)
+    intent = state.get("intent", "agent")
+    user_msg = _find_last_human_message(messages)
+    selected_names = select_tools(
+        user_msg,
+        tools,
+        intent_classifier=None,
+    )
+    direct_names = [name for name in selected_names if name in _DIRECT_READ_TOOLS]
+    if (
+        intent == "query"
+        and not has_tool_results
+        and direct_names
+        and (len(tools) == 1 or len(selected_names) < len(tools))
+        and len(direct_names) == len(selected_names)
+    ):
+        tool_calls = [
+            {
+                "name": name,
+                "args": {},
+                "id": f"direct_{name}",
+                "type": "tool_call",
+            }
+            for name in direct_names
+        ]
+        logger.info(
+            "确定性工具直达 | input=%r | tool_calls=%s | skipped_llm=true",
+            user_msg[:80],
+            direct_names,
+        )
+        return {"messages": [AIMessage(content="", tool_calls=tool_calls)]}
+
     # 获取农场上下文（位置、坐标、称呼、种植信息）
     farm_ctx = await _get_farm_context(farm_id)
     display_name = farm_ctx["display_name"]
     farm_location = farm_ctx["farm_location"]
 
-    tools = get_langchain_tools(farm_id=farm_id)
-    has_tool_results = bool(tool_msgs)
-
-    intent = state.get("intent", "agent")
     model_role = "lightweight" if intent == "query" else "generation"
     raw_llm = get_llm(role=model_role)
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     _circuit_key = _build_circuit_key(raw_llm)
-    user_msg = _find_last_human_message(messages)
-    selected_names = select_tools(
-        user_msg,
-        tools,
-        intent_classifier=_get_classifier(),
-        # user_location=farm_location,
-    )
+    if len(selected_names) >= len(tools):
+        selected_names = select_tools(
+            user_msg,
+            tools,
+            intent_classifier=_get_classifier(),
+            # user_location=farm_location,
+        )
     if has_tool_results:
         selected_names_set = expand_by_chain(set(selected_names))
         selected_tools = [t for t in tools if t.name in selected_names_set]
@@ -251,18 +306,23 @@ async def _llm_node(state: AgentState) -> dict:
     if not response.tool_calls:
         parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
         if parsed_tool_calls:
-            logger.info(
-                "LLM content 中检测到工具调用 JSON，手动构造 tool_calls | tools=%s | model=%s",
-                [tc["name"] for tc in parsed_tool_calls],
-                model_name,
+            filtered_tool_calls = _filter_tool_calls_by_selected(
+                parsed_tool_calls,
+                selected_tools,
             )
-            # 重建 AIMessage，保留原 metadata，注入 tool_calls
-            response = AIMessage(
-                content="",
-                tool_calls=parsed_tool_calls,
-                response_metadata=response.response_metadata,
-                id=response.id,
-            )
+            if filtered_tool_calls:
+                logger.info(
+                    "LLM content 中检测到工具调用 JSON，手动构造 tool_calls | tools=%s | model=%s",
+                    [tc["name"] for tc in filtered_tool_calls],
+                    model_name,
+                )
+                # 重建 AIMessage，保留原 metadata，注入 tool_calls
+                response = AIMessage(
+                    content="",
+                    tool_calls=filtered_tool_calls,
+                    response_metadata=response.response_metadata,
+                    id=response.id,
+                )
 
     # 检测"应该调用工具但未调用"的情况：用户消息匹配工具关键词，但 LLM 返回了纯文本
     if not response.tool_calls and response.content:
@@ -286,16 +346,23 @@ async def _llm_node(state: AgentState) -> dict:
                     retry_response.content or ""
                 )
                 if retry_parsed:
-                    logger.info(
-                        "重试成功，LLM 输出了工具调用 | tools=%s",
-                        [tc["name"] for tc in retry_parsed],
+                    filtered_retry_calls = _filter_tool_calls_by_selected(
+                        retry_parsed,
+                        selected_tools,
                     )
-                    response = AIMessage(
-                        content="",
-                        tool_calls=retry_parsed,
-                        response_metadata=retry_response.response_metadata,
-                        id=retry_response.id,
-                    )
+                    if filtered_retry_calls:
+                        logger.info(
+                            "重试成功，LLM 输出了工具调用 | tools=%s",
+                            [tc["name"] for tc in filtered_retry_calls],
+                        )
+                        response = AIMessage(
+                            content="",
+                            tool_calls=filtered_retry_calls,
+                            response_metadata=retry_response.response_metadata,
+                            id=retry_response.id,
+                        )
+                    else:
+                        logger.warning("重试输出的工具调用均未绑定，使用原回复")
                 else:
                     logger.warning("重试后 LLM 仍未输出工具调用，使用原回复")
             except Exception as retry_exc:
@@ -311,6 +378,18 @@ async def _llm_node(state: AgentState) -> dict:
             "completion_tokens": usage_meta.get("completion_tokens", 0),
             "total_tokens": tokens,
         }
+
+    logger.info(
+        "LLM 调用完成 | role=%s | key=%s | model=%s | latency_ms=%d | "
+        "selected_tools=%d | tool_calls=%d | tokens=%s",
+        model_role,
+        _circuit_key,
+        model_name,
+        duration_ms,
+        len(selected_tools),
+        len(response.tool_calls or []),
+        tokens if tokens is not None else "-",
+    )
 
     # LLM 工具选择日志
     if response.tool_calls:

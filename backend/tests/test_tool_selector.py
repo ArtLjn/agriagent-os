@@ -61,6 +61,14 @@ class TestWritePatternMatching:
         result = select_tools("秋茬种番茄", _make_tools())
         assert "create_crop_cycle" in result
 
+    def test_create_crop_cycle_intent_with_new_crop_name(self):
+        result = select_tools("我想种小麦", _make_tools())
+        assert result == ["create_crop_cycle"]
+
+    def test_planting_advice_with_intent_phrase_does_not_write(self):
+        result = select_tools("我想种小麦要注意什么", _make_tools())
+        assert result == ALL_TOOL_NAMES
+
     def test_log_farm_activity_watering(self):
         result = select_tools("今天浇了水", _make_tools())
         assert "log_farm_activity" in result
@@ -108,6 +116,15 @@ class TestQueryKeywordMatching:
         assert "get_weather_forecast" in result
         assert "get_cost_summary" in result
 
+    def test_keyword_match_logs_tool_select_layer(self, caplog):
+        with caplog.at_level("INFO", logger="app.agent.tool_selector"):
+            result = select_tools("今天天气", _make_tools())
+
+        assert result == ["get_weather_forecast"]
+        assert "tool_select | layer=rule" in caplog.text
+        assert "candidates=['get_weather_forecast']" in caplog.text
+        assert "returned=['get_weather_forecast']" in caplog.text
+
 
 class TestFallback:
     def test_greeting_returns_all(self):
@@ -116,6 +133,14 @@ class TestFallback:
 
     def test_planting_advice_returns_all(self):
         result = select_tools("西瓜怎么种", _make_tools())
+        assert result == ALL_TOOL_NAMES
+
+    def test_how_to_plant_new_crop_returns_all(self):
+        result = select_tools("怎么种小麦", _make_tools())
+        assert result == ALL_TOOL_NAMES
+
+    def test_planting_attention_returns_all(self):
+        result = select_tools("种小麦要注意什么", _make_tools())
         assert result == ALL_TOOL_NAMES
 
     def test_all_tools_present(self):
@@ -135,3 +160,26 @@ class TestFallback:
     def test_top_k_limits_results(self):
         result = select_tools("看看天气和成本和余额和趋势", _make_tools(), top_k=2)
         assert len(result) <= 2
+
+    def test_llm_intent_logs_returned_tools(self, caplog):
+        classifier = MagicMock()
+        classifier.classify.return_value = ["get_cost_summary"]
+
+        with caplog.at_level("INFO", logger="app.agent.tool_selector"):
+            result = select_tools(
+                "帮我看看最近账怎么样",
+                _make_tools(),
+                intent_classifier=classifier,
+            )
+
+        assert result == ["get_cost_summary"]
+        assert "tool_select | layer=llm_intent" in caplog.text
+        assert "returned=['get_cost_summary']" in caplog.text
+
+    def test_fallback_all_logs_returned_tools(self, caplog):
+        with caplog.at_level("INFO", logger="app.agent.tool_selector"):
+            result = select_tools("你好", _make_tools())
+
+        assert result == ALL_TOOL_NAMES
+        assert "tool_select | layer=fallback_all" in caplog.text
+        assert "returned=[" in caplog.text

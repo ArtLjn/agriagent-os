@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from app.agent.prompt_registry import get_registry
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.logger import get_logger
+from app.core.logger import get_logger, setup_logging
 from app.core.seed import seed_admin_user, seed_default_farm
 from app.infra.trace_cleaner import clean_expired_traces
 from app.infra.trace_collector import start_trace_system, stop_trace_system
@@ -81,8 +81,10 @@ async def _daily_trace_cleanup() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期。"""
+    setup_logging()
     _configure_langsmith()
     await _run_migrations()
+    setup_logging()
     _seed_initial_data()
     _load_prompts()
 

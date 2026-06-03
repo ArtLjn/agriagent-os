@@ -405,6 +405,61 @@ class TestKeyRotation:
         assert manager._get_api_key(provider) == "only-key"
         assert manager._get_api_key(provider) == "only-key"
 
+    def test_chat_model_with_info_returns_actual_selection_and_key_slot(self, tmp_path):
+        cfg = {
+            "providers": [
+                {
+                    "name": "primary",
+                    "base_url": "http://primary",
+                    "api_keys": ["key-a", "key-b"],
+                    "priority": 1,
+                    "models": [{"id": "generation-model", "roles": ["generation"]}],
+                }
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        llm, info = manager.get_chat_model_with_info(role="generation")
+
+        assert llm.model_name == "generation-model"
+        assert info == {
+            "provider": "primary",
+            "model": "generation-model",
+            "base_url": "http://primary",
+            "role": "generation",
+            "api_key_index": 0,
+            "api_key_count": 2,
+            "circuit_key": "primary/generation-model",
+        }
+        assert "api_key" not in info
+
+    def test_sync_client_with_info_returns_tool_selection_model(self, tmp_path):
+        cfg = {
+            "providers": [
+                {
+                    "name": "tool-provider",
+                    "base_url": "http://tool-provider",
+                    "api_keys": ["tool-key"],
+                    "priority": 1,
+                    "models": [{"id": "tool-model", "roles": ["tool-selection"]}],
+                }
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        client, info = manager.get_sync_client_with_info(role="tool-selection")
+
+        assert client is not None
+        assert info["provider"] == "tool-provider"
+        assert info["model"] == "tool-model"
+        assert info["role"] == "tool-selection"
+        assert info["circuit_key"] == "tool-provider/tool-model"
+        assert "api_key" not in info
+
 
 class TestModelRoles:
     """测试模型角色配置。"""
@@ -560,6 +615,61 @@ class TestModelRoles:
         client = manager.get_sync_client(role="tool-selection")
         # 无法直接获取 model 名，但验证不抛异常即可
         assert client is not None
+
+    def test_lightweight_role_excludes_all_only_models_when_exact_role_exists(
+        self, tmp_path
+    ):
+        """lightweight 请求应优先走显式轻量模型，避免随机打到 all 大模型。"""
+        cfg = {
+            "providers": [
+                {
+                    "name": "slow-all",
+                    "base_url": "http://slow",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "weight": 100,
+                    "models": [{"id": "huge-model", "roles": ["all"]}],
+                },
+                {
+                    "name": "fast-light",
+                    "base_url": "http://fast",
+                    "api_keys": ["k"],
+                    "priority": 2,
+                    "weight": 1,
+                    "models": [{"id": "small-model", "roles": ["lightweight"]}],
+                },
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        _llm, info = manager.get_chat_model_with_info(role="lightweight")
+
+        assert info["provider"] == "fast-light"
+        assert info["model"] == "small-model"
+
+    def test_generation_role_can_fallback_to_all_models(self, tmp_path):
+        """generation 未配置显式模型时仍可使用 all 模型保持兼容。"""
+        cfg = {
+            "providers": [
+                {
+                    "name": "default",
+                    "base_url": "http://default",
+                    "api_keys": ["k"],
+                    "priority": 1,
+                    "models": [{"id": "general-model", "roles": ["all"]}],
+                }
+            ]
+        }
+        p = tmp_path / "providers.json"
+        _write_providers_json(p, cfg)
+        manager = LLMClientManager(config_path=str(p))
+
+        _llm, info = manager.get_chat_model_with_info(role="generation")
+
+        assert info["provider"] == "default"
+        assert info["model"] == "general-model"
 
     def test_role_none_no_filtering(self, tmp_path):
         """role=None 时不做角色筛选，保持向后兼容。"""

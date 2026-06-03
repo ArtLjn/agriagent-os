@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import time
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -14,9 +15,12 @@ from app.agent.prompt_composer import get_composer
 from app.agent.skills import get_langchain_tools
 from app.infra.json_repair import safe_parse_json
 from app.infra.pending_actions import (
+    PendingAction,
+    build_confirm_message,
     detect_user_intent,
     get_pending,
     remove_pending,
+    store_pending,
 )
 from app.infra.trace_collector import get_collector
 from app.models.agent_record import AgentRecord
@@ -39,6 +43,7 @@ logger = logging.getLogger(__name__)
 # title 超过此长度截断并加省略号
 _TITLE_MAX_DISPLAY = 10
 _ADVICE_ITEM_MAX = 5
+_MISSING_TEMPLATE_RE = re.compile(r"系统还没有\s*(?P<crop>.+?)\s*模板")
 
 
 def _truncate_title(title: str) -> str:
@@ -117,6 +122,73 @@ async def _execute_pending_action(farm_id: int, skill_name: str, params: dict) -
         )
 
 
+def _extract_missing_template_crop(pending: PendingAction, result: str) -> str:
+    """从缺模板结果中提取作物名，优先使用 pending 参数。"""
+    crop_name = str(pending.params.get("crop_name") or "").strip()
+    if crop_name:
+        return crop_name
+
+    match = _MISSING_TEMPLATE_RE.search(result)
+    return match.group("crop").strip() if match else ""
+
+
+def _format_follow_up_intro(skill_name: str, params: dict) -> str:
+    """生成后续确认动作的自然语言引导。"""
+    if skill_name == "create_crop_cycle":
+        crop_name = str(params.get("crop_name") or "").strip()
+        return f"现在可以继续创建{crop_name}茬口。" if crop_name else "现在可以继续创建茬口。"
+
+    return "下一步需要继续确认。"
+
+
+async def _confirm_pending_action(farm_id: int, pending: PendingAction) -> str:
+    """执行已确认的 pending action，并处理缺模板和链式动作。"""
+    result = await _execute_pending_action(farm_id, pending.skill_name, pending.params)
+    remove_pending(farm_id)
+
+    if pending.skill_name == "create_crop_cycle" and "系统还没有" in result and "模板" in result:
+        crop_name = _extract_missing_template_crop(pending, result)
+        if crop_name:
+            store_pending(
+                farm_id,
+                "create_crop_template",
+                {"crop_name": crop_name},
+                original_input=f"系统还没有{crop_name}作物模板",
+                follow_up_skill_name="create_crop_cycle",
+                follow_up_params=dict(pending.params),
+                follow_up_original_input=pending.original_input,
+            )
+            confirm = build_confirm_message(
+                "create_crop_template",
+                {"crop_name": crop_name},
+                original_input=f"系统还没有{crop_name}作物模板",
+            )
+            return (
+                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n"
+                f"{confirm}"
+            )
+
+    if pending.follow_up_skill_name and pending.follow_up_params is not None:
+        store_pending(
+            farm_id,
+            pending.follow_up_skill_name,
+            dict(pending.follow_up_params),
+            original_input=pending.follow_up_original_input,
+        )
+        confirm = build_confirm_message(
+            pending.follow_up_skill_name,
+            pending.follow_up_params,
+            original_input=pending.follow_up_original_input,
+        )
+        intro = _format_follow_up_intro(
+            pending.follow_up_skill_name,
+            pending.follow_up_params,
+        )
+        return f"已执行：{result}\n\n{intro}\n{confirm}"
+
+    return f"已执行：{result}"
+
+
 async def chat_with_agent(
     db: Session,
     message: str,
@@ -153,14 +225,10 @@ async def chat_with_agent(
                 pending.params,
             )
             try:
-                result = await _execute_pending_action(
-                    farm_id, pending.skill_name, pending.params
-                )
-                reply = f"已执行：{result}"
+                reply = await _confirm_pending_action(farm_id, pending)
             except Exception as exc:
                 logger.error("执行 pending action 失败: %s", exc)
                 reply = f"执行失败：{exc}"
-            finally:
                 remove_pending(farm_id)
 
             record = AgentRecord(
@@ -257,14 +325,10 @@ async def stream_chat_with_agent(
                 pending.params,
             )
             try:
-                result = await _execute_pending_action(
-                    farm_id, pending.skill_name, pending.params
-                )
-                reply = f"已执行：{result}"
+                reply = await _confirm_pending_action(farm_id, pending)
             except Exception as exc:
                 logger.error("执行 pending action 失败: %s", exc)
                 reply = f"执行失败：{exc}"
-            finally:
                 remove_pending(farm_id)
             yield reply
             return

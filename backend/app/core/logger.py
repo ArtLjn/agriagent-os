@@ -25,6 +25,17 @@ def _ensure_log_dir(log_dir: Path) -> Path:
     return log_dir
 
 
+def _reenable_project_loggers() -> None:
+    """恢复被 Alembic fileConfig 禁用的项目 logger。"""
+    manager = logging.root.manager
+    for name, logger_obj in manager.loggerDict.items():
+        if not name.startswith("app."):
+            continue
+        if isinstance(logger_obj, logging.Logger):
+            logger_obj.disabled = False
+            logger_obj.propagate = True
+
+
 def setup_logging() -> None:
     """初始化全局日志配置。
 
@@ -34,6 +45,7 @@ def setup_logging() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(logging.INFO)
+    _reenable_project_loggers()
 
     # ── 1. stdout 处理器（带颜色）─
     console_fmt = (
@@ -74,7 +86,15 @@ def setup_logging() -> None:
     root.addHandler(error_handler)
 
     # 第三方库降噪
-    for noisy in ("httpx", "httpcore", "urllib3", "openai._base_client", "werkzeug"):
+    for noisy in (
+        "httpx",
+        "httpcore",
+        "urllib3",
+        "openai._base_client",
+        "werkzeug",
+        "watchfiles",
+        "watchfiles.main",
+    ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 

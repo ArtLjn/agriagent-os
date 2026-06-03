@@ -171,6 +171,76 @@ class TestChatWithAgent:
         # 清理
         remove_pending(1)
 
+    @pytest.mark.asyncio
+    async def test_template_confirm_creates_follow_up_cycle_pending(self) -> None:
+        """确认创建模板后，应自动回到原始创建茬口确认。"""
+        from app.infra.pending_actions import get_pending, remove_pending, store_pending
+
+        remove_pending(1)
+        store_pending(
+            1,
+            "create_crop_template",
+            {"crop_name": "小麦"},
+            original_input="系统还没有小麦模板",
+            follow_up_skill_name="create_crop_cycle",
+            follow_up_params={"crop_name": "小麦"},
+            follow_up_original_input="我想种小麦",
+        )
+
+        mock_db = _make_mock_db()
+        with patch(
+            "app.services.agent_service._execute_pending_action",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_exec.return_value = "✅ 小麦模板已创建！"
+            result = await chat_with_agent(mock_db, "确认", farm_id=1)
+
+        pending = get_pending(1)
+        assert pending is not None
+        assert pending.skill_name == "create_crop_cycle"
+        assert pending.params == {"crop_name": "小麦"}
+        assert "小麦模板已创建" in result.reply
+        assert "继续创建小麦茬口" in result.reply
+        assert "crop_name" not in result.reply
+
+        remove_pending(1)
+
+    @pytest.mark.asyncio
+    async def test_cycle_confirm_missing_template_creates_template_pending(
+        self,
+    ) -> None:
+        """确认创建茬口但缺模板时，应先请求确认创建模板。"""
+        from app.infra.pending_actions import get_pending, remove_pending, store_pending
+
+        remove_pending(1)
+        store_pending(
+            1,
+            "create_crop_cycle",
+            {"crop_name": "小麦"},
+            original_input="我想种小麦",
+        )
+
+        mock_db = _make_mock_db()
+        with patch(
+            "app.services.agent_service._execute_pending_action",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_exec.return_value = "系统还没有小麦模板，要帮你创建一个吗？"
+            result = await chat_with_agent(mock_db, "确认", farm_id=1)
+
+        pending = get_pending(1)
+        assert pending is not None
+        assert pending.skill_name == "create_crop_template"
+        assert pending.params == {"crop_name": "小麦"}
+        assert pending.follow_up_skill_name == "create_crop_cycle"
+        assert pending.follow_up_params == {"crop_name": "小麦"}
+        assert "系统还没有小麦作物模板" in result.reply
+        assert "确认创建作物模板" in result.reply
+        assert "已执行：系统还没有" not in result.reply
+        assert "crop_name" not in result.reply
+
+        remove_pending(1)
+
 
 class TestStreamChatWithAgent:
     """测试流式对话服务。"""
@@ -208,6 +278,45 @@ class TestStreamChatWithAgent:
         assert chunks == ["chunk1", "chunk2"]
         # 验证保存 user 消息（assistant 由调用方 agent.py 保存）
         mock_save_msg.assert_any_call(mock_db, 55, "user", "问题")
+
+    @pytest.mark.asyncio
+    async def test_stream_cycle_confirm_missing_template_creates_template_pending(
+        self,
+    ) -> None:
+        """流式确认创建茬口但缺模板时，也应先请求确认创建模板。"""
+        from app.infra.pending_actions import get_pending, remove_pending, store_pending
+        from app.services.agent_service import stream_chat_with_agent
+
+        remove_pending(1)
+        store_pending(
+            1,
+            "create_crop_cycle",
+            {"crop_name": "小麦"},
+            original_input="我想种小麦",
+        )
+
+        with patch(
+            "app.services.agent_service._execute_pending_action",
+            new_callable=AsyncMock,
+        ) as mock_exec:
+            mock_exec.return_value = "系统还没有小麦模板，要帮你创建一个吗？"
+            chunks = []
+            async for chunk in stream_chat_with_agent("确认", farm_id=1):
+                chunks.append(chunk)
+
+        reply = "".join(chunks)
+        pending = get_pending(1)
+        assert pending is not None
+        assert pending.skill_name == "create_crop_template"
+        assert pending.params == {"crop_name": "小麦"}
+        assert pending.follow_up_skill_name == "create_crop_cycle"
+        assert pending.follow_up_params == {"crop_name": "小麦"}
+        assert "系统还没有小麦作物模板" in reply
+        assert "确认创建作物模板" in reply
+        assert "已执行：系统还没有" not in reply
+        assert "crop_name" not in reply
+
+        remove_pending(1)
 
 
 class TestGetDailyAdvice:

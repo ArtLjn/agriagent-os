@@ -70,6 +70,28 @@ class ProviderConfig:
     models: list[ModelConfig] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class LLMSelection:
+    """一次 LLM 路由选择结果，公开日志信息时不包含 api_key。"""
+
+    provider: ProviderConfig
+    model: ModelConfig
+    api_key: str
+    api_key_index: int
+    role: str | None
+
+    def public_info(self) -> dict[str, str | int]:
+        return {
+            "provider": self.provider.name,
+            "model": self.model.id,
+            "base_url": self.provider.base_url,
+            "role": self.role or "all",
+            "api_key_index": self.api_key_index,
+            "api_key_count": len(self.provider.api_keys),
+            "circuit_key": f"{self.provider.name}/{self.model.id}",
+        }
+
+
 def classify_error(exc: Exception) -> ErrorLevel:
     """根据异常类型判断错误级别。"""
     from openai import APIConnectionError, AuthenticationError, RateLimitError
@@ -171,10 +193,15 @@ class LLMClientManager:
         return self._chain
 
     def _get_api_key(self, provider: ProviderConfig) -> str:
-        idx = self._key_counters.get(provider.name, 0)
-        key = provider.api_keys[idx % len(provider.api_keys)]
-        self._key_counters[provider.name] = idx + 1
+        key, _key_index = self._get_api_key_with_index(provider)
         return key
+
+    def _get_api_key_with_index(self, provider: ProviderConfig) -> tuple[str, int]:
+        idx = self._key_counters.get(provider.name, 0)
+        key_index = idx % len(provider.api_keys)
+        key = provider.api_keys[key_index]
+        self._key_counters[provider.name] = idx + 1
+        return key, key_index
 
     def _is_provider_healthy(self, provider_name: str) -> bool:
         """检查 provider 是否健康（<50% 模型处于 WARMING/DEAD）。"""
@@ -193,39 +220,41 @@ class LLMClientManager:
         return bad_count < len(provider_models) / 2
 
     def _weighted_random_choice(
-        self, candidates: list[tuple[ProviderConfig, ModelConfig, str, int]]
-    ) -> tuple[ProviderConfig, ModelConfig, str] | None:
+        self, candidates: list[tuple[LLMSelection, int]]
+    ) -> LLMSelection | None:
         """按权重随机选择一个候选。"""
         if not candidates:
             return None
-        total = sum(w for _, _, _, w in candidates)
+        total = sum(weight for _, weight in candidates)
         r = random.random() * total
         cumulative = 0
-        for provider, model, api_key, weight in candidates:
+        for selection, weight in candidates:
             cumulative += weight
             if r <= cumulative:
-                return provider, model, api_key
-        return candidates[-1][:3]
+                return selection
+        return candidates[-1][0]
 
     def _get_next_available(
         self,
         role: str | None = None,
-    ) -> tuple[ProviderConfig, ModelConfig, str] | None:
+    ) -> LLMSelection | None:
         """获取下一个可用的 provider+model+key（加权随机，可选角色筛选）。"""
         seen_providers: set[str] = set()
-        candidates: list[tuple[ProviderConfig, ModelConfig, str, int]] = []
+        exact_candidates: list[tuple[LLMSelection, int]] = []
+        fallback_candidates: list[tuple[LLMSelection, int]] = []
 
         for provider, model in self._chain:
             if not provider.enabled or not model.enabled:
                 continue
             if not provider.api_keys:
                 continue
-            if (
-                role is not None
-                and role not in model.roles
-                and "all" not in model.roles
-            ):
-                continue
+            if role is not None:
+                is_exact_role = role in model.roles
+                is_all_fallback = "all" in model.roles
+                if not is_exact_role and not is_all_fallback:
+                    continue
+            else:
+                is_exact_role = True
             model_key = f"{provider.name}/{model.id}"
             if self.is_cooled_down(model_key):
                 continue
@@ -234,16 +263,29 @@ class LLMClientManager:
             if provider.name in seen_providers:
                 continue
             seen_providers.add(provider.name)
-            api_key = self._get_api_key(provider)
+            api_key, api_key_index = self._get_api_key_with_index(provider)
             if not api_key:
                 continue
-            candidates.append((provider, model, api_key, provider.weight))
+            candidate = (
+                LLMSelection(
+                    provider=provider,
+                    model=model,
+                    api_key=api_key,
+                    api_key_index=api_key_index,
+                    role=role,
+                ),
+                provider.weight,
+            )
+            if is_exact_role:
+                exact_candidates.append(candidate)
+            else:
+                fallback_candidates.append(candidate)
 
-        return self._weighted_random_choice(candidates)
+        return self._weighted_random_choice(exact_candidates or fallback_candidates)
 
     def _get_first_available(
         self,
-    ) -> tuple[ProviderConfig, ModelConfig, str] | None:
+    ) -> LLMSelection | None:
         """获取第一个未 cooldown 的 provider+model+key 组合。"""
         for provider, model in self._chain:
             if not provider.api_keys:
@@ -251,61 +293,91 @@ class LLMClientManager:
             model_key = f"{provider.name}/{model.id}"
             if self.is_cooled_down(model_key):
                 continue
-            api_key = self._get_api_key(provider)
+            api_key, api_key_index = self._get_api_key_with_index(provider)
             if not api_key:
                 continue
-            return provider, model, api_key
+            return LLMSelection(
+                provider=provider,
+                model=model,
+                api_key=api_key,
+                api_key_index=api_key_index,
+                role=None,
+            )
         return None
 
     def get_chat_model(
         self, *, role: str | None = "generation", **kwargs
     ) -> ChatOpenAI:
         """获取 ChatOpenAI 实例（给 llm.py / graph.py 使用）。"""
+        llm, _info = self.get_chat_model_with_info(role=role, **kwargs)
+        return llm
+
+    def get_chat_model_with_info(
+        self, *, role: str | None = "generation", **kwargs
+    ) -> tuple[ChatOpenAI, dict[str, str | int]]:
+        """获取 ChatOpenAI 实例和同一次路由选择的公开信息。"""
         result = self._get_next_available(role=role)
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
-        provider, model, api_key = result
 
         extra_body = kwargs.pop("extra_body", None)
         if not settings.ai.enable_thinking:
             extra_body = {**(extra_body or {}), "enable_thinking": False}
 
-        return ChatOpenAI(
-            model=model.id,
-            api_key=api_key,
-            base_url=provider.base_url,
+        llm = ChatOpenAI(
+            model=result.model.id,
+            api_key=result.api_key,
+            base_url=result.provider.base_url,
             temperature=kwargs.pop("temperature", 0.7),
             streaming=True,
             extra_body=extra_body if extra_body else None,
             **kwargs,
         )
+        return llm, result.public_info()
 
     def get_sync_client(self, *, role: str | None = "generation") -> OpenAI:
         """获取同步 OpenAI 客户端（给 tool_selector 使用）。"""
+        client, _info = self.get_sync_client_with_info(role=role)
+        return client
+
+    def get_sync_client_with_info(
+        self, *, role: str | None = "generation"
+    ) -> tuple[OpenAI, dict[str, str | int]]:
+        """获取同步 OpenAI 客户端和同一次路由选择的公开信息。"""
         result = self._get_next_available(role=role)
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
-        provider, model, api_key = result
-        return OpenAI(api_key=api_key, base_url=provider.base_url)
+        return (
+            OpenAI(api_key=result.api_key, base_url=result.provider.base_url),
+            result.public_info(),
+        )
 
-    def get_async_client(self) -> AsyncOpenAI:
+    def get_async_client(self, *, role: str | None = None) -> AsyncOpenAI:
         """获取异步 OpenAI 客户端（给 skills 使用）。"""
-        result = self._get_next_available()
+        client, _info = self.get_async_client_with_info(role=role)
+        return client
+
+    def get_async_client_with_info(
+        self, *, role: str | None = None
+    ) -> tuple[AsyncOpenAI, dict[str, str | int]]:
+        """获取异步 OpenAI 客户端和同一次路由选择的公开信息。"""
+        result = self._get_next_available(role=role)
         if not result:
             raise RuntimeError("所有 LLM Provider 均不可用或处于 cooldown 中")
-        provider, model, api_key = result
-        return AsyncOpenAI(api_key=api_key, base_url=provider.base_url)
+        return (
+            AsyncOpenAI(api_key=result.api_key, base_url=result.provider.base_url),
+            result.public_info(),
+        )
 
     def get_model_info(self, *, role: str | None = "generation") -> dict:
         """返回当前使用的 provider/model 信息。"""
         result = self._get_next_available(role=role)
         if not result:
             return {"provider": "", "model": "", "base_url": ""}
-        provider, model, _ = result
         return {
-            "provider": provider.name,
-            "model": model.id,
-            "base_url": provider.base_url,
+            "provider": result.provider.name,
+            "model": result.model.id,
+            "base_url": result.provider.base_url,
         }
 
     def record_failure(self, key: str, error_level: ErrorLevel | None = None) -> None:
