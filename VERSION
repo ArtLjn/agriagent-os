@@ -1,3 +1,3 @@
-VERSION_NAME=1.1.0
-VERSION_CODE=7
-CHANGELOG=Agent 仿真测试平台 + 移动端 CustomAlert 弹窗 + 多项改进
+VERSION_NAME=1.2.2
+VERSION_CODE=8
+CHANGELOG=优化 Agent 工具确认、路由日志与后端兼容性
