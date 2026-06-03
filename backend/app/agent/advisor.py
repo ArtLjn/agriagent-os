@@ -114,7 +114,7 @@ async def invoke_advisor(
 
     try:
         result = await graph.ainvoke(
-            {"messages": messages, "farm_id": farm_id},
+            {"messages": messages, "farm_id": farm_id, "intent": intent.value},
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_invoke",
@@ -198,7 +198,7 @@ async def stream_advisor(
     step = 0
     try:
         async for event in graph.astream(
-            {"messages": messages, "farm_id": farm_id},
+            {"messages": messages, "farm_id": farm_id, "intent": intent.value},
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_stream",

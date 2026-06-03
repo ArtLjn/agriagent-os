@@ -6,16 +6,13 @@ import logging
 import re
 import threading
 from datetime import date
-from typing import Annotated
-
 import time as _time
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
 
 from app.agent.llm import get_llm
+from app.agent.state import AgentState
 from app.infra.pending_actions import (
     PENDING_MARKER,
     is_write_skill,
@@ -128,11 +125,6 @@ def sliding_window_compact(
                 )
 
     return result
-
-
-class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
-    farm_id: int
 
 
 def _should_continue(state: AgentState) -> str:
@@ -438,7 +430,10 @@ async def _llm_node(state: AgentState) -> dict:
     tools = get_langchain_tools(farm_id=farm_id)
     has_tool_results = bool(tool_msgs)
 
-    raw_llm = get_llm(role="generation")
+    intent = state.get("intent", "agent")
+    model_role = "lightweight" if intent == "query" else "generation"
+    raw_llm = get_llm(role=model_role)
+    logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     _circuit_key = _build_circuit_key(raw_llm)
     user_msg = _find_last_human_message(messages)
     selected_names = select_tools(
@@ -511,7 +506,7 @@ async def _llm_node(state: AgentState) -> dict:
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    raw_llm = get_llm(role="generation")
+                    raw_llm = get_llm(role=model_role)
                     _circuit_key = _build_circuit_key(raw_llm)
                     if selected_tools:
                         parallel = {"parallel_tool_calls": True} if settings.ai.parallel_tool_calls else {}
