@@ -9,11 +9,21 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import Base, _set_sqlite_pragma
+from app.core.database import Base
 from app.models.cost import CostRecord
 from app.models.farm import Farm
 from app.schemas.cost import CostRecordCreate
 from app.services.cost_service import create_record
+
+
+def _set_sqlite_pragma(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
 
 _settle_mod = importlib.import_module("app.agent.skills.settle-debt.scripts.main")
 SettleDebtSkill = _settle_mod.SettleDebtSkill
@@ -34,7 +44,7 @@ def clean_db():
     db.add(Farm(id=1, name="默认农场"))
     db.commit()
     db.close()
-    with patch("app.agent.skills.settle-debt.scripts.main.SessionLocal", _TestSession):
+    with patch.object(_settle_mod, "SessionLocal", _TestSession):
         yield
 
 

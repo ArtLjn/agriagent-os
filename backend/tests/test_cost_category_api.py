@@ -3,12 +3,12 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_db
-from app.core.database import SessionLocal
+from app.api.deps import get_current_farm, get_db
+from app.models.farm import Farm
 
 
 @pytest.fixture
-def client():
+def client(db_session):
     """创建测试客户端。"""
     from app.api.cost_categories import router
 
@@ -18,13 +18,13 @@ def client():
     app.include_router(router)
 
     def override_get_db():
-        try:
-            db = SessionLocal()
-            yield db
-        finally:
-            db.close()
+        yield db_session
+
+    def override_get_current_farm():
+        return db_session.get(Farm, 1)
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_farm] = override_get_current_farm
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()

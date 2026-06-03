@@ -531,7 +531,7 @@ def get_report_history(
     query = (
         db.query(AgentRecord)
         .filter(AgentRecord.farm_id == farm_id)
-        .filter(AgentRecord.record_type == "report")
+        .filter(AgentRecord.record_type.in_(["report", "weekly", "monthly"]))
     )
     if cycle_id is not None:
         query = query.filter(AgentRecord.cycle_id == cycle_id)

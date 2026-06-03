@@ -47,7 +47,7 @@ class TestDualPhaseModelSelection:
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=["web_search"])
     @patch("app.agent.graph.expand_by_chain", return_value={"web_search"})
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")
@@ -56,7 +56,7 @@ class TestDualPhaseModelSelection:
     @patch("app.agent.graph.get_request_date")
     @patch("app.agent.graph._get_season", return_value="春季")
     @patch("app.agent.graph.get_composer")
-    def test_no_tool_results_uses_tool_selection_role(
+    def test_no_tool_results_uses_generation_role(
         self, mock_composer, mock_season, mock_date,
         mock_find_human, mock_sliding, mock_collector,
         mock_round, mock_quota, mock_farm_ctx,
@@ -64,7 +64,7 @@ class TestDualPhaseModelSelection:
         mock_tools, mock_get_llm, mock_circuit_key,
         mock_failure, mock_success,
     ):
-        """无 ToolMessage 时，get_llm 应以 role='tool-selection' 调用。"""
+        """默认 agent intent 无 ToolMessage 时使用 generation 角色。"""
         mock_composer.return_value.compose.return_value = "system prompt"
         mock_collector.return_value = MagicMock()
         mock_tools.return_value = []
@@ -77,7 +77,7 @@ class TestDualPhaseModelSelection:
         state = _make_state([HumanMessage(content="你好")])
         asyncio.get_event_loop().run_until_complete(_llm_node(state))
 
-        mock_get_llm.assert_called_once_with(role="tool-selection")
+        mock_get_llm.assert_called_once_with(role="generation")
 
     @pytest.mark.asyncio
     @patch("app.agent.graph._record_llm_success")
@@ -88,7 +88,7 @@ class TestDualPhaseModelSelection:
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=["web_search"])
     @patch("app.agent.graph.expand_by_chain", return_value={"web_search"})
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")
@@ -138,7 +138,7 @@ class TestRetryLoop:
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=["web_search"])
     @patch("app.agent.graph.expand_by_chain", return_value={"web_search"})
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")
@@ -182,7 +182,7 @@ class TestRetryLoop:
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=[])
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")
@@ -251,7 +251,7 @@ class TestRetryLoop:
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=[])
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")
@@ -302,7 +302,7 @@ class TestRetryLoop:
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=[])
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")
@@ -361,7 +361,7 @@ class TestRetryLoop:
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=["web_search"])
     @patch("app.agent.graph.expand_by_chain", return_value={"web_search"})
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")
@@ -432,7 +432,7 @@ class TestRetryWithSingleAttempt:
     @patch("app.agent.graph.get_langchain_tools")
     @patch("app.agent.graph._get_classifier", return_value=None)
     @patch("app.agent.graph.select_tools", return_value=[])
-    @patch("app.agent.graph._get_farm_context", return_value=("睢宁", "农友"))
+    @patch("app.agent.graph._get_farm_context", return_value={"farm_location": "睢宁", "display_name": "农友", "farm_coords": "", "active_crops": ""})
     @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.increment_round", return_value=1)
     @patch("app.agent.graph.get_collector")

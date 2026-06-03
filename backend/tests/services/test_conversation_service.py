@@ -2,24 +2,57 @@
 
 from datetime import datetime, timedelta
 
-from app.core.database import SessionLocal
+import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+
+from app.core.database import Base
 from app.models.conversation import ConversationStatus
+from app.models.farm import Farm
 from app.services.conversation_service import (
-    get_or_create_conversation,
-    save_message,
-    get_recent_messages,
     close_expired_conversations,
-    list_conversations,
     get_conversation_messages,
+    get_or_create_conversation,
+    get_recent_messages,
+    list_conversations,
+    save_message,
 )
+
+
+def _set_sqlite_pragma(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
+
+_test_engine = create_engine(
+    "sqlite:///tests/test_conversation_service.db",
+    connect_args={"check_same_thread": False},
+)
+event.listen(_test_engine, "connect", _set_sqlite_pragma)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
+
+
+@pytest.fixture(autouse=True)
+def clean_conversation_db():
+    Base.metadata.drop_all(bind=_test_engine)
+    Base.metadata.create_all(bind=_test_engine)
+    db = _TestSession()
+    db.add(Farm(id=1, name="默认农场"))
+    db.commit()
+    db.close()
+    yield
 
 
 class TestGetOrCreateConversation:
     """get_or_create_conversation 测试。"""
 
-    def test_create_new_conversation(self, clean_db):
+    def test_create_new_conversation(self):
         """新 session_id 创建新会话。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv = get_or_create_conversation(db, farm_id=1, session_id="sess-new")
 
         assert conv.farm_id == 1
@@ -27,18 +60,18 @@ class TestGetOrCreateConversation:
         assert conv.status == ConversationStatus.ACTIVE
         db.close()
 
-    def test_reuse_active_conversation(self, clean_db):
+    def test_reuse_active_conversation(self):
         """同一 session_id 复用已有会话。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv1 = get_or_create_conversation(db, farm_id=1, session_id="sess-reuse")
         conv2 = get_or_create_conversation(db, farm_id=1, session_id="sess-reuse")
 
         assert conv1.id == conv2.id
         db.close()
 
-    def test_close_old_active_when_new_session(self, clean_db):
+    def test_close_old_active_when_new_session(self):
         """新 session_id 时关闭同一 farm 的旧活跃会话。"""
-        db = SessionLocal()
+        db = _TestSession()
         old = get_or_create_conversation(db, farm_id=1, session_id="sess-old")
         assert old.status == ConversationStatus.ACTIVE
 
@@ -54,9 +87,9 @@ class TestGetOrCreateConversation:
 class TestSaveAndGetMessages:
     """save_message / get_recent_messages 测试。"""
 
-    def test_save_user_message(self, clean_db):
+    def test_save_user_message(self):
         """保存用户消息。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv = get_or_create_conversation(db, farm_id=1, session_id="sess-msg")
         msg = save_message(db, conv.id, "user", "明天天气如何")
 
@@ -64,9 +97,9 @@ class TestSaveAndGetMessages:
         assert msg.content == "明天天气如何"
         db.close()
 
-    def test_save_assistant_message(self, clean_db):
+    def test_save_assistant_message(self):
         """保存助手消息。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv = get_or_create_conversation(db, farm_id=1, session_id="sess-msg2")
         msg = save_message(db, conv.id, "assistant", "明天晴，适合浇水")
 
@@ -74,9 +107,9 @@ class TestSaveAndGetMessages:
         assert msg.content == "明天晴，适合浇水"
         db.close()
 
-    def test_get_recent_messages_limit(self, clean_db):
+    def test_get_recent_messages_limit(self):
         """获取最近 N 条消息，按时间正序返回。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv = get_or_create_conversation(db, farm_id=1, session_id="sess-recent")
         for i in range(5):
             save_message(db, conv.id, "user", f"msg-{i}")
@@ -92,9 +125,9 @@ class TestSaveAndGetMessages:
 class TestCloseExpiredConversations:
     """close_expired_conversations 测试。"""
 
-    def test_close_conversations_older_than_24h(self, clean_db):
+    def test_close_conversations_older_than_24h(self):
         """超过 24h 无活动的活跃会话被关闭。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv = get_or_create_conversation(db, farm_id=1, session_id="sess-expired")
         # 手动设置 last_active_at 为 25 小时前
         conv.last_active_at = datetime.now() - timedelta(hours=25)
@@ -107,9 +140,9 @@ class TestCloseExpiredConversations:
         assert conv.status == ConversationStatus.CLOSED
         db.close()
 
-    def test_keep_recent_conversations(self, clean_db):
+    def test_keep_recent_conversations(self):
         """近期活跃的会话不会被关闭。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv = get_or_create_conversation(db, farm_id=1, session_id="sess-recent2")
 
         closed_count = close_expired_conversations(db, farm_id=1)
@@ -123,9 +156,9 @@ class TestCloseExpiredConversations:
 class TestListConversations:
     """list_conversations 测试。"""
 
-    def test_list_ordered_by_last_active(self, clean_db):
+    def test_list_ordered_by_last_active(self):
         """会话列表按最后活跃时间倒序。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv1 = get_or_create_conversation(db, farm_id=1, session_id="sess-list1")
         _conv2 = get_or_create_conversation(db, farm_id=1, session_id="sess-list2")
         # conv2 创建后 conv1 被 close，但 save_message 更新 conv1.last_active_at
@@ -141,9 +174,9 @@ class TestListConversations:
 class TestGetConversationMessages:
     """get_conversation_messages 测试。"""
 
-    def test_get_full_message_list(self, clean_db):
+    def test_get_full_message_list(self):
         """通过 session_id 获取完整消息列表。"""
-        db = SessionLocal()
+        db = _TestSession()
         conv = get_or_create_conversation(db, farm_id=1, session_id="sess-full")
         save_message(db, conv.id, "user", "Q1")
         save_message(db, conv.id, "assistant", "A1")
@@ -154,9 +187,9 @@ class TestGetConversationMessages:
         assert msgs[1].role == "assistant"
         db.close()
 
-    def test_get_messages_nonexistent_session(self, clean_db):
+    def test_get_messages_nonexistent_session(self):
         """不存在的 session_id 返回空列表。"""
-        db = SessionLocal()
+        db = _TestSession()
         msgs = get_conversation_messages(db, "nonexistent-session")
         assert msgs == []
         db.close()

@@ -22,20 +22,20 @@ def _make_weather_data(days=3) -> dict:
 
 
 class TestWeatherFormatMarkdown:
-    """验证天气回复使用 Markdown 表格格式。"""
+    """验证天气回复使用结构化文本格式。"""
 
     def test_reply_starts_with_location_emoji(self):
-        """回复以 📍 emoji + 地点开头。"""
+        """回复以城市信息开头。"""
         data = _make_weather_data()
         reply = _weather_mod._format_weather_reply("苏州", data)
-        assert reply.startswith("📍")
+        assert reply.startswith("城市: 苏州")
 
     def test_reply_contains_markdown_table(self):
-        """回复包含 Markdown 表格（| 分隔符）。"""
+        """回复包含未来天数和逐日天气。"""
         data = _make_weather_data()
         reply = _weather_mod._format_weather_reply("苏州", data)
-        assert "|" in reply
-        assert "---" in reply
+        assert "未来天数: 3天" in reply
+        assert "5/28: 天气" in reply
 
     def test_reply_contains_weather_emoji(self):
         """天气列包含 emoji 图标。"""
@@ -62,10 +62,9 @@ class TestWeatherFormatMarkdown:
         data = _make_weather_data()
         data["daily"]["temperature_2m_max"][0] = 38  # 触发高温预警
         reply = _weather_mod._format_weather_reply("苏州", data)
-        assert "⚠️" in reply
-        table_end = reply.rindex("|")
-        warning_pos = reply.index("⚠️")
-        assert warning_pos > table_end
+        assert "天气预警:" in reply
+        warning_pos = reply.index("天气预警:")
+        assert warning_pos > reply.index("5/30")
 
     def test_no_warning_shows_no_alert(self):
         """无预警时不出现 ⚠️。"""
@@ -76,4 +75,4 @@ class TestWeatherFormatMarkdown:
     def test_no_data_returns_fallback(self):
         """无数据时返回友好提示。"""
         reply = _weather_mod._format_weather_reply("苏州", {"daily": {}})
-        assert "🌤️" in reply
+        assert "暂时获取不到天气数据" in reply

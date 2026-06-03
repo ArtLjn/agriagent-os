@@ -1,48 +1,54 @@
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
-import httpx
 import pytest
 
 from app.services.weather_service import check_weather_warnings, fetch_weather
+from app.services.weather.base import DailyForecast, ProviderError, WeatherData
 
 
 class TestFetchWeather:
     """测试天气查询功能。"""
 
-    @patch("app.services.weather_service.httpx.get")
-    def test_fetch_weather_returns_dict_with_required_keys(
-        self, mock_get: Mock
+    @pytest.mark.asyncio
+    @patch("app.services.weather_service.get_weather_strategy")
+    async def test_fetch_weather_returns_dict_with_required_keys(
+        self, mock_get_strategy: Mock
     ) -> None:
         """验证 fetch_weather 返回包含必需字段的字典。"""
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "daily": {
-                "time": ["2026-05-23", "2026-05-24"],
-                "temperature_2m_max": [28.0, 30.0],
-                "temperature_2m_min": [18.0, 20.0],
-                "precipitation_sum": [0.0, 5.0],
-                "windspeed_10m_max": [10.0, 15.0],
-            }
-        }
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
+        strategy = Mock()
+        strategy.fetch = AsyncMock(
+            return_value=WeatherData(
+                location="34.26,117.18",
+                provider="test",
+                daily=[
+                    DailyForecast("2026-05-23", 28.0, 18.0, "晴", 0.0, 10.0),
+                    DailyForecast("2026-05-24", 30.0, 20.0, "雨", 5.0, 15.0),
+                ],
+                alerts=[],
+                air_quality=None,
+                current_temp=26.0,
+            )
+        )
+        mock_get_strategy.return_value = strategy
 
-        result = fetch_weather(lat=34.26, lon=117.18)
+        result = await fetch_weather(lat=34.26, lon=117.18)
 
         assert "daily" in result
         assert "location" in result
-        call_args = mock_get.call_args
-        assert call_args.kwargs["params"]["latitude"] == 34.26
-        assert call_args.kwargs["params"]["longitude"] == 117.18
-        assert call_args.kwargs["timeout"] == 10
+        strategy.fetch.assert_awaited_once_with("", 7, 34.26, 117.18)
 
-    @patch("app.services.weather_service.httpx.get")
-    def test_fetch_weather_raises_on_http_error(self, mock_get: Mock) -> None:
+    @pytest.mark.asyncio
+    @patch("app.services.weather_service.get_weather_strategy")
+    async def test_fetch_weather_raises_on_http_error(
+        self, mock_get_strategy: Mock
+    ) -> None:
         """验证 HTTP 错误时抛出 RuntimeError。"""
-        mock_get.side_effect = httpx.HTTPError("连接超时")
+        strategy = Mock()
+        strategy.fetch = AsyncMock(side_effect=ProviderError("连接超时"))
+        mock_get_strategy.return_value = strategy
 
-        with pytest.raises(RuntimeError, match="天气 API 请求失败"):
-            fetch_weather(lat=34.26, lon=117.18)
+        with pytest.raises(RuntimeError, match="天气数据获取失败"):
+            await fetch_weather(lat=34.26, lon=117.18)
 
 
 class TestCheckWeatherWarnings:

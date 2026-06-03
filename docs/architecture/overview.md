@@ -51,3 +51,4 @@ admin-web/src/
 - 横切关注点（auth/log/telemetry）通过依赖注入，不被业务层直接 import
 - API 版本统一 v1，路径前缀 `/api/v1/`
 - 数据库迁移只用 alembic，禁止手动改表
+- 数据库统一使用 MySQL 8.x，连接串需包含 `charset=utf8mb4`

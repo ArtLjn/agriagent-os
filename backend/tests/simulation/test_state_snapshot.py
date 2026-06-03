@@ -6,8 +6,18 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base, _set_sqlite_pragma
+from app.core.database import Base
 from app.simulation.state_snapshot import DbStateSnapshot, _TABLE_PRIMARY_KEYS
+
+
+def _set_sqlite_pragma(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
 
 _test_engine = create_engine(
     "sqlite:///tests/test_simulation.db",
@@ -28,6 +38,7 @@ class TestDbStateSnapshot:
         Base.metadata.create_all(bind=_test_engine)
         db = _TestSession()
         from app.models.farm import Farm
+
         db.add(Farm(id=1, name="农场1"))
         db.add(Farm(id=2, name="农场2"))
         db.commit()
@@ -75,12 +86,24 @@ class TestDbStateSnapshot:
 
         db = self._get_db()
         try:
-            db.add(CostRecord(
-                farm_id=1, record_type="expense", category="化肥", amount=100, record_date=date(2026, 5, 26)
-            ))
-            db.add(CostRecord(
-                farm_id=2, record_type="expense", category="农药", amount=200, record_date=date(2026, 5, 26)
-            ))
+            db.add(
+                CostRecord(
+                    farm_id=1,
+                    record_type="expense",
+                    category="化肥",
+                    amount=100,
+                    record_date=date(2026, 5, 26),
+                )
+            )
+            db.add(
+                CostRecord(
+                    farm_id=2,
+                    record_type="expense",
+                    category="农药",
+                    amount=200,
+                    record_date=date(2026, 5, 26),
+                )
+            )
             db.commit()
 
             snapshot = DbStateSnapshot(db, farm_id=1)
@@ -92,8 +115,12 @@ class TestDbStateSnapshot:
             Base.metadata.drop_all(bind=_test_engine)
 
     def test_compute_diff_no_changes(self):
-        before = {"cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]}
-        after = {"cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]}
+        before = {
+            "cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]
+        }
+        after = {
+            "cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]
+        }
 
         snapshot = DbStateSnapshot(None, farm_id=1)
         diff = snapshot.compute_diff(before, after)
@@ -103,7 +130,9 @@ class TestDbStateSnapshot:
 
     def test_compute_diff_added(self):
         before = {"cost_records": []}
-        after = {"cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]}
+        after = {
+            "cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]
+        }
 
         snapshot = DbStateSnapshot(None, farm_id=1)
         diff = snapshot.compute_diff(before, after)
@@ -113,7 +142,9 @@ class TestDbStateSnapshot:
         assert diff.modified == []
 
     def test_compute_diff_removed(self):
-        before = {"cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]}
+        before = {
+            "cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]
+        }
         after = {"cost_records": []}
 
         snapshot = DbStateSnapshot(None, farm_id=1)
@@ -122,8 +153,12 @@ class TestDbStateSnapshot:
         assert diff.removed[0]["__table__"] == "cost_records"
 
     def test_compute_diff_modified(self):
-        before = {"cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]}
-        after = {"cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]}
+        before = {
+            "cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}]
+        }
+        after = {
+            "cost_records": [{"id": 1, "amount": 200, "__table__": "cost_records"}]
+        }
 
         snapshot = DbStateSnapshot(None, farm_id=1)
         diff = snapshot.compute_diff(before, after)
@@ -133,8 +168,26 @@ class TestDbStateSnapshot:
         assert "__after__" in diff.modified[0]
 
     def test_compute_diff_ignores_created_at(self):
-        before = {"cost_records": [{"id": 1, "amount": 100, "created_at": "t1", "__table__": "cost_records"}]}
-        after = {"cost_records": [{"id": 1, "amount": 100, "created_at": "t2", "__table__": "cost_records"}]}
+        before = {
+            "cost_records": [
+                {
+                    "id": 1,
+                    "amount": 100,
+                    "created_at": "t1",
+                    "__table__": "cost_records",
+                }
+            ]
+        }
+        after = {
+            "cost_records": [
+                {
+                    "id": 1,
+                    "amount": 100,
+                    "created_at": "t2",
+                    "__table__": "cost_records",
+                }
+            ]
+        }
 
         snapshot = DbStateSnapshot(None, farm_id=1)
         diff = snapshot.compute_diff(before, after)
@@ -147,7 +200,9 @@ class TestDbStateSnapshot:
         }
         after = {
             "cost_records": [{"id": 1, "amount": 100, "__table__": "cost_records"}],
-            "farm_logs": [{"id": 1, "operation_type": "浇水", "__table__": "farm_logs"}],
+            "farm_logs": [
+                {"id": 1, "operation_type": "浇水", "__table__": "farm_logs"}
+            ],
         }
 
         snapshot = DbStateSnapshot(None, farm_id=1)
@@ -162,13 +217,15 @@ class TestDbStateSnapshot:
 
     def test_normalize_record_excludes_timestamps(self):
         snapshot = DbStateSnapshot(None, farm_id=1)
-        normalized = snapshot._normalize_record({
-            "id": 1,
-            "amount": 100,
-            "created_at": "t1",
-            "updated_at": "t2",
-            "__table__": "cost_records",
-        })
+        normalized = snapshot._normalize_record(
+            {
+                "id": 1,
+                "amount": 100,
+                "created_at": "t1",
+                "updated_at": "t2",
+                "__table__": "cost_records",
+            }
+        )
         assert "created_at" not in normalized
         assert "updated_at" not in normalized
         assert "__table__" not in normalized

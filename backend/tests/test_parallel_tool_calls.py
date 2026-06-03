@@ -39,11 +39,12 @@ class TestBindToolsParallel:
     """bind_tools 根据 parallel_tool_calls 配置传入参数。"""
 
     @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_bind_tools_passes_parallel_true_by_default(
-        self, mock_session, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
     ):
         """parallel_tool_calls=True 时 bind_tools 传入该参数。"""
         mock_db = MagicMock()
@@ -69,11 +70,12 @@ class TestBindToolsParallel:
         assert call_kwargs.get("parallel_tool_calls") is True
 
     @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_bind_tools_omits_parallel_when_disabled(
-        self, mock_session, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
     ):
         """parallel_tool_calls=False 时不传入该参数。"""
         mock_db = MagicMock()

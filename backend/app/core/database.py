@@ -1,28 +1,19 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
 
 
-def _set_sqlite_pragma(dbapi_connection, _connection_record):
-    """SQLite 连接级 PRAGMA 配置。"""
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.execute("PRAGMA busy_timeout=5000")
-    cursor.close()
-
+if not settings.database_url.startswith("mysql+pymysql://"):
+    raise RuntimeError("database.url 必须使用 mysql+pymysql:// 连接串")
 
 engine = create_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False}
-    if settings.database_url.startswith("sqlite")
-    else {},
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=3600,
+    pool_pre_ping=True,
 )
-
-if settings.database_url.startswith("sqlite"):
-    event.listen(engine, "connect", _set_sqlite_pragma)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

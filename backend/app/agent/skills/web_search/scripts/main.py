@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from html import unescape
 from urllib.parse import urlencode
 
@@ -262,7 +262,7 @@ async def _fetch_page_content(url: str, max_length: int = 400) -> str | None:
                 # 清理空白
                 content = re.sub(r"\s+", " ", content).strip()
                 # 过滤掉太短的内容（可能是登录页/错误页）
-                if len(content) > 50:
+                if len(content) > 30:
                     return content[:max_length]
     except Exception:
         pass

@@ -1,32 +1,42 @@
 """Admin 用户管理 API 集成测试。"""
 
 import pytest
-from fastapi import Depends
 
-from app.api.deps import get_current_user
-from app.core.database import SessionLocal
+from app.api.deps import get_current_user, get_db
 from app.core.security import create_access_token
 from app.main import app
-from app.models.farm import Farm
 from app.models.user import User
 
 
+def _get_test_db():
+    override = app.dependency_overrides[get_db]
+    db_iter = override()
+    try:
+        db = next(db_iter)
+        yield db
+    finally:
+        db_iter.close()
+
+
 @pytest.fixture()
-def admin_user():
+def admin_user(client):
     """创建管理员用户到数据库并覆盖 get_current_user 返回管理员。"""
-    db = SessionLocal()
-    admin = User(
-        id="test-admin-001",
-        phone="99999999999",
-        password_hash="h",
-        nickname="管理员",
-        role="admin",
-        status="active",
-    )
-    db.add(admin)
-    db.commit()
-    db.refresh(admin)
-    db.close()
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        admin = User(
+            id="test-admin-001",
+            phone="99999999999",
+            password_hash="h",
+            nickname="管理员",
+            role="admin",
+            status="active",
+        )
+        db.add(admin)
+        db.commit()
+        db.refresh(admin)
+    finally:
+        db_iter.close()
 
     original = app.dependency_overrides.get(get_current_user)
     app.dependency_overrides[get_current_user] = lambda: admin
@@ -45,22 +55,25 @@ def admin_headers():
 
 
 @pytest.fixture()
-def target_user():
+def target_user(client):
     """创建一个用于禁用/启用的目标普通用户。"""
-    db = SessionLocal()
-    user = User(
-        id="test-target-001",
-        phone="11111111111",
-        password_hash="h",
-        nickname="目标用户",
-        role="user",
-        status="active",
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    db.close()
-    return user
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        user = User(
+            id="test-target-001",
+            phone="11111111111",
+            password_hash="h",
+            nickname="目标用户",
+            role="user",
+            status="active",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    finally:
+        db_iter.close()
 
 
 def test_list_users_empty(client, admin_user, admin_headers):

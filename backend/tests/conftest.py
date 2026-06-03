@@ -7,11 +7,21 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.api.deps import get_current_farm, get_current_user, get_db
-from app.core.database import Base, _set_sqlite_pragma
+from app.core.database import Base
 from app.core.security import create_access_token
 from app.main import app
 from app.models.farm import Farm
 from app.models.user import User
+
+
+def _set_sqlite_pragma(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
 
 _test_engine = create_engine(
     "sqlite:///tests/test_farm_manager.db",
@@ -67,6 +77,16 @@ def clean_db():
     yield
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def db_session():
+    """提供隔离测试数据库会话。"""
+    db = _TestSession()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 @pytest.fixture()

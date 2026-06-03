@@ -4,13 +4,17 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 
+from app.core.database import Base
 from app.models.cost import CostRecord
+from app.models.farm import Farm
 from app.schemas.cost import CostRecordCreate
 from app.services.debt_service import (
-    SUBTYPE_DEBT,
     CATEGORY_REPAY,
+    SUBTYPE_DEBT,
     count_debt_records,
     create_debt_record,
     get_debt_records,
@@ -19,12 +23,31 @@ from app.services.debt_service import (
 )
 
 
+def _set_sqlite_pragma(dbapi_connection, _connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
+
+_test_engine = create_engine(
+    "sqlite:///tests/test_debt_service.db",
+    connect_args={"check_same_thread": False},
+)
+event.listen(_test_engine, "connect", _set_sqlite_pragma)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
+
+
 @pytest.fixture
 def db():
     """提供数据库会话。"""
-    from app.core.database import SessionLocal
-
-    session = SessionLocal()
+    Base.metadata.drop_all(bind=_test_engine)
+    Base.metadata.create_all(bind=_test_engine)
+    session = _TestSession()
+    session.add(Farm(id=1, name="默认农场"))
+    session.commit()
     yield session
     session.close()
 

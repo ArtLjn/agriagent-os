@@ -2,7 +2,6 @@
 
 import pytest
 
-from app.core.database import SessionLocal
 from app.models.cost_category import CostCategory
 from app.schemas.cost_category import CostCategoryCreate
 from app.services.cost_category_service import (
@@ -14,11 +13,9 @@ from app.services.cost_category_service import (
 
 
 @pytest.fixture
-def db():
+def db(db_session):
     """提供一个数据库会话。"""
-    session = SessionLocal()
-    yield session
-    session.close()
+    yield db_session
 
 
 def test_init_default_categories(db):

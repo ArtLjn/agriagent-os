@@ -11,7 +11,7 @@ class Farm(Base):
     __tablename__ = "farms"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    name = Column(String, nullable=False)
-    location = Column(String, nullable=True)
+    name = Column(String(100), nullable=False)
+    location = Column(String(200), nullable=True)
     user_id = Column(String(36), unique=True, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

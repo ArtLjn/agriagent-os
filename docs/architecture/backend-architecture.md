@@ -86,8 +86,8 @@ flowchart TB
     end
 
     subgraph "核心层 (app/core/)"
-        Config["config.py<br/>pydantic-settings"]
-        DB["database.py<br/>SQLite WAL"]
+        Config["settings/<br/>pydantic-settings"]
+        DB["database.py<br/>MySQL 连接池"]
         Security["security.py<br/>JWT + bcrypt"]
         Logger["logger.py<br/>结构化日志"]
         LLMMgr["llm_client_manager.py<br/>多 Provider 路由"]
@@ -100,7 +100,7 @@ flowchart TB
     end
 
     subgraph "数据层"
-        SQLite[("SQLite<br/>farm_manager.db<br/>16 张表")]
+        MySQL[("MySQL 8.x<br/>farm_manager<br/>20 张表")]
         PromptFiles["prompts/<br/>snippets/ + templates<br/>config.yaml"]
         ProvidersJSON["providers.json<br/>LLM 路由配置"]
     end
@@ -134,8 +134,8 @@ flowchart TB
     AgentSvc --> Trace
     AgentAPI --> Limiter
 
-    AuthSvc & CostSvc & CropSvc & CycleSvc --> SQLite
-    ConvSvc & FarmCtx --> SQLite
+    AuthSvc & CostSvc & CropSvc & CycleSvc --> MySQL
+    ConvSvc & FarmCtx --> MySQL
 ```
 
 ---
@@ -226,7 +226,7 @@ sequenceDiagram
     participant LLM as LLM Provider
     participant SK as Skill
     participant PA as PendingAction
-    participant DB as SQLite
+    participant DB as MySQL
 
     C->>M: POST /agent/chat
     M->>L: 检查限流 (10/min)
@@ -836,8 +836,8 @@ erDiagram
 
 | 文件 | 职责 |
 |------|------|
-| `config.py` | pydantic-settings 配置中心，加载优先级：init_settings > env_vars > config.yaml |
-| `database.py` | SQLAlchemy 引擎 + Session 工厂，SQLite WAL 模式，foreign_keys=ON |
+| `settings/` | pydantic-settings 配置中心，加载优先级：init_settings > env_vars > config.yaml |
+| `database.py` | SQLAlchemy MySQL 引擎 + Session 工厂，连接池启用 pre_ping/recycle |
 | `security.py` | JWT 创建/验证 (PyJWT) + bcrypt 密码哈希 |
 | `logger.py` | 结构化日志：stdout 彩色 + rotating files，request_id 上下文变量 |
 | `seed.py` | 数据库初始化：默认农场、管理员用户、字段迁移 |
@@ -937,7 +937,7 @@ erDiagram
 | `limiter.py` | 全局 SlowAPI 限流器（IP 级） |
 | `circuit_breaker.py` | 三态熔断器（CLOSED/OPEN/HALF_OPEN），指数退避重试 |
 | `pending_actions.py` | 写操作确认系统：内存存储（5min 超时），意图检测（确认/取消/修改） |
-| `trace_collector.py` | 异步 Trace 收集：后台 flush 批量写入 SQLite |
+| `trace_collector.py` | 异步 Trace 收集：后台 flush 批量写入 MySQL |
 | `trace_context.py` | ContextVar 追踪上下文：request_id, session_id, farm_id, round |
 | `trace_dao.py` | 批量 INSERT + Token 统计 UPSERT |
 | `trace_cleaner.py` | TTL 清理：Trace 7天，Token 统计 90天，每日执行 |

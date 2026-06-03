@@ -6,7 +6,6 @@ from datetime import date
 from app.agent.prompt_renderer import render_prompt
 from app.agent.prompt_registry import PromptRegistry
 from app.models.farm import Farm
-from app.core.database import SessionLocal
 
 
 class TestFarmContextSummaryInjection:
@@ -202,23 +201,19 @@ class TestBaseJ2TemplateContent:
 class TestFarmDisplayNameFromDatabase:
     """从数据库获取 display_name 的集成测试。"""
 
-    def test_get_display_name_from_farm_model(self):
+    def test_get_display_name_from_farm_model(self, db_session):
         """Farm 模型 name 字段可读取作为 display_name。"""
-        db = SessionLocal()
-        farm = db.query(Farm).filter(Farm.id == 1).first()
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
         display_name = farm.name or "农友"
         assert display_name != ""
-        db.close()
 
-    def test_get_display_name_custom_from_database(self):
+    def test_get_display_name_custom_from_database(self, db_session):
         """Farm 模型 name 设置了自定义值时正确读取。"""
-        db = SessionLocal()
-        farm = db.query(Farm).filter(Farm.id == 1).first()
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
         original_name = farm.name
         farm.name = "老赵的农场"
-        db.commit()
+        db_session.commit()
         display_name = farm.name or "农友"
         assert display_name == "老赵的农场"
         farm.name = original_name
-        db.commit()
-        db.close()
+        db_session.commit()

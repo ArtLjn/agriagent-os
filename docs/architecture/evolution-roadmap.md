@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-05-27
+last_updated: 2026-06-03
 status: active
 ---
 
@@ -60,7 +60,7 @@ status: active
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│                      SQLite (单文件, ~6张表)                      │
+│                      MySQL 8.x (生产) / SQLite (开发)             │
 │  farms | crops | cycles | costs | cost_categories | logs         │
 │  conversations | conversation_messages | trace_records           │
 │  token_stats | guardrails_logs | idempotency_keys | agents       │
@@ -68,6 +68,13 @@ status: active
 
 外部依赖: DashScope(Qwen) | LangSmith(观测) | Open-Meteo(天气)
 ```
+
+### 2026-06-03 数据库迁移完成
+
+- 生产数据库已从 SQLite 迁移到 MySQL 8.x。
+- 后端通过 Alembic 管理 schema，启动时执行 `alembic upgrade head`。
+- 开发环境仍保留 SQLite 兼容能力，通过 `database.url` 切换。
+- SQLite 到 MySQL 全量迁移校验通过：20 张业务表，768 行数据。
 
 ---
 

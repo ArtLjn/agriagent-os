@@ -38,12 +38,12 @@ from app.api import (  # noqa: E402
 )
 from app.simulation.routes import router as simulation_router  # noqa: E402
 from app.core.config import settings  # noqa: E402
-from app.core.database import engine, Base, SessionLocal  # noqa: E402
+from app.core.database import SessionLocal  # noqa: E402
 from app.core.date_context import set_request_date  # noqa: E402
 from app.infra.limiter import limiter  # noqa: E402
 from app.core.logger import get_logger, setup_logging  # noqa: E402
 from app.agent.prompt_registry import get_registry  # noqa: E402
-from app.core.seed import migrate_cost_records, seed_admin_user, seed_default_farm  # noqa: E402
+from app.core.seed import seed_admin_user, seed_default_farm  # noqa: E402
 from app.infra.trace_cleaner import clean_expired_traces  # noqa: E402
 from app.infra.trace_collector import start_trace_system, stop_trace_system  # noqa: E402
 
@@ -64,8 +64,24 @@ async def lifespan(app: FastAPI):
             "LangSmith 已启用 | project=%s", settings.langsmith_config.project_name
         )
 
-    await asyncio.to_thread(Base.metadata.create_all, bind=engine)
-    await asyncio.to_thread(migrate_cost_records)
+    from alembic import command
+    from alembic.config import Config as AlembicConfig
+    from sqlalchemy import inspect
+
+    alembic_cfg = AlembicConfig(
+        str(Path(__file__).resolve().parent.parent / "alembic.ini")
+    )
+    alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
+    db = SessionLocal()
+    try:
+        inspector = inspect(db.bind)
+        tables = set(inspector.get_table_names())
+        if tables and "alembic_version" not in tables:
+            await asyncio.to_thread(command.stamp, alembic_cfg, "head")
+    finally:
+        db.close()
+    await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+
     db = SessionLocal()
     try:
         seed_default_farm(db)
@@ -80,6 +96,7 @@ async def lifespan(app: FastAPI):
 
     # 初始化 PromptComposer 全局单例
     from app.agent.prompt_composer import get_composer
+
     get_composer()
     logger.info("PromptComposer 初始化完成")
 

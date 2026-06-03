@@ -11,8 +11,8 @@ class CropTemplate(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
-    name = Column(String, nullable=False)
-    variety = Column(String, nullable=True)
+    name = Column(String(100), nullable=False)
+    variety = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     stages = relationship(
@@ -33,9 +33,9 @@ class GrowthStage(Base):
         ForeignKey("crop_templates.id"),
         nullable=False,
     )
-    name = Column(String, nullable=False)
+    name = Column(String(100), nullable=False)
     duration_days = Column(Integer, nullable=False)
     order_index = Column(Integer, nullable=False)
-    key_tasks = Column(String, nullable=True)
+    key_tasks = Column(String(500), nullable=True)
 
     crop_template = relationship("CropTemplate", back_populates="stages")

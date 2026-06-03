@@ -97,7 +97,8 @@ def _to_legacy_format(data) -> dict:
 def check_weather_warnings(weather_data: dict) -> list[str]:
     """检查天气数据中的灾害预警。
 
-    现在预警由 AlertScraper 从中国天气网获取，这里返回 warnings 字段。
+    优先返回 AlertScraper 获取的官方 warnings 字段；当输入是旧版
+    Open-Meteo daily 结构且没有 warnings 时，按阈值生成基础农事预警。
 
     Args:
         weather_data: 天气数据字典。
@@ -105,7 +106,36 @@ def check_weather_warnings(weather_data: dict) -> list[str]:
     Returns:
         预警信息列表。
     """
-    return weather_data.get("warnings", [])
+    warnings = weather_data.get("warnings")
+    if warnings:
+        return warnings
+
+    daily = weather_data.get("daily", {})
+    times = daily.get("time", [])
+    max_temps = daily.get("temperature_2m_max", [])
+    min_temps = daily.get("temperature_2m_min", [])
+    precipitations = daily.get("precipitation_sum", [])
+    winds = daily.get("windspeed_10m_max", [])
+
+    inferred: list[str] = []
+    for index, day in enumerate(times):
+        max_temp = max_temps[index] if index < len(max_temps) else None
+        min_temp = min_temps[index] if index < len(min_temps) else None
+        precipitation = (
+            precipitations[index] if index < len(precipitations) else None
+        )
+        wind = winds[index] if index < len(winds) else None
+
+        if max_temp is not None and max_temp >= 35:
+            inferred.append(f"{day} 高温预警：最高温 {max_temp}℃")
+        if min_temp is not None and min_temp <= 0:
+            inferred.append(f"{day} 霜冻预警：最低温 {min_temp}℃")
+        if precipitation is not None and precipitation >= 50:
+            inferred.append(f"{day} 大雨预警：降水量 {precipitation}mm")
+        if wind is not None and wind >= 17:
+            inferred.append(f"{day} 大风预警：最大风速 {wind}m/s")
+
+    return inferred
 
 
 __all__ = ["fetch_weather", "check_weather_warnings"]

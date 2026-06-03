@@ -1,6 +1,5 @@
 """天气预报 Skill。"""
 
-import re
 
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill

@@ -54,16 +54,16 @@ class TestComposerCompose:
         assert "苏州" in result
         assert "2026-05-29" in result
 
-    def test_system_base_no_hardcoded_tool_names(self, _composer):
-        """system_base 组合结果不含具体工具名。"""
+    def test_system_base_contains_tool_guidance(self, _composer):
+        """system_base 组合结果包含工具引导，且不含旧上下文变量。"""
         result = _composer.compose(
             "system_base",
             variables={"display_name": "农友"},
             current_date=date(2026, 5, 29),
         )
-        assert "get_farm_status" not in result
-        assert "get_weather_forecast" not in result
-        assert "最高优先级" not in result
+        assert "get_farm_status" in result
+        assert "get_weather_forecast" in result
+        assert "farm_context_summary" not in result
 
     def test_cost_parse_compose(self, _composer):
         """cost_parse 场景组合：snippet + template。"""

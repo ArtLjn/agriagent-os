@@ -1,7 +1,7 @@
 """get_farm_status Skill 单元测试。"""
 
 import importlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -52,8 +52,8 @@ class TestFarmStatusExecution:
     async def test_returns_farm_summary(self, mock_fcs, mock_session_local):
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_fcs.build_summary.return_value = (
-            "【农场现状】\n茬口：辣椒(开花期)\n本月花费：1250元"
+        mock_fcs.build_summary = AsyncMock(
+            return_value="【农场现状】\n茬口：辣椒(开花期)\n本月花费：1250元"
         )
 
         skill = FarmStatusSkill()
@@ -72,7 +72,7 @@ class TestFarmStatusExecution:
     async def test_handles_db_error(self, mock_fcs, mock_session_local):
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_fcs.build_summary.side_effect = Exception("DB error")
+        mock_fcs.build_summary = AsyncMock(side_effect=Exception("DB error"))
 
         skill = FarmStatusSkill()
         context = MagicMock(farm_id=1)
@@ -90,7 +90,7 @@ class TestFarmStatusExecution:
     ):
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_fcs.build_summary.return_value = "test summary"
+        mock_fcs.build_summary = AsyncMock(return_value="test summary")
 
         skill = FarmStatusSkill()
         context = MagicMock(farm_id=None)
@@ -107,7 +107,7 @@ class TestFarmStatusExecution:
     ):
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
-        mock_fcs.build_summary.return_value = "test summary"
+        mock_fcs.build_summary = AsyncMock(return_value="test summary")
 
         skill = FarmStatusSkill()
         context = MagicMock(spec=[])  # 无 farm_id 属性

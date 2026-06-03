@@ -23,8 +23,8 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
     user_id = Column(String(36), nullable=True)
-    session_id = Column(String, nullable=False, index=True, unique=True)
-    status = Column(String, nullable=False, default=ConversationStatus.ACTIVE.value)
+    session_id = Column(String(64), nullable=False, index=True, unique=True)
+    status = Column(String(20), nullable=False, default=ConversationStatus.ACTIVE.value)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_active_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -46,7 +46,7 @@ class ConversationMessage(Base):
     conversation_id = Column(
         Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
     )
-    role = Column(String, nullable=False)
+    role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     meta = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

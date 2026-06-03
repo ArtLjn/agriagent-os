@@ -23,6 +23,7 @@ class TestToolChainMap:
             "update_crop_stage",
             "settle_debt",
             "get_farm_status",
+            "web_search",
         }
         assert set(TOOL_CHAIN_MAP.keys()) == expected_keys
 

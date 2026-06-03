@@ -66,8 +66,8 @@ class TestBasePromptNoFarmContext:
         )
         assert "farm_context_summary" not in text
 
-    def test_base_prompt_no_hardcoded_tool_routing(self, _composer):
-        """Composer 组合结果不硬编码具体工具名。"""
+    def test_base_prompt_contains_tool_routing(self, _composer):
+        """Composer 组合结果包含工具路由引导，且不含旧 farm_context_summary。"""
         text = _composer.compose(
             "system_base",
             variables={
@@ -77,8 +77,9 @@ class TestBasePromptNoFarmContext:
             },
             current_date=date(2026, 5, 29),
         )
-        assert "get_farm_status" not in text
-        assert "get_weather_forecast" not in text
+        assert "get_farm_status" in text
+        assert "get_weather_forecast" in text
+        assert "farm_context_summary" not in text
 
     def test_base_prompt_renders_with_minimal_vars(self, _composer):
         """Composer 组合结果仅用最少变量即可正常渲染。"""
@@ -233,16 +234,16 @@ class TestCrossCuttingIntegration:
             assert "get_farm_status" in expanded
 
     def test_tool_chain_handles_farm_status_routing(self, _composer):
-        """get_farm_status 路由由 TOOL_CHAIN_MAP 自动处理，prompt 不硬编码。"""
-        from app.agent.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
+        """get_farm_status 路由由 TOOL_CHAIN_MAP 自动处理，prompt 保留工具引导。"""
+        from app.agent.tool_selector import expand_by_chain
 
         text = _composer.compose(
             "system_base",
             variables={"display_name": "农友"},
             current_date=date(2026, 5, 29),
         )
-        # prompt 不硬编码工具名
-        assert "get_farm_status" not in text
+        # prompt 保留工具引导，但不再使用旧 farm_context_summary。
+        assert "get_farm_status" in text
         assert "farm_context_summary" not in text
         # TOOL_CHAIN_MAP 确保查询工具能获取农场状态
         for tool in ["get_weather_forecast", "get_cost_summary", "get_crop_cycle_info"]:

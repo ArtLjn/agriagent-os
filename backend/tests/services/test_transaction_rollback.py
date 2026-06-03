@@ -2,7 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -20,6 +20,26 @@ from app.services.agent_service import (
     get_daily_advice,
     generate_report,
 )
+
+
+def _make_report_data():
+    from app.services.report_data_service import ReportData
+
+    return ReportData(
+        report_type="weekly",
+        period_start=date(2026, 6, 1),
+        period_end=date(2026, 6, 7),
+        overview={
+            "active_cycles": 1,
+            "log_count": 0,
+            "total_cost": "0",
+            "total_income": "0",
+            "net_profit": "0",
+        },
+        cycles=[],
+        costs=[],
+        logs=[],
+    )
 
 
 class TestCostServiceRollback:
@@ -173,10 +193,12 @@ class TestAgentServiceRollback:
         mock_db.rollback.assert_called_once()
 
     @patch("app.services.agent_service.invoke_advisor")
+    @patch("app.services.agent_service.get_composer")
     def test_get_daily_advice_rollback_on_commit_failure(
-        self, mock_invoke: MagicMock
+        self, mock_get_composer: MagicMock, mock_invoke: MagicMock
     ) -> None:
         """commit 失败时应调用 rollback 并重新抛出异常。"""
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = "建议"
         mock_db = MagicMock()
         # 缓存查询返回 None，使 get_daily_advice 走生成新建议分支
@@ -188,12 +210,18 @@ class TestAgentServiceRollback:
 
         mock_db.rollback.assert_called_once()
 
-    @patch("app.services.agent_service.generate_cycle_report")
+    @patch("app.services.agent_service.get_llm")
+    @patch("app.services.report_data_service.get_weekly_report_data")
     def test_generate_report_rollback_on_commit_failure(
-        self, mock_generate: MagicMock
+        self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
     ) -> None:
         """commit 失败时应调用 rollback 并重新抛出异常。"""
-        mock_generate.return_value = "报告内容"
+        mock_report_data.return_value = _make_report_data()
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=MagicMock(content='{"summary":"报告内容","advice_items":[]}')
+        )
+        mock_get_llm.return_value = mock_llm
         mock_db = MagicMock()
         mock_db.commit.side_effect = RuntimeError("DB error")
 

@@ -1,9 +1,7 @@
 """用户设置 API 测试。"""
 
-import pytest
 from fastapi.testclient import TestClient
 
-from app.core.database import SessionLocal
 from app.models.user_setting import UserSetting
 
 
@@ -20,21 +18,11 @@ class TestGetSettings:
         assert data["default_lat"] is None
         assert data["default_lon"] is None
 
-    def test_no_settings_returns_defaults(self, client: TestClient, auth_headers):
-        """无设置记录时返回默认值。"""
-        resp = client.get("/settings", headers=auth_headers)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["display_name"] == "测试用户"
-        assert data["default_city"] is None
-        assert data["default_lat"] is None
-        assert data["default_lon"] is None
-
 
 class TestUpdateSettings:
     """PUT /settings 测试。"""
 
-    def test_create_city_settings(self, client: TestClient, auth_headers):
+    def test_create_city_settings(self, client: TestClient, auth_headers, db_session):
         """首次设置城市，自动创建记录。"""
         resp = client.put(
             "/settings",
@@ -52,9 +40,9 @@ class TestUpdateSettings:
         assert data["default_lon"] == 116.41
 
         # 验证数据库
-        db = SessionLocal()
-        setting = db.query(UserSetting).filter_by(user_id="test-user-001").first()
-        db.close()
+        setting = (
+            db_session.query(UserSetting).filter_by(user_id="test-user-001").first()
+        )
         assert setting is not None
         assert setting.default_city == "北京"
 

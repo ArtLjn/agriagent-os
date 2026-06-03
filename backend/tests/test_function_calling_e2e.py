@@ -26,11 +26,12 @@ class TestFunctionCallingE2E:
     """端到端验证 function calling 链路。"""
 
     @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_weather_query_triggers_tool_call(
-        self, mock_session, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
     ):
         """天气查询应触发 get_weather_forecast tool call。"""
         mock_db = MagicMock()
@@ -64,11 +65,12 @@ class TestFunctionCallingE2E:
         mock_llm.ainvoke.assert_called()
 
     @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_chat_query_does_not_trigger_tool_call(
-        self, mock_session, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
     ):
         """闲聊不应触发 tool call，直接返回文本。"""
         mock_db = MagicMock()
@@ -93,11 +95,12 @@ class TestFunctionCallingE2E:
         assert last_msg.content == "你好老李，有啥事？"
 
     @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_pre_filter_reduces_tools_before_binding(
-        self, mock_session, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
     ):
         """天气查询应只绑定 get_weather_forecast，不应绑定其他工具。"""
         mock_db = MagicMock()
@@ -132,11 +135,12 @@ class TestFunctionCallingE2E:
         assert "get_cost_summary" not in bound_names
 
     @patch("app.agent.graph.get_langchain_tools")
+    @patch("app.agent.graph.check_quota", return_value=True)
     @patch("app.agent.graph.get_llm")
     @patch("app.agent.graph.SessionLocal")
     @pytest.mark.asyncio
     async def test_multi_turn_bypasses_pre_filter(
-        self, mock_session, mock_get_llm, mock_get_tools
+        self, mock_session, mock_get_llm, _mock_quota, mock_get_tools
     ):
         """多轮 tool call 场景下，第二轮应绑定全量工具。"""
         mock_db = MagicMock()

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agent.graph import _llm_node
+from app.agent.prompt_cache import clear_all_caches
 
 
 class _FakeFarm:
@@ -21,9 +22,16 @@ class _FakeUser:
 
 
 class _FakeUserSetting:
-    def __init__(self, default_city: str | None):
+    def __init__(
+        self,
+        default_city: str | None,
+        default_lat: float | None = None,
+        default_lon: float | None = None,
+    ):
         self.user_id = "u1"
         self.default_city = default_city
+        self.default_lat = default_lat
+        self.default_lon = default_lon
 
 
 def _make_query_side_effect(*results):
@@ -65,21 +73,22 @@ def _build_mock_session(*query_results):
 @pytest.fixture()
 def mock_env():
     """mock 掉所有外部依赖：LLM、collector、quota、prompt 渲染等。"""
+    clear_all_caches()
     with (
         patch("app.agent.graph.get_llm") as mock_get_llm,
         patch("app.agent.graph.get_langchain_tools") as mock_get_tools,
-        patch("app.agent.graph.get_registry"),
-        patch("app.agent.graph.render_prompt") as mock_render,
+        patch("app.agent.graph.get_composer") as mock_get_composer,
         patch("app.agent.graph.get_collector") as mock_get_collector,
         patch("app.agent.graph.get_request_date") as mock_get_date,
         patch("app.agent.graph.check_quota", return_value=True),
         patch("app.agent.graph.select_tools", return_value=[]),
         patch("app.agent.graph._get_classifier", return_value=None),
-        patch("app.agent.graph.farm_context_service.build_summary", return_value=""),
     ):
         mock_get_tools.return_value = []
         mock_get_date.return_value = __import__("datetime").date(2026, 5, 29)
-        mock_render.return_value = "system prompt"
+        mock_composer = MagicMock()
+        mock_composer.compose.return_value = "system prompt"
+        mock_get_composer.return_value = mock_composer
         mock_get_collector.return_value = MagicMock()
         llm = MagicMock()
         llm.model_name = "test-model"
@@ -92,7 +101,8 @@ def mock_env():
             ),
         )
         mock_get_llm.return_value = llm
-        yield mock_render
+        yield mock_composer.compose
+    clear_all_caches()
 
 
 async def _run_llm_node(mock_render, *query_results):

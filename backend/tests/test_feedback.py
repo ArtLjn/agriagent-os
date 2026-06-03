@@ -1,6 +1,5 @@
 """反馈功能测试。"""
 
-from app.core.database import SessionLocal
 from app.models.conversation import Conversation, ConversationMessage
 from app.services.feedback_service import get_feedback_stats, submit_feedback
 
@@ -20,51 +19,39 @@ def _seed_message(db) -> int:
     return msg.id
 
 
-def test_submit_good_feedback():
+def test_submit_good_feedback(db_session):
     """提交正面评价。"""
-    db = SessionLocal()
-    try:
-        msg_id = _seed_message(db)
-        record = submit_feedback(
-            db, user_id="test-user", message_id=msg_id, rating="good"
-        )
+    msg_id = _seed_message(db_session)
+    record = submit_feedback(
+        db_session, user_id="test-user", message_id=msg_id, rating="good"
+    )
 
-        assert record.rating == "good"
-        assert record.id is not None
-    finally:
-        db.close()
+    assert record.rating == "good"
+    assert record.id is not None
 
 
-def test_submit_bad_feedback_with_correction():
+def test_submit_bad_feedback_with_correction(db_session):
     """提交负面评价 + 修正。"""
-    db = SessionLocal()
-    try:
-        msg_id = _seed_message(db)
-        record = submit_feedback(
-            db,
-            user_id="test-user",
-            message_id=msg_id,
-            rating="bad",
-            correction="应该说...",
-        )
+    msg_id = _seed_message(db_session)
+    record = submit_feedback(
+        db_session,
+        user_id="test-user",
+        message_id=msg_id,
+        rating="bad",
+        correction="应该说...",
+    )
 
-        assert record.rating == "bad"
-        assert record.correction == "应该说..."
-    finally:
-        db.close()
+    assert record.rating == "bad"
+    assert record.correction == "应该说..."
 
 
-def test_feedback_stats():
+def test_feedback_stats(db_session):
     """统计反馈数据。"""
-    db = SessionLocal()
-    try:
-        msg_id = _seed_message(db)
-        submit_feedback(db, "u1", msg_id, "good")
-        submit_feedback(db, "u2", msg_id, "bad")
-        stats = get_feedback_stats(db)
+    msg_id = _seed_message(db_session)
+    submit_feedback(db_session, "u1", msg_id, "good")
+    submit_feedback(db_session, "u2", msg_id, "bad")
+    stats = get_feedback_stats(db_session)
 
-        assert stats["total"] >= 2
-        assert stats["good"] >= 1
-        assert stats["bad"] >= 1
-    finally:
-        db.close()
+    assert stats["total"] >= 2
+    assert stats["good"] >= 1
+    assert stats["bad"] >= 1

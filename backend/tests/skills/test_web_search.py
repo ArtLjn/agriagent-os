@@ -434,7 +434,11 @@ class TestFormatResults:
             "infoboxes": [],
         }
         result = await _format_results("test", data)
-        lines = [l for l in result.split("\n") if l.startswith(("[1]", "[2]", "[3]"))]
+        lines = [
+            line
+            for line in result.split("\n")
+            if line.startswith(("[1]", "[2]", "[3]"))
+        ]
         assert "高分" in lines[0]
         assert "中分" in lines[1]
         assert "低分" in lines[2]

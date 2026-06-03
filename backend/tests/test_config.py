@@ -10,7 +10,10 @@ class TestYamlConfig:
     def test_load_from_yaml_file(self, tmp_path):
         config_data = {
             "server": {"host": "127.0.0.1", "port": 9000},
-            "database": {"url": "sqlite:///./test.db"},
+            "database": {
+                "url": "mysql+pymysql://tester:pass@localhost:3306/test_db"
+                "?charset=utf8mb4"
+            },
             "ai": {
                 "model": "test-model",
                 "api_key": "test-key",
@@ -37,7 +40,7 @@ class TestYamlConfig:
             settings = Settings(_config_path="/nonexistent/config.yaml")
         assert settings.server.host == "0.0.0.0"
         assert settings.server.port == 8000
-        assert "farm_manager.db" in settings.database.url
+        assert settings.database.url.startswith("mysql+pymysql://")
 
     def test_env_var_overrides_yaml(self, tmp_path):
         config_data = {
@@ -60,7 +63,7 @@ class TestYamlConfig:
         from app.core.config import Settings
 
         settings = Settings(_config_path="/nonexistent/config.yaml")
-        assert "farm_manager.db" in settings.database_url
+        assert settings.database_url.startswith("mysql+pymysql://")
         assert settings.project_name == "Farm Manager API"
         assert settings.weather_latitude == 34.26
 
@@ -69,7 +72,7 @@ class TestAIConfig:
     def test_ai_config_default_model(self):
         from app.core.config import AIConfig
 
-        assert AIConfig().model == "qwen3.6-flash-2026-04-16"
+        assert AIConfig().model == "qwen3.6-35b-a3b"
 
     def test_ai_config_default_enable_thinking_false(self):
         from app.core.config import AIConfig

@@ -7,7 +7,7 @@
 import time
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,6 +18,8 @@ from app.services.farm_context_service import (
     build_summary,
     clear_context_cache,
 )
+
+pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture(autouse=True)
@@ -150,9 +152,9 @@ class TestBuildSummaryWithActiveCycles:
     """有活跃茬口时的摘要组装测试。"""
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_summary_contains_all_sections(self, mock_weather_svc):
+    async def test_summary_contains_all_sections(self, mock_weather_svc):
         """摘要应包含所有五个部分：茬口、农事、欠账、花费、天气。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
 
         cycles = [
             _make_cycle(
@@ -167,7 +169,7 @@ class TestBuildSummaryWithActiveCycles:
         ]
         db = _make_db_session(cycles=cycles, logs=logs, monthly_cost=Decimal("5800"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert "茬口" in result
         assert "农事" in result
@@ -177,24 +179,24 @@ class TestBuildSummaryWithActiveCycles:
         mock_weather_svc.fetch_weather.assert_called_once()
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_summary_includes_current_stage(self, mock_weather_svc):
+    async def test_summary_includes_current_stage(self, mock_weather_svc):
         """茬口行应包含当前阶段名称。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
 
         cycles = [
             _make_cycle("秋季豆角", [_make_stage("播种期", is_current=1)]),
         ]
         db = _make_db_session(cycles=cycles)
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert "秋季豆角" in result
         assert "播种期" in result
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_summary_includes_recent_logs(self, mock_weather_svc):
+    async def test_summary_includes_recent_logs(self, mock_weather_svc):
         """近期农事应包含最近 3 天内的记录。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
 
         today = date.today()
         logs = [
@@ -204,7 +206,7 @@ class TestBuildSummaryWithActiveCycles:
         ]
         db = _make_db_session(logs=logs, monthly_cost=Decimal("0"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert "施肥" in result
         assert "浇水" in result
@@ -220,12 +222,12 @@ class TestBuildSummaryNoActiveCycles:
     """无活跃茬口时的摘要组装测试。"""
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_no_active_cycles_shows_placeholder(self, mock_weather_svc):
+    async def test_no_active_cycles_shows_placeholder(self, mock_weather_svc):
         """无活跃茬口时，应显示「当前无种植计划」。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
         db = _make_db_session(cycles=[], monthly_cost=Decimal("0"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert "当前无种植计划" in result
 
@@ -239,14 +241,14 @@ class TestTrimmingRules:
     """各类型数据硬上限裁剪测试。"""
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_trim_cycles_to_three(self, mock_weather_svc):
+    async def test_trim_cycles_to_three(self, mock_weather_svc):
         """超过 3 个茬口时只取前 3 个。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
 
         cycles = [_make_cycle(f"作物{i}", [_make_stage(f"阶段{i}")]) for i in range(5)]
         db = _make_db_session(cycles=cycles, monthly_cost=Decimal("0"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         # 前 3 个应出现，第 4、5 个不应出现
         assert "作物0" in result
@@ -256,15 +258,15 @@ class TestTrimmingRules:
         assert "作物4" not in result
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_trim_logs_to_three(self, mock_weather_svc):
+    async def test_trim_logs_to_three(self, mock_weather_svc):
         """超过 3 条农事记录时只取前 3 条。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
 
         today = date.today()
         logs = [_make_log(f"操作{i}", today - timedelta(days=i)) for i in range(5)]
         db = _make_db_session(logs=logs, monthly_cost=Decimal("0"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert "操作0" in result
         assert "操作1" in result
@@ -273,9 +275,9 @@ class TestTrimmingRules:
         assert "操作4" not in result
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_summary_length_within_limit(self, mock_weather_svc):
+    async def test_summary_length_within_limit(self, mock_weather_svc):
         """摘要总长度应不超过 300 字。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
 
         # 构造大量数据使摘要可能超长
         cycles = [
@@ -291,7 +293,7 @@ class TestTrimmingRules:
         ]
         db = _make_db_session(cycles=cycles, logs=logs, monthly_cost=Decimal("99999"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert len(result) <= _MAX_LENGTH
 
@@ -386,26 +388,26 @@ class TestBuildSummaryCacheIntegration:
     """build_summary 与缓存集成测试。"""
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_second_call_hits_cache(self, mock_weather_svc):
+    async def test_second_call_hits_cache(self, mock_weather_svc):
         """第二次调用 build_summary 应命中缓存，不再查库。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
         clear_context_cache()
 
         db = _make_db_session(monthly_cost=Decimal("100"))
-        result1 = build_summary(db, farm_id=1)
+        result1 = await build_summary(db, farm_id=1)
 
         # 用新的 db mock（查询会失败如果被调用）
         db2 = MagicMock()
         db2.query.side_effect = AssertionError("不应该再查库")
 
-        result2 = build_summary(db2, farm_id=1)
+        result2 = await build_summary(db2, farm_id=1)
 
         assert result1 == result2
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_different_farm_id_not_shared(self, mock_weather_svc):
+    async def test_different_farm_id_not_shared(self, mock_weather_svc):
         """不同 farm_id 的缓存应互相独立。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
         clear_context_cache()
 
         db1 = _make_db_session(
@@ -417,8 +419,8 @@ class TestBuildSummaryCacheIntegration:
             monthly_cost=Decimal("200"),
         )
 
-        result1 = build_summary(db1, farm_id=1)
-        result2 = build_summary(db2, farm_id=2)
+        result1 = await build_summary(db1, farm_id=1)
+        result2 = await build_summary(db2, farm_id=2)
 
         assert "农场1作物" in result1
         assert "农场2作物" in result2
@@ -434,22 +436,22 @@ class TestMonthlyCost:
     """月度成本汇总测试。"""
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_monthly_cost_displayed(self, mock_weather_svc):
+    async def test_monthly_cost_displayed(self, mock_weather_svc):
         """月度花费金额应出现在摘要中。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
         db = _make_db_session(monthly_cost=Decimal("12345.67"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert "12345.67" in result
 
     @patch("app.services.farm_context_service.weather_service")
-    def test_zero_monthly_cost(self, mock_weather_svc):
+    async def test_zero_monthly_cost(self, mock_weather_svc):
         """当月无花费时，应显示 0。"""
-        mock_weather_svc.fetch_weather.return_value = _make_weather_data()
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
         db = _make_db_session(monthly_cost=Decimal("0"))
 
-        result = build_summary(db, farm_id=1)
+        result = await build_summary(db, farm_id=1)
 
         assert "0" in result
 
@@ -462,15 +464,15 @@ class TestMonthlyCost:
 class TestWeatherFallback:
     """天气服务调用失败时的降级测试。"""
 
-    def test_weather_failure_shows_fallback(self):
+    async def test_weather_failure_shows_fallback(self):
         """天气 API 失败时，摘要应包含降级提示而不是报错。"""
         with patch(
             "app.services.farm_context_service.weather_service"
         ) as mock_weather_svc:
-            mock_weather_svc.fetch_weather.side_effect = RuntimeError("API 超时")
+            mock_weather_svc.fetch_weather = AsyncMock(side_effect=RuntimeError("API 超时"))
             clear_context_cache()
 
             db = _make_db_session(monthly_cost=Decimal("0"))
-            result = build_summary(db, farm_id=1)
+            result = await build_summary(db, farm_id=1)
 
             assert "暂无天气数据" in result

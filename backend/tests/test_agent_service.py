@@ -1,4 +1,5 @@
 from datetime import datetime
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,6 +22,26 @@ def _make_mock_db() -> MagicMock:
     # 让缓存查询链式调用返回 None，确保走 LLM 路径
     mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
     return mock_db
+
+
+def _make_report_data():
+    from app.services.report_data_service import ReportData
+
+    return ReportData(
+        report_type="weekly",
+        period_start=date(2026, 6, 1),
+        period_end=date(2026, 6, 7),
+        overview={
+            "active_cycles": 1,
+            "log_count": 0,
+            "total_cost": "0",
+            "total_income": "0",
+            "net_profit": "0",
+        },
+        cycles=[],
+        costs=[],
+        logs=[],
+    )
 
 
 class TestChatWithAgent:
@@ -193,11 +214,13 @@ class TestGetDailyAdvice:
     """测试每日建议服务。"""
 
     @pytest.mark.asyncio
+    @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_returns_structured_items(
-        self, mock_invoke: AsyncMock
+        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
     ) -> None:
         """验证每日建议生成结构化 items 并保存（旧数组格式）。"""
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = (
             '[{"title":"施肥","detail":"生长期需追肥","priority":1,"icon":"🌱"}]'
         )
@@ -212,11 +235,13 @@ class TestGetDailyAdvice:
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_new_format_with_preview(
-        self, mock_invoke: AsyncMock
+        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
     ) -> None:
         """验证新格式（含 preview + items）正确解析。"""
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = (
             '{"preview":"今日需浇水","items":['
             '{"title":"浇水","detail":"土壤干燥需补水","priority":1,"icon":"💧"}'
@@ -232,11 +257,13 @@ class TestGetDailyAdvice:
         assert result.items[0].icon == "💧"
 
     @pytest.mark.asyncio
+    @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_old_format_backward_compatible(
-        self, mock_invoke: AsyncMock
+        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
     ) -> None:
         """验证旧数组格式仍然兼容。"""
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = (
             '[{"title":"除草","detail":"杂草影响生长","priority":2,"icon":"🌿"},'
             '{"title":"施肥","detail":"补充氮肥","priority":1,"icon":"🌱"}]'
@@ -254,11 +281,13 @@ class TestGetDailyAdvice:
         assert result.items[1].title == "除草"
 
     @pytest.mark.asyncio
+    @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_fallback_on_plain_text(
-        self, mock_invoke: AsyncMock
+        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
     ) -> None:
         """验证 LLM 返回纯文本时 fallback 为单条 item。"""
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = "今日建议：施肥。"
         mock_db = _make_mock_db()
 
@@ -275,18 +304,26 @@ class TestGenerateReport:
     """测试报告生成服务。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.generate_cycle_report", new_callable=AsyncMock)
+    @patch("app.services.agent_service.get_llm")
+    @patch("app.services.report_data_service.get_weekly_report_data")
     async def test_generate_report_returns_content(
-        self, mock_generate: AsyncMock
+        self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
     ) -> None:
         """验证报告生成并保存。"""
-        mock_generate.return_value = "报告内容..."
+        mock_report_data.return_value = _make_report_data()
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=MagicMock(
+                content='{"summary":"报告内容...","advice_items":[]}'
+            )
+        )
+        mock_get_llm.return_value = mock_llm
         mock_db = _make_mock_db()
 
         result = await generate_report(
             mock_db, farm_id=1, cycle_id=1, report_type="weekly"
         )
 
-        assert result.content == "报告内容..."
+        assert "报告内容..." in result.content
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()

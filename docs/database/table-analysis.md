@@ -1,7 +1,7 @@
-# Farm Manager 数据库表结构分析
+# Farm Manager 旧 SQLite 表结构分析
 
 > 生成时间：2026-05-27
-> 数据库：SQLite（farm_manager.db）
+> 数据库：SQLite（farm_manager.db，历史快照；生产已迁移到 MySQL）
 > 共 17 张表
 
 ---
