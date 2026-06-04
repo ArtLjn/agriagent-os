@@ -83,6 +83,19 @@ class UpdateUserQuotaRequest(BaseModel):
     token_weekly_limit: int | None = Field(None, ge=0)
 
 
+class BatchUpdateUserQuotaRequest(UpdateUserQuotaRequest):
+    """批量修改用户 Token 配额请求。"""
+
+    user_ids: list[str] = Field(..., min_length=1, max_length=100)
+
+
+class BatchUpdateUserQuotaResponse(BaseModel):
+    """批量修改用户 Token 配额响应。"""
+
+    updated_count: int
+    user_ids: list[str]
+
+
 class UserQuotaOverviewItem(BaseModel):
     """用户配额概览项。"""
 

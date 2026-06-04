@@ -31,6 +31,15 @@ export interface UpdateUserQuotaRequest {
   token_weekly_limit?: number | null;
 }
 
+export interface BatchUpdateUserQuotaRequest extends UpdateUserQuotaRequest {
+  user_ids: string[];
+}
+
+export interface BatchUpdateUserQuotaResponse {
+  updated_count: number;
+  user_ids: string[];
+}
+
 export interface UserQuotaOverviewItem {
   user_id: string;
   nickname: string;
@@ -84,6 +93,9 @@ export const usersApi = {
 
   updateQuota: (userId: string, data: UpdateUserQuotaRequest) =>
     apiClient.put<UserQuotaStatus>(`/admin/users/${userId}/quota`, data),
+
+  batchUpdateQuota: (data: BatchUpdateUserQuotaRequest) =>
+    apiClient.put<BatchUpdateUserQuotaResponse>("/admin/users/quota/batch", data),
 
   getQuotaOverview: (params?: ListQuotaOverviewParams) =>
     apiClient.get<UserQuotaOverviewResponse>("/admin/users/quota-overview", { params }),

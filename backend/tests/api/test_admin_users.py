@@ -251,6 +251,48 @@ def test_update_user_quota(client, admin_user, admin_headers, quota_user):
         db_iter.close()
 
 
+def test_batch_update_user_quota(client, admin_user, admin_headers, target_user, quota_user):
+    """批量更新用户配额，支持内部用户自定义用量。"""
+    resp = client.put(
+        "/admin/users/quota/batch",
+        json={
+            "user_ids": [target_user.id, quota_user.id],
+            "token_monthly_limit": 9000000,
+            "token_weekly_limit": 2000000,
+        },
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["updated_count"] == 2
+    assert sorted(data["user_ids"]) == sorted([target_user.id, quota_user.id])
+
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        refreshed = db.query(User).filter(User.id.in_([target_user.id, quota_user.id])).all()
+        assert {user.token_monthly_limit for user in refreshed} == {9000000}
+        assert {user.token_weekly_limit for user in refreshed} == {2000000}
+    finally:
+        db_iter.close()
+
+
+def test_batch_update_user_quota_rejects_empty_user_ids(
+    client, admin_user, admin_headers
+):
+    """批量更新配额必须选择至少一个用户。"""
+    resp = client.put(
+        "/admin/users/quota/batch",
+        json={
+            "user_ids": [],
+            "token_monthly_limit": 1000,
+            "token_weekly_limit": 100,
+        },
+        headers=admin_headers,
+    )
+    assert resp.status_code == 422
+
+
 def test_quota_overview(client, admin_user, admin_headers, quota_user):
     """分页查询用户配额概览并支持状态筛选。"""
     resp = client.get(

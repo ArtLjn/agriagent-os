@@ -14,12 +14,14 @@ import {
   Row,
   Col,
   Card,
+  InputNumber,
 } from "antd";
 import {
   TeamOutlined,
   StopOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -36,6 +38,8 @@ const BG_CARD = "#21262d";
 const BORDER = "#30363d";
 const TEXT_SECONDARY = "#8b949e";
 const ACCENT = "#58a6ff";
+const DEFAULT_MONTHLY_LIMIT = 3000000;
+const DEFAULT_WEEKLY_LIMIT = 750000;
 
 const statusFilters = [
   { label: "全部", value: "" },
@@ -55,6 +59,13 @@ export default function Users() {
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [detailQuota, setDetailQuota] = useState<UserQuotaStatus | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [quotaModalOpen, setQuotaModalOpen] = useState(false);
+  const [quotaMode, setQuotaMode] = useState<"single" | "batch">("single");
+  const [quotaTarget, setQuotaTarget] = useState<UserListItem | null>(null);
+  const [monthlyLimit, setMonthlyLimit] = useState<number | null>(DEFAULT_MONTHLY_LIMIT);
+  const [weeklyLimit, setWeeklyLimit] = useState<number | null>(DEFAULT_WEEKLY_LIMIT);
+  const [quotaSaving, setQuotaSaving] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -130,6 +141,67 @@ export default function Users() {
         }
       },
     });
+  };
+
+  const openSingleQuotaModal = (record: UserListItem) => {
+    setQuotaMode("single");
+    setQuotaTarget(record);
+    setMonthlyLimit(record.quota?.monthly_limit ?? DEFAULT_MONTHLY_LIMIT);
+    setWeeklyLimit(record.quota?.weekly_limit ?? DEFAULT_WEEKLY_LIMIT);
+    setQuotaModalOpen(true);
+  };
+
+  const openBatchQuotaModal = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning("请先选择用户");
+      return;
+    }
+    setQuotaMode("batch");
+    setQuotaTarget(null);
+    setMonthlyLimit(DEFAULT_MONTHLY_LIMIT);
+    setWeeklyLimit(DEFAULT_WEEKLY_LIMIT);
+    setQuotaModalOpen(true);
+  };
+
+  const handleRestoreDefaultQuota = () => {
+    setMonthlyLimit(null);
+    setWeeklyLimit(null);
+  };
+
+  const handleSaveQuota = async () => {
+    const userIds = quotaMode === "single"
+      ? quotaTarget ? [quotaTarget.id] : []
+      : selectedRowKeys.map(String);
+    if (userIds.length === 0) {
+      message.warning("请先选择用户");
+      return;
+    }
+
+    setQuotaSaving(true);
+    try {
+      const payload = {
+        token_monthly_limit: monthlyLimit,
+        token_weekly_limit: weeklyLimit,
+      };
+      if (quotaMode === "single") {
+        await usersApi.updateQuota(userIds[0], payload);
+        message.success("额度已更新");
+      } else {
+        const res = await usersApi.batchUpdateQuota({ user_ids: userIds, ...payload });
+        message.success(`已更新 ${res.data.updated_count} 个用户`);
+        setSelectedRowKeys([]);
+      }
+      setQuotaModalOpen(false);
+      await fetchUsers();
+      if (detail && userIds.includes(detail.id)) {
+        const quotaRes = await usersApi.getQuota(detail.id);
+        setDetailQuota(quotaRes.data);
+      }
+    } catch {
+      message.error("额度更新失败");
+    } finally {
+      setQuotaSaving(false);
+    }
   };
 
   const activeCount = users.filter((u) => u.status === "active").length;
@@ -230,11 +302,14 @@ export default function Users() {
     {
       title: "操作",
       key: "action",
-      width: 160,
+      width: 220,
       render: (_: unknown, record: UserListItem) => (
         <Space>
           <Button type="link" size="small" onClick={() => handleViewDetail(record.id)}>
             详情
+          </Button>
+          <Button type="link" size="small" onClick={() => openSingleQuotaModal(record)}>
+            设置额度
           </Button>
           <Button
             type="link"
@@ -318,12 +393,23 @@ export default function Users() {
             setPage(1);
           }}
         />
+        <Button
+          icon={<SettingOutlined />}
+          disabled={selectedRowKeys.length === 0}
+          onClick={openBatchQuotaModal}
+        >
+          批量设置额度{selectedRowKeys.length ? `（${selectedRowKeys.length}）` : ""}
+        </Button>
       </Space>
 
       <Table<UserListItem>
         columns={columns}
         dataSource={users}
         rowKey="id"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
         loading={loading}
         pagination={{
           current: page,
@@ -334,6 +420,57 @@ export default function Users() {
         }}
         style={{ background: BG_CARD, borderRadius: 8 }}
       />
+
+      <Modal
+        title={quotaMode === "single" ? "设置用户额度" : "批量设置额度"}
+        open={quotaModalOpen}
+        onCancel={() => setQuotaModalOpen(false)}
+        onOk={handleSaveQuota}
+        confirmLoading={quotaSaving}
+        okText="保存"
+        cancelText="取消"
+        width={520}
+      >
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <div style={{ color: TEXT_SECONDARY }}>
+            {quotaMode === "single" && quotaTarget
+              ? `当前用户：${quotaTarget.nickname}（${quotaTarget.phone}）`
+              : `将更新 ${selectedRowKeys.length} 个已选用户`}
+          </div>
+          <div>
+            <div style={{ marginBottom: 8 }}>月 Token 额度</div>
+            <InputNumber
+              min={0}
+              precision={0}
+              value={monthlyLimit}
+              placeholder="输入自定义月额度"
+              style={{ width: "100%" }}
+              formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+              parser={(value) => Number(value?.replace(/,/g, "") || 0)}
+              onChange={(value) => setMonthlyLimit(value)}
+            />
+          </div>
+          <div>
+            <div style={{ marginBottom: 8 }}>周 Token 额度</div>
+            <InputNumber
+              min={0}
+              precision={0}
+              value={weeklyLimit}
+              placeholder="输入自定义周额度"
+              style={{ width: "100%" }}
+              formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+              parser={(value) => Number(value?.replace(/,/g, "") || 0)}
+              onChange={(value) => setWeeklyLimit(value)}
+            />
+          </div>
+          <Space>
+            <Button onClick={handleRestoreDefaultQuota}>恢复系统默认额度</Button>
+            <span style={{ color: TEXT_SECONDARY, fontSize: 12 }}>
+              恢复后按后端系统配置生效；填 0 表示禁止使用。
+            </span>
+          </Space>
+        </Space>
+      </Modal>
 
       <Modal
         title="用户详情"

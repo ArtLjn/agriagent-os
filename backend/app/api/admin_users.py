@@ -10,6 +10,8 @@ from app.schemas.admin_user import (
     AdminUserDetailResponse,
     AdminUserListItem,
     AdminUserListResponse,
+    BatchUpdateUserQuotaRequest,
+    BatchUpdateUserQuotaResponse,
     UpdateUserQuotaRequest,
     UpdateUserStatusRequest,
     UpdateUserStatusResponse,
@@ -170,6 +172,33 @@ def get_user_detail(
         farm_id=farm.id if farm else None,
         farm_name=farm.name if farm else None,
         farm_location=farm.location if farm else None,
+    )
+
+
+@router.put("/quota/batch", response_model=BatchUpdateUserQuotaResponse)
+def batch_update_user_quota(
+    req: BatchUpdateUserQuotaRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> BatchUpdateUserQuotaResponse:
+    """批量修改用户 Token 配额。"""
+    users = db.query(User).filter(User.id.in_(req.user_ids)).all()
+    if len(users) != len(set(req.user_ids)):
+        found_ids = {user.id for user in users}
+        missing_ids = [user_id for user_id in req.user_ids if user_id not in found_ids]
+        raise HTTPException(
+            status_code=404,
+            detail=f"用户不存在: {', '.join(missing_ids)}",
+        )
+
+    for user in users:
+        user.token_monthly_limit = req.token_monthly_limit
+        user.token_weekly_limit = req.token_weekly_limit
+    db.commit()
+
+    return BatchUpdateUserQuotaResponse(
+        updated_count=len(users),
+        user_ids=[user.id for user in users],
     )
 
 
