@@ -11,15 +11,21 @@ class TokenDailyStats(Base):
     __tablename__ = "token_daily_stats"
     __table_args__ = (
         UniqueConstraint(
-            "farm_id", "date", "model", "call_type", name="uq_token_stats"
+            "user_id",
+            "farm_id",
+            "date",
+            "model",
+            "call_type",
+            name="uq_token_stats",
         ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    farm_id = Column(Integer, nullable=False)
-    date = Column(String(10), nullable=False)  # YYYY-MM-DD
+    user_id = Column(String(36), nullable=True, index=True)
+    farm_id = Column(Integer, nullable=False, index=True)
+    date = Column(String(10), nullable=False)
     model = Column(String(100), nullable=False)
-    call_type = Column(String(20), nullable=False)  # chat / daily_advice / report
+    call_type = Column(String(20), nullable=False)
     prompt_tokens = Column(Integer, default=0)
     completion_tokens = Column(Integer, default=0)
     total_tokens = Column(Integer, default=0)

@@ -2,7 +2,7 @@
 
 import enum
 
-from sqlalchemy import Column, DateTime, String, func
+from sqlalchemy import Column, DateTime, Integer, String, func
 
 from app.core.database import Base
 
@@ -29,4 +29,6 @@ class User(Base):
     avatar_url = Column(String(500), nullable=True)
     role = Column(String(20), nullable=False, default=UserRole.USER.value)
     status = Column(String(20), nullable=False, default=UserStatus.ACTIVE.value)
+    token_monthly_limit = Column(Integer, nullable=True)
+    token_weekly_limit = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
