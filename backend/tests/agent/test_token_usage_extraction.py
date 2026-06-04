@@ -46,6 +46,29 @@ class TestExtractTokenUsage:
             "usage_source": "provider",
         }
 
+    def test_extracts_nested_provider_usage(self) -> None:
+        message = AIMessage(
+            content="ok",
+            response_metadata={
+                "output": {
+                    "usage": {
+                        "input_tokens": 120,
+                        "output_tokens": 30,
+                        "total_tokens": 150,
+                    }
+                }
+            },
+        )
+
+        usage = extract_token_usage(message)
+
+        assert usage == {
+            "prompt_tokens": 120,
+            "completion_tokens": 30,
+            "total_tokens": 150,
+            "usage_source": "provider",
+        }
+
     def test_returns_none_when_usage_missing(self) -> None:
         message = AIMessage(content="ok")
 

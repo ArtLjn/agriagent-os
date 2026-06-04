@@ -207,6 +207,17 @@ def extract_token_usage(response: AIMessage) -> dict | None:
             if normalized is not None:
                 return normalized
 
+    for container_key in ("output", "raw", "response"):
+        container = response_metadata.get(container_key)
+        if not isinstance(container, dict):
+            continue
+        for key in ("token_usage", "usage", "usage_metadata"):
+            usage = container.get(key)
+            if usage:
+                normalized = _normalize_token_usage(usage, "provider")
+                if normalized is not None:
+                    return normalized
+
     return None
 
 
