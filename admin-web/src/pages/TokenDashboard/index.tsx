@@ -75,6 +75,15 @@ const monoStyle = {
   fontVariantNumeric: 'tabular-nums',
 } as const;
 
+const truncateStyle = {
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+} as const;
+
+const modelUsageColumns = 'minmax(180px, 1.2fr) minmax(220px, 2fr) minmax(240px, 2.2fr) 112px 72px';
+
 export default function TokenDashboard() {
   const [days, setDays] = useState<number>(7);
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
@@ -367,70 +376,98 @@ export default function TokenDashboard() {
     },
   ];
 
-  const renderModelRows = () => {
+  const renderModelUsageRows = () => {
     if (modelStats.length === 0) return emptyBlock('当前筛选下暂无模型用量');
     return (
-      <div style={{ display: 'grid', gap: 12 }}>
-        {modelStats.map((item) => {
-          const width = `${Math.max(18, Math.round((item.total_tokens / maxModelTokens) * 100))}%`;
-          return (
-            <div
-              key={`${item.model}-${item.call_type}`}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(180px, 240px) minmax(180px, 1fr) 110px 72px',
-                gap: 14,
-                alignItems: 'center',
-              }}
-            >
-              <div>
-                <div style={{ color: TEXT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.model}
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: 920 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: modelUsageColumns,
+              gap: 16,
+              alignItems: 'center',
+              color: TEXT_DIM,
+              fontSize: 12,
+              padding: '0 0 10px',
+            }}
+          >
+            <span>模型</span>
+            <span>总量</span>
+            <span>Prompt / Completion</span>
+            <span style={{ textAlign: 'right' }}>Token</span>
+            <span style={{ textAlign: 'right' }}>请求</span>
+          </div>
+          <div
+            style={{
+              maxHeight: 330,
+              overflowY: modelStats.length > 5 ? 'auto' : 'visible',
+              paddingRight: modelStats.length > 5 ? 6 : 0,
+            }}
+          >
+            {modelStats.map((item) => {
+              const totalWidth = `${Math.max(8, Math.round((item.total_tokens / maxModelTokens) * 100))}%`;
+              const promptPercent = item.total_tokens > 0
+                ? Math.round((item.prompt_tokens / item.total_tokens) * 100)
+                : 0;
+              const completionPercent = Math.max(0, 100 - promptPercent);
+              return (
+                <div
+                  key={`${item.model}-${item.call_type}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: modelUsageColumns,
+                    gap: 16,
+                    alignItems: 'center',
+                    minHeight: 62,
+                    borderTop: `1px solid ${BORDER}`,
+                  }}
+                >
+                  <div style={truncateStyle} title={`${item.model} / ${item.call_type}`}>
+                    <div style={{ ...truncateStyle, color: TEXT, fontWeight: 700 }}>
+                      {item.model}
+                    </div>
+                    <div style={{ ...truncateStyle, color: TEXT_DIM, fontSize: 12, marginTop: 3 }}>
+                      {item.call_type}
+                    </div>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ height: 24, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ width: totalWidth, height: '100%', background: BLUE }} />
+                    </div>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', height: 24, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ width: `${promptPercent}%`, background: BLUE }} />
+                      <div style={{ width: `${completionPercent}%`, background: GREEN }} />
+                    </div>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                        gap: 10,
+                        color: TEXT_DIM,
+                        fontSize: 12,
+                        marginTop: 5,
+                      }}
+                    >
+                      <span style={truncateStyle}>Prompt {formatNumber(item.prompt_tokens)} ({promptPercent}%)</span>
+                      <span style={{ ...truncateStyle, textAlign: 'right' }}>
+                        Completion {formatNumber(item.completion_tokens)} ({completionPercent}%)
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ ...monoStyle, textAlign: 'right', fontWeight: 700, overflow: 'hidden' }}>
+                    {formatNumber(item.total_tokens)}
+                  </div>
+                  <div style={{ ...monoStyle, textAlign: 'right', overflow: 'hidden' }}>
+                    {formatNumber(item.request_count)}
+                  </div>
                 </div>
-                <div style={{ color: TEXT_DIM, fontSize: 12 }}>{item.call_type}</div>
-              </div>
-              <div style={{ height: 26, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width, height: '100%', background: BLUE }} />
-              </div>
-              <div style={{ ...monoStyle, textAlign: 'right', fontWeight: 600 }}>
-                {formatNumber(item.total_tokens)}
-              </div>
-              <div style={{ ...monoStyle, textAlign: 'right' }}>{formatNumber(item.request_count)} 次</div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderCompositionRows = () => {
-    if (modelStats.length === 0) return emptyBlock('当前筛选下暂无 Prompt / Completion 数据');
-    return (
-      <div style={{ display: 'grid', gap: 14 }}>
-        {modelStats.map((item) => {
-          const promptPercent = item.total_tokens > 0
-            ? Math.round((item.prompt_tokens / item.total_tokens) * 100)
-            : 0;
-          const completionPercent = Math.max(0, 100 - promptPercent);
-          return (
-            <div key={`${item.model}-${item.call_type}`}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
-                <span style={{ color: TEXT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.model}
-                </span>
-                <span style={monoStyle}>{formatNumber(item.total_tokens)}</span>
-              </div>
-              <div style={{ display: 'flex', height: 26, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: `${promptPercent}%`, background: BLUE }} />
-                <div style={{ width: `${completionPercent}%`, background: GREEN }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: TEXT_DIM, fontSize: 12, marginTop: 6 }}>
-                <span>Prompt {formatNumber(item.prompt_tokens)} ({promptPercent}%)</span>
-                <span>Completion {formatNumber(item.completion_tokens)} ({completionPercent}%)</span>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        </div>
       </div>
     );
   };
@@ -465,7 +502,7 @@ export default function TokenDashboard() {
                 alignItems: 'center',
               }}
             >
-              <div style={{ color: TEXT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ ...truncateStyle, color: TEXT, fontWeight: 600 }} title={row.label}>
                 {row.label}
               </div>
               {visibleHours.map((hour) => {
@@ -629,20 +666,10 @@ export default function TokenDashboard() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 18 }}>
-        <Col xs={24} lg={12}>
+        <Col xs={24}>
           <Card
-            title={<span style={{ color: TEXT }}>模型用量排行</span>}
-            extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>非时间趋势，按模型聚合</span>}
-            style={panelStyle}
-            bodyStyle={{ padding: 22 }}
-          >
-            {renderModelRows()}
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card
-            title={<span style={{ color: TEXT }}>Prompt / Completion 分布</span>}
-            extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>堆叠展示真实 token 构成</span>}
+            title={<span style={{ color: TEXT }}>模型用量</span>}
+            extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>按模型聚合；行内展示总量和真实 token 构成</span>}
             style={panelStyle}
             bodyStyle={{ padding: 22 }}
           >
@@ -656,7 +683,7 @@ export default function TokenDashboard() {
                 <span style={{ color: TEXT_DIM }}>Completion</span>
               </Space>
             </Space>
-            {renderCompositionRows()}
+            {renderModelUsageRows()}
           </Card>
         </Col>
       </Row>
