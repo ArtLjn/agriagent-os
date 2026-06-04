@@ -9,6 +9,44 @@ export interface UserListItem {
   status: string;
   created_at: string;
   farm_name: string | null;
+  quota?: UserQuotaOverviewItem;
+}
+
+export interface UserQuotaStatus {
+  monthly_limit: number;
+  monthly_usage: number;
+  monthly_remaining: number;
+  monthly_start: string;
+  monthly_end: string;
+  weekly_limit: number;
+  weekly_usage: number;
+  weekly_remaining: number;
+  weekly_start: string;
+  weekly_end: string;
+  status: string;
+}
+
+export interface UpdateUserQuotaRequest {
+  token_monthly_limit?: number | null;
+  token_weekly_limit?: number | null;
+}
+
+export interface UserQuotaOverviewItem {
+  user_id: string;
+  nickname: string;
+  phone: string;
+  monthly_limit: number;
+  monthly_usage: number;
+  monthly_percent: number;
+  weekly_limit: number;
+  weekly_usage: number;
+  weekly_percent: number;
+  status: string;
+}
+
+export interface UserQuotaOverviewResponse {
+  items: UserQuotaOverviewItem[];
+  total: number;
 }
 
 export interface UserListResponse {
@@ -28,12 +66,27 @@ export interface ListUsersParams {
   phone_keyword?: string;
 }
 
+export interface ListQuotaOverviewParams {
+  page?: number;
+  size?: number;
+  status?: string;
+}
+
 export const usersApi = {
   list: (params?: ListUsersParams) =>
     apiClient.get<UserListResponse>("/admin/users", { params }),
 
   getDetail: (userId: string) =>
     apiClient.get<UserDetail>(`/admin/users/${userId}`),
+
+  getQuota: (userId: string) =>
+    apiClient.get<UserQuotaStatus>(`/admin/users/${userId}/quota`),
+
+  updateQuota: (userId: string, data: UpdateUserQuotaRequest) =>
+    apiClient.put<UserQuotaStatus>(`/admin/users/${userId}/quota`, data),
+
+  getQuotaOverview: (params?: ListQuotaOverviewParams) =>
+    apiClient.get<UserQuotaOverviewResponse>("/admin/users/quota-overview", { params }),
 
   updateStatus: (userId: string, status: string) =>
     apiClient.put(`/admin/users/${userId}/status`, { status }),

@@ -167,20 +167,23 @@ export default function ConfigKeys() {
               labelStyle={descriptionsLabelStyle}
               contentStyle={descriptionsContentStyle}
             >
-              <Descriptions.Item label="日限额">
-                {config.token_quota.daily_limit.toLocaleString()}
+              <Descriptions.Item label="月限额">
+                {config.token_quota.monthly_limit.toLocaleString()}
+              </Descriptions.Item>
+              <Descriptions.Item label="周限额">
+                {config.token_quota.weekly_limit.toLocaleString()}
               </Descriptions.Item>
               <Descriptions.Item label="超额动作">
                 <Tag
                   color={
-                    config.token_quota.over_quota_action === 'block'
+                    config.token_quota.over_quota_action === 'reject'
                       ? 'error'
                       : config.token_quota.over_quota_action === 'warn'
                         ? 'warning'
                         : 'default'
                   }
                 >
-                  {config.token_quota.over_quota_action}
+                  {config.token_quota.over_quota_action === 'reject' ? 'reject' : 'warn'}
                 </Tag>
               </Descriptions.Item>
             </Descriptions>

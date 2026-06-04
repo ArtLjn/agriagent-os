@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Card, Segmented, Statistic, Table, Progress, Row, Col } from 'antd';
+import { Card, Segmented, Statistic, Table, Progress, Row, Col, Select, Space } from 'antd';
 import { Line, Bar } from '@ant-design/charts';
 import {
   getTokenSummary,
@@ -7,6 +7,7 @@ import {
   type TokenSummary,
   type DailyTokenItem,
 } from '../../api/admin';
+import { usersApi, type UserListItem, type UserQuotaStatus } from '../../api/users';
 
 const BG = '#0d1117';
 const CARD_BG = '#161b22';
@@ -14,13 +15,15 @@ const BORDER = '#30363d';
 const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
 
-const QUOTA_LIMIT = 10000;
-
 export default function TokenDashboard() {
   const [days, setDays] = useState<number>(7);
+  const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
+  const [users, setUsers] = useState<UserListItem[]>([]);
+  const [userQuota, setUserQuota] = useState<UserQuotaStatus | null>(null);
   const [summary, setSummary] = useState<TokenSummary | null>(null);
   const [dailyItems, setDailyItems] = useState<DailyTokenItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [quotaLoading, setQuotaLoading] = useState(false);
 
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -29,32 +32,80 @@ export default function TokenDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    Promise.all([getTokenSummary(days), getDailyTokenStats(todayStr)])
-      .then(([sum, daily]) => {
+    usersApi.list({ page: 1, size: 100 })
+      .then((res) => {
         if (cancelled) return;
-        setSummary(sum);
-        setDailyItems(daily.items);
+        setUsers(res.data.items);
       })
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (cancelled) return;
+        setUsers([]);
+      });
     return () => { cancelled = true; };
-  }, [days, todayStr]);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = { days, user_id: selectedUserId };
+    void Promise.resolve().then(() => {
+      setLoading(true);
+      return Promise.all([
+        getTokenSummary(params),
+        getDailyTokenStats(todayStr, { user_id: selectedUserId }),
+      ])
+        .then(([sum, daily]) => {
+          if (cancelled) return;
+          setSummary(sum);
+          setDailyItems(daily.items);
+        })
+        .finally(() => setLoading(false));
+    });
+    return () => { cancelled = true; };
+  }, [days, selectedUserId, todayStr]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedUserId) {
+      void Promise.resolve().then(() => setUserQuota(null));
+      return () => { cancelled = true; };
+    }
+
+    void Promise.resolve().then(() => {
+      setQuotaLoading(true);
+      return usersApi.getQuota(selectedUserId)
+        .then((res) => {
+          if (cancelled) return;
+          setUserQuota(res.data);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setUserQuota(null);
+        })
+        .finally(() => setQuotaLoading(false));
+    });
+
+    return () => { cancelled = true; };
+  }, [selectedUserId]);
 
   const todayUsage = useMemo(
     () => dailyItems.reduce((sum, i) => sum + i.total_tokens, 0),
     [dailyItems]
   );
 
-  const quotaPercent = useMemo(
-    () => Math.min(100, Math.round((todayUsage / QUOTA_LIMIT) * 100)),
-    [todayUsage]
-  );
+  const getQuotaPercent = (usage?: number, limit?: number) => {
+    if (!usage || !limit) return 0;
+    return Math.min(100, Math.round((usage / limit) * 100));
+  };
 
-  const quotaStatus = useMemo(() => {
-    if (quotaPercent >= 100) return 'exception';
-    if (quotaPercent >= 80) return 'warning';
+  const getQuotaStatus = (percent: number) => {
+    if (percent >= 100) return 'exception';
+    if (percent >= 80) return 'exception';
+    if (percent >= 60) return 'active';
     return 'success';
-  }, [quotaPercent]);
+  };
+
+  const monthlyPercent = getQuotaPercent(userQuota?.monthly_usage, userQuota?.monthly_limit);
+  const weeklyPercent = getQuotaPercent(userQuota?.weekly_usage, userQuota?.weekly_limit);
 
   const lineData = useMemo(() => {
     if (!summary) return [];
@@ -114,15 +165,30 @@ export default function TokenDashboard() {
     <div style={{ padding: 24, background: BG, minHeight: '100vh' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h2 style={{ color: TEXT, margin: 0 }}>Token 用量看板</h2>
-        <Segmented
-          options={[
-            { label: '近 7 天', value: 7 },
-            { label: '近 30 天', value: 30 },
-          ]}
-          value={days}
-          onChange={(v) => setDays(v as number)}
-          style={{ background: CARD_BG }}
-        />
+        <Space>
+          <Select
+            allowClear
+            showSearch
+            placeholder="全部用户"
+            style={{ width: 240 }}
+            value={selectedUserId}
+            optionFilterProp="label"
+            onChange={(value) => setSelectedUserId(value)}
+            options={users.map((user) => ({
+              label: `${user.nickname || '未命名'} / ${user.phone}`,
+              value: user.id,
+            }))}
+          />
+          <Segmented
+            options={[
+              { label: '近 7 天', value: 7 },
+              { label: '近 30 天', value: 30 },
+            ]}
+            value={days}
+            onChange={(v) => setDays(v as number)}
+            style={{ background: CARD_BG }}
+          />
+        </Space>
       </div>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -145,7 +211,7 @@ export default function TokenDashboard() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card style={{ background: CARD_BG, borderColor: BORDER }} loading={loading}>
+          <Card style={{ background: CARD_BG, borderColor: BORDER }} loading={loading || quotaLoading}>
             <Statistic
               title={<span style={{ color: TEXT_DIM }}>今日用量</span>}
               value={todayUsage}
@@ -154,12 +220,33 @@ export default function TokenDashboard() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card style={{ background: CARD_BG, borderColor: BORDER }} loading={loading}>
-            <div style={{ color: TEXT_DIM, fontSize: 14, marginBottom: 8 }}>配额使用</div>
-            <Progress percent={quotaPercent} status={quotaStatus as any} />
-            <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 4 }}>
-              {todayUsage} / {QUOTA_LIMIT}
-            </div>
+          <Card style={{ background: CARD_BG, borderColor: BORDER }} loading={quotaLoading}>
+            <div style={{ color: TEXT_DIM, fontSize: 14, marginBottom: 8 }}>月配额使用</div>
+            {selectedUserId && userQuota ? (
+              <>
+                <Progress percent={monthlyPercent} status={getQuotaStatus(monthlyPercent)} />
+                <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 4 }}>
+                  {userQuota.monthly_usage.toLocaleString()} / {userQuota.monthly_limit.toLocaleString()}
+                </div>
+              </>
+            ) : (
+              <div style={{ color: TEXT_DIM, fontSize: 13 }}>请选择用户查看配额</div>
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card style={{ background: CARD_BG, borderColor: BORDER }} loading={quotaLoading}>
+            <div style={{ color: TEXT_DIM, fontSize: 14, marginBottom: 8 }}>周配额使用</div>
+            {selectedUserId && userQuota ? (
+              <>
+                <Progress percent={weeklyPercent} status={getQuotaStatus(weeklyPercent)} />
+                <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 4 }}>
+                  {userQuota.weekly_usage.toLocaleString()} / {userQuota.weekly_limit.toLocaleString()}
+                </div>
+              </>
+            ) : (
+              <div style={{ color: TEXT_DIM, fontSize: 13 }}>请选择用户查看配额</div>
+            )}
           </Card>
         </Col>
       </Row>

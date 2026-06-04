@@ -113,6 +113,8 @@ export interface TokenSummary {
 export interface DailyTokenItem {
   model: string;
   call_type: string;
+  user_id?: string | null;
+  farm_id?: number;
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
@@ -125,13 +127,24 @@ export interface DailyTokenStats {
   items: DailyTokenItem[];
 }
 
-export async function getTokenSummary(days?: number): Promise<TokenSummary> {
-  const res = await apiClient.get<TokenSummary>('/admin/stats/tokens', { params: { days } });
+export interface TokenStatsParams {
+  days?: number;
+  user_id?: string;
+  farm_id?: number;
+}
+
+export async function getTokenSummary(params: TokenStatsParams = {}): Promise<TokenSummary> {
+  const res = await apiClient.get<TokenSummary>('/admin/stats/tokens', { params });
   return res.data;
 }
 
-export async function getDailyTokenStats(date: string): Promise<DailyTokenStats> {
-  const res = await apiClient.get<DailyTokenStats>('/admin/stats/tokens/daily', { params: { date } });
+export async function getDailyTokenStats(
+  date: string,
+  params: Omit<TokenStatsParams, 'days'> = {}
+): Promise<DailyTokenStats> {
+  const res = await apiClient.get<DailyTokenStats>('/admin/stats/tokens/daily', {
+    params: { date, ...params },
+  });
   return res.data;
 }
 
@@ -200,8 +213,9 @@ export interface TraceConfig {
 }
 
 export interface TokenQuotaConfig {
-  daily_limit: number;
-  over_quota_action: string;
+  monthly_limit: number;
+  weekly_limit: number;
+  over_quota_action: "warn" | "reject";
 }
 
 export interface LangsmithConfig {
