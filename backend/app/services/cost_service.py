@@ -6,7 +6,23 @@ from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
 from app.models.cost import CostRecord
+from app.models.cost_category import CostCategory
 from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary
+
+
+def _find_category(
+    db: Session, farm_id: int, category_name: str, record_type: str
+) -> CostCategory | None:
+    """按农场、分类名和收支类型查找分类。"""
+    return (
+        db.query(CostCategory)
+        .filter(
+            CostCategory.farm_id == farm_id,
+            CostCategory.name == category_name,
+            CostCategory.type == record_type,
+        )
+        .first()
+    )
 
 
 def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRecord:
@@ -20,10 +36,13 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
     Returns:
         新创建的 CostRecord 实例。
     """
+    category = _find_category(db, farm_id, record.category, record.record_type)
     db_record = CostRecord(
         cycle_id=record.cycle_id,
         record_type=record.record_type,
         category=record.category,
+        category_id=category.id if category else None,
+        category_name_snapshot=category.name if category else record.category,
         amount=record.amount,
         record_date=record.record_date,
         note=record.note,
@@ -33,6 +52,8 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         due_date=record.due_date,
         settled_at=record.settled_at,
         parent_record_id=record.parent_record_id,
+        source_type=record.source_type,
+        source_id=record.source_id,
     )
     db.add(db_record)
     try:

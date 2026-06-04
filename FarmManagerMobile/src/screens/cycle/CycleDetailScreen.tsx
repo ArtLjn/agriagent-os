@@ -63,11 +63,26 @@ export const CycleDetailScreen: React.FC = () => {
   const route = useRoute<RouteParams>();
   const navigation = useNavigation<NavigationProp>();
   const { cycleId } = route.params;
-  const { currentCycle, loading, fetchCycleDetail } = useCycleStore();
+  const {
+    currentCycle,
+    loading,
+    units,
+    operationTypes,
+    fetchCycleDetail,
+    fetchUnits,
+    fetchOperationTypes,
+  } = useCycleStore();
 
   useEffect(() => {
     fetchCycleDetail(cycleId);
-  }, [cycleId, fetchCycleDetail]);
+    fetchUnits(cycleId);
+  }, [cycleId, fetchCycleDetail, fetchUnits]);
+
+  useEffect(() => {
+    if (currentCycle?.name) {
+      fetchOperationTypes(currentCycle.name);
+    }
+  }, [currentCycle?.name, fetchOperationTypes]);
 
   if (loading || !currentCycle) {
     return <Loading />;
@@ -115,10 +130,13 @@ export const CycleDetailScreen: React.FC = () => {
       <View style={styles.infoCard}>
         <View style={styles.infoGrid}>
           <View style={styles.infoCell}>
-            <Icon name="map-marker" size={18} color={colors.primary} />
-            <Text style={styles.infoCellLabel}>地块</Text>
+            <Icon name="map-marker-radius" size={18} color={colors.primary} />
+            <Text style={styles.infoCellLabel}>面积/单元</Text>
             <Text style={styles.infoCellValue} numberOfLines={1}>
-              {currentCycle.field_name || "未指定"}
+              {currentCycle.total_area_mu
+                ? `${Number(currentCycle.total_area_mu).toFixed(2).replace(/\.00$/, "")}亩`
+                : currentCycle.field_name || "未指定"}
+              {currentCycle.unit_count ? ` · ${currentCycle.unit_count}个` : ""}
             </Text>
           </View>
           <View style={[styles.infoCell, styles.infoCellBorder]}>
@@ -155,6 +173,43 @@ export const CycleDetailScreen: React.FC = () => {
         </View>
       </View>
 
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>种植单元</Text>
+        <View style={styles.unitCard}>
+          {units.length > 0 ? (
+            units.map((unit) => (
+              <View key={unit.id} style={styles.unitRow}>
+                <View style={styles.unitIcon}>
+                  <Icon name="greenhouse" size={18} color={colors.primary} />
+                </View>
+                <View style={styles.unitInfo}>
+                  <Text style={styles.unitName}>{unit.name}</Text>
+                  <Text style={styles.unitMeta}>
+                    {unit.area_mu ? `${Number(unit.area_mu).toFixed(2).replace(/\.00$/, "")} 亩` : "未填面积"}
+                    {unit.status ? ` · ${unit.status}` : ""}
+                  </Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyHint}>
+              暂未拆分棚或地块，当前仍按批次整体管理。
+            </Text>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>作业快捷项</Text>
+        <View style={styles.operationWrap}>
+          {operationTypes.slice(0, 8).map((item) => (
+            <View key={item.name} style={styles.operationPill}>
+              <Text style={styles.operationText}>{item.name}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
       {/* Timeline */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>生长阶段</Text>
@@ -183,6 +238,45 @@ export const CycleDetailScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.actionBtn}
+          onPress={() =>
+            navigation.navigate("WorkOrderCreate" as never, {
+              cycleId,
+              cropName: currentCycle.name,
+            } as never)
+          }
+          activeOpacity={0.7}
+        >
+          <View
+            style={[
+              styles.actionIcon,
+              { backgroundColor: colors.primaryMuted },
+            ]}
+          >
+            <Icon name="clipboard-plus" size={20} color={colors.primary} />
+          </View>
+          <Text style={styles.actionLabel}>记录作业</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() =>
+            navigation.navigate("PlantingUnits" as never, { cycleId } as never)
+          }
+          activeOpacity={0.7}
+        >
+          <View
+            style={[
+              styles.actionIcon,
+              { backgroundColor: "rgba(59, 178, 115, 0.08)" },
+            ]}
+          >
+            <Icon name="greenhouse" size={20} color={colors.success} />
+          </View>
+          <Text style={styles.actionLabel}>种植单元</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionBtn}
           onPress={() => navigation.navigate("Profit" as never, { cycleId } as never)}
           activeOpacity={0.7}
         >
@@ -197,21 +291,6 @@ export const CycleDetailScreen: React.FC = () => {
           <Text style={styles.actionLabel}>利润统计</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate("AgentChat" as never, { cycleId } as never)}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.actionIcon,
-              { backgroundColor: colors.aiPurpleMuted },
-            ]}
-          >
-            <Icon name="robot" size={20} color={colors.aiPurple} />
-          </View>
-          <Text style={styles.actionLabel}>农事顾问</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -314,6 +393,67 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 12,
     elevation: 2,
+  },
+  unitCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.md,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  unitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacingV2.sm,
+    gap: spacingV2.md,
+  },
+  unitIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryMuted,
+  },
+  unitInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  unitName: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  unitMeta: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  emptyHint: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    paddingVertical: spacingV2.sm,
+  },
+  operationWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacingV2.sm,
+  },
+  operationPill: {
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.primaryMuted,
+  },
+  operationText: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "700",
+    color: colors.primary,
   },
   actions: {
     flexDirection: "row",

@@ -1,6 +1,6 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse, ReportResponse, ReportListResponse } from './types';
+import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse, ReportResponse, ReportListResponse, PlantingUnit, OperationType, Worker, OperationWorkOrder, LaborEntryCreate } from './types';
 
 const API_BASE_URL = 'http://172.16.57.244:8099';
 
@@ -93,6 +93,9 @@ export const cycleApi = {
     crop_template_id: number;
     start_date: string;
     field_name?: string;
+    total_area_mu?: string;
+    season?: string;
+    batch_note?: string;
   }) => apiClient.post('/cycles', data),
   deleteCycle: (id: number) => apiClient.delete(`/cycles/${id}`),
   parseCycle: (description: string) => {
@@ -111,6 +114,50 @@ export const cycleApi = {
       }
     );
   },
+};
+
+// 种植批次 MVP：种植单元、作业类型、作业单
+export const plantingApi = {
+  getUnits: (cycleId?: number) =>
+    apiClient.get<PlantingUnit[]>('/planting/units', {
+      params: cycleId ? { cycle_id: cycleId } : undefined,
+    }),
+  createUnit: (data: {
+    cycle_id: number;
+    name: string;
+    area_mu?: string;
+    planted_date?: string;
+    note?: string;
+  }) => apiClient.post<PlantingUnit>('/planting/units', data),
+  updateUnit: (
+    id: number,
+    data: {
+      name?: string;
+      area_mu?: string;
+      planted_date?: string;
+      note?: string;
+      status?: string;
+    }
+  ) => apiClient.put<PlantingUnit>(`/planting/units/${id}`, data),
+  getOperationTypes: (cropName?: string) =>
+    apiClient.get<OperationType[]>('/planting/operation-types', {
+      params: cropName ? { crop_name: cropName } : undefined,
+    }),
+  getWorkers: () => apiClient.get<Worker[]>('/planting/workers'),
+  createWorker: (data: {
+    name: string;
+    default_pay_type?: string;
+    default_unit_price?: string;
+  }) => apiClient.post<Worker>('/planting/workers', data),
+  createWorkOrder: (data: {
+    cycle_id: number;
+    operation_type: string;
+    operation_date: string;
+    scope_type: string;
+    unit_ids?: number[];
+    note?: string;
+    labor_entries?: LaborEntryCreate[];
+  }) => apiClient.post<OperationWorkOrder>('/planting/work-orders', data),
 };
 
 // 农事日志

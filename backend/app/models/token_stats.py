@@ -1,7 +1,7 @@
 """Token 日用量统计模型。"""
 
 from datetime import datetime
-from sqlalchemy import Column, DateTime, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from app.core.database import Base
 
 
@@ -20,9 +20,9 @@ class TokenDailyStats(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(36), nullable=True, index=True)
-    farm_id = Column(Integer, nullable=False, index=True)
-    date = Column(String(10), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
+    date = Column(Date, nullable=False)
     model = Column(String(100), nullable=False)
     call_type = Column(String(20), nullable=False)
     prompt_tokens = Column(Integer, default=0)

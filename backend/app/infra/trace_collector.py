@@ -1,10 +1,9 @@
 """Trace 收集器 — 统一入口，委托 TraceDAO 存储。"""
 
 import asyncio
-import json
 import logging
 import time
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from app.infra.trace_context import get_trace, get_round_index
@@ -68,17 +67,6 @@ class TraceCollector:
             if end_time is None:
                 end_time = time.time()
 
-        input_str = (
-            json.dumps(input_data, ensure_ascii=False, default=str)
-            if input_data
-            else None
-        )
-        output_str = (
-            json.dumps(output_data, ensure_ascii=False, default=str)
-            if output_data
-            else None
-        )
-
         trace_data = {
             "request_id": trace.request_id,
             "session_id": trace.session_id or None,
@@ -86,14 +74,12 @@ class TraceCollector:
             "round_index": get_round_index(),
             "node_type": node_type,
             "node_name": node_name,
-            "input_data": input_str,
-            "output_data": output_str,
-            "start_time": time.strftime(
-                "%Y-%m-%dT%H:%M:%S", time.localtime(start_time)
-            ),
-            "end_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(end_time)),
+            "input_data": input_data,
+            "output_data": output_data,
+            "start_time": datetime.fromtimestamp(start_time),
+            "end_time": datetime.fromtimestamp(end_time),
             "duration_ms": duration_ms,
-            "token_usage": json.dumps(token_usage) if token_usage else None,
+            "token_usage": token_usage,
             "status": "error" if error_message else "success",
             "error_message": error_message,
         }

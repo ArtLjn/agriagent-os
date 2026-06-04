@@ -21,6 +21,8 @@ class CostRecordBase(BaseModel):
     due_date: date | None = None
     settled_at: datetime | None = None
     parent_record_id: int | None = None
+    source_type: str | None = Field(None, max_length=50)
+    source_id: int | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -47,6 +49,7 @@ class CostRecordResponse(CostRecordBase):
     """成本记账记录响应 Schema。"""
 
     id: int
+    source_label: str | None = None
     created_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -65,6 +68,8 @@ class CostRecordUpdate(BaseModel):
     due_date: date | None = None
     settled_at: datetime | None = None
     parent_record_id: int | None = None
+    source_type: str | None = Field(None, max_length=50)
+    source_id: int | None = None
 
     @field_validator("record_type")
     @classmethod

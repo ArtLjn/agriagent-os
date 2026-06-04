@@ -18,6 +18,13 @@ from app.models.conversation import (
 from app.models.feedback import FeedbackRecord
 from app.models.user_setting import UserSetting
 from app.models.simulation import SimulationRun, SimulationResultRecord
+from app.models.planting import (
+    LaborEntry,
+    OperationWorkOrder,
+    OperationWorkOrderUnit,
+    PlantingUnit,
+    Worker,
+)
 
 __all__ = [
     "Farm",
@@ -41,4 +48,9 @@ __all__ = [
     "UserSetting",
     "SimulationRun",
     "SimulationResultRecord",
+    "PlantingUnit",
+    "OperationWorkOrder",
+    "OperationWorkOrderUnit",
+    "Worker",
+    "LaborEntry",
 ]

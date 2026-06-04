@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -19,6 +19,9 @@ class CropCycle(Base):
     )
     start_date = Column(Date, nullable=False)
     field_name = Column(String(100), nullable=True)
+    total_area_mu = Column(Numeric(10, 2), nullable=True)
+    season = Column(String(50), nullable=True)
+    batch_note = Column(String(500), nullable=True)
     status = Column(String(20), default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -27,6 +30,12 @@ class CropCycle(Base):
         "CycleStage", back_populates="cycle", cascade="all, delete-orphan"
     )
     farm_logs = relationship("FarmLog", cascade="all, delete-orphan")
+    planting_units = relationship(
+        "PlantingUnit", back_populates="cycle", cascade="all, delete-orphan"
+    )
+    work_orders = relationship(
+        "OperationWorkOrder", back_populates="cycle", cascade="all, delete-orphan"
+    )
 
 
 class CycleStage(Base):
@@ -42,6 +51,6 @@ class CycleStage(Base):
     order_index = Column(Integer, nullable=False)
     duration_days = Column(Integer, nullable=False)
     key_tasks = Column(String(500), nullable=True)
-    is_current = Column(Integer, default=0)
+    is_current = Column(Boolean, default=False)
 
     cycle = relationship("CropCycle", back_populates="stages")

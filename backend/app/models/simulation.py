@@ -2,7 +2,7 @@
 
 import json
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text, func
 
 from app.core.database import Base
 
@@ -14,7 +14,7 @@ class SimulationRun(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     run_id = Column(String(32), unique=True, nullable=False, index=True)
-    farm_id = Column(Integer, nullable=False, default=1)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     status = Column(String(16), nullable=False, default="running")
     total = Column(Integer, nullable=False, default=0)
     passed = Column(Integer, nullable=False, default=0)
@@ -31,18 +31,18 @@ class SimulationResultRecord(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     run_id = Column(String(32), nullable=False, index=True)
-    farm_id = Column(Integer, nullable=False, default=1)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
     case_id = Column(String(64), nullable=False)
     passed = Column(Integer, nullable=False, default=0)
     agent_reply = Column(Text, nullable=True)
-    errors_json = Column(Text, nullable=True)
-    db_diff_json = Column(Text, nullable=True)
-    extracted_claims_json = Column(Text, nullable=True)
+    errors_json = Column(JSON, nullable=True)
+    db_diff_json = Column(JSON, nullable=True)
+    extracted_claims_json = Column(JSON, nullable=True)
     latency_ms = Column(Integer, nullable=False, default=0)
     category = Column(String(32), nullable=True)
     user_input = Column(Text, nullable=True)
-    pending_action_json = Column(Text, nullable=True)
-    expected_db_changes_json = Column(Text, nullable=True)
+    pending_action_json = Column(JSON, nullable=True)
+    expected_db_changes_json = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     @property

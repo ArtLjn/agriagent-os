@@ -92,9 +92,11 @@ def list_cycles(
     skip = (page - 1) * size
     cycles = cycle_service.get_crop_cycles(db, farm_id=farm.id, skip=skip, limit=size)
     total = cycle_service.count_crop_cycles(db, farm_id=farm.id)
+    stats = cycle_service.get_cycle_unit_stats(db, [c.id for c in cycles], farm.id)
     items = []
     for c in cycles:
         current = next((s for s in c.stages if s.is_current), None)
+        stat = stats.get(c.id, {})
         items.append(
             CropCycleListResponse(
                 id=c.id,
@@ -103,9 +105,37 @@ def list_cycles(
                 start_date=c.start_date,
                 status=c.status,
                 current_stage_name=current.name if current else None,
+                total_area_mu=c.total_area_mu,
+                unit_area_mu=stat.get("unit_area_mu"),
+                unit_count=stat.get("unit_count", 0),
+                field_name=c.field_name,
+                season=c.season,
             )
         )
     return {"items": items, "total": total}
+
+
+def _build_cycle_response(
+    db: Session, cycle, farm_id: int
+) -> CropCycleResponse:
+    """组装带批次聚合字段的详情响应。"""
+    current = next((s for s in cycle.stages if s.is_current), None)
+    stats = cycle_service.get_cycle_unit_stats(db, [cycle.id], farm_id).get(cycle.id, {})
+    return CropCycleResponse(
+        id=cycle.id,
+        name=cycle.name,
+        crop_template_id=cycle.crop_template_id,
+        start_date=cycle.start_date,
+        field_name=cycle.field_name,
+        total_area_mu=cycle.total_area_mu,
+        season=cycle.season,
+        batch_note=cycle.batch_note,
+        status=cycle.status,
+        stages=cycle.stages,
+        unit_count=stats.get("unit_count", 0),
+        unit_area_mu=stats.get("unit_area_mu"),
+        current_stage_name=current.name if current else None,
+    )
 
 
 @router.get("/{cycle_id}", response_model=CropCycleResponse)
@@ -118,7 +148,7 @@ def get_cycle(
     cycle = cycle_service.get_crop_cycle(db, cycle_id, farm_id=farm.id)
     if not cycle:
         raise HTTPException(status_code=404, detail="Cycle not found")
-    return cycle
+    return _build_cycle_response(db, cycle, farm.id)
 
 
 @router.put("/{cycle_id}", response_model=CropCycleResponse)

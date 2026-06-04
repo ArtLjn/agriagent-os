@@ -11,7 +11,7 @@ class FeedbackRecord(Base):
     __tablename__ = "feedback_records"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     conversation_message_id = Column(
         Integer,
         ForeignKey("conversation_messages.id", ondelete="SET NULL"),

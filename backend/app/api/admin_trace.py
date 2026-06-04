@@ -1,6 +1,5 @@
 """Admin Trace 查询 API — 链路查询、Gantt 时间线、清理。"""
 
-import json
 import logging
 from collections import defaultdict
 from datetime import datetime
@@ -98,7 +97,7 @@ def get_timeline(request_id: str, db: Session = Depends(get_db)) -> TimelineResp
 
     rounds_map: dict[int, list[TimelineNode]] = defaultdict(list)
     for r in records:
-        token_dict = json.loads(r.token_usage) if r.token_usage else None
+        token_dict = r.token_usage
         rounds_map[r.round_index].append(
             TimelineNode(
                 node_type=r.node_type,

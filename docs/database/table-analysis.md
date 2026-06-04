@@ -162,9 +162,11 @@
 |------|------|------|
 | id | Integer PK | 自增主键 |
 | farm_id | Integer FK → farms | 所属农场 |
-| cycle_id | Integer | 关联茬口（无 FK） |
+| cycle_id | Integer FK → crop_cycles | 关联茬口 |
 | record_type | String NOT NULL | cost/income |
-| category | String NOT NULL | 分类 |
+| category | String NOT NULL | 兼容分类名称 |
+| category_id | Integer FK → cost_categories | 结构化分类引用 |
+| category_name_snapshot | String | 历史分类名称快照 |
 | amount | Numeric(10,2) NOT NULL | 金额 |
 | record_date | Date NOT NULL | 记账日期 |
 | note | String | 备注 |
@@ -177,9 +179,9 @@
 
 **作用：** 记录种植成本和收入，支持欠款/结算追踪。
 
-**问题：**
-- `cycle_id` 没有 FK 约束（可能是历史原因）
-- `category` 是自由字符串，和 `cost_categories` 表没有 FK 关联
+**治理说明：**
+- schema hardening 迁移补充 `cycle_id` 外键，删除茬口时按业务兼容策略置空或由服务层处理。
+- `category` 继续作为兼容字段保留，新增 `category_id` 和 `category_name_snapshot`。历史展示优先使用快照，分类统计优先使用 `category_id`。
 
 ---
 
@@ -188,7 +190,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | Integer PK | 自增主键 |
-| farm_id | Integer NOT NULL | 所属农场（无 FK） |
+| farm_id | Integer FK → farms | 所属农场 |
 | name | String(50) NOT NULL | 分类名 |
 | type | String(10) NOT NULL | cost/income |
 | icon | String(50) | 图标 |
@@ -198,8 +200,8 @@
 
 **作用：** 定义成本/收入的分类标签。
 
-**问题：**
-- `farm_id` 没有 FK 约束
+**治理说明：**
+- schema hardening 迁移为 `farm_id` 补充外键约束，避免跨农场悬挂分类。
 
 ---
 

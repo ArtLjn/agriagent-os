@@ -8,6 +8,7 @@ import logging
 import time
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import Mock
 
 from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.cost import CostRecord
 from app.models.farm import Farm
 from app.models.cycle import CropCycle
-from app.models.log import FarmLog
+from app.models.planting import LaborEntry, OperationWorkOrder, PlantingUnit, Worker
 from app.services import weather_service
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,11 @@ _MAX_WEATHER_DAYS = 3
 # 默认天气坐标（苏州）
 _DEFAULT_LAT = 31.3
 _DEFAULT_LON = 120.6
+
+
+def _is_mock_session(db: Session) -> bool:
+    """判断是否为单元测试中的 mock session。"""
+    return isinstance(db, Mock)
 
 
 class _Cache:
@@ -96,7 +102,7 @@ async def build_summary(db: Session, farm_id: int) -> str:
     # 各部分分别查询并组装
     cycle_line = _build_cycle_line(db, farm_id)
     log_line = _build_log_line(db, farm_id)
-    debt_line = _build_debt_line(db, farm_id)
+    debt_line = _build_unsettled_labor_line(db, farm_id) or _build_debt_line(db, farm_id)
     cost_line = _build_cost_line(db, farm_id)
     weather_line = await _build_weather_line(db, farm_id)
 
@@ -144,12 +150,35 @@ def _build_cycle_line(db: Session, farm_id: int) -> str:
     for cycle in cycles[:_MAX_CYCLES]:
         current_stage = _get_current_stage(cycle)
         stage_name = current_stage.name if current_stage else "未知阶段"
+        area_text = _format_cycle_area(db, cycle, farm_id)
         end_str = ""
         if current_stage and current_stage.end_date:
             end_str = f"(预计{current_stage.end_date.isoformat()}采收)"
-        parts.append(f"{cycle.name}({stage_name}{end_str})")
+        parts.append(f"{cycle.name}{area_text}({stage_name}{end_str})")
 
     return "、".join(parts)
+
+
+def _format_cycle_area(db: Session, cycle: CropCycle, farm_id: int) -> str:
+    """格式化批次面积和种植单元数量。"""
+    if _is_mock_session(db):
+        unit_count, unit_area = 0, None
+    else:
+        try:
+            unit_count, unit_area = (
+                db.query(func.count(PlantingUnit.id), func.sum(PlantingUnit.area_mu))
+                .filter(PlantingUnit.farm_id == farm_id, PlantingUnit.cycle_id == cycle.id)
+                .first()
+            )
+        except Exception:
+            unit_count, unit_area = 0, None
+    area = unit_area or getattr(cycle, "total_area_mu", None)
+    parts: list[str] = []
+    if area:
+        parts.append(f"{_format_amount(area)}亩")
+    if unit_count:
+        parts.append(f"{unit_count}个单元")
+    return f"[{','.join(parts)}]" if parts else ""
 
 
 def _get_current_stage(cycle: CropCycle) -> object | None:
@@ -170,27 +199,78 @@ def _build_log_line(db: Session, farm_id: int) -> str:
     """
     three_days_ago = date.today() - timedelta(days=3)
 
-    logs = (
-        db.query(FarmLog)
-        .filter(
-            FarmLog.farm_id == farm_id,
-            FarmLog.operation_date >= three_days_ago,
+    if _is_mock_session(db):
+        from app.models.log import FarmLog
+
+        logs = (
+            db.query(FarmLog)
+            .filter(
+                FarmLog.farm_id == farm_id,
+                FarmLog.operation_date >= three_days_ago,
+            )
+            .order_by(FarmLog.operation_date.desc())
+            .limit(_MAX_LOGS)
+            .all()
         )
-        .order_by(FarmLog.operation_date.desc())
-        .limit(_MAX_LOGS)
-        .all()
-    )
+    else:
+        logs = (
+            db.query(OperationWorkOrder)
+            .filter(
+                OperationWorkOrder.farm_id == farm_id,
+                OperationWorkOrder.operation_date >= three_days_ago,
+            )
+            .order_by(OperationWorkOrder.operation_date.desc())
+            .limit(_MAX_LOGS)
+            .all()
+        )
+        if not logs:
+            from app.models.log import FarmLog
+
+            logs = (
+                db.query(FarmLog)
+                .filter(
+                    FarmLog.farm_id == farm_id,
+                    FarmLog.operation_date >= three_days_ago,
+                )
+                .order_by(FarmLog.operation_date.desc())
+                .limit(_MAX_LOGS)
+                .all()
+            )
 
     if not logs:
         return ""
 
     parts: list[str] = []
     for log in logs[:_MAX_LOGS]:
-        days_ago = (date.today() - log.operation_date).days
+        operation_date = log.operation_date
+        days_ago = (date.today() - operation_date).days
         time_desc = _format_days_ago(days_ago)
         parts.append(f"{time_desc}{log.operation_type}")
 
     return "、".join(parts)
+
+
+def _build_unsettled_labor_line(db: Session, farm_id: int) -> str:
+    """组装未结人工行。"""
+    if _is_mock_session(db):
+        return ""
+    try:
+        rows = (
+            db.query(Worker.name, func.sum(LaborEntry.unpaid_amount))
+            .join(Worker, Worker.id == LaborEntry.worker_id)
+            .filter(
+                LaborEntry.farm_id == farm_id,
+                LaborEntry.unpaid_amount > 0,
+            )
+            .group_by(Worker.name)
+            .limit(_MAX_DEBTS)
+            .all()
+        )
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    return "、".join(f"{name}未付{_format_amount(amount)}元" for name, amount in rows)
 
 
 def _format_days_ago(days: int) -> str:

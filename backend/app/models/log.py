@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -21,3 +22,5 @@ class FarmLog(Base):
     note = Column(String(500), nullable=True)
     photo_urls = Column(String(2000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    cycle = relationship("CropCycle", overlaps="farm_logs")

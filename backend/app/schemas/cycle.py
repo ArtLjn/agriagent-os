@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -29,6 +30,9 @@ class CropCycleBase(BaseModel):
     crop_template_id: int
     start_date: date
     field_name: str | None = None
+    total_area_mu: Decimal | None = None
+    season: str | None = None
+    batch_note: str | None = None
 
 
 class CropCycleCreate(CropCycleBase):
@@ -43,6 +47,9 @@ class CropCycleResponse(CropCycleBase):
     id: int
     status: str
     stages: list[CycleStageResponse]
+    unit_count: int = 0
+    unit_area_mu: Decimal | None = None
+    current_stage_name: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -55,6 +62,11 @@ class CropCycleListResponse(BaseModel):
     start_date: date
     status: str
     current_stage_name: str | None = None
+    total_area_mu: Decimal | None = None
+    unit_area_mu: Decimal | None = None
+    unit_count: int = 0
+    field_name: str | None = None
+    season: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

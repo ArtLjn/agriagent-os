@@ -1,5 +1,7 @@
 """Admin 用户管理 API 集成测试。"""
 
+from datetime import date
+
 import pytest
 
 from app.api.deps import get_current_user, get_db
@@ -94,11 +96,12 @@ def quota_user(client):
             token_weekly_limit=200,
         )
         db.add(user)
+        db.commit()
         db.add(
             TokenDailyStats(
                 user_id=user.id,
                 farm_id=1,
-                date="2026-06-04",
+                date=date(2026, 6, 4),
                 model="qwen3.6-flash",
                 call_type="chat",
                 prompt_tokens=300,

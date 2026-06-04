@@ -6,6 +6,8 @@ import { MainTabNavigator } from "./MainTabNavigator";
 import { CycleListScreen } from "../screens/cycle/CycleListScreen";
 import { CycleDetailScreen } from "../screens/cycle/CycleDetailScreen";
 import { CycleCreateScreen } from "../screens/cycle/CycleCreateScreen";
+import { PlantingUnitManageScreen } from "../screens/cycle/PlantingUnitManageScreen";
+import { WorkOrderCreateScreen } from "../screens/cycle/WorkOrderCreateScreen";
 import { LogListScreen } from "../screens/log/LogListScreen";
 import { LogCreateScreen } from "../screens/log/LogCreateScreen";
 import { CostCreateScreen } from "../screens/cost/CostCreateScreen";
@@ -35,6 +37,8 @@ export type RootStackParamList = {
   CycleList: undefined;
   CycleDetail: { cycleId: number };
   CycleCreate: undefined;
+  PlantingUnits: { cycleId: number };
+  WorkOrderCreate: { cycleId: number; cropName?: string };
   LogList: { cycleId: number };
   LogCreate: { cycleId: number };
   CostCreate: undefined;
@@ -139,6 +143,16 @@ export const AppNavigator: React.FC = () => {
               name="CycleCreate"
               component={CycleCreateScreen}
               options={{ title: "新建茬口" }}
+            />
+            <Stack.Screen
+              name="PlantingUnits"
+              component={PlantingUnitManageScreen}
+              options={{ title: "种植单元" }}
+            />
+            <Stack.Screen
+              name="WorkOrderCreate"
+              component={WorkOrderCreateScreen}
+              options={{ title: "记录作业" }}
             />
             <Stack.Screen
               name="LogList"

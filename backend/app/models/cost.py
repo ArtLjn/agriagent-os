@@ -1,13 +1,5 @@
-from sqlalchemy import (
-    Column,
-    ForeignKey,
-    Integer,
-    String,
-    Numeric,
-    Date,
-    DateTime,
-    func,
-)
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -19,9 +11,11 @@ class CostRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
-    cycle_id = Column(Integer, nullable=True)
+    cycle_id = Column(Integer, ForeignKey("crop_cycles.id"), nullable=True)
     record_type = Column(String(20), nullable=False)
     category = Column(String(50), nullable=False)
+    category_id = Column(Integer, ForeignKey("cost_categories.id"), nullable=True)
+    category_name_snapshot = Column(String(50), nullable=True)
     amount = Column(Numeric(10, 2), nullable=False)
     record_date = Column(Date, nullable=False)
     note = Column(String(500), nullable=True)
@@ -30,5 +24,16 @@ class CostRecord(Base):
     due_date = Column(Date, nullable=True)
     settled_at = Column(DateTime(timezone=True), nullable=True)
     parent_record_id = Column(Integer, ForeignKey("cost_records.id"), nullable=True)
+    source_type = Column(String(50), nullable=True)
+    source_id = Column(Integer, nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    category_ref = relationship("CostCategory", foreign_keys=[category_id])
+
+    @property
+    def source_label(self) -> str | None:
+        """返回账单来源标识，供移动端避免重复录入。"""
+        if self.source_type == "operation_work_order":
+            return "来自农事作业单"
+        return None
