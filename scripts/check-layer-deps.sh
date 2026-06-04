@@ -88,6 +88,27 @@ check_python_imports_recursive_excluding() {
   fi
 }
 
+check_python_files() {
+  PATTERN="$1"
+  MESSAGE="$2"
+  FIX="$3"
+  shift 3
+
+  MATCHES=$(for file in "$@"; do
+    if [ -f "$file" ]; then
+      rg -n --with-filename "$PATTERN" "$file" 2>/dev/null | grep -v "# harness-exempt:" || true
+    fi
+  done)
+
+  if [ -n "$MATCHES" ]; then
+    echo "$MATCHES"
+    echo "❌ ERROR: $MESSAGE"
+    echo "✅ FIX: $FIX"
+    echo "📖 See: docs/architecture/boundaries.md"
+    ERRORS=$((ERRORS + 1))
+  fi
+}
+
 # ── 后端检查 ──
 # 层级（从低到高）: schemas → agents → api → core → models → services
 BACKEND="backend/app"
@@ -136,6 +157,19 @@ if [ -d "$BACKEND" ]; then
     "只允许导入: agents, models, schemas, services"
 
   echo "🔍 检查 Agent 平台边界..."
+  check_python_files \
+    "_execute_pending_action|_execute_advisor_pending_action|manager\\.execute\\(pending\\.skill_name|get_langchain_tools\\(farm_id=farm_id" \
+    "兼容入口重新引入了 pending action 执行逻辑" \
+    "使用 app.agent.executor.pending_actions.handle_pending_action 进行兼容委托" \
+    "$BACKEND/services/agent_service.py" \
+    "$BACKEND/agent/advisor.py"
+
+  check_python_imports_recursive_excluding \
+    "$BACKEND/agent/application" \
+    "^[[:space:]]*from[[:space:]]+app\\.services\\.agent_service[[:space:]]+import[[:space:]]+.*\\b(chat_with_agent|stream_chat_with_agent)\\b" \
+    "agent/application/ 依赖了旧 service 聊天编排入口" \
+    "Agent Application 应拥有聊天生命周期编排，不能导入 services.agent_service 的 chat_with_agent/stream_chat_with_agent"
+
   check_python_imports \
     "$BACKEND/api" \
     "^[[:space:]]*(from|import)[[:space:]]+app\\.(memory|prompt|context)(\\.|[[:space:]]|$)" \

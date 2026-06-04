@@ -11,7 +11,7 @@ client = TestClient(app)
 class TestAgentChat:
     """测试 Agent 对话接口。"""
 
-    @patch("app.agent.application.chat_use_case.chat_with_agent")
+    @patch("app.api.agent.chat")
     def test_chat_endpoint(self, mock_chat) -> None:
         """验证 POST /agent/chat 返回回复。"""
         from app.schemas.agent import ChatResponse
@@ -23,9 +23,9 @@ class TestAgentChat:
         assert response.status_code == 200
         assert response.json()["reply"] == "建议：浇水。"
 
-    @patch("app.agent.application.chat_use_case.chat_with_agent")
+    @patch("app.api.agent.chat")
     def test_chat_endpoint_passes_session_id(self, mock_chat) -> None:
-        """验证 POST /agent/chat 传递 session_id 给 service。"""
+        """验证 POST /agent/chat 传递 session_id 给 use case。"""
         from app.schemas.agent import ChatResponse
 
         mock_chat.return_value = ChatResponse(reply="回复")
@@ -37,12 +37,10 @@ class TestAgentChat:
 
         assert response.status_code == 200
         mock_chat.assert_called_once()
-        call_kwargs = mock_chat.call_args
-        assert call_kwargs.kwargs.get("session_id") == "sess-abc" or "sess-abc" in str(
-            call_kwargs
-        )
+        chat_request = mock_chat.call_args.args[1]
+        assert chat_request.session_id == "sess-abc"
 
-    @patch("app.agent.application.chat_use_case.chat_with_agent")
+    @patch("app.api.agent.chat")
     def test_chat_endpoint_without_session_id(self, mock_chat) -> None:
         """验证 POST /agent/chat 无 session_id 时传 None。"""
         from app.schemas.agent import ChatResponse
@@ -52,24 +50,29 @@ class TestAgentChat:
         response = client.post("/agent/chat", json={"message": "你好"})
 
         assert response.status_code == 200
-        call_kwargs = mock_chat.call_args
-        assert call_kwargs.kwargs.get("session_id") is None or "session_id=None" in str(
-            call_kwargs
-        )
+        chat_request = mock_chat.call_args.args[1]
+        assert chat_request.session_id is None
 
     async def test_chat_use_case_observes_memory_after_completion(self, db_session):
         """验证聊天完成后提交 Memory observation event。"""
         from app.agent.application.chat_use_case import chat
+        from app.agent.executor.models import PendingActionDecision
         from app.models.farm import Farm
-        from app.schemas.agent import ChatRequest, ChatResponse
+        from app.schemas.agent import ChatRequest
 
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
         memory_service = AsyncMock()
 
         with (
             patch(
-                "app.agent.application.chat_use_case.chat_with_agent",
-                return_value=ChatResponse(reply="建议：今天浇水。"),
+                "app.agent.application.chat_use_case.handle_pending_action",
+                new_callable=AsyncMock,
+                return_value=PendingActionDecision.unhandled(),
+            ),
+            patch(
+                "app.agent.application.chat_use_case.invoke_advisor",
+                new_callable=AsyncMock,
+                return_value="建议：今天浇水。",
             ),
             patch(
                 "app.agent.application.chat_use_case.get_memory_service",
@@ -98,13 +101,22 @@ class TestAgentChat:
 class TestAgentChatStream:
     """测试流式对话接口。"""
 
-    @patch("app.agent.application.chat_use_case.stream_chat_with_agent")
-    def test_stream_endpoint_passes_session_id(self, mock_stream) -> None:
+    @patch("app.agent.application.chat_use_case._observe_chat_completion")
+    @patch("app.agent.application.chat_use_case.handle_pending_action")
+    @patch("app.agent.application.chat_use_case.stream_advisor")
+    def test_stream_endpoint_passes_session_id(
+        self,
+        mock_stream,
+        mock_pending,
+        mock_observe,
+    ) -> None:
         """验证 POST /agent/chat/stream 传递 session_id。"""
+        from app.agent.executor.models import PendingActionDecision
 
         async def _fake_stream(*args, **kwargs):
             yield "chunk1"
 
+        mock_pending.return_value = PendingActionDecision.unhandled()
         mock_stream.side_effect = _fake_stream
 
         response = client.post(
@@ -114,11 +126,8 @@ class TestAgentChatStream:
 
         assert response.status_code == 200
         mock_stream.assert_called_once()
-        call_kwargs = mock_stream.call_args
-        assert (
-            "sess-stream" in str(call_kwargs)
-            or call_kwargs.kwargs.get("session_id") == "sess-stream"
-        )
+        assert mock_stream.call_args.kwargs["session_id"] == "sess-stream"
+        mock_observe.assert_awaited_once()
 
 
 class TestAgentDaily:

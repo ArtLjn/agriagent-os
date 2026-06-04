@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.schemas.agent import ChatRequest
 from app.services.agent_service import (
     chat_with_agent,
     get_daily_advice,
@@ -21,6 +22,7 @@ def _make_mock_db() -> MagicMock:
     mock_db.refresh.side_effect = _refresh_side_effect
     # 让缓存查询链式调用返回 None，确保走 LLM 路径
     mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+    mock_db.query.return_value.filter.return_value.first.return_value = None
     return mock_db
 
 
@@ -48,198 +50,125 @@ class TestChatWithAgent:
     """测试 Agent 对话服务。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    async def test_chat_with_agent_returns_reply(self, mock_invoke: AsyncMock) -> None:
-        """验证对话返回回复并保存记录。"""
-        mock_invoke.return_value = "建议：今天浇水。"
+    async def test_chat_with_agent_delegates_to_application_use_case(self) -> None:
+        """验证兼容入口委托 Application 聊天用例。"""
         mock_db = _make_mock_db()
+        farm = MagicMock()
+        farm.id = 1
+        farm.user_id = "user-1"
 
-        result = await chat_with_agent(mock_db, "今天做什么？", farm_id=1)
-
-        assert result.reply == "建议：今天浇水。"
-        mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-
-    @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.save_message")
-    @patch("app.services.agent_service.get_or_create_conversation")
-    async def test_chat_with_session_id_saves_messages(
-        self,
-        mock_get_conv: MagicMock,
-        mock_save_msg: MagicMock,
-        mock_invoke: AsyncMock,
-    ) -> None:
-        """验证 session_id 存在时保存用户和助手消息到会话。"""
-        mock_invoke.return_value = "回复内容"
-        mock_conv = MagicMock()
-        mock_conv.id = 42
-        mock_get_conv.return_value = mock_conv
-        mock_db = _make_mock_db()
-
-        result = await chat_with_agent(
-            mock_db, "你好", farm_id=1, session_id="sess-123"
-        )
-
-        assert result.reply == "回复内容"
-        # 验证 get_or_create_conversation 被调用
-        mock_get_conv.assert_called_once_with(mock_db, 1, "sess-123", user_id=None)
-        # 验证 save_message 被调用 2 次：user + assistant
-        assert mock_save_msg.call_count == 2
-        mock_save_msg.assert_any_call(mock_db, 42, "user", "你好")
-        mock_save_msg.assert_any_call(mock_db, 42, "assistant", "回复内容")
-
-    @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.save_message")
-    @patch("app.services.agent_service.get_or_create_conversation")
-    async def test_chat_with_session_id_passes_conversation_id_to_advisor(
-        self,
-        mock_get_conv: MagicMock,
-        mock_save_msg: MagicMock,
-        mock_invoke: AsyncMock,
-    ) -> None:
-        """验证 session_id 时 conversation_id 传递给 invoke_advisor。"""
-        mock_invoke.return_value = "回复"
-        mock_conv = MagicMock()
-        mock_conv.id = 99
-        mock_get_conv.return_value = mock_conv
-        mock_db = _make_mock_db()
-
-        await chat_with_agent(mock_db, "问题", farm_id=1, session_id="sess-abc")
-
-        # invoke_advisor 应该被传入 db 和 conversation_id
-        mock_invoke.assert_called_once()
-        call_kwargs = mock_invoke.call_args
-        assert (
-            call_kwargs.kwargs.get("db") == mock_db
-            or call_kwargs[1].get("db") == mock_db
-        )
-
-    @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.save_message")
-    async def test_chat_without_session_id_no_conversation(
-        self, mock_save_msg: MagicMock, mock_invoke: AsyncMock
-    ) -> None:
-        """验证无 session_id 时不保存会话消息。"""
-        mock_invoke.return_value = "回复"
-        mock_db = _make_mock_db()
-
-        result = await chat_with_agent(mock_db, "问题", farm_id=1)
-
-        assert result.reply == "回复"
-        mock_save_msg.assert_not_called()
-
-    @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.save_message")
-    @patch("app.services.agent_service.get_or_create_conversation")
-    async def test_chat_pending_confirm_saves_to_conversation(
-        self,
-        mock_get_conv: MagicMock,
-        mock_save_msg: MagicMock,
-        mock_invoke: AsyncMock,
-    ) -> None:
-        """验证 pending action 确认路径也保存会话消息。"""
-        from app.infra.pending_actions import store_pending, remove_pending
-
-        mock_conv = MagicMock()
-        mock_conv.id = 10
-        mock_get_conv.return_value = mock_conv
-
-        # 清理：确保无残留 pending
-        remove_pending(1)
-        store_pending(1, "create_cost_record", {"amount": 100})
-
-        mock_db = _make_mock_db()
-        # mock execute 相关
-        with patch(
-            "app.services.agent_service._execute_pending_action",
-            new_callable=AsyncMock,
-        ) as mock_exec:
-            mock_exec.return_value = "已记账"
+        with (
+            patch(
+                "app.services.agent_service._load_farm_for_application",
+                return_value=farm,
+            ) as mock_load_farm,
+            patch(
+                "app.services.agent_service.application_chat",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.return_value = MagicMock(reply="应用层回复")
             result = await chat_with_agent(
-                mock_db, "确认", farm_id=1, session_id="sess-confirm"
+                mock_db,
+                "你好",
+                farm_id=1,
+                cycle_id=2,
+                session_id="sess-1",
+                user_id="user-1",
+                request_id="req-1",
             )
 
-        assert "已记账" in result.reply or "已执行" in result.reply
-        # 应该保存 user + assistant 消息
-        assert mock_save_msg.call_count == 2
-        mock_save_msg.assert_any_call(mock_db, 10, "user", "确认")
-
-        # 清理
-        remove_pending(1)
-
-    @pytest.mark.asyncio
-    async def test_template_confirm_creates_follow_up_cycle_pending(self) -> None:
-        """确认创建模板后，应自动回到原始创建茬口确认。"""
-        from app.infra.pending_actions import get_pending, remove_pending, store_pending
-
-        remove_pending(1)
-        store_pending(
-            1,
-            "create_crop_template",
-            {"crop_name": "小麦"},
-            original_input="系统还没有小麦模板",
-            follow_up_skill_name="create_crop_cycle",
-            follow_up_params={"crop_name": "小麦"},
-            follow_up_original_input="我想种小麦",
+        assert result.reply == "应用层回复"
+        mock_load_farm.assert_called_once_with(mock_db, 1)
+        mock_chat.assert_awaited_once()
+        delegated_db, delegated_request, delegated_farm = mock_chat.call_args.args
+        assert delegated_db == mock_db
+        assert delegated_request == ChatRequest(
+            message="你好", cycle_id=2, session_id="sess-1"
         )
-
-        mock_db = _make_mock_db()
-        with patch(
-            "app.services.agent_service._execute_pending_action",
-            new_callable=AsyncMock,
-        ) as mock_exec:
-            mock_exec.return_value = "✅ 小麦模板已创建！"
-            result = await chat_with_agent(mock_db, "确认", farm_id=1)
-
-        pending = get_pending(1)
-        assert pending is not None
-        assert pending.skill_name == "create_crop_cycle"
-        assert pending.params == {"crop_name": "小麦"}
-        assert "小麦模板已创建" in result.reply
-        assert "继续创建小麦茬口" in result.reply
-        assert "crop_name" not in result.reply
-
-        remove_pending(1)
+        assert delegated_farm.id == farm.id
+        assert delegated_farm.user_id == "user-1"
+        assert mock_chat.call_args.kwargs == {"request_id": "req-1"}
 
     @pytest.mark.asyncio
-    async def test_cycle_confirm_missing_template_creates_template_pending(
+    async def test_chat_with_agent_backfills_user_id_on_loaded_farm(self) -> None:
+        """验证旧入口传入 user_id 时回填无用户农场。"""
+        mock_db = _make_mock_db()
+        farm = MagicMock()
+        farm.id = 1
+        farm.user_id = None
+
+        with (
+            patch(
+                "app.services.agent_service._load_farm_for_application",
+                return_value=farm,
+            ),
+            patch(
+                "app.services.agent_service.application_chat",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.return_value = MagicMock(reply="回复内容")
+            result = await chat_with_agent(
+                mock_db,
+                "你好",
+                farm_id=1,
+                session_id="sess-123",
+                user_id="user-1",
+            )
+
+        assert result.reply == "回复内容"
+        mock_chat.assert_awaited_once()
+        delegated_farm = mock_chat.call_args.args[2]
+        assert delegated_farm.id == farm.id
+        assert delegated_farm.user_id == "user-1"
+        assert farm.user_id is None
+
+    @pytest.mark.asyncio
+    async def test_chat_with_agent_explicit_user_id_overrides_farm_user_id(
         self,
     ) -> None:
-        """确认创建茬口但缺模板时，应先请求确认创建模板。"""
-        from app.infra.pending_actions import get_pending, remove_pending, store_pending
+        """验证显式 user_id 优先于农场原有 user_id。"""
+        mock_db = _make_mock_db()
+        farm = MagicMock()
+        farm.id = 1
+        farm.user_id = "farm-user"
 
-        remove_pending(1)
-        store_pending(
-            1,
-            "create_crop_cycle",
-            {"crop_name": "小麦"},
-            original_input="我想种小麦",
-        )
+        with (
+            patch(
+                "app.services.agent_service._load_farm_for_application",
+                return_value=farm,
+            ),
+            patch(
+                "app.services.agent_service.application_chat",
+                new_callable=AsyncMock,
+            ) as mock_chat,
+        ):
+            mock_chat.return_value = MagicMock(reply="回复内容")
+            await chat_with_agent(
+                mock_db,
+                "你好",
+                farm_id=1,
+                session_id="sess-123",
+                user_id="explicit-user",
+            )
+
+        delegated_farm = mock_chat.call_args.args[2]
+        assert delegated_farm.user_id == "explicit-user"
+        assert farm.user_id == "farm-user"
+
+    @pytest.mark.asyncio
+    async def test_load_farm_for_application_raises_when_missing(self) -> None:
+        """验证兼容入口加载不到农场时抛出明确错误。"""
+        from app.services.agent_service import _load_farm_for_application
 
         mock_db = _make_mock_db()
-        with patch(
-            "app.services.agent_service._execute_pending_action",
-            new_callable=AsyncMock,
-        ) as mock_exec:
-            mock_exec.return_value = "系统还没有小麦模板，要帮你创建一个吗？"
-            result = await chat_with_agent(mock_db, "确认", farm_id=1)
+        mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        pending = get_pending(1)
-        assert pending is not None
-        assert pending.skill_name == "create_crop_template"
-        assert pending.params == {"crop_name": "小麦"}
-        assert pending.follow_up_skill_name == "create_crop_cycle"
-        assert pending.follow_up_params == {"crop_name": "小麦"}
-        assert "系统还没有小麦作物模板" in result.reply
-        assert "确认创建作物模板" in result.reply
-        assert "已执行：系统还没有" not in result.reply
-        assert "crop_name" not in result.reply
+        with pytest.raises(ValueError, match="未找到农场: 1"):
+            _load_farm_for_application(mock_db, 1)
 
-        remove_pending(1)
+        mock_db.query.assert_called_once()
 
 
 class TestStreamChatWithAgent:
@@ -296,10 +225,10 @@ class TestStreamChatWithAgent:
         )
 
         with patch(
-            "app.services.agent_service._execute_pending_action",
+            "app.agent.executor.pending_actions._execute_write_skill",
             new_callable=AsyncMock,
-        ) as mock_exec:
-            mock_exec.return_value = "系统还没有小麦模板，要帮你创建一个吗？"
+        ) as mock_execute:
+            mock_execute.return_value = "系统还没有小麦模板，要帮你创建一个吗？"
             chunks = []
             async for chunk in stream_chat_with_agent("确认", farm_id=1):
                 chunks.append(chunk)

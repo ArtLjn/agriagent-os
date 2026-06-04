@@ -2,31 +2,25 @@
 
 import json
 import logging
-import re
-import time
 from collections.abc import AsyncGenerator
 from datetime import datetime
+from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 
 from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.llm import get_llm
 from app.agent.prompt_composer import get_composer
-from app.agent.skills import get_langchain_tools
 from app.infra.json_repair import safe_parse_json
 from app.infra.pending_actions import (
-    PendingAction,
-    build_confirm_message,
-    detect_user_intent,
     get_pending,
-    remove_pending,
-    store_pending,
 )
-from app.infra.trace_collector import get_collector
 from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 from app.schemas.agent import (
     AdviceItem,
+    ChatRequest,
     ChatResponse,
     DailyAdviceResponse,
     ReportResponse,
@@ -44,7 +38,7 @@ logger = logging.getLogger(__name__)
 # title 超过此长度截断并加省略号
 _TITLE_MAX_DISPLAY = 10
 _ADVICE_ITEM_MAX = 5
-_MISSING_TEMPLATE_RE = re.compile(r"系统还没有\s*(?P<crop>.+?)\s*模板")
+application_chat = None
 
 
 def _truncate_title(title: str) -> str:
@@ -62,6 +56,14 @@ def _resolve_user_id(
         return user_id
     farm = db.query(Farm).filter(Farm.id == farm_id).first()
     return farm.user_id if farm else None
+
+
+def _load_farm_for_application(db: Session, farm_id: int) -> Farm:
+    """加载 Application 聊天用例需要的农场实体。"""
+    farm = db.query(Farm).filter(Farm.id == farm_id).first()
+    if farm is None:
+        raise ValueError(f"未找到农场: {farm_id}")
+    return farm
 
 
 def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
@@ -105,112 +107,6 @@ def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
         return "", [fallback_item]
 
 
-async def _execute_pending_action(
-    farm_id: int, skill_name: str, params: dict, farm_uid: str | None = None
-) -> str:
-    """执行 pending action 中存储的写操作 Skill。"""
-    start = time.time()
-    error_msg = None
-    result_str = ""
-    try:
-        tool_map = {
-            t.name: t for t in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
-        }
-        tool = tool_map.get(skill_name)
-        if not tool:
-            return f"未知工具: {skill_name}"
-        result = await tool.ainvoke(params)
-        result_str = str(result)
-        return result_str
-    except Exception as exc:
-        error_msg = str(exc)
-        raise
-    finally:
-        get_collector().record(
-            node_type="skill_call",
-            node_name=skill_name,
-            input_data=params,
-            output_data=result_str or None,
-            start_time=start,
-            end_time=time.time(),
-            error_message=error_msg,
-        )
-
-
-def _extract_missing_template_crop(pending: PendingAction, result: str) -> str:
-    """从缺模板结果中提取作物名，优先使用 pending 参数。"""
-    crop_name = str(pending.params.get("crop_name") or "").strip()
-    if crop_name:
-        return crop_name
-
-    match = _MISSING_TEMPLATE_RE.search(result)
-    return match.group("crop").strip() if match else ""
-
-
-def _format_follow_up_intro(skill_name: str, params: dict) -> str:
-    """生成后续确认动作的自然语言引导。"""
-    if skill_name == "create_crop_cycle":
-        crop_name = str(params.get("crop_name") or "").strip()
-        return (
-            f"现在可以继续创建{crop_name}茬口。"
-            if crop_name
-            else "现在可以继续创建茬口。"
-        )
-
-    return "下一步需要继续确认。"
-
-
-async def _confirm_pending_action(farm_id: int, pending: PendingAction) -> str:
-    """执行已确认的 pending action，并处理缺模板和链式动作。"""
-    result = await _execute_pending_action(farm_id, pending.skill_name, pending.params)
-    remove_pending(farm_id)
-
-    if (
-        pending.skill_name == "create_crop_cycle"
-        and "系统还没有" in result
-        and "模板" in result
-    ):
-        crop_name = _extract_missing_template_crop(pending, result)
-        if crop_name:
-            store_pending(
-                farm_id,
-                "create_crop_template",
-                {"crop_name": crop_name},
-                original_input=f"系统还没有{crop_name}作物模板",
-                follow_up_skill_name="create_crop_cycle",
-                follow_up_params=dict(pending.params),
-                follow_up_original_input=pending.original_input,
-            )
-            confirm = build_confirm_message(
-                "create_crop_template",
-                {"crop_name": crop_name},
-                original_input=f"系统还没有{crop_name}作物模板",
-            )
-            return (
-                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n{confirm}"
-            )
-
-    if pending.follow_up_skill_name and pending.follow_up_params is not None:
-        store_pending(
-            farm_id,
-            pending.follow_up_skill_name,
-            dict(pending.follow_up_params),
-            original_input=pending.follow_up_original_input,
-        )
-        confirm = build_confirm_message(
-            pending.follow_up_skill_name,
-            pending.follow_up_params,
-            original_input=pending.follow_up_original_input,
-        )
-        intro = _format_follow_up_intro(
-            pending.follow_up_skill_name,
-            pending.follow_up_params,
-        )
-        return f"已执行：{result}\n\n{intro}\n{confirm}"
-
-    return f"已执行：{result}"
-
-
 async def chat_with_agent(
     db: Session,
     message: str,
@@ -220,102 +116,25 @@ async def chat_with_agent(
     user_id: str | None = None,
     request_id: str = "",
 ) -> ChatResponse:
-    """与用户进行 Agent 对话，支持写操作确认流程。"""
-    user_id = _resolve_user_id(db, farm_id, user_id)
-    logger.info(
-        "开始对话 | farm=%s cycle=%s | input: %s", farm_id, cycle_id, message[:100]
+    """兼容旧 service 入口，委托 Application 聊天用例。"""
+    global application_chat
+    if application_chat is None:
+        from app.agent.application.chat_use_case import chat as application_chat
+
+    farm = _load_farm_for_application(db, farm_id)
+    application_farm = (
+        SimpleNamespace(id=farm.id, user_id=user_id) if user_id else farm
     )
-
-    # 如果有 session_id，获取或创建会话并保存用户消息
-    conversation = None
-    if session_id:
-        conversation = get_or_create_conversation(
-            db, farm_id, session_id, user_id=user_id
-        )
-        save_message(db, conversation.id, "user", message)
-
-    # 检查是否有 pending action
-    pending = get_pending(farm_id)
-    if pending is not None:
-        intent = detect_user_intent(message)
-
-        if intent == "confirm":
-            # 用户确认：执行 pending action
-            logger.info(
-                "用户确认执行 | farm=%s skill=%s params=%s",
-                farm_id,
-                pending.skill_name,
-                pending.params,
-            )
-            try:
-                reply = await _confirm_pending_action(farm_id, pending)
-            except Exception as exc:
-                logger.error("执行 pending action 失败: %s", exc)
-                reply = f"执行失败：{exc}"
-                remove_pending(farm_id)
-
-            record = AgentRecord(
-                cycle_id=cycle_id, record_type="chat", content=reply, farm_id=farm_id
-            )
-            db.add(record)
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
-                raise
-            if conversation:
-                save_message(db, conversation.id, "assistant", reply)
-            return ChatResponse(reply=reply)
-
-        if intent == "cancel":
-            # 用户取消：删除 pending action
-            logger.info("用户取消操作 | farm=%s skill=%s", farm_id, pending.skill_name)
-            remove_pending(farm_id)
-            reply = "已取消操作。"
-            record = AgentRecord(
-                cycle_id=cycle_id, record_type="chat", content=reply, farm_id=farm_id
-            )
-            db.add(record)
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
-                raise
-            if conversation:
-                save_message(db, conversation.id, "assistant", reply)
-            return ChatResponse(reply=reply)
-
-        # intent == "modify"：用户修正参数，交给 LLM 处理
-        # 保留 pending action 不删除，让 LLM 根据上下文重新决策
-
-    # 统一走 LangGraph Function Calling 路由
-    context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
-    full_input = context + message
-    reply = await invoke_advisor(
-        full_input,
-        farm_id=farm_id,
-        db=db,
-        conversation_id=conversation.id if conversation else None,
-        session_id=session_id or "",
+    return await application_chat(
+        db,
+        ChatRequest(
+            message=message,
+            cycle_id=cycle_id,
+            session_id=session_id,
+        ),
+        application_farm,
         request_id=request_id,
-        user_id=user_id,
     )
-
-    record = AgentRecord(
-        cycle_id=cycle_id, record_type="chat", content=reply, farm_id=farm_id
-    )
-    db.add(record)
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    logger.info("对话记录已保存 | record_id=%s", record.id)
-
-    if conversation:
-        save_message(db, conversation.id, "assistant", reply)
-
-    return ChatResponse(reply=reply)
 
 
 async def stream_chat_with_agent(
@@ -340,31 +159,10 @@ async def stream_chat_with_agent(
     # 检查是否有 pending action（写操作确认流程）
     pending = get_pending(farm_id)
     if pending is not None:
-        intent = detect_user_intent(message)
-
-        if intent == "confirm":
-            logger.info(
-                "用户确认执行 | farm=%s skill=%s params=%s",
-                farm_id,
-                pending.skill_name,
-                pending.params,
-            )
-            try:
-                reply = await _confirm_pending_action(farm_id, pending)
-            except Exception as exc:
-                logger.error("执行 pending action 失败: %s", exc)
-                reply = f"执行失败：{exc}"
-                remove_pending(farm_id)
-            yield reply
+        decision = await handle_pending_action(farm_id=farm_id, message=message)
+        if decision.handled:
+            yield decision.reply
             return
-
-        if intent == "cancel":
-            logger.info("用户取消操作 | farm=%s skill=%s", farm_id, pending.skill_name)
-            remove_pending(farm_id)
-            yield "已取消操作。"
-            return
-
-        # intent == "modify"：继续走 LangGraph，让 LLM 根据上下文重新决策
 
     # 统一走 LangGraph Function Calling 流式路由
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
