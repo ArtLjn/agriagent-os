@@ -88,6 +88,16 @@ def test_check_user_quota_rejects_missing_user_id() -> None:
     assert result.exceeded_period == "identity"
 
 
+def test_check_user_quota_rejects_unknown_user_id() -> None:
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+
+    result = check_user_quota("unknown", db)
+
+    assert result.allowed is False
+    assert result.exceeded_period == "identity"
+
+
 def test_check_user_quota_allows_under_limits() -> None:
     db = MagicMock()
     user = User(
@@ -185,3 +195,18 @@ def test_check_quota_wraps_farm_user_lookup(mock_session_local) -> None:
         check_user.return_value = QuotaCheckResult(allowed=True)
         assert check_quota(1) is True
         check_user.assert_called_once()
+        db.close.assert_called_once()
+
+
+@patch("app.services.quota_service.SessionLocal")
+def test_check_quota_rejects_missing_farm(mock_session_local) -> None:
+    db = MagicMock()
+    mock_session_local.return_value = db
+    db.query.return_value.filter.return_value.first.return_value = None
+    with patch("app.services.quota_service.check_user_quota") as check_user:
+        check_user.return_value = QuotaCheckResult(
+            allowed=False, exceeded_period="identity"
+        )
+        assert check_quota(1) is False
+        check_user.assert_called_once_with(None, db)
+        db.close.assert_called_once()
