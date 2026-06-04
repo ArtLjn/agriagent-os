@@ -34,13 +34,18 @@ def create_record(
     farm: Farm = Depends(get_current_farm),
 ):
     """创建一条成本或收入记录。"""
-    return cost_service.create_record(db, record, farm_id=farm.id)
+    try:
+        return cost_service.create_record(db, record, farm_id=farm.id)
+    except cost_service.DuplicateSourceRecordError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.get("", response_model=PaginatedResponse[CostRecordResponse])
 def list_records(
     cycle_id: int | None = None,
     category: str | None = None,
+    source_type: str | None = None,
+    source_id: int | None = None,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -49,10 +54,22 @@ def list_records(
     """查询成本记账记录列表（分页）。"""
     skip = (page - 1) * size
     items = cost_service.get_records(
-        db, farm_id=farm.id, cycle_id=cycle_id, category=category, skip=skip, limit=size
+        db,
+        farm_id=farm.id,
+        cycle_id=cycle_id,
+        category=category,
+        source_type=source_type,
+        source_id=source_id,
+        skip=skip,
+        limit=size,
     )
     total = cost_service.count_records(
-        db, farm_id=farm.id, cycle_id=cycle_id, category=category
+        db,
+        farm_id=farm.id,
+        cycle_id=cycle_id,
+        category=category,
+        source_type=source_type,
+        source_id=source_id,
     )
     return {"items": items, "total": total}
 

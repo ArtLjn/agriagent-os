@@ -3,6 +3,8 @@
 from datetime import date
 from decimal import Decimal
 
+from app.models.planting import LaborEntry
+
 
 def _create_watermelon_template(client) -> int:
     response = client.post(
@@ -30,6 +32,20 @@ def _create_watermelon_template(client) -> int:
     return response.json()["id"]
 
 
+def test_labor_entry_client_request_id_unique_per_farm():
+    """工资幂等号必须有数据库唯一防线，避免并发重复记账。"""
+    constraint = next(
+        item
+        for item in LaborEntry.__table__.constraints
+        if item.name == "uq_labor_entries_farm_client_request"
+    )
+
+    assert [column.name for column in constraint.columns] == [
+        "farm_id",
+        "client_request_id",
+    ]
+
+
 def _create_watermelon_cycle(client) -> int:
     template_id = _create_watermelon_template(client)
     response = client.post(
@@ -42,6 +58,36 @@ def _create_watermelon_cycle(client) -> int:
             "total_area_mu": "18.00",
             "season": "春茬",
             "batch_note": "兼容旧地块字段，后续拆分为棚",
+        },
+    )
+    assert response.status_code == 200
+    return response.json()["id"]
+
+
+def _create_cycle(client, crop_name: str, cycle_name: str) -> int:
+    response = client.post(
+        "/crops/templates",
+        json={
+            "name": crop_name,
+            "variety": "常规",
+            "stages": [
+                {
+                    "name": "生长期",
+                    "duration_days": 30,
+                    "order_index": 0,
+                    "key_tasks": "日常管理",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    template_id = response.json()["id"]
+    response = client.post(
+        "/cycles",
+        json={
+            "name": cycle_name,
+            "crop_template_id": template_id,
+            "start_date": "2026-03-01",
         },
     )
     assert response.status_code == 200
@@ -147,6 +193,310 @@ def test_create_work_order_with_labor_generates_cost_record(client):
 
     profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
     assert Decimal(profit["total_cost"]) == Decimal("800.00")
+
+
+def test_save_wage_reuses_worker_across_cycles_and_groups_history(client):
+    """独立记工资按姓名复用全场工人，并按茬口返回用工历史。"""
+    watermelon_cycle_id = _create_cycle(client, "西瓜", "2026 春茬西瓜")
+    bean_cycle_id = _create_cycle(client, "豆角", "2026 春茬豆角")
+
+    for cycle_id, operation_type in [
+        (watermelon_cycle_id, "人工授粉"),
+        (bean_cycle_id, "采收"),
+    ]:
+        response = client.post(
+            "/planting/labor/wages",
+            json={
+                "cycle_id": cycle_id,
+                "operation_type": operation_type,
+                "worker_name": "老王",
+                "quantity": "1",
+                "unit_price": "200.00",
+                "paid_amount": "50.00",
+                "work_date": "2026-04-01",
+                "client_request_id": f"老王-{cycle_id}-{operation_type}",
+            },
+        )
+        assert response.status_code == 200
+
+    workers = client.get("/planting/workers/summary").json()
+
+    assert workers["total"] == 1
+    worker = workers["items"][0]
+    assert worker["name"] == "老王"
+    assert worker["total_payable"] == "400.00"
+    assert worker["total_paid"] == "100.00"
+    assert worker["total_unpaid"] == "300.00"
+    assert {item["cycle_id"] for item in worker["cycle_summaries"]} == {
+        watermelon_cycle_id,
+        bean_cycle_id,
+    }
+
+
+def test_save_wage_generates_single_traceable_labor_cost(client):
+    """保存工资生成一条可追溯到工资记录的人工成本账单。"""
+    cycle_id = _create_watermelon_cycle(client)
+
+    response = client.post(
+        "/planting/labor/wages",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "整枝打杈",
+            "worker_name": "老王",
+            "quantity": "2",
+            "unit_price": "180.00",
+            "paid_amount": "100.00",
+            "note": "两天工资，先付 100",
+            "work_date": "2026-04-02",
+            "client_request_id": "整枝打杈-老王-20260402",
+        },
+    )
+
+    assert response.status_code == 200
+    wage = response.json()
+    assert wage["worker_name"] == "老王"
+    assert wage["payable_amount"] == "360.00"
+    assert wage["paid_amount"] == "100.00"
+    assert wage["unpaid_amount"] == "260.00"
+    assert wage["cost_record_id"] is not None
+
+    costs = client.get(
+        f"/costs?cycle_id={cycle_id}&category=人工&source_type=labor_entry"
+    ).json()
+    assert costs["total"] == 1
+    cost = costs["items"][0]
+    assert cost["amount"] == "360.00"
+    assert cost["source_type"] == "labor_entry"
+    assert cost["source_id"] == wage["id"]
+    assert cost["source_label"] == "来自工资记录"
+
+
+def test_duplicate_wage_save_updates_source_cost_without_duplicate_expense(client):
+    """使用同一来源重复保存工资时更新原人工账单，利润支出不翻倍。"""
+    cycle_id = _create_watermelon_cycle(client)
+    payload = {
+        "cycle_id": cycle_id,
+        "operation_type": "采收",
+        "worker_name": "老王",
+        "quantity": "1",
+        "unit_price": "200.00",
+        "paid_amount": "0.00",
+        "work_date": "2026-04-03",
+        "client_request_id": "采收-老王-20260403",
+    }
+
+    first = client.post("/planting/labor/wages", json=payload)
+    second = client.post(
+        "/planting/labor/wages",
+        json={**payload, "quantity": "2", "paid_amount": "150.00"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+    assert second.json()["payable_amount"] == "400.00"
+    assert second.json()["paid_amount"] == "150.00"
+    assert second.json()["unpaid_amount"] == "250.00"
+
+    costs = client.get(f"/costs?cycle_id={cycle_id}&category=人工").json()
+    assert costs["total"] == 1
+    assert costs["items"][0]["amount"] == "400.00"
+
+    profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
+    assert Decimal(profit["total_cost"]) == Decimal("400.00")
+
+
+def test_save_wage_requires_client_request_id(client):
+    """独立记工资必须带客户端幂等键。"""
+    cycle_id = _create_watermelon_cycle(client)
+
+    response = client.post(
+        "/planting/labor/wages",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "采收",
+            "worker_name": "老王",
+            "quantity": "1",
+            "unit_price": "200.00",
+            "paid_amount": "0.00",
+            "work_date": "2026-04-03",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_wage_syncs_labor_entry_context_and_cost(client):
+    """按工资记录更新金额和上下文时，同步用工记录与人工账单。"""
+    cycle_id = _create_watermelon_cycle(client)
+    created = client.post(
+        "/planting/labor/wages",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "采收",
+            "worker_name": "老王",
+            "quantity": "1",
+            "unit_price": "200.00",
+            "paid_amount": "0.00",
+            "work_date": "2026-04-03",
+            "client_request_id": "更新工资-老王-20260403",
+        },
+    ).json()
+
+    response = client.patch(
+        f"/planting/labor/wages/{created['id']}",
+        json={
+            "operation_type": "装车",
+            "quantity": "2",
+            "unit_price": "180.00",
+            "paid_amount": "120.00",
+            "note": "改为两天装车工资",
+            "work_date": "2026-04-04",
+        },
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["operation_type"] == "装车"
+    assert updated["payable_amount"] == "360.00"
+    assert updated["paid_amount"] == "120.00"
+    assert updated["unpaid_amount"] == "240.00"
+
+    costs = client.get(
+        f"/costs?cycle_id={cycle_id}&source_type=labor_entry&source_id={created['id']}"
+    ).json()
+    assert costs["total"] == 1
+    assert costs["items"][0]["amount"] == "360.00"
+    assert costs["items"][0]["note"] == "老王装车工资"
+
+    profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
+    assert Decimal(profit["total_cost"]) == Decimal("360.00")
+
+
+def test_update_wage_to_zero_soft_deletes_existing_labor_cost(client):
+    """工资金额更新为 0 后软删除原人工账单，利润不残留旧金额。"""
+    cycle_id = _create_watermelon_cycle(client)
+    created = client.post(
+        "/planting/labor/wages",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "采收",
+            "worker_name": "老王",
+            "quantity": "1",
+            "unit_price": "200.00",
+            "paid_amount": "0.00",
+            "work_date": "2026-04-03",
+            "client_request_id": "归零工资-老王-20260403",
+        },
+    ).json()
+
+    response = client.patch(
+        f"/planting/labor/wages/{created['id']}",
+        json={"quantity": "1", "unit_price": "0.00", "paid_amount": "0.00"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["payable_amount"] == "0.00"
+
+    costs = client.get(
+        f"/costs?cycle_id={cycle_id}&source_type=labor_entry&source_id={created['id']}"
+    ).json()
+    assert costs["total"] == 0
+    profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
+    assert Decimal(profit["total_cost"]) == Decimal("0")
+
+
+def test_profit_total_expense_equals_filtered_ledger_sum_for_labor(client):
+    """利润总支出等于同茬口账单支出合计，人工成本只统计一次。"""
+    cycle_id = _create_watermelon_cycle(client)
+    client.post(
+        "/planting/labor/wages",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "采收",
+            "worker_name": "老王",
+            "quantity": "3",
+            "unit_price": "120.00",
+            "paid_amount": "360.00",
+            "work_date": "2026-04-04",
+            "client_request_id": "采收-老王-20260404",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "肥料",
+            "amount": "80.00",
+            "record_date": "2026-04-04",
+        },
+    )
+
+    ledger = client.get(f"/costs?cycle_id={cycle_id}").json()
+    ledger_total = sum(Decimal(item["amount"]) for item in ledger["items"])
+    profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
+    labor_ledger = client.get(
+        f"/costs?cycle_id={cycle_id}&category=人工&source_type=labor_entry"
+    ).json()
+
+    assert Decimal(profit["total_cost"]) == ledger_total
+    assert Decimal(profit["total_cost"]) == Decimal("440.00")
+    assert labor_ledger["total"] == 1
+    assert labor_ledger["items"][0]["amount"] == "360.00"
+
+
+def test_profit_labor_breakdown_includes_wage_and_work_order_labor(client):
+    """利润统计返回工资记录和作业单两类人工成本拆分。"""
+    cycle_id = _create_watermelon_cycle(client)
+    worker = client.post("/planting/workers", json={"name": "老李"}).json()
+    client.post(
+        "/planting/labor/wages",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "采收",
+            "worker_name": "老王",
+            "quantity": "2",
+            "unit_price": "150.00",
+            "paid_amount": "300.00",
+            "work_date": "2026-04-05",
+            "client_request_id": "利润拆分-工资-20260405",
+        },
+    )
+    client.post(
+        "/planting/work-orders",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "装车",
+            "operation_date": "2026-04-05",
+            "scope_type": "cycle",
+            "labor_entries": [
+                {
+                    "worker_id": worker["id"],
+                    "quantity": "1",
+                    "unit_price": "200.00",
+                    "paid_amount": "200.00",
+                }
+            ],
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "肥料",
+            "amount": "80.00",
+            "record_date": "2026-04-05",
+        },
+    )
+
+    profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
+
+    assert profit["total_cost"] == "580.00"
+    assert profit["labor_cost"] == "500.00"
+    assert profit["labor_entry_cost"] == "300.00"
+    assert profit["operation_labor_cost"] == "200.00"
 
 
 def test_operation_types_prioritize_watermelon_templates(client):

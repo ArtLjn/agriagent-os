@@ -1,13 +1,35 @@
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy import event
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+
+ACTIVE_SOURCE_KEY = "active"
 
 
 class CostRecord(Base):
     """成本记账模型，记录种植周期中的成本与收入。"""
 
     __tablename__ = "cost_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "farm_id",
+            "source_type",
+            "source_id",
+            "source_active_key",
+            name="uq_cost_records_active_source",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
@@ -26,6 +48,7 @@ class CostRecord(Base):
     parent_record_id = Column(Integer, ForeignKey("cost_records.id"), nullable=True)
     source_type = Column(String(50), nullable=True)
     source_id = Column(Integer, nullable=True)
+    source_active_key = Column(String(20), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -36,4 +59,18 @@ class CostRecord(Base):
         """返回账单来源标识，供移动端避免重复录入。"""
         if self.source_type == "operation_work_order":
             return "来自农事作业单"
+        if self.source_type == "labor_entry":
+            return "来自工资记录"
         return None
+
+
+@event.listens_for(CostRecord, "before_insert")
+@event.listens_for(CostRecord, "before_update")
+def _sync_source_active_key(_mapper, _connection, record: CostRecord) -> None:
+    """保证活动来源账单不会以空 active key 入库。"""
+    if record.deleted_at is not None:
+        record.source_active_key = None
+    elif record.source_type is not None and record.source_id is not None:
+        record.source_active_key = ACTIVE_SOURCE_KEY
+    else:
+        record.source_active_key = None

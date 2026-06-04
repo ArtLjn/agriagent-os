@@ -45,6 +45,20 @@ const QUICK_ACTIONS = [
     route: "CycleList",
   },
   {
+    label: "工人管理",
+    icon: "account-hard-hat",
+    iconBg: "#EEF4FF",
+    iconColor: "#4A7BF7",
+    route: "WorkerList",
+  },
+  {
+    label: "记一笔账",
+    icon: "cash-plus",
+    iconBg: "#FFF1F2",
+    iconColor: "#C45B5B",
+    route: "CostCreate",
+  },
+  {
     label: "作物模板",
     icon: "seed",
     iconBg: "#FFF8E8",
@@ -314,7 +328,7 @@ const styles = StyleSheet.create({
   },
   quickActionsGrid: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     alignItems: "flex-start",
   },
   quickActionItem: {

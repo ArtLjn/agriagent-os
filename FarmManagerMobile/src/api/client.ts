@@ -1,6 +1,6 @@
 import SSE from 'react-native-sse';
 import axios from 'axios';
-import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse, ReportResponse, ReportListResponse, PlantingUnit, OperationType, Worker, OperationWorkOrder, LaborEntryCreate } from './types';
+import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse, ReportResponse, ReportListResponse, PlantingUnit, OperationType, Worker, OperationWorkOrder, LaborEntryCreate, WageCreateRequest, WageEntryResponse, WorkerSummaryResponse, UnsettledLaborSummary } from './types';
 
 const API_BASE_URL = 'http://172.16.57.244:8099';
 
@@ -144,11 +144,17 @@ export const plantingApi = {
       params: cropName ? { crop_name: cropName } : undefined,
     }),
   getWorkers: () => apiClient.get<Worker[]>('/planting/workers'),
+  getWorkerSummary: () =>
+    apiClient.get<WorkerSummaryResponse>('/planting/workers/summary'),
   createWorker: (data: {
     name: string;
     default_pay_type?: string;
     default_unit_price?: string;
   }) => apiClient.post<Worker>('/planting/workers', data),
+  createWage: (data: WageCreateRequest) =>
+    apiClient.post<WageEntryResponse>('/planting/labor/wages', data),
+  getUnsettledLaborSummary: () =>
+    apiClient.get<UnsettledLaborSummary>('/planting/labor/unsettled-summary'),
   createWorkOrder: (data: {
     cycle_id: number;
     operation_type: string;
@@ -174,7 +180,12 @@ export const logApi = {
 
 // 成本记账
 export const costApi = {
-  getRecords: (params?: { cycle_id?: number; category?: string }) =>
+  getRecords: (params?: {
+    cycle_id?: number;
+    category?: string;
+    source_type?: string;
+    source_id?: number;
+  }) =>
     apiClient.get('/costs', { params }),
   createRecord: (data: {
     cycle_id?: number;

@@ -14,11 +14,15 @@ from app.schemas.planting import (
     PlantingUnitResponse,
     PlantingUnitUpdate,
     RecentOperationResponse,
+    WageSaveRequest,
+    WageSaveResponse,
+    WageUpdateRequest,
     WorkerCreate,
+    WorkerLaborSummary,
     WorkerResponse,
     WorkerUpdate,
 )
-from app.services import planting_read_service, planting_service
+from app.services import labor_service, planting_read_service, planting_service
 
 router = APIRouter(prefix="/planting", tags=["planting"])
 
@@ -94,6 +98,19 @@ def list_workers(
     return planting_service.list_workers(db, farm.id, active_only=active_only)
 
 
+@router.get("/workers/summary", response_model=PaginatedResponse[WorkerLaborSummary])
+def list_worker_summaries(
+    active_only: bool = False,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """查询工人管理页摘要。"""
+    items = planting_read_service.list_worker_labor_summaries(
+        db, farm.id, active_only=active_only
+    )
+    return {"items": items, "total": len(items)}
+
+
 @router.put("/workers/{worker_id}", response_model=WorkerResponse)
 def update_worker(
     worker_id: int,
@@ -126,6 +143,37 @@ def delete_worker(
 def list_operation_types(crop_name: str | None = None):
     """查询通用或西瓜内置作业类型。"""
     return planting_service.get_operation_types(crop_name)
+
+
+@router.post("/labor/wages", response_model=WageSaveResponse)
+def save_wage(
+    data: WageSaveRequest,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """统一保存独立工资记录，并同步人工成本账单。"""
+    try:
+        entry, cost_record_id = labor_service.save_wage_entry(db, data, farm.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return planting_read_service.to_wage_response(entry, cost_record_id)
+
+
+@router.patch("/labor/wages/{labor_entry_id}", response_model=WageSaveResponse)
+def update_wage(
+    labor_entry_id: int,
+    data: WageUpdateRequest,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """更新独立工资记录，并同步人工成本账单。"""
+    try:
+        entry, cost_record_id = labor_service.update_wage_entry(
+            db, labor_entry_id, data, farm.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return planting_read_service.to_wage_response(entry, cost_record_id)
 
 
 @router.post("/work-orders", response_model=OperationWorkOrderResponse)

@@ -9,6 +9,15 @@ from app.models.cost import CostRecord
 from app.models.cost_category import CostCategory
 from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary
 
+ACTIVE_SOURCE_KEY = "active"
+LABOR_CATEGORY = "人工"
+LABOR_ENTRY_SOURCE = "labor_entry"
+WORK_ORDER_SOURCE = "operation_work_order"
+
+
+class DuplicateSourceRecordError(ValueError):
+    """同一来源已存在活动账单。"""
+
 
 def _find_category(
     db: Session, farm_id: int, category_name: str, record_type: str
@@ -37,6 +46,9 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         新创建的 CostRecord 实例。
     """
     category = _find_category(db, farm_id, record.category, record.record_type)
+    source_active_key = _source_active_key(record.source_type, record.source_id)
+    if source_active_key:
+        _ensure_source_record_unique(db, farm_id, record.source_type, record.source_id)
     db_record = CostRecord(
         cycle_id=record.cycle_id,
         record_type=record.record_type,
@@ -54,6 +66,7 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         parent_record_id=record.parent_record_id,
         source_type=record.source_type,
         source_id=record.source_id,
+        source_active_key=source_active_key,
     )
     db.add(db_record)
     try:
@@ -66,11 +79,37 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
     return db_record
 
 
+def _source_active_key(source_type: str | None, source_id: int | None) -> str | None:
+    if source_type is not None and source_id is not None:
+        return ACTIVE_SOURCE_KEY
+    return None
+
+
+def _ensure_source_record_unique(
+    db: Session, farm_id: int, source_type: str | None, source_id: int | None
+) -> None:
+    exists = (
+        db.query(CostRecord.id)
+        .filter(
+            CostRecord.farm_id == farm_id,
+            CostRecord.source_type == source_type,
+            CostRecord.source_id == source_id,
+            CostRecord.source_active_key == ACTIVE_SOURCE_KEY,
+            CostRecord.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if exists:
+        raise DuplicateSourceRecordError("同一来源已存在活动账单")
+
+
 def get_records(
     db: Session,
     farm_id: int,
     cycle_id: int | None = None,
     category: str | None = None,
+    source_type: str | None = None,
+    source_id: int | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[CostRecord]:
@@ -95,6 +134,10 @@ def get_records(
         query = query.filter(CostRecord.cycle_id == cycle_id)
     if category is not None:
         query = query.filter(CostRecord.category == category)
+    if source_type is not None:
+        query = query.filter(CostRecord.source_type == source_type)
+    if source_id is not None:
+        query = query.filter(CostRecord.source_id == source_id)
     return query.order_by(CostRecord.record_date.desc()).offset(skip).limit(limit).all()
 
 
@@ -103,6 +146,8 @@ def count_records(
     farm_id: int,
     cycle_id: int | None = None,
     category: str | None = None,
+    source_type: str | None = None,
+    source_id: int | None = None,
 ) -> int:
     """查询成本记账记录总数。
 
@@ -123,6 +168,10 @@ def count_records(
         query = query.filter(CostRecord.cycle_id == cycle_id)
     if category is not None:
         query = query.filter(CostRecord.category == category)
+    if source_type is not None:
+        query = query.filter(CostRecord.source_type == source_type)
+    if source_id is not None:
+        query = query.filter(CostRecord.source_id == source_id)
     return query.count()
 
 
@@ -154,11 +203,30 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
         (r.amount for r in records if r.record_type == "income"),
         Decimal("0"),
     )
+    labor_entry_cost = _sum_labor_source(records, LABOR_ENTRY_SOURCE)
+    operation_labor_cost = _sum_labor_source(records, WORK_ORDER_SOURCE)
+    labor_cost = labor_entry_cost + operation_labor_cost
     return CycleProfit(
         cycle_id=cycle_id,
         total_cost=total_cost,
         total_income=total_income,
         net_profit=total_income - total_cost,
+        labor_cost=labor_cost,
+        labor_entry_cost=labor_entry_cost,
+        operation_labor_cost=operation_labor_cost,
+    )
+
+
+def _sum_labor_source(records: list[CostRecord], source_type: str) -> Decimal:
+    return sum(
+        (
+            record.amount
+            for record in records
+            if record.record_type == "cost"
+            and record.category == LABOR_CATEGORY
+            and record.source_type == source_type
+        ),
+        Decimal("0"),
     )
 
 
@@ -176,6 +244,7 @@ def delete_record(db: Session, record_id: int, farm_id: int) -> CostRecord | Non
     if not record:
         return None
     record.deleted_at = datetime.now(timezone.utc)
+    record.source_active_key = None
     try:
         db.commit()
         invalidate_farm_context(farm_id)

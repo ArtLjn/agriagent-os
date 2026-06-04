@@ -1,29 +1,23 @@
-"""种植单元、农事作业单和轻量用工服务。"""
-
-from decimal import Decimal
+"""种植单元、农事作业单和工人档案服务。"""
 
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
-from app.models.cost import CostRecord
-from app.models.cost_category import CostCategory
 from app.models.cycle import CropCycle
 from app.models.planting import (
-    LaborEntry,
     OperationWorkOrder,
     OperationWorkOrderUnit,
     PlantingUnit,
     Worker,
 )
 from app.schemas.planting import (
-    LaborEntryCreate,
     OperationWorkOrderCreate,
     PlantingUnitCreate,
     PlantingUnitUpdate,
     WorkerCreate,
     WorkerUpdate,
 )
-from app.services.cost_service import _find_category
+from app.services import labor_service
 
 WATERMELON_OPERATION_TYPES = [
     "定植",
@@ -42,8 +36,6 @@ WATERMELON_OPERATION_TYPES = [
 ]
 
 GENERAL_OPERATION_TYPES = ["浇水", "施肥", "打药", "除草", "巡棚", "采收", "其他"]
-LABOR_CATEGORY = "人工"
-WORK_ORDER_SOURCE = "operation_work_order"
 
 
 def _get_cycle(db: Session, cycle_id: int, farm_id: int) -> CropCycle:
@@ -124,6 +116,9 @@ def delete_unit(db: Session, unit_id: int, farm_id: int) -> None:
 
 def create_worker(db: Session, data: WorkerCreate, farm_id: int) -> Worker:
     """创建工人档案。"""
+    existing = _find_worker_by_name(db, data.name, farm_id)
+    if existing:
+        return existing
     worker = Worker(farm_id=farm_id, **data.model_dump())
     db.add(worker)
     try:
@@ -170,6 +165,16 @@ def _get_worker(db: Session, worker_id: int, farm_id: int) -> Worker:
     if not worker:
         raise ValueError("工人不存在")
     return worker
+
+
+def _find_worker_by_name(db: Session, name: str, farm_id: int) -> Worker | None:
+    normalized = name.strip()
+    return (
+        db.query(Worker)
+        .filter(Worker.farm_id == farm_id, Worker.name == normalized)
+        .order_by(Worker.id)
+        .first()
+    )
 
 
 def delete_worker(db: Session, worker_id: int, farm_id: int) -> None:
@@ -221,10 +226,10 @@ def create_work_order(
         db.add(OperationWorkOrderUnit(work_order_id=work_order.id, unit_id=unit_id))
 
     for labor in data.labor_entries:
-        db.add(_build_labor_entry(db, labor, work_order.id, farm_id))
+        db.add(labor_service.build_labor_entry(db, labor, work_order.id, farm_id))
 
     db.flush()
-    _sync_labor_cost_record(db, work_order, cycle, farm_id)
+    labor_service.sync_work_order_labor_cost_record(db, work_order, cycle, farm_id)
 
     try:
         db.commit()
@@ -260,96 +265,6 @@ def _validate_work_order_scope(
         if cycle and any(unit.cycle_id != cycle.id for unit in units):
             raise ValueError("种植单元不属于当前批次")
     return cycle
-
-
-def _build_labor_entry(
-    db: Session, data: LaborEntryCreate, work_order_id: int, farm_id: int
-) -> LaborEntry:
-    _get_worker(db, data.worker_id, farm_id)
-    payable = data.payable_amount or (data.quantity * data.unit_price)
-    paid = data.paid_amount
-    unpaid = max(payable - paid, Decimal("0"))
-    if paid <= 0:
-        status = "unpaid"
-    elif unpaid <= 0:
-        status = "settled"
-    else:
-        status = "partial"
-    return LaborEntry(
-        farm_id=farm_id,
-        work_order_id=work_order_id,
-        worker_id=data.worker_id,
-        pay_type=data.pay_type,
-        quantity=data.quantity,
-        unit_price=data.unit_price,
-        payable_amount=payable,
-        paid_amount=paid,
-        unpaid_amount=unpaid,
-        settlement_status=status,
-        note=data.note,
-    )
-
-
-def _sync_labor_cost_record(
-    db: Session, work_order: OperationWorkOrder, cycle: CropCycle | None, farm_id: int
-) -> None:
-    total_payable = sum(
-        (entry.payable_amount for entry in work_order.labor_entries),
-        Decimal("0"),
-    )
-    if total_payable <= 0:
-        return
-    category = _ensure_labor_category(db, farm_id)
-    scope_text = _format_scope_text(work_order)
-    note = f"{work_order.operation_type}人工费"
-    if scope_text:
-        note = f"{note}（{scope_text}）"
-    record = CostRecord(
-        farm_id=farm_id,
-        cycle_id=cycle.id if cycle else None,
-        record_type="cost",
-        category=LABOR_CATEGORY,
-        category_id=category.id if category else None,
-        category_name_snapshot=LABOR_CATEGORY,
-        amount=total_payable,
-        record_date=work_order.operation_date,
-        note=note,
-        record_subtype="作业单人工",
-        source_type=WORK_ORDER_SOURCE,
-        source_id=work_order.id,
-    )
-    db.add(record)
-    db.flush()
-    work_order.labor_cost_record_id = record.id
-
-
-def _format_scope_text(work_order: OperationWorkOrder) -> str:
-    """格式化作业单作用范围，用于人工成本备注。"""
-    if work_order.scope_type == "farm":
-        return "全农场"
-    if work_order.scope_type == "unit":
-        names = [link.unit.name for link in work_order.unit_links if link.unit]
-        return "、".join(names)
-    if work_order.cycle:
-        return work_order.cycle.name
-    return ""
-
-
-def _ensure_labor_category(db: Session, farm_id: int) -> CostCategory | None:
-    category = _find_category(db, farm_id, LABOR_CATEGORY, "cost")
-    if category:
-        return category
-    category = CostCategory(
-        farm_id=farm_id,
-        name=LABOR_CATEGORY,
-        type="cost",
-        icon="users",
-        sort_order=4,
-        is_default=True,
-    )
-    db.add(category)
-    db.flush()
-    return category
 
 
 def list_work_orders(

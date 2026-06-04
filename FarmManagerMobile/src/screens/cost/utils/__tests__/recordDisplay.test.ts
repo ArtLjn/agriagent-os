@@ -107,4 +107,81 @@ describe("recordDisplay", () => {
       }).map((r) => r.id)
     ).toEqual([1]);
   });
+
+  it("支持按茬口和人工来源筛选跳转账单", () => {
+    const records: CostRecord[] = [
+      {
+        ...baseRecord,
+        id: 1,
+        cycle_id: 7,
+        category: "人工",
+        source_type: "labor_entry",
+        source_id: 11,
+      },
+      {
+        ...baseRecord,
+        id: 2,
+        cycle_id: 7,
+        category: "人工",
+        source_type: "operation_work_order",
+        source_id: 12,
+      },
+      {
+        ...baseRecord,
+        id: 3,
+        cycle_id: 8,
+        category: "人工",
+        source_type: "labor_entry",
+        source_id: 13,
+      },
+    ];
+
+    expect(
+      filterCostRecords(records, {
+        query: "",
+        type: "cost",
+        dateRange: "month",
+        month: "2026-06",
+        now: "2026-06-03T16:00:00",
+        cycleId: 7,
+        category: "人工",
+        sourceType: "labor_entry",
+      }).map((r) => r.id)
+    ).toEqual([1]);
+  });
+
+  it("深链账单筛选支持全部日期，保证利润页跨月明细不被本月过滤", () => {
+    const records: CostRecord[] = [
+      {
+        ...baseRecord,
+        id: 1,
+        cycle_id: 7,
+        category: "人工",
+        amount: "500",
+        record_date: "2026-05-20",
+        source_type: "labor_entry",
+      },
+      {
+        ...baseRecord,
+        id: 2,
+        cycle_id: 7,
+        category: "人工",
+        amount: "600",
+        record_date: "2026-06-02",
+        source_type: "operation_work_order",
+      },
+    ];
+
+    expect(
+      filterCostRecords(records, {
+        query: "",
+        type: "cost",
+        dateRange: "all",
+        month: "2026-06",
+        now: "2026-06-03T16:00:00",
+        cycleId: 7,
+        category: "人工",
+      }).map((r) => r.id)
+    ).toEqual([1, 2]);
+  });
 });

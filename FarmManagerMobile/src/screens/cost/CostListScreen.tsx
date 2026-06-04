@@ -9,7 +9,12 @@ import {
   StyleSheet,
   TextInput,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import dayjs from "dayjs";
 import { useCostStore } from "../../stores/costStore";
@@ -34,8 +39,9 @@ type FilterType = RecordFilterType;
 
 type CostListNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  "CostCreate"
+  "CostList"
 >;
+type CostListRouteProp = RouteProp<RootStackParamList, "CostList">;
 
 interface Section {
   title: string;
@@ -98,9 +104,13 @@ function formatSectionTitle(dateStr: string): string {
 
 export const CostListScreen: React.FC = () => {
   const navigation = useNavigation<CostListNavigationProp>();
+  const route = useRoute<CostListRouteProp>();
   const { records, loading, fetchRecords, deleteRecord } = useCostStore();
+  const routeFilters = route.params?.filters;
   const [filter, setFilter] = useState<FilterType>("all");
-  const [dateRange, setDateRange] = useState<DateRangeFilter>("month");
+  const [dateRange, setDateRange] = useState<DateRangeFilter>(
+    routeFilters ? "all" : "month"
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -109,8 +119,23 @@ export const CostListScreen: React.FC = () => {
 
   useFocusEffect(
     useCallback(() => {
-      fetchRecords();
-    }, [fetchRecords])
+      fetchRecords(
+        routeFilters
+          ? {
+              cycle_id: routeFilters.cycleId,
+              category: routeFilters.category,
+              source_type: routeFilters.sourceType,
+              source_id: routeFilters.sourceId,
+            }
+          : undefined
+      );
+    }, [
+      fetchRecords,
+      routeFilters?.category,
+      routeFilters?.cycleId,
+      routeFilters?.sourceId,
+      routeFilters?.sourceType,
+    ])
   );
 
   const currentMonth = dayjs(selectedMonth).format("YYYY-MM");
@@ -140,9 +165,23 @@ export const CostListScreen: React.FC = () => {
         type: filter,
         dateRange,
         month: currentMonth,
-        category: categoryFilter,
+        category: categoryFilter ?? routeFilters?.category,
+        cycleId: routeFilters?.cycleId,
+        sourceType: routeFilters?.sourceType,
+        sourceId: routeFilters?.sourceId,
       }),
-    [records, searchQuery, filter, dateRange, currentMonth, categoryFilter]
+    [
+      records,
+      searchQuery,
+      filter,
+      dateRange,
+      currentMonth,
+      categoryFilter,
+      routeFilters?.category,
+      routeFilters?.cycleId,
+      routeFilters?.sourceType,
+      routeFilters?.sourceId,
+    ]
   );
 
   const resultStats = useMemo(() => {
@@ -234,6 +273,38 @@ export const CostListScreen: React.FC = () => {
     ]);
   };
 
+  const handleOpenSource = (record: CostRecord) => {
+    setDetailVisible(false);
+    if (record.source_type === "labor_entry") {
+      navigation.navigate("WorkerList");
+      return;
+    }
+    if (record.source_type === "operation_work_order") {
+      if (record.cycle_id) {
+        navigation.navigate("CostList", {
+          filters: {
+            cycleId: record.cycle_id,
+            category: "人工",
+            sourceType: "operation_work_order",
+            sourceId: record.source_id || undefined,
+            title: "农事作业人工账单",
+          },
+        });
+      }
+      return;
+    }
+    if (record.cycle_id) {
+      navigation.navigate("CostList", {
+        filters: {
+          cycleId: record.cycle_id,
+          sourceType: record.source_type || undefined,
+          sourceId: record.source_id || undefined,
+          title: "来源账单",
+        },
+      });
+    }
+  };
+
   if (loading && records.length === 0) {
     return <Loading message="加载账单中..." />;
   }
@@ -273,6 +344,38 @@ export const CostListScreen: React.FC = () => {
             />
             <AssetCard income={stats.income} cost={stats.cost} />
 
+            {routeFilters ? (
+              <View style={styles.deepLinkBanner}>
+                <View style={styles.deepLinkIcon}>
+                  <Icon
+                    name="filter-check-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </View>
+                <View style={styles.deepLinkInfo}>
+                  <Text style={styles.deepLinkTitle}>
+                    {routeFilters.title || "已应用来源筛选"}
+                  </Text>
+                  <Text style={styles.deepLinkText}>
+                    {[
+                      routeFilters.cycleId
+                        ? `茬口 ${routeFilters.cycleId}`
+                        : null,
+                      routeFilters.category || null,
+                      routeFilters.sourceType === "labor_entry"
+                        ? "来自工资记录"
+                        : routeFilters.sourceType === "operation_work_order"
+                          ? "来自农事作业"
+                          : routeFilters.sourceType || null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
             <View style={styles.searchSection}>
               <View style={styles.searchBox}>
                 <Icon name="magnify" size={20} color={colors.textTertiary} />
@@ -297,7 +400,10 @@ export const CostListScreen: React.FC = () => {
                   </TouchableOpacity>
                 )}
               </View>
-              {(searchQuery || filter !== "all" || dateRange !== "month") && (
+              {(searchQuery ||
+                filter !== "all" ||
+                dateRange !== "month" ||
+                routeFilters) && (
                 <Text style={styles.resultSummary}>
                   找到 {resultStats.count} 条 · 收入 +
                   {formatRecordAmount(String(resultStats.income))} · 支出 -
@@ -315,6 +421,7 @@ export const CostListScreen: React.FC = () => {
               >
                 {(
                   [
+                    { key: "all", label: "全部" },
                     { key: "today", label: "今天" },
                     { key: "week", label: "近7天" },
                     { key: "month", label: "本月" },
@@ -462,6 +569,7 @@ export const CostListScreen: React.FC = () => {
         visible={detailVisible}
         record={selectedRecord}
         onClose={() => setDetailVisible(false)}
+        onOpenSource={handleOpenSource}
         onDelete={() => {
           setDetailVisible(false);
           if (selectedRecord) {
@@ -508,6 +616,39 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     fontWeight: "500",
+  },
+  deepLinkBanner: {
+    marginHorizontal: spacingV2.lg,
+    marginBottom: spacingV2.lg,
+    padding: spacingV2.md,
+    borderRadius: borderRadiusV2.xl,
+    backgroundColor: colors.primaryMuted,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.sm,
+  },
+  deepLinkIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deepLinkInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  deepLinkTitle: {
+    fontSize: fontSizeV2.sm,
+    color: colors.primary,
+    fontWeight: "800",
+  },
+  deepLinkText: {
+    marginTop: 2,
+    fontSize: fontSizeV2.xs,
+    color: colors.textSecondary,
+    fontWeight: "600",
   },
   filterSection: {
     marginBottom: spacingV2.sm,

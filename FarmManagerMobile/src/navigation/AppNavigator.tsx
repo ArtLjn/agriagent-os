@@ -11,8 +11,11 @@ import { WorkOrderCreateScreen } from "../screens/cycle/WorkOrderCreateScreen";
 import { LogListScreen } from "../screens/log/LogListScreen";
 import { LogCreateScreen } from "../screens/log/LogCreateScreen";
 import { CostCreateScreen } from "../screens/cost/CostCreateScreen";
+import { CostListScreen } from "../screens/cost/CostListScreen";
 import { CostCategoryScreen } from "../screens/cost/CostCategoryScreen";
 import { ProfitScreen } from "../screens/cost/ProfitScreen";
+import { WorkerListScreen } from "../screens/worker/WorkerListScreen";
+import { WageCreateScreen } from "../screens/worker/WageCreateScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
 import { AgentReportScreen } from "../screens/agent/AgentReportScreen";
 import { GuideScreen } from "../screens/settings/GuideScreen";
@@ -39,8 +42,27 @@ export type RootStackParamList = {
   CycleCreate: undefined;
   PlantingUnits: { cycleId: number };
   WorkOrderCreate: { cycleId: number; cropName?: string };
+  WorkerList: undefined;
+  WageCreate: {
+    cycleId?: number;
+    cropName?: string;
+    operationType?: string;
+    workerName?: string;
+    unitPrice?: string;
+  };
   LogList: { cycleId: number };
   LogCreate: { cycleId: number };
+  CostList:
+    | {
+        filters?: {
+          cycleId?: number;
+          category?: string;
+          sourceType?: string;
+          sourceId?: number;
+          title?: string;
+        };
+      }
+    | undefined;
   CostCreate: undefined;
   CostCategory: undefined;
   Profit: { cycleId: number };
@@ -155,6 +177,16 @@ export const AppNavigator: React.FC = () => {
               options={{ title: "记录作业" }}
             />
             <Stack.Screen
+              name="WorkerList"
+              component={WorkerListScreen}
+              options={{ title: "工人管理" }}
+            />
+            <Stack.Screen
+              name="WageCreate"
+              component={WageCreateScreen}
+              options={{ title: "记工资" }}
+            />
+            <Stack.Screen
               name="LogList"
               component={LogListScreen}
               options={{ title: "农事记录" }}
@@ -168,6 +200,11 @@ export const AppNavigator: React.FC = () => {
               name="CostCreate"
               component={CostCreateScreen}
               options={{ title: "记一笔" }}
+            />
+            <Stack.Screen
+              name="CostList"
+              component={CostListScreen}
+              options={{ title: "账单记录" }}
             />
             <Stack.Screen
               name="CostCategory"
