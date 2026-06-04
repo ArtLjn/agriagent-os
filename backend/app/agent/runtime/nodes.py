@@ -37,6 +37,7 @@ from app.agent.tool_selector import expand_by_chain, select_tools
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.date_context import get_request_date
+from app.context.models import ContextBundle
 from app.infra.pending_actions import PENDING_MARKER, is_pending_tool_message
 from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round
@@ -44,11 +45,7 @@ from app.services.quota_service import QuotaCheckResult, check_user_quota
 
 logger = logging.getLogger(__name__)
 
-_DIRECT_READ_TOOLS: set[str] = {
-    "get_weather_forecast",
-    "get_cost_summary",
-    "get_farm_status",
-}
+_DIRECT_READ_TOOLS: set[str] = {"get_weather_forecast", "get_cost_summary", "get_farm_status"}
 
 _QUOTA_REJECT_MESSAGES = {
     "month": "本月用量已达上限，配额将在下月重置。",
@@ -126,6 +123,10 @@ async def _llm_node(state: AgentState) -> dict:
         logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
         return {"messages": [AIMessage(content=confirm)]}
 
+    prepared_system_prompt = state.get("system_prompt")
+    prepared_context_bundle = state.get("context_bundle")
+    prepared_selected_tool_names = state.get("selected_tool_names")
+
     farm_id = state.get("farm_id", 1)
     if not isinstance(farm_id, int) or farm_id <= 0:
         return {"messages": [AIMessage(content="缺少可信农场上下文，无法继续处理。")]}
@@ -161,6 +162,8 @@ async def _llm_node(state: AgentState) -> dict:
         tools,
         intent_classifier=None,
     )
+    if prepared_selected_tool_names is not None:
+        selected_names = list(prepared_selected_tool_names)
     direct_names = [name for name in selected_names if name in _DIRECT_READ_TOOLS]
     if (
         intent == "query"
@@ -189,14 +192,16 @@ async def _llm_node(state: AgentState) -> dict:
     raw_llm = get_llm(role=model_role)
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     _circuit_key = _build_circuit_key(raw_llm)
-    if len(selected_names) >= len(tools):
+    if prepared_selected_tool_names is None and len(selected_names) >= len(tools):
         selected_names = select_tools(
             user_msg,
             tools,
             intent_classifier=_get_classifier(),
             # user_location=farm_location,
         )
-    if has_tool_results:
+    if prepared_selected_tool_names is not None:
+        selected_tools = [t for t in tools if t.name in selected_names]
+    elif has_tool_results:
         selected_names_set = expand_by_chain(set(selected_names))
         selected_tools = [t for t in tools if t.name in selected_names_set]
     else:
@@ -211,13 +216,19 @@ async def _llm_node(state: AgentState) -> dict:
         logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
 
     selected_tool_names = [t.name for t in selected_tools] if selected_tools else []
-    context_bundle, farm_ctx = await _get_runtime_context_bundle(
-        farm_id=farm_id,
-        intent=intent,
-        selected_tool_names=selected_tool_names,
-        user_id=state.get("user_id"),
-        session_id=state.get("session_id"),
-    )
+    if prepared_context_bundle is not None:
+        if not isinstance(prepared_context_bundle, ContextBundle):
+            raise TypeError("prepared context_bundle must be ContextBundle")
+        context_bundle = prepared_context_bundle
+        farm_ctx = await _get_farm_context(farm_id)
+    else:
+        context_bundle, farm_ctx = await _get_runtime_context_bundle(
+            farm_id=farm_id,
+            intent=intent,
+            selected_tool_names=selected_tool_names,
+            user_id=state.get("user_id"),
+            session_id=state.get("session_id"),
+        )
     if not context_bundle.blocks and farm_ctx.get("display_name") == "农友":
         farm_ctx = await _get_farm_context(farm_id)
     display_name = farm_ctx["display_name"]
@@ -226,27 +237,29 @@ async def _llm_node(state: AgentState) -> dict:
     _round_idx = increment_round()
     collector = get_collector()
 
-    current_date = get_request_date()
-    date_str = str(current_date)
-    prompt_cache = get_prompt_cache()
-
-    cached_prompt = prompt_cache.get(farm_id=farm_id, date_str=date_str)
-    if cached_prompt is not None:
-        system_text = cached_prompt
+    if prepared_system_prompt:
+        system_text = prepared_system_prompt
     else:
-        current_season = _get_season(current_date)
-        system_text = get_composer().compose(
-            "system_base",
-            variables={
-                "display_name": display_name,
-                "farm_location": farm_location,
-                "farm_coords": farm_ctx["farm_coords"],
-                "current_season": current_season,
-                "active_crops": farm_ctx["active_crops"],
-            },
-            current_date=current_date,
-        )
-        prompt_cache.set(farm_id=farm_id, date_str=date_str, value=system_text)
+        current_date = get_request_date()
+        date_str = str(current_date)
+        prompt_cache = get_prompt_cache()
+        cached_prompt = prompt_cache.get(farm_id=farm_id, date_str=date_str)
+        if cached_prompt is not None:
+            system_text = cached_prompt
+        else:
+            current_season = _get_season(current_date)
+            system_text = get_composer().compose(
+                "system_base",
+                variables={
+                    "display_name": display_name,
+                    "farm_location": farm_location,
+                    "farm_coords": farm_ctx["farm_coords"],
+                    "current_season": current_season,
+                    "active_crops": farm_ctx["active_crops"],
+                },
+                current_date=current_date,
+            )
+            prompt_cache.set(farm_id=farm_id, date_str=date_str, value=system_text)
 
     runtime_context_text = context_bundle.render_text()
     if runtime_context_text:

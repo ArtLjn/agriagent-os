@@ -8,18 +8,10 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from sqlalchemy.orm import Session
 
+from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
 from app.agent.intent_router import IntentType, classify_intent, get_greeting_reply
-from app.agent.skills import get_skill_manager, build_skill_context
-from app.infra.pending_actions import (
-    PendingAction,
-    build_confirm_message,
-    get_pending,
-    remove_pending,
-    detect_user_intent,
-    store_pending,
-)
 from app.infra.trace_context import clear_trace, init_trace
 from app.models.farm import Farm
 from app.services.conversation_service import get_recent_messages
@@ -66,103 +58,6 @@ def _resolve_farm_uid(db: Session | None, farm_id: int) -> str | None:
     return farm.uid if farm else None
 
 
-def _format_follow_up_intro(skill_name: str, params: dict) -> str:
-    if skill_name == "create_crop_cycle":
-        crop_name = str(params.get("crop_name") or "").strip()
-        return (
-            f"现在可以继续创建{crop_name}茬口。"
-            if crop_name
-            else "现在可以继续创建茬口。"
-        )
-
-    return "下一步需要继续确认。"
-
-
-def _extract_missing_template_crop(pending: PendingAction, reply: str) -> str:
-    crop_name = str(pending.params.get("crop_name") or "").strip()
-    if crop_name:
-        return crop_name
-
-    marker = "系统还没有"
-    suffix = "模板"
-    if marker not in reply or suffix not in reply:
-        return ""
-    after_marker = reply.split(marker, 1)[1]
-    return after_marker.split(suffix, 1)[0].strip()
-
-
-async def _execute_advisor_pending_action(
-    farm_id: int,
-    pending: PendingAction,
-    farm_uid: str | None = None,
-) -> str:
-    """执行 Advisor 兜底 pending action，并处理链式后续确认。"""
-    manager = get_skill_manager()
-    ctx = build_skill_context(farm_id, farm_uid=farm_uid)
-    exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
-    reply = exec_result.result.reply if exec_result.result else "操作完成。"
-
-    from app.infra.pending_actions import get_cache_groups_for_skill
-    from app.infra.skill_cache import clear_cache as clear_skill_cache
-
-    for group in get_cache_groups_for_skill(pending.skill_name):
-        cleared = clear_skill_cache(group)
-        if cleared:
-            logger.info(
-                "写操作后清除缓存 | skill=%s group=%s cleared=%d",
-                pending.skill_name,
-                group,
-                cleared,
-            )
-
-    remove_pending(farm_id)
-
-    if (
-        pending.skill_name == "create_crop_cycle"
-        and "系统还没有" in reply
-        and "模板" in reply
-    ):
-        crop_name = _extract_missing_template_crop(pending, reply)
-        if crop_name:
-            store_pending(
-                farm_id,
-                "create_crop_template",
-                {"crop_name": crop_name},
-                original_input=f"系统还没有{crop_name}作物模板",
-                follow_up_skill_name="create_crop_cycle",
-                follow_up_params=dict(pending.params),
-                follow_up_original_input=pending.original_input,
-            )
-            confirm = build_confirm_message(
-                "create_crop_template",
-                {"crop_name": crop_name},
-                original_input=f"系统还没有{crop_name}作物模板",
-            )
-            return (
-                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n{confirm}"
-            )
-
-    if pending.follow_up_skill_name and pending.follow_up_params is not None:
-        store_pending(
-            farm_id,
-            pending.follow_up_skill_name,
-            dict(pending.follow_up_params),
-            original_input=pending.follow_up_original_input,
-        )
-        confirm = build_confirm_message(
-            pending.follow_up_skill_name,
-            pending.follow_up_params,
-            original_input=pending.follow_up_original_input,
-        )
-        intro = _format_follow_up_intro(
-            pending.follow_up_skill_name,
-            pending.follow_up_params,
-        )
-        return f"已执行：{reply}\n\n{intro}\n{confirm}"
-
-    return reply
-
-
 async def invoke_advisor(
     user_input: str,
     farm_id: int,
@@ -194,43 +89,21 @@ async def invoke_advisor(
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
     farm_uid = _resolve_farm_uid(db, farm_id)
 
-    pending = get_pending(farm_id)
-    if pending:
-        pending_intent = detect_user_intent(user_input)
-        if pending_intent == "confirm":
-            logger.info(
-                "用户确认执行 pending action | farm_id=%s | skill=%s",
-                farm_id,
-                pending.skill_name,
-            )
-            try:
-                reply = await _execute_advisor_pending_action(
-                    farm_id, pending, farm_uid=farm_uid
-                )
-            except Exception as e:
-                logger.error(
-                    "pending action 执行失败 | farm_id=%s | error=%s", farm_id, e
-                )
-                reply = "操作执行失败，请重试。"
-                remove_pending(farm_id)
-            return filter_output(reply)
-        if pending_intent == "cancel":
-            logger.info("用户取消 pending action | farm_id=%s", farm_id)
-            remove_pending(farm_id)
-            return "好的，已取消。"
-        logger.info(
-            "用户修改 pending action | farm_id=%s | intent=modify",
-            farm_id,
-        )
-        remove_pending(farm_id)
-
-    graph = _get_advisor_graph()
-
-    # 构建历史消息 + 当前消息
-    history = _build_history_messages(db, conversation_id)
-    messages = history + [HumanMessage(content=user_input)]
-
     try:
+        pending_decision = await handle_pending_action(
+            farm_id=farm_id,
+            message=user_input,
+            farm_uid=farm_uid,
+        )
+        if pending_decision.handled:
+            return filter_output(pending_decision.reply)
+
+        graph = _get_advisor_graph()
+
+        # 构建历史消息 + 当前消息
+        history = _build_history_messages(db, conversation_id)
+        messages = history + [HumanMessage(content=user_input)]
+
         result = await graph.ainvoke(
             {
                 "messages": messages,
@@ -295,46 +168,23 @@ async def stream_advisor(
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
     farm_uid = _resolve_farm_uid(db, farm_id)
 
-    pending = get_pending(farm_id)
-    if pending:
-        pending_intent = detect_user_intent(user_input)
-        if pending_intent == "confirm":
-            logger.info(
-                "用户确认执行 pending action | farm_id=%s | skill=%s",
-                farm_id,
-                pending.skill_name,
-            )
-            try:
-                reply = await _execute_advisor_pending_action(
-                    farm_id, pending, farm_uid=farm_uid
-                )
-            except Exception as e:
-                logger.error(
-                    "pending action 执行失败 | farm_id=%s | error=%s", farm_id, e
-                )
-                reply = "操作执行失败，请重试。"
-                remove_pending(farm_id)
-            yield filter_output(reply)
-            return
-        if pending_intent == "cancel":
-            logger.info("用户取消 pending action | farm_id=%s", farm_id)
-            remove_pending(farm_id)
-            yield "好的，已取消。"
-            return
-        logger.info(
-            "用户修改 pending action | farm_id=%s | intent=modify",
-            farm_id,
-        )
-        remove_pending(farm_id)
-
-    graph = _get_advisor_graph()
-
-    # 构建历史消息 + 当前消息
-    history = _build_history_messages(db, conversation_id)
-    messages = history + [HumanMessage(content=user_input)]
-
     step = 0
     try:
+        pending_decision = await handle_pending_action(
+            farm_id=farm_id,
+            message=user_input,
+            farm_uid=farm_uid,
+        )
+        if pending_decision.handled:
+            yield filter_output(pending_decision.reply)
+            return
+
+        graph = _get_advisor_graph()
+
+        # 构建历史消息 + 当前消息
+        history = _build_history_messages(db, conversation_id)
+        messages = history + [HumanMessage(content=user_input)]
+
         async for event in graph.astream(
             {
                 "messages": messages,

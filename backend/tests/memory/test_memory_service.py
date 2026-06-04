@@ -24,7 +24,13 @@ async def test_build_context_returns_empty_context_when_memory_is_empty():
     assert context.session_summary is None
     assert context.pending_action is None
     assert context.temporary_task_state is None
+    assert context.long_term.user_preferences == []
+    assert context.long_term.farm_profiles == []
+    assert context.long_term.key_facts == []
+    assert context.long_term.cycle_summaries == []
+    assert context.long_term.ledger_summaries == []
     assert context.long_term.is_empty()
+    assert context.retrieved_hits == []
 
 
 async def test_short_term_memory_keeps_recent_message_window_and_session_state():
@@ -161,4 +167,43 @@ async def test_search_returns_empty_results_without_retrieval_backend():
         MemorySearchQuery(query="浇水记录", user_id="user-1", farm_id=1, limit=5)
     )
 
+    assert results == []
+
+
+async def test_memory_observe_build_and_search_continue_without_rag_backend():
+    service = InMemoryMemoryService()
+
+    await service.observe_chat_completion(
+        user_id="user-1",
+        farm_id=1,
+        session_id="session-1",
+        user_input="明天提醒我看温室湿度",
+        assistant_reply="已记录这次对话。",
+        skills_called=["schedule_reminder"],
+    )
+
+    context = await service.build_context(
+        user_id="user-1",
+        farm_id=1,
+        session_id="session-1",
+    )
+    results = await service.search(
+        MemorySearchQuery(
+            query="温室湿度提醒",
+            user_id="user-1",
+            farm_id=1,
+            session_id="session-1",
+        )
+    )
+
+    assert [message.content for message in context.recent_messages] == [
+        "明天提醒我看温室湿度",
+        "已记录这次对话。",
+    ]
+    assert context.long_term.user_preferences == []
+    assert context.long_term.farm_profiles == []
+    assert context.long_term.key_facts == []
+    assert context.long_term.cycle_summaries == []
+    assert context.long_term.ledger_summaries == []
+    assert context.long_term.is_empty()
     assert results == []

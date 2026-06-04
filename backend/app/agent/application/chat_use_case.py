@@ -8,6 +8,8 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.orm import Session
 
+from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.llm import LlmNotConfiguredError
 from app.core.logger import request_id_var
 from app.infra.pending_actions import get_pending
@@ -23,8 +25,7 @@ from app.schemas.agent import (
     PendingActionContext,
     PendingActionResponse,
 )
-from app.services.agent_service import chat_with_agent, stream_chat_with_agent
-from app.services.conversation_service import save_message
+from app.services.conversation_service import get_or_create_conversation, save_message
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +110,59 @@ async def chat(
         chat_request.cycle_id,
     )
     start = time.perf_counter()
-    result = await chat_with_agent(
-        db,
-        chat_request.message,
+
+    conversation = None
+    if chat_request.session_id:
+        conversation = get_or_create_conversation(
+            db,
+            farm.id,
+            chat_request.session_id,
+            user_id=farm.user_id,
+        )
+        save_message(db, conversation.id, "user", chat_request.message)
+
+    decision = await handle_pending_action(
         farm_id=farm.id,
-        cycle_id=chat_request.cycle_id,
-        session_id=chat_request.session_id,
-        request_id=request_id,
+        message=chat_request.message,
     )
+    if decision.handled:
+        reply = decision.reply
+    else:
+        context = (
+            f"【关联周期 ID: {chat_request.cycle_id}】\n"
+            if chat_request.cycle_id
+            else ""
+        )
+        reply = await invoke_advisor(
+            context + chat_request.message,
+            farm_id=farm.id,
+            db=db,
+            conversation_id=conversation.id if conversation else None,
+            session_id=chat_request.session_id or "",
+            request_id=request_id,
+            user_id=farm.user_id,
+        )
+
+    record = AgentRecord(
+        cycle_id=chat_request.cycle_id,
+        record_type="chat",
+        content=reply,
+        farm_id=farm.id,
+        user_id=farm.user_id,
+        conversation_id=conversation.id if conversation else None,
+    )
+    db.add(record)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    logger.info("[%s] 对话记录已保存 | record_id=%s", request_id, record.id)
+
+    if conversation:
+        save_message(db, conversation.id, "assistant", reply)
+
+    result = ChatResponse(reply=reply)
     pending_action = build_pending_action_response(farm.id)
     if pending_action:
         result.pending_action = pending_action
@@ -173,20 +219,46 @@ async def stream_chat_events(
 ) -> AsyncGenerator[str, None]:
     """生成聊天 SSE 事件。"""
     full_reply = ""
+    conversation = None
     start = time.perf_counter()
     try:
-        async for chunk in stream_chat_with_agent(
-            chat_request.message,
+        decision = await handle_pending_action(
             farm_id=farm.id,
-            cycle_id=chat_request.cycle_id,
-            db=db,
-            session_id=chat_request.session_id,
-            user_id=user.id,
-            request_id=request_id,
-        ):
-            full_reply += chunk
-            data = json.dumps({"content": chunk}, ensure_ascii=False)
+            message=chat_request.message,
+        )
+
+        if chat_request.session_id:
+            conversation = get_or_create_conversation(
+                db,
+                farm.id,
+                chat_request.session_id,
+                user_id=user.id,
+            )
+            save_message(db, conversation.id, "user", chat_request.message)
+
+        if decision.handled:
+            full_reply = decision.reply
+            data = json.dumps({"content": decision.reply}, ensure_ascii=False)
             yield f"data: {data}\n\n"
+        else:
+            context = (
+                f"【关联周期 ID: {chat_request.cycle_id}】\n"
+                if chat_request.cycle_id
+                else ""
+            )
+            async for chunk in stream_advisor(
+                context + chat_request.message,
+                farm_id=farm.id,
+                db=db,
+                conversation_id=conversation.id if conversation else None,
+                session_id=chat_request.session_id or "",
+                request_id=request_id,
+                user_id=user.id,
+                call_type="stream_chat",
+            ):
+                full_reply += chunk
+                data = json.dumps({"content": chunk}, ensure_ascii=False)
+                yield f"data: {data}\n\n"
 
         await _flush_trace_queue()
         skill_names = _get_skill_names(db, request_id)

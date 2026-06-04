@@ -2,9 +2,10 @@
 
 from typing import Annotated
 
+from app.context.models import ContextBundle
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 
 class AgentState(TypedDict):
@@ -16,3 +17,6 @@ class AgentState(TypedDict):
     intent: str  # "greeting" | "query" | "write" | "agent"
     user_id: str | None
     session_id: str | None
+    system_prompt: NotRequired[str | None]
+    context_bundle: NotRequired[ContextBundle | None]
+    selected_tool_names: NotRequired[list[str] | None]
