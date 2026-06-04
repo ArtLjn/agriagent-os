@@ -46,6 +46,24 @@ def test_get_user_quota_limits_uses_custom_values() -> None:
     assert limits.weekly_limit == 100
 
 
+def test_get_user_quota_limits_preserves_zero_custom_values() -> None:
+    db = MagicMock()
+    user = User(
+        id="u1",
+        phone="1",
+        password_hash="h",
+        nickname="n",
+        token_monthly_limit=0,
+        token_weekly_limit=0,
+    )
+    db.query.return_value.filter.return_value.first.return_value = user
+
+    limits = get_user_quota_limits("u1", db)
+
+    assert limits.monthly_limit == 0
+    assert limits.weekly_limit == 0
+
+
 def test_get_period_usage_sums_user_tokens() -> None:
     db = MagicMock()
     db.query.return_value.filter.return_value.scalar.return_value = 123
@@ -99,6 +117,26 @@ def test_check_user_quota_rejects_weekly_over_limit() -> None:
 
     assert result.allowed is False
     assert result.exceeded_period == "week"
+    assert result.reset_at == "2026-06-08"
+
+
+def test_check_user_quota_rejects_monthly_over_limit_with_next_month_reset() -> None:
+    db = MagicMock()
+    user = User(
+        id="u1",
+        phone="1",
+        password_hash="h",
+        nickname="n",
+        token_monthly_limit=1000,
+        token_weekly_limit=100,
+    )
+    db.query.return_value.filter.return_value.first.return_value = user
+    with patch("app.services.quota_service.get_period_usage", side_effect=[1000, 50]):
+        result = check_user_quota("u1", db, today=date(2026, 6, 4))
+
+    assert result.allowed is False
+    assert result.exceeded_period == "month"
+    assert result.reset_at == "2026-07-01"
 
 
 @patch("app.services.quota_service.SessionLocal")

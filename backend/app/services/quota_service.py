@@ -51,11 +51,23 @@ def get_week_range(today: date | None = None) -> tuple[date, date]:
 
 def get_user_quota_limits(user_id: str, db: Session) -> QuotaLimits:
     user = db.query(User).filter(User.id == user_id).first()
-    monthly = user.token_monthly_limit if user and user.token_monthly_limit else None
-    weekly = user.token_weekly_limit if user and user.token_weekly_limit else None
+    monthly = (
+        user.token_monthly_limit
+        if user and user.token_monthly_limit is not None
+        else None
+    )
+    weekly = (
+        user.token_weekly_limit
+        if user and user.token_weekly_limit is not None
+        else None
+    )
     return QuotaLimits(
-        monthly_limit=monthly or settings.token_quota.monthly_limit,
-        weekly_limit=weekly or settings.token_quota.weekly_limit,
+        monthly_limit=monthly
+        if monthly is not None
+        else settings.token_quota.monthly_limit,
+        weekly_limit=weekly
+        if weekly is not None
+        else settings.token_quota.weekly_limit,
     )
 
 
@@ -101,11 +113,11 @@ def check_user_quota(
     if monthly_usage >= limits.monthly_limit:
         result.allowed = False
         result.exceeded_period = "month"
-        result.reset_at = month_end.isoformat()
+        result.reset_at = (month_end + timedelta(days=1)).isoformat()
     elif weekly_usage >= limits.weekly_limit:
         result.allowed = False
         result.exceeded_period = "week"
-        result.reset_at = week_end.isoformat()
+        result.reset_at = (week_end + timedelta(days=1)).isoformat()
     return result
 
 
