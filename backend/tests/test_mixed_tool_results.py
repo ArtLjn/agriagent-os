@@ -1,9 +1,9 @@
 """测试 _llm_node 混合 ToolMessage 三路分支处理。"""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.agent.graph import _llm_node
 from app.infra.pending_actions import PENDING_MARKER
@@ -165,6 +165,67 @@ class TestPureNormalPath:
             assert ai_msg.content == "LLM 回复"
             # 验证 LLM 确实被调用了
             llm.ainvoke.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_llm_node_records_provider_usage_source(self):
+        """LLM 节点传递真实 provider usage 给 TraceCollector。"""
+        from app.agent.runtime.nodes import _llm_node
+
+        state = {
+            "messages": [HumanMessage(content="查一下天气")],
+            "farm_id": 1,
+        }
+
+        with (
+            patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+            patch("app.agent.runtime.nodes.get_langchain_tools", return_value=[]),
+            patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+            patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+            patch("app.agent.runtime.nodes.get_collector") as mock_collector,
+            patch("app.agent.runtime.nodes.check_quota", return_value=True),
+            patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+            patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+            patch("app.agent.runtime.llm_support.SessionLocal") as mock_session,
+        ):
+            mock_get_date.return_value = __import__("datetime").date(2026, 5, 30)
+            mock_composer = MagicMock()
+            mock_composer.compose.return_value = "system prompt"
+            mock_get_composer.return_value = mock_composer
+            collector = MagicMock()
+            mock_collector.return_value = collector
+
+            mock_db = MagicMock()
+            mock_db.query.return_value.filter.return_value.first.return_value = None
+            mock_session.return_value = mock_db
+
+            llm = MagicMock()
+            llm.model_name = "test-model"
+            response = AIMessage(
+                content="LLM 回复",
+                response_metadata={
+                    "token_usage": {
+                        "prompt_tokens": 7,
+                        "completion_tokens": 3,
+                        "total_tokens": 10,
+                    }
+                },
+            )
+            llm.ainvoke = AsyncMock(return_value=response)
+            mock_get_llm.return_value = llm
+
+            await _llm_node(state)
+
+        llm_call = next(
+            call
+            for call in collector.record.call_args_list
+            if call.kwargs.get("node_type") == "llm_call"
+        )
+        assert llm_call.kwargs["token_usage"] == {
+            "prompt_tokens": 7,
+            "completion_tokens": 3,
+            "total_tokens": 10,
+            "usage_source": "provider",
+        }
 
 
 class TestMixedEdgeCases:

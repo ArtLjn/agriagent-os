@@ -27,6 +27,7 @@ from app.agent.runtime.messages import (
     _extract_tokens_used,
     _extract_tool_calls_from_content,
     _find_last_human_message,
+    extract_token_usage,
     sliding_window_compact,
 )
 from app.agent.runtime.tool_executor import _parallel_tool_node
@@ -412,16 +413,11 @@ async def _llm_node(state: AgentState) -> dict:
             except Exception as retry_exc:
                 logger.warning("重试调用失败 | error=%s", retry_exc)
 
-    # 提取 token 用量
-    tokens = _extract_tokens_used(response)
-    token_usage = None
-    if tokens is not None:
-        usage_meta = response.response_metadata.get("token_usage", {})
-        token_usage = {
-            "prompt_tokens": usage_meta.get("prompt_tokens", 0),
-            "completion_tokens": usage_meta.get("completion_tokens", 0),
-            "total_tokens": tokens,
-        }
+    # 提取真实 provider token usage，缺失时不参与 TokenDailyStats 入账。
+    token_usage = extract_token_usage(response)
+    tokens = (
+        token_usage["total_tokens"] if token_usage else _extract_tokens_used(response)
+    )
 
     logger.info(
         "LLM 调用完成 | role=%s | key=%s | model=%s | latency_ms=%d | "
