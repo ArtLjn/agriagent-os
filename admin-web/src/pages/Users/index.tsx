@@ -62,9 +62,10 @@ export default function Users() {
       const params: ListUsersParams = { page, size };
       if (statusFilter) params.status = statusFilter;
       if (phoneKeyword.trim()) params.phone_keyword = phoneKeyword.trim();
+      const quotaParams = statusFilter ? { page, size, status: statusFilter } : { page, size };
       const [usersRes, quotaRes] = await Promise.all([
         usersApi.list(params),
-        usersApi.getQuotaOverview({ page, size }),
+        usersApi.getQuotaOverview(quotaParams),
       ]);
       const quotaMap = new Map(
         quotaRes.data.items.map((item) => [item.user_id, item])
