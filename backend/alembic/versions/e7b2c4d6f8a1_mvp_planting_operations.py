@@ -167,6 +167,7 @@ def _create_planting_tables(inspector) -> None:
             sa.Column("paid_amount", sa.Numeric(10, 2), nullable=False, server_default="0"),
             sa.Column("unpaid_amount", sa.Numeric(10, 2), nullable=False, server_default="0"),
             sa.Column("settlement_status", sa.String(length=20), nullable=False, server_default="unpaid"),
+            sa.Column("client_request_id", sa.String(length=100), nullable=True),
             sa.Column("note", sa.String(length=500), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),

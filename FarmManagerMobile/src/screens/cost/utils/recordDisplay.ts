@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import type { CostRecord } from "../../../api/types";
 
 export type RecordFilterType = "all" | "cost" | "income" | "debt";
-export type DateRangeFilter = "today" | "week" | "month";
+export type DateRangeFilter = "today" | "week" | "month" | "all";
 
 interface FilterOptions {
   query: string;
@@ -11,6 +11,9 @@ interface FilterOptions {
   month: string;
   now?: string;
   category?: string | null;
+  cycleId?: number | null;
+  sourceType?: string | null;
+  sourceId?: number | null;
 }
 
 function toAmountNumber(amount: string): number {
@@ -103,6 +106,9 @@ function matchesDateRange(
   const recordDay = dayjs(record.record_date);
   const now = options.now ? dayjs(options.now) : dayjs();
 
+  if (options.dateRange === "all") {
+    return true;
+  }
   if (options.dateRange === "today") {
     return recordDay.isSame(now, "day");
   }
@@ -150,6 +156,15 @@ export function filterCostRecords(
       return false;
     }
     if (options.category && record.category !== options.category) {
+      return false;
+    }
+    if (options.cycleId && record.cycle_id !== options.cycleId) {
+      return false;
+    }
+    if (options.sourceType && record.source_type !== options.sourceType) {
+      return false;
+    }
+    if (options.sourceId && record.source_id !== options.sourceId) {
       return false;
     }
     return matchesQuery(record, options.query);

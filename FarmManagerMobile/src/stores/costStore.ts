@@ -3,6 +3,13 @@ import type { CostRecord, CycleProfit } from '../api/types';
 import { costApi } from '../api/client';
 import { normalizeCostRecords } from '../screens/cost/utils/costRecordNormalize';
 
+export interface CostRecordFilters {
+  cycle_id?: number;
+  category?: string;
+  source_type?: string;
+  source_id?: number;
+}
+
 function getRecordList(data: any): CostRecord[] {
   return data?.items ?? data;
 }
@@ -12,7 +19,7 @@ interface CostState {
   profit: CycleProfit | null;
   loading: boolean;
   error: string | null;
-  fetchRecords: (cycleId?: number) => Promise<void>;
+  fetchRecords: (filters?: number | CostRecordFilters) => Promise<void>;
   createRecord: (data: {
     cycle_id?: number;
     record_type: string;
@@ -32,12 +39,12 @@ export const useCostStore = create<CostState>((set) => ({
   loading: false,
   error: null,
 
-  fetchRecords: async (cycleId) => {
+  fetchRecords: async (filters) => {
     set({ loading: true, error: null });
     try {
-      const res = await costApi.getRecords(
-        cycleId ? { cycle_id: cycleId } : undefined
-      );
+      const params =
+        typeof filters === "number" ? { cycle_id: filters } : filters;
+      const res = await costApi.getRecords(params);
       set({
         records: normalizeCostRecords(getRecordList(res.data)),
         loading: false,

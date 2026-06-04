@@ -15,6 +15,7 @@ interface RecordDetailModalProps {
   record: CostRecord | null;
   onClose: () => void;
   onDelete: () => void;
+  onOpenSource?: (record: CostRecord) => void;
 }
 
 export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
@@ -22,6 +23,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   record,
   onClose,
   onDelete,
+  onOpenSource,
 }) => {
   if (!record) {
     return null;
@@ -34,6 +36,14 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const prefix = isCost ? "-" : "+";
   const createdAtText = getRecordCreatedAtText(record);
   const noteText = getRecordNoteText(record);
+  const hasSource = Boolean(record.source_type && record.source_id);
+  const sourceLabel =
+    record.source_label ||
+    (record.source_type === "labor_entry"
+      ? "来自工资记录"
+      : record.source_type === "operation_work_order"
+        ? "来自农事作业"
+        : record.source_type);
 
   return (
     <Modal
@@ -115,6 +125,31 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 </View>
                 <Text style={styles.detailValue}>{noteText}</Text>
               </View>
+            ) : null}
+
+            {hasSource ? (
+              <TouchableOpacity
+                style={styles.sourceRow}
+                onPress={() => onOpenSource?.(record)}
+                activeOpacity={0.75}
+              >
+                <View style={styles.detailLeft}>
+                  <Icon
+                    name="link-variant"
+                    size={18}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.sourceLabel}>来源</Text>
+                </View>
+                <View style={styles.sourceRight}>
+                  <Text style={styles.sourceValue}>{sourceLabel}</Text>
+                  <Icon
+                    name="chevron-right"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </View>
+              </TouchableOpacity>
             ) : null}
           </View>
 
@@ -201,6 +236,31 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     maxWidth: "60%",
     textAlign: "right",
+  },
+  sourceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacingV2.md,
+    paddingHorizontal: spacingV2.md,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.primaryMuted,
+  },
+  sourceLabel: {
+    fontSize: fontSizeV2.md,
+    color: colors.primary,
+    fontWeight: "700",
+  },
+  sourceRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    maxWidth: "58%",
+  },
+  sourceValue: {
+    fontSize: fontSizeV2.md,
+    color: colors.primary,
+    fontWeight: "800",
   },
   actions: {
     flexDirection: "row",

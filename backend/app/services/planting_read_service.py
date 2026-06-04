@@ -8,8 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.models.log import FarmLog
 from app.models.planting import LaborEntry, OperationWorkOrder, Worker
-from app.schemas.planting import OperationWorkOrderResponse, RecentOperationResponse
-from app.services.planting_service import WORK_ORDER_SOURCE
+from app.schemas.planting import (
+    OperationWorkOrderResponse,
+    RecentOperationResponse,
+    WageSaveResponse,
+    WorkerLaborSummary,
+)
+from app.services.labor_service import WORK_ORDER_SOURCE
 
 
 def to_work_order_response(work_order: OperationWorkOrder) -> OperationWorkOrderResponse:
@@ -58,6 +63,29 @@ def to_work_order_response(work_order: OperationWorkOrder) -> OperationWorkOrder
         total_paid_amount=total_paid,
         total_unpaid_amount=total_unpaid,
         created_at=work_order.created_at,
+    )
+
+
+def to_wage_response(entry: LaborEntry, cost_record_id: int | None) -> WageSaveResponse:
+    """将用工记录转换为独立工资响应。"""
+    work_order = entry.work_order
+    return WageSaveResponse(
+        id=entry.id,
+        farm_id=entry.farm_id,
+        work_order_id=entry.work_order_id,
+        cycle_id=work_order.cycle_id if work_order else 0,
+        operation_type=work_order.operation_type if work_order else "",
+        worker_id=entry.worker_id,
+        worker_name=entry.worker.name if entry.worker else "",
+        pay_type=entry.pay_type,
+        quantity=entry.quantity,
+        unit_price=entry.unit_price,
+        payable_amount=entry.payable_amount,
+        paid_amount=entry.paid_amount,
+        unpaid_amount=entry.unpaid_amount,
+        settlement_status=entry.settlement_status,
+        note=entry.note,
+        cost_record_id=cost_record_id,
     )
 
 
@@ -152,4 +180,82 @@ def get_unsettled_labor_summary(db: Session, farm_id: int) -> dict:
             }
             for name, amount, count in rows
         ],
+    }
+
+
+def list_worker_labor_summaries(
+    db: Session, farm_id: int, active_only: bool = False
+) -> list[WorkerLaborSummary]:
+    """返回工人管理页所需的全场用工摘要。"""
+    worker_query = db.query(Worker).filter(Worker.farm_id == farm_id)
+    if active_only:
+        worker_query = worker_query.filter(Worker.status == "active")
+    workers = worker_query.order_by(Worker.id).all()
+
+    rows = (
+        db.query(
+            LaborEntry.worker_id,
+            OperationWorkOrder.cycle_id,
+            func.sum(LaborEntry.payable_amount),
+            func.sum(LaborEntry.paid_amount),
+            func.sum(LaborEntry.unpaid_amount),
+            func.count(LaborEntry.id),
+        )
+        .join(OperationWorkOrder, OperationWorkOrder.id == LaborEntry.work_order_id)
+        .filter(LaborEntry.farm_id == farm_id)
+        .group_by(LaborEntry.worker_id, OperationWorkOrder.cycle_id)
+        .all()
+    )
+    cycles_by_id = _get_cycle_names(db, farm_id)
+    by_worker: dict[int, list[dict]] = {}
+    for worker_id, cycle_id, payable, paid, unpaid, count in rows:
+        by_worker.setdefault(worker_id, []).append(
+            {
+                "cycle_id": cycle_id,
+                "cycle_name": cycles_by_id.get(cycle_id),
+                "total_payable": payable or Decimal("0"),
+                "total_paid": paid or Decimal("0"),
+                "total_unpaid": unpaid or Decimal("0"),
+                "entry_count": count,
+            }
+        )
+
+    summaries: list[WorkerLaborSummary] = []
+    for worker in workers:
+        cycle_summaries = by_worker.get(worker.id, [])
+        summaries.append(
+            WorkerLaborSummary(
+                id=worker.id,
+                farm_id=worker.farm_id,
+                name=worker.name,
+                phone=worker.phone,
+                default_pay_type=worker.default_pay_type,
+                default_unit_price=worker.default_unit_price,
+                note=worker.note,
+                status=worker.status,
+                created_at=worker.created_at,
+                total_payable=sum(
+                    (item["total_payable"] for item in cycle_summaries), Decimal("0")
+                ),
+                total_paid=sum(
+                    (item["total_paid"] for item in cycle_summaries), Decimal("0")
+                ),
+                total_unpaid=sum(
+                    (item["total_unpaid"] for item in cycle_summaries), Decimal("0")
+                ),
+                entry_count=sum(item["entry_count"] for item in cycle_summaries),
+                cycle_summaries=cycle_summaries,
+            )
+        )
+    return summaries
+
+
+def _get_cycle_names(db: Session, farm_id: int) -> dict[int, str]:
+    from app.models.cycle import CropCycle
+
+    return {
+        cycle_id: name
+        for cycle_id, name in db.query(CropCycle.id, CropCycle.name)
+        .filter(CropCycle.farm_id == farm_id)
+        .all()
     }

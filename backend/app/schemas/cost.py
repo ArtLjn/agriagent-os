@@ -23,6 +23,7 @@ class CostRecordBase(BaseModel):
     parent_record_id: int | None = None
     source_type: str | None = Field(None, max_length=50)
     source_id: int | None = None
+    source_active_key: str | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -70,6 +71,7 @@ class CostRecordUpdate(BaseModel):
     parent_record_id: int | None = None
     source_type: str | None = Field(None, max_length=50)
     source_id: int | None = None
+    source_active_key: str | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -93,6 +95,9 @@ class CycleProfit(BaseModel):
     total_cost: Decimal
     total_income: Decimal
     net_profit: Decimal
+    labor_cost: Decimal = Decimal("0")
+    labor_entry_cost: Decimal = Decimal("0")
+    operation_labor_cost: Decimal = Decimal("0")
     model_config = ConfigDict(from_attributes=True)
 
 

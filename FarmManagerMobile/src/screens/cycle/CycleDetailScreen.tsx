@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
+import { costApi, plantingApi } from "../../api/client";
+import type { CostRecord, WorkerSummaryItem } from "../../api/types";
 import { useCycleStore } from "../../stores/cycleStore";
 import { Timeline } from "../../components/Timeline";
 import { Loading } from "../../components/Loading";
@@ -63,6 +65,8 @@ export const CycleDetailScreen: React.FC = () => {
   const route = useRoute<RouteParams>();
   const navigation = useNavigation<NavigationProp>();
   const { cycleId } = route.params;
+  const [laborRecords, setLaborRecords] = useState<CostRecord[]>([]);
+  const [cycleWorkers, setCycleWorkers] = useState<WorkerSummaryItem[]>([]);
   const {
     currentCycle,
     loading,
@@ -79,10 +83,45 @@ export const CycleDetailScreen: React.FC = () => {
   }, [cycleId, fetchCycleDetail, fetchUnits]);
 
   useEffect(() => {
+    costApi
+      .getRecords({ cycle_id: cycleId, category: "人工" })
+      .then((res) => setLaborRecords((res.data as any)?.items ?? res.data ?? []))
+      .catch(() => setLaborRecords([]));
+    plantingApi
+      .getWorkerSummary()
+      .then((res) => {
+        setCycleWorkers(
+          (res.data.items || []).filter((worker) =>
+            worker.cycle_summaries.some((cycle) => cycle.cycle_id === cycleId)
+          )
+        );
+      })
+      .catch(() => setCycleWorkers([]));
+  }, [cycleId]);
+
+  useEffect(() => {
     if (currentCycle?.name) {
       fetchOperationTypes(currentCycle.name);
     }
   }, [currentCycle?.name, fetchOperationTypes]);
+
+  const laborSummary = useMemo(() => {
+    const totalCost = laborRecords.reduce(
+      (sum, record) => sum + Number(record.amount || 0),
+      0
+    );
+    const totalUnpaid = cycleWorkers.reduce((sum, worker) => {
+      const cycle = worker.cycle_summaries.find(
+        (item) => item.cycle_id === cycleId
+      );
+      return sum + Number(cycle?.total_unpaid || 0);
+    }, 0);
+    return {
+      totalCost,
+      totalUnpaid,
+      workers: cycleWorkers.map((worker) => worker.name).slice(0, 3),
+    };
+  }, [cycleId, laborRecords, cycleWorkers]);
 
   if (loading || !currentCycle) {
     return <Loading />;
@@ -207,6 +246,78 @@ export const CycleDetailScreen: React.FC = () => {
               <Text style={styles.operationText}>{item.name}</Text>
             </View>
           ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>本茬用工</Text>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("CostList", {
+                filters: {
+                  cycleId,
+                  category: "人工",
+                  title: `${currentCycle.name}人工账单`,
+                },
+              })
+            }
+          >
+            <Text style={styles.sectionLink}>查看人工账单</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.laborCard}>
+          <View style={styles.laborMetricRow}>
+            <View style={styles.laborMetric}>
+              <Text style={styles.laborLabel}>人工支出</Text>
+              <Text style={styles.laborValue}>
+                {laborSummary.totalCost.toFixed(0)}
+              </Text>
+            </View>
+            <View style={styles.laborMetric}>
+              <Text style={styles.laborLabel}>未结金额</Text>
+              <Text style={[styles.laborValue, { color: colors.danger }]}>
+                {laborSummary.totalUnpaid.toFixed(0)}
+              </Text>
+            </View>
+            <View style={styles.laborMetric}>
+              <Text style={styles.laborLabel}>相关工人</Text>
+              <Text style={styles.laborValue}>{cycleWorkers.length}</Text>
+            </View>
+          </View>
+          <Text style={styles.laborWorkers} numberOfLines={1}>
+            {laborSummary.workers.length > 0
+              ? laborSummary.workers.join("、")
+              : "暂无本茬工资记录"}
+          </Text>
+          <View style={styles.laborActions}>
+            <TouchableOpacity
+              style={styles.laborActionPrimary}
+              onPress={() =>
+                navigation.navigate("WageCreate", {
+                  cycleId,
+                  cropName: currentCycle.name,
+                })
+              }
+            >
+              <Icon name="cash-plus" size={18} color={colors.primary} />
+              <Text style={styles.laborActionPrimaryText}>记工资</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.laborActionSecondary}
+              onPress={() =>
+                navigation.navigate("CostList", {
+                  filters: {
+                    cycleId,
+                    category: "人工",
+                    title: `${currentCycle.name}人工账单`,
+                  },
+                })
+              }
+            >
+              <Text style={styles.laborActionSecondaryText}>查看账单</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -382,6 +493,86 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
     marginBottom: spacingV2.md,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacingV2.md,
+  },
+  sectionLink: {
+    fontSize: fontSizeV2.sm,
+    color: colors.primary,
+    fontWeight: "800",
+  },
+  laborCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  laborMetricRow: {
+    flexDirection: "row",
+    gap: spacingV2.sm,
+  },
+  laborMetric: {
+    flex: 1,
+    minHeight: 68,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.background,
+    padding: spacingV2.md,
+    justifyContent: "center",
+  },
+  laborLabel: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textSecondary,
+    fontWeight: "700",
+  },
+  laborValue: {
+    marginTop: 4,
+    fontSize: fontSizeV2.lg,
+    color: colors.text,
+    fontWeight: "900",
+  },
+  laborWorkers: {
+    marginTop: spacingV2.md,
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  laborActions: {
+    flexDirection: "row",
+    gap: spacingV2.md,
+    marginTop: spacingV2.lg,
+  },
+  laborActionPrimary: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacingV2.xs,
+  },
+  laborActionPrimaryText: {
+    fontSize: fontSizeV2.md,
+    color: colors.primary,
+    fontWeight: "800",
+  },
+  laborActionSecondary: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  laborActionSecondaryText: {
+    fontSize: fontSizeV2.md,
+    color: colors.textSecondary,
+    fontWeight: "800",
   },
   timelineCard: {
     backgroundColor: colors.surface,

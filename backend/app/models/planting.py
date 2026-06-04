@@ -132,6 +132,13 @@ class LaborEntry(Base):
     """作业单用工明细。"""
 
     __tablename__ = "labor_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "farm_id",
+            "client_request_id",
+            name="uq_labor_entries_farm_client_request",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
@@ -149,6 +156,7 @@ class LaborEntry(Base):
     paid_amount = Column(Numeric(10, 2), nullable=False, default=0)
     unpaid_amount = Column(Numeric(10, 2), nullable=False, default=0)
     settlement_status = Column(String(20), nullable=False, default="unpaid")
+    client_request_id = Column(String(100), nullable=True)
     note = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

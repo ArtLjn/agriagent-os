@@ -84,6 +84,49 @@ export interface Worker {
   status: string;
 }
 
+export interface WorkerCycleSummary {
+  cycle_id: number;
+  cycle_name: string;
+  total_payable: string;
+  total_paid: string;
+  total_unpaid: string;
+  entry_count: number;
+  recent_operation_type?: string | null;
+  recent_work_date?: string | null;
+}
+
+export interface WorkerSummaryItem {
+  id: number;
+  name: string;
+  phone?: string | null;
+  default_pay_type?: string | null;
+  default_unit_price?: string | null;
+  total_payable: string;
+  total_paid: string;
+  total_unpaid: string;
+  entry_count: number;
+  cycle_summaries: WorkerCycleSummary[];
+}
+
+export interface WorkerSummaryResponse {
+  items: WorkerSummaryItem[];
+  total: number;
+  total_payable?: string;
+  total_paid?: string;
+  total_unpaid?: string;
+}
+
+export interface UnsettledLaborWorker {
+  worker_name: string;
+  unpaid_amount: string | number;
+  entry_count: number;
+}
+
+export interface UnsettledLaborSummary {
+  total_unpaid: string | number;
+  workers: UnsettledLaborWorker[];
+}
+
 export interface LaborEntryCreate {
   worker_id: number;
   pay_type?: string;
@@ -92,10 +135,42 @@ export interface LaborEntryCreate {
   paid_amount?: string;
 }
 
+export interface WageCreateRequest {
+  cycle_id: number;
+  operation_type: string;
+  worker_name: string;
+  quantity: string;
+  unit_price: string;
+  paid_amount?: string;
+  work_date: string;
+  pay_type?: string;
+  crop_name?: string;
+  note?: string;
+  client_request_id: string;
+}
+
+export interface WageEntryResponse {
+  id: number;
+  cycle_id: number;
+  worker_id: number;
+  worker_name: string;
+  operation_type: string;
+  pay_type: string;
+  quantity: string;
+  unit_price: string;
+  payable_amount: string;
+  paid_amount: string;
+  unpaid_amount: string;
+  work_date: string;
+  note?: string | null;
+  cost_record_id?: number | null;
+}
+
 export interface OperationWorkOrder {
   id: number;
   farm_id: number;
   cycle_id: number | null;
+  cycle_name?: string | null;
   operation_type: string;
   operation_date: string;
   scope_type: string;
@@ -144,6 +219,9 @@ export interface CycleProfit {
   total_cost: string;
   total_income: string;
   net_profit: string;
+  labor_cost?: string;
+  labor_entry_cost?: string;
+  operation_labor_cost?: string;
 }
 
 export interface AdviceItem {

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>工人管理页面关系设计</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        width: 1500px;
+        height: 980px;
+        background: #edf3f0;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: #172033;
+      }
+      .board { padding: 36px; }
+      .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
+      h1 { margin: 0; font-size: 34px; }
+      .sub { margin-top: 8px; color: #667085; font-size: 17px; }
+      .rule { padding: 12px 18px; background: white; border: 1px solid #dbe7e0; border-radius: 999px; color: #087443; font-weight: 800; }
+      .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; align-items: start; }
+      .phone {
+        height: 850px;
+        border: 8px solid #111827;
+        border-radius: 34px;
+        background: #f7faf8;
+        overflow: hidden;
+        box-shadow: 0 22px 44px rgba(16,24,40,.18);
+      }
+      .screen { padding: 22px 18px; height: 100%; overflow: hidden; }
+      .top { display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px; }
+      .title { font-size: 22px; font-weight: 900; }
+      .back { font-size: 28px; font-weight: 900; }
+      .weather { height: 190px; border-radius: 28px; background: linear-gradient(135deg,#5798ff,#75b4ff); color:white; padding: 22px; margin-bottom: 14px; }
+      .weather b { font-size: 52px; }
+      .card { background:white; border:1px solid #e4ece7; border-radius: 24px; padding: 16px; margin-bottom: 14px; }
+      .advice { display:grid; grid-template-columns:48px 1fr auto; gap:12px; align-items:center; }
+      .iconbox { width:48px; height:48px; border-radius:17px; background:#ecfdf3; display:flex; align-items:center; justify-content:center; font-size:24px; }
+      .small { color:#667085; font-size:13px; margin-top:4px; }
+      .quick { display:grid; grid-template-columns:repeat(4,1fr); gap: 12px; }
+      .quick-item { text-align:center; }
+      .quick-icon { width:54px; height:54px; border-radius:20px; margin:0 auto 8px; display:flex; align-items:center; justify-content:center; font-size:25px; }
+      .green { background:#e8fbef; color:#087443; }
+      .blue { background:#eef4ff; color:#2563eb; }
+      .amber { background:#fff7e8; color:#b7791f; }
+      .pink { background:#fff1f3; color:#c01048; }
+      .quick-label { font-size:13px; font-weight:800; }
+      .hero { background:#173f2f; color:white; border-radius:26px; padding:18px; margin-bottom:14px; }
+      .hero span { color:#bdebd2; font-size:13px; font-weight:800; }
+      .hero b { display:block; font-size:32px; margin:8px 0; }
+      .metric-row { display:flex; gap:10px; }
+      .metric { flex:1; background:rgba(255,255,255,.1); border-radius:16px; padding:10px; }
+      .metric strong { display:block; font-size:20px; }
+      .section { display:flex; justify-content:space-between; align-items:center; margin:18px 2px 10px; }
+      .section b { font-size:18px; }
+      .section span { color:#12b76a; font-size:13px; font-weight:900; }
+      .worker { display:flex; align-items:center; justify-content:space-between; padding:13px 0; border-bottom:1px solid #eef2ef; }
+      .worker:last-child { border-bottom:0; }
+      .person { display:flex; align-items:center; gap:10px; }
+      .avatar { width:38px; height:38px; border-radius:19px; background:#ecfdf3; color:#087443; display:flex; align-items:center; justify-content:center; font-weight:900; }
+      .name { font-weight:900; }
+      .money { color:#b42318; font-weight:900; }
+      .ok { color:#087443; font-weight:900; }
+      .btn { height:52px; border-radius:18px; background:#12b76a; color:white; display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:900; margin-bottom:12px; }
+      .outline { height:46px; border-radius:16px; border:1px solid #dbe7e0; background:#fff; display:flex; align-items:center; justify-content:center; font-weight:850; color:#344054; }
+      .field { background:#f8faf9; border:1px solid #dfe7e2; border-radius:18px; padding:14px; color:#667085; margin-bottom:10px; }
+      .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+      .chip { padding:9px 12px; border-radius:999px; background:#eef7f2; color:#087443; font-size:13px; font-weight:900; }
+      .chip.active { background:#173f2f; color:white; }
+      .flow { margin-top:20px; display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+      .flow div { background:white; border:1px solid #dbe7e0; border-radius:18px; padding:14px; font-size:14px; line-height:1.5; }
+      .flow b { display:block; margin-bottom:5px; }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <div class="head">
+        <div>
+          <h1>工人管理与茬口/账单关联页面图</h1>
+          <div class="sub">工人是全局资源；工资记录绑定到茬口/作业；利润和欠款都从同一批账单与用工记录汇总。</div>
+        </div>
+        <div class="rule">首页有工人入口，茬口内只看本茬用工</div>
+      </div>
+
+      <section class="row">
+        <div class="phone">
+          <div class="screen">
+            <div class="weather"><span>本地天气</span><br><b>23° ~ 32°</b><div>小雨 · 体感 30°</div></div>
+            <div class="card advice">
+              <div class="iconbox">🌫</div>
+              <div><div class="name">高温育苗防烧苗</div><div class="small">4 条建议待查看</div></div>
+              <div>›</div>
+            </div>
+            <div class="card">
+              <div class="quick">
+                <div class="quick-item"><div class="quick-icon green">🌱</div><div class="quick-label">种植规划</div></div>
+                <div class="quick-item"><div class="quick-icon blue">👷</div><div class="quick-label">工人管理</div></div>
+                <div class="quick-item"><div class="quick-icon pink">💰</div><div class="quick-label">记一笔账</div></div>
+                <div class="quick-item"><div class="quick-icon amber">🍃</div><div class="quick-label">作物模板</div></div>
+              </div>
+            </div>
+            <div class="section"><b>待处理</b><span>全部</span></div>
+            <div class="card">
+              <div class="worker"><div class="person"><div class="avatar">王</div><div><div class="name">老王工资未结</div><div class="small">西瓜春茬 · 授粉</div></div></div><div class="money">400</div></div>
+              <div class="worker"><div class="person"><div class="avatar">李</div><div><div class="name">老李今日用工</div><div class="small">豆角春茬 · 搭架</div></div></div><div class="ok">已记</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="screen">
+            <div class="top"><div class="back">‹</div><div class="title">工人管理</div><div></div></div>
+            <div class="hero"><span>全场人工</span><b>未结 1,260 元</b><div class="metric-row"><div class="metric"><strong>8</strong><span>工人</span></div><div class="metric"><strong>3</strong><span>相关茬口</span></div><div class="metric"><strong>12</strong><span>本月用工</span></div></div></div>
+            <div class="btn">记一笔工资</div>
+            <div class="outline">新增工人</div>
+            <div class="section"><b>工人列表</b><span>筛选</span></div>
+            <div class="card">
+              <div class="worker"><div class="person"><div class="avatar">王</div><div><div class="name">老王</div><div class="small">西瓜春茬、豆角春茬 · 常用 200/天</div></div></div><div class="money">欠 400</div></div>
+              <div class="worker"><div class="person"><div class="avatar">李</div><div><div class="name">老李</div><div class="small">西瓜春茬 · 常用 220/天</div></div></div><div class="money">欠 660</div></div>
+              <div class="worker"><div class="person"><div class="avatar">赵</div><div><div class="name">小赵</div><div class="small">豆角春茬 · 常用 180/天</div></div></div><div class="ok">结清</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="screen">
+            <div class="top"><div class="back">‹</div><div class="title">记工资</div><div></div></div>
+            <div class="card">
+              <div class="section" style="margin-top:0"><b>这笔工资属于哪里</b></div>
+              <div class="field">茬口：西瓜春茬</div>
+              <div class="field">作物：8424 西瓜</div>
+              <div class="field">作业：人工授粉</div>
+              <div class="field">日期：今天</div>
+            </div>
+            <div class="card">
+              <div class="section" style="margin-top:0"><b>选择工人</b><span>新增</span></div>
+              <div class="chips"><div class="chip active">老王</div><div class="chip active">老李</div><div class="chip">小赵</div><div class="chip">临时工</div></div>
+              <div class="field">人数：2 人</div>
+              <div class="field">每人：200 元</div>
+              <div class="field">已付：老王 200 元</div>
+            </div>
+            <div class="card">
+              <div class="name">保存后自动生成</div>
+              <div class="small">1. 用工记录 2 条</div>
+              <div class="small">2. 人工成本账单 400 元</div>
+              <div class="small">3. 老李未结 200 元，老王结清</div>
+            </div>
+            <div class="btn">保存工资</div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="screen">
+            <div class="top"><div class="back">‹</div><div class="title">西瓜春茬</div><div></div></div>
+            <div class="hero"><span>本茬用工</span><b>人工支出 8,400</b><div class="metric-row"><div class="metric"><strong>6</strong><span>工人</span></div><div class="metric"><strong>1,060</strong><span>未结</span></div><div class="metric"><strong>22</strong><span>作业</span></div></div></div>
+            <div class="btn">记农事/工资</div>
+            <div class="section"><b>本茬工人</b><span>查看全部</span></div>
+            <div class="card">
+              <div class="worker"><div class="person"><div class="avatar">王</div><div><div class="name">老王</div><div class="small">授粉 4 次 · 采收 1 次</div></div></div><div class="money">欠 400</div></div>
+              <div class="worker"><div class="person"><div class="avatar">李</div><div><div class="name">老李</div><div class="small">压蔓 2 次 · 授粉 3 次</div></div></div><div class="money">欠 660</div></div>
+            </div>
+            <div class="section"><b>关联账单</b><span>到账单页</span></div>
+            <div class="card">
+              <div class="worker"><div><div class="name">人工授粉</div><div class="small">来自作业单 · 老王/老李</div></div><div class="money">-400</div></div>
+              <div class="worker"><div><div class="name">采收装车</div><div class="small">来自作业单 · 4 人</div></div><div class="money">-800</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="flow">
+        <div><b>1. 首页</b>工人管理作为全局快捷入口，处理“看人、记工资、查欠款”。</div>
+        <div><b>2. 工人页</b>工人不归属某个茬口，只汇总他参与过的茬口和未结金额。</div>
+        <div><b>3. 记工资</b>工资必须选择茬口/作物/作业，保存后自动形成账单。</div>
+        <div><b>4. 茬口页</b>只显示本茬相关工人、人工成本和未结款，可跳到账单筛选。</div>
+      </section>
+    </main>
+  </body>
+</html>

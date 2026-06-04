@@ -8,3 +8,30 @@ def test_user_quota_columns_have_alembic_migration():
 
     assert "token_monthly_limit" in migration_sources
     assert "token_weekly_limit" in migration_sources
+
+
+def test_labor_cost_source_idempotency_has_alembic_migration():
+    """人工成本来源幂等字段和索引必须由 Alembic 迁移同步。"""
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "e7b2c4d6f8a2_add_labor_entry_client_request_id.py"
+    )
+    source = migration_path.read_text()
+
+    assert "source_active_key" in source
+    assert "UPDATE cost_records" in source
+    assert "source_active_key = 'active'" in source
+    assert "deleted_at IS NULL" in source
+    assert "source_type IS NOT NULL" in source
+    assert "source_id IS NOT NULL" in source
+    assert "uq_cost_records_active_source" in source
+    assert '["farm_id", "source_type", "source_id", "source_active_key"]' in source
+    assert 'op.drop_index("uq_cost_records_active_source"' in source
+    assert 'op.drop_column("cost_records", "source_active_key")' in source
+    assert "client_request_id" in source
+    assert "uq_labor_entries_farm_client_request" in source
+    assert '["farm_id", "client_request_id"]' in source
+    assert "UPDATE labor_entries" in source
+    assert "GROUP BY farm_id, client_request_id" in source

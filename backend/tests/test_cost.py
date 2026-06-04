@@ -101,6 +101,36 @@ def test_cycle_profit(cycle_id):
     assert data["total_cost"] == "800.00"
     assert data["total_income"] == "5000.00"
     assert data["net_profit"] == "4200.00"
+    assert data["labor_cost"] == "0"
+    assert data["labor_entry_cost"] == "0"
+    assert data["operation_labor_cost"] == "0"
+
+
+def test_source_cost_record_unique_and_recreatable_after_delete(cycle_id):
+    """普通账单 API 同来源活动账单不能重复，软删除后可重新创建。"""
+    payload = {
+        "cycle_id": cycle_id,
+        "record_type": "cost",
+        "category": "人工",
+        "amount": "120.00",
+        "record_date": "2025-03-10",
+        "source_type": "labor_entry",
+        "source_id": 98765,
+    }
+    first = client.post("/costs", json=payload)
+    duplicate = client.post("/costs", json={**payload, "amount": "180.00"})
+
+    assert first.status_code == 200
+    assert first.json()["source_active_key"] == "active"
+    assert duplicate.status_code == 409
+
+    deleted = client.delete(f"/costs/{first.json()['id']}")
+    recreated = client.post("/costs", json={**payload, "amount": "180.00"})
+
+    assert deleted.status_code == 200
+    assert deleted.json()["source_active_key"] is None
+    assert recreated.status_code == 200
+    assert recreated.json()["amount"] == "180.00"
 
 
 def test_yearly_summary(cycle_id):
