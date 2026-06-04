@@ -25,8 +25,21 @@ async def _parallel_tool_node(state: AgentState) -> dict:
     if not isinstance(last, AIMessage) or not last.tool_calls:
         return {"messages": []}
 
-    farm_id = state.get("farm_id", 1)
-    tool_map = {t.name: t for t in get_langchain_tools(farm_id=farm_id)}
+    farm_id = state.get("farm_id")
+    if not isinstance(farm_id, int) or farm_id <= 0:
+        return {
+            "messages": [
+                ToolMessage(
+                    content="工具调用失败：缺少可信农场上下文。",
+                    tool_call_id=tc["id"],
+                )
+                for tc in last.tool_calls
+            ]
+        }
+    farm_uid = state.get("farm_uid")
+    tool_map = {
+        t.name: t for t in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
+    }
     collector = get_collector()
 
     # 获取用户原始输入（最近一条 HumanMessage）

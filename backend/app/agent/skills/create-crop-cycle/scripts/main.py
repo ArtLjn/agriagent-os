@@ -6,6 +6,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.core.database import SessionLocal
+from app.agent.skills.context import require_farm_context
 from app.schemas.cycle import CropCycleCreate
 from app.services import crop_service, cycle_service
 
@@ -63,7 +64,9 @@ class CreateCropCycleSkill(Skill):
         season = params.get("season") or _current_season()
         start_date = _parse_date(params.get("start_date"))
         field_name = params.get("field_name")
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "建茬口")
+        if context_error:
+            return context_error
 
         db = SessionLocal()
         try:

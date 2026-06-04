@@ -5,6 +5,7 @@ from datetime import date
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.models.cycle import CropCycle
 from app.schemas.log import FarmLogCreate
@@ -67,7 +68,9 @@ class LogFarmActivitySkill(Skill):
         operation_type = operation_type.strip()
         operation_date = _parse_date(params.get("operation_date"))
         note = params.get("note")
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "记农事")
+        if context_error:
+            return context_error
 
         db = SessionLocal()
         try:

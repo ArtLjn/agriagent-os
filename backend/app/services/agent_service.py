@@ -24,6 +24,7 @@ from app.infra.pending_actions import (
 )
 from app.infra.trace_collector import get_collector
 from app.models.agent_record import AgentRecord
+from app.models.farm import Farm
 from app.schemas.agent import (
     AdviceItem,
     ChatResponse,
@@ -51,6 +52,16 @@ def _truncate_title(title: str) -> str:
     if len(title) > _TITLE_MAX_DISPLAY:
         return title[:_TITLE_MAX_DISPLAY] + "…"
     return title
+
+
+def _resolve_user_id(
+    db: Session | None, farm_id: int, user_id: str | None
+) -> str | None:
+    """优先使用调用方用户；缺省时从当前农场回填。"""
+    if user_id or db is None:
+        return user_id
+    farm = db.query(Farm).filter(Farm.id == farm_id).first()
+    return farm.user_id if farm else None
 
 
 def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
@@ -94,13 +105,17 @@ def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
         return "", [fallback_item]
 
 
-async def _execute_pending_action(farm_id: int, skill_name: str, params: dict) -> str:
+async def _execute_pending_action(
+    farm_id: int, skill_name: str, params: dict, farm_uid: str | None = None
+) -> str:
     """执行 pending action 中存储的写操作 Skill。"""
     start = time.time()
     error_msg = None
     result_str = ""
     try:
-        tool_map = {t.name: t for t in get_langchain_tools(farm_id=farm_id)}
+        tool_map = {
+            t.name: t for t in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
+        }
         tool = tool_map.get(skill_name)
         if not tool:
             return f"未知工具: {skill_name}"
@@ -136,7 +151,11 @@ def _format_follow_up_intro(skill_name: str, params: dict) -> str:
     """生成后续确认动作的自然语言引导。"""
     if skill_name == "create_crop_cycle":
         crop_name = str(params.get("crop_name") or "").strip()
-        return f"现在可以继续创建{crop_name}茬口。" if crop_name else "现在可以继续创建茬口。"
+        return (
+            f"现在可以继续创建{crop_name}茬口。"
+            if crop_name
+            else "现在可以继续创建茬口。"
+        )
 
     return "下一步需要继续确认。"
 
@@ -146,7 +165,11 @@ async def _confirm_pending_action(farm_id: int, pending: PendingAction) -> str:
     result = await _execute_pending_action(farm_id, pending.skill_name, pending.params)
     remove_pending(farm_id)
 
-    if pending.skill_name == "create_crop_cycle" and "系统还没有" in result and "模板" in result:
+    if (
+        pending.skill_name == "create_crop_cycle"
+        and "系统还没有" in result
+        and "模板" in result
+    ):
         crop_name = _extract_missing_template_crop(pending, result)
         if crop_name:
             store_pending(
@@ -164,8 +187,7 @@ async def _confirm_pending_action(farm_id: int, pending: PendingAction) -> str:
                 original_input=f"系统还没有{crop_name}作物模板",
             )
             return (
-                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n"
-                f"{confirm}"
+                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n{confirm}"
             )
 
     if pending.follow_up_skill_name and pending.follow_up_params is not None:
@@ -199,6 +221,7 @@ async def chat_with_agent(
     request_id: str = "",
 ) -> ChatResponse:
     """与用户进行 Agent 对话，支持写操作确认流程。"""
+    user_id = _resolve_user_id(db, farm_id, user_id)
     logger.info(
         "开始对话 | farm=%s cycle=%s | input: %s", farm_id, cycle_id, message[:100]
     )
@@ -275,6 +298,7 @@ async def chat_with_agent(
         conversation_id=conversation.id if conversation else None,
         session_id=session_id or "",
         request_id=request_id,
+        user_id=user_id,
     )
 
     record = AgentRecord(
@@ -304,6 +328,7 @@ async def stream_chat_with_agent(
     request_id: str = "",
 ) -> AsyncGenerator[str, None]:
     """流式与 Agent 对话，逐 token 返回。支持写操作确认流程。"""
+    user_id = _resolve_user_id(db, farm_id, user_id)
     # 如果有 session_id 和 db，获取或创建会话并保存用户消息
     conversation = None
     if db and session_id:
@@ -352,6 +377,8 @@ async def stream_chat_with_agent(
         conversation_id=conversation.id if conversation else None,
         session_id=session_id or "",
         request_id=request_id,
+        user_id=user_id,
+        call_type="stream_chat",
     ):
         full_reply += chunk
         yield chunk

@@ -1,38 +1,22 @@
 ## ADDED Requirements
 
-### Requirement: AgentTrace 写入 LLM 调用记录
-`_llm_node` 每次调用 LLM 后 SHALL 向 `agent_traces` 表写入一条记录，包含：`farm_id`、`session_id`（从 `request_id_var` 获取）、`node_type="llm_call"`、`node_name="llm"`、`input_summary`（用户最后一条消息前 200 字符）、`output_summary`（LLM 响应前 200 字符或 tool_calls 摘要）、`duration_ms`（毫秒耗时）、`tokens_used`（如 LLM 响应 metadata 包含则提取，否则 None）。
+### Requirement: 平台级 Trace 事件
+Agent Trace SHALL 覆盖 Agent 请求生命周期中的 context_build、prompt_render、llm_call、tool_call、memory_observe、response_format 和 evaluation_capture 事件。
 
-#### Scenario: LLM 直接回复文本
-- **WHEN** LLM 返回文本回复（无 tool_calls）
-- **THEN** 写入 `agent_traces` 一条记录，`node_type="llm_call"`，`output_summary` 为回复前 200 字符，`duration_ms` 为实际耗时
+#### Scenario: 完整 Agent 请求追踪
+- **WHEN** 用户发送一次触发工具调用的聊天请求
+- **THEN** trace 中包含上下文构建、Prompt 渲染、LLM 调用、工具调用和回复格式化事件
 
-#### Scenario: LLM 返回 tool_calls
-- **WHEN** LLM 返回包含 tool_calls 的响应
-- **THEN** 写入 `agent_traces` 一条记录，`output_summary` 格式为 `tool_calls: [skill1, skill2]`，包含调用的 Skill 名称列表
+### Requirement: Trace 关联 Prompt 和 Context
+LLM 调用 trace SHALL 记录 Prompt 版本、ContextBundle 摘要、token 预算使用和被注入的 ContextBlock 类型。
 
-#### Scenario: LLM 调用失败
-- **WHEN** LLM 调用抛出异常
-- **THEN** 写入 `agent_traces` 一条记录，`error_message` 包含异常信息，`output_summary` 为 None
+#### Scenario: 调试 Prompt 版本
+- **WHEN** 开发者查看某次 LLM 调用 trace
+- **THEN** 可以看到该请求使用的 Prompt 版本和上下文摘要
 
-### Requirement: AgentTrace 写入 Skill 执行记录
-`_parallel_tool_node` 每次执行 Skill 后 SHALL 向 `agent_traces` 表写入一条记录，包含：`farm_id`、`session_id`、`node_type="tool_call"`、`node_name`（Skill 名称）、`input_summary`（参数 JSON 前 200 字符）、`output_summary`（返回值前 200 字符）、`duration_ms`（毫秒耗时）、`error_message`（失败时记录异常信息）。
+### Requirement: Trace 支持评测回放
+Trace SHALL 提供足够信息用于构建评测回放样本，包括用户输入、上下文摘要、Prompt 版本、工具调用、回复摘要和错误信息。
 
-#### Scenario: Skill 执行成功
-- **WHEN** Skill `ainvoke` 正常返回
-- **THEN** 写入 `agent_traces` 一条记录，`node_type="tool_call"`，`node_name` 为 Skill 名称，`output_summary` 为返回值前 200 字符，`duration_ms` 为实际耗时
-
-#### Scenario: Skill 执行失败
-- **WHEN** Skill `ainvoke` 抛出异常
-- **THEN** 写入 `agent_traces` 一条记录，`error_message` 包含异常信息，`output_summary` 为 None
-
-#### Scenario: 写操作 Skill 拦截
-- **WHEN** 写操作 Skill 被 pending action 拦截
-- **THEN** 写入 `agent_traces` 一条记录，`node_type="tool_call"`，`output_summary` 为 "已拦截为 pending action"，`duration_ms` 为 0
-
-### Requirement: AgentTrace session_id 关联
-每条 `agent_traces` 记录 SHALL 从 `request_id_var` ContextVar 获取 `session_id`，使同一请求的 LLM 调用和 Skill 执行记录可关联查询。
-
-#### Scenario: 同一请求产生多条追踪记录
-- **WHEN** 用户发送一条消息，触发 LLM 调用 + Skill 执行
-- **THEN** LLM 调用记录和 Skill 执行记录具有相同的 `session_id`
+#### Scenario: 从失败请求生成回放用例
+- **WHEN** 某次线上请求出现错误工具调用
+- **THEN** 开发者可以基于 trace 信息创建评测回放用例

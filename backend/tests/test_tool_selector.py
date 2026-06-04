@@ -107,6 +107,22 @@ class TestQueryKeywordMatching:
         result = select_tools("我的月额", _make_tools())
         assert "get_cost_summary" in result
 
+    def test_weekly_bill_query(self):
+        result = select_tools("查一下本周账单", _make_tools())
+        assert "get_cost_summary" in result
+
+    def test_yearly_bill_query(self):
+        result = select_tools("今年账单汇总", _make_tools())
+        assert "get_cost_summary" in result
+
+    def test_detail_ledger_query(self):
+        result = select_tools("看一下这个月流水明细", _make_tools())
+        assert "get_cost_summary" in result
+
+    def test_debt_bill_query(self):
+        result = select_tools("老王那边赊账还欠多少", _make_tools())
+        assert "get_cost_summary" in result
+
     def test_trend_analytics(self):
         result = select_tools("比去年赚得多吗", _make_tools())
         assert "get_cost_analytics" in result

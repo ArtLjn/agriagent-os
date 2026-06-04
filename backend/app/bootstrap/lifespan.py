@@ -20,8 +20,18 @@ logger = get_logger(__name__)
 
 async def _run_migrations() -> None:
     """运行 Alembic 数据库迁移。"""
-    from alembic import command
-    from alembic.config import Config as AlembicConfig
+    import sys
+
+    _backend_dir = str(Path(__file__).resolve().parent.parent.parent)
+    _saved_path = sys.path[:]
+    if _backend_dir in sys.path:
+        sys.path.remove(_backend_dir)
+    try:
+        from alembic import command
+        from alembic.config import Config as AlembicConfig
+    finally:
+        sys.path[:] = _saved_path
+
     from sqlalchemy import inspect
 
     alembic_cfg = AlembicConfig(

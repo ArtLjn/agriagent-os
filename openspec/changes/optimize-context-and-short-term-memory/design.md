@@ -63,6 +63,18 @@ Conversation Service 继续负责消息持久化和会话生命周期。Memory S
 
 这延续当前架构优点：低 token、低幻觉、数据来源可追踪。
 
+### Decision 6: 外部 farm_uid 与内部 farm_id 分层
+
+新增 `farms.uid` 作为外部不可枚举标识，格式为 UUID。认证、API、Agent Runtime、SkillContext 和 trace metadata 可以携带 `farm_uid`；业务表在第一阶段继续使用内部自增 `farms.id` 作为外键，避免一次性迁移所有历史数据和 join 关系。
+
+所有进入 Agent/Skill 的 farm 上下文必须由服务端认证边界解析：`current_user -> Farm -> farm.id/farm.uid`。LLM 生成的参数、用户自然语言、前端提交的任意 farm 标识都不能决定写操作归属。Skill 参数 schema 不暴露 `farm_id` 或 `farm_uid`；写 Skill 只能从 `SkillContext` 读取 farm 上下文。
+
+### Decision 7: 缺少可信上下文即失败
+
+所有依赖 farm 数据的 Skill 必须在打开数据库连接前校验 `SkillContext.farm_id`。缺失、非正数或类型异常时返回失败结果，并明确“缺少农场上下文，已拒绝执行”。禁止保留 `getattr(context, "farm_id", 1) or 1` 这类默认写入 1 号农场的兜底。
+
+读操作如果完全由用户显式提供公共参数且不访问租户数据（例如指定城市天气）可以继续执行；一旦需要读取用户设置、Farm.location 或业务表，就必须校验 farm 上下文。
+
 ## Risks / Trade-offs
 
 - [Risk] selector 过多导致请求延迟增加 → 通过 ContextPolicy 限制默认 selector，并保留 tool cache preload。
@@ -70,6 +82,8 @@ Conversation Service 继续负责消息持久化和会话生命周期。Memory S
 - [Risk] 缓存失效遗漏导致上下文过期 → 在用户设置、农场、周期、账务、日志写接口加统一 invalidation helper，并补测试。
 - [Risk] 会话摘要质量影响追问理解 → 第一阶段可使用确定性摘要模板或保守保留最近窗口，摘要生成失败时降级为空摘要。
 - [Risk] 引入 ContextPolicy 增加复杂度 → 先实现内置规则表，不引入外部 DSL 或数据库配置。
+- [Risk] 一次性把所有 farm 外键从 int 迁到 UUID 风险过高 → 第一阶段采用 `farm_uid` 外部标识 + `farm.id` 内部外键，后续再按表迁移。
+- [Risk] 旧测试或脚本依赖默认 1 号农场 → 更新为显式创建 Farm 并通过可信上下文传递，测试不得鼓励默认写入。
 
 ## Migration Plan
 
@@ -78,6 +92,9 @@ Conversation Service 继续负责消息持久化和会话生命周期。Memory S
 3. 将 ConversationSelector 和 MemorySelector 接入 session 短时记忆，替换纯 `sliding_window_compact()` 的旧窗口策略。
 4. 为写接口添加 context/prompt cache invalidation。
 5. 通过 trace 对比新旧上下文 token、selector 选择和 Agent 回复质量，再逐步扩大按需 selector 覆盖。
+6. 为 `farms` 表增加 `uid`，回填历史数据，新增 Farm 默认生成 UUID。
+7. Agent Runtime 状态补充 `farm_uid`，LangChain Tool 包装层统一构建可信 `SkillContext`。
+8. 移除所有 Skill 的 `farm_id=1` 兜底，缺上下文直接失败。
 
 Rollback 策略：保留配置开关，允许 Runtime 回退到 `build_farm_runtime_context()` 四字段注入和旧消息滑窗。
 

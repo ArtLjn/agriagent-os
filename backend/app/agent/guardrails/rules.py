@@ -45,6 +45,10 @@ _JSON_TOOL_CALL_RE = re.compile(
     r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"parameters"\s*:\s*\{[^}]*\}\s*\}',
     re.DOTALL,
 )
+_PY_DICT_TOOL_CALL_RE = re.compile(
+    r"\{\s*'name'\s*:\s*'[^']+'\s*,\s*'parameters'\s*:\s*\{[^}]*\}\s*\}",
+    re.DOTALL,
+)
 _JSON_ACTION_RE = re.compile(
     r'\{\s*"(?:name|action|tool|function)"\s*:\s*"[^"]+"\s*,'
     r'\s*"(?:parameters|params|args|arguments)"\s*:\s*\{',
@@ -117,7 +121,11 @@ def _filter_tool_leaks(text: str) -> str:
         )
         result = re.sub(r"\n{3,}", "\n\n", result).strip()
 
-    if _JSON_TOOL_CALL_RE.search(result) or _JSON_ACTION_RE.search(result):
+    if (
+        _JSON_TOOL_CALL_RE.search(result)
+        or _PY_DICT_TOOL_CALL_RE.search(result)
+        or _JSON_ACTION_RE.search(result)
+    ):
         logger.warning(
             "Guardrails 检测到 JSON 工具调用泄漏 | category=tool_leak_json | text=%s",
             result[:200],
@@ -128,6 +136,9 @@ def _filter_tool_leaks(text: str) -> str:
             )
             return _FALLBACK_TOOL_CALL_REPLY
         result, count = _JSON_TOOL_CALL_RE.subn("", result)
+        py_result, py_count = _PY_DICT_TOOL_CALL_RE.subn("", result)
+        result = py_result
+        count += py_count
         if count:
             logger.info(
                 "Guardrails 移除部分 JSON 工具调用 | category=tool_leak_json_partial | count=%d",
@@ -142,6 +153,7 @@ def _is_mostly_json_tool_call(text: str) -> bool:
     if not text:
         return False
     cleaned = _JSON_TOOL_CALL_RE.sub("", text).strip()
+    cleaned = _PY_DICT_TOOL_CALL_RE.sub("", cleaned).strip()
     cleaned = re.sub(r"[\s -⁯⸀-⹿\\'!\"#$%&()*+,./:;<=>?@[\]^_`{|}~]", "", cleaned)
     return len(cleaned) < 10
 

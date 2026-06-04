@@ -1,10 +1,9 @@
 """Trace 收集器 — 统一入口，委托 TraceDAO 存储。"""
 
 import asyncio
-import json
 import logging
 import time
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from app.infra.trace_context import get_trace, get_round_index
@@ -68,17 +67,6 @@ class TraceCollector:
             if end_time is None:
                 end_time = time.time()
 
-        input_str = (
-            json.dumps(input_data, ensure_ascii=False, default=str)
-            if input_data
-            else None
-        )
-        output_str = (
-            json.dumps(output_data, ensure_ascii=False, default=str)
-            if output_data
-            else None
-        )
-
         trace_data = {
             "request_id": trace.request_id,
             "session_id": trace.session_id or None,
@@ -86,29 +74,44 @@ class TraceCollector:
             "round_index": get_round_index(),
             "node_type": node_type,
             "node_name": node_name,
-            "input_data": input_str,
-            "output_data": output_str,
-            "start_time": time.strftime(
-                "%Y-%m-%dT%H:%M:%S", time.localtime(start_time)
-            ),
-            "end_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(end_time)),
+            "input_data": input_data,
+            "output_data": output_data,
+            "start_time": datetime.fromtimestamp(start_time),
+            "end_time": datetime.fromtimestamp(end_time),
             "duration_ms": duration_ms,
-            "token_usage": json.dumps(token_usage) if token_usage else None,
+            "token_usage": token_usage,
             "status": "error" if error_message else "success",
             "error_message": error_message,
         }
 
         dao.record(trace_data)
 
-        # 同时累加 token 统计
+        # 只累计真实 provider / LangChain usage，缺失或估算来源不入账。
         if token_usage and node_type == "llm_call":
+            usage_source = token_usage.get("usage_source")
+            if usage_source not in {"provider", "usage_metadata"}:
+                logger.warning(
+                    "跳过 token 统计：缺少真实 usage 来源 | request_id=%s | "
+                    "node=%s | usage_source=%s",
+                    trace.request_id,
+                    node_name,
+                    usage_source,
+                )
+                return
             dao.accumulate_token_stats(
                 farm_id=trace.farm_id,
+                user_id=trace.user_id,
                 date_str=date.today().isoformat(),
                 model=node_name,
-                call_type="chat",
+                call_type=trace.call_type,
                 prompt_tokens=token_usage.get("prompt_tokens", 0),
                 completion_tokens=token_usage.get("completion_tokens", 0),
+            )
+        elif node_type == "llm_call":
+            logger.warning(
+                "跳过 token 统计：缺少 token_usage | request_id=%s | node=%s",
+                trace.request_id,
+                node_name,
             )
 
 

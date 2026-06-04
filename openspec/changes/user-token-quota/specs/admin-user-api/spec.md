@@ -7,6 +7,10 @@
 - **WHEN** 管理员请求用户配额
 - **THEN** 返回包含 monthly_limit、monthly_usage、monthly_remaining、monthly_start、monthly_end、weekly_limit、weekly_usage、weekly_remaining、weekly_start、weekly_end、status（normal/warning/exceeded）
 
+#### Scenario: 非管理员禁止查询
+- **WHEN** 非管理员请求用户配额接口
+- **THEN** 系统 SHALL 返回 403
+
 ### Requirement: 用户配额修改
 系统 SHALL 提供管理员 API 修改单个用户的 token 配额。
 
@@ -28,3 +32,22 @@
 #### Scenario: 筛选超限用户
 - **WHEN** 管理员请求 quota-overview?status=exceeded
 - **THEN** 仅返回配额已超限的用户
+
+### Requirement: Token 统计接口筛选
+系统 SHALL 提供管理员 Token 统计接口，支持 user_id 和 farm_id 过滤；未提供过滤条件时返回全量聚合。
+
+#### Scenario: 按用户筛选 token 汇总
+- **WHEN** 管理员请求 GET /admin/stats/tokens?user_id=u1&days=7
+- **THEN** 返回该用户近 7 天的 token 汇总
+
+#### Scenario: 按用户和农场交集筛选
+- **WHEN** 管理员请求 GET /admin/stats/tokens?user_id=u1&farm_id=2
+- **THEN** 返回同时匹配 user_id 和 farm_id 的 token 汇总
+
+#### Scenario: 全量聚合
+- **WHEN** 管理员请求 GET /admin/stats/tokens 且未提供 user_id 和 farm_id
+- **THEN** 返回所有用户和农场的 token 汇总
+
+#### Scenario: 非管理员禁止查看 token 统计
+- **WHEN** 非管理员请求 /admin/stats/tokens 或 /admin/stats/tokens/daily
+- **THEN** 系统 SHALL 返回 403

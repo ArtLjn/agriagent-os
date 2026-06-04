@@ -9,6 +9,8 @@
 - 将短时记忆定义为 session 级工作记忆，包含最近消息窗口、会话摘要、pending action 和临时任务状态。
 - 增加 token-aware 预算策略，要求对最终 prompt 进行统一预算、压缩和丢弃记录。
 - 增加用户上下文准确性规则，用户资料、位置、坐标、当前 farm 和 session 必须从认证/数据库边界获取，不得由 LLM 推断。
+- 增加 farm 外部 UUID 标识规则：API/Agent/Skill 上下文只接受服务端可信注入的 `farm_uid`，不得由 LLM 或用户自然语言提供可枚举的 `farm_id`。
+- 移除所有写 Skill 中 `farm_id=1` 的默认兜底；缺少可信 farm 上下文时必须失败，不得读写默认农场。
 - 增加缓存失效策略，用户设置、农场信息、活跃茬口、账务和日志变更后必须清理相关 context/prompt 缓存。
 - 增加上下文 trace 要求，记录候选 block、保留 block、压缩 block、丢弃 block、token 估算和 selector 错误。
 
@@ -29,4 +31,5 @@
 - 影响 `backend/app/context/*` 的 builder、models、budget、selectors、cache、preload。
 - 影响 `backend/app/memory/*` 与 `backend/app/services/conversation_service.py` 的短时记忆接口。
 - 影响用户设置、农场、周期、账务、日志等写接口的 context/prompt 缓存失效逻辑。
+- 影响 `farms` 表结构、Farm 创建流程、Agent Runtime 状态、SkillContext 构建与所有依赖 farm 的 Skill。
 - 需要新增或更新 Context Builder、TokenBudget、Conversation/Memory、Agent Runtime 集成测试。

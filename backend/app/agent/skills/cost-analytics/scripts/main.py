@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.models.cost import CostRecord
@@ -49,7 +50,9 @@ class CostAnalyticsSkill(Skill):
 
     @cached(ttl_seconds=300)
     async def execute(self, params: dict, context) -> SkillResult:
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "分析收支趋势")
+        if context_error:
+            return context_error
         date_from = params["date_from"]
         date_to = params["date_to"]
         compare_period = params.get("compare_period", "none")

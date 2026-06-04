@@ -75,7 +75,8 @@ def get_config() -> dict:
             "trace_ttl_days": settings.trace.trace_ttl_days,
         },
         "token_quota": {
-            "daily_limit": settings.token_quota.daily_limit,
+            "monthly_limit": settings.token_quota.monthly_limit,
+            "weekly_limit": settings.token_quota.weekly_limit,
             "over_quota_action": settings.token_quota.over_quota_action,
         },
         "langsmith": {

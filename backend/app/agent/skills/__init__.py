@@ -104,13 +104,14 @@ def clear_category_cache(farm_id: int | None = None) -> None:
         _category_cache.pop(farm_id, None)
 
 
-def _make_sync_fn(skill):
+def _make_sync_fn(skill, farm_id: int, farm_uid: str | None = None):
     """为 StructuredTool 创建同步调用函数。"""
 
     def fn(**kwargs):
         loop = asyncio.new_event_loop()
         try:
-            result = loop.run_until_complete(skill.execute(kwargs, None))
+            context = build_skill_context(farm_id=farm_id, farm_uid=farm_uid)
+            result = loop.run_until_complete(skill.execute(kwargs, context))
             return result.reply
         finally:
             loop.close()
@@ -118,18 +119,19 @@ def _make_sync_fn(skill):
     return fn
 
 
-def _make_async_fn(skill):
+def _make_async_fn(skill, farm_id: int, farm_uid: str | None = None):
     """为 StructuredTool 创建异步调用函数。"""
 
     async def coro(**kwargs):
-        result = await skill.execute(kwargs, None)
+        context = build_skill_context(farm_id=farm_id, farm_uid=farm_uid)
+        result = await skill.execute(kwargs, context)
         return result.reply
 
     return coro
 
 
 def skills_to_langchain_tools(
-    manager: SkillManager, farm_id: int = 1
+    manager: SkillManager, farm_id: int = 1, farm_uid: str | None = None
 ) -> list[StructuredTool]:
     """将 skillify Skills 转为 LangChain StructuredTool 列表。"""
     category_enum = get_category_enum(farm_id)
@@ -148,16 +150,20 @@ def skills_to_langchain_tools(
                 name=skill.name(),
                 description=skill.description(),
                 args_schema=args_schema,
-                func=_make_sync_fn(skill),
-                coroutine=_make_async_fn(skill),
+                func=_make_sync_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
+                coroutine=_make_async_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
             )
         )
     return tools
 
 
-def get_langchain_tools(farm_id: int = 1) -> list[StructuredTool]:
+def get_langchain_tools(
+    farm_id: int = 1, farm_uid: str | None = None
+) -> list[StructuredTool]:
     """获取 LangChain Tool 列表（供 LangGraph 使用）。"""
-    return skills_to_langchain_tools(get_skill_manager(), farm_id=farm_id)
+    return skills_to_langchain_tools(
+        get_skill_manager(), farm_id=farm_id, farm_uid=farm_uid
+    )
 
 
 _SKILL_REGISTRY: dict = {}
@@ -192,7 +198,7 @@ def clear_skill_cache():
     _SKILL_REGISTRY = {}
 
 
-def build_skill_context(farm_id: int) -> SkillContext:
+def build_skill_context(farm_id: int, farm_uid: str | None = None) -> SkillContext:
     """构建 skillify SkillContext，优先从 Manager 获取 LLM 配置。"""
     from openai import AsyncOpenAI
 
@@ -214,13 +220,16 @@ def build_skill_context(farm_id: int) -> SkillContext:
     except Exception:
         pass
 
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-    return SkillContext(
-        user_id=str(farm_id),
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url) if api_key else None
+    context = SkillContext(
+        user_id=farm_uid or "",
         farm_id=farm_id,
         llm_model=model,
         llm_client=client,
     )
+    if farm_uid:
+        setattr(context, "farm_uid", farm_uid)
+    return context
 
 
 __all__ = [

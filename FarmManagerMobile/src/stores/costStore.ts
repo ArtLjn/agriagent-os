@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import type { CostRecord, CycleProfit } from '../api/types';
 import { costApi } from '../api/client';
+import { normalizeCostRecords } from '../screens/cost/utils/costRecordNormalize';
+
+function getRecordList(data: any): CostRecord[] {
+  return data?.items ?? data;
+}
 
 interface CostState {
   records: CostRecord[];
@@ -33,7 +38,10 @@ export const useCostStore = create<CostState>((set) => ({
       const res = await costApi.getRecords(
         cycleId ? { cycle_id: cycleId } : undefined
       );
-      set({ records: (res.data as any)?.items ?? res.data, loading: false });
+      set({
+        records: normalizeCostRecords(getRecordList(res.data)),
+        loading: false,
+      });
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
@@ -42,11 +50,15 @@ export const useCostStore = create<CostState>((set) => ({
   createRecord: async (data) => {
     set({ loading: true, error: null });
     try {
+      const createdAt = new Date().toISOString();
       await costApi.createRecord(data);
       const res = await costApi.getRecords(
         data.cycle_id ? { cycle_id: data.cycle_id } : undefined
       );
-      set({ records: (res.data as any)?.items ?? res.data, loading: false });
+      set({
+        records: normalizeCostRecords(getRecordList(res.data), createdAt),
+        loading: false,
+      });
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
@@ -59,7 +71,10 @@ export const useCostStore = create<CostState>((set) => ({
       const res = await costApi.getRecords(
         cycleId ? { cycle_id: cycleId } : undefined
       );
-      set({ records: (res.data as any)?.items ?? res.data, loading: false });
+      set({
+        records: normalizeCostRecords(getRecordList(res.data)),
+        loading: false,
+      });
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

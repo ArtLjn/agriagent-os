@@ -6,6 +6,7 @@
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.models.cycle import CropCycle, CycleStage
 
@@ -53,7 +54,9 @@ class UpdateCropStageSkill(Skill):
 
         stage_name = stage_name.strip()
         cycle_id = params.get("cycle_id")
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "更新阶段")
+        if context_error:
+            return context_error
 
         db = SessionLocal()
         try:

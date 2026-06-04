@@ -1,37 +1,30 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: SQLite WAL 模式
-系统启动时 SHALL 自动配置 SQLite WAL 模式，确保读写不互阻塞。
+系统启动时 SHALL 根据数据库类型自动配置优化参数。SQLite 使用 WAL 模式，MySQL 使用连接池参数。
 
-#### Scenario: 启动时自动配置
-- **WHEN** FastAPI 应用启动，数据库连接建立
+#### Scenario: SQLite 启动配置（不变）
+- **WHEN** FastAPI 应用启动，数据库 URL 以 `sqlite:///` 开头
 - **THEN** 自动执行 PRAGMA journal_mode=WAL, synchronous=NORMAL, foreign_keys=ON, busy_timeout=5000
 
-#### Scenario: WAL 模式验证
-- **WHEN** 查询 `PRAGMA journal_mode`
-- **THEN** 返回 "wal"
+#### Scenario: MySQL 启动配置
+- **WHEN** FastAPI 应用启动，数据库 URL 以 `mysql` 开头
+- **THEN** 跳过 SQLite PRAGMA，使用 pool_size=10, max_overflow=20, pool_recycle=3600, pool_pre_ping=True
 
 ### Requirement: 外键约束生效
-所有外键关系 SHALL 在 SQLite 层面强制执行（PRAGMA foreign_keys=ON）。
+所有外键关系 SHALL 在数据库层面强制执行。SQLite 通过 PRAGMA foreign_keys=ON，MySQL InnoDB 默认启用外键约束。
 
-#### Scenario: 删除农场级联清理
-- **WHEN** 删除一条 Farm 记录
-- **THEN** 关联的 crop_cycles、cost_records、conversations 等记录自动级联删除
+#### Scenario: MySQL 外键约束
+- **WHEN** 使用 MySQL InnoDB 引擎
+- **THEN** 所有外键约束（CASCADE、SET NULL、RESTRICT）由 InnoDB 自动强制执行
 
 ### Requirement: 定时备份
-系统 SHALL 提供备份脚本，每小时在线热备 SQLite 数据库，保留 7 天滚动备份。
+系统 SHALL 根据数据库类型提供对应的备份策略。SQLite 使用文件拷贝，MySQL 使用 mysqldump。
 
-#### Scenario: 正常备份
-- **WHEN** cron 每小时触发备份脚本
+#### Scenario: MySQL 定时备份
+- **WHEN** 使用 MySQL 数据库，cron 触发备份脚本
+- **THEN** 执行 `mysqldump --single-transaction` 生成 SQL 备份文件，自动清理 7 天前的备份
+
+#### Scenario: SQLite 定时备份（不变）
+- **WHEN** 使用 SQLite 数据库，cron 触发备份脚本
 - **THEN** 使用 `sqlite3 .backup` 命令生成备份文件，命名含时间戳，自动清理 7 天前的备份
-
-### Requirement: users 和 farms 表使用 UUID 主键
-`users` 和 `farms` 表的主键 SHALL 使用 UUID v4（String(36)），防止 ID 枚举攻击。
-
-#### Scenario: 注册时生成 UUID
-- **WHEN** 用户注册成功
-- **THEN** users.id 和 farms.id 为 UUID v4 格式（如 "a1b2c3d4-e5f6-7890-abcd-ef1234567890"）
-
-#### Scenario: API 使用 UUID
-- **WHEN** 前端请求 `GET /farms/<uuid>`
-- **THEN** 使用 UUID 查询，无法通过递增 ID 猜测其他农场

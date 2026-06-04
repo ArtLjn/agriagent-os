@@ -1,40 +1,54 @@
 ---
 name: settle_debt
-description: 还赊账，结清欠款，支持部分还款和全额还清。触发词: 还钱、还账、还款、清账、还了
+type: write
+description: 还赊账、还款或结清欠款，支持部分还款和全额还清。
 triggers:
   - 还钱
   - 还账
   - 还款
   - 清账
+  - 结清
+  - 欠款
   - 还了
 parameters:
   type: object
   properties:
     counterparty:
       type: string
-      description: "债权人名称/简称，如'老王'、'农资店'"
+      description: "债权人或交易对象名称/简称，如老王、农资店。"
     amount:
       type: number
-      description: "还款金额，不传则全额还清"
+      description: "还款金额。不传则全额还清匹配到的欠款。"
     note:
       type: string
-      description: "备注"
+      description: "备注。"
   required:
     - counterparty
 ---
 
 # 还赊账
 
-## 功能
-结清赊账记录，支持部分还款和全额还清两种模式。根据债权人名称查找未结清的赊账记录。
+## 何时使用
+用户表达已经还钱、准备结清、清账、把欠款还上等写入动作时使用本 Skill。
 
-## 参数说明
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| counterparty | string | 是 | 债权人名称/简称，如'老王'、'农资店' |
-| amount | number | 否 | 还款金额，不传则全额还清 |
-| note | string | 否 | 备注 |
+## 不要使用
+- 用户只是查询“还欠多少”“欠谁的钱”“赊账账单”时，不要用本 Skill；当前可先用 `get_cost_summary` 或后续新增债务查询 Skill。
+- 用户是在新增一笔赊账时，应使用 `create_cost_record`。
+- 用户没有确认实际还款动作时，不要执行。
+
+## 参数推断
+- “还了老王 1000 块” -> `counterparty=老王`, `amount=1000`。
+- “把农资店的账结清” -> `counterparty=农资店`，不传 `amount` 表示全额。
+- “老王的钱全还了” -> `counterparty=老王`，不传 `amount`。
+
+## 缺参策略
+- 缺少交易对象时，应追问“还给谁/结清谁的账”。
+- 缺少金额但用户说“结清/全还”，可不传金额。
+- 缺少金额且没有“全额”语义时，应追问还款金额。
+
+## 多工具协作
+还款成功后，如果用户继续问欠款余额，应调用账务查询或债务查询能力读取最新数据。
 
 ## 示例
-- 部分还款：「还了老王1000块」→ settle_debt(counterparty="老王", amount=1000)
-- 全额还清：「老王的钱全还了」→ settle_debt(counterparty="老王")
+- 用户：“还了老王 1000 块” -> `settle_debt(counterparty="老王", amount=1000)`
+- 用户：“农资店的账全清了” -> `settle_debt(counterparty="农资店")`

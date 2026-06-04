@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.context.invalidation import invalidate_farm_context
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordCreate, DebtSummary
+from app.services.cost_service import _find_category
 
 SUBTYPE_DEBT = "赊账"
 CATEGORY_REPAY = "还款"
@@ -28,11 +29,14 @@ def create_debt_record(
         新创建的 CostRecord 实例。
     """
     subtype = record.record_subtype or SUBTYPE_DEBT
+    category = _find_category(db, farm_id, record.category, record.record_type)
     db_record = CostRecord(
         farm_id=farm_id,
         cycle_id=record.cycle_id,
         record_type=record.record_type,
         category=record.category,
+        category_id=category.id if category else None,
+        category_name_snapshot=category.name if category else record.category,
         amount=record.amount,
         record_date=record.record_date,
         note=record.note,
@@ -206,10 +210,13 @@ def settle_debt(
         raise ValueError(f"未找到 {counterparty} 的未结清赊账记录")
 
     repay_amount = amount if amount is not None else debt.amount
+    repay_category = _find_category(db, farm_id, CATEGORY_REPAY, "income")
     repay_record = CostRecord(
         farm_id=farm_id,
         record_type="income",
         category=CATEGORY_REPAY,
+        category_id=repay_category.id if repay_category else None,
+        category_name_snapshot=CATEGORY_REPAY,
         amount=repay_amount,
         record_date=date.today(),
         note=note,

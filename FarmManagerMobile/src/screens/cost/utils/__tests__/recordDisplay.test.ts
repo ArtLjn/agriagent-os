@@ -53,7 +53,7 @@ describe("recordDisplay", () => {
     expect(getRecordNoteText(record)).toBeNull();
   });
 
-  it("缺少创建时间时只显示业务日期，不显示时间占位", () => {
+  it("缺少创建时间时不显示占位符", () => {
     const record = {
       ...baseRecord,
       created_at: undefined,

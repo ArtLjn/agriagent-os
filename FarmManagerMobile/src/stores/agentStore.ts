@@ -29,6 +29,7 @@ interface AgentState {
   generateReport: (reportType: string, cycleId?: number) => Promise<void>;
   fetchWeather: (days?: number) => Promise<void>;
   fetchReports: () => Promise<void>;
+  deleteReports: (ids: number[]) => Promise<void>;
   loadCachedWeather: () => Promise<void>;
   setCity: (name: string, lat?: number, lon?: number) => Promise<void>;
   clearChat: () => void;
@@ -155,6 +156,18 @@ export const useAgentStore = create<AgentState, [["zustand/persist", unknown]]>(
         }
       },
 
+      deleteReports: async (ids) => {
+        set({ loading: true, error: null });
+        try {
+          await Promise.all(ids.map((id) => agentApi.deleteReport(id)));
+          const res = await agentApi.getReportHistory();
+          set({ reports: res.data.items, loading: false });
+        } catch (err: any) {
+          set({ error: err.message, loading: false });
+          throw err;
+        }
+      },
+
       generateReport: async (reportType, cycleId) => {
         set({ loading: true, error: null });
         try {
@@ -175,13 +188,19 @@ export const useAgentStore = create<AgentState, [["zustand/persist", unknown]]>(
         }
         try {
           const state = useAgentStore.getState();
+          const requestCity = state.cityName;
+          const requestLat = state.cityLat;
+          const requestLon = state.cityLon;
           const res = await weatherApi.getForecast(
             days ?? 3,
-            state.cityLat,
-            state.cityLon,
-            state.cityName
+            requestLat,
+            requestLon,
+            requestCity
           );
-          const cacheKey = `weather_cache_${state.cityName}`;
+          if (useAgentStore.getState().cityName !== requestCity) {
+            return;
+          }
+          const cacheKey = `weather_cache_${requestCity}`;
           await AsyncStorage.setItem(cacheKey, JSON.stringify(res.data));
           set({ weather: res.data, loading: false });
         } catch (err: any) {
@@ -205,7 +224,7 @@ export const useAgentStore = create<AgentState, [["zustand/persist", unknown]]>(
       setCity: async (name, lat, lon) => {
         set({ cityName: name, cityLat: lat, cityLon: lon });
         await useAgentStore.getState().loadCachedWeather();
-        useAgentStore.getState().fetchWeather();
+        await useAgentStore.getState().fetchWeather();
       },
 
       clearChat: () =>

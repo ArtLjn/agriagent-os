@@ -1,5 +1,7 @@
 """会话管理 API 端点测试。"""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
@@ -11,6 +13,7 @@ from app.api.deps import get_current_farm, get_db
 from app.core.database import Base
 from app.infra.limiter import limiter
 from app.models.farm import Farm
+from app.models.user import User
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -35,7 +38,16 @@ def clean_agent_api_db():
     Base.metadata.drop_all(bind=_test_engine)
     Base.metadata.create_all(bind=_test_engine)
     db = _TestSession()
-    db.add(Farm(id=1, name="默认农场"))
+    db.add(
+        User(
+            id="test-user-001",
+            phone="00000000000",
+            password_hash="h",
+            nickname="测试用户",
+            status="active",
+        )
+    )
+    db.add(Farm(id=1, name="默认农场", user_id="test-user-001"))
     db.commit()
     db.close()
     yield
@@ -66,6 +78,21 @@ def client():
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
+
+
+def test_chat_passes_current_user_to_advisor(client):
+    """POST /agent/chat 将当前用户透传给 advisor。"""
+    advisor = AsyncMock(return_value="ok")
+
+    with patch("app.services.agent_service.invoke_advisor", advisor):
+        response = client.post(
+            "/agent/chat",
+            json={"message": "帮我看看农场状态", "session_id": "sess-user-1"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["reply"] == "ok"
+    assert advisor.await_args.kwargs["user_id"] == "test-user-001"
 
 
 class TestConversationApi:

@@ -54,6 +54,8 @@ class TestComposerCompose:
         assert "【语言规则】" in result
         assert "【安全护栏】" in result
         assert "【角色定义】" in result
+        assert "芽芽" in result
+        assert "轻松闲聊" in result
         assert "老李" in result
         assert "苏州" in result
         assert "2026-05-29" in result

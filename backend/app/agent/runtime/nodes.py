@@ -21,11 +21,13 @@ from app.agent.runtime.llm_support import (
     _record_llm_success,
     _warm_tool_caches,
 )
+from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.agent.runtime.messages import (
     _detect_missed_tool_call,
     _extract_tokens_used,
     _extract_tool_calls_from_content,
     _find_last_human_message,
+    extract_token_usage,
     sliding_window_compact,
 )
 from app.agent.runtime.tool_executor import _parallel_tool_node
@@ -33,11 +35,12 @@ from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.tool_selector import expand_by_chain, select_tools
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.core.date_context import get_request_date
 from app.infra.pending_actions import PENDING_MARKER, is_pending_tool_message
 from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round
-from app.services.quota_service import check_quota
+from app.services.quota_service import QuotaCheckResult, check_user_quota
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +49,20 @@ _DIRECT_READ_TOOLS: set[str] = {
     "get_cost_summary",
     "get_farm_status",
 }
+
+_QUOTA_REJECT_MESSAGES = {
+    "month": "本月用量已达上限，配额将在下月重置。",
+    "week": "本周用量已达上限，配额将在下周一重置。",
+    "identity": "缺少可信用户上下文，无法继续处理。",
+}
+
+
+def check_quota(user_id: str | None) -> QuotaCheckResult:
+    db = SessionLocal()
+    try:
+        return check_user_quota(user_id, db)
+    finally:
+        db.close()
 
 
 def _filter_tool_calls_by_selected(
@@ -110,8 +127,32 @@ async def _llm_node(state: AgentState) -> dict:
         return {"messages": [AIMessage(content=confirm)]}
 
     farm_id = state.get("farm_id", 1)
+    if not isinstance(farm_id, int) or farm_id <= 0:
+        return {"messages": [AIMessage(content="缺少可信农场上下文，无法继续处理。")]}
+    farm_uid = state.get("farm_uid")
 
-    tools = get_langchain_tools(farm_id=farm_id)
+    quota = check_quota(state.get("user_id"))
+    quota_allowed = quota if isinstance(quota, bool) else quota.allowed
+    exceeded_period = None if isinstance(quota, bool) else quota.exceeded_period
+    if not quota_allowed:
+        action = settings.token_quota.over_quota_action
+        if action == "reject":
+            logger.warning(
+                "Token 配额超限，拒绝调用（reject 模式）| period=%s",
+                exceeded_period,
+            )
+            content = _QUOTA_REJECT_MESSAGES.get(
+                exceeded_period,
+                "用量已达上限，请稍后再试。",
+            )
+            return {"messages": [AIMessage(content=content)]}
+        if action == "warn":
+            logger.warning(
+                "Token 配额超限，继续调用（warn 模式）| period=%s",
+                exceeded_period,
+            )
+
+    tools = get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
     has_tool_results = bool(tool_msgs)
     intent = state.get("intent", "agent")
     user_msg = _find_last_human_message(messages)
@@ -229,16 +270,26 @@ async def _llm_node(state: AgentState) -> dict:
 
     system = SystemMessage(content=system_text)
     messages = sliding_window_compact(state["messages"])
+    messages, final_budget = FinalPromptBudget().apply(system_text, messages)
     input_summary = _find_last_human_message(state["messages"])[:200]
-
-    # Token 配额检查
-    if not check_quota(farm_id=farm_id):
-        action = settings.token_quota.over_quota_action
-        if action == "reject":
-            logger.warning("Token 配额超限，拒绝调用（reject 模式）")
-            return {"messages": [AIMessage(content="今日用量已达上限，明天再来吧。")]}
-        elif action == "warn":
-            logger.warning("Token 配额超限，继续调用（warn 模式）")
+    collector.record(
+        node_type="prompt_budget",
+        node_name="final_prompt",
+        input_data={
+            "system_prompt": True,
+            "context_blocks": [block.key for block in context_bundle.blocks],
+            "messages": len(messages),
+        },
+        output_data=final_budget.summary(),
+        token_usage={"prompt_tokens": final_budget.total_tokens},
+    )
+    if final_budget.over_budget:
+        logger.warning(
+            "最终 prompt 仍超预算 | total=%d max=%d actions=%s",
+            final_budget.total_tokens,
+            final_budget.max_tokens,
+            final_budget.actions,
+        )
 
     # 并行缓存预热（与 LLM 调用并行执行）
     preload_task = asyncio.create_task(
@@ -389,16 +440,11 @@ async def _llm_node(state: AgentState) -> dict:
             except Exception as retry_exc:
                 logger.warning("重试调用失败 | error=%s", retry_exc)
 
-    # 提取 token 用量
-    tokens = _extract_tokens_used(response)
-    token_usage = None
-    if tokens is not None:
-        usage_meta = response.response_metadata.get("token_usage", {})
-        token_usage = {
-            "prompt_tokens": usage_meta.get("prompt_tokens", 0),
-            "completion_tokens": usage_meta.get("completion_tokens", 0),
-            "total_tokens": tokens,
-        }
+    # 提取真实 provider token usage，缺失时不参与 TokenDailyStats 入账。
+    token_usage = extract_token_usage(response)
+    tokens = (
+        token_usage["total_tokens"] if token_usage else _extract_tokens_used(response)
+    )
 
     logger.info(
         "LLM 调用完成 | role=%s | key=%s | model=%s | latency_ms=%d | "

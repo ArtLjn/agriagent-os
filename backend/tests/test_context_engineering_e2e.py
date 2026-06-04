@@ -87,7 +87,8 @@ class TestBasePromptNoFarmContext:
             current_date=date(2026, 5, 29),
         )
         assert len(text) > 100
-        assert "农友" in text
+        assert "农友" not in text
+        assert "称呼用户为" not in text
 
 
 class TestSlidingWindowCompact:

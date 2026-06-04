@@ -12,4 +12,7 @@ class AgentState(TypedDict):
 
     messages: Annotated[list[BaseMessage], add_messages]
     farm_id: int
+    farm_uid: str | None
     intent: str  # "greeting" | "query" | "write" | "agent"
+    user_id: str | None
+    session_id: str | None

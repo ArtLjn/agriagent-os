@@ -1,7 +1,9 @@
 """Trace 数据访问对象 — 批量 INSERT + Token 统计累加。"""
 
+import json
 import logging
 from collections import deque
+from datetime import date
 from typing import Any
 
 from app.core.database import SessionLocal
@@ -28,7 +30,7 @@ class TraceDAO:
     def record(self, trace_data: dict[str, Any]) -> None:
         """将一条 trace 数据入队。"""
         if "output_data" in trace_data and trace_data["output_data"]:
-            trace_data["output_data"] = trace_data["output_data"][:MAX_OUTPUT_LEN]
+            trace_data["output_data"] = _truncate_json_value(trace_data["output_data"])
         self._queue.append(trace_data)
 
     async def flush_now(self) -> int:
@@ -57,7 +59,8 @@ class TraceDAO:
     def accumulate_token_stats(
         self,
         farm_id: int,
-        date_str: str,
+        user_id: str | None,
+        date_str: str | date,
         model: str,
         call_type: str,
         prompt_tokens: int,
@@ -70,8 +73,9 @@ class TraceDAO:
             existing = (
                 db.query(TokenDailyStats)
                 .filter(
+                    TokenDailyStats.user_id == user_id,
                     TokenDailyStats.farm_id == farm_id,
-                    TokenDailyStats.date == date_str,
+                    TokenDailyStats.date == _coerce_date(date_str),
                     TokenDailyStats.model == model,
                     TokenDailyStats.call_type == call_type,
                 )
@@ -85,8 +89,9 @@ class TraceDAO:
             else:
                 db.add(
                     TokenDailyStats(
+                        user_id=user_id,
                         farm_id=farm_id,
-                        date=date_str,
+                        date=_coerce_date(date_str),
                         model=model,
                         call_type=call_type,
                         prompt_tokens=prompt_tokens,
@@ -101,6 +106,21 @@ class TraceDAO:
             logger.exception("累加 token 统计失败")
         finally:
             db.close()
+
+
+def _coerce_date(value: str | date) -> date:
+    """兼容旧调用方传入的 ISO 日期字符串。"""
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(value)
+
+
+def _truncate_json_value(value: Any) -> Any:
+    """限制 trace 输出体积，同时保持 JSON 列可写入。"""
+    serialized = json.dumps(value, ensure_ascii=False, default=str)
+    if len(serialized) <= MAX_OUTPUT_LEN:
+        return value
+    return serialized[:MAX_OUTPUT_LEN]
 
 
 __all__ = ["TraceDAO"]

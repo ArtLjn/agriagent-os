@@ -80,6 +80,15 @@ class LLMSelection:
     api_key_index: int
     role: str | None
 
+    def _legacy_tuple(self) -> tuple[ProviderConfig, ModelConfig, str]:
+        return (self.provider, self.model, self.api_key)
+
+    def __iter__(self):
+        return iter(self._legacy_tuple())
+
+    def __getitem__(self, index: int):
+        return self._legacy_tuple()[index]
+
     def public_info(self) -> dict[str, str | int]:
         return {
             "provider": self.provider.name,

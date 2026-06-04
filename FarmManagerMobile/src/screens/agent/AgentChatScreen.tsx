@@ -18,7 +18,6 @@ import { useAuthStore } from "../../stores/authStore";
 import type { ChatMessage } from "../../api/types";
 import { MarkdownText } from "../../components/MarkdownText";
 import { ReportListView } from "../../components/ReportListView";
-import { ScalePress } from "../../components/animations/ScalePress";
 import { colors } from "../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import { appGradients } from "../../theme/gradients";
@@ -60,10 +59,18 @@ const PROMPT_TONES = {
 
 const getGreeting = () => {
   const hour = new Date().getHours();
-  if (hour < 6) return "夜深了，早点休息";
-  if (hour < 12) return "早上好";
-  if (hour < 14) return "中午好";
-  if (hour < 19) return "下午好";
+  if (hour < 6) {
+    return "夜深了，早点休息";
+  }
+  if (hour < 12) {
+    return "早上好";
+  }
+  if (hour < 14) {
+    return "中午好";
+  }
+  if (hour < 19) {
+    return "下午好";
+  }
   return "晚上好";
 };
 
@@ -76,6 +83,7 @@ export const AgentChatScreen: React.FC = () => {
     loading: isLoading,
     reports,
     fetchReports,
+    deleteReports,
   } = useAgentStore();
   const [inputText, setInputText] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "report">("chat");
@@ -201,10 +209,10 @@ export const AgentChatScreen: React.FC = () => {
             <Icon name="sprout" size={24} color={colors.success} />
           </LinearGradient>
           <View style={styles.heroCopy}>
-            <Text style={styles.welcomeEyebrow}>{greeting}</Text>
-            <Text style={styles.welcomeTitle}>
-              今天想先处理什么，{nickname}？
+            <Text style={styles.welcomeEyebrow}>
+              {greeting}，{nickname}
             </Text>
+            <Text style={styles.welcomeTitle}>今天要处理什么？</Text>
             <Text style={styles.welcomeSubtitle}>
               可以直接问，也可以点一个场景开始。
             </Text>
@@ -215,23 +223,26 @@ export const AgentChatScreen: React.FC = () => {
           <Text style={styles.promptTitle}>常用场景</Text>
           <View style={styles.promptCards}>
             {QUICK_PROMPTS.map((prompt, index) => (
-              <ScalePress key={index} onPress={() => handleSend(prompt.prompt)}>
-                <View style={styles.promptPill}>
-                  <View
-                    style={[
-                      styles.promptIconBox,
-                      { backgroundColor: PROMPT_TONES[prompt.tone].bg },
-                    ]}
-                  >
-                    <Icon
-                      name={prompt.icon as any}
-                      size={16}
-                      color={PROMPT_TONES[prompt.tone].icon}
-                    />
-                  </View>
-                  <Text style={styles.promptPillText}>{prompt.text}</Text>
+              <TouchableOpacity
+                key={index}
+                style={styles.promptPill}
+                onPress={() => handleSend(prompt.prompt)}
+                activeOpacity={0.78}
+              >
+                <View
+                  style={[
+                    styles.promptIconBox,
+                    { backgroundColor: PROMPT_TONES[prompt.tone].bg },
+                  ]}
+                >
+                  <Icon
+                    name={prompt.icon as any}
+                    size={16}
+                    color={PROMPT_TONES[prompt.tone].icon}
+                  />
                 </View>
-              </ScalePress>
+                <Text style={styles.promptPillText}>{prompt.text}</Text>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
@@ -253,7 +264,7 @@ export const AgentChatScreen: React.FC = () => {
             <Icon name="sprout" size={18} color={colors.success} />
           </View>
           <View>
-            <Text style={styles.headerTitle}>农事助手</Text>
+            <Text style={styles.headerTitle}>芽芽</Text>
             <View style={styles.statusRow}>
               <View style={styles.statusDot} />
               <Text style={styles.headerSubtitle}>在线</Text>
@@ -372,6 +383,7 @@ export const AgentChatScreen: React.FC = () => {
         <ReportListView
           reports={reports}
           onGenerate={() => navigation.navigate("AgentReport" as never)}
+          onDeleteReports={deleteReports}
           onViewReport={(r) =>
             (navigation as any).navigate("AgentReport", {
               content: r.content,
@@ -480,28 +492,28 @@ const styles = StyleSheet.create({
   // ─── Welcome — left-aligned ───
   welcomeScrollContent: {
     flexGrow: 1,
-    justifyContent: "flex-end",
+    justifyContent: "center",
   },
   welcomeContainer: {
     paddingHorizontal: spacingV2.lg,
-    paddingTop: spacingV2.xxl,
-    paddingBottom: spacingV2.xxl,
+    paddingTop: spacingV2.lg,
+    paddingBottom: spacingV2.lg,
   },
   heroBlock: {
-    minHeight: 260,
+    minHeight: 148,
     justifyContent: "flex-end",
-    marginBottom: spacingV2.xxl,
+    marginBottom: spacingV2.lg,
   },
   heroIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: spacingV2.xl,
+    marginBottom: spacingV2.lg,
   },
   heroCopy: {
-    maxWidth: 320,
+    maxWidth: 360,
   },
   welcomeEyebrow: {
     fontSize: fontSizeV2.sm,
@@ -510,11 +522,11 @@ const styles = StyleSheet.create({
     marginBottom: spacingV2.sm,
   },
   welcomeTitle: {
-    fontSize: fontSizeV2.xxl,
+    fontSize: fontSizeV2.xl,
     fontWeight: "700",
     color: colors.text,
-    lineHeight: 34,
-    marginBottom: spacingV2.md,
+    lineHeight: 30,
+    marginBottom: spacingV2.sm,
   },
   welcomeSubtitle: {
     fontSize: fontSizeV2.md,
@@ -524,7 +536,7 @@ const styles = StyleSheet.create({
 
   // ─── Prompt pills ───
   promptSection: {
-    marginTop: spacingV2.sm,
+    marginTop: 0,
   },
   promptTitle: {
     fontSize: fontSizeV2.xs,
@@ -539,7 +551,7 @@ const styles = StyleSheet.create({
   },
   promptPill: {
     width: "47%",
-    minHeight: 86,
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "flex-start",
     backgroundColor: colors.surface,
@@ -686,7 +698,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     backgroundColor: "#F1F5F9",
-    borderRadius: 28,
+    borderRadius: borderRadiusV2.xxxl,
     paddingLeft: spacingV2.lg,
     paddingRight: spacingV2.sm,
     paddingVertical: spacingV2.sm,

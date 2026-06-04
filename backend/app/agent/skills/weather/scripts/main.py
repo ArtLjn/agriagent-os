@@ -3,7 +3,7 @@
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
-from app.core.config import settings
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.services.weather_service import check_weather_warnings, fetch_weather
@@ -67,11 +67,8 @@ def _extract_city(text: str) -> str | None:
     return None
 
 
-def _get_user_location(farm_id: int) -> tuple[str, float, float]:
-    """从 user_settings 读取用户位置（城市名、坐标），无记录时降级到默认值。"""
-    default_city = "苏州"
-    default_lat = settings.weather_latitude
-    default_lon = settings.weather_longitude
+def _get_user_location(farm_id: int) -> tuple[str, float | None, float | None] | None:
+    """从用户设置或 Farm.location 读取可信位置，无配置时返回 None。"""
     try:
         db = SessionLocal()
         try:
@@ -86,13 +83,17 @@ def _get_user_location(farm_id: int) -> tuple[str, float, float]:
                     .first()
                 )
                 if setting and setting.default_lat and setting.default_lon:
-                    city = setting.default_city or default_city
+                    city = setting.default_city or farm.location or ""
                     return city, setting.default_lat, setting.default_lon
+                if setting and setting.default_city:
+                    return setting.default_city, None, None
+            if farm and farm.location:
+                return farm.location, None, None
         finally:
             db.close()
     except Exception:
         pass
-    return default_city, default_lat, default_lon
+    return None
 
 
 def _weather_emoji(precip: float, max_temp: float) -> str:
@@ -217,15 +218,22 @@ class WeatherSkill(Skill):
 
     @cached(ttl_seconds=1800)
     async def execute(self, params: dict, context) -> SkillResult:
-        farm_id = getattr(context, "farm_id", 1) or 1
-
         # 优先使用参数中的城市名
         city = params.get("city", "").strip()
         if city:
             location, lat, lon = city, None, None
         else:
+            farm_id, context_error = require_farm_context(context, "查询天气")
+            if context_error:
+                return context_error
             # 降级到用户设置的位置
-            location, lat, lon = _get_user_location(farm_id)
+            user_location = _get_user_location(farm_id)
+            if user_location is None:
+                return SkillResult(
+                    status=ResultStatus.NEED_CLARIFY,
+                    reply="查询天气需要先知道城市，请告诉我你要查询哪个城市。",
+                )
+            location, lat, lon = user_location
 
         data = await fetch_weather(location, days=3, lat=lat, lon=lon)
         reply = _format_weather_reply(location, data)

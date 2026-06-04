@@ -168,7 +168,7 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen
               name="AgentChat"
               component={AgentChatScreen}
-              options={{ title: "农事顾问" }}
+              options={{ title: "芽芽顾问" }}
             />
             <Stack.Screen
               name="AgentReport"

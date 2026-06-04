@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -42,6 +42,6 @@ class CycleStage(Base):
     order_index = Column(Integer, nullable=False)
     duration_days = Column(Integer, nullable=False)
     key_tasks = Column(String(500), nullable=True)
-    is_current = Column(Integer, default=0)
+    is_current = Column(Boolean, default=False)
 
     cycle = relationship("CropCycle", back_populates="stages")

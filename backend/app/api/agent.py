@@ -13,6 +13,7 @@ from app.models.farm import Farm
 from app.agent.application.chat_use_case import chat, new_request_id
 from app.agent.application.daily_advice_use_case import get_daily, refresh_daily
 from app.agent.application.history_use_case import (
+    delete_report_item,
     list_conversation_items,
     list_message_items,
     list_report_history_items,
@@ -193,6 +194,20 @@ async def list_reports(
 ) -> ReportListResponse:
     """获取报告历史列表（支持分页）。"""
     return list_report_page(db, farm=farm, page=page, size=size)
+
+
+@router.delete("/reports/{report_id}")
+def delete_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """删除报告历史。"""
+    try:
+        delete_report_item(db, farm=farm, report_id=report_id)
+        return {"message": "删除成功"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 __all__ = ["router"]

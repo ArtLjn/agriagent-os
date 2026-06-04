@@ -2,7 +2,7 @@ import SSE from 'react-native-sse';
 import axios from 'axios';
 import type { PendingAction, CostRecord, DebtListResponse, CropTemplateParseResponse, CreateTemplateRequest, CycleParseResponse, ReportResponse, ReportListResponse } from './types';
 
-const API_BASE_URL = 'http://10.167.110.141:8099';
+const API_BASE_URL = 'http://172.16.57.244:8099';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -81,6 +81,7 @@ export const cropApi = {
   },
   createTemplate: (data: CreateTemplateRequest) =>
     apiClient.post('/crops/templates', data),
+  deleteTemplate: (id: number) => apiClient.delete(`/crops/templates/${id}`),
 };
 
 // 种植周期
@@ -93,6 +94,7 @@ export const cycleApi = {
     start_date: string;
     field_name?: string;
   }) => apiClient.post('/cycles', data),
+  deleteCycle: (id: number) => apiClient.delete(`/cycles/${id}`),
   parseCycle: (description: string) => {
     const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
       /[xy]/g,
@@ -224,6 +226,7 @@ export const agentApi = {
     apiClient.get('/agent/advice-history', { params: { cycle_id: cycleId } }),
   getReportHistory: (page: number = 1, size: number = 10) =>
     apiClient.get<ReportListResponse>('/agent/reports', { params: { page, size } }),
+  deleteReport: (id: number) => apiClient.delete(`/agent/reports/${id}`),
 };
 
 // 债务管理

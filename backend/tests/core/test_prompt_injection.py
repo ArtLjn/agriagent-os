@@ -1,4 +1,4 @@
-"""测试 prompt 模板注入农场上下文 + 回复格式规则 + 用户称呼。"""
+"""测试 prompt 模板注入农场上下文 + 轻量回复规则。"""
 
 import pytest
 from datetime import date
@@ -81,7 +81,7 @@ class TestFarmContextSummaryInjection:
 
 
 class TestResponseFormatRules:
-    """response_format_rules 和 display_name 测试。"""
+    """display_name 作为上下文变量，而不是强制称呼规则。"""
 
     def test_display_name_default_is_nongyou(self):
         """display_name 未传入时，默认为「农友」。"""
@@ -99,13 +99,13 @@ class TestResponseFormatRules:
         )
         assert result == "农友"
 
-    def test_display_name_custom(self):
-        """display_name 传入自定义值时正确渲染。"""
+    def test_display_name_custom_context_value(self):
+        """display_name 传入自定义值时仍可作为上下文渲染。"""
         reg = PromptRegistry()
         reg.register(
             "system_base",
             "v1",
-            "称呼用户为「{{ display_name }}」",
+            "<name>{{ display_name }}</name>",
         )
         result = render_prompt(
             "system_base",
@@ -113,23 +113,19 @@ class TestResponseFormatRules:
             registry=reg,
             current_date=date(2026, 5, 25),
         )
-        assert "称呼用户为「老王」" in result
+        assert "<name>老王</name>" in result
 
-    def test_response_format_rules_in_template(self):
-        """response_format_rules 硬编码在 base.j2 中能正确渲染 display_name。"""
-        reg = PromptRegistry()
-        template_with_rules = (
-            "【回复格式】\n- 称呼用户为「{{ display_name }}」\n- 每条建议不超过2行\n"
-        )
-        reg.register("system_base", "v1", template_with_rules)
-        result = render_prompt(
-            "system_base",
-            {"display_name": "老李"},
-            registry=reg,
-            current_date=date(2026, 5, 25),
-        )
-        assert "称呼用户为「老李」" in result
-        assert "每条建议不超过2行" in result
+    def test_format_snippet_does_not_force_user_name(self):
+        """系统基础 prompt 不应要求每次称呼用户。"""
+        from pathlib import Path
+
+        snippet = (
+            Path(__file__).parent.parent.parent
+            / "prompts"
+            / "snippets"
+            / "p3-format.j2"
+        ).read_text()
+        assert "称呼用户为" not in snippet
 
 
 class TestBaseJ2TemplateContent:
@@ -185,14 +181,25 @@ class TestBaseJ2TemplateContent:
         for f in snippets_dir.glob("*.j2"):
             assert "【农场状态查询】" not in f.read_text(), f"{f.name} 包含农场状态查询"
 
-    def test_format_snippet_rules_content(self, format_snippet):
-        """p3-format.j2 回复格式规则包含关键条目。"""
-        assert "称呼用户为" in format_snippet
-        assert "不超过2行" in format_snippet
-        assert "不超过5条" in format_snippet
-        assert "先说结论" in format_snippet
-        assert "禁止铺垫" in format_snippet
-        assert "口语化" in format_snippet
+    def test_format_snippet_rules_are_lightweight(self, format_snippet):
+        """p3-format.j2 只保留轻量表达原则，不锁死输出模板。"""
+        assert "不套固定开场或结尾" in format_snippet
+        assert "Markdown" in format_snippet
+        assert "上下文参考" in format_snippet
+        assert "称呼用户为" not in format_snippet
+        assert "不超过2行" not in format_snippet
+        assert "不超过5条" not in format_snippet
+        assert "必须口语化" not in format_snippet
+
+    def test_style_snippet_allows_markdown(self):
+        """p3-style.j2 不再禁止 Markdown。"""
+        from pathlib import Path
+
+        style_snippet = (
+            Path(__file__).parent.parent.parent / "prompts" / "snippets" / "p3-style.j2"
+        ).read_text()
+        assert "不要使用 Markdown" not in style_snippet
+        assert "禁止使用 Markdown" not in style_snippet
 
     def test_context_snippet_renders_with_display_name(self, context_snippet):
         """p4-context.j2 渲染 display_name 不报错。"""

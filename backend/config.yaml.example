@@ -27,6 +27,11 @@ secrets:
   dashscope_api_key: ""
   langsmith_api_key: ""
 
+token_quota:
+  monthly_limit: 3000000
+  weekly_limit: 750000
+  over_quota_action: "reject"  # warn / reject
+
 rate_limiting:
   global_requests_per_minute: 30
   agent_requests_per_minute: 10

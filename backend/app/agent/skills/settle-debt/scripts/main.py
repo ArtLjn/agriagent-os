@@ -6,6 +6,7 @@ from decimal import Decimal
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordCreate
@@ -73,7 +74,9 @@ class SettleDebtSkill(Skill):
             if error:
                 return error
 
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "还款")
+        if context_error:
+            return context_error
 
         db = SessionLocal()
         try:

@@ -297,19 +297,10 @@ class TestSettleDebtError:
     @pytest.mark.asyncio
     @patch.object(_settle_mod, "SessionLocal")
     @patch.object(_settle_mod, "create_record")
-    async def test_no_context_farm_id_defaults_to_1(self, mock_create, mock_session):
-        """context 无 farm_id 时默认为 1。"""
-        mock_db = MagicMock()
-        mock_session.return_value = mock_db
-
-        mock_create.return_value = MagicMock(
-            record_type="income",
-            category="还款",
-            amount=Decimal("1000"),
-            record_date=date(2026, 5, 26),
-            note="还老王（全额）",
-        )
-
+    async def test_missing_context_farm_id_fails_without_db_access(
+        self, mock_create, mock_session
+    ):
+        """context 无 farm_id 时必须失败，不能默认写到 1 号农场。"""
         empty_ctx = SkillContext()
 
         skill = SettleDebtSkill()
@@ -323,11 +314,10 @@ class TestSettleDebtError:
                 empty_ctx,
             )
 
-        assert result.status.value == "success"
-        # 验证 farm_id 默认为 1
-        call_args = mock_create.call_args
-        farm_id = call_args[1].get("farm_id") or call_args[0][2]
-        assert farm_id == 1
+        assert result.status.value == "failed"
+        assert "农场上下文" in result.reply
+        mock_session.assert_not_called()
+        mock_create.assert_not_called()
 
     @pytest.mark.asyncio
     @patch.object(_settle_mod, "SessionLocal")

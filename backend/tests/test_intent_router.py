@@ -14,7 +14,7 @@ class TestClassifyIntent:
 
     @pytest.mark.parametrize(
         "message",
-        ["你好", "在吗", "嗨", "hello", "您好"],
+        ["你好", "在吗", "嗨", "hello", "您好", "谢谢你", "辛苦啦", "你是谁"],
     )
     def test_greeting(self, message: str):
         assert classify_intent(message) == IntentType.GREETING
@@ -51,6 +51,9 @@ class TestGreetingResponses:
         reply = get_greeting_reply("你好")
         assert isinstance(reply, str)
         assert len(reply) > 0
+        assert "芽芽" in reply
+        assert "茬口" not in reply
+        assert "花费" not in reply
 
     def test_greeting_reply_deterministic(self):
         """同一输入应产生相同的回复。"""
@@ -63,3 +66,22 @@ class TestGreetingResponses:
         reply = get_greeting_reply("hello")
         assert isinstance(reply, str)
         assert len(reply) > 0
+
+    def test_cute_greeting_suffix_is_classified_as_greeting(self):
+        """轻松问候不应进入 Agent 主链路触发农场摘要。"""
+        assert classify_intent("你好呀") == IntentType.GREETING
+
+    def test_identity_reply_introduces_yaya_without_business_summary(self):
+        """问身份时介绍芽芽，不主动输出农场业务摘要。"""
+        reply = get_greeting_reply("你是谁")
+        assert "芽芽" in reply
+        assert "农场管理助手" in reply
+        assert "茬口" not in reply
+        assert "花费" not in reply
+
+    def test_thanks_reply_has_light_emotional_value(self):
+        """感谢类输入给轻松回应，不触发业务汇报。"""
+        reply = get_greeting_reply("谢谢你")
+        assert "芽芽" in reply
+        assert "不客气" in reply or "随时" in reply
+        assert "收支" not in reply

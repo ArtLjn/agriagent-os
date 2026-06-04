@@ -338,14 +338,10 @@ class TestUpdateCropStageError:
 
     @pytest.mark.asyncio
     @patch.object(_update_mod, "SessionLocal")
-    async def test_no_context_farm_id_defaults_to_1(self, mock_session, ctx):
-        """context 无 farm_id 时默认为 1。"""
-        mock_db = MagicMock()
-        mock_session.return_value = mock_db
-
-        cycle = _make_cycle()
-        mock_db.query.return_value.filter.return_value.first.return_value = cycle
-
+    async def test_missing_context_farm_id_fails_without_db_access(
+        self, mock_session, ctx
+    ):
+        """context 无 farm_id 时必须失败，不能默认写到 1 号农场。"""
         empty_ctx = SkillContext()
 
         skill = UpdateCropStageSkill()
@@ -354,7 +350,9 @@ class TestUpdateCropStageError:
             empty_ctx,
         )
 
-        assert result.status.value == "success"
+        assert result.status.value == "failed"
+        assert "农场上下文" in result.reply
+        mock_session.assert_not_called()
 
     @pytest.mark.asyncio
     @patch.object(_update_mod, "SessionLocal")

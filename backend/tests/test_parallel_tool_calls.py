@@ -125,7 +125,7 @@ class TestParallelToolSnippet:
             },
         )
         assert "并行工具调用" in rendered
-        assert "同时返回所有需要的工具调用" in rendered
+        assert "同一轮同时调用所需工具" in rendered
 
 
 class TestParallelBatchTrace:

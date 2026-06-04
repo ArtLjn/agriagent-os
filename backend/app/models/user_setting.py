@@ -1,6 +1,6 @@
 """用户设置模型 — 持久化用户偏好配置。"""
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, func
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, func
 
 from app.core.database import Base
 
@@ -11,7 +11,7 @@ class UserSetting(Base):
     __tablename__ = "user_settings"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(36), unique=True, nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), unique=True, nullable=False, index=True)
     default_city = Column(String(50), nullable=True)
     default_lat = Column(Float, nullable=True)
     default_lon = Column(Float, nullable=True)
