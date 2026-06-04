@@ -18,6 +18,8 @@ const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
 const TEXT_SOFT = '#c9d1d9';
 const GREEN = '#238636';
+const BLUE = '#2f81f7';
+const HOURS_24 = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
 
 type NormalizedModelStats = {
   model: string;
@@ -61,6 +63,11 @@ const fieldLabelStyle = {
 const panelStyle = {
   background: CARD_BG,
   borderColor: BORDER,
+} as const;
+
+const compactCardStyle = {
+  ...panelStyle,
+  minHeight: 142,
 } as const;
 
 const monoStyle = {
@@ -241,8 +248,12 @@ export default function TokenDashboard() {
   );
 
   const visibleHours = useMemo(() => {
-    if (hourlyHours.length > 0) return hourlyHours;
-    return Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
+    return HOURS_24;
+  }, []);
+
+  const activeHoursText = useMemo(() => {
+    if (hourlyHours.length === 0) return '暂无活跃小时';
+    return hourlyHours.join(', ');
   }, [hourlyHours]);
 
   const hourlyByModel = useMemo<HourlyRow[]>(() => {
@@ -361,14 +372,14 @@ export default function TokenDashboard() {
     return (
       <div style={{ display: 'grid', gap: 12 }}>
         {modelStats.map((item) => {
-          const width = `${Math.max(4, Math.round((item.total_tokens / maxModelTokens) * 100))}%`;
+          const width = `${Math.max(18, Math.round((item.total_tokens / maxModelTokens) * 100))}%`;
           return (
             <div
               key={`${item.model}-${item.call_type}`}
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(190px, 260px) 1fr 120px 90px',
-                gap: 12,
+                gridTemplateColumns: 'minmax(180px, 240px) minmax(180px, 1fr) 110px 72px',
+                gap: 14,
                 alignItems: 'center',
               }}
             >
@@ -378,8 +389,8 @@ export default function TokenDashboard() {
                 </div>
                 <div style={{ color: TEXT_DIM, fontSize: 12 }}>{item.call_type}</div>
               </div>
-              <div style={{ height: 22, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width, height: '100%', background: '#2f81f7' }} />
+              <div style={{ height: 26, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width, height: '100%', background: BLUE }} />
               </div>
               <div style={{ ...monoStyle, textAlign: 'right', fontWeight: 600 }}>
                 {formatNumber(item.total_tokens)}
@@ -409,8 +420,8 @@ export default function TokenDashboard() {
                 </span>
                 <span style={monoStyle}>{formatNumber(item.total_tokens)}</span>
               </div>
-              <div style={{ display: 'flex', height: 24, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: `${promptPercent}%`, background: '#2f81f7' }} />
+              <div style={{ display: 'flex', height: 26, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: `${promptPercent}%`, background: BLUE }} />
                 <div style={{ width: `${completionPercent}%`, background: GREEN }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: TEXT_DIM, fontSize: 12, marginTop: 6 }}>
@@ -427,12 +438,12 @@ export default function TokenDashboard() {
   const renderHourlyRows = (rows: HourlyRow[], emptyText: string) => {
     if (rows.length === 0) return emptyBlock(emptyText);
     return (
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 920, display: 'grid', gap: 10 }}>
+      <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
+        <div style={{ minWidth: 1280, display: 'grid', gap: 10 }}>
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: `220px repeat(${visibleHours.length}, 34px) 110px 80px`,
+              gridTemplateColumns: `220px repeat(${visibleHours.length}, 32px) 112px 72px`,
               gap: 6,
               alignItems: 'center',
               color: TEXT_DIM,
@@ -449,7 +460,7 @@ export default function TokenDashboard() {
               key={row.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: `220px repeat(${visibleHours.length}, 34px) 110px 80px`,
+                gridTemplateColumns: `220px repeat(${visibleHours.length}, 32px) 112px 72px`,
                 gap: 6,
                 alignItems: 'center',
               }}
@@ -465,7 +476,7 @@ export default function TokenDashboard() {
                     key={`${row.id}-${hour}`}
                     title={`${hour}:00 ${formatNumber(value)} tokens`}
                     style={{
-                      height: 22,
+                      height: 24,
                       borderRadius: 4,
                       background: value > 0 ? `rgba(35, 134, 54, ${opacity})` : '#21262d',
                       border: '1px solid rgba(48, 54, 61, 0.7)',
@@ -483,7 +494,7 @@ export default function TokenDashboard() {
   };
 
   return (
-    <div style={{ padding: 24, background: BG, minHeight: '100vh' }}>
+    <div style={{ padding: '20px 24px 80px', background: BG, minHeight: '100vh' }}>
       <div style={{ marginBottom: 18 }}>
         <Space align="center" size={12} wrap>
           <h2 style={{ color: TEXT, margin: 0 }}>Token 监控看板</h2>
@@ -497,7 +508,7 @@ export default function TokenDashboard() {
         </div>
       </div>
 
-      <Card style={{ ...panelStyle, marginBottom: 16 }} bodyStyle={{ padding: 16 }}>
+      <Card style={{ ...panelStyle, marginBottom: 14 }} bodyStyle={{ padding: 14 }}>
         <Row gutter={[14, 14]} align="bottom">
           <Col xs={24} sm={12} xl={5}>
             <div style={fieldLabelStyle}>用户</div>
@@ -554,9 +565,9 @@ export default function TokenDashboard() {
         </Row>
       </Card>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={panelStyle} loading={loading}>
+      <Row gutter={[14, 14]} style={{ marginBottom: 18 }}>
+        <Col xs={24} sm={12} xl={5}>
+          <Card style={compactCardStyle} loading={loading} bodyStyle={{ padding: 20 }}>
             <Statistic
               title={<span style={{ color: TEXT_DIM }}>近 {days} 天 Tokens</span>}
               value={displayTotalTokens}
@@ -565,8 +576,8 @@ export default function TokenDashboard() {
             <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 8 }}>按当前用户和模型筛选后统计</div>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={panelStyle} loading={loading}>
+        <Col xs={24} sm={12} xl={5}>
+          <Card style={compactCardStyle} loading={loading} bodyStyle={{ padding: 20 }}>
             <Statistic
               title={<span style={{ color: TEXT_DIM }}>近 {days} 天请求数</span>}
               value={displayTotalRequests}
@@ -575,8 +586,8 @@ export default function TokenDashboard() {
             <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 8 }}>请求数来自 token 统计聚合</div>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={panelStyle} loading={loading || quotaLoading}>
+        <Col xs={24} sm={12} xl={5}>
+          <Card style={compactCardStyle} loading={loading || quotaLoading} bodyStyle={{ padding: 20 }}>
             <Statistic
               title={<span style={{ color: TEXT_DIM }}>今日 Tokens</span>}
               value={todayUsage}
@@ -585,8 +596,8 @@ export default function TokenDashboard() {
             <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 8 }}>{todayStr} 的入账记录</div>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={panelStyle} loading={quotaLoading}>
+        <Col xs={24} sm={12} xl={5}>
+          <Card style={compactCardStyle} loading={quotaLoading} bodyStyle={{ padding: 20 }}>
             <div style={{ color: TEXT_DIM, fontSize: 14, marginBottom: 8 }}>月配额使用</div>
             {selectedUserId && userQuota ? (
               <>
@@ -600,8 +611,8 @@ export default function TokenDashboard() {
             )}
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={panelStyle} loading={quotaLoading}>
+        <Col xs={24} sm={12} xl={4}>
+          <Card style={compactCardStyle} loading={quotaLoading} bodyStyle={{ padding: 20 }}>
             <div style={{ color: TEXT_DIM, fontSize: 14, marginBottom: 8 }}>周配额使用</div>
             {selectedUserId && userQuota ? (
               <>
@@ -617,13 +628,13 @@ export default function TokenDashboard() {
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 18 }}>
         <Col xs={24} lg={12}>
           <Card
             title={<span style={{ color: TEXT }}>模型用量排行</span>}
             extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>非时间趋势，按模型聚合</span>}
             style={panelStyle}
-            bodyStyle={{ padding: 24 }}
+            bodyStyle={{ padding: 22 }}
           >
             {renderModelRows()}
           </Card>
@@ -633,11 +644,11 @@ export default function TokenDashboard() {
             title={<span style={{ color: TEXT }}>Prompt / Completion 分布</span>}
             extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>堆叠展示真实 token 构成</span>}
             style={panelStyle}
-            bodyStyle={{ padding: 24 }}
+            bodyStyle={{ padding: 22 }}
           >
             <Space size={16} style={{ marginBottom: 18 }}>
               <Space size={6}>
-                <span style={{ width: 10, height: 10, background: '#2f81f7', borderRadius: 2, display: 'inline-block' }} />
+                <span style={{ width: 10, height: 10, background: BLUE, borderRadius: 2, display: 'inline-block' }} />
                 <span style={{ color: TEXT_DIM }}>Prompt</span>
               </Space>
               <Space size={6}>
@@ -650,13 +661,13 @@ export default function TokenDashboard() {
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 18 }}>
         <Col xs={24}>
           <Card
             title={<span style={{ color: TEXT }}>模型 × 小时</span>}
-            extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>今日真实 trace usage 小时聚合</span>}
+            extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>24 小时视角；活跃小时：{activeHoursText}</span>}
             style={panelStyle}
-            bodyStyle={{ padding: 24 }}
+            bodyStyle={{ padding: 20 }}
           >
             {renderHourlyRows(hourlyByModel, '今日暂无可用于小时聚合的真实 Token trace')}
           </Card>
@@ -666,7 +677,7 @@ export default function TokenDashboard() {
             title={<span style={{ color: TEXT }}>用户 × 小时</span>}
             extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>按 farm.user_id 关联用户</span>}
             style={panelStyle}
-            bodyStyle={{ padding: 24 }}
+            bodyStyle={{ padding: 20 }}
           >
             {renderHourlyRows(hourlyByUser, '今日暂无用户小时用量')}
           </Card>
