@@ -11,7 +11,6 @@ class TokenDailyStats(Base):
     __tablename__ = "token_daily_stats"
     __table_args__ = (
         UniqueConstraint(
-            "user_id",
             "farm_id",
             "date",
             "model",
