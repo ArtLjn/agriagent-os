@@ -1,19 +1,31 @@
 """Admin Token 统计查询 API。"""
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin
+from app.models.farm import Farm
 from app.models.token_stats import TokenDailyStats
+from app.models.trace import TraceRecord
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/stats", tags=["admin-stats"])
+
+
+def _int_from_usage(usage: dict | None, key: str) -> int:
+    if not usage:
+        return 0
+    value = usage.get(key, 0)
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 @router.get("/tokens")
@@ -107,6 +119,99 @@ def token_daily(
             }
             for r in rows
         ],
+    }
+
+
+@router.get("/tokens/hourly")
+def token_hourly(
+    user_id: str | None = Query(None),
+    farm_id: int | None = Query(None),
+    model: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> dict:
+    """按小时聚合真实 LLM Token 用量，用于监控热力图。"""
+    end = date.fromisoformat(end_date) if end_date else date.today()
+    start = date.fromisoformat(start_date) if start_date else end
+    start_dt = datetime.combine(start, time.min)
+    end_dt = datetime.combine(end + timedelta(days=1), time.min)
+
+    query = (
+        db.query(TraceRecord, Farm.user_id.label("user_id"))
+        .join(Farm, Farm.id == TraceRecord.farm_id)
+        .filter(
+            TraceRecord.node_type == "llm_call",
+            TraceRecord.start_time >= start_dt,
+            TraceRecord.start_time < end_dt,
+        )
+    )
+    if user_id is not None:
+        query = query.filter(Farm.user_id == user_id)
+    if farm_id is not None:
+        query = query.filter(TraceRecord.farm_id == farm_id)
+    if model is not None:
+        query = query.filter(TraceRecord.node_name == model)
+
+    buckets: dict[tuple[str, str | None, int, str, str], dict] = {}
+    for trace, farm_user_id in query.all():
+        usage = trace.token_usage or {}
+        usage_source = usage.get("usage_source")
+        if usage_source not in {"provider", "usage_metadata"}:
+            continue
+        prompt_tokens = _int_from_usage(usage, "prompt_tokens")
+        completion_tokens = _int_from_usage(usage, "completion_tokens")
+        total_tokens = prompt_tokens + completion_tokens
+        if total_tokens <= 0:
+            continue
+
+        hour = trace.start_time.strftime("%H") if trace.start_time else "00"
+        day = trace.start_time.date().isoformat() if trace.start_time else start.isoformat()
+        item_key = (
+            day,
+            farm_user_id,
+            trace.farm_id,
+            trace.node_name,
+            hour,
+        )
+        item = buckets.setdefault(
+            item_key,
+            {
+                "date": day,
+                "hour": hour,
+                "user_id": farm_user_id,
+                "farm_id": trace.farm_id,
+                "model": trace.node_name,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "request_count": 0,
+            },
+        )
+        item["prompt_tokens"] += prompt_tokens
+        item["completion_tokens"] += completion_tokens
+        item["total_tokens"] += total_tokens
+        item["request_count"] += 1
+
+    items = sorted(
+        buckets.values(),
+        key=lambda item: (
+            item["date"],
+            item["hour"],
+            item["user_id"] or "",
+            item["model"],
+        ),
+    )
+    hours = sorted({item["hour"] for item in items})
+
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "items": items,
+        "hours": hours,
+        "total_tokens": sum(item["total_tokens"] for item in items),
+        "total_requests": sum(item["request_count"] for item in items),
     }
 
 

@@ -1,5 +1,6 @@
 """Tests for Admin Token Stats API。"""
 
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,6 +8,8 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
+from app.models.farm import Farm
+from app.models.trace import TraceRecord
 from app.models.user import User
 
 
@@ -130,5 +133,107 @@ class TestTokenDaily:
             assert data["date"] == "2026-05-26"
             assert len(data["items"]) == 1
             assert data["items"][0]["model"] == "qwen3.6-flash"
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestTokenHourly:
+    def test_returns_hourly_usage_grouped_by_user_model_and_hour(
+        self, client, db_session, admin_user
+    ) -> None:
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
+        farm.user_id = "hourly-user-001"
+        db_session.add(
+            User(
+                id="hourly-user-001",
+                phone="18800000000",
+                password_hash="h",
+                nickname="小时用户",
+                role="user",
+                status="active",
+            )
+        )
+        db_session.add_all(
+            [
+                TraceRecord(
+                    request_id="hour001",
+                    farm_id=1,
+                    node_type="llm_call",
+                    node_name="gemma4:31b",
+                    start_time=datetime(2026, 6, 4, 9, 5),
+                    token_usage={
+                        "prompt_tokens": 100,
+                        "completion_tokens": 40,
+                        "usage_source": "provider",
+                    },
+                    status="success",
+                ),
+                TraceRecord(
+                    request_id="hour002",
+                    farm_id=1,
+                    node_type="llm_call",
+                    node_name="gemma4:31b",
+                    start_time=datetime(2026, 6, 4, 9, 40),
+                    token_usage={
+                        "prompt_tokens": 10,
+                        "completion_tokens": 5,
+                        "usage_source": "provider",
+                    },
+                    status="success",
+                ),
+                TraceRecord(
+                    request_id="hour003",
+                    farm_id=1,
+                    node_type="llm_call",
+                    node_name="llama",
+                    start_time=datetime(2026, 6, 4, 10, 0),
+                    token_usage={
+                        "prompt_tokens": 20,
+                        "completion_tokens": 30,
+                        "usage_source": "usage_metadata",
+                    },
+                    status="success",
+                ),
+                TraceRecord(
+                    request_id="hour004",
+                    farm_id=1,
+                    node_type="skill_call",
+                    node_name="ignored",
+                    start_time=datetime(2026, 6, 4, 9, 10),
+                    token_usage={"prompt_tokens": 999, "completion_tokens": 999},
+                    status="success",
+                ),
+            ]
+        )
+        db_session.commit()
+
+        def _override_get_db():
+            yield db_session
+
+        def _override_current_user():
+            return admin_user
+
+        app.dependency_overrides[get_db] = _override_get_db
+        app.dependency_overrides[get_current_user] = _override_current_user
+        try:
+            resp = client.get(
+                "/admin/stats/tokens/hourly?start_date=2026-06-04&end_date=2026-06-04"
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["start_date"] == "2026-06-04"
+            assert data["end_date"] == "2026-06-04"
+            assert data["total_tokens"] == 205
+            assert data["total_requests"] == 3
+            assert data["hours"] == ["09", "10"]
+
+            first = data["items"][0]
+            assert first["hour"] == "09"
+            assert first["user_id"] == "hourly-user-001"
+            assert first["model"] == "gemma4:31b"
+            assert first["prompt_tokens"] == 110
+            assert first["completion_tokens"] == 45
+            assert first["total_tokens"] == 155
+            assert first["request_count"] == 2
         finally:
             app.dependency_overrides.clear()

@@ -4,8 +4,10 @@ import { ReloadOutlined } from '@ant-design/icons';
 import {
   getTokenSummary,
   getDailyTokenStats,
+  getHourlyTokenStats,
   type TokenSummary,
   type DailyTokenItem,
+  type HourlyTokenItem,
 } from '../../api/admin';
 import { usersApi, type UserListItem, type UserQuotaStatus } from '../../api/users';
 
@@ -22,6 +24,14 @@ type NormalizedModelStats = {
   call_type: string;
   prompt_tokens: number;
   completion_tokens: number;
+  total_tokens: number;
+  request_count: number;
+};
+
+type HourlyRow = {
+  id: string;
+  label: string;
+  tokensByHour: Record<string, number>;
   total_tokens: number;
   request_count: number;
 };
@@ -66,6 +76,8 @@ export default function TokenDashboard() {
   const [userQuota, setUserQuota] = useState<UserQuotaStatus | null>(null);
   const [summary, setSummary] = useState<TokenSummary | null>(null);
   const [dailyItems, setDailyItems] = useState<DailyTokenItem[]>([]);
+  const [hourlyItems, setHourlyItems] = useState<HourlyTokenItem[]>([]);
+  const [hourlyHours, setHourlyHours] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [quotaLoading, setQuotaLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -94,17 +106,26 @@ export default function TokenDashboard() {
   useEffect(() => {
     let cancelled = false;
     const params = { days, user_id: selectedUserId };
+    const hourlyParams = {
+      user_id: selectedUserId,
+      model: selectedModel,
+      start_date: todayStr,
+      end_date: todayStr,
+    };
     void Promise.resolve().then(() => {
       setLoading(true);
       setLoadFailed(false);
       return Promise.all([
         getTokenSummary(params),
         getDailyTokenStats(todayStr, { user_id: selectedUserId }),
+        getHourlyTokenStats(hourlyParams),
       ])
-        .then(([sum, daily]) => {
+        .then(([sum, daily, hourly]) => {
           if (cancelled) return;
           setSummary(sum);
           setDailyItems(daily.items);
+          setHourlyItems(hourly.items);
+          setHourlyHours(hourly.hours);
           setLastLoadedAt(new Date());
         })
         .catch(() => {
@@ -116,7 +137,7 @@ export default function TokenDashboard() {
         });
     });
     return () => { cancelled = true; };
-  }, [days, selectedUserId, todayStr, refreshKey]);
+  }, [days, selectedUserId, selectedModel, todayStr, refreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,6 +239,57 @@ export default function TokenDashboard() {
     () => Math.max(1, ...modelStats.map((item) => item.total_tokens)),
     [modelStats]
   );
+
+  const visibleHours = useMemo(() => {
+    if (hourlyHours.length > 0) return hourlyHours;
+    return Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
+  }, [hourlyHours]);
+
+  const hourlyByModel = useMemo<HourlyRow[]>(() => {
+    const rows = new Map<string, HourlyRow>();
+    hourlyItems.forEach((item) => {
+      const row = rows.get(item.model) ?? {
+        id: item.model,
+        label: item.model,
+        tokensByHour: {},
+        total_tokens: 0,
+        request_count: 0,
+      };
+      const tokens = toNumber(item.total_tokens);
+      row.tokensByHour[item.hour] = (row.tokensByHour[item.hour] ?? 0) + tokens;
+      row.total_tokens += tokens;
+      row.request_count += toNumber(item.request_count);
+      rows.set(item.model, row);
+    });
+    return Array.from(rows.values()).sort((a, b) => b.total_tokens - a.total_tokens);
+  }, [hourlyItems]);
+
+  const hourlyByUser = useMemo<HourlyRow[]>(() => {
+    const rows = new Map<string, HourlyRow>();
+    hourlyItems.forEach((item) => {
+      const id = item.user_id || `farm-${item.farm_id}`;
+      const user = users.find((candidate) => candidate.id === item.user_id);
+      const label = user ? `${user.nickname || '未命名'} / ${user.phone}` : id;
+      const row = rows.get(id) ?? {
+        id,
+        label,
+        tokensByHour: {},
+        total_tokens: 0,
+        request_count: 0,
+      };
+      const tokens = toNumber(item.total_tokens);
+      row.tokensByHour[item.hour] = (row.tokensByHour[item.hour] ?? 0) + tokens;
+      row.total_tokens += tokens;
+      row.request_count += toNumber(item.request_count);
+      rows.set(id, row);
+    });
+    return Array.from(rows.values()).sort((a, b) => b.total_tokens - a.total_tokens);
+  }, [hourlyItems, users]);
+
+  const maxHourlyTokens = useMemo(() => {
+    const values = hourlyItems.map((item) => toNumber(item.total_tokens));
+    return Math.max(1, ...values);
+  }, [hourlyItems]);
 
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId),
@@ -348,6 +420,64 @@ export default function TokenDashboard() {
             </div>
           );
         })}
+      </div>
+    );
+  };
+
+  const renderHourlyRows = (rows: HourlyRow[], emptyText: string) => {
+    if (rows.length === 0) return emptyBlock(emptyText);
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: 920, display: 'grid', gap: 10 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `220px repeat(${visibleHours.length}, 34px) 110px 80px`,
+              gap: 6,
+              alignItems: 'center',
+              color: TEXT_DIM,
+              fontSize: 12,
+            }}
+          >
+            <span />
+            {visibleHours.map((hour) => <span key={hour} style={{ textAlign: 'center' }}>{hour}</span>)}
+            <span style={{ textAlign: 'right' }}>Token</span>
+            <span style={{ textAlign: 'right' }}>请求</span>
+          </div>
+          {rows.map((row) => (
+            <div
+              key={row.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `220px repeat(${visibleHours.length}, 34px) 110px 80px`,
+                gap: 6,
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ color: TEXT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {row.label}
+              </div>
+              {visibleHours.map((hour) => {
+                const value = row.tokensByHour[hour] ?? 0;
+                const opacity = value > 0 ? Math.max(0.22, value / maxHourlyTokens) : 0;
+                return (
+                  <div
+                    key={`${row.id}-${hour}`}
+                    title={`${hour}:00 ${formatNumber(value)} tokens`}
+                    style={{
+                      height: 22,
+                      borderRadius: 4,
+                      background: value > 0 ? `rgba(35, 134, 54, ${opacity})` : '#21262d',
+                      border: '1px solid rgba(48, 54, 61, 0.7)',
+                    }}
+                  />
+                );
+              })}
+              <div style={{ ...monoStyle, textAlign: 'right' }}>{formatNumber(row.total_tokens)}</div>
+              <div style={{ ...monoStyle, textAlign: 'right' }}>{formatNumber(row.request_count)}</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -516,6 +646,29 @@ export default function TokenDashboard() {
               </Space>
             </Space>
             {renderCompositionRows()}
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24}>
+          <Card
+            title={<span style={{ color: TEXT }}>模型 × 小时</span>}
+            extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>今日真实 trace usage 小时聚合</span>}
+            style={panelStyle}
+            bodyStyle={{ padding: 24 }}
+          >
+            {renderHourlyRows(hourlyByModel, '今日暂无可用于小时聚合的真实 Token trace')}
+          </Card>
+        </Col>
+        <Col xs={24}>
+          <Card
+            title={<span style={{ color: TEXT }}>用户 × 小时</span>}
+            extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>按 farm.user_id 关联用户</span>}
+            style={panelStyle}
+            bodyStyle={{ padding: 24 }}
+          >
+            {renderHourlyRows(hourlyByUser, '今日暂无用户小时用量')}
           </Card>
         </Col>
       </Row>

@@ -127,10 +127,34 @@ export interface DailyTokenStats {
   items: DailyTokenItem[];
 }
 
+export interface HourlyTokenItem {
+  date: string;
+  hour: string;
+  user_id?: string | null;
+  farm_id: number;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  request_count: number;
+}
+
+export interface HourlyTokenStats {
+  start_date: string;
+  end_date: string;
+  items: HourlyTokenItem[];
+  hours: string[];
+  total_tokens: number;
+  total_requests: number;
+}
+
 export interface TokenStatsParams {
   days?: number;
   user_id?: string;
   farm_id?: number;
+  model?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 export async function getTokenSummary(params: TokenStatsParams = {}): Promise<TokenSummary> {
@@ -145,6 +169,13 @@ export async function getDailyTokenStats(
   const res = await apiClient.get<DailyTokenStats>('/admin/stats/tokens/daily', {
     params: { date, ...params },
   });
+  return res.data;
+}
+
+export async function getHourlyTokenStats(
+  params: Pick<TokenStatsParams, 'user_id' | 'farm_id' | 'model' | 'start_date' | 'end_date'> = {}
+): Promise<HourlyTokenStats> {
+  const res = await apiClient.get<HourlyTokenStats>('/admin/stats/tokens/hourly', { params });
   return res.data;
 }
 
