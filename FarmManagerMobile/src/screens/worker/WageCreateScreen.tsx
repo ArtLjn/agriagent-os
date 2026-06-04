@@ -368,44 +368,50 @@ export const WageCreateScreen: React.FC = () => {
         {showWorkerList ? (
           <View style={styles.dropdownList}>
             {workers.length > 0 ? (
-              workers.map((worker) => {
-                const active = selectedWorkerIds.includes(worker.id);
-                return (
-                  <TouchableOpacity
-                    key={worker.id}
-                    style={[
-                      styles.workerOption,
-                      active && styles.workerOptionActive,
-                    ]}
-                    onPress={() => toggleWorker(worker)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={styles.workerAvatar}>
-                      <Text style={styles.workerAvatarText}>
-                        {worker.name.slice(0, 1)}
-                      </Text>
-                    </View>
-                    <View style={styles.workerOptionInfo}>
-                      <Text style={styles.workerOptionName} numberOfLines={1}>
-                        {worker.name}
-                      </Text>
-                      <Text style={styles.workerOptionMeta}>
-                        {worker.phone ? `${worker.phone} · ` : ""}
-                        {worker.default_unit_price
-                          ? `${worker.default_unit_price} 元/天`
-                          : "未设置默认日工资"}
-                      </Text>
-                    </View>
-                    {active ? (
-                      <Icon
-                        name="check-circle"
-                        size={20}
-                        color={colors.success}
-                      />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })
+              <ScrollView
+                style={styles.dropdownListScroll}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+              >
+                {workers.map((worker) => {
+                  const active = selectedWorkerIds.includes(worker.id);
+                  return (
+                    <TouchableOpacity
+                      key={worker.id}
+                      style={[
+                        styles.workerOption,
+                        active && styles.workerOptionActive,
+                      ]}
+                      onPress={() => toggleWorker(worker)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.workerAvatar}>
+                        <Text style={styles.workerAvatarText}>
+                          {worker.name.slice(0, 1)}
+                        </Text>
+                      </View>
+                      <View style={styles.workerOptionInfo}>
+                        <Text style={styles.workerOptionName} numberOfLines={1}>
+                          {worker.name}
+                        </Text>
+                        <Text style={styles.workerOptionMeta} numberOfLines={1}>
+                          {worker.phone ? `${worker.phone} · ` : ""}
+                          {worker.default_unit_price
+                            ? `${worker.default_unit_price} 元/天`
+                            : "未设置默认日工资"}
+                        </Text>
+                      </View>
+                      {active ? (
+                        <Icon
+                          name="check-circle"
+                          size={20}
+                          color={colors.success}
+                        />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             ) : (
               <View style={styles.emptyWorkerBox}>
                 <Text style={styles.emptyWorkerText}>暂无工人档案</Text>
@@ -664,6 +670,9 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     backgroundColor: colors.background,
     overflow: "hidden",
+  },
+  dropdownListScroll: {
+    maxHeight: 292,
   },
   workerOption: {
     minHeight: 58,

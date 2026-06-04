@@ -26,7 +26,6 @@ import { showAlert } from "../../utils/alert";
 type RouteParams = RouteProp<RootStackParamList, "WorkOrderCreate">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const COMMON_LABOR_COUNTS = [2, 4, 6, 8];
 const COMMON_PRICES = ["150", "180", "200", "220"];
 
 export const WorkOrderCreateScreen: React.FC = () => {
@@ -43,14 +42,13 @@ export const WorkOrderCreateScreen: React.FC = () => {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [operationType, setOperationType] = useState(presetOperationType || "");
   const [selectedUnitIds, setSelectedUnitIds] = useState<number[]>([]);
-  const [workerNames, setWorkerNames] = useState("");
-  const [workerCount, setWorkerCount] = useState("");
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<number[]>([]);
   const [unitPrice, setUnitPrice] = useState("200");
-  const [paidWorker, setPaidWorker] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
   const [note, setNote] = useState("");
   const [showScope, setShowScope] = useState(false);
   const [showLabor, setShowLabor] = useState(false);
+  const [showLaborWorkerList, setShowLaborWorkerList] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -68,31 +66,18 @@ export const WorkOrderCreateScreen: React.FC = () => {
       .catch((err) => showAlert("加载失败", err.message));
   }, [cycleId, cropName]);
 
-  const workerNameList = useMemo(
-    () =>
-      workerNames
-        .replace(/，/g, ",")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    [workerNames]
+  const selectedWorkers = useMemo(
+    () => workers.filter((worker) => selectedWorkerIds.includes(worker.id)),
+    [selectedWorkerIds, workers]
   );
-
-  const generatedWorkerNames = useMemo(() => {
-    const count = Number(workerCount);
-    if (workerNameList.length > 0 || !Number.isInteger(count) || count <= 0) {
-      return workerNameList;
-    }
-    return Array.from({ length: count }, (_, index) => `临时工${index + 1}`);
-  }, [workerCount, workerNameList]);
 
   const selectedUnitsText =
     selectedUnitIds.length > 0
       ? `${selectedUnitIds.length} 个棚/地块`
       : "整茬一起记";
   const laborSummary =
-    generatedWorkerNames.length > 0 && unitPrice
-      ? `${generatedWorkerNames.length} 人 · 每人 ${unitPrice} 元`
+    selectedWorkers.length > 0 && unitPrice
+      ? `${selectedWorkers.length} 人 · 每人 ${unitPrice} 元`
       : "不记人工";
 
   const toggleUnit = (id: number) => {
@@ -101,22 +86,20 @@ export const WorkOrderCreateScreen: React.FC = () => {
     );
   };
 
-  const ensureWorkers = async () => {
-    const result: Worker[] = [];
-    for (const name of generatedWorkerNames) {
-      const existing = workers.find((worker) => worker.name === name);
-      if (existing) {
-        result.push(existing);
-        continue;
+  const toggleWorker = (worker: Worker) => {
+    setSelectedWorkerIds((prev) => {
+      if (prev.includes(worker.id)) {
+        return prev.filter((id) => id !== worker.id);
       }
-      const created = await plantingApi.createWorker({
-        name,
-        default_pay_type: "daily",
-        default_unit_price: unitPrice || undefined,
-      });
-      result.push(created.data);
+      return [...prev, worker.id];
+    });
+    if (selectedWorkerIds.length === 0 && worker.default_unit_price) {
+      setUnitPrice(worker.default_unit_price);
     }
-    return result;
+  };
+
+  const clearSelectedWorkers = () => {
+    setSelectedWorkerIds([]);
   };
 
   const submit = async () => {
@@ -125,7 +108,7 @@ export const WorkOrderCreateScreen: React.FC = () => {
       return;
     }
     if (
-      generatedWorkerNames.length > 0 &&
+      selectedWorkers.length > 0 &&
       (!unitPrice || isNaN(Number(unitPrice)))
     ) {
       showAlert("提示", "请填写有效的每人金额");
@@ -133,7 +116,6 @@ export const WorkOrderCreateScreen: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      const resolvedWorkers = await ensureWorkers();
       await plantingApi.createWorkOrder({
         cycle_id: cycleId,
         operation_type: operationType,
@@ -141,15 +123,12 @@ export const WorkOrderCreateScreen: React.FC = () => {
         scope_type: selectedUnitIds.length > 0 ? "unit" : "cycle",
         unit_ids: selectedUnitIds,
         note: note.trim() || undefined,
-        labor_entries: resolvedWorkers.map((worker) => ({
+        labor_entries: selectedWorkers.map((worker) => ({
           worker_id: worker.id,
           pay_type: "daily",
           quantity: "1",
           unit_price: unitPrice,
-          paid_amount:
-            paidWorker.trim() && paidWorker.trim() === worker.name
-              ? paidAmount || "0"
-              : "0",
+          paid_amount: paidAmount || "0",
         })),
       });
       navigation.goBack();
@@ -198,6 +177,13 @@ export const WorkOrderCreateScreen: React.FC = () => {
             </TouchableOpacity>
           ))}
         </View>
+        <TextInput
+          style={[styles.input, styles.operationInput]}
+          value={operationType}
+          onChangeText={setOperationType}
+          placeholder="也可以自己写：例如摘侧枝、清沟、补绑蔓"
+          placeholderTextColor={colors.textTertiary}
+        />
       </View>
 
       <TouchableOpacity
@@ -268,7 +254,7 @@ export const WorkOrderCreateScreen: React.FC = () => {
           <Icon name="account-hard-hat" size={20} color={colors.success} />
         </View>
         <View style={styles.foldText}>
-          <Text style={styles.foldTitle}>人工工资</Text>
+          <Text style={styles.foldTitle}>顺手记人工</Text>
           <Text style={styles.foldSub}>{laborSummary}</Text>
         </View>
         <Icon
@@ -280,43 +266,109 @@ export const WorkOrderCreateScreen: React.FC = () => {
 
       {showLabor ? (
         <View style={styles.expandedCard}>
-          <Text style={styles.fieldLabel}>今天几个人</Text>
-          <View style={styles.quickRow}>
-            {COMMON_LABOR_COUNTS.map((count) => (
+          <Text style={styles.fieldLabel}>选择工人</Text>
+          <TouchableOpacity
+            style={styles.dropdownField}
+            onPress={() => setShowLaborWorkerList((visible) => !visible)}
+            activeOpacity={0.75}
+          >
+            <Icon name="account-hard-hat" size={18} color={colors.primary} />
+            <Text
+              style={[
+                styles.dropdownText,
+                selectedWorkers.length === 0 && styles.dropdownPlaceholder,
+              ]}
+              numberOfLines={1}
+            >
+              {selectedWorkers.length > 0
+                ? selectedWorkers.map((worker) => worker.name).join("、")
+                : "请选择工人"}
+            </Text>
+            {selectedWorkers.length > 0 ? (
               <TouchableOpacity
-                key={count}
-                style={[
-                  styles.quickChip,
-                  workerCount === String(count) && styles.quickChipActive,
-                ]}
-                onPress={() => {
-                  setWorkerCount(String(count));
-                  setWorkerNames("");
-                }}
+                onPress={clearSelectedWorkers}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text
-                  style={[
-                    styles.quickChipText,
-                    workerCount === String(count) && styles.quickChipTextActive,
-                  ]}
-                >
-                  {count} 人
-                </Text>
+                <Icon
+                  name="close-circle"
+                  size={18}
+                  color={colors.textTertiary}
+                />
               </TouchableOpacity>
-            ))}
-          </View>
-          <TextInput
-            style={styles.input}
-            value={workerNames}
-            onChangeText={(value) => {
-              setWorkerNames(value);
-              if (value.trim()) {
-                setWorkerCount("");
-              }
-            }}
-            placeholder="知道姓名就填：老王、老李、老张"
-            placeholderTextColor={colors.textTertiary}
-          />
+            ) : (
+              <Icon
+                name={showLaborWorkerList ? "chevron-up" : "chevron-down"}
+                size={20}
+                color={colors.textTertiary}
+              />
+            )}
+          </TouchableOpacity>
+          {showLaborWorkerList ? (
+            <View style={styles.dropdownList}>
+              {workers.length > 0 ? (
+                <ScrollView
+                  style={styles.dropdownListScroll}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                >
+                  {workers.map((worker) => {
+                    const selected = selectedWorkerIds.includes(worker.id);
+                    return (
+                      <TouchableOpacity
+                        key={worker.id}
+                        style={[
+                          styles.workerOption,
+                          selected && styles.workerOptionActive,
+                        ]}
+                        onPress={() => toggleWorker(worker)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={styles.workerAvatar}>
+                          <Text style={styles.workerAvatarText}>
+                            {worker.name.slice(0, 1) || "工"}
+                          </Text>
+                        </View>
+                        <View style={styles.workerOptionInfo}>
+                          <Text
+                            style={styles.workerOptionName}
+                            numberOfLines={1}
+                          >
+                            {worker.name}
+                          </Text>
+                          <Text
+                            style={styles.workerOptionMeta}
+                            numberOfLines={1}
+                          >
+                            {worker.phone ? `${worker.phone} · ` : ""}
+                            {worker.default_unit_price
+                              ? `${worker.default_unit_price} 元/天`
+                              : "未设置默认日工资"}
+                          </Text>
+                        </View>
+                        {selected ? (
+                          <Icon
+                            name="check-circle"
+                            size={20}
+                            color={colors.success}
+                          />
+                        ) : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              ) : (
+                <View style={styles.emptyWorkerBox}>
+                  <Text style={styles.emptyWorkerText}>暂无工人档案</Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate("WorkerCreate")}
+                    activeOpacity={0.76}
+                  >
+                    <Text style={styles.emptyWorkerLink}>去新增工人</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : null}
 
           <Text style={styles.fieldLabel}>每人多少钱</Text>
           <View style={styles.quickRow}>
@@ -349,23 +401,14 @@ export const WorkOrderCreateScreen: React.FC = () => {
             placeholderTextColor={colors.textTertiary}
           />
 
-          <View style={styles.twoCol}>
-            <TextInput
-              style={[styles.input, styles.flexInput]}
-              value={paidWorker}
-              onChangeText={setPaidWorker}
-              placeholder="已付给谁"
-              placeholderTextColor={colors.textTertiary}
-            />
-            <TextInput
-              style={[styles.input, styles.flexInput]}
-              value={paidAmount}
-              onChangeText={setPaidAmount}
-              placeholder="已付金额"
-              keyboardType="decimal-pad"
-              placeholderTextColor={colors.textTertiary}
-            />
-          </View>
+          <TextInput
+            style={styles.input}
+            value={paidAmount}
+            onChangeText={setPaidAmount}
+            placeholder="每人已付金额，不填按 0"
+            keyboardType="decimal-pad"
+            placeholderTextColor={colors.textTertiary}
+          />
         </View>
       ) : null}
 
@@ -445,6 +488,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   chipTextActive: { color: colors.textInverse },
+  operationInput: { marginTop: spacingV2.md },
   foldCard: {
     minHeight: 64,
     flexDirection: "row",
@@ -509,6 +553,96 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text,
   },
+  dropdownField: {
+    minHeight: 50,
+    paddingHorizontal: spacingV2.md,
+    borderRadius: borderRadiusV2.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.sm,
+  },
+  dropdownText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "800",
+  },
+  dropdownPlaceholder: {
+    color: colors.textTertiary,
+    fontWeight: "600",
+  },
+  dropdownList: {
+    borderRadius: borderRadiusV2.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.background,
+    overflow: "hidden",
+  },
+  dropdownListScroll: {
+    maxHeight: 292,
+  },
+  workerOption: {
+    minHeight: 58,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  workerOptionActive: {
+    backgroundColor: colors.successMuted,
+  },
+  workerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.successMuted,
+  },
+  workerAvatarText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.success,
+    fontWeight: "900",
+  },
+  workerOptionInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  workerOptionName: {
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "800",
+  },
+  workerOptionMeta: {
+    marginTop: 2,
+    fontSize: fontSizeV2.xs,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  emptyWorkerBox: {
+    minHeight: 72,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacingV2.xs,
+    padding: spacingV2.lg,
+  },
+  emptyWorkerText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "700",
+  },
+  emptyWorkerLink: {
+    fontSize: fontSizeV2.sm,
+    color: colors.primary,
+    fontWeight: "900",
+  },
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: spacingV2.sm },
   quickChip: {
     minHeight: 36,
@@ -534,8 +668,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.background,
   },
-  twoCol: { flexDirection: "row", gap: spacingV2.md },
-  flexInput: { flex: 1 },
   textArea: { minHeight: 92, textAlignVertical: "top" },
   submitButton: { marginTop: spacingV2.lg },
 });

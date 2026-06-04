@@ -16,13 +16,14 @@ import type {
   LaborEntryCreate,
   WageCreateRequest,
   WageEntryResponse,
+  WorkerCreateRequest,
   WorkerSummaryResponse,
   UnsettledLaborSummary,
   ConversationListItem,
   ConversationMessageItem,
 } from "./types";
 
-const API_BASE_URL = "http://47.98.253.236:8000";
+const API_BASE_URL = "http://10.167.110.141:8099";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -163,14 +164,17 @@ export const plantingApi = {
     apiClient.get<OperationType[]>("/planting/operation-types", {
       params: cropName ? { crop_name: cropName } : undefined,
     }),
-  getWorkers: () => apiClient.get<Worker[]>("/planting/workers"),
-  getWorkerSummary: () =>
-    apiClient.get<WorkerSummaryResponse>("/planting/workers/summary"),
-  createWorker: (data: {
-    name: string;
-    default_pay_type?: string;
-    default_unit_price?: string;
-  }) => apiClient.post<Worker>("/planting/workers", data),
+  getWorkers: (activeOnly = true) =>
+    apiClient.get<Worker[]>("/planting/workers", {
+      params: { active_only: activeOnly },
+    }),
+  getWorkerSummary: (activeOnly = true) =>
+    apiClient.get<WorkerSummaryResponse>("/planting/workers/summary", {
+      params: { active_only: activeOnly },
+    }),
+  createWorker: (data: WorkerCreateRequest) =>
+    apiClient.post<Worker>("/planting/workers", data),
+  deleteWorker: (id: number) => apiClient.delete(`/planting/workers/${id}`),
   createWage: (data: WageCreateRequest) =>
     apiClient.post<WageEntryResponse>("/planting/labor/wages", data),
   getUnsettledLaborSummary: () =>

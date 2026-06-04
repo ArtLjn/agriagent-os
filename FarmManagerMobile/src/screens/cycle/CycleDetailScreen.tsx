@@ -218,8 +218,6 @@ export const CycleDetailScreen: React.FC = () => {
     : "按整茬管理";
   const seasonText = currentCycle.season || "当前批次";
   const quickOperations = operationTypes.slice(0, 4);
-  const previewUnits = units.slice(0, 4);
-
   return (
     <ScrollView
       style={styles.container}
@@ -354,35 +352,36 @@ export const CycleDetailScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
         <View style={styles.unitCard}>
-          {previewUnits.length > 0 ? (
-            previewUnits.map((unit) => (
-              <View key={unit.id} style={styles.unitRow}>
-                <View style={styles.unitIcon}>
-                  <Icon name="greenhouse" size={18} color={colors.primary} />
+          {units.length > 0 ? (
+            <ScrollView
+              style={styles.unitListScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              {units.map((unit) => (
+                <View key={unit.id} style={styles.unitRow}>
+                  <View style={styles.unitIcon}>
+                    <Icon name="greenhouse" size={18} color={colors.primary} />
+                  </View>
+                  <View style={styles.unitInfo}>
+                    <Text style={styles.unitName}>{unit.name}</Text>
+                    <Text style={styles.unitMeta}>
+                      {unit.area_mu
+                        ? `${Number(unit.area_mu)
+                            .toFixed(2)
+                            .replace(/\.00$/, "")} 亩`
+                        : "未填面积"}
+                      {unit.status ? ` · ${unit.status}` : ""}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.unitInfo}>
-                  <Text style={styles.unitName}>{unit.name}</Text>
-                  <Text style={styles.unitMeta}>
-                    {unit.area_mu
-                      ? `${Number(unit.area_mu)
-                          .toFixed(2)
-                          .replace(/\.00$/, "")} 亩`
-                      : "未填面积"}
-                    {unit.status ? ` · ${unit.status}` : ""}
-                  </Text>
-                </View>
-              </View>
-            ))
+              ))}
+            </ScrollView>
           ) : (
             <Text style={styles.emptyHint}>
               还没拆棚或地块，也可以先按整茬记录农事。
             </Text>
           )}
-          {units.length > previewUnits.length ? (
-            <Text style={styles.moreHint}>
-              还有 {units.length - previewUnits.length} 个，点“管理”查看
-            </Text>
-          ) : null}
         </View>
       </View>
 
@@ -948,6 +947,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
+  unitListScroll: {
+    maxHeight: 248,
+  },
   unitRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -981,12 +983,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
     paddingVertical: spacingV2.sm,
-  },
-  moreHint: {
-    fontSize: fontSizeV2.sm,
-    fontWeight: "700",
-    color: colors.primary,
-    paddingTop: spacingV2.sm,
   },
   operationWrap: {
     flexDirection: "row",

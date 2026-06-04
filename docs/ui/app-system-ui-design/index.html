@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Farm Manager App System UI Design</title>
+    <style>
+      :root {
+        --bg: #eef3f8;
+        --ink: #18202c;
+        --muted: #718094;
+        --line: #dfe7f0;
+        --paper: #ffffff;
+        --blue: #4a7bf7;
+        --blue-2: #6b9aff;
+        --green: #3b8b5c;
+        --green-2: #e8f5ed;
+        --purple: #7a7ae0;
+        --red: #c45b5b;
+        --red-2: #fdf0f0;
+        --amber: #b48a3e;
+        --amber-2: #fff8e8;
+        --navy: #0f172a;
+        --shadow: 0 18px 50px rgba(74, 123, 247, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1800px;
+        background:
+          radial-gradient(circle at 12% 8%, rgba(74, 123, 247, 0.16), transparent 30%),
+          radial-gradient(circle at 88% 12%, rgba(59, 139, 92, 0.12), transparent 28%),
+          linear-gradient(135deg, #f7fbff 0%, #eef3f8 46%, #f4f7fb 100%);
+        color: var(--ink);
+        font-family:
+          Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", Arial,
+          sans-serif;
+        letter-spacing: 0;
+      }
+
+      .canvas {
+        width: 1800px;
+        min-height: 1260px;
+        padding: 48px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 32px;
+        align-items: stretch;
+        margin-bottom: 32px;
+      }
+
+      .hero-main,
+      .panel {
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.86);
+        border-radius: 32px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .hero-main {
+        padding: 36px 40px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-main::after {
+        content: "";
+        position: absolute;
+        right: -120px;
+        top: -120px;
+        width: 360px;
+        height: 360px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(74, 123, 247, 0.22), rgba(59, 139, 92, 0.12));
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+        padding: 9px 14px;
+        border-radius: 999px;
+        background: #edf4ff;
+        color: var(--blue);
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      h1 {
+        position: relative;
+        z-index: 1;
+        margin: 22px 0 14px;
+        font-size: 58px;
+        line-height: 1.06;
+        letter-spacing: 0;
+      }
+
+      .hero-copy {
+        position: relative;
+        z-index: 1;
+        max-width: 850px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 23px;
+        line-height: 1.65;
+      }
+
+      .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-top: 32px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .stat {
+        padding: 18px;
+        border-radius: 22px;
+        background: rgba(246, 248, 252, 0.85);
+        border: 1px solid #edf1f6;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 28px;
+        margin-bottom: 6px;
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .panel {
+        padding: 28px;
+      }
+
+      .panel-title {
+        margin: 0 0 18px;
+        font-size: 24px;
+        font-weight: 900;
+      }
+
+      .tokens {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+      }
+
+      .swatch {
+        min-height: 104px;
+        padding: 14px;
+        border-radius: 20px;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        font-weight: 800;
+      }
+
+      .swatch small {
+        font-size: 12px;
+        opacity: 0.82;
+        font-weight: 700;
+      }
+
+      .swatch.light {
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 360px 1fr 380px;
+        gap: 28px;
+        align-items: start;
+      }
+
+      .rail,
+      .right-rail {
+        display: grid;
+        gap: 20px;
+      }
+
+      .section {
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(225, 232, 241, 0.9);
+        border-radius: 28px;
+        padding: 24px;
+        box-shadow: 0 12px 34px rgba(15, 23, 42, 0.05);
+      }
+
+      .section h2 {
+        margin: 0 0 16px;
+        font-size: 22px;
+        letter-spacing: 0;
+      }
+
+      .flow {
+        display: grid;
+        gap: 10px;
+      }
+
+      .flow-item {
+        display: grid;
+        grid-template-columns: 38px 1fr;
+        gap: 12px;
+        align-items: start;
+        padding: 14px;
+        border-radius: 18px;
+        background: #f6f8fc;
+        border: 1px solid #edf1f6;
+      }
+
+      .flow-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: #edf4ff;
+        color: var(--blue);
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .flow-item strong {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 4px;
+      }
+
+      .flow-item span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .phones {
+        display: grid;
+        grid-template-columns: repeat(4, 252px);
+        gap: 22px;
+        justify-content: center;
+      }
+
+      .phone {
+        height: 548px;
+        background: #f6f8fc;
+        border: 8px solid #101827;
+        border-radius: 42px;
+        overflow: hidden;
+        box-shadow: 0 28px 56px rgba(15, 23, 42, 0.16);
+        position: relative;
+      }
+
+      .phone.small {
+        height: 500px;
+      }
+
+      .status {
+        height: 28px;
+        background: var(--navy);
+      }
+
+      .screen {
+        height: calc(100% - 28px);
+        padding: 16px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .screen.with-tab {
+        padding-bottom: 74px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #edf4ff;
+        color: var(--blue);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .icon-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 22px;
+        display: grid;
+        place-items: center;
+        background: #edf4ff;
+        color: var(--blue);
+        font-size: 22px;
+        font-weight: 900;
+      }
+
+      .greeting {
+        margin: 18px 0 4px;
+        font-size: 25px;
+        line-height: 1.08;
+        font-weight: 950;
+      }
+
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .weather-card {
+        margin-top: 18px;
+        border-radius: 28px;
+        padding: 22px;
+        color: #fff;
+        min-height: 190px;
+        background: linear-gradient(135deg, var(--blue), var(--blue-2));
+        box-shadow: 0 18px 34px rgba(74, 123, 247, 0.3);
+      }
+
+      .weather-value {
+        font-size: 44px;
+        font-weight: 950;
+        margin: 16px 0 4px;
+      }
+
+      .forecast {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.22);
+        text-align: center;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .advice {
+        margin-top: 14px;
+        padding: 16px;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid #e8edf4;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      }
+
+      .quick-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid #e8edf4;
+      }
+
+      .quick {
+        display: grid;
+        justify-items: center;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .quick i {
+        width: 42px;
+        height: 42px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        font-style: normal;
+        font-size: 18px;
+      }
+
+      .tabbar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 66px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        align-items: center;
+        background: rgba(255, 255, 255, 0.94);
+        border-top-left-radius: 28px;
+        border-top-right-radius: 28px;
+        box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.08);
+      }
+
+      .tab {
+        text-align: center;
+        color: #9aa4b2;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .tab.active {
+        color: var(--blue);
+      }
+
+      .tab b {
+        display: block;
+        font-size: 21px;
+        line-height: 1.1;
+      }
+
+      .chat-head {
+        display: grid;
+        grid-template-columns: 42px 1fr 42px;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 16px;
+        background: #e8f8ef;
+        display: grid;
+        place-items: center;
+        color: var(--green);
+        font-size: 22px;
+        font-weight: 900;
+      }
+
+      .seg {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px;
+        background: #e9eef6;
+        border-radius: 24px;
+        padding: 4px;
+        font-weight: 900;
+        text-align: center;
+      }
+
+      .seg span {
+        padding: 12px 0;
+        border-radius: 20px;
+        color: #6f7b8d;
+      }
+
+      .seg .on {
+        background: #fff;
+        color: var(--ink);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+      }
+
+      .bubble {
+        max-width: 82%;
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .bubble.ai {
+        background: #fff;
+        border: 1px solid #e8edf4;
+        color: var(--muted);
+      }
+
+      .bubble.user {
+        margin-left: auto;
+        background: var(--blue);
+        color: #fff;
+        font-weight: 800;
+      }
+
+      .prompt-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .prompt {
+        padding: 12px;
+        border-radius: 16px;
+        background: #fff;
+        border: 1px solid #e8edf4;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .input {
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: 74px;
+        height: 52px;
+        border-radius: 26px;
+        background: #eef3f8;
+        border: 1px solid #dde6f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px 0 18px;
+        color: #9aa4b2;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .send {
+        width: 38px;
+        height: 38px;
+        border-radius: 19px;
+        display: grid;
+        place-items: center;
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .money-card {
+        margin-top: 16px;
+        padding: 22px;
+        border-radius: 28px;
+        background: var(--green-2);
+        text-align: center;
+      }
+
+      .money-card .big {
+        font-size: 40px;
+        font-weight: 950;
+        color: var(--green);
+        margin: 10px 0;
+      }
+
+      .search {
+        margin-top: 14px;
+        padding: 13px 16px;
+        border-radius: 22px;
+        background: #fff;
+        border: 1px solid #edf1f6;
+        color: #9aa4b2;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .chip {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #eef2f7;
+        color: #6f7b8d;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .chip.on {
+        background: #18202c;
+        color: #fff;
+      }
+
+      .record {
+        display: grid;
+        grid-template-columns: 42px 1fr auto;
+        gap: 12px;
+        align-items: center;
+        margin-top: 10px;
+        padding: 14px;
+        border-radius: 20px;
+        background: #fff;
+        border: 1px solid #edf1f6;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+      }
+
+      .record i {
+        width: 42px;
+        height: 42px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        font-style: normal;
+        background: var(--red-2);
+      }
+
+      .record strong {
+        display: block;
+        font-size: 16px;
+      }
+
+      .record small {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .amount {
+        font-size: 16px;
+        font-weight: 950;
+        color: var(--red);
+      }
+
+      .amount.in {
+        color: var(--green);
+      }
+
+      .fab {
+        position: absolute;
+        right: 18px;
+        bottom: 82px;
+        width: 58px;
+        height: 58px;
+        border-radius: 29px;
+        display: grid;
+        place-items: center;
+        background: var(--blue);
+        color: #fff;
+        font-size: 32px;
+        box-shadow: 0 14px 30px rgba(74, 123, 247, 0.36);
+      }
+
+      .list-card {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid #edf1f6;
+      }
+
+      .progress {
+        height: 8px;
+        border-radius: 99px;
+        background: #edf1f6;
+        overflow: hidden;
+        margin-top: 12px;
+      }
+
+      .progress b {
+        display: block;
+        width: 58%;
+        height: 100%;
+        background: linear-gradient(90deg, var(--green), var(--blue));
+      }
+
+      .worker-hero {
+        padding: 18px;
+        border-radius: 26px;
+        background: linear-gradient(135deg, #e8f5ed, #edf4ff);
+      }
+
+      .form {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .field {
+        padding: 14px;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid #e8edf4;
+      }
+
+      .field small {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+        font-weight: 800;
+      }
+
+      .field strong {
+        font-size: 16px;
+      }
+
+      .primary-btn {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 18px;
+        height: 52px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, var(--blue), var(--blue-2));
+        color: #fff;
+        font-size: 16px;
+        font-weight: 950;
+      }
+
+      .phone-label {
+        position: absolute;
+        left: 18px;
+        top: 40px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.78);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 900;
+        z-index: 4;
+      }
+
+      .screen-title {
+        font-size: 22px;
+        font-weight: 950;
+      }
+
+      .spec-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .spec {
+        padding: 14px;
+        border-radius: 18px;
+        background: #f6f8fc;
+        border: 1px solid #edf1f6;
+      }
+
+      .spec strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 15px;
+      }
+
+      .spec span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.48;
+      }
+
+      .state-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .state {
+        min-height: 94px;
+        padding: 14px;
+        border-radius: 18px;
+        background: #fff;
+        border: 1px solid #edf1f6;
+      }
+
+      .state b {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 6px;
+      }
+
+      .state span {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .handoff {
+        display: grid;
+        gap: 10px;
+      }
+
+      .handoff div {
+        padding: 13px 14px;
+        border-radius: 16px;
+        background: #f6f8fc;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .handoff strong {
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="canvas">
+      <section class="hero">
+        <div class="hero-main">
+          <div class="eyebrow">Android App UI 总览 · Farm Manager</div>
+          <h1>农博社移动端系统 UI 设计图</h1>
+          <p class="hero-copy">
+            面向农场主与一线管理者：把天气判断、AI 农事建议、种植批次、工人工资与记账收敛成一个清爽但高效的移动作业控制台。视觉保持现有蓝绿紫体系，重点提升扫描效率、表单确定性与异常状态表达。
+          </p>
+          <div class="hero-stats">
+            <div class="stat"><strong>4</strong><span>底部主导航</span></div>
+            <div class="stat"><strong>10+</strong><span>核心业务页面族</span></div>
+            <div class="stat"><strong>44pt</strong><span>最小触控目标</span></div>
+            <div class="stat"><strong>8pt</strong><span>移动端间距网格</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2 class="panel-title">设计系统核心</h2>
+          <div class="tokens">
+            <div class="swatch" style="background:#4a7bf7"><span>Primary</span><small>#4A7BF7</small></div>
+            <div class="swatch" style="background:#3b8b5c"><span>Farm</span><small>#3B8B5C</small></div>
+            <div class="swatch" style="background:#7a7ae0"><span>AI</span><small>#7A7AE0</small></div>
+            <div class="swatch" style="background:#c45b5b"><span>Cost</span><small>#C45B5B</small></div>
+            <div class="swatch light" style="background:#f6f8fc"><span>Canvas</span><small>#F6F8FC</small></div>
+          </div>
+          <div class="spec-list" style="margin-top:18px">
+            <div class="spec"><strong>字体层级</strong><span>32/24/18/14 四档为主，大金额使用 40-44，正文保持 15-16 与 1.5 行高。</span></div>
+            <div class="spec"><strong>圆角与阴影</strong><span>卡片 22-28，输入 18-24，TabBar 28；阴影使用蓝色或背景色轻微染色。</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="rail">
+          <div class="section">
+            <h2>信息架构</h2>
+            <div class="flow">
+              <div class="flow-item"><div class="flow-icon">1</div><div><strong>认证</strong><span>欢迎、登录、注册，建立信任与快速进入。</span></div></div>
+              <div class="flow-item"><div class="flow-icon">2</div><div><strong>首页</strong><span>城市、天气、AI 建议、四个高频业务入口。</span></div></div>
+              <div class="flow-item"><div class="flow-icon">3</div><div><strong>芽芽</strong><span>对话、报告、会话抽屉、确认执行。</span></div></div>
+              <div class="flow-item"><div class="flow-icon">4</div><div><strong>记账</strong><span>月结余、搜索筛选、账单列表、详情与创建。</span></div></div>
+              <div class="flow-item"><div class="flow-icon">5</div><div><strong>我的</strong><span>农场概览、账本、种植、作物模板、设置。</span></div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>页面优先级</h2>
+            <div class="spec-list">
+              <div class="spec"><strong>P0 主路径</strong><span>首页、芽芽聊天、记账列表、种植规划、工人管理、我的。</span></div>
+              <div class="spec"><strong>P1 详情与创建</strong><span>新建茬口、种植单元、记录作业、记工资、记一笔、作物模板。</span></div>
+              <div class="spec"><strong>P2 支撑页面</strong><span>天气详情、天气预警、农事建议、报告、设置、关于、使用指南。</span></div>
+            </div>
+          </div>
+        </aside>
+
+        <div class="phones">
+          <article class="phone">
+            <div class="phone-label">首页</div>
+            <div class="status"></div>
+            <div class="screen with-tab">
+              <div class="row"><span class="pill">⌖ 苏州</span><div class="icon-btn">☰</div></div>
+              <div class="greeting">晚上好，系统管理员</div>
+              <div class="sub">6月4日 星期四</div>
+              <div class="weather-card">
+                <div class="row"><strong>本地天气</strong><span style="font-size:42px">☔</span></div>
+                <div class="weather-value">23° ~ 32°</div>
+                <div>小雨 · 体感 30°</div>
+                <div class="forecast">
+                  <div>今天<br />☔<br />32°</div>
+                  <div>6/5<br />⛅<br />30°</div>
+                  <div>6/6<br />⛅<br />28°</div>
+                </div>
+              </div>
+              <div class="advice"><strong style="color:var(--purple)">· AI 每日建议</strong><br /><b>雾气朦胧，注意排湿</b><br /><span class="sub">1 条建议待查看</span></div>
+              <div class="quick-grid">
+                <div class="quick"><i style="background:#edfdf3">🌱</i>种植规划</div>
+                <div class="quick"><i style="background:#eef4ff">👷</i>工人管理</div>
+                <div class="quick"><i style="background:#fff1f2">💴</i>记一笔账</div>
+                <div class="quick"><i style="background:#fff8e8">🌾</i>作物模板</div>
+              </div>
+              <div class="tabbar">
+                <div class="tab active"><b>⌂</b>首页</div><div class="tab"><b>♧</b>芽芽</div><div class="tab"><b>▣</b>记账</div><div class="tab"><b>♙</b>我的</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="phone">
+            <div class="phone-label">芽芽顾问</div>
+            <div class="status"></div>
+            <div class="screen with-tab">
+              <div class="chat-head"><div class="icon-btn" style="background:#fff;color:#1f2937">☰</div><div class="row" style="justify-content:start"><div class="avatar">♧</div><div><strong>芽芽</strong><br /><span class="sub">● 在线</span></div></div><div class="icon-btn" style="background:#fff;color:#1f2937">+</div></div>
+              <div class="seg"><span class="on">对话</span><span>报告</span></div>
+              <div class="bubble user">天气如何</div>
+              <div class="bubble ai"><b>睢宁县未来3天天气如下：</b><br />· 6月4日：晴，20~34℃<br />· 6月5日：晴，22~32℃<br />· 6月6日：晴，21~36℃<br /><br /><b>⚠ 高温预警：</b>请注意防暑降温。</div>
+              <div class="prompt-grid">
+                <div class="prompt">🌤 天气判断</div>
+                <div class="prompt">🌱 种植建议</div>
+                <div class="prompt">🐛 病虫害</div>
+                <div class="prompt">📄 本周报告</div>
+              </div>
+              <div class="input">问农事、记一笔、生成报告... <span class="send">↑</span></div>
+              <div class="tabbar">
+                <div class="tab"><b>⌂</b>首页</div><div class="tab active"><b>♧</b>芽芽</div><div class="tab"><b>▣</b>记账</div><div class="tab"><b>♙</b>我的</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="phone">
+            <div class="phone-label">记账</div>
+            <div class="status"></div>
+            <div class="screen with-tab">
+              <div class="row"><div class="icon-btn" style="background:#eef2f7;color:#6f7b8d">‹</div><div class="screen-title">2026年6月</div><div class="icon-btn" style="background:#eef2f7;color:#6f7b8d">›</div></div>
+              <div class="money-card"><span class="sub">本月结余</span><div class="big">+3549.84</div><div class="row"><span>收入<br /><b style="color:var(--green)">+5000</b></span><span>支出<br /><b style="color:var(--red)">-1450</b></span></div></div>
+              <div class="search">⌕ 搜索分类、备注、对方、金额</div>
+              <div class="chips"><span class="chip">全部</span><span class="chip">今天</span><span class="chip">近7天</span><span class="chip on">本月</span><span class="chip">支出</span><span class="chip">收入</span><span class="chip">赊账</span></div>
+              <div class="row" style="margin-top:18px"><b>今天</b><span><b style="color:var(--green)">+5000</b> <b style="color:var(--red);margin-left:8px">-1350</b></span></div>
+              <div class="record"><i>⚗</i><div><strong>化肥</strong><small>20:56</small></div><div class="amount">-¥250.16</div></div>
+              <div class="record"><i>👷</i><div><strong>人工</strong><small>来自工资记录 · 赊账</small></div><div class="amount">-¥100</div></div>
+              <div class="record"><i style="background:#e8f5ed">💵</i><div><strong>销售</strong><small>14:51</small></div><div class="amount in">+¥5,000</div></div>
+              <div class="fab">+</div>
+              <div class="tabbar">
+                <div class="tab"><b>⌂</b>首页</div><div class="tab"><b>♧</b>芽芽</div><div class="tab active"><b>▣</b>记账</div><div class="tab"><b>♙</b>我的</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="phone">
+            <div class="phone-label">种植/工人/我的</div>
+            <div class="status"></div>
+            <div class="screen with-tab">
+              <div class="worker-hero">
+                <span class="sub">全场人工未结</span>
+                <div class="screen-title" style="margin-top:8px">未结 2600 元</div>
+                <div class="chips"><span class="chip on">记工资</span><span class="chip">工人档案</span></div>
+              </div>
+              <div class="list-card">
+                <div class="row"><strong>西瓜 2026 春茬</strong><span class="pill" style="background:#e8f5ed;color:var(--green)">进行中</span></div>
+                <div class="sub" style="margin-top:8px">已种植 38 天 · 6.5 亩 · 开花期</div>
+                <div class="progress"><b></b></div>
+                <div class="chips"><span class="chip">作业</span><span class="chip">日志</span><span class="chip">利润</span></div>
+              </div>
+              <div class="form">
+                <div class="field"><small>作业类型</small><strong>定植 / 除草 / 施肥</strong></div>
+                <div class="field"><small>工人</small><strong>刘俊男 · 100 元/天</strong></div>
+                <div class="field"><small>记录方式</small><strong>现金 / 赊账 / 已结清</strong></div>
+              </div>
+              <div class="list-card">
+                <div class="row"><div><strong>我的农场</strong><br /><span class="sub">总茬口 12 · 进行中 3</span></div><div class="avatar">♙</div></div>
+              </div>
+              <div class="tabbar">
+                <div class="tab"><b>⌂</b>首页</div><div class="tab"><b>♧</b>芽芽</div><div class="tab"><b>▣</b>记账</div><div class="tab active"><b>♙</b>我的</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="phone small">
+            <div class="phone-label">认证</div>
+            <div class="status"></div>
+            <div class="screen" style="background:linear-gradient(135deg,#2563eb,#4a7bf7,#7ba4ff);color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:34px 20px">
+              <div></div>
+              <div style="text-align:center">
+                <div style="width:86px;height:86px;border-radius:30px;background:rgba(255,255,255,.14);display:grid;place-items:center;margin:0 auto;font-size:42px">🌱</div>
+                <h3 style="font-size:36px;margin:22px 0 8px;letter-spacing:0">农博社</h3>
+                <p style="opacity:.78;margin:0">智能种植管理平台</p>
+              </div>
+              <div>
+                <div style="height:52px;border-radius:18px;background:#fff;color:#2563eb;display:grid;place-items:center;font-weight:950">开始使用</div>
+                <div style="height:48px;display:grid;place-items:center;font-weight:800;opacity:.85">已有账号？登录</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="phone small">
+            <div class="phone-label">天气详情</div>
+            <div class="status"></div>
+            <div class="screen" style="background:linear-gradient(180deg,#bfd8ff,#eaf3ff,#fff)">
+              <div class="row"><div class="icon-btn" style="background:rgba(255,255,255,.62);color:#1f2937">‹</div><strong>苏州天气</strong><div></div></div>
+              <div style="text-align:center;margin-top:28px"><div style="font-size:62px;font-weight:300">32°</div><div>小雨 · 最高32° 最低23°</div></div>
+              <div class="list-card"><strong>24小时趋势</strong><div style="height:90px;margin-top:14px;border-radius:18px;background:linear-gradient(180deg,rgba(74,123,247,.18),rgba(74,123,247,.02));display:grid;place-items:center;color:var(--blue);font-weight:900">温度曲线</div></div>
+              <div class="list-card"><strong>7日预报</strong><div class="flow" style="margin-top:10px"><div class="row"><span>今天 ☔</span><b>23° / 32°</b></div><div class="row"><span>周五 ⛅</span><b>22° / 30°</b></div><div class="row"><span>周六 ⛅</span><b>21° / 28°</b></div></div></div>
+            </div>
+          </article>
+
+          <article class="phone small">
+            <div class="phone-label">创建表单</div>
+            <div class="status"></div>
+            <div class="screen">
+              <div class="screen-title">记录作业</div>
+              <div class="sub" style="margin-top:6px">从茬口、工人、账本自动串联</div>
+              <div class="form">
+                <div class="field"><small>茬口</small><strong>西瓜 2026 春茬</strong></div>
+                <div class="field"><small>作业类型</small><strong>施肥</strong></div>
+                <div class="field"><small>种植单元</small><strong>A-01 / A-02 / B-01</strong></div>
+                <div class="field"><small>人工费用</small><strong>刘俊男 · 1 天 · 100 元</strong></div>
+                <div class="field"><small>备注</small><strong style="color:#9aa4b2">补充天气、用量、照片...</strong></div>
+              </div>
+              <div class="primary-btn">保存记录</div>
+            </div>
+          </article>
+
+          <article class="phone small">
+            <div class="phone-label">状态页</div>
+            <div class="status"></div>
+            <div class="screen">
+              <div class="screen-title">系统状态规范</div>
+              <div class="state-grid" style="margin-top:16px">
+                <div class="state"><b>加载</b><span>骨架屏优先，长任务显示“正在整理建议”。</span></div>
+                <div class="state"><b>空数据</b><span>说明下一步动作，给一个主 CTA。</span></div>
+                <div class="state"><b>失败</b><span>错误 code、原因、重试入口三件套。</span></div>
+                <div class="state"><b>成功</b><span>轻反馈、回到列表、展示新增结果。</span></div>
+                <div class="state"><b>确认</b><span>高风险操作必须二次确认。</span></div>
+                <div class="state"><b>离线</b><span>保留缓存数据并标记更新时间。</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <aside class="right-rail">
+          <div class="section">
+            <h2>屏幕设计说明</h2>
+            <div class="spec-list">
+              <div class="spec"><strong>首页</strong><span>首屏只放当天关键判断：城市、天气、AI 建议、四个快捷动作。天气卡是视觉峰值，快捷入口保持 4 个以内。</span></div>
+              <div class="spec"><strong>芽芽</strong><span>对话页保留会话抽屉和新建入口；报告页使用同一 segmented control，避免二级 Tab 膨胀。</span></div>
+              <div class="spec"><strong>记账</strong><span>金额卡占据上半屏注意力，筛选 chip 直接暴露；新增按钮固定拇指区。</span></div>
+              <div class="spec"><strong>种植/工人</strong><span>列表项强调作物、状态、阶段、面积、单元和进度；工人页强调未结金额与快速记工资。</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>组件规则</h2>
+            <div class="spec-list">
+              <div class="spec"><strong>导航</strong><span>底部 4 Tab：首页、芽芽、记账、我的；业务入口从首页和我的页双入口进入。</span></div>
+              <div class="spec"><strong>表单</strong><span>优先选择组件，减少手输；金额、日期、工人、茬口使用专用选择器。</span></div>
+              <div class="spec"><strong>列表</strong><span>每项左侧图标色块，中间主标题+上下文，右侧金额或状态；支持长按批量选择。</span></div>
+              <div class="spec"><strong>AI 执行确认</strong><span>AI 识别出记账/记工资/建茬口等操作时，消息卡底部出现确认/取消按钮。</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>状态覆盖</h2>
+            <div class="state-grid">
+              <div class="state"><b>空茬口</b><span>“新建第一个种植批次” CTA。</span></div>
+              <div class="state"><b>空账单</b><span>展示记账入口与示例分类。</span></div>
+              <div class="state"><b>天气失败</b><span>使用缓存天气，显示更新时间。</span></div>
+              <div class="state"><b>AI 超时</b><span>保留输入，显示重试和转手动入口。</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>开发交付提示</h2>
+            <div class="handoff">
+              <div><strong>适配基线：</strong>Android 360-430dp 宽度，状态栏深色，内容使用 SafeArea bottom。</div>
+              <div><strong>复用文件：</strong>颜色来自 `src/theme/colors.ts`，圆角/字号来自 `spacing.ts` 与 `designTokens.ts`。</div>
+              <div><strong>图标：</strong>沿用 MaterialCommunityIcons；按钮优先图标+可访问标签。</div>
+              <div><strong>验证：</strong>检查 375px 小屏中文不截断，FAB 不遮挡末条记录，键盘弹起后输入栏可见。</div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

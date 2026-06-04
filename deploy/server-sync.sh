@@ -28,9 +28,13 @@ COPYFILE_DISABLE=1 tar czf /tmp/farm-backend-sync.tar.gz \
     --exclude='._*' \
     -C "${PROJECT_ROOT}" \
     backend/app \
+    backend/alembic \
+    backend/alembic.ini \
     backend/requirements.txt \
     backend/skillify-sdk \
+    backend/config.yaml \
     backend/config.yaml.example \
+    backend/providers.json \
     backend/prompts
 
 log "上传到服务器..."
@@ -67,29 +71,43 @@ rm -f /tmp/farm-backend-sync.tar.gz
 rlog "备份旧代码..."
 BACKUP_DIR="/tmp/farm-backup-${TIMESTAMP}"
 mkdir -p "${BACKUP_DIR}"
-for d in app skillify-sdk prompts; do
+for d in app alembic skillify-sdk prompts; do
     [ -d "$d" ] && cp -a "$d" "${BACKUP_DIR}/"
 done
+[ -f alembic.ini ] && cp alembic.ini "${BACKUP_DIR}/"
 [ -f config.yaml ] && cp config.yaml "${BACKUP_DIR}/"
+[ -f providers.json ] && cp providers.json "${BACKUP_DIR}/"
 [ -f requirements.txt ] && cp requirements.txt "${BACKUP_DIR}/"
 rlog "备份已保存到 ${BACKUP_DIR}"
 
 # --- 覆盖代码 ---
 rlog "覆盖代码..."
-rm -rf app skillify-sdk prompts
+rm -rf app alembic skillify-sdk prompts
 mv backend/app .
+mv backend/alembic .
+mv backend/alembic.ini .
 mv backend/skillify-sdk .
 mv backend/prompts .
 mv backend/requirements.txt .
+mv backend/config.yaml .
 mv backend/config.yaml.example .
+[ -f backend/providers.json ] && mv backend/providers.json .
 rm -rf backend
 
-# --- 恢复 config.yaml ---
-rlog "恢复 config.yaml..."
-if [ -f "${BACKUP_DIR}/config.yaml" ]; then
-    cp "${BACKUP_DIR}/config.yaml" config.yaml
-else
-    rlog "无旧 config.yaml，使用 example"
+# --- 配置兜底 ---
+rlog "检查配置文件..."
+if [ ! -f config.yaml ]; then
+    if [ -f "${BACKUP_DIR}/config.yaml" ]; then
+        cp "${BACKUP_DIR}/config.yaml" config.yaml
+    else
+        rlog "无 config.yaml，使用 example"
+        cp config.yaml.example config.yaml
+    fi
+fi
+if [ ! -f providers.json ] && [ -f "${BACKUP_DIR}/providers.json" ]; then
+    cp "${BACKUP_DIR}/providers.json" providers.json
+fi
+if [ ! -f config.yaml ]; then
     cp config.yaml.example config.yaml
 fi
 

@@ -12,6 +12,8 @@ import {
   Modal,
   Pressable,
   Dimensions,
+  Animated,
+  Easing,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -67,6 +69,10 @@ const PROMPT_TONES = {
   slate: { bg: "#F1F5F9", icon: "#64748B" },
 } as const;
 
+const DRAWER_ENTER_MS = 280;
+const DRAWER_EXIT_MS = 180;
+const DRAWER_EASING = Easing.bezier(0.32, 0.72, 0, 1);
+
 const getGreeting = () => {
   const hour = new Date().getHours();
   if (hour < 6) {
@@ -104,9 +110,64 @@ export const AgentChatScreen: React.FC = () => {
   const [inputText, setInputText] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "report">("chat");
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [drawerMounted, setDrawerMounted] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const drawerProgress = useRef(new Animated.Value(0)).current;
+  const drawerEnterFrameRef = useRef<number | null>(null);
 
   const hasMessages = messages.length > 0;
+
+  useEffect(() => {
+    if (drawerVisible) {
+      drawerProgress.stopAnimation();
+      drawerProgress.setValue(0);
+      setDrawerMounted(true);
+      return;
+    }
+
+    if (!drawerMounted) {
+      return;
+    }
+
+    if (drawerEnterFrameRef.current !== null) {
+      cancelAnimationFrame(drawerEnterFrameRef.current);
+      drawerEnterFrameRef.current = null;
+    }
+    drawerProgress.stopAnimation();
+    Animated.timing(drawerProgress, {
+      toValue: 0,
+      duration: DRAWER_EXIT_MS,
+      easing: DRAWER_EASING,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setDrawerMounted(false);
+      }
+    });
+  }, [drawerMounted, drawerProgress, drawerVisible]);
+
+  useEffect(() => {
+    if (!drawerMounted || !drawerVisible) {
+      return;
+    }
+
+    drawerEnterFrameRef.current = requestAnimationFrame(() => {
+      drawerEnterFrameRef.current = null;
+      Animated.timing(drawerProgress, {
+        toValue: 1,
+        duration: DRAWER_ENTER_MS,
+        easing: DRAWER_EASING,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      if (drawerEnterFrameRef.current !== null) {
+        cancelAnimationFrame(drawerEnterFrameRef.current);
+        drawerEnterFrameRef.current = null;
+      }
+    };
+  }, [drawerMounted, drawerProgress, drawerVisible]);
 
   useEffect(() => {
     if (activeTab === "report") {
@@ -338,25 +399,50 @@ export const AgentChatScreen: React.FC = () => {
   };
 
   const renderSessionDrawer = () => {
+    if (!drawerMounted) {
+      return null;
+    }
+
     const orderedSessions = [...sessions].sort(
       (a, b) => b.updatedAt - a.updatedAt
     );
     const renderedPeriods = new Set<string>();
     const drawerWidth = Math.min(Dimensions.get("window").width * 0.78, 320);
+    const drawerTranslateX = drawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-drawerWidth, 0],
+    });
+    const scrimOpacity = drawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+    });
 
     return (
       <Modal
-        visible={drawerVisible}
+        visible={drawerMounted}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setDrawerVisible(false)}
       >
         <View style={styles.drawerRoot}>
-          <Pressable
-            style={styles.drawerScrim}
-            onPress={() => setDrawerVisible(false)}
-          />
-          <View style={[styles.drawerPanel, { width: drawerWidth }]}>
+          <Animated.View
+            pointerEvents={drawerVisible ? "auto" : "none"}
+            style={[styles.drawerScrim, { opacity: scrimOpacity }]}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setDrawerVisible(false)}
+            />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.drawerPanel,
+              {
+                width: drawerWidth,
+                transform: [{ translateX: drawerTranslateX }],
+              },
+            ]}
+          >
             <View style={styles.drawerTop}>
               <TouchableOpacity
                 style={styles.drawerIconBtn}
@@ -484,7 +570,7 @@ export const AgentChatScreen: React.FC = () => {
                 <Icon name="cog-outline" size={23} color={colors.text} />
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     );
