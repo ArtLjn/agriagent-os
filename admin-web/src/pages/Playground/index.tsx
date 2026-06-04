@@ -2,13 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Input, Button, Space, Typography, Drawer, Tag, Tooltip, message, Select } from 'antd';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { listTraces, getTimeline, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
+import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
 import { listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
 import type { PendingAction } from '../../api/agent';
 import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
+import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
 import { authStore } from '../../stores/authStore';
 
 const BG = '#0d1117';
@@ -178,15 +179,6 @@ async function fetchLatestTimeline(): Promise<TraceTimeline | null> {
     return timelineRes;
   } catch {
     return null;
-  }
-}
-
-function formatJson(raw: string | null): string {
-  if (!raw) return '';
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
-  } catch {
-    return raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
   }
 }
 
@@ -682,7 +674,7 @@ export default function Playground() {
             )}
 
             {/* 输入数据 */}
-            {nodeDetail.input_data && (
+            {hasTracePayload(nodeDetail.input_data) && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>输入数据</div>
                 <pre style={{
@@ -691,13 +683,13 @@ export default function Playground() {
                   maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
                   color: TEXT,
                 }}>
-                  {formatJson(nodeDetail.input_data)}
+                  {formatTracePayload(nodeDetail.input_data)}
                 </pre>
               </div>
             )}
 
             {/* 输出数据 */}
-            {nodeDetail.output_data && (
+            {hasTracePayload(nodeDetail.output_data) && (
               <div>
                 <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 4 }}>输出数据</div>
                 {nodeDetail.node_type === 'skill_call' ? (
@@ -709,7 +701,7 @@ export default function Playground() {
                     maxHeight: 500, overflow: 'auto', whiteSpace: 'pre-wrap',
                     color: TEXT,
                   }}>
-                    {formatJson(nodeDetail.output_data)}
+                    {formatTracePayload(nodeDetail.output_data)}
                   </pre>
                 )}
               </div>

@@ -1,5 +1,6 @@
 import { Button, Space, message } from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
+import { formatTracePayload, hasTracePayload, type TracePayload } from '../../utils/tracePayload';
 
 const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
@@ -7,7 +8,7 @@ const BORDER = '#30363d';
 const BG = '#161b22';
 
 interface SkillOutputFormatterProps {
-  outputData: string | null;
+  outputData: TracePayload;
 }
 
 interface ParsedSkillOutput {
@@ -17,13 +18,17 @@ interface ParsedSkillOutput {
 }
 
 export default function SkillOutputFormatter({ outputData }: SkillOutputFormatterProps) {
-  if (!outputData) return null;
+  if (!hasTracePayload(outputData)) return null;
 
   let parsed: ParsedSkillOutput | null = null;
-  try {
-    parsed = JSON.parse(outputData) as ParsedSkillOutput;
-  } catch {
-    // 解析失败，回退到原始展示
+  if (typeof outputData === 'string') {
+    try {
+      parsed = JSON.parse(outputData) as ParsedSkillOutput;
+    } catch {
+      // 解析失败，回退到原始展示
+    }
+  } else if (typeof outputData === 'object' && outputData !== null) {
+    parsed = outputData as ParsedSkillOutput;
   }
 
   // 解析失败或不含 reply_preview —— 回退到原始 JSON
@@ -41,7 +46,7 @@ export default function SkillOutputFormatter({ outputData }: SkillOutputFormatte
         whiteSpace: 'pre-wrap',
         color: TEXT,
       }}>
-        {outputData}
+        {formatTracePayload(outputData)}
       </pre>
     );
   }

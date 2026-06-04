@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>芽芽会话侧边栏设计稿</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 1500px;
+        height: 980px;
+        background: #eef4f2;
+        color: #1a1d23;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+      }
+
+      .board {
+        width: 100%;
+        height: 100%;
+        padding: 36px 44px;
+      }
+
+      .title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin-top: 8px;
+        color: #667085;
+        font-size: 17px;
+      }
+
+      .notes {
+        display: flex;
+        gap: 10px;
+        color: #475467;
+        font-size: 15px;
+      }
+
+      .notes span {
+        padding: 9px 13px;
+        border-radius: 999px;
+        background: #ffffff;
+        border: 1px solid #d9e5df;
+      }
+
+      .canvas {
+        display: grid;
+        grid-template-columns: 390px 390px 1fr;
+        gap: 34px;
+        align-items: start;
+      }
+
+      .phone {
+        position: relative;
+        width: 390px;
+        height: 812px;
+        border-radius: 42px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #f7faff 0%, #ffffff 100%);
+        border: 10px solid #101828;
+        box-shadow: 0 24px 50px rgba(16, 24, 40, 0.2);
+      }
+
+      .status {
+        height: 28px;
+        padding: 8px 22px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        font-weight: 800;
+        color: #0f172a;
+      }
+
+      .signal {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #111827;
+      }
+
+      .screen {
+        height: calc(100% - 28px);
+        position: relative;
+      }
+
+      .main-content {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .header {
+        padding: 18px 24px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .icon-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 22px;
+        border: 1px solid #e6edf5;
+        background: rgba(255, 255, 255, 0.86);
+        display: grid;
+        place-items: center;
+        color: #0f172a;
+        box-shadow: 0 8px 18px rgba(30, 41, 59, 0.06);
+      }
+
+      .avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 20px;
+        background: #eaf7f1;
+        display: grid;
+        place-items: center;
+        color: #10b981;
+      }
+
+      .title {
+        font-size: 22px;
+        font-weight: 850;
+        line-height: 1.1;
+      }
+
+      .online {
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: #6b7280;
+        font-size: 13px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #10b981;
+      }
+
+      .tabs {
+        margin: 0 24px;
+        padding: 5px;
+        height: 66px;
+        border-radius: 32px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        background: #eef3f9;
+      }
+
+      .tab {
+        display: grid;
+        place-items: center;
+        border-radius: 28px;
+        color: #6b7280;
+        font-size: 17px;
+        font-weight: 750;
+      }
+
+      .tab.active {
+        background: #ffffff;
+        color: #111827;
+        box-shadow: 0 5px 14px rgba(30, 41, 59, 0.1);
+      }
+
+      .welcome {
+        flex: 1;
+        padding: 118px 24px 0;
+      }
+
+      .bot-mark {
+        width: 70px;
+        height: 70px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, #daf7e9, #e7f0ff);
+        display: grid;
+        place-items: center;
+        color: #10b981;
+        margin-bottom: 30px;
+      }
+
+      .greet {
+        color: #10b981;
+        font-weight: 850;
+        font-size: 17px;
+        margin-bottom: 12px;
+      }
+
+      .question {
+        font-size: 30px;
+        font-weight: 900;
+        line-height: 1.18;
+        margin-bottom: 16px;
+      }
+
+      .hint {
+        color: #667085;
+        font-size: 18px;
+        line-height: 1.5;
+        margin-bottom: 28px;
+      }
+
+      .section-label {
+        color: #98a2b3;
+        font-size: 14px;
+        font-weight: 800;
+        margin-bottom: 12px;
+      }
+
+      .prompts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .prompt-card {
+        height: 82px;
+        border: 1px solid #dfe7f1;
+        border-radius: 22px;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 14px;
+        font-size: 16px;
+        font-weight: 850;
+      }
+
+      .prompt-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+      }
+
+      .blue {
+        background: #edf4ff;
+        color: #4a7bf7;
+      }
+
+      .green {
+        background: #edfdf3;
+        color: #10b981;
+      }
+
+      .yellow {
+        background: #fff8e8;
+        color: #d49a4a;
+      }
+
+      .gray {
+        background: #f1f5f9;
+        color: #64748b;
+      }
+
+      .input-area {
+        padding: 14px 24px 20px;
+        border-top: 1px solid #e5eaf0;
+        background: rgba(255, 255, 255, 0.82);
+      }
+
+      .input {
+        height: 58px;
+        border-radius: 29px;
+        background: #f3f6fb;
+        border: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px 0 20px;
+        color: #9ca3af;
+        font-size: 16px;
+      }
+
+      .send {
+        width: 42px;
+        height: 42px;
+        border-radius: 21px;
+        display: grid;
+        place-items: center;
+        background: #e6ecf5;
+        color: #aab3c2;
+      }
+
+      .bottom-tabs {
+        height: 66px;
+        border-top-left-radius: 28px;
+        border-top-right-radius: 28px;
+        background: #ffffff;
+        box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        align-items: center;
+        color: #98a2b3;
+        font-size: 12px;
+      }
+
+      .bottom-tab {
+        display: grid;
+        gap: 4px;
+        justify-items: center;
+      }
+
+      .bottom-tab.active {
+        color: #4a7bf7;
+        font-weight: 800;
+      }
+
+      .drawer-phone .main-content {
+        transform: translateX(258px) scale(0.96);
+        transform-origin: left center;
+        filter: brightness(0.82);
+      }
+
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.38);
+      }
+
+      .drawer {
+        position: absolute;
+        top: 28px;
+        left: 0;
+        bottom: 0;
+        width: 304px;
+        background: #f8fbff;
+        border-right: 1px solid #dfe7ef;
+        box-shadow: 20px 0 34px rgba(15, 23, 42, 0.12);
+        padding: 18px 18px 14px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .drawer-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      .drawer-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .small-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 20px;
+        border: 1px solid #e1e8f0;
+        background: #ffffff;
+        display: grid;
+        place-items: center;
+        color: #1f2937;
+      }
+
+      .new-session {
+        height: 62px;
+        border-radius: 22px;
+        background: #ffffff;
+        border: 1px solid #e2eaf2;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 16px;
+        font-size: 18px;
+        font-weight: 850;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+        margin-bottom: 22px;
+      }
+
+      .new-session .stack {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: #eaf7f1;
+        color: #10b981;
+      }
+
+      .drawer-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .drawer-heading strong {
+        font-size: 19px;
+      }
+
+      .filter {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #667085;
+        font-size: 14px;
+      }
+
+      .history {
+        flex: 1;
+        overflow: hidden;
+      }
+
+      .period {
+        margin: 18px 0 8px;
+        color: #b0b8c4;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .session {
+        position: relative;
+        padding: 11px 8px 11px 12px;
+        border-radius: 15px;
+        margin-bottom: 6px;
+      }
+
+      .session.active {
+        background: #eef8f3;
+        border: 1px solid #ccebdd;
+      }
+
+      .session-title {
+        font-size: 15px;
+        font-weight: 760;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .session-meta {
+        margin-top: 5px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #98a2b3;
+        font-size: 12px;
+      }
+
+      .tag {
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #10b981;
+        border: 1px solid #dceee6;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .unread {
+        position: absolute;
+        right: 8px;
+        top: 18px;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #ef4444;
+      }
+
+      .drawer-footer {
+        height: 62px;
+        border-top: 1px solid #e5eaf0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 12px;
+      }
+
+      .user {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #3bb273, #4a7bf7);
+        display: grid;
+        place-items: center;
+        color: #ffffff;
+        font-weight: 900;
+      }
+
+      .user-name {
+        font-size: 16px;
+        font-weight: 850;
+      }
+
+      .spec {
+        background: #ffffff;
+        border: 1px solid #dce6e0;
+        border-radius: 28px;
+        padding: 24px;
+        min-height: 812px;
+      }
+
+      .spec h2 {
+        margin: 0 0 18px;
+        font-size: 24px;
+      }
+
+      .spec-card {
+        padding: 18px;
+        border-radius: 20px;
+        background: #f7faf8;
+        border: 1px solid #e1e9e4;
+        margin-bottom: 14px;
+      }
+
+      .spec-card strong {
+        display: block;
+        font-size: 17px;
+        margin-bottom: 8px;
+      }
+
+      .spec-card p {
+        margin: 0;
+        color: #667085;
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .flow span {
+        border-radius: 18px;
+        padding: 13px 12px;
+        background: #eef8f3;
+        border: 1px solid #cfebde;
+        color: #157347;
+        font-weight: 850;
+        text-align: center;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <div class="title-row">
+        <div>
+          <h1>芽芽 Chat 会话侧边栏 UI 设计稿</h1>
+          <div class="subtitle">
+            基于当前 App 页面，增加轻量抽屉式 session 历史和新建会话入口。
+          </div>
+        </div>
+        <div class="notes">
+          <span>抽屉宽度 78%</span>
+          <span>保留底部导航</span>
+          <span>场景自动成标题</span>
+        </div>
+      </div>
+
+      <section class="canvas">
+        <div class="phone">
+          <div class="status">
+            <span>15:34</span>
+            <span class="signal">5G 85</span>
+          </div>
+          <div class="screen">
+            <div class="main-content">
+              <div class="header">
+                <div class="header-left">
+                  <div class="icon-btn"><i data-lucide="menu" size="23"></i></div>
+                  <div class="avatar"><i data-lucide="sprout" size="22"></i></div>
+                  <div>
+                    <div class="title">芽芽</div>
+                    <div class="online"><span class="dot"></span>在线</div>
+                  </div>
+                </div>
+                <div class="icon-btn"><i data-lucide="plus" size="22"></i></div>
+              </div>
+
+              <div class="tabs">
+                <div class="tab active">对话</div>
+                <div class="tab">报告</div>
+              </div>
+
+              <div class="welcome">
+                <div class="bot-mark"><i data-lucide="sprout" size="34"></i></div>
+                <div class="greet">下午好，系统管理员</div>
+                <div class="question">今天要处理什么？</div>
+                <div class="hint">可以直接问，也可以点一个场景开始。</div>
+                <div class="section-label">常用场景</div>
+                <div class="prompts">
+                  <div class="prompt-card">
+                    <span class="prompt-icon blue"><i data-lucide="cloud-sun" size="18"></i></span>
+                    天气判断
+                  </div>
+                  <div class="prompt-card">
+                    <span class="prompt-icon green"><i data-lucide="sprout" size="18"></i></span>
+                    种植建议
+                  </div>
+                  <div class="prompt-card">
+                    <span class="prompt-icon yellow"><i data-lucide="bug" size="18"></i></span>
+                    病虫害
+                  </div>
+                  <div class="prompt-card">
+                    <span class="prompt-icon gray"><i data-lucide="file-text" size="18"></i></span>
+                    本周报告
+                  </div>
+                </div>
+              </div>
+
+              <div class="input-area">
+                <div class="input">
+                  问农事、记一笔、生成报告...
+                  <span class="send"><i data-lucide="arrow-up" size="19"></i></span>
+                </div>
+              </div>
+
+              <div class="bottom-tabs">
+                <div class="bottom-tab"><i data-lucide="home" size="22"></i><span>首页</span></div>
+                <div class="bottom-tab active"><i data-lucide="sprout" size="22"></i><span>芽芽</span></div>
+                <div class="bottom-tab"><i data-lucide="receipt" size="22"></i><span>记账</span></div>
+                <div class="bottom-tab"><i data-lucide="user" size="22"></i><span>我的</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone drawer-phone">
+          <div class="status">
+            <span>15:34</span>
+            <span class="signal">5G 85</span>
+          </div>
+          <div class="screen">
+            <div class="main-content">
+              <div class="header">
+                <div class="header-left">
+                  <div class="icon-btn"><i data-lucide="menu" size="23"></i></div>
+                  <div class="avatar"><i data-lucide="sprout" size="22"></i></div>
+                  <div>
+                    <div class="title">芽芽</div>
+                    <div class="online"><span class="dot"></span>在线</div>
+                  </div>
+                </div>
+                <div class="icon-btn"><i data-lucide="plus" size="22"></i></div>
+              </div>
+              <div class="tabs">
+                <div class="tab active">对话</div>
+                <div class="tab">报告</div>
+              </div>
+              <div class="welcome">
+                <div class="bot-mark"><i data-lucide="sprout" size="34"></i></div>
+                <div class="greet">下午好，系统管理员</div>
+                <div class="question">今天要处理什么？</div>
+                <div class="hint">可以直接问，也可以点一个场景开始。</div>
+                <div class="section-label">常用场景</div>
+                <div class="prompts">
+                  <div class="prompt-card">天气判断</div>
+                  <div class="prompt-card">种植建议</div>
+                  <div class="prompt-card">病虫害</div>
+                  <div class="prompt-card">本周报告</div>
+                </div>
+              </div>
+              <div class="input-area">
+                <div class="input">问农事、记一笔、生成报告...<span class="send"></span></div>
+              </div>
+              <div class="bottom-tabs"></div>
+            </div>
+            <div class="scrim"></div>
+            <aside class="drawer">
+              <div class="drawer-top">
+                <div class="small-btn"><i data-lucide="menu" size="23"></i></div>
+                <div class="drawer-actions">
+                  <div class="small-btn"><i data-lucide="search" size="21"></i></div>
+                  <div class="small-btn"><i data-lucide="message-square-plus" size="21"></i></div>
+                </div>
+              </div>
+
+              <div class="new-session">
+                <span class="stack"><i data-lucide="layers-3" size="23"></i></span>
+                新对话
+                <i data-lucide="chevron-right" size="22" style="margin-left: auto; color: #98a2b3"></i>
+              </div>
+
+              <div class="drawer-heading">
+                <strong>会话列表</strong>
+                <span class="filter">农事对话 <i data-lucide="sliders-horizontal" size="16"></i></span>
+              </div>
+
+              <div class="history">
+                <div class="period">今天</div>
+                <div class="session active">
+                  <div class="session-title">日常对话开启</div>
+                  <div class="session-meta"><span class="tag">当前</span>刚刚</div>
+                </div>
+                <div class="session">
+                  <div class="session-title">今天适不适合打药？</div>
+                  <div class="session-meta"><span class="tag">天气</span>12:18</div>
+                </div>
+
+                <div class="period">7 天内</div>
+                <div class="session">
+                  <div class="session-title">番茄叶片发黄原因分析</div>
+                  <div class="session-meta"><span class="tag">病虫害</span>昨天</div>
+                  <span class="unread"></span>
+                </div>
+                <div class="session">
+                  <div class="session-title">给 3 号棚生成本周农事报告</div>
+                  <div class="session-meta"><span class="tag">报告</span>周二</div>
+                </div>
+
+                <div class="period">30 天内</div>
+                <div class="session">
+                  <div class="session-title">黄瓜苗期浇水频率建议</div>
+                  <div class="session-meta"><span class="tag">种植</span>5 月 28 日</div>
+                </div>
+                <div class="session">
+                  <div class="session-title">记一笔：人工采摘 6 人半天</div>
+                  <div class="session-meta"><span class="tag">记账</span>5 月 25 日</div>
+                </div>
+                <div class="session">
+                  <div class="session-title">连续阴雨后的棚内通风安排</div>
+                  <div class="session-meta"><span class="tag">天气</span>5 月 20 日</div>
+                </div>
+              </div>
+
+              <div class="drawer-footer">
+                <div class="user">
+                  <div class="user-avatar">农</div>
+                  <div class="user-name">系统管理员</div>
+                </div>
+                <div class="small-btn"><i data-lucide="settings" size="22"></i></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <aside class="spec">
+          <h2>设计说明</h2>
+          <div class="spec-card">
+            <strong>主入口</strong>
+            <p>
+              左上角菜单打开会话侧边栏，右上角加号直接新建会话。这样既参考了你给的 App，
+              又不会把历史列表塞进主聊天页面。
+            </p>
+          </div>
+          <div class="spec-card">
+            <strong>抽屉结构</strong>
+            <p>
+              顶部放搜索和新建；中部按“今天、7 天内、30 天内”分组；底部放当前用户和设置。
+              侧边栏宽度控制在 304px，右侧保留当前页面预览和遮罩。
+            </p>
+          </div>
+          <div class="spec-card">
+            <strong>农业场景标题</strong>
+            <p>
+              会话标题建议自动生成，配一个轻量标签：天气、种植、病虫害、报告、记账。
+              用户扫历史时能马上知道这轮对话的用途。
+            </p>
+          </div>
+          <div class="spec-card">
+            <strong>交互建议</strong>
+            <p>
+              点常用场景时默认创建新 session；如果当前 session 已有未发送输入，则弹确认。
+              从历史进入后，输入框和上下文都绑定对应 session。
+            </p>
+          </div>
+          <div class="flow">
+            <span>菜单</span>
+            <span>历史列表</span>
+            <span>恢复上下文</span>
+            <span>新对话</span>
+            <span>自动标题</span>
+            <span>场景标签</span>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <script>
+      lucide.createIcons();
+    </script>
+  </body>
+</html>

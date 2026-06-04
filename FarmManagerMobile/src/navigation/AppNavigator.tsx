@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -41,7 +41,11 @@ export type RootStackParamList = {
   CycleDetail: { cycleId: number };
   CycleCreate: undefined;
   PlantingUnits: { cycleId: number };
-  WorkOrderCreate: { cycleId: number; cropName?: string };
+  WorkOrderCreate: {
+    cycleId: number;
+    cropName?: string;
+    operationType?: string;
+  };
   WorkerList: undefined;
   WageCreate: {
     cycleId?: number;
@@ -120,7 +124,7 @@ export const AppNavigator: React.FC = () => {
 
   useEffect(() => {
     initialize();
-  }, []);
+  }, [initialize]);
 
   if (isInitializing) {
     return (
@@ -289,7 +293,9 @@ export const AppNavigator: React.FC = () => {
               component={(props: any) => (
                 <WelcomeScreen
                   onNavigateToLogin={() => props.navigation.navigate("Login")}
-                  onNavigateToRegister={() => props.navigation.navigate("Register")}
+                  onNavigateToRegister={() =>
+                    props.navigation.navigate("Register")
+                  }
                 />
               )}
               options={{ headerShown: false }}
@@ -298,7 +304,9 @@ export const AppNavigator: React.FC = () => {
               name="Login"
               component={(props: any) => (
                 <LoginScreen
-                  onNavigateToRegister={() => props.navigation.navigate("Register")}
+                  onNavigateToRegister={() =>
+                    props.navigation.navigate("Register")
+                  }
                 />
               )}
               options={{ headerShown: false, animation: "slide_from_bottom" }}

@@ -9,6 +9,9 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Pressable,
+  Dimensions,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -79,14 +82,20 @@ export const AgentChatScreen: React.FC = () => {
   const { user } = useAuthStore();
   const {
     messages,
+    sessions,
+    sessionId,
     sendMessage,
+    startNewChatSession,
+    switchChatSession,
     loading: isLoading,
     reports,
     fetchReports,
     deleteReports,
+    markPendingActionHandled,
   } = useAgentStore();
   const [inputText, setInputText] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "report">("chat");
+  const [drawerVisible, setDrawerVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   const hasMessages = messages.length > 0;
@@ -112,9 +121,33 @@ export const AgentChatScreen: React.FC = () => {
     handleSend(inputText);
   };
 
+  const handleStartNewSession = () => {
+    startNewChatSession();
+    setActiveTab("chat");
+    setDrawerVisible(false);
+  };
+
+  const handleSwitchSession = (nextSessionId: string) => {
+    switchChatSession(nextSessionId);
+    setActiveTab("chat");
+    setDrawerVisible(false);
+  };
+
+  const handlePendingAction = (item: ChatMessage, text: "确认" | "取消") => {
+    const actionId = item.pending_action?.action_id;
+    if (!actionId || item.pending_action_handled || isLoading) {
+      return;
+    }
+    markPendingActionHandled(actionId);
+    handleSend(text);
+  };
+
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === "user";
     const hasPendingAction = !isUser && item.pending_action;
+    const pendingActionDisabled = Boolean(
+      item.pending_action_handled || isLoading
+    );
     const showStreamingHint = !isUser && item.is_streaming && !item.content;
     return (
       <View
@@ -169,21 +202,39 @@ export const AgentChatScreen: React.FC = () => {
           {hasPendingAction && (
             <View style={styles.confirmBar}>
               <TouchableOpacity
-                style={styles.confirmBtn}
-                onPress={() => handleSend("确认")}
+                style={[
+                  styles.confirmBtn,
+                  pendingActionDisabled && styles.actionBtnDisabled,
+                ]}
+                onPress={() => handlePendingAction(item, "确认")}
                 activeOpacity={0.7}
-                disabled={isLoading}
+                disabled={pendingActionDisabled}
               >
-                <Icon name="check" size={16} color="#FFFFFF" />
+                <Icon
+                  name="check"
+                  size={16}
+                  color={pendingActionDisabled ? "#D7DEE7" : "#FFFFFF"}
+                />
                 <Text style={styles.confirmBtnText}>确认执行</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => handleSend("取消")}
+                style={[
+                  styles.cancelBtn,
+                  pendingActionDisabled && styles.actionBtnDisabled,
+                ]}
+                onPress={() => handlePendingAction(item, "取消")}
                 activeOpacity={0.7}
-                disabled={isLoading}
+                disabled={pendingActionDisabled}
               >
-                <Icon name="close" size={16} color={colors.textSecondary} />
+                <Icon
+                  name="close"
+                  size={16}
+                  color={
+                    pendingActionDisabled
+                      ? colors.textTertiary
+                      : colors.textSecondary
+                  }
+                />
                 <Text style={styles.cancelBtnText}>取消</Text>
               </TouchableOpacity>
             </View>
@@ -250,6 +301,163 @@ export const AgentChatScreen: React.FC = () => {
     );
   };
 
+  const formatSessionPeriod = (updatedAt: number) => {
+    const now = Date.now();
+    const diffDays = Math.floor((now - updatedAt) / (24 * 60 * 60 * 1000));
+    if (diffDays <= 0) {
+      return "今天";
+    }
+    if (diffDays <= 7) {
+      return "7 天内";
+    }
+    return "30 天内";
+  };
+
+  const formatSessionTime = (updatedAt: number) => {
+    const date = new Date(updatedAt);
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) {
+      return date.toLocaleTimeString("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+    return `${date.getMonth() + 1} 月 ${date.getDate()} 日`;
+  };
+
+  const renderSessionDrawer = () => {
+    const orderedSessions = [...sessions].sort(
+      (a, b) => b.updatedAt - a.updatedAt
+    );
+    const renderedPeriods = new Set<string>();
+    const drawerWidth = Math.min(Dimensions.get("window").width * 0.78, 320);
+
+    return (
+      <Modal
+        visible={drawerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDrawerVisible(false)}
+      >
+        <View style={styles.drawerRoot}>
+          <Pressable
+            style={styles.drawerScrim}
+            onPress={() => setDrawerVisible(false)}
+          />
+          <View style={[styles.drawerPanel, { width: drawerWidth }]}>
+            <View style={styles.drawerTop}>
+              <TouchableOpacity
+                style={styles.drawerIconBtn}
+                onPress={() => setDrawerVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Icon name="menu" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <View style={styles.drawerActionRow}>
+                <TouchableOpacity style={styles.drawerIconBtn} activeOpacity={0.7}>
+                  <Icon name="magnify" size={22} color={colors.text} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.drawerIconBtn}
+                  onPress={handleStartNewSession}
+                  activeOpacity={0.7}
+                >
+                  <Icon
+                    name="message-plus-outline"
+                    size={22}
+                    color={colors.text}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.newSessionCard}
+              onPress={handleStartNewSession}
+              activeOpacity={0.78}
+            >
+              <View style={styles.newSessionIcon}>
+                <Icon name="layers-triple-outline" size={22} color={colors.success} />
+              </View>
+              <Text style={styles.newSessionText}>新对话</Text>
+              <Icon name="chevron-right" size={22} color={colors.textTertiary} />
+            </TouchableOpacity>
+
+            <View style={styles.drawerHeading}>
+              <Text style={styles.drawerTitle}>会话列表</Text>
+              <View style={styles.drawerFilter}>
+                <Text style={styles.drawerFilterText}>农事对话</Text>
+                <Icon name="filter-variant" size={18} color={colors.textSecondary} />
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.sessionList}
+              showsVerticalScrollIndicator={false}
+            >
+              {orderedSessions.map((session) => {
+                const period = formatSessionPeriod(session.updatedAt);
+                const shouldShowPeriod = !renderedPeriods.has(period);
+                renderedPeriods.add(period);
+                const isActive = session.id === sessionId;
+                return (
+                  <View key={session.id}>
+                    {shouldShowPeriod && (
+                      <Text style={styles.sessionPeriod}>{period}</Text>
+                    )}
+                    <TouchableOpacity
+                      style={[
+                        styles.sessionItem,
+                        isActive && styles.sessionItemActive,
+                      ]}
+                      onPress={() => handleSwitchSession(session.id)}
+                      activeOpacity={0.76}
+                    >
+                      <Text
+                        style={[
+                          styles.sessionTitle,
+                          isActive && styles.sessionTitleActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {session.title}
+                      </Text>
+                      <View style={styles.sessionMetaRow}>
+                        <Text style={styles.sessionTag}>{session.category}</Text>
+                        <Text style={styles.sessionTime}>
+                          {formatSessionTime(session.updatedAt)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.drawerFooter}>
+              <View style={styles.drawerUser}>
+                <LinearGradient
+                  colors={[colors.success, colors.primary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.drawerUserAvatar}
+                >
+                  <Text style={styles.drawerUserAvatarText}>农</Text>
+                </LinearGradient>
+                <Text style={styles.drawerUserName} numberOfLines={1}>
+                  {user?.nickname || "系统管理员"}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.drawerIconBtn} activeOpacity={0.7}>
+                <Icon name="cog-outline" size={23} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <LinearGradient
@@ -259,6 +467,13 @@ export const AgentChatScreen: React.FC = () => {
 
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerMenuBtn}
+          onPress={() => setDrawerVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Icon name="menu" size={24} color={colors.text} />
+        </TouchableOpacity>
         <View style={styles.headerLeft}>
           <View style={styles.headerAvatar}>
             <Icon name="sprout" size={18} color={colors.success} />
@@ -271,6 +486,13 @@ export const AgentChatScreen: React.FC = () => {
             </View>
           </View>
         </View>
+        <TouchableOpacity
+          style={styles.headerNewBtn}
+          onPress={handleStartNewSession}
+          activeOpacity={0.7}
+        >
+          <Icon name="plus" size={22} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       {/* SegmentedControl */}
@@ -395,6 +617,7 @@ export const AgentChatScreen: React.FC = () => {
           }
         />
       )}
+      {renderSessionDrawer()}
     </SafeAreaView>
   );
 };
@@ -411,14 +634,28 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacingV2.lg,
     paddingTop: spacingV2.md,
     paddingBottom: spacingV2.sm,
     backgroundColor: "transparent",
   },
+  headerMenuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.76)",
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.7)",
+  },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
+    marginLeft: spacingV2.md,
+    minWidth: 0,
   },
   headerAvatar: {
     width: 40,
@@ -449,6 +686,16 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: fontSizeV2.xs,
     color: colors.textSecondary,
+  },
+  headerNewBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.76)",
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.7)",
   },
 
   // ─── Segment ───
@@ -772,9 +1019,193 @@ const styles = StyleSheet.create({
     paddingVertical: spacingV2.sm,
     borderRadius: borderRadiusV2.full,
   },
+  actionBtnDisabled: {
+    opacity: 0.52,
+  },
   cancelBtnText: {
     color: colors.textSecondary,
     fontSize: fontSizeV2.sm,
     fontWeight: "600",
+  },
+
+  // ─── Session drawer ───
+  drawerRoot: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  drawerScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.42)",
+  },
+  drawerPanel: {
+    height: "100%",
+    backgroundColor: "#F8FBFF",
+    paddingTop: Platform.OS === "ios" ? 52 : spacingV2.xl,
+    paddingHorizontal: spacingV2.lg,
+    paddingBottom: spacingV2.lg,
+    borderRightWidth: 1,
+    borderRightColor: "rgba(226, 232, 240, 0.96)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 16, height: 0 },
+    shadowOpacity: 0.14,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  drawerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacingV2.lg,
+  },
+  drawerActionRow: {
+    flexDirection: "row",
+    gap: spacingV2.sm,
+  },
+  drawerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.94)",
+  },
+  newSessionCard: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.md,
+    paddingHorizontal: spacingV2.md,
+    borderRadius: borderRadiusV2.xxl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.94)",
+    marginBottom: spacingV2.xl,
+  },
+  newSessionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.successMuted,
+  },
+  newSessionText: {
+    flex: 1,
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "700",
+  },
+  drawerHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacingV2.md,
+  },
+  drawerTitle: {
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "800",
+  },
+  drawerFilter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  drawerFilterText: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  sessionList: {
+    flex: 1,
+  },
+  sessionPeriod: {
+    marginTop: spacingV2.md,
+    marginBottom: spacingV2.sm,
+    fontSize: fontSizeV2.sm,
+    color: colors.textTertiary,
+    fontWeight: "700",
+  },
+  sessionItem: {
+    position: "relative",
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.md,
+    borderRadius: borderRadiusV2.lg,
+    marginBottom: spacingV2.xs,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  sessionItemActive: {
+    backgroundColor: "#EEF8F3",
+    borderColor: "rgba(59, 178, 115, 0.24)",
+  },
+  sessionTitle: {
+    fontSize: fontSizeV2.sm,
+    color: colors.text,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  sessionTitleActive: {
+    color: "#147A4C",
+  },
+  sessionMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.sm,
+    marginTop: spacingV2.xs,
+  },
+  sessionTag: {
+    overflow: "hidden",
+    paddingHorizontal: spacingV2.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "rgba(59, 178, 115, 0.18)",
+    color: colors.success,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  sessionTime: {
+    flex: 1,
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+  },
+  drawerFooter: {
+    minHeight: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacingV2.md,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(226, 232, 240, 0.96)",
+    paddingTop: spacingV2.md,
+  },
+  drawerUser: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.sm,
+  },
+  drawerUserAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drawerUserAvatarText: {
+    color: colors.textInverse,
+    fontSize: fontSizeV2.sm,
+    fontWeight: "800",
+  },
+  drawerUserName: {
+    flex: 1,
+    fontSize: fontSizeV2.sm,
+    color: colors.text,
+    fontWeight: "800",
   },
 });

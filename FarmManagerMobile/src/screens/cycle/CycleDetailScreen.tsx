@@ -16,7 +16,6 @@ import type { RootStackParamList } from "../../navigation/AppNavigator";
 import { costApi, plantingApi } from "../../api/client";
 import type { CostRecord, WorkerSummaryItem } from "../../api/types";
 import { useCycleStore } from "../../stores/cycleStore";
-import { Timeline } from "../../components/Timeline";
 import { Loading } from "../../components/Loading";
 import { colors } from "../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
@@ -47,18 +46,59 @@ const STATUS_MAP: Record<
 };
 
 function getCropEmoji(name: string): string {
-  if (name.includes("西瓜")) return "🍉";
-  if (name.includes("辣椒")) return "🌶️";
-  if (name.includes("番茄") || name.includes("西红柿")) return "🍅";
-  if (name.includes("黄瓜")) return "🥒";
-  if (name.includes("茄子")) return "🍆";
-  if (name.includes("白菜")) return "🥬";
-  if (name.includes("玉米")) return "🌽";
-  if (name.includes("土豆")) return "🥔";
-  if (name.includes("萝卜")) return "🥕";
-  if (name.includes("南瓜")) return "🎃";
-  if (name.includes("大蒜") || name.includes("洋葱")) return "🧄";
+  if (name.includes("西瓜")) {
+    return "🍉";
+  }
+  if (name.includes("辣椒")) {
+    return "🌶️";
+  }
+  if (name.includes("番茄") || name.includes("西红柿")) {
+    return "🍅";
+  }
+  if (name.includes("黄瓜")) {
+    return "🥒";
+  }
+  if (name.includes("茄子")) {
+    return "🍆";
+  }
+  if (name.includes("白菜")) {
+    return "🥬";
+  }
+  if (name.includes("玉米")) {
+    return "🌽";
+  }
+  if (name.includes("土豆")) {
+    return "🥔";
+  }
+  if (name.includes("萝卜")) {
+    return "🥕";
+  }
+  if (name.includes("南瓜")) {
+    return "🎃";
+  }
+  if (name.includes("大蒜") || name.includes("洋葱")) {
+    return "🧄";
+  }
   return "🌱";
+}
+
+function parseDateValue(value: string): number {
+  const parsed = new Date(`${value}T00:00:00`).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function getTodayValue(): number {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
+function getStageStatus(stage: { start_date: string; end_date: string }) {
+  const today = getTodayValue();
+  const start = parseDateValue(stage.start_date);
+  const end = parseDateValue(stage.end_date);
+  if (start && today < start) return "upcoming";
+  if (end && today > end) return "done";
+  return "current";
 }
 
 export const CycleDetailScreen: React.FC = () => {
@@ -133,15 +173,30 @@ export const CycleDetailScreen: React.FC = () => {
     bgColor: colors.surfaceMuted,
   };
 
-  const timelineItems = currentCycle.stages.map((stage) => ({
-    id: String(stage.id),
-    title: stage.name,
-    subtitle: stage.key_tasks || "无关键任务",
-    dateRange: `${stage.start_date} ~ ${stage.end_date}`,
-    isCurrent: stage.is_current,
+  const stageItems = currentCycle.stages.map((stage, index) => ({
+    ...stage,
+    status: getStageStatus(stage),
+    index,
   }));
-
-  const currentStage = currentCycle.stages.find((s) => s.is_current);
+  const currentStage =
+    stageItems.find((stage) => stage.status === "current") ||
+    stageItems.find((stage) => stage.is_current) ||
+    stageItems[0];
+  const currentStageIndex = currentStage?.index ?? 0;
+  const nextStage = stageItems.find((stage) => stage.index > currentStageIndex);
+  const progressPercent =
+    stageItems.length > 1
+      ? Math.round((currentStageIndex / (stageItems.length - 1)) * 100)
+      : 0;
+  const areaText = currentCycle.total_area_mu
+    ? `${Number(currentCycle.total_area_mu).toFixed(2).replace(/\.00$/, "")} 亩`
+    : currentCycle.field_name || "未填面积";
+  const unitCountText = currentCycle.unit_count
+    ? `${currentCycle.unit_count} 个单元`
+    : "按整茬管理";
+  const seasonText = currentCycle.season || "当前批次";
+  const quickOperations = operationTypes.slice(0, 4);
+  const previewUnits = units.slice(0, 4);
 
   return (
     <ScrollView
@@ -149,74 +204,134 @@ export const CycleDetailScreen: React.FC = () => {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero */}
-      <View style={styles.hero}>
-        <Text style={styles.heroEmoji}>
-          {getCropEmoji(currentCycle.name)}
-        </Text>
-        <Text style={styles.heroTitle}>{currentCycle.name}</Text>
-        <View style={[styles.statusPill, { backgroundColor: status.bgColor }]}>
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryTop}>
+          <View style={styles.cropIcon}>
+            <Text style={styles.cropEmoji}>
+              {getCropEmoji(currentCycle.name)}
+            </Text>
+          </View>
+          <View style={styles.summaryText}>
+            <Text style={styles.batchLabel}>{seasonText}</Text>
+            <Text style={styles.heroTitle} numberOfLines={2}>
+              {currentCycle.name}
+            </Text>
+            <Text style={styles.heroMeta} numberOfLines={1}>
+              {areaText} · {unitCountText} · {currentStage?.name || "未开始"}
+            </Text>
+          </View>
           <View
-            style={[styles.statusDot, { backgroundColor: status.color }]}
-          />
-          <Text style={[styles.statusText, { color: status.color }]}>
-            {status.label}
-          </Text>
+            style={[styles.statusPill, { backgroundColor: status.bgColor }]}
+          >
+            <View
+              style={[styles.statusDot, { backgroundColor: status.color }]}
+            />
+            <Text style={[styles.statusText, { color: status.color }]}>
+              {status.label}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.summaryStats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{areaText}</Text>
+            <Text style={styles.statLabel}>种植面积</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{unitCountText}</Text>
+            <Text style={styles.statLabel}>管理范围</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{currentCycle.start_date}</Text>
+            <Text style={styles.statLabel}>开始日期</Text>
+          </View>
         </View>
       </View>
 
-      {/* Info Grid */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoGrid}>
-          <View style={styles.infoCell}>
-            <Icon name="map-marker-radius" size={18} color={colors.primary} />
-            <Text style={styles.infoCellLabel}>面积/单元</Text>
-            <Text style={styles.infoCellValue} numberOfLines={1}>
-              {currentCycle.total_area_mu
-                ? `${Number(currentCycle.total_area_mu).toFixed(2).replace(/\.00$/, "")}亩`
-                : currentCycle.field_name || "未指定"}
-              {currentCycle.unit_count ? ` · ${currentCycle.unit_count}个` : ""}
+      <View style={styles.quickPanel}>
+        <TouchableOpacity
+          style={styles.primaryAction}
+          onPress={() =>
+            navigation.navigate(
+              "WorkOrderCreate" as never,
+              {
+                cycleId,
+                cropName: currentCycle.name,
+              } as never
+            )
+          }
+          activeOpacity={0.82}
+        >
+          <Icon name="clipboard-plus" size={22} color={colors.textInverse} />
+          <View style={styles.primaryActionText}>
+            <Text style={styles.primaryActionTitle}>记一条农事</Text>
+            <Text style={styles.primaryActionSub}>
+              授粉、压蔓、采收、用工一起记
             </Text>
           </View>
-          <View style={[styles.infoCell, styles.infoCellBorder]}>
-            <Icon name="calendar" size={18} color={colors.primary} />
-            <Text style={styles.infoCellLabel}>开始日期</Text>
-            <Text style={styles.infoCellValue}>
-              {currentCycle.start_date}
-            </Text>
-          </View>
-          <View style={[styles.infoCell, styles.infoCellBorderTop]}>
+          <Icon name="chevron-right" size={22} color={colors.textInverse} />
+        </TouchableOpacity>
+
+        <View style={styles.secondaryActions}>
+          <TouchableOpacity
+            style={styles.secondaryAction}
+            onPress={() =>
+              navigation.navigate("LogList" as never, { cycleId } as never)
+            }
+            activeOpacity={0.75}
+          >
             <Icon
-              name="format-list-numbered"
-              size={18}
+              name="clipboard-text-clock"
+              size={20}
               color={colors.primary}
             />
-            <Text style={styles.infoCellLabel}>阶段数</Text>
-            <Text style={styles.infoCellValue}>
-              {currentCycle.stages.length} 个
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.infoCell,
-              styles.infoCellBorder,
-              styles.infoCellBorderTop,
-            ]}
+            <Text style={styles.secondaryActionText}>看记录</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryAction}
+            onPress={() =>
+              navigation.navigate(
+                "PlantingUnits" as never,
+                { cycleId } as never
+              )
+            }
+            activeOpacity={0.75}
           >
-            <Icon name="progress-clock" size={18} color={colors.primary} />
-            <Text style={styles.infoCellLabel}>当前阶段</Text>
-            <Text style={styles.infoCellValue} numberOfLines={1}>
-              {currentStage?.name || "-"}
-            </Text>
-          </View>
+            <Icon name="greenhouse" size={20} color={colors.success} />
+            <Text style={styles.secondaryActionText}>棚/地块</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryAction}
+            onPress={() =>
+              navigation.navigate("Profit" as never, { cycleId } as never)
+            }
+            activeOpacity={0.75}
+          >
+            <Icon name="chart-line" size={20} color={colors.success} />
+            <Text style={styles.secondaryActionText}>利润</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>种植单元</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>棚 / 地块</Text>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate(
+                "PlantingUnits" as never,
+                { cycleId } as never
+              )
+            }
+          >
+            <Text style={styles.sectionLink}>管理</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.unitCard}>
-          {units.length > 0 ? (
-            units.map((unit) => (
+          {previewUnits.length > 0 ? (
+            previewUnits.map((unit) => (
               <View key={unit.id} style={styles.unitRow}>
                 <View style={styles.unitIcon}>
                   <Icon name="greenhouse" size={18} color={colors.primary} />
@@ -224,7 +339,11 @@ export const CycleDetailScreen: React.FC = () => {
                 <View style={styles.unitInfo}>
                   <Text style={styles.unitName}>{unit.name}</Text>
                   <Text style={styles.unitMeta}>
-                    {unit.area_mu ? `${Number(unit.area_mu).toFixed(2).replace(/\.00$/, "")} 亩` : "未填面积"}
+                    {unit.area_mu
+                      ? `${Number(unit.area_mu)
+                          .toFixed(2)
+                          .replace(/\.00$/, "")} 亩`
+                      : "未填面积"}
                     {unit.status ? ` · ${unit.status}` : ""}
                   </Text>
                 </View>
@@ -232,19 +351,37 @@ export const CycleDetailScreen: React.FC = () => {
             ))
           ) : (
             <Text style={styles.emptyHint}>
-              暂未拆分棚或地块，当前仍按批次整体管理。
+              还没拆棚或地块，也可以先按整茬记录农事。
             </Text>
           )}
+          {units.length > previewUnits.length ? (
+            <Text style={styles.moreHint}>
+              还有 {units.length - previewUnits.length} 个，点“管理”查看
+            </Text>
+          ) : null}
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>作业快捷项</Text>
+        <Text style={styles.sectionTitle}>常用作业</Text>
         <View style={styles.operationWrap}>
-          {operationTypes.slice(0, 8).map((item) => (
-            <View key={item.name} style={styles.operationPill}>
+          {quickOperations.map((item) => (
+            <TouchableOpacity
+              key={item.name}
+              style={styles.operationPill}
+              onPress={() =>
+                navigation.navigate(
+                  "WorkOrderCreate" as never,
+                  {
+                    cycleId,
+                    cropName: currentCycle.name,
+                    operationType: item.name,
+                  } as never
+                )
+              }
+            >
               <Text style={styles.operationText}>{item.name}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </View>
@@ -321,87 +458,76 @@ export const CycleDetailScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Timeline */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>生长阶段</Text>
-        <View style={styles.timelineCard}>
-          <Timeline items={timelineItems} />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>生长阶段</Text>
+          <Text style={styles.sectionMeta}>
+            {currentStageIndex + 1}/{stageItems.length}
+          </Text>
         </View>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate("LogList" as never, { cycleId } as never)}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.actionIcon,
-              { backgroundColor: colors.primaryMuted },
-            ]}
-          >
-            <Icon name="clipboard-text" size={20} color={colors.primary} />
+        <View style={styles.stageCard}>
+          <View style={styles.stageTop}>
+            <View style={styles.stageBadge}>
+              <Icon name="sprout" size={18} color={colors.success} />
+            </View>
+            <View style={styles.stageCopy}>
+              <Text style={styles.stageEyebrow}>今天应处于</Text>
+              <Text style={styles.stageTitle}>{currentStage?.name || "-"}</Text>
+              <Text style={styles.stageDesc} numberOfLines={2}>
+                {currentStage?.key_tasks || "按当前作物模板继续日常管理"}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.actionLabel}>农事记录</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() =>
-            navigation.navigate("WorkOrderCreate" as never, {
-              cycleId,
-              cropName: currentCycle.name,
-            } as never)
-          }
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.actionIcon,
-              { backgroundColor: colors.primaryMuted },
-            ]}
-          >
-            <Icon name="clipboard-plus" size={20} color={colors.primary} />
+          <View style={styles.progressTrack}>
+            <View
+              style={[styles.progressFill, { width: `${progressPercent}%` }]}
+            />
           </View>
-          <Text style={styles.actionLabel}>记录作业</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() =>
-            navigation.navigate("PlantingUnits" as never, { cycleId } as never)
-          }
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.actionIcon,
-              { backgroundColor: "rgba(59, 178, 115, 0.08)" },
-            ]}
-          >
-            <Icon name="greenhouse" size={20} color={colors.success} />
+          <View style={styles.stageRail}>
+            {stageItems.map((stage) => {
+              const isCurrent = stage.index === currentStageIndex;
+              const isDone = stage.status === "done";
+              return (
+                <View key={stage.id} style={styles.stageRailItem}>
+                  <View
+                    style={[
+                      styles.stageDot,
+                      isDone && styles.stageDotDone,
+                      isCurrent && styles.stageDotCurrent,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.stageRailText,
+                      isCurrent && styles.stageRailTextCurrent,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {stage.name}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
-          <Text style={styles.actionLabel}>种植单元</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate("Profit" as never, { cycleId } as never)}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[
-              styles.actionIcon,
-              { backgroundColor: "rgba(59, 178, 115, 0.08)" },
-            ]}
-          >
-            <Icon name="chart-line" size={20} color={colors.success} />
+          <View style={styles.stageFooter}>
+            <View>
+              <Text style={styles.stageFooterLabel}>当前阶段日期</Text>
+              <Text style={styles.stageFooterValue}>
+                {currentStage?.start_date || "-"} 至{" "}
+                {currentStage?.end_date || "-"}
+              </Text>
+            </View>
+            <View style={styles.nextStageBox}>
+              <Text style={styles.nextStageLabel}>下一阶段</Text>
+              <Text style={styles.nextStageValue} numberOfLines={1}>
+                {nextStage?.name || "暂无"}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.actionLabel}>利润统计</Text>
-        </TouchableOpacity>
-
+        </View>
       </View>
     </ScrollView>
   );
@@ -409,23 +535,52 @@ export const CycleDetailScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { paddingBottom: spacingV2.xxxl },
-  hero: {
-    alignItems: "center",
-    paddingVertical: spacingV2.xxl,
-    paddingHorizontal: spacingV2.lg,
+  content: {
+    padding: spacingV2.md,
+    paddingBottom: spacingV2.xxxl,
   },
-  heroEmoji: {
-    fontSize: 48,
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.md,
     marginBottom: spacingV2.md,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  summaryTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacingV2.md,
+  },
+  cropIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryMuted,
+  },
+  cropEmoji: { fontSize: 28 },
+  summaryText: { flex: 1, minWidth: 0 },
+  batchLabel: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "700",
+    color: colors.success,
+    marginBottom: spacingV2.xs,
   },
   heroTitle: {
-    fontSize: fontSizeV2.xxxl,
+    fontSize: fontSizeV2.xl,
     fontWeight: "800",
     color: colors.text,
-    textAlign: "center",
-    marginBottom: spacingV2.md,
-    letterSpacing: -0.5,
+    lineHeight: 28,
+  },
+  heroMeta: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    marginTop: spacingV2.xs,
   },
   statusPill: {
     flexDirection: "row",
@@ -444,54 +599,85 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.sm,
     fontWeight: "600",
   },
-  infoCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxxl,
-    marginHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.xl,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  infoGrid: {
+  summaryStats: {
     flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  infoCell: {
-    width: "50%",
     alignItems: "center",
-    paddingVertical: spacingV2.xl,
-    paddingHorizontal: spacingV2.md,
-  },
-  infoCellBorder: {
-    borderLeftWidth: 1,
-    borderLeftColor: colors.borderLight,
-  },
-  infoCellBorderTop: {
+    marginTop: spacingV2.lg,
+    paddingTop: spacingV2.lg,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
-  infoCellLabel: {
+  statItem: { flex: 1, minWidth: 0 },
+  statValue: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  statLabel: {
     fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
-    marginTop: spacingV2.sm,
-    marginBottom: spacingV2.xs,
+    marginTop: 2,
   },
-  infoCellValue: {
-    fontSize: fontSizeV2.md,
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: colors.borderLight,
+    marginHorizontal: spacingV2.md,
+  },
+  quickPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.sm,
+    marginBottom: spacingV2.xl,
+  },
+  primaryAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 64,
+    paddingHorizontal: spacingV2.lg,
+    paddingVertical: spacingV2.md,
+    borderRadius: borderRadiusV2.xl,
+    backgroundColor: colors.primary,
+    gap: spacingV2.md,
+  },
+  primaryActionText: { flex: 1 },
+  primaryActionTitle: {
+    fontSize: fontSizeV2.lg,
+    fontWeight: "800",
+    color: colors.textInverse,
+  },
+  primaryActionSub: {
+    fontSize: fontSizeV2.sm,
+    color: "rgba(255, 255, 255, 0.82)",
+    marginTop: 2,
+  },
+  secondaryActions: {
+    flexDirection: "row",
+    gap: spacingV2.sm,
+    marginTop: spacingV2.sm,
+  },
+  secondaryAction: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacingV2.xs,
+  },
+  secondaryActionText: {
+    fontSize: fontSizeV2.sm,
     fontWeight: "700",
     color: colors.text,
   },
   section: {
-    marginHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.xl,
+    marginBottom: spacingV2.lg,
   },
-  sectionTitle: {
-    fontSize: fontSizeV2.xl,
-    fontWeight: "700",
-    color: colors.text,
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: spacingV2.md,
   },
   sectionHeaderRow: {
@@ -499,11 +685,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: spacingV2.md,
-  },
-  sectionLink: {
-    fontSize: fontSizeV2.sm,
-    color: colors.primary,
-    fontWeight: "800",
   },
   laborCard: {
     backgroundColor: colors.surface,
@@ -574,27 +755,148 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: "800",
   },
-  timelineCard: {
+  sectionTitle: {
+    fontSize: fontSizeV2.lg,
+    fontWeight: "800",
+    color: colors.text,
+    marginBottom: 0,
+  },
+  sectionMeta: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "800",
+    color: colors.textTertiary,
+  },
+  sectionLink: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  stageCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxxl,
-    paddingTop: spacingV2.lg,
-    paddingBottom: spacingV2.md,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.lg,
+  },
+  stageTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacingV2.md,
+  },
+  stageBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.successMuted,
+  },
+  stageCopy: { flex: 1, minWidth: 0 },
+  stageEyebrow: {
+    fontSize: fontSizeV2.xs,
+    fontWeight: "800",
+    color: colors.success,
+    marginBottom: 2,
+  },
+  stageTitle: {
+    fontSize: fontSizeV2.xl,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  stageDesc: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginTop: spacingV2.xs,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.borderLight,
+    overflow: "hidden",
+    marginTop: spacingV2.lg,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.success,
+  },
+  stageRail: {
+    flexDirection: "row",
+    gap: spacingV2.sm,
+    marginTop: spacingV2.md,
+  },
+  stageRailItem: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "center",
+  },
+  stageDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.border,
+    marginBottom: spacingV2.xs,
+  },
+  stageDotDone: {
+    backgroundColor: colors.success,
+  },
+  stageDotCurrent: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.primary,
+    marginTop: -2,
+  },
+  stageRailText: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    maxWidth: 64,
+  },
+  stageRailTextCurrent: {
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  stageFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacingV2.md,
+    marginTop: spacingV2.lg,
+    paddingTop: spacingV2.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  stageFooterLabel: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    marginBottom: 2,
+  },
+  stageFooterValue: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  nextStageBox: {
+    maxWidth: 120,
+    borderRadius: borderRadiusV2.lg,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
+    backgroundColor: colors.background,
+  },
+  nextStageLabel: {
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    marginBottom: 2,
+  },
+  nextStageValue: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "800",
+    color: colors.text,
   },
   unitCard: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxl,
-    paddingHorizontal: spacingV2.lg,
-    paddingVertical: spacingV2.md,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    borderRadius: borderRadiusV2.xl,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.sm,
   },
   unitRow: {
     flexDirection: "row",
@@ -630,43 +932,29 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingVertical: spacingV2.sm,
   },
+  moreHint: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "700",
+    color: colors.primary,
+    paddingTop: spacingV2.sm,
+  },
   operationWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacingV2.sm,
   },
   operationPill: {
-    paddingHorizontal: spacingV2.md,
+    minHeight: 44,
+    paddingHorizontal: spacingV2.lg,
     paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.primaryMuted,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "rgba(74, 123, 247, 0.16)",
   },
   operationText: {
     fontSize: fontSizeV2.sm,
     fontWeight: "700",
     color: colors.primary,
-  },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginHorizontal: spacingV2.lg,
-    paddingVertical: spacingV2.xl,
-  },
-  actionBtn: {
-    alignItems: "center",
-    width: 80,
-  },
-  actionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacingV2.sm,
-  },
-  actionLabel: {
-    fontSize: 13,
-    color: colors.text,
-    fontWeight: "500",
   },
 });

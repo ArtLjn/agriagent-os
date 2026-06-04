@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { TracePayload } from '../utils/tracePayload';
 
 // ─── Trace API ───────────────────────────────────────────────────────────────
 
@@ -25,8 +26,8 @@ export interface TraceNode {
   token_usage: Record<string, unknown> | null;
   start_time: string | null;
   error_message: string | null;
-  input_data: string | null;
-  output_data: string | null;
+  input_data: TracePayload;
+  output_data: TracePayload;
 }
 
 export interface TraceRound {
@@ -45,8 +46,8 @@ export interface TraceNodeDetail {
   round_index: number;
   node_type: string;
   node_name: string;
-  input_data: string | null;
-  output_data: string | null;
+  input_data: TracePayload;
+  output_data: TracePayload;
   duration_ms: number | null;
   token_usage: string | null;
   status: string;

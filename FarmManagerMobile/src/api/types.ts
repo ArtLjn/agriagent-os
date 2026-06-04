@@ -248,6 +248,7 @@ export interface ChatMessage {
   role: "user" | "agent";
   content: string;
   pending_action?: PendingAction | null;
+  pending_action_handled?: boolean;
   is_streaming?: boolean;
 }
 

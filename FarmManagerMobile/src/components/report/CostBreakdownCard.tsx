@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
 import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { formatCompactNumber } from "../../utils/numberFormat";
 import type { ReportCostItem } from "../../api/types";
 
 interface CostBreakdownCardProps {
@@ -36,15 +37,25 @@ export const CostBreakdownCard: React.FC<CostBreakdownCardProps> = ({
       {/* 总览 */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryValue, { color: colors.expense }]}>
-            {totalCost.toFixed(0)}
+          <Text
+            style={[styles.summaryValue, { color: colors.expense }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
+            {formatCompactNumber(totalCost)}
           </Text>
           <Text style={styles.summaryLabel}>总支出</Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryValue, { color: colors.income }]}>
-            {totalIncome.toFixed(0)}
+          <Text
+            style={[styles.summaryValue, { color: colors.income }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
+            {formatCompactNumber(totalIncome)}
           </Text>
           <Text style={styles.summaryLabel}>总收入</Text>
         </View>
@@ -55,9 +66,12 @@ export const CostBreakdownCard: React.FC<CostBreakdownCardProps> = ({
               styles.summaryValue,
               { color: netProfit >= 0 ? colors.income : colors.expense },
             ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
           >
             {netProfit >= 0 ? "+" : ""}
-            {netProfit.toFixed(0)}
+            {formatCompactNumber(netProfit)}
           </Text>
           <Text style={styles.summaryLabel}>净利润</Text>
         </View>

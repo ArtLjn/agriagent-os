@@ -40,6 +40,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useAgentStore.setState({
     messages: [],
+    sessions: [],
     dailyAdvice: null,
     report: null,
     weather: null,
@@ -220,5 +221,62 @@ describe("sendMessage", () => {
       },
     ]);
     expect(useAgentStore.getState().loading).toBe(false);
+  });
+});
+
+describe("chat sessions", () => {
+  it("新建会话后保留旧会话消息，并切换到空的新会话", () => {
+    useAgentStore.getState().sendMessage("今天怎么管理小麦？");
+    const firstSessionId = useAgentStore.getState().sessionId;
+
+    useAgentStore.getState().startNewChatSession();
+
+    expect(useAgentStore.getState().sessionId).not.toBe(firstSessionId);
+    expect(useAgentStore.getState().messages).toEqual([]);
+
+    useAgentStore.getState().switchChatSession(firstSessionId);
+
+    expect(useAgentStore.getState().messages).toEqual([
+      { role: "user", content: "今天怎么管理小麦？" },
+      { role: "agent", content: "", is_streaming: true },
+    ]);
+  });
+
+  it("发送消息时自动更新当前会话标题和预览", () => {
+    useAgentStore.getState().sendMessage("今天适不适合打药？");
+
+    const currentSession = useAgentStore
+      .getState()
+      .sessions.find((session) => session.id === useAgentStore.getState().sessionId);
+
+    expect(currentSession).toMatchObject({
+      title: "今天适不适合打药？",
+      preview: "今天适不适合打药？",
+      category: "天气",
+    });
+  });
+});
+
+describe("markPendingActionHandled", () => {
+  it("按 action_id 将待确认消息标记为已处理", () => {
+    useAgentStore.setState({
+      messages: [
+        {
+          role: "agent",
+          content: "确认记账吗？",
+          pending_action: {
+            action_id: "action-1",
+            skill_name: "create-cost-record",
+            params: {},
+          },
+        },
+      ],
+    });
+
+    useAgentStore.getState().markPendingActionHandled("action-1");
+
+    expect(useAgentStore.getState().messages[0]).toMatchObject({
+      pending_action_handled: true,
+    });
   });
 });

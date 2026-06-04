@@ -1,8 +1,10 @@
 """Admin Trace 查询 API — 链路查询、Gantt 时间线、清理。"""
 
+import json
 import logging
 from collections import defaultdict
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -24,8 +26,8 @@ class TimelineNode(BaseModel):
     token_usage: dict | None = None
     start_time: str | None = None
     error_message: str | None = None
-    input_data: str | None = None
-    output_data: str | None = None
+    input_data: Any = None
+    output_data: Any = None
 
 
 class TimelineRound(BaseModel):
@@ -97,15 +99,14 @@ def get_timeline(request_id: str, db: Session = Depends(get_db)) -> TimelineResp
 
     rounds_map: dict[int, list[TimelineNode]] = defaultdict(list)
     for r in records:
-        token_dict = r.token_usage
         rounds_map[r.round_index].append(
             TimelineNode(
                 node_type=r.node_type,
                 node_name=r.node_name,
                 duration_ms=r.duration_ms,
                 status=r.status,
-                token_usage=token_dict,
-                start_time=r.start_time,
+                token_usage=_coerce_token_usage(r.token_usage),
+                start_time=_format_datetime(r.start_time),
                 error_message=r.error_message,
                 input_data=r.input_data,
                 output_data=r.output_data,
@@ -117,6 +118,28 @@ def get_timeline(request_id: str, db: Session = Depends(get_db)) -> TimelineResp
         for idx, nodes in sorted(rounds_map.items())
     ]
     return TimelineResponse(request_id=request_id, rounds=rounds)
+
+
+def _format_datetime(value: Any) -> str | None:
+    """将数据库时间值统一转为 API 响应字符串。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _coerce_token_usage(value: Any) -> dict | None:
+    """兼容旧数据或测试中保存为 JSON 字符串的 token_usage。"""
+    if value is None or isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
 
 
 @router.get("/traces/{request_id}/nodes/{node_id}")

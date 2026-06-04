@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
 import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { formatCompactNumber } from "../../utils/numberFormat";
 import type { ReportOverviewMetrics } from "../../api/types";
 
 interface ReportOverviewRowProps {
@@ -26,7 +27,12 @@ const MetricCard: React.FC<MetricCardProps> = ({
 }) => (
   <View style={[styles.card, { backgroundColor: bgColor }]}>
     <Icon name={icon} size={18} color={color} style={styles.icon} />
-    <Text style={[styles.value, { color }]} numberOfLines={1}>
+    <Text
+      style={[styles.value, { color }]}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.4}
+    >
       {value}
     </Text>
     <Text style={styles.label}>{label}</Text>
@@ -62,14 +68,14 @@ export const ReportOverviewRow: React.FC<ReportOverviewRowProps> = ({
       <MetricCard
         icon="cash-minus"
         label="净支出"
-        value={metrics.total_cost}
+        value={formatCompactNumber(parseFloat(metrics.total_cost))}
         color={colors.expense}
         bgColor={colors.expenseBg}
       />
       <MetricCard
         icon="chart-line"
         label="净利润"
-        value={metrics.net_profit}
+        value={formatCompactNumber(parseFloat(metrics.net_profit))}
         color={profitColor}
         bgColor={profitBg}
       />

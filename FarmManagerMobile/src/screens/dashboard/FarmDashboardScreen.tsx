@@ -13,6 +13,7 @@ import { useCostStore } from "../../stores/costStore";
 import { useCycleStore } from "../../stores/cycleStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { formatCompactNumber } from "../../utils/numberFormat";
 import { colors } from "../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -90,8 +91,8 @@ export const FarmDashboardScreen: React.FC = () => {
   const weatherAccent = precip > 5 ? "#5B8DB8" : precip > 0 ? "#7A8B9A" : "#C9A03F";
 
   const statValues: Record<string, string> = {
-    income: stats.income > 0 ? `+${stats.income.toFixed(0)}` : "0",
-    cost: stats.cost > 0 ? `-${stats.cost.toFixed(0)}` : "0",
+    income: stats.income > 0 ? `+${formatCompactNumber(stats.income)}` : "0",
+    cost: stats.cost > 0 ? `-${formatCompactNumber(stats.cost)}` : "0",
     cycles: String(activeCycles.length),
     days: String(farmAge),
   };
@@ -144,7 +145,12 @@ export const FarmDashboardScreen: React.FC = () => {
                 <View style={[styles.statCardIcon, { backgroundColor: card.color + "15" }]}>
                   <Icon name={card.icon} size={16} color={card.color} />
                 </View>
-                <Text style={[styles.statCardValue, { color: card.color }]}>
+                <Text
+                  style={[styles.statCardValue, { color: card.color }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
                   {statValues[card.key]}
                 </Text>
               </View>
@@ -240,6 +246,9 @@ export const FarmDashboardScreen: React.FC = () => {
                             styles.activityAmount,
                             { color: isCost ? colors.danger : colors.success },
                           ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.6}
                         >
                           {isCost ? "-" : "+"}
                           {record.amount}

@@ -25,6 +25,7 @@ import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
+import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
 
 const CARD = '#161b22';
 const BORDER = '#30363d';
@@ -156,15 +157,6 @@ export default function TraceMonitor() {
     };
     setNodeDetail(detail);
     setDrawerOpen(true);
-  };
-
-  const formatJson = (raw: string | null): string => {
-    if (!raw) return '';
-    try {
-      return JSON.stringify(JSON.parse(raw), null, 2);
-    } catch {
-      return raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
-    }
   };
 
   function computeTimingReport(timeline: TraceTimeline): string {
@@ -503,7 +495,7 @@ export default function TraceMonitor() {
                 </pre>
               </div>
             )}
-            {nodeDetail.input_data && (
+            {hasTracePayload(nodeDetail.input_data) && (
               <div>
                 <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输入数据</div>
                 <pre style={{
@@ -517,11 +509,11 @@ export default function TraceMonitor() {
                   overflow: 'auto',
                   whiteSpace: 'pre-wrap',
                 }}>
-                  {formatJson(nodeDetail.input_data)}
+                  {formatTracePayload(nodeDetail.input_data)}
                 </pre>
               </div>
             )}
-            {nodeDetail.output_data && (
+            {hasTracePayload(nodeDetail.output_data) && (
               <div>
                 <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
                 {nodeDetail.node_type === 'skill_call' ? (
@@ -538,7 +530,7 @@ export default function TraceMonitor() {
                     overflow: 'auto',
                     whiteSpace: 'pre-wrap',
                   }}>
-                    {formatJson(nodeDetail.output_data)}
+                    {formatTracePayload(nodeDetail.output_data)}
                   </pre>
                 )}
               </div>

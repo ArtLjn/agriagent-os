@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>农场 App MVP 页面设计提案</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1600px;
+        height: 1100px;
+        background: #eef3f0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        color: #1f2933;
+      }
+      .board {
+        width: 100%;
+        height: 100%;
+        padding: 42px;
+      }
+      .title-row {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 28px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        letter-spacing: 0;
+      }
+      .subtitle {
+        margin-top: 8px;
+        color: #667085;
+        font-size: 17px;
+      }
+      .legend {
+        display: flex;
+        gap: 10px;
+        color: #475467;
+        font-size: 15px;
+      }
+      .legend span {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: white;
+        border: 1px solid #dce5df;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 300px repeat(4, 1fr);
+        gap: 22px;
+        align-items: start;
+      }
+      .model {
+        background: #ffffff;
+        border: 1px solid #dce5df;
+        border-radius: 28px;
+        padding: 22px;
+        min-height: 900px;
+      }
+      .model h2 {
+        margin: 0 0 14px;
+        font-size: 22px;
+      }
+      .node {
+        border-radius: 20px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #f7faf8;
+        border: 1px solid #e1e9e4;
+      }
+      .node strong {
+        display: block;
+        font-size: 17px;
+        margin-bottom: 6px;
+      }
+      .node p {
+        margin: 0;
+        color: #667085;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .arrow {
+        text-align: center;
+        color: #98a2b3;
+        font-size: 22px;
+        margin: -2px 0 8px;
+      }
+      .phone {
+        width: 285px;
+        height: 900px;
+        border-radius: 36px;
+        background: #f6f8fb;
+        border: 8px solid #182230;
+        overflow: hidden;
+        box-shadow: 0 22px 42px rgba(16, 24, 40, 0.18);
+      }
+      .screen {
+        height: 100%;
+        padding: 22px 18px;
+        overflow: hidden;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+      .back {
+        font-size: 24px;
+        font-weight: 800;
+      }
+      .screen-title {
+        font-size: 22px;
+        font-weight: 850;
+      }
+      .muted {
+        color: #667085;
+      }
+      .card {
+        background: #ffffff;
+        border: 1px solid #e6ece8;
+        border-radius: 24px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+      .hero {
+        background: #173f2f;
+        color: white;
+        border-radius: 28px;
+        padding: 18px;
+        margin-bottom: 14px;
+      }
+      .hero small {
+        color: #bdebd2;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .hero h3 {
+        margin: 8px 0 10px;
+        font-size: 26px;
+      }
+      .metric-row {
+        display: flex;
+        gap: 8px;
+      }
+      .metric {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 10px;
+      }
+      .metric b {
+        display: block;
+        font-size: 18px;
+      }
+      .metric span {
+        color: #d1fadf;
+        font-size: 12px;
+      }
+      .primary-btn {
+        height: 54px;
+        border-radius: 18px;
+        background: #12b76a;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 850;
+        margin-bottom: 12px;
+      }
+      .secondary-row {
+        display: flex;
+        gap: 10px;
+      }
+      .mini-btn {
+        flex: 1;
+        height: 44px;
+        border-radius: 16px;
+        background: #ecfdf3;
+        color: #087443;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 16px 2px 10px;
+      }
+      .section-head b {
+        font-size: 18px;
+      }
+      .section-head span {
+        color: #12b76a;
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .crop-list {
+        display: grid;
+        gap: 10px;
+      }
+      .crop-item {
+        display: grid;
+        grid-template-columns: 40px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        background: white;
+        border: 1px solid #e6ece8;
+        border-radius: 18px;
+        padding: 12px;
+      }
+      .emoji {
+        width: 40px;
+        height: 40px;
+        border-radius: 14px;
+        background: #f0f7ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 23px;
+      }
+      .crop-name {
+        font-size: 15px;
+        font-weight: 850;
+      }
+      .crop-meta {
+        color: #667085;
+        font-size: 12px;
+        margin-top: 3px;
+      }
+      .pill {
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #ecfdf3;
+        color: #087443;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .field {
+        background: #f8faf9;
+        border: 1px solid #dfe7e2;
+        border-radius: 18px;
+        padding: 14px;
+        color: #98a2b3;
+        font-size: 15px;
+        margin-bottom: 10px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .chip {
+        padding: 9px 12px;
+        border-radius: 999px;
+        background: #eef7f2;
+        color: #087443;
+        font-weight: 800;
+        font-size: 13px;
+      }
+      .chip.dark {
+        background: #173f2f;
+        color: white;
+      }
+      .unit-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .unit {
+        background: #ffffff;
+        border: 1px solid #e6ece8;
+        border-radius: 18px;
+        padding: 13px;
+        min-height: 82px;
+      }
+      .unit b {
+        display: block;
+        font-size: 15px;
+        margin-bottom: 7px;
+      }
+      .unit span {
+        color: #667085;
+        font-size: 12px;
+      }
+      .worker {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #eef2ef;
+      }
+      .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
+        background: #ecfdf3;
+        color: #087443;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        margin-right: 10px;
+      }
+      .worker-left {
+        display: flex;
+        align-items: center;
+      }
+      .money {
+        font-weight: 850;
+        color: #b42318;
+      }
+      .profit-hero {
+        background: white;
+        border-radius: 28px;
+        padding: 18px;
+        text-align: center;
+        margin-bottom: 14px;
+        border: 1px solid #e6ece8;
+      }
+      .profit-hero b {
+        display: block;
+        font-size: 40px;
+        color: #12b76a;
+        margin: 6px 0;
+      }
+      .bar {
+        height: 12px;
+        border-radius: 999px;
+        background: #f2f4f7;
+        overflow: hidden;
+        margin-top: 10px;
+      }
+      .bar div {
+        height: 100%;
+        background: #12b76a;
+        width: 65%;
+      }
+      .source {
+        display: flex;
+        justify-content: space-between;
+        padding: 11px 0;
+        border-bottom: 1px solid #eef2ef;
+        font-size: 14px;
+      }
+      .note {
+        margin-top: 18px;
+        padding: 16px;
+        border-radius: 20px;
+        background: #fffaeb;
+        border: 1px solid #fedf89;
+        color: #7a4b00;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <div class="title-row">
+        <div>
+          <h1>农场 App MVP 功能拆分与页面设计</h1>
+          <div class="subtitle">
+            核心原则：茬口是季节经营单元，作物是安排，棚/地块是管理范围，利润来自账单与作业单。
+          </div>
+        </div>
+        <div class="legend">
+          <span>功能丰富</span>
+          <span>默认简单</span>
+          <span>可逐步展开</span>
+        </div>
+      </div>
+
+      <section class="grid">
+        <aside class="model">
+          <h2>业务层级</h2>
+          <div class="node">
+            <strong>茬口 / 种植季</strong>
+            <p>如 2026 春茬。承载一个季节的经营、面积、周期与利润。</p>
+          </div>
+          <div class="arrow">↓</div>
+          <div class="node">
+            <strong>作物安排</strong>
+            <p>同一茬口可有西瓜、毛豆等多个作物，每个作物有阶段与作业模板。</p>
+          </div>
+          <div class="arrow">↓</div>
+          <div class="node">
+            <strong>种植单元</strong>
+            <p>东棚、西棚、露天 1 区。可批量创建并分配给作物。</p>
+          </div>
+          <div class="arrow">↓</div>
+          <div class="node">
+            <strong>农事 / 用工 / 账单</strong>
+            <p>作业单产生农事记录；人工可自动生成成本；销售产生收入。</p>
+          </div>
+          <div class="note">
+            工人建议做“轻档案”：首次录入姓名自动创建，后续在工人页维护欠款、常用工价和联系方式。
+          </div>
+        </aside>
+
+        <div class="phone">
+          <div class="screen">
+            <div class="top">
+              <div class="screen-title">春茬 2026</div>
+              <div class="pill">进行中</div>
+            </div>
+            <div class="hero">
+              <small>总览</small>
+              <h3>春季茬口</h3>
+              <div class="metric-row">
+                <div class="metric"><b>28 亩</b><span>总面积</span></div>
+                <div class="metric"><b>6 个</b><span>棚/地块</span></div>
+                <div class="metric"><b>2 种</b><span>作物</span></div>
+              </div>
+            </div>
+            <div class="primary-btn">记一条农事</div>
+            <div class="secondary-row">
+              <div class="mini-btn">加作物</div>
+              <div class="mini-btn">管棚</div>
+              <div class="mini-btn">看利润</div>
+            </div>
+            <div class="section-head">
+              <b>作物安排</b><span>管理</span>
+            </div>
+            <div class="crop-list">
+              <div class="crop-item">
+                <div class="emoji">🍉</div>
+                <div>
+                  <div class="crop-name">8424 西瓜</div>
+                  <div class="crop-meta">东棚 1-4 · 18 亩 · 伸蔓期</div>
+                </div>
+                <div class="pill">当前</div>
+              </div>
+              <div class="crop-item">
+                <div class="emoji">🌱</div>
+                <div>
+                  <div class="crop-name">毛豆</div>
+                  <div class="crop-meta">露天区 · 10 亩 · 苗期</div>
+                </div>
+                <div class="pill">正常</div>
+              </div>
+            </div>
+            <div class="section-head">
+              <b>今日关注</b><span>展开</span>
+            </div>
+            <div class="card">
+              <div class="crop-name">西瓜进入伸蔓期</div>
+              <div class="crop-meta">建议记录：压蔓、整枝、追肥、人工授粉</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="screen">
+            <div class="top">
+              <div class="back">‹</div>
+              <div class="screen-title">新建茬口</div>
+              <div></div>
+            </div>
+            <div class="card">
+              <div class="crop-name">一句话创建</div>
+              <div class="field">春茬，28亩，种西瓜和毛豆</div>
+              <div class="primary-btn">智能填写</div>
+            </div>
+            <div class="section-head"><b>基础信息</b></div>
+            <div class="field">茬口名称：2026 春茬</div>
+            <div class="field">开始日期：2026-05-01</div>
+            <div class="field">总面积：28 亩</div>
+            <div class="section-head"><b>包含作物</b><span>添加</span></div>
+            <div class="card">
+              <div class="crop-name">🍉 8424 西瓜</div>
+              <div class="crop-meta">18 亩 · 东棚 1-4 · 使用西瓜模板</div>
+            </div>
+            <div class="card">
+              <div class="crop-name">🌱 毛豆</div>
+              <div class="crop-meta">10 亩 · 露天区 · 使用通用模板</div>
+            </div>
+            <div class="primary-btn">创建茬口</div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="screen">
+            <div class="top">
+              <div class="back">‹</div>
+              <div class="screen-title">棚 / 地块</div>
+              <div></div>
+            </div>
+            <div class="card">
+              <div class="crop-name">快捷创建</div>
+              <div class="chips">
+                <div class="chip dark">东棚 1-4</div>
+                <div class="chip">每棚 4.5 亩</div>
+                <div class="chip">露天 10 亩</div>
+              </div>
+              <div class="field">命名：东棚</div>
+              <div class="field">数量：4 个</div>
+              <div class="field">每个面积：4.5 亩</div>
+              <div class="primary-btn">一键生成</div>
+            </div>
+            <div class="section-head"><b>已有单元</b><span>批量分配</span></div>
+            <div class="unit-grid">
+              <div class="unit"><b>东棚 1</b><span>4.5 亩 · 西瓜</span></div>
+              <div class="unit"><b>东棚 2</b><span>4.5 亩 · 西瓜</span></div>
+              <div class="unit"><b>东棚 3</b><span>4.5 亩 · 西瓜</span></div>
+              <div class="unit"><b>东棚 4</b><span>4.5 亩 · 西瓜</span></div>
+              <div class="unit"><b>露天区</b><span>10 亩 · 毛豆</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone">
+          <div class="screen">
+            <div class="top">
+              <div class="back">‹</div>
+              <div class="screen-title">利润与工人</div>
+              <div></div>
+            </div>
+            <div class="profit-hero">
+              <span class="muted">春茬净利润</span>
+              <b>+12,860</b>
+              <span class="muted">收入 38,600 - 支出 25,740</span>
+              <div class="bar"><div></div></div>
+            </div>
+            <div class="section-head"><b>利润来源</b><span>明细</span></div>
+            <div class="card">
+              <div class="source"><span>销售收入</span><b>+38,600</b></div>
+              <div class="source"><span>人工成本</span><b class="money">-8,400</b></div>
+              <div class="source"><span>农资成本</span><b class="money">-12,300</b></div>
+              <div class="source"><span>其他支出</span><b class="money">-5,040</b></div>
+            </div>
+            <div class="section-head"><b>未结人工</b><span>工人管理</span></div>
+            <div class="card">
+              <div class="worker">
+                <div class="worker-left"><span class="avatar">王</span><span>老王</span></div>
+                <span class="money">欠 400</span>
+              </div>
+              <div class="worker">
+                <div class="worker-left"><span class="avatar">李</span><span>老李</span></div>
+                <span class="money">欠 200</span>
+              </div>
+              <div class="worker">
+                <div class="worker-left"><span class="avatar">赵</span><span>小赵</span></div>
+                <span>已结清</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
