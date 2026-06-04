@@ -1,5 +1,7 @@
 """Tests for app.core.trace_collector。"""
 
+from datetime import date
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -51,9 +53,9 @@ class TestTraceCollector:
         assert call_kwargs["node_type"] == "llm_call"
         assert call_kwargs["duration_ms"] == 1500
 
-    def test_record_accumulates_token_stats(self) -> None:
-        """record 同时调用 token 统计累加。"""
-        init_trace(farm_id=1)
+    def test_record_accumulates_provider_token_stats_with_user(self) -> None:
+        """provider 真实 token usage 才累计到用户维度统计。"""
+        init_trace(farm_id=1, user_id="u1", call_type="chat")
         from app.infra.trace_collector import TraceCollector
 
         collector = TraceCollector.__new__(TraceCollector)
@@ -69,6 +71,38 @@ class TestTraceCollector:
                 "prompt_tokens": 100,
                 "completion_tokens": 50,
                 "total_tokens": 150,
+                "usage_source": "provider",
             },
         )
-        collector._dao.accumulate_token_stats.assert_called_once()
+        collector._dao.accumulate_token_stats.assert_called_once_with(
+            farm_id=1,
+            user_id="u1",
+            date_str=date.today().isoformat(),
+            model="llm",
+            call_type="chat",
+            prompt_tokens=100,
+            completion_tokens=50,
+        )
+
+    def test_record_skips_missing_token_usage_source(self) -> None:
+        """缺真实 usage 来源时不累计 token 统计。"""
+        init_trace(farm_id=1, user_id="u1", call_type="chat")
+        from app.infra.trace_collector import TraceCollector
+
+        collector = TraceCollector.__new__(TraceCollector)
+        collector._dao = MagicMock()
+        collector._dao.record = MagicMock()
+        collector._dao.accumulate_token_stats = MagicMock()
+        collector.record(
+            node_type="llm_call",
+            node_name="llm",
+            input_data="test",
+            output_data="ok",
+            token_usage={
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_tokens": 150,
+                "usage_source": "missing",
+            },
+        )
+        collector._dao.accumulate_token_stats.assert_not_called()
