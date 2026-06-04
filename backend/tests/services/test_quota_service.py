@@ -90,7 +90,14 @@ def test_check_user_quota_rejects_missing_user_id() -> None:
 
 def test_check_user_quota_allows_under_limits() -> None:
     db = MagicMock()
-    user = User(id="u1", phone="1", password_hash="h", nickname="n")
+    user = User(
+        id="u1",
+        phone="1",
+        password_hash="h",
+        nickname="n",
+        token_monthly_limit=500,
+        token_weekly_limit=100,
+    )
     db.query.return_value.filter.return_value.first.return_value = user
     with patch("app.services.quota_service.get_period_usage", side_effect=[10, 20]):
         result = check_user_quota("u1", db, today=date(2026, 6, 4))
@@ -98,7 +105,9 @@ def test_check_user_quota_allows_under_limits() -> None:
     assert result.allowed is True
     assert result.exceeded_period is None
     assert result.monthly_usage == 10
+    assert result.monthly_remaining == 490
     assert result.weekly_usage == 20
+    assert result.weekly_remaining == 80
 
 
 def test_check_user_quota_rejects_weekly_over_limit() -> None:
@@ -117,6 +126,8 @@ def test_check_user_quota_rejects_weekly_over_limit() -> None:
 
     assert result.allowed is False
     assert result.exceeded_period == "week"
+    assert result.monthly_remaining == 950
+    assert result.weekly_remaining == 0
     assert result.reset_at == "2026-06-08"
 
 
@@ -136,7 +147,29 @@ def test_check_user_quota_rejects_monthly_over_limit_with_next_month_reset() -> 
 
     assert result.allowed is False
     assert result.exceeded_period == "month"
+    assert result.monthly_remaining == 0
+    assert result.weekly_remaining == 50
     assert result.reset_at == "2026-07-01"
+
+
+def test_check_user_quota_reports_zero_remaining_for_zero_limits() -> None:
+    db = MagicMock()
+    user = User(
+        id="u1",
+        phone="1",
+        password_hash="h",
+        nickname="n",
+        token_monthly_limit=0,
+        token_weekly_limit=0,
+    )
+    db.query.return_value.filter.return_value.first.return_value = user
+    with patch("app.services.quota_service.get_period_usage", side_effect=[0, 0]):
+        result = check_user_quota("u1", db, today=date(2026, 6, 4))
+
+    assert result.allowed is False
+    assert result.exceeded_period == "month"
+    assert result.monthly_remaining == 0
+    assert result.weekly_remaining == 0
 
 
 @patch("app.services.quota_service.SessionLocal")

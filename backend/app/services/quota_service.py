@@ -28,8 +28,10 @@ class QuotaCheckResult:
     exceeded_period: str | None = None
     monthly_usage: int = 0
     monthly_limit: int = 0
+    monthly_remaining: int = 0
     weekly_usage: int = 0
     weekly_limit: int = 0
+    weekly_remaining: int = 0
     reset_at: str | None = None
 
 
@@ -107,8 +109,10 @@ def check_user_quota(
         allowed=True,
         monthly_usage=monthly_usage,
         monthly_limit=limits.monthly_limit,
+        monthly_remaining=max(0, limits.monthly_limit - monthly_usage),
         weekly_usage=weekly_usage,
         weekly_limit=limits.weekly_limit,
+        weekly_remaining=max(0, limits.weekly_limit - weekly_usage),
     )
     if monthly_usage >= limits.monthly_limit:
         result.allowed = False
