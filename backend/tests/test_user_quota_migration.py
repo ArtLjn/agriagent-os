@@ -35,3 +35,17 @@ def test_labor_cost_source_idempotency_has_alembic_migration():
     assert '["farm_id", "client_request_id"]' in source
     assert "UPDATE labor_entries" in source
     assert "GROUP BY farm_id, client_request_id" in source
+
+
+def test_labor_entries_dedupe_update_avoids_mysql_direct_self_reference():
+    """MySQL 禁止 UPDATE 目标表时在同层子查询直接读取同一张表。"""
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "e7b2c4d6f8a2_add_labor_entry_client_request_id.py"
+    )
+    source = migration_path.read_text()
+
+    assert "SELECT MIN(id)" in source
+    assert "FROM (\n                              SELECT MIN(id)" in source

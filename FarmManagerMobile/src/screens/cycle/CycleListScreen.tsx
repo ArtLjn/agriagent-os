@@ -95,16 +95,41 @@ function estimateProgress(stageName: string | null): number {
   return 0.3;
 }
 
-// ─── 种植天数 ───
-function getDaysSince(startDate: string): number {
-  const start = new Date(startDate);
+type CycleTiming = {
+  days: number;
+  daysUntil: number;
+  isFuture: boolean;
+};
+
+// ─── 种植时间状态 ───
+function getCycleTiming(startDate: string): CycleTiming {
+  const start = new Date(`${startDate}T00:00:00`).getTime();
+  if (Number.isNaN(start)) {
+    return { days: 0, daysUntil: 0, isFuture: false };
+  }
+
   const now = new Date();
-  const diff = now.getTime() - start.getTime();
-  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+  const dayMs = 1000 * 60 * 60 * 24;
+  const diffDays = Math.floor((today - start) / dayMs);
+  return {
+    days: Math.max(0, diffDays),
+    daysUntil: Math.max(0, Math.ceil((start - today) / dayMs)),
+    isFuture: diffDays < 0,
+  };
 }
 
-function formatBatchMeta(item: any, days: number): string {
-  const parts = [item.crop_template_name, `已种植 ${days} 天`];
+function formatBatchMeta(item: any, timing: CycleTiming): string {
+  const parts = [
+    item.crop_template_name,
+    timing.isFuture
+      ? `还有 ${timing.daysUntil} 天开始`
+      : `已种植 ${timing.days} 天`,
+  ];
   const area = item.total_area_mu || item.unit_area_mu;
   if (area) {
     parts.push(`${Number(area).toFixed(2).replace(/\.00$/, "")} 亩`);
@@ -201,31 +226,52 @@ export const CycleListScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.header}>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{cycles.length}</Text>
-                <Text style={styles.statLabel}>总批次</Text>
+            <View style={styles.overviewCard}>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{cycles.length}</Text>
+                  <Text style={styles.statLabel}>总批次</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNumber, styles.statActive]}>
+                    {activeCount}
+                  </Text>
+                  <Text style={styles.statLabel}>进行中</Text>
+                </View>
               </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, styles.statActive]}>
-                  {activeCount}
-                </Text>
-                <Text style={styles.statLabel}>进行中</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.headerAction}
+                onPress={() => navigation.navigate("CycleCreate" as never)}
+              >
+                <Icon name="plus" size={18} color={colors.success} />
+                <Text style={styles.headerActionText}>新建批次</Text>
+              </TouchableOpacity>
             </View>
           </View>
         }
-        renderItem={({ item, index }) => {
-          const status = STATUS_CONFIG[item.status] || {
+        renderItem={({ item }) => {
+          const baseStatus = STATUS_CONFIG[item.status] || {
             label: item.status,
             color: colors.textSecondary,
             bgColor: colors.surfaceMuted,
           };
 
           const emoji = getCropEmoji(item.crop_template_name || item.name);
-          const days = getDaysSince(item.start_date);
-          const progress = estimateProgress(item.current_stage_name);
+          const timing = getCycleTiming(item.start_date);
+          const status = timing.isFuture
+            ? {
+                label: "计划中",
+                color: colors.info,
+                bgColor: colors.infoLight,
+              }
+            : baseStatus;
+          const stageName = timing.isFuture
+            ? "未开始"
+            : item.current_stage_name;
+          const progress = timing.isFuture
+            ? 0
+            : estimateProgress(item.current_stage_name);
 
           return (
             <View style={styles.selectableRow}>
@@ -283,27 +329,12 @@ export const CycleListScreen: React.FC = () => {
 
                     {/* 作物 + 天数 */}
                     <Text style={styles.metaText} numberOfLines={1}>
-                      {formatBatchMeta(item, days)}
+                      {formatBatchMeta(item, timing)}
                     </Text>
 
-                    {/* 进度条 */}
-                    <View style={styles.progressRow}>
-                      <View style={styles.progressTrack}>
-                        <View
-                          style={[
-                            styles.progressFill,
-                            {
-                              width: `${Math.round(progress * 100)}%`,
-                              backgroundColor: status.color,
-                            },
-                          ]}
-                        />
-                      </View>
-                    </View>
-
                     {/* 阶段标签 */}
-                    {item.current_stage_name && (
-                      <View style={styles.stageRow}>
+                    <View style={styles.cardFooter}>
+                      {stageName ? (
                         <View
                           style={[
                             styles.stagePill,
@@ -319,18 +350,26 @@ export const CycleListScreen: React.FC = () => {
                           <Text
                             style={[styles.stageText, { color: status.color }]}
                           >
-                            {item.current_stage_name}
+                            {stageName}
                           </Text>
                         </View>
+                      ) : (
+                        <Text style={styles.stageMuted}>未设置阶段</Text>
+                      )}
+                      <View style={styles.progressMini}>
+                        <View
+                          style={[
+                            styles.progressMiniFill,
+                            {
+                              width: `${Math.round(progress * 100)}%`,
+                              backgroundColor: status.color,
+                            },
+                          ]}
+                        />
                       </View>
-                    )}
+                    </View>
                   </View>
                 </View>
-
-                {/* 装饰序号 */}
-                <Text style={styles.indexBadge}>
-                  #{String(index + 1).padStart(2, "0")}
-                </Text>
               </TouchableOpacity>
             </View>
           );
@@ -367,12 +406,12 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   header: {
-    marginBottom: spacingV2.xxl,
+    marginBottom: spacingV2.lg,
   },
   selectableRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacingV2.lg,
+    marginBottom: spacingV2.md,
   },
   selectionSlot: {
     width: 36,
@@ -380,18 +419,29 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    gap: spacingV2.xl,
+    alignItems: "center",
+    gap: spacingV2.lg,
+  },
+  overviewCard: {
+    minHeight: 92,
+    padding: spacingV2.lg,
+    borderRadius: borderRadiusV2.xxl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacingV2.md,
   },
   statItem: {
     alignItems: "flex-start",
   },
   statNumber: {
-    fontSize: fontSizeV2.xxxl,
-    fontWeight: "800",
+    fontSize: fontSizeV2.xxl,
+    fontWeight: "900",
     color: colors.text,
-    letterSpacing: -1,
-    lineHeight: 44,
+    lineHeight: 34,
   },
   statActive: {
     color: colors.success,
@@ -400,22 +450,33 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     marginTop: 2,
+    fontWeight: "700",
   },
   statDivider: {
     width: 1,
-    height: 36,
-    backgroundColor: colors.border,
-    marginBottom: 4,
+    height: 38,
+    backgroundColor: colors.borderLight,
+  },
+  headerAction: {
+    minHeight: 40,
+    paddingHorizontal: spacingV2.md,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.successMuted,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.xs,
+  },
+  headerActionText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.success,
+    fontWeight: "800",
   },
   card: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: borderRadiusV2.xxxl,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    borderRadius: borderRadiusV2.xxl,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
     overflow: "hidden",
   },
   cardSelected: {
@@ -425,24 +486,25 @@ const styles = StyleSheet.create({
   },
   cardInner: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     padding: spacingV2.lg,
     gap: spacingV2.md,
   },
   iconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: borderRadiusV2.lg,
-    backgroundColor: colors.primaryMuted,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.successMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   iconEmoji: {
-    fontSize: 26,
+    fontSize: 24,
   },
   cardContent: {
     flex: 1,
-    gap: 4,
+    gap: spacingV2.xs,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: "row",
@@ -452,7 +514,7 @@ const styles = StyleSheet.create({
   },
   cardName: {
     fontSize: fontSizeV2.lg,
-    fontWeight: "700",
+    fontWeight: "900",
     color: colors.text,
     flex: 1,
   },
@@ -469,23 +531,11 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
   },
-  progressRow: {
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  progressTrack: {
-    height: 4,
-    backgroundColor: colors.borderLight,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  stageRow: {
+  cardFooter: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacingV2.md,
     marginTop: 2,
   },
   stagePill: {
@@ -505,14 +555,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-  indexBadge: {
-    position: "absolute",
-    right: spacingV2.lg,
-    bottom: spacingV2.lg,
-    fontSize: 11,
-    fontWeight: "700",
+  stageMuted: {
+    fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
-    opacity: 0.4,
+    fontWeight: "700",
+  },
+  progressMini: {
+    width: 72,
+    height: 5,
+    borderRadius: borderRadiusV2.full,
+    overflow: "hidden",
+    backgroundColor: colors.borderLight,
+  },
+  progressMiniFill: {
+    height: "100%",
+    borderRadius: borderRadiusV2.full,
   },
   fab: {
     position: "absolute",
@@ -521,10 +578,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.success,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: colors.primary,
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,

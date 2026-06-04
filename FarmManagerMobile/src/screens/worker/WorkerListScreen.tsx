@@ -73,7 +73,9 @@ function buildFallbackSummary(
   return {
     items,
     total: items.length,
-    total_payable: String(items.reduce((sum, item) => sum + toNumber(item.total_payable), 0)),
+    total_payable: String(
+      items.reduce((sum, item) => sum + toNumber(item.total_payable), 0)
+    ),
     total_paid: "0",
     total_unpaid: String(toNumber(unsettled?.total_unpaid)),
   };
@@ -99,10 +101,18 @@ export const WorkerListScreen: React.FC = () => {
           plantingApi.getUnsettledLaborSummary().catch(() => ({ data: null })),
         ]);
         setSummary(buildFallbackSummary(workersRes.data, unsettledRes.data));
-        setFallbackNote("后端工人汇总接口未就绪，当前使用工人档案和未结摘要展示。");
+        setFallbackNote(
+          "后端工人汇总接口未就绪，当前使用工人档案和未结摘要展示。"
+        );
       } catch (err: any) {
         setFallbackNote(err.message || "工人数据加载失败");
-        setSummary({ items: [], total: 0, total_payable: "0", total_paid: "0", total_unpaid: "0" });
+        setSummary({
+          items: [],
+          total: 0,
+          total_payable: "0",
+          total_paid: "0",
+          total_unpaid: "0",
+        });
       }
     } finally {
       setLoading(false);
@@ -115,7 +125,7 @@ export const WorkerListScreen: React.FC = () => {
     }, [loadData])
   );
 
-  const workers = summary?.items || [];
+  const workers = useMemo(() => summary?.items || [], [summary?.items]);
   const filteredWorkers = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) {
@@ -160,7 +170,11 @@ export const WorkerListScreen: React.FC = () => {
       }))
     );
     return cycles
-      .sort((a, b) => String(b.recent_work_date || "").localeCompare(String(a.recent_work_date || "")))
+      .sort((a, b) =>
+        String(b.recent_work_date || "").localeCompare(
+          String(a.recent_work_date || "")
+        )
+      )
       .slice(0, 4);
   }, [workers]);
 
@@ -172,6 +186,14 @@ export const WorkerListScreen: React.FC = () => {
         title: "人工工资账单",
       },
     });
+  };
+
+  const openCreateWorker = () => {
+    navigation.navigate("WorkerCreate");
+  };
+
+  const openCreateWage = () => {
+    navigation.navigate("WageCreate", {});
   };
 
   return (
@@ -190,11 +212,11 @@ export const WorkerListScreen: React.FC = () => {
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <View>
-            <Text style={styles.heroLabel}>全场人工</Text>
+            <Text style={styles.heroLabel}>全场人工未结</Text>
             <Text style={styles.heroValue}>未结 {overview.unpaid} 元</Text>
           </View>
           <TouchableOpacity style={styles.heroIcon} onPress={openLedger}>
-            <Icon name="receipt-text-outline" size={22} color={colors.textInverse} />
+            <Icon name="receipt" size={22} color={colors.success} />
           </TouchableOpacity>
         </View>
         <View style={styles.metricRow}>
@@ -203,8 +225,8 @@ export const WorkerListScreen: React.FC = () => {
             <Text style={styles.metricLabel}>工人</Text>
           </View>
           <View style={styles.metricItem}>
-            <Text style={styles.metricValue}>{overview.cycles}</Text>
-            <Text style={styles.metricLabel}>相关茬口</Text>
+            <Text style={styles.metricValue}>{overview.paid}</Text>
+            <Text style={styles.metricLabel}>已付</Text>
           </View>
           <View style={styles.metricItem}>
             <Text style={styles.metricValue}>{overview.payable}</Text>
@@ -213,11 +235,38 @@ export const WorkerListScreen: React.FC = () => {
         </View>
       </View>
 
-      <View style={styles.actionRow}>
+      <View style={styles.primaryActions}>
+        <TouchableOpacity
+          style={styles.primaryActionCard}
+          onPress={openCreateWorker}
+        >
+          <View style={[styles.primaryActionIcon, styles.workerActionIcon]}>
+            <Icon
+              name="account-plus-outline"
+              size={22}
+              color={colors.success}
+            />
+          </View>
+          <Text style={styles.primaryActionTitle}>新增工人</Text>
+          <Text style={styles.primaryActionText}>先建常用工人档案</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.primaryActionCard}
+          onPress={openCreateWage}
+        >
+          <View style={[styles.primaryActionIcon, styles.wageActionIcon]}>
+            <Icon name="cash-plus" size={22} color={colors.primary} />
+          </View>
+          <Text style={styles.primaryActionTitle}>记工资</Text>
+          <Text style={styles.primaryActionText}>选择茬口后自动入账</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.linkRow}>
         <BigButton
           title="记一笔工资"
           icon="cash-plus"
-          onPress={() => navigation.navigate("WageCreate", {})}
+          onPress={openCreateWage}
           style={styles.actionButton}
         />
         <TouchableOpacity style={styles.outlineButton} onPress={openLedger}>
@@ -252,10 +301,10 @@ export const WorkerListScreen: React.FC = () => {
       {filteredWorkers.length === 0 ? (
         <EmptyState
           title="暂无工人"
-          subtitle="保存工资时会自动创建轻档案"
-          actionLabel="去记工资"
-          onAction={() => navigation.navigate("WageCreate", {})}
-          icon="account-hard-hat-outline"
+          subtitle="可以先新增工人，也可以在记工资时临时输入姓名自动建档"
+          actionLabel="新增工人"
+          onAction={openCreateWorker}
+          icon="account-hard-hat"
         />
       ) : (
         <View style={styles.list}>
@@ -273,22 +322,36 @@ export const WorkerListScreen: React.FC = () => {
                 activeOpacity={0.75}
                 onPress={() =>
                   navigation.navigate("WageCreate", {
+                    workerId: worker.id,
                     workerName: worker.name,
+                    unitPrice: worker.default_unit_price || undefined,
                   })
                 }
               >
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{getInitial(worker.name)}</Text>
+                  <Text style={styles.avatarText}>
+                    {getInitial(worker.name)}
+                  </Text>
                 </View>
                 <View style={styles.workerInfo}>
                   <Text style={styles.workerName}>{worker.name}</Text>
                   <Text style={styles.workerMeta} numberOfLines={1}>
+                    {worker.phone ? `${worker.phone} · ` : ""}
                     {recent || "暂未关联茬口"}
-                    {worker.default_unit_price ? ` · 常用 ${worker.default_unit_price}/天` : ""}
+                  </Text>
+                  <Text style={styles.workerSubMeta} numberOfLines={1}>
+                    {worker.default_unit_price
+                      ? `默认 ${worker.default_unit_price} 元/天`
+                      : "未设置默认工价"}
                   </Text>
                 </View>
                 <View style={styles.workerMoney}>
-                  <Text style={[styles.unpaidText, unpaid > 0 ? styles.moneyDanger : styles.moneyOk]}>
+                  <Text
+                    style={[
+                      styles.unpaidText,
+                      unpaid > 0 ? styles.moneyDanger : styles.moneyOk,
+                    ]}
+                  >
                     {unpaid > 0 ? `欠 ${formatMoney(unpaid)}` : "结清"}
                   </Text>
                   <Text style={styles.entryText}>{worker.entry_count} 笔</Text>
@@ -310,7 +373,9 @@ export const WorkerListScreen: React.FC = () => {
         <View style={styles.list}>
           {recentCycles.map((cycle) => (
             <TouchableOpacity
-              key={`${cycle.workerName}-${cycle.cycle_id}-${cycle.recent_work_date || ""}`}
+              key={`${cycle.workerName}-${cycle.cycle_id}-${
+                cycle.recent_work_date || ""
+              }`}
               style={styles.cycleRow}
               onPress={() =>
                 navigation.navigate("CostList", {
@@ -327,15 +392,22 @@ export const WorkerListScreen: React.FC = () => {
               <View style={styles.cycleInfo}>
                 <Text style={styles.cycleName}>{cycle.cycle_name}</Text>
                 <Text style={styles.workerMeta}>
-                  {cycle.workerName} · {cycle.recent_operation_type || "用工"} · 欠 {formatMoney(cycle.total_unpaid)}
+                  {cycle.workerName} · {cycle.recent_operation_type || "用工"} ·
+                  欠 {formatMoney(cycle.total_unpaid)}
                 </Text>
               </View>
-              <Icon name="chevron-right" size={20} color={colors.textTertiary} />
+              <Icon
+                name="chevron-right"
+                size={20}
+                color={colors.textTertiary}
+              />
             </TouchableOpacity>
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyText}>记工资后会在这里看到跨茬口参与记录。</Text>
+        <Text style={styles.emptyText}>
+          记工资后会在这里看到跨茬口参与记录。
+        </Text>
       )}
     </ScrollView>
   );
@@ -345,10 +417,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacingV2.lg, paddingBottom: spacingV2.xxxxl },
   hero: {
-    backgroundColor: colors.headerBg,
-    borderRadius: borderRadiusV2.xxxl,
-    padding: spacingV2.xl,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
+    padding: spacingV2.lg,
     marginBottom: spacingV2.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   heroTop: {
     flexDirection: "row",
@@ -358,14 +432,14 @@ const styles = StyleSheet.create({
   },
   heroLabel: {
     fontSize: fontSizeV2.sm,
-    color: "rgba(255,255,255,0.72)",
+    color: colors.textSecondary,
     fontWeight: "700",
   },
   heroValue: {
     marginTop: spacingV2.xs,
     fontSize: fontSizeV2.xxxl,
-    color: colors.textInverse,
-    fontWeight: "800",
+    color: colors.success,
+    fontWeight: "900",
   },
   heroIcon: {
     width: 44,
@@ -373,27 +447,74 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: colors.successMuted,
   },
   metricRow: { flexDirection: "row", gap: spacingV2.sm },
   metricItem: {
     flex: 1,
     padding: spacingV2.md,
     borderRadius: borderRadiusV2.lg,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   metricValue: {
     fontSize: fontSizeV2.lg,
-    color: colors.textInverse,
-    fontWeight: "800",
+    color: colors.text,
+    fontWeight: "900",
   },
   metricLabel: {
     marginTop: 2,
     fontSize: fontSizeV2.xs,
-    color: "rgba(255,255,255,0.66)",
-    fontWeight: "600",
+    color: colors.textSecondary,
+    fontWeight: "700",
   },
-  actionRow: { flexDirection: "row", gap: spacingV2.md, marginBottom: spacingV2.md },
+  actionRow: {
+    flexDirection: "row",
+    gap: spacingV2.md,
+    marginBottom: spacingV2.md,
+  },
+  primaryActions: {
+    flexDirection: "row",
+    gap: spacingV2.md,
+    marginBottom: spacingV2.md,
+  },
+  primaryActionCard: {
+    flex: 1,
+    minHeight: 116,
+    padding: spacingV2.lg,
+    borderRadius: borderRadiusV2.xxl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    justifyContent: "space-between",
+  },
+  primaryActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacingV2.md,
+  },
+  workerActionIcon: { backgroundColor: colors.successMuted },
+  wageActionIcon: { backgroundColor: colors.primaryMuted },
+  primaryActionTitle: {
+    fontSize: fontSizeV2.lg,
+    color: colors.text,
+    fontWeight: "900",
+  },
+  primaryActionText: {
+    marginTop: spacingV2.xs,
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  linkRow: {
+    flexDirection: "row",
+    gap: spacingV2.md,
+    marginBottom: spacingV2.md,
+  },
   actionButton: { flex: 1, minHeight: 48 },
   outlineButton: {
     minHeight: 48,
@@ -420,7 +541,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.infoLight,
     marginBottom: spacingV2.md,
   },
-  noticeText: { flex: 1, fontSize: fontSizeV2.sm, color: colors.info, lineHeight: 19 },
+  noticeText: {
+    flex: 1,
+    fontSize: fontSizeV2.sm,
+    color: colors.info,
+    lineHeight: 19,
+  },
   searchBox: {
     minHeight: 44,
     borderRadius: borderRadiusV2.xl,
@@ -432,7 +558,12 @@ const styles = StyleSheet.create({
     gap: spacingV2.sm,
     paddingHorizontal: spacingV2.md,
   },
-  searchInput: { flex: 1, minWidth: 0, fontSize: fontSizeV2.md, color: colors.text },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+  },
   sectionHeader: {
     marginTop: spacingV2.xl,
     marginBottom: spacingV2.md,
@@ -440,9 +571,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  sectionTitle: { fontSize: fontSizeV2.lg, fontWeight: "800", color: colors.text },
-  sectionMeta: { fontSize: fontSizeV2.sm, color: colors.textSecondary, fontWeight: "600" },
-  sectionLink: { fontSize: fontSizeV2.sm, color: colors.primary, fontWeight: "800" },
+  sectionTitle: {
+    fontSize: fontSizeV2.lg,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  sectionMeta: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  sectionLink: {
+    fontSize: fontSizeV2.sm,
+    color: colors.primary,
+    fontWeight: "800",
+  },
   list: {
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxl,
@@ -466,20 +609,39 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.successMuted,
   },
-  avatarText: { color: colors.success, fontWeight: "900", fontSize: fontSizeV2.md },
+  avatarText: {
+    color: colors.success,
+    fontWeight: "900",
+    fontSize: fontSizeV2.md,
+  },
   workerInfo: { flex: 1, minWidth: 0 },
-  workerName: { fontSize: fontSizeV2.md, fontWeight: "800", color: colors.text },
+  workerName: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "800",
+    color: colors.text,
+  },
   workerMeta: {
     marginTop: 3,
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     lineHeight: 18,
   },
+  workerSubMeta: {
+    marginTop: 2,
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
   workerMoney: { alignItems: "flex-end", minWidth: 62 },
   unpaidText: { fontSize: fontSizeV2.sm, fontWeight: "900" },
   moneyDanger: { color: colors.danger },
   moneyOk: { color: colors.success },
-  entryText: { marginTop: 2, fontSize: fontSizeV2.xs, color: colors.textTertiary },
+  entryText: {
+    marginTop: 2,
+    fontSize: fontSizeV2.xs,
+    color: colors.textTertiary,
+  },
   cycleRow: {
     flexDirection: "row",
     alignItems: "center",

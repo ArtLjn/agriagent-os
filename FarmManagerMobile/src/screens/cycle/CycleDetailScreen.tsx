@@ -125,7 +125,9 @@ export const CycleDetailScreen: React.FC = () => {
   useEffect(() => {
     costApi
       .getRecords({ cycle_id: cycleId, category: "人工" })
-      .then((res) => setLaborRecords((res.data as any)?.items ?? res.data ?? []))
+      .then((res) =>
+        setLaborRecords((res.data as any)?.items ?? res.data ?? [])
+      )
       .catch(() => setLaborRecords([]));
     plantingApi
       .getWorkerSummary()
@@ -178,16 +180,36 @@ export const CycleDetailScreen: React.FC = () => {
     status: getStageStatus(stage),
     index,
   }));
-  const currentStage =
-    stageItems.find((stage) => stage.status === "current") ||
-    stageItems.find((stage) => stage.is_current) ||
-    stageItems[0];
-  const currentStageIndex = currentStage?.index ?? 0;
-  const nextStage = stageItems.find((stage) => stage.index > currentStageIndex);
+  const firstStage = stageItems[0];
+  const todayValue = getTodayValue();
+  const cycleStartValue = parseDateValue(currentCycle.start_date);
+  const firstStageStartValue = firstStage
+    ? parseDateValue(firstStage.start_date)
+    : 0;
+  const effectiveStartValue = cycleStartValue || firstStageStartValue;
+  const isBeforeCycleStart = Boolean(
+    effectiveStartValue && todayValue < effectiveStartValue
+  );
+  const currentStage = isBeforeCycleStart
+    ? undefined
+    : stageItems.find((stage) => stage.status === "current") ||
+      stageItems.find((stage) => stage.is_current) ||
+      firstStage;
+  const displayStage = currentStage || firstStage;
+  const displayStageIndex = displayStage?.index ?? 0;
+  const nextStage = isBeforeCycleStart
+    ? firstStage
+    : stageItems.find((stage) => stage.index > displayStageIndex);
   const progressPercent =
-    stageItems.length > 1
-      ? Math.round((currentStageIndex / (stageItems.length - 1)) * 100)
+    !isBeforeCycleStart && stageItems.length > 1
+      ? Math.round((displayStageIndex / (stageItems.length - 1)) * 100)
       : 0;
+  const stageCounterText = isBeforeCycleStart
+    ? `0/${stageItems.length}`
+    : `${displayStageIndex + 1}/${stageItems.length}`;
+  const heroStageText = isBeforeCycleStart
+    ? "未开始"
+    : displayStage?.name || "未开始";
   const areaText = currentCycle.total_area_mu
     ? `${Number(currentCycle.total_area_mu).toFixed(2).replace(/\.00$/, "")} 亩`
     : currentCycle.field_name || "未填面积";
@@ -212,22 +234,24 @@ export const CycleDetailScreen: React.FC = () => {
             </Text>
           </View>
           <View style={styles.summaryText}>
-            <Text style={styles.batchLabel}>{seasonText}</Text>
-            <Text style={styles.heroTitle} numberOfLines={2}>
+            <View style={styles.titleMetaRow}>
+              <Text style={styles.batchLabel}>{seasonText}</Text>
+              <View
+                style={[styles.statusPill, { backgroundColor: status.bgColor }]}
+              >
+                <View
+                  style={[styles.statusDot, { backgroundColor: status.color }]}
+                />
+                <Text style={[styles.statusText, { color: status.color }]}>
+                  {status.label}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.heroTitle} numberOfLines={1}>
               {currentCycle.name}
             </Text>
             <Text style={styles.heroMeta} numberOfLines={1}>
-              {areaText} · {unitCountText} · {currentStage?.name || "未开始"}
-            </Text>
-          </View>
-          <View
-            style={[styles.statusPill, { backgroundColor: status.bgColor }]}
-          >
-            <View
-              style={[styles.statusDot, { backgroundColor: status.color }]}
-            />
-            <Text style={[styles.statusText, { color: status.color }]}>
-              {status.label}
+              {areaText} · {unitCountText} · {heroStageText}
             </Text>
           </View>
         </View>
@@ -364,7 +388,11 @@ export const CycleDetailScreen: React.FC = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>常用作业</Text>
-        <View style={styles.operationWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.operationWrap}
+        >
           {quickOperations.map((item) => (
             <TouchableOpacity
               key={item.name}
@@ -383,7 +411,7 @@ export const CycleDetailScreen: React.FC = () => {
               <Text style={styles.operationText}>{item.name}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
 
       <View style={styles.section}>
@@ -461,9 +489,7 @@ export const CycleDetailScreen: React.FC = () => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>生长阶段</Text>
-          <Text style={styles.sectionMeta}>
-            {currentStageIndex + 1}/{stageItems.length}
-          </Text>
+          <Text style={styles.sectionMeta}>{stageCounterText}</Text>
         </View>
         <View style={styles.stageCard}>
           <View style={styles.stageTop}>
@@ -471,10 +497,18 @@ export const CycleDetailScreen: React.FC = () => {
               <Icon name="sprout" size={18} color={colors.success} />
             </View>
             <View style={styles.stageCopy}>
-              <Text style={styles.stageEyebrow}>今天应处于</Text>
-              <Text style={styles.stageTitle}>{currentStage?.name || "-"}</Text>
+              <Text style={styles.stageEyebrow}>
+                {isBeforeCycleStart ? "计划开始" : "今天应处于"}
+              </Text>
+              <Text style={styles.stageTitle}>
+                {isBeforeCycleStart ? "尚未开始" : displayStage?.name || "-"}
+              </Text>
               <Text style={styles.stageDesc} numberOfLines={2}>
-                {currentStage?.key_tasks || "按当前作物模板继续日常管理"}
+                {isBeforeCycleStart
+                  ? `${displayStage?.name || "首个阶段"} 将在 ${
+                      displayStage?.start_date || currentCycle.start_date
+                    } 开始`
+                  : displayStage?.key_tasks || "按当前作物模板继续日常管理"}
               </Text>
             </View>
           </View>
@@ -487,8 +521,9 @@ export const CycleDetailScreen: React.FC = () => {
 
           <View style={styles.stageRail}>
             {stageItems.map((stage) => {
-              const isCurrent = stage.index === currentStageIndex;
-              const isDone = stage.status === "done";
+              const isCurrent =
+                !isBeforeCycleStart && stage.index === displayStageIndex;
+              const isDone = !isBeforeCycleStart && stage.status === "done";
               return (
                 <View key={stage.id} style={styles.stageRailItem}>
                   <View
@@ -514,14 +549,18 @@ export const CycleDetailScreen: React.FC = () => {
 
           <View style={styles.stageFooter}>
             <View>
-              <Text style={styles.stageFooterLabel}>当前阶段日期</Text>
+              <Text style={styles.stageFooterLabel}>
+                {isBeforeCycleStart ? "计划阶段日期" : "当前阶段日期"}
+              </Text>
               <Text style={styles.stageFooterValue}>
-                {currentStage?.start_date || "-"} 至{" "}
-                {currentStage?.end_date || "-"}
+                {displayStage?.start_date || "-"} 至{" "}
+                {displayStage?.end_date || "-"}
               </Text>
             </View>
             <View style={styles.nextStageBox}>
-              <Text style={styles.nextStageLabel}>下一阶段</Text>
+              <Text style={styles.nextStageLabel}>
+                {isBeforeCycleStart ? "首个阶段" : "下一阶段"}
+              </Text>
               <Text style={styles.nextStageValue} numberOfLines={1}>
                 {nextStage?.name || "暂无"}
               </Text>
@@ -536,19 +575,16 @@ export const CycleDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: {
-    padding: spacingV2.md,
+    padding: spacingV2.lg,
     paddingBottom: spacingV2.xxxl,
   },
   summaryCard: {
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxl,
-    padding: spacingV2.md,
-    marginBottom: spacingV2.md,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    elevation: 2,
+    padding: spacingV2.lg,
+    marginBottom: spacingV2.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   summaryTop: {
     flexDirection: "row",
@@ -556,24 +592,31 @@ const styles = StyleSheet.create({
     gap: spacingV2.md,
   },
   cropIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primaryMuted,
+    backgroundColor: colors.successMuted,
   },
   cropEmoji: { fontSize: 28 },
   summaryText: { flex: 1, minWidth: 0 },
+  titleMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacingV2.sm,
+    marginBottom: spacingV2.xs,
+  },
   batchLabel: {
     fontSize: fontSizeV2.sm,
     fontWeight: "700",
     color: colors.success,
-    marginBottom: spacingV2.xs,
+    flexShrink: 1,
   },
   heroTitle: {
     fontSize: fontSizeV2.xl,
-    fontWeight: "800",
+    fontWeight: "900",
     color: colors.text,
     lineHeight: 28,
   },
@@ -585,10 +628,11 @@ const styles = StyleSheet.create({
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacingV2.md,
+    paddingHorizontal: spacingV2.sm,
     paddingVertical: spacingV2.xs,
     borderRadius: borderRadiusV2.full,
-    gap: spacingV2.xs,
+    gap: 4,
+    flexShrink: 0,
   },
   statusDot: {
     width: 6,
@@ -596,14 +640,14 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusText: {
-    fontSize: fontSizeV2.sm,
-    fontWeight: "600",
+    fontSize: fontSizeV2.xs,
+    fontWeight: "800",
   },
   summaryStats: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: spacingV2.lg,
-    paddingTop: spacingV2.lg,
+    paddingTop: spacingV2.md,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
@@ -625,19 +669,19 @@ const styles = StyleSheet.create({
     marginHorizontal: spacingV2.md,
   },
   quickPanel: {
-    backgroundColor: colors.surface,
+    backgroundColor: "transparent",
     borderRadius: borderRadiusV2.xxl,
-    padding: spacingV2.sm,
+    padding: 0,
     marginBottom: spacingV2.xl,
   },
   primaryAction: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 64,
+    minHeight: 68,
     paddingHorizontal: spacingV2.lg,
     paddingVertical: spacingV2.md,
     borderRadius: borderRadiusV2.xl,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.success,
     gap: spacingV2.md,
   },
   primaryActionText: { flex: 1 },
@@ -658,13 +702,15 @@ const styles = StyleSheet.create({
   },
   secondaryAction: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 52,
     borderRadius: borderRadiusV2.lg,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: spacingV2.xs,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   secondaryActionText: {
     fontSize: fontSizeV2.sm,
@@ -672,7 +718,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   section: {
-    marginBottom: spacingV2.lg,
+    marginBottom: spacingV2.xl,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -701,7 +747,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 68,
     borderRadius: borderRadiusV2.lg,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
     padding: spacingV2.md,
     justifyContent: "center",
   },
@@ -775,6 +821,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxl,
     padding: spacingV2.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   stageTop: {
     flexDirection: "row",
@@ -897,6 +945,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadiusV2.xl,
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   unitRow: {
     flexDirection: "row",
@@ -940,21 +990,24 @@ const styles = StyleSheet.create({
   },
   operationWrap: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: spacingV2.sm,
+    paddingTop: spacingV2.md,
+    paddingRight: spacingV2.lg,
   },
   operationPill: {
-    minHeight: 44,
-    paddingHorizontal: spacingV2.lg,
-    paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.lg,
+    height: 40,
+    minWidth: 78,
+    paddingHorizontal: spacingV2.md,
+    borderRadius: borderRadiusV2.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "rgba(74, 123, 247, 0.16)",
+    borderColor: "rgba(59, 178, 115, 0.22)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   operationText: {
     fontSize: fontSizeV2.sm,
     fontWeight: "700",
-    color: colors.primary,
+    color: colors.success,
   },
 });

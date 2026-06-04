@@ -26,7 +26,14 @@ import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import { appGradients } from "../../theme/gradients";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-const QUICK_PROMPTS = [
+type PromptTone = "sky" | "leaf" | "amber" | "slate";
+
+const QUICK_PROMPTS: Array<{
+  text: string;
+  prompt: string;
+  icon: string;
+  tone: PromptTone;
+}> = [
   {
     text: "天气判断",
     prompt: "今日天气对作物有什么影响？",
@@ -87,6 +94,7 @@ export const AgentChatScreen: React.FC = () => {
     sendMessage,
     startNewChatSession,
     switchChatSession,
+    fetchChatSessions,
     loading: isLoading,
     reports,
     fetchReports,
@@ -105,6 +113,10 @@ export const AgentChatScreen: React.FC = () => {
       fetchReports();
     }
   }, [activeTab, fetchReports]);
+
+  useEffect(() => {
+    fetchChatSessions();
+  }, [fetchChatSessions]);
 
   const handleSend = async (text: string) => {
     if (!text.trim() || isLoading) {
@@ -354,7 +366,10 @@ export const AgentChatScreen: React.FC = () => {
                 <Icon name="menu" size={24} color={colors.text} />
               </TouchableOpacity>
               <View style={styles.drawerActionRow}>
-                <TouchableOpacity style={styles.drawerIconBtn} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={styles.drawerIconBtn}
+                  activeOpacity={0.7}
+                >
                   <Icon name="magnify" size={22} color={colors.text} />
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -377,17 +392,29 @@ export const AgentChatScreen: React.FC = () => {
               activeOpacity={0.78}
             >
               <View style={styles.newSessionIcon}>
-                <Icon name="layers-triple-outline" size={22} color={colors.success} />
+                <Icon
+                  name="layers-triple-outline"
+                  size={22}
+                  color={colors.success}
+                />
               </View>
               <Text style={styles.newSessionText}>新对话</Text>
-              <Icon name="chevron-right" size={22} color={colors.textTertiary} />
+              <Icon
+                name="chevron-right"
+                size={22}
+                color={colors.textTertiary}
+              />
             </TouchableOpacity>
 
             <View style={styles.drawerHeading}>
               <Text style={styles.drawerTitle}>会话列表</Text>
               <View style={styles.drawerFilter}>
                 <Text style={styles.drawerFilterText}>农事对话</Text>
-                <Icon name="filter-variant" size={18} color={colors.textSecondary} />
+                <Icon
+                  name="filter-variant"
+                  size={18}
+                  color={colors.textSecondary}
+                />
               </View>
             </View>
 
@@ -423,7 +450,9 @@ export const AgentChatScreen: React.FC = () => {
                         {session.title}
                       </Text>
                       <View style={styles.sessionMetaRow}>
-                        <Text style={styles.sessionTag}>{session.category}</Text>
+                        <Text style={styles.sessionTag}>
+                          {session.category}
+                        </Text>
                         <Text style={styles.sessionTime}>
                           {formatSessionTime(session.updatedAt)}
                         </Text>
@@ -448,7 +477,10 @@ export const AgentChatScreen: React.FC = () => {
                   {user?.nickname || "系统管理员"}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.drawerIconBtn} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.drawerIconBtn}
+                activeOpacity={0.7}
+              >
                 <Icon name="cog-outline" size={23} color={colors.text} />
               </TouchableOpacity>
             </View>

@@ -100,10 +100,15 @@ class TestConversationApi:
 
     def test_list_conversations(self, client, clean_db):
         """GET /agent/conversations 返回会话列表。"""
-        from app.services.conversation_service import get_or_create_conversation
+        from app.services.conversation_service import (
+            get_or_create_conversation,
+            save_message,
+        )
 
         db = _TestSession()
-        get_or_create_conversation(db, farm_id=1, session_id="sess-api-1")
+        conv = get_or_create_conversation(db, farm_id=1, session_id="sess-api-1")
+        save_message(db, conv.id, "user", "今天适不适合打药？")
+        save_message(db, conv.id, "assistant", "今天风小，可以安排傍晚打药。")
         db.close()
 
         response = client.get("/agent/conversations")
@@ -112,6 +117,9 @@ class TestConversationApi:
         data = response.json()
         assert len(data) >= 1
         assert data[0]["session_id"] == "sess-api-1"
+        assert data[0]["title"] == "今天适不适合打药？"
+        assert data[0]["preview"] == "今天风小，可以安排傍晚打药。"
+        assert data[0]["category"] == "天气"
 
     def test_get_conversation_messages(self, client, clean_db):
         """GET /agent/conversations/{session_id}/messages 返回消息列表。"""

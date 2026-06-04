@@ -42,10 +42,13 @@ def upgrade() -> None:
                     SET client_request_id = NULL
                     WHERE client_request_id IS NOT NULL
                       AND id NOT IN (
-                          SELECT MIN(id)
-                          FROM labor_entries
-                          WHERE client_request_id IS NOT NULL
-                          GROUP BY farm_id, client_request_id
+                          SELECT kept_id
+                          FROM (
+                              SELECT MIN(id) AS kept_id
+                              FROM labor_entries
+                              WHERE client_request_id IS NOT NULL
+                              GROUP BY farm_id, client_request_id
+                          ) AS kept_labor_entries
                       )
                     """
                 )

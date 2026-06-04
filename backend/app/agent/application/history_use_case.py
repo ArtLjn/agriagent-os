@@ -19,22 +19,83 @@ from app.services.conversation_service import (
     list_conversations,
 )
 
+_DEFAULT_CONVERSATION_TITLE = "历史对话"
+_DEFAULT_CONVERSATION_PREVIEW = "点击查看这轮农事对话"
+
+
+def _truncate_text(text: str, limit: int) -> str:
+    """按字符长度截断展示文本。"""
+    clean_text = " ".join(text.split()).strip()
+    if len(clean_text) <= limit:
+        return clean_text
+    return f"{clean_text[:limit]}..."
+
+
+def _infer_category(text: str) -> str:
+    """根据首条用户消息推断会话分类。"""
+    if any(
+        keyword in text
+        for keyword in ("天气", "降雨", "下雨", "温度", "打药", "施药", "风", "雨")
+    ):
+        return "天气"
+    if any(
+        keyword in text for keyword in ("病虫害", "虫", "病", "叶片", "发黄", "防治")
+    ):
+        return "病虫害"
+    if any(keyword in text for keyword in ("报告", "周报", "月报", "总结")):
+        return "报告"
+    if any(
+        keyword in text
+        for keyword in ("记一笔", "记账", "成本", "收入", "支出", "人工", "费用")
+    ):
+        return "记账"
+    if any(
+        keyword in text for keyword in ("种植", "浇水", "施肥", "采摘", "播种", "定植")
+    ):
+        return "种植"
+    return "对话"
+
+
+def _build_conversation_summary(db: Session, session_id: str) -> tuple[str, str, str]:
+    """从会话消息生成列表标题、预览和分类。"""
+    messages = get_conversation_messages(db, session_id)
+    if not messages:
+        return (
+            _DEFAULT_CONVERSATION_TITLE,
+            _DEFAULT_CONVERSATION_PREVIEW,
+            "对话",
+        )
+    first_user = next((message for message in messages if message.role == "user"), None)
+    title_source = first_user.content if first_user else messages[0].content
+    preview_source = messages[-1].content
+    return (
+        _truncate_text(title_source, 18),
+        _truncate_text(preview_source, 24),
+        _infer_category(title_source),
+    )
+
 
 def list_conversation_items(
     db: Session, farm: Farm, limit: int
 ) -> list[ConversationListItem]:
     """获取当前 farm 的会话列表。"""
     conversations = list_conversations(db, farm_id=farm.id, limit=limit)
-    return [
-        ConversationListItem(
-            id=c.id,
-            session_id=c.session_id,
-            status=c.status,
-            created_at=c.created_at,
-            last_active_at=c.last_active_at,
+    items: list[ConversationListItem] = []
+    for c in conversations:
+        title, preview, category = _build_conversation_summary(db, c.session_id)
+        items.append(
+            ConversationListItem(
+                id=c.id,
+                session_id=c.session_id,
+                status=c.status,
+                title=title,
+                preview=preview,
+                category=category,
+                created_at=c.created_at,
+                last_active_at=c.last_active_at,
+            )
         )
-        for c in conversations
-    ]
+    return items
 
 
 def list_message_items(db: Session, session_id: str) -> list[ConversationMessageItem]:

@@ -16,6 +16,7 @@ import { CostCategoryScreen } from "../screens/cost/CostCategoryScreen";
 import { ProfitScreen } from "../screens/cost/ProfitScreen";
 import { WorkerListScreen } from "../screens/worker/WorkerListScreen";
 import { WageCreateScreen } from "../screens/worker/WageCreateScreen";
+import { WorkerCreateScreen } from "../screens/worker/WorkerCreateScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
 import { AgentReportScreen } from "../screens/agent/AgentReportScreen";
 import { GuideScreen } from "../screens/settings/GuideScreen";
@@ -47,10 +48,16 @@ export type RootStackParamList = {
     operationType?: string;
   };
   WorkerList: undefined;
+  WorkerCreate:
+    | {
+        workerName?: string;
+      }
+    | undefined;
   WageCreate: {
     cycleId?: number;
     cropName?: string;
     operationType?: string;
+    workerId?: number;
     workerName?: string;
     unitPrice?: string;
   };
@@ -184,6 +191,11 @@ export const AppNavigator: React.FC = () => {
               name="WorkerList"
               component={WorkerListScreen}
               options={{ title: "工人管理" }}
+            />
+            <Stack.Screen
+              name="WorkerCreate"
+              component={WorkerCreateScreen}
+              options={{ title: "新增工人" }}
             />
             <Stack.Screen
               name="WageCreate"

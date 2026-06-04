@@ -121,6 +121,9 @@ class ConversationListItem(BaseModel):
     id: int
     session_id: str
     status: str
+    title: str = ""
+    preview: str = ""
+    category: str = "对话"
     created_at: datetime
     last_active_at: datetime
     model_config = ConfigDict(from_attributes=True)

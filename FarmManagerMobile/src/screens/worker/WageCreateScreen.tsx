@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -7,7 +7,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import {
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import dayjs from "dayjs";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -22,15 +26,21 @@ import { showAlert } from "../../utils/alert";
 type RouteParams = RouteProp<RootStackParamList, "WageCreate">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const QUANTITY_CHIPS = ["0.5", "1", "2", "3", "4"];
-const PRICE_CHIPS = ["120", "150", "180", "200", "220", "260"];
+const HOUR_CHIPS = ["4", "8", "10"];
+const PRICE_CHIPS = ["100", "120", "150", "180", "200", "220"];
+const STANDARD_DAY_HOURS = 8;
 
 function toMoneyNumber(value: string): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getRequestId(cycleId: number, operationType: string, workerName: string, date: string) {
+function getRequestId(
+  cycleId: number,
+  operationType: string,
+  workerName: string,
+  date: string
+) {
   return `${cycleId}-${operationType}-${workerName}-${date}`;
 }
 
@@ -46,10 +56,15 @@ export const WageCreateScreen: React.FC = () => {
     params.cycleId ?? null
   );
   const [cropName, setCropName] = useState(params.cropName || "");
-  const [operationType, setOperationType] = useState(params.operationType || "");
-  const [workerQuery, setWorkerQuery] = useState(params.workerName || "");
-  const [quantity, setQuantity] = useState("1");
-  const [unitPrice, setUnitPrice] = useState(params.unitPrice || "200");
+  const [operationType, setOperationType] = useState(
+    params.operationType || ""
+  );
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<number[]>(
+    params.workerId ? [params.workerId] : []
+  );
+  const [showWorkerList, setShowWorkerList] = useState(false);
+  const [workHours, setWorkHours] = useState("8");
+  const [dailyWage, setDailyWage] = useState(params.unitPrice || "200");
   const [paidAmount, setPaidAmount] = useState("");
   const [workDate, setWorkDate] = useState(today);
   const [note, setNote] = useState("");
@@ -67,22 +82,44 @@ export const WageCreateScreen: React.FC = () => {
         setCycles(cycleItems);
         setWorkers(workersRes.data);
         setOperationTypes(typesRes.data);
+        const defaultWorker =
+          workersRes.data.find((worker) => worker.id === params.workerId) ||
+          workersRes.data.find((worker) => worker.name === params.workerName);
+        if (selectedWorkerIds.length === 0 && defaultWorker) {
+          setSelectedWorkerIds([defaultWorker.id]);
+          if (defaultWorker.default_unit_price) {
+            setDailyWage(defaultWorker.default_unit_price);
+          }
+        }
 
         const defaultCycle =
-          cycleItems.find((item: CropCycleListItem) => item.id === params.cycleId) ||
-          cycleItems.find((item: CropCycleListItem) => item.status === "active") ||
+          cycleItems.find(
+            (item: CropCycleListItem) => item.id === params.cycleId
+          ) ||
+          cycleItems.find(
+            (item: CropCycleListItem) => item.status === "active"
+          ) ||
           cycleItems[0];
         if (!selectedCycleId && defaultCycle) {
           setSelectedCycleId(defaultCycle.id);
           setCropName(defaultCycle.name);
         }
-        if (!operationType) {
-          setOperationType(typesRes.data[0]?.name || "");
+        if (!params.operationType) {
+          const defaultOperation = typesRes.data[0]?.name || "";
+          setOperationType(defaultOperation);
         }
       })
       .catch((err) => showAlert("加载失败", err.message || "请稍后重试"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [
+    params.cropName,
+    params.cycleId,
+    params.operationType,
+    params.workerId,
+    params.workerName,
+    selectedCycleId,
+    selectedWorkerIds.length,
+  ]);
 
   useEffect(() => {
     const selected = cycles.find((cycle) => cycle.id === selectedCycleId);
@@ -99,26 +136,34 @@ export const WageCreateScreen: React.FC = () => {
         }
       })
       .catch(() => {});
-  }, [selectedCycleId]);
+  }, [cycles, operationType, selectedCycleId]);
 
-  const workerName = workerQuery.trim();
+  const selectedWorkers = workers.filter((worker) =>
+    selectedWorkerIds.includes(worker.id)
+  );
   const selectedCycle = cycles.find((cycle) => cycle.id === selectedCycleId);
-  const payable = toMoneyNumber(quantity) * toMoneyNumber(unitPrice);
-  const unpaid = Math.max(0, payable - toMoneyNumber(paidAmount || "0"));
+  const hoursValue = toMoneyNumber(workHours);
+  const dailyWageValue = toMoneyNumber(dailyWage);
+  const workDayQuantity = hoursValue / STANDARD_DAY_HOURS;
+  const perWorkerPayable = workDayQuantity * dailyWageValue;
+  const payable = perWorkerPayable * selectedWorkers.length;
+  const perWorkerPaid = toMoneyNumber(paidAmount || "0");
+  const unpaid = Math.max(0, payable - perWorkerPaid * selectedWorkers.length);
 
-  const workerSuggestions = useMemo(() => {
-    const normalized = workerName.toLowerCase();
-    const list = normalized
-      ? workers.filter((worker) => worker.name.toLowerCase().includes(normalized))
-      : workers;
-    return list.slice(0, 8);
-  }, [workerName, workers]);
-
-  const selectWorker = (worker: Worker) => {
-    setWorkerQuery(worker.name);
-    if (worker.default_unit_price) {
-      setUnitPrice(worker.default_unit_price);
+  const toggleWorker = (worker: Worker) => {
+    setSelectedWorkerIds((ids) => {
+      if (ids.includes(worker.id)) {
+        return ids.filter((id) => id !== worker.id);
+      }
+      return [...ids, worker.id];
+    });
+    if (selectedWorkerIds.length === 0 && worker.default_unit_price) {
+      setDailyWage(worker.default_unit_price);
     }
+  };
+
+  const clearSelectedWorkers = () => {
+    setSelectedWorkerIds([]);
   };
 
   const submit = async () => {
@@ -130,35 +175,42 @@ export const WageCreateScreen: React.FC = () => {
       showAlert("提示", "请选择作业");
       return;
     }
-    if (!workerName) {
-      showAlert("提示", "请选择或输入工人姓名");
+    if (selectedWorkers.length === 0) {
+      showAlert("提示", "请选择工人");
       return;
     }
-    if (toMoneyNumber(quantity) <= 0 || toMoneyNumber(unitPrice) <= 0) {
-      showAlert("提示", "请填写有效人数和单价");
+    if (hoursValue <= 0 || dailyWageValue <= 0) {
+      showAlert("提示", "请填写有效工时和日工资");
       return;
     }
 
     setSubmitting(true);
     try {
-      await plantingApi.createWage({
-        cycle_id: selectedCycleId,
-        crop_name: cropName || selectedCycle?.name,
-        operation_type: operationType.trim(),
-        worker_name: workerName,
-        quantity,
-        unit_price: unitPrice,
-        paid_amount: paidAmount || "0",
-        work_date: workDate,
-        pay_type: "daily",
-        note: note.trim() || undefined,
-        client_request_id: getRequestId(
-          selectedCycleId,
-          operationType.trim(),
-          workerName,
-          workDate
-        ),
-      });
+      await Promise.all(
+        selectedWorkers.map((worker) =>
+          plantingApi.createWage({
+            cycle_id: selectedCycleId,
+            crop_name: cropName || selectedCycle?.name,
+            operation_type: operationType.trim(),
+            worker_id: worker.id,
+            worker_name: worker.name,
+            quantity: workDayQuantity.toFixed(2).replace(/\.00$/, ""),
+            unit_price: dailyWage,
+            paid_amount: paidAmount || "0",
+            work_date: workDate,
+            pay_type: "daily",
+            note:
+              note.trim() ||
+              `工时 ${workHours} 小时，按 ${STANDARD_DAY_HOURS} 小时/天折算`,
+            client_request_id: getRequestId(
+              selectedCycleId,
+              operationType.trim(),
+              worker.name,
+              workDate
+            ),
+          })
+        )
+      );
       navigation.goBack();
     } catch (err: any) {
       showAlert("保存失败", err.message || "请稍后重试");
@@ -171,18 +223,30 @@ export const WageCreateScreen: React.FC = () => {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.summaryBar}>
         <View>
-          <Text style={styles.summaryLabel}>本次应付</Text>
+          <Text style={styles.summaryLabel}>合计应付</Text>
           <Text style={styles.summaryValue}>{payable.toFixed(0)} 元</Text>
+          <Text style={styles.summarySub}>
+            {selectedWorkers.length || 0} 人 · 每人{" "}
+            {perWorkerPayable.toFixed(0)} 元
+          </Text>
         </View>
         <View style={styles.summaryPill}>
-          <Text style={styles.summaryPillText}>未结 {unpaid.toFixed(0)} 元</Text>
+          <Text style={styles.summaryPillText}>
+            未结 {unpaid.toFixed(0)} 元
+          </Text>
         </View>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>这笔工资属于哪里</Text>
-        <Text style={styles.sectionHint}>茬口必须选择，作物和作业用于后续核对账单来源。</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+        <Text style={styles.sectionHint}>
+          茬口必须选择，作物和作业用于后续核对账单来源。
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
           {cycles.map((cycle) => {
             const active = selectedCycleId === cycle.id;
             return (
@@ -191,7 +255,12 @@ export const WageCreateScreen: React.FC = () => {
                 style={[styles.selectChip, active && styles.selectChipActive]}
                 onPress={() => setSelectedCycleId(cycle.id)}
               >
-                <Text style={[styles.selectChipText, active && styles.selectChipTextActive]}>
+                <Text
+                  style={[
+                    styles.selectChipText,
+                    active && styles.selectChipTextActive,
+                  ]}
+                >
                   {cycle.name}
                 </Text>
               </TouchableOpacity>
@@ -208,7 +277,11 @@ export const WageCreateScreen: React.FC = () => {
             placeholderTextColor={colors.textTertiary}
           />
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
           {operationTypes.map((item) => {
             const active = operationType === item.name;
             return (
@@ -217,7 +290,12 @@ export const WageCreateScreen: React.FC = () => {
                 style={[styles.selectChip, active && styles.selectChipActive]}
                 onPress={() => setOperationType(item.name)}
               >
-                <Text style={[styles.selectChipText, active && styles.selectChipTextActive]}>
+                <Text
+                  style={[
+                    styles.selectChipText,
+                    active && styles.selectChipTextActive,
+                  ]}
+                >
                   {item.name}
                 </Text>
               </TouchableOpacity>
@@ -225,7 +303,11 @@ export const WageCreateScreen: React.FC = () => {
           })}
         </ScrollView>
         <View style={styles.inputRow}>
-          <Icon name="clipboard-edit-outline" size={18} color={colors.primary} />
+          <Icon
+            name="clipboard-edit-outline"
+            size={18}
+            color={colors.primary}
+          />
           <TextInput
             style={styles.inlineInput}
             value={operationType}
@@ -248,78 +330,154 @@ export const WageCreateScreen: React.FC = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>选择工人</Text>
-        <View style={styles.inputRow}>
-          <Icon name="account-hard-hat-outline" size={18} color={colors.primary} />
-          <TextInput
-            style={styles.inlineInput}
-            value={workerQuery}
-            onChangeText={setWorkerQuery}
-            placeholder="搜索或输入新工人姓名"
-            placeholderTextColor={colors.textTertiary}
-          />
-        </View>
-        <View style={styles.workerWrap}>
-          {workerSuggestions.map((worker) => {
-            const active = worker.name === workerName;
-            return (
-              <TouchableOpacity
-                key={worker.id}
-                style={[styles.workerChip, active && styles.workerChipActive]}
-                onPress={() => selectWorker(worker)}
-              >
-                <Text style={[styles.workerChipText, active && styles.workerChipTextActive]}>
-                  {worker.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-          {workerName && !workers.some((worker) => worker.name === workerName) ? (
-            <View style={styles.newWorkerChip}>
-              <Icon name="plus-circle-outline" size={15} color={colors.success} />
-              <Text style={styles.newWorkerText}>保存时创建 {workerName}</Text>
-            </View>
-          ) : null}
-        </View>
+        <Text style={styles.sectionHint}>
+          可同时选择多人，保存后每人一条工资。
+        </Text>
+        <TouchableOpacity
+          style={styles.dropdownField}
+          onPress={() => setShowWorkerList((visible) => !visible)}
+          activeOpacity={0.75}
+        >
+          <Icon name="account-hard-hat" size={18} color={colors.primary} />
+          <Text
+            style={[
+              styles.dropdownText,
+              selectedWorkers.length === 0 && styles.dropdownPlaceholder,
+            ]}
+            numberOfLines={1}
+          >
+            {selectedWorkers.length > 0
+              ? selectedWorkers.map((worker) => worker.name).join("、")
+              : "请选择工人"}
+          </Text>
+          {selectedWorkers.length > 0 ? (
+            <TouchableOpacity
+              onPress={clearSelectedWorkers}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name="close-circle" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+          ) : (
+            <Icon
+              name={showWorkerList ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={colors.textTertiary}
+            />
+          )}
+        </TouchableOpacity>
+        {showWorkerList ? (
+          <View style={styles.dropdownList}>
+            {workers.length > 0 ? (
+              workers.map((worker) => {
+                const active = selectedWorkerIds.includes(worker.id);
+                return (
+                  <TouchableOpacity
+                    key={worker.id}
+                    style={[
+                      styles.workerOption,
+                      active && styles.workerOptionActive,
+                    ]}
+                    onPress={() => toggleWorker(worker)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.workerAvatar}>
+                      <Text style={styles.workerAvatarText}>
+                        {worker.name.slice(0, 1)}
+                      </Text>
+                    </View>
+                    <View style={styles.workerOptionInfo}>
+                      <Text style={styles.workerOptionName} numberOfLines={1}>
+                        {worker.name}
+                      </Text>
+                      <Text style={styles.workerOptionMeta}>
+                        {worker.phone ? `${worker.phone} · ` : ""}
+                        {worker.default_unit_price
+                          ? `${worker.default_unit_price} 元/天`
+                          : "未设置默认日工资"}
+                      </Text>
+                    </View>
+                    {active ? (
+                      <Icon
+                        name="check-circle"
+                        size={20}
+                        color={colors.success}
+                      />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              <View style={styles.emptyWorkerBox}>
+                <Text style={styles.emptyWorkerText}>暂无工人档案</Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("WorkerCreate")}
+                >
+                  <Text style={styles.emptyWorkerLink}>去新增工人</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>人数和单价</Text>
-        <Text style={styles.fieldLabel}>人数/工日</Text>
+        <Text style={styles.sectionTitle}>工资金额</Text>
+        <Text style={styles.fieldLabel}>工时</Text>
         <View style={styles.quickGrid}>
-          {QUANTITY_CHIPS.map((item) => (
+          {HOUR_CHIPS.map((item) => (
             <TouchableOpacity
-              key={`quantity-${item}`}
-              style={[styles.quickChip, quantity === item && styles.quickChipActive]}
-              onPress={() => setQuantity(item)}
+              key={`hours-${item}`}
+              style={[
+                styles.quickChip,
+                workHours === item && styles.quickChipActive,
+              ]}
+              onPress={() => setWorkHours(item)}
             >
-              <Text style={[styles.quickChipText, quantity === item && styles.quickChipTextActive]}>
-                {item} 人
+              <Text
+                style={[
+                  styles.quickChipText,
+                  workHours === item && styles.quickChipTextActive,
+                ]}
+              >
+                {item} 小时
               </Text>
             </TouchableOpacity>
           ))}
         </View>
         <View style={styles.inputRow}>
-          <Icon name="account-multiple-outline" size={18} color={colors.textSecondary} />
+          <Icon
+            name="account-multiple-outline"
+            size={18}
+            color={colors.textSecondary}
+          />
           <TextInput
             style={styles.inlineInput}
-            value={quantity}
-            onChangeText={setQuantity}
+            value={workHours}
+            onChangeText={setWorkHours}
             keyboardType="decimal-pad"
-            placeholder="人数或工日"
+            placeholder="填写工时"
             placeholderTextColor={colors.textTertiary}
           />
         </View>
 
-        <Text style={styles.fieldLabel}>每人单价</Text>
+        <Text style={styles.fieldLabel}>日工资</Text>
         <View style={styles.quickGrid}>
           {PRICE_CHIPS.map((item) => (
             <TouchableOpacity
               key={`price-${item}`}
-              style={[styles.quickChip, unitPrice === item && styles.quickChipActive]}
-              onPress={() => setUnitPrice(item)}
+              style={[
+                styles.quickChip,
+                dailyWage === item && styles.quickChipActive,
+              ]}
+              onPress={() => setDailyWage(item)}
             >
-              <Text style={[styles.quickChipText, unitPrice === item && styles.quickChipTextActive]}>
-                {item} 元
+              <Text
+                style={[
+                  styles.quickChipText,
+                  dailyWage === item && styles.quickChipTextActive,
+                ]}
+              >
+                {item} 元/天
               </Text>
             </TouchableOpacity>
           ))}
@@ -328,10 +486,10 @@ export const WageCreateScreen: React.FC = () => {
           <Icon name="cash" size={18} color={colors.textSecondary} />
           <TextInput
             style={styles.inlineInput}
-            value={unitPrice}
-            onChangeText={setUnitPrice}
+            value={dailyWage}
+            onChangeText={setDailyWage}
             keyboardType="decimal-pad"
-            placeholder="每人单价"
+            placeholder="元/天"
             placeholderTextColor={colors.textTertiary}
           />
         </View>
@@ -364,7 +522,9 @@ export const WageCreateScreen: React.FC = () => {
         <Icon name="link-variant" size={20} color={colors.primary} />
         <View style={styles.autoInfo}>
           <Text style={styles.autoTitle}>保存后自动关联</Text>
-          <Text style={styles.autoText}>生成工资记录，并同步一条来源为“工资记录”的人工成本账单。</Text>
+          <Text style={styles.autoText}>
+            生成工资记录，并同步一条来源为“工资记录”的人工成本账单。
+          </Text>
         </View>
       </View>
 
@@ -394,12 +554,22 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: spacingV2.lg,
   },
-  summaryLabel: { fontSize: fontSizeV2.sm, color: colors.textSecondary, fontWeight: "700" },
+  summaryLabel: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "700",
+  },
   summaryValue: {
     marginTop: spacingV2.xs,
     fontSize: fontSizeV2.xxxl,
     color: colors.text,
     fontWeight: "900",
+  },
+  summarySub: {
+    marginTop: 2,
+    fontSize: fontSizeV2.xs,
+    color: colors.textSecondary,
+    fontWeight: "700",
   },
   summaryPill: {
     paddingHorizontal: spacingV2.md,
@@ -407,7 +577,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadiusV2.full,
     backgroundColor: colors.expenseBg,
   },
-  summaryPillText: { fontSize: fontSizeV2.sm, color: colors.expense, fontWeight: "800" },
+  summaryPillText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.expense,
+    fontWeight: "800",
+  },
   section: {
     marginBottom: spacingV2.lg,
     padding: spacingV2.lg,
@@ -436,7 +610,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   selectChipActive: { backgroundColor: colors.primaryMuted },
-  selectChipText: { fontSize: fontSizeV2.sm, fontWeight: "700", color: colors.textSecondary },
+  selectChipText: {
+    fontSize: fontSizeV2.sm,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
   selectChipTextActive: { color: colors.primary },
   inputRow: {
     minHeight: 46,
@@ -457,31 +635,92 @@ const styles = StyleSheet.create({
     color: colors.text,
     paddingVertical: spacingV2.sm,
   },
-  workerWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacingV2.sm,
-    marginTop: spacingV2.md,
-  },
-  workerChip: {
+  dropdownField: {
+    minHeight: 50,
     paddingHorizontal: spacingV2.md,
-    paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surfaceMuted,
-  },
-  workerChipActive: { backgroundColor: colors.headerBg },
-  workerChipText: { fontSize: fontSizeV2.sm, color: colors.textSecondary, fontWeight: "800" },
-  workerChipTextActive: { color: colors.textInverse },
-  newWorkerChip: {
+    borderRadius: borderRadiusV2.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: spacingV2.sm,
+  },
+  dropdownText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "800",
+  },
+  dropdownPlaceholder: {
+    color: colors.textTertiary,
+    fontWeight: "600",
+  },
+  dropdownList: {
+    marginTop: spacingV2.sm,
+    borderRadius: borderRadiusV2.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.background,
+    overflow: "hidden",
+  },
+  workerOption: {
+    minHeight: 58,
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.full,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacingV2.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  workerOptionActive: {
     backgroundColor: colors.successMuted,
   },
-  newWorkerText: { fontSize: fontSizeV2.sm, color: colors.success, fontWeight: "800" },
+  workerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  workerAvatarText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.success,
+    fontWeight: "900",
+  },
+  workerOptionInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  workerOptionName: {
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+    fontWeight: "800",
+  },
+  workerOptionMeta: {
+    marginTop: 2,
+    fontSize: fontSizeV2.xs,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  emptyWorkerBox: {
+    padding: spacingV2.lg,
+    alignItems: "center",
+    gap: spacingV2.sm,
+  },
+  emptyWorkerText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "700",
+  },
+  emptyWorkerLink: {
+    fontSize: fontSizeV2.sm,
+    color: colors.primary,
+    fontWeight: "900",
+  },
   fieldLabel: {
     marginTop: spacingV2.md,
     fontSize: fontSizeV2.sm,
@@ -504,7 +743,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   quickChipActive: { backgroundColor: colors.successMuted },
-  quickChipText: { fontSize: fontSizeV2.sm, color: colors.textSecondary, fontWeight: "800" },
+  quickChipText: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    fontWeight: "800",
+  },
   quickChipTextActive: { color: colors.success },
   textArea: {
     minHeight: 96,
@@ -523,7 +766,11 @@ const styles = StyleSheet.create({
     marginBottom: spacingV2.lg,
   },
   autoInfo: { flex: 1, minWidth: 0 },
-  autoTitle: { fontSize: fontSizeV2.md, color: colors.primary, fontWeight: "900" },
+  autoTitle: {
+    fontSize: fontSizeV2.md,
+    color: colors.primary,
+    fontWeight: "900",
+  },
   autoText: {
     marginTop: 3,
     fontSize: fontSizeV2.sm,

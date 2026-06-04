@@ -19,6 +19,8 @@ jest.mock("../../api/client", () => ({
     refreshAdvice: jest.fn(),
     generateReport: jest.fn(),
     getReportHistory: jest.fn(),
+    getConversations: jest.fn(),
+    getConversationMessages: jest.fn(),
   },
   weatherApi: {
     getForecast: jest.fn(),
@@ -242,16 +244,145 @@ describe("chat sessions", () => {
     ]);
   });
 
+  it("连续新建但未发送消息时，不累计空历史会话", () => {
+    useAgentStore.getState().startNewChatSession();
+    useAgentStore.getState().startNewChatSession();
+    useAgentStore.getState().startNewChatSession();
+
+    expect(useAgentStore.getState().messages).toEqual([]);
+    expect(useAgentStore.getState().sessions).toHaveLength(1);
+    expect(useAgentStore.getState().sessions[0].messages).toEqual([]);
+  });
+
+  it("已有真实会话后新建空对话，不把空草稿计入历史列表", () => {
+    useAgentStore.getState().sendMessage("今天怎么管理小麦？");
+
+    useAgentStore.getState().startNewChatSession();
+    useAgentStore.getState().startNewChatSession();
+
+    const nonEmptySessions = useAgentStore
+      .getState()
+      .sessions.filter((session) => session.messages.length > 0);
+    const emptySessions = useAgentStore
+      .getState()
+      .sessions.filter((session) => session.messages.length === 0);
+
+    expect(nonEmptySessions).toHaveLength(1);
+    expect(emptySessions).toHaveLength(1);
+  });
+
   it("发送消息时自动更新当前会话标题和预览", () => {
     useAgentStore.getState().sendMessage("今天适不适合打药？");
 
     const currentSession = useAgentStore
       .getState()
-      .sessions.find((session) => session.id === useAgentStore.getState().sessionId);
+      .sessions.find(
+        (session) => session.id === useAgentStore.getState().sessionId
+      );
 
     expect(currentSession).toMatchObject({
       title: "今天适不适合打药？",
       preview: "今天适不适合打药？",
+      category: "天气",
+    });
+  });
+
+  it("切换会话后，旧会话的流式回复仍写回原会话", () => {
+    let onChunk: (chunk: string) => void = () => {};
+    agentApi.streamChat.mockImplementationOnce(
+      (_data: unknown, chunkHandler: (chunk: string) => void) => {
+        onChunk = chunkHandler;
+      }
+    );
+
+    useAgentStore.getState().sendMessage("分析番茄叶片发黄");
+    const firstSessionId = useAgentStore.getState().sessionId;
+    useAgentStore.getState().startNewChatSession();
+
+    onChunk("可能是缺肥或病害。");
+
+    const firstSession = useAgentStore
+      .getState()
+      .sessions.find((session) => session.id === firstSessionId);
+
+    expect(useAgentStore.getState().messages).toEqual([]);
+    expect(firstSession?.messages).toEqual([
+      { role: "user", content: "分析番茄叶片发黄" },
+      {
+        role: "agent",
+        content: "可能是缺肥或病害。",
+        is_streaming: true,
+      },
+    ]);
+  });
+
+  it("从后端加载会话列表并保留本地会话缓存", async () => {
+    agentApi.getConversations.mockResolvedValueOnce({
+      data: [
+        {
+          id: 1,
+          session_id: "remote-session-1",
+          status: "active",
+          title: "今天适不适合打药？",
+          preview: "今天风小，可以安排傍晚打药。",
+          category: "天气",
+          created_at: "2026-06-04T07:00:00",
+          last_active_at: "2026-06-04T07:10:00",
+        },
+      ],
+    });
+
+    await useAgentStore.getState().fetchChatSessions();
+
+    expect(useAgentStore.getState().sessions[0]).toMatchObject({
+      id: "remote-session-1",
+      title: "今天适不适合打药？",
+      preview: "今天风小，可以安排傍晚打药。",
+      category: "天气",
+    });
+  });
+
+  it("切换后端会话时拉取消息，并将 assistant 映射为 agent", async () => {
+    useAgentStore.setState({
+      sessionId: "remote-session-2",
+      sessions: [
+        {
+          id: "remote-session-2",
+          title: "历史对话",
+          preview: "",
+          category: "对话",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          messages: [],
+        },
+      ],
+      messages: [],
+    });
+    agentApi.getConversationMessages.mockResolvedValueOnce({
+      data: [
+        {
+          id: 1,
+          role: "user",
+          content: "明天天气如何",
+          created_at: "2026-06-04T07:00:00",
+        },
+        {
+          id: 2,
+          role: "assistant",
+          content: "明天适合通风，注意午后降雨。",
+          created_at: "2026-06-04T07:01:00",
+        },
+      ],
+    });
+
+    await useAgentStore.getState().switchChatSession("remote-session-2");
+
+    expect(useAgentStore.getState().messages).toEqual([
+      { role: "user", content: "明天天气如何" },
+      { role: "agent", content: "明天适合通风，注意午后降雨。" },
+    ]);
+    expect(useAgentStore.getState().sessions[0]).toMatchObject({
+      title: "明天天气如何",
       category: "天气",
     });
   });

@@ -44,11 +44,11 @@ echo "========================================"
 # 1. 更新 API 地址
 echo "→ 更新 API 地址..."
 if [ -f "$CLIENT_FILE" ]; then
-    CURRENT_URL=$(grep -oP "const API_BASE_URL = '\K[^']*" "$CLIENT_FILE" 2>/dev/null || true)
+    CURRENT_URL=$(grep -oE "const API_BASE_URL = ['\"][^'\"]*['\"]" "$CLIENT_FILE" 2>/dev/null | sed -E "s/.*['\"]([^'\"]*)['\"].*/\1/" || true)
     if [ "$CURRENT_URL" = "$API_URL" ]; then
         echo "  API 地址已是 $API_URL，无需修改"
     else
-        sed -i '' "s|const API_BASE_URL = '.*';|const API_BASE_URL = '${API_URL}';|" "$CLIENT_FILE"
+        sed -i '' -E "s|const API_BASE_URL = ['\"][^'\"]*['\"];|const API_BASE_URL = '${API_URL}';|" "$CLIENT_FILE"
         echo "  已切换为: $API_URL"
     fi
 else

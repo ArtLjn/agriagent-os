@@ -227,12 +227,12 @@ else
   _step "$STEP" "$TOTAL_STEPS" "构建 release APK..."
 
   # 2.1 更新API地址
-  CURRENT_URL=$(grep -oP "const API_BASE_URL = '\K[^']*" "$CLIENT_FILE" 2>/dev/null || true)
+  CURRENT_URL=$(grep -Eo "const API_BASE_URL = ['\"][^'\"]*" "$CLIENT_FILE" 2>/dev/null | sed -E "s/const API_BASE_URL = ['\"]//" || true)
   if [ "$CURRENT_URL" != "$PROD_API_URL" ]; then
     if [[ "$OSTYPE" == "darwin"* ]]; then
-      sed -i '' "s|const API_BASE_URL = '.*';|const API_BASE_URL = '${PROD_API_URL}';|" "$CLIENT_FILE"
+      sed -i '' -E "s|const API_BASE_URL = ['\"][^'\"]*['\"];|const API_BASE_URL = \"${PROD_API_URL}\";|" "$CLIENT_FILE"
     else
-      sed -i "s|const API_BASE_URL = '.*';|const API_BASE_URL = '${PROD_API_URL}';|" "$CLIENT_FILE"
+      sed -i -E "s|const API_BASE_URL = ['\"][^'\"]*['\"];|const API_BASE_URL = \"${PROD_API_URL}\";|" "$CLIENT_FILE"
     fi
     echo "  ✓ API地址 → ${PROD_API_URL}"
   fi

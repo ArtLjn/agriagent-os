@@ -41,7 +41,8 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> Crop
     current_date = cycle.start_date
     stages = sorted(template.stages, key=lambda s: s.order_index)
 
-    for idx, stage in enumerate(stages):
+    today = date.today()
+    for stage in stages:
         end_date = current_date + timedelta(days=stage.duration_days - 1)
         db_stage = CycleStage(
             cycle_id=db_cycle.id,
@@ -51,7 +52,7 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> Crop
             order_index=stage.order_index,
             duration_days=stage.duration_days,
             key_tasks=stage.key_tasks,
-            is_current=1 if idx == 0 else 0,
+            is_current=1 if current_date <= today <= end_date else 0,
         )
         db.add(db_stage)
         current_date = end_date + timedelta(days=1)

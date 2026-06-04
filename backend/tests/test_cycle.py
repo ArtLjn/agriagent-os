@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from datetime import date, timedelta
 
 from app.main import app
 
@@ -55,6 +56,24 @@ def test_create_crop_cycle(watermelon_template_id):
     assert data["stages"][0]["start_date"] == "2025-03-15"
     assert data["stages"][0]["end_date"] == "2025-04-13"
     assert data["stages"][1]["start_date"] == "2025-04-14"
+
+
+def test_future_crop_cycle_has_no_current_stage(watermelon_template_id):
+    """未到开始日期的茬口不应提前点亮阶段。"""
+    start_date = date.today() + timedelta(days=30)
+    payload = {
+        "name": "未来西瓜",
+        "crop_template_id": watermelon_template_id,
+        "start_date": start_date.isoformat(),
+        "field_name": "计划棚",
+    }
+
+    response = client.post("/cycles", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert all(stage["is_current"] is False for stage in data["stages"])
+    assert data["current_stage_name"] is None
 
 
 def test_list_crop_cycles(watermelon_template_id):
@@ -145,7 +164,7 @@ def test_advance_stage(watermelon_template_id):
     create_payload = {
         "name": "1号棚西瓜",
         "crop_template_id": watermelon_template_id,
-        "start_date": "2025-03-15",
+        "start_date": date.today().isoformat(),
     }
     create_resp = client.post("/cycles", json=create_payload)
     cycle_id = create_resp.json()["id"]
@@ -170,7 +189,7 @@ def test_advance_stage_last_stage(watermelon_template_id):
     create_payload = {
         "name": "1号棚西瓜",
         "crop_template_id": watermelon_template_id,
-        "start_date": "2025-03-15",
+        "start_date": date.today().isoformat(),
     }
     create_resp = client.post("/cycles", json=create_payload)
     cycle_id = create_resp.json()["id"]

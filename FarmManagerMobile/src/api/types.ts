@@ -84,6 +84,14 @@ export interface Worker {
   status: string;
 }
 
+export interface WorkerCreateRequest {
+  name: string;
+  phone?: string;
+  default_pay_type?: string;
+  default_unit_price?: string;
+  note?: string;
+}
+
 export interface WorkerCycleSummary {
   cycle_id: number;
   cycle_name: string;
@@ -138,6 +146,7 @@ export interface LaborEntryCreate {
 export interface WageCreateRequest {
   cycle_id: number;
   operation_type: string;
+  worker_id?: number;
   worker_name: string;
   quantity: string;
   unit_price: string;
@@ -260,6 +269,25 @@ export interface ChatRequest {
 export interface ChatResponse {
   reply: string;
   pending_action: PendingAction | null;
+}
+
+export interface ConversationListItem {
+  id: number;
+  session_id: string;
+  status: string;
+  title?: string;
+  preview?: string;
+  category?: string;
+  created_at: string;
+  last_active_at: string;
+}
+
+export interface ConversationMessageItem {
+  id: number;
+  role: "user" | "assistant" | "agent";
+  content: string;
+  skills?: string[] | null;
+  created_at: string;
 }
 
 export interface DailyAdvice {
