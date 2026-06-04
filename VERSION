@@ -1,3 +1,3 @@
-VERSION_NAME=1.2.3
-VERSION_CODE=9
-CHANGELOG=新增 ContextPolicy 构建策略与缓存失效机制；优化 Agent runtime LLM 调用；重构移动端 Agent 聊天界面；升级服务器 Python 至 3.12
+VERSION_NAME=1.2.4
+VERSION_CODE=10
+CHANGELOG=更新至 v1.2.4

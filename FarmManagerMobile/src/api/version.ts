@@ -16,10 +16,10 @@ export const versionApi = {
 };
 
 /** 当前应用版本名，与 android/app/build.gradle versionName 同步。 */
-export const APP_VERSION = "1.2.3";
+export const APP_VERSION = "1.2.4";
 
 /** 当前应用构建号，与 android/app/build.gradle versionCode 同步。 */
-export const APP_BUILD_NUMBER = 9;
+export const APP_BUILD_NUMBER = 10;
 
 /** 获取应用 build 号。 */
 export async function getAppVersionCode(): Promise<number> {
