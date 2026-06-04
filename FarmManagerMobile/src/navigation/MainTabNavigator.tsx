@@ -3,7 +3,6 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../theme/colors";
 import { spacingV2, fontSizeV2 } from "../theme/spacing";
-import { shadowV2 } from "../theme/designTokens";
 import { HomeScreen } from "../screens/home/HomeScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
 import { CostListScreen } from "../screens/cost/CostListScreen";
@@ -24,7 +23,7 @@ const TAB_CONFIG: Record<
   { label: string; icon: string; activeIcon: string }
 > = {
   Home: { label: "首页", icon: "home-outline", activeIcon: "home" },
-  AgentChat: { label: "助手", icon: "sprout", activeIcon: "sprout" },
+  AgentChat: { label: "芽芽", icon: "sprout", activeIcon: "sprout" },
   Costs: { label: "记账", icon: "cash-multiple", activeIcon: "cash-multiple" },
   Settings: { label: "我的", icon: "account-outline", activeIcon: "account" },
 };

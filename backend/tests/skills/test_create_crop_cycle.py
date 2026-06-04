@@ -420,30 +420,23 @@ class TestCreateCropCycleError:
     @patch.object(_create_cycle_mod, "SessionLocal")
     @patch.object(_create_cycle_mod, "cycle_service")
     @patch.object(_create_cycle_mod, "crop_service")
-    async def test_no_context_farm_id_defaults_to_1(
+    async def test_missing_context_farm_id_fails_without_db_access(
         self, mock_crop_svc, mock_cycle_svc, mock_session, ctx
     ):
-        """context 无 farm_id 时默认为 1。"""
-        mock_db = MagicMock()
-        mock_session.return_value = mock_db
-
-        template = _make_template()
-        mock_crop_svc.find_template_by_name.return_value = template
-
-        cycle = _make_cycle()
-        mock_cycle_svc.create_crop_cycle.return_value = cycle
-
+        """context 无 farm_id 时必须失败，不能默认写到 1 号农场。"""
         empty_ctx = SkillContext()
 
         skill = CreateCropCycleSkill()
-        await skill.execute(
+        result = await skill.execute(
             {"crop_name": "辣椒", "season": "秋季"},
             empty_ctx,
         )
 
-        call_args = mock_cycle_svc.create_crop_cycle.call_args
-        farm_id = call_args[1].get("farm_id") or call_args[0][2]
-        assert farm_id == 1
+        assert result.status.value == "failed"
+        assert "农场上下文" in result.reply
+        mock_session.assert_not_called()
+        mock_crop_svc.find_template_by_name.assert_not_called()
+        mock_cycle_svc.create_crop_cycle.assert_not_called()
 
     @pytest.mark.asyncio
     @patch.object(_create_cycle_mod, "SessionLocal")

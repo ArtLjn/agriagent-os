@@ -329,27 +329,22 @@ class TestLogFarmActivityError:
     @pytest.mark.asyncio
     @patch.object(_mod, "SessionLocal")
     @patch.object(_mod, "log_service")
-    async def test_no_context_farm_id_defaults_to_1(
+    async def test_missing_context_farm_id_fails_without_db_access(
         self, mock_log_svc, mock_session, ctx
     ):
-        """context 无 farm_id 时默认为 1。"""
-        mock_db = MagicMock()
-        mock_session.return_value = mock_db
-
-        farm_log = _make_farm_log()
-        mock_log_svc.create_log.return_value = farm_log
-
+        """context 无 farm_id 时必须失败，不能默认写到 1 号农场。"""
         empty_ctx = SkillContext()
 
         skill = LogFarmActivitySkill()
-        await skill.execute(
+        result = await skill.execute(
             {"operation_type": "浇水", "cycle_id": 1},
             empty_ctx,
         )
 
-        call_args = mock_log_svc.create_log.call_args
-        farm_id = call_args[1].get("farm_id") or call_args[0][2]
-        assert farm_id == 1
+        assert result.status.value == "failed"
+        assert "农场上下文" in result.reply
+        mock_session.assert_not_called()
+        mock_log_svc.create_log.assert_not_called()
 
     @pytest.mark.asyncio
     @patch.object(_mod, "SessionLocal")

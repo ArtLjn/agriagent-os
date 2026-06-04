@@ -30,7 +30,7 @@
 - [x] 5.1 修改 `tests/conftest.py`，将 SQLite 测试 fixture 条件化（支持 SQLite/MySQL 双模式）
 - [x] 5.2 删除 `tests/test_database_wal.py`（SQLite 专有测试）
 - [x] 5.3 审查并修复 6+ 个硬编码 SQLite 连接的测试文件
-- [ ] 5.4 验证所有测试在 SQLite 模式下通过
+- [x] 5.4 验证所有测试在 SQLite 模式下通过
 - [x] 5.5 验证生产 MySQL 模式下通过迁移、启动和健康检查
 
 ## 6. 数据迁移脚本

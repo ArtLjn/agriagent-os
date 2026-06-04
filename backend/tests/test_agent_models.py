@@ -7,6 +7,17 @@ from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 
 
+def test_farm_generates_external_uid(db_session: Session) -> None:
+    """新建 Farm 时应生成不可枚举的外部 UUID。"""
+    farm = Farm(name="第二农场")
+    db_session.add(farm)
+    db_session.commit()
+
+    assert farm.uid
+    assert len(farm.uid) == 36
+    assert farm.uid != str(farm.id)
+
+
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")

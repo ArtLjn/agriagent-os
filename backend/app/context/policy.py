@@ -1,9 +1,9 @@
 """Context 构建策略入口。"""
 
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Protocol
 
+from app.core.compat import StrEnum
 from app.context.models import ContextBlock
 from app.context.selectors import (
     ConversationSelector,

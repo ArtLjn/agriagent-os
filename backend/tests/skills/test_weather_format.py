@@ -1,6 +1,10 @@
 """天气预报格式化测试 — 验证 Markdown 表格输出。"""
 
 import importlib
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from skillify.core.context import SkillContext
 
 _weather_mod = importlib.import_module("app.agent.skills.weather.scripts.main")
 WeatherSkill = _weather_mod.WeatherSkill
@@ -74,3 +78,37 @@ class TestWeatherFormatMarkdown:
         """无数据时返回友好提示。"""
         reply = _weather_mod._format_weather_reply("苏州", {"daily": {}})
         assert "暂时获取不到天气数据" in reply
+
+
+class TestWeatherLocationMissing:
+    """验证缺少位置时走安全澄清路径。"""
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    @patch.object(_weather_mod, "SessionLocal")
+    async def test_no_city_and_no_user_location_needs_clarify(
+        self, mock_session_local, mock_fetch_weather
+    ):
+        """无 city、无用户设置、无 Farm.location 时不使用默认城市。"""
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        mock_session_local.return_value = db
+
+        result = await WeatherSkill().execute({}, SkillContext(farm_id=1))
+
+        assert result.status.value == "need_clarify"
+        assert "城市" in result.reply
+        mock_fetch_weather.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    async def test_explicit_city_can_query_without_farm_location(
+        self, mock_fetch_weather
+    ):
+        """用户显式给城市时不依赖 Farm.location。"""
+        mock_fetch_weather.return_value = _make_weather_data()
+
+        result = await WeatherSkill().execute({"city": "上海"}, SkillContext())
+
+        assert result.status.value == "success"
+        mock_fetch_weather.assert_awaited_once()

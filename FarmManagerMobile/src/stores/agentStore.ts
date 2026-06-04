@@ -175,13 +175,19 @@ export const useAgentStore = create<AgentState, [["zustand/persist", unknown]]>(
         }
         try {
           const state = useAgentStore.getState();
+          const requestCity = state.cityName;
+          const requestLat = state.cityLat;
+          const requestLon = state.cityLon;
           const res = await weatherApi.getForecast(
             days ?? 3,
-            state.cityLat,
-            state.cityLon,
-            state.cityName
+            requestLat,
+            requestLon,
+            requestCity
           );
-          const cacheKey = `weather_cache_${state.cityName}`;
+          if (useAgentStore.getState().cityName !== requestCity) {
+            return;
+          }
+          const cacheKey = `weather_cache_${requestCity}`;
           await AsyncStorage.setItem(cacheKey, JSON.stringify(res.data));
           set({ weather: res.data, loading: false });
         } catch (err: any) {
@@ -205,7 +211,7 @@ export const useAgentStore = create<AgentState, [["zustand/persist", unknown]]>(
       setCity: async (name, lat, lon) => {
         set({ cityName: name, cityLat: lat, cityLon: lon });
         await useAgentStore.getState().loadCachedWeather();
-        useAgentStore.getState().fetchWeather();
+        await useAgentStore.getState().fetchWeather();
       },
 
       clearChat: () =>

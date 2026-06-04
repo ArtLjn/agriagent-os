@@ -7,6 +7,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.core.database import SessionLocal
+from app.agent.skills.context import require_farm_context
 from app.schemas.crop import CropTemplateCreate, GrowthStageCreate
 from app.services import crop_service
 
@@ -59,7 +60,9 @@ class CreateCropTemplateSkill(Skill):
             )
 
         variety = params.get("variety", "").strip() or None
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "创建模板")
+        if context_error:
+            return context_error
 
         db = SessionLocal()
         try:

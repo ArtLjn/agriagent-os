@@ -129,14 +129,14 @@ export const HomeScreen: React.FC = () => {
   const greeting = getGreeting(nickname);
   const weatherCondition = getWeatherCondition(weather);
 
-  const handleCitySelect = (city: {
+  const handleCitySelect = async (city: {
     name: string;
     lat: number;
     lon: number;
   }) => {
-    setCity(city.name, city.lat, city.lon);
     setSettingsCity({ name: city.name, lat: city.lat, lon: city.lon });
-    fetchWeather();
+    await setCity(city.name, city.lat, city.lon);
+    await syncToServer();
   };
 
   return (

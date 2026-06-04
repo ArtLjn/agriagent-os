@@ -84,3 +84,16 @@ class TestFilterOutput:
         result = filter_output(text)
         assert "[手机号已隐藏]" in result
         assert "[邮箱已隐藏]" in result
+
+    def test_single_quote_tool_call_leak_returns_fallback(self):
+        text = "{'name': 'get_farm_status', 'parameters': {}}"
+
+        assert filter_output(text) == "检测到工具调用格式异常，正在重新处理。请稍等片刻。"
+
+    def test_single_quote_tool_call_removed_from_partial_reply(self):
+        text = "好的 {'name': 'get_farm_status', 'parameters': {}} 稍等"
+
+        result = filter_output(text)
+
+        assert "get_farm_status" not in result
+        assert "parameters" not in result

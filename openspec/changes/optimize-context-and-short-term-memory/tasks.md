@@ -8,7 +8,7 @@
 ## 2. Token 预算与 Trace
 
 - [x] 2.1 扩展 TokenBudget，记录 required block 超预算、压缩原因和丢弃原因
-- [ ] 2.2 增加最终 prompt 预算检查，覆盖 system prompt、热上下文、工作记忆、按需上下文和工具结果
+- [x] 2.2 增加最终 prompt 预算检查，覆盖 system prompt、热上下文、工作记忆、按需上下文和工具结果
 - [x] 2.3 改进 context_build trace，记录启用 selector、候选 block、保留 block、压缩 block、丢弃 block、token 估算和耗时
 - [x] 2.4 为 TokenBudget 添加单元测试，覆盖低于预算、超过预算、required block 超预算和可压缩 block 场景
 
@@ -32,8 +32,11 @@
 
 - [x] 5.1 明确用户上下文来源顺序：认证用户、当前 farm、UserSetting、Farm.location，不允许从自然语言推断身份或位置
 - [x] 5.2 调整用户位置注入规则，默认城市优先于 Farm.location，坐标优先供天气 provider 使用
-- [ ] 5.3 增加缺失位置处理测试，验证天气问题在无 location 时追问或走安全错误路径
+- [x] 5.3 增加缺失位置处理测试，验证天气问题在无 location 时追问或走安全错误路径
 - [x] 5.4 更新 farm context selector，确保普通闲聊只注入热上下文，业务问题才注入摘要候选
+- [x] 5.5 为 Farm 增加不可枚举 `uid`，新建和历史农场均必须有 UUID
+- [x] 5.6 Agent Runtime 和 SkillContext 必须由服务端注入 `farm_id`/`farm_uid`，Skill 参数不得暴露租户归属
+- [x] 5.7 移除所有 Skill 的 `farm_id=1` 兜底，缺少可信农场上下文时必须失败且不访问数据库
 
 ## 6. 缓存失效
 

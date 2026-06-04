@@ -110,6 +110,34 @@ describe("fetchWeather", () => {
     expect(useAgentStore.getState().weather).toEqual(MOCK_WEATHER_DATA);
     expect(useAgentStore.getState().error).toBe("网络错误");
   });
+
+  it("旧城市请求慢返回时不覆盖当前城市天气", async () => {
+    let resolveSuzhou: (value: unknown) => void = () => {};
+    weatherApi.getForecast
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSuzhou = resolve;
+        })
+      )
+      .mockResolvedValueOnce({
+        data: { ...MOCK_WEATHER_DATA, location: "宁德" },
+      });
+
+    const suzhouRequest = useAgentStore.getState().fetchWeather(3);
+    useAgentStore.setState({
+      cityName: "宁德",
+      cityLat: 26.66,
+      cityLon: 119.53,
+    });
+    await useAgentStore.getState().fetchWeather(3);
+    resolveSuzhou({ data: { ...MOCK_WEATHER_DATA, location: "苏州" } });
+    await suzhouRequest;
+
+    expect(useAgentStore.getState().weather).toEqual({
+      ...MOCK_WEATHER_DATA,
+      location: "宁德",
+    });
+  });
 });
 
 describe("setCity", () => {
@@ -124,6 +152,22 @@ describe("setCity", () => {
     expect(useAgentStore.getState().cityName).toBe("宁德");
     expect(AsyncStorage.getItem).toHaveBeenCalledWith("weather_cache_宁德");
     expect(weatherApi.getForecast).toHaveBeenCalledTimes(1);
+  });
+
+  it("切换城市后的天气请求使用新城市参数", async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(null);
+    weatherApi.getForecast.mockResolvedValueOnce({
+      data: MOCK_WEATHER_DATA,
+    });
+
+    await useAgentStore.getState().setCity("宁德", 26.66, 119.53);
+
+    expect(weatherApi.getForecast).toHaveBeenCalledWith(
+      3,
+      26.66,
+      119.53,
+      "宁德"
+    );
   });
 });
 

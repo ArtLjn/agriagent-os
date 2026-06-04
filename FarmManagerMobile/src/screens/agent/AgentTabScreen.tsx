@@ -57,7 +57,7 @@ export const AgentTabScreen: React.FC = () => {
           <View style={styles.headerAvatar}>
             <Icon name="robot-happy" size={36} color={colors.primary} />
           </View>
-          <Text style={styles.headerTitle}>AI 农事助手</Text>
+          <Text style={styles.headerTitle}>芽芽顾问</Text>
           <Text style={styles.headerSubtitle}>
             智能分析 · 专业建议 · 实时解答
           </Text>

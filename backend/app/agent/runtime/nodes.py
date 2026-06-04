@@ -21,6 +21,7 @@ from app.agent.runtime.llm_support import (
     _record_llm_success,
     _warm_tool_caches,
 )
+from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.agent.runtime.messages import (
     _detect_missed_tool_call,
     _extract_tokens_used,
@@ -110,8 +111,11 @@ async def _llm_node(state: AgentState) -> dict:
         return {"messages": [AIMessage(content=confirm)]}
 
     farm_id = state.get("farm_id", 1)
+    if not isinstance(farm_id, int) or farm_id <= 0:
+        return {"messages": [AIMessage(content="缺少可信农场上下文，无法继续处理。")]}
+    farm_uid = state.get("farm_uid")
 
-    tools = get_langchain_tools(farm_id=farm_id)
+    tools = get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
     has_tool_results = bool(tool_msgs)
     intent = state.get("intent", "agent")
     user_msg = _find_last_human_message(messages)
@@ -229,7 +233,26 @@ async def _llm_node(state: AgentState) -> dict:
 
     system = SystemMessage(content=system_text)
     messages = sliding_window_compact(state["messages"])
+    messages, final_budget = FinalPromptBudget().apply(system_text, messages)
     input_summary = _find_last_human_message(state["messages"])[:200]
+    collector.record(
+        node_type="prompt_budget",
+        node_name="final_prompt",
+        input_data={
+            "system_prompt": True,
+            "context_blocks": [block.key for block in context_bundle.blocks],
+            "messages": len(messages),
+        },
+        output_data=final_budget.summary(),
+        token_usage={"prompt_tokens": final_budget.total_tokens},
+    )
+    if final_budget.over_budget:
+        logger.warning(
+            "最终 prompt 仍超预算 | total=%d max=%d actions=%s",
+            final_budget.total_tokens,
+            final_budget.max_tokens,
+            final_budget.actions,
+        )
 
     # Token 配额检查
     if not check_quota(farm_id=farm_id):

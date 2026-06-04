@@ -94,13 +94,18 @@ def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
         return "", [fallback_item]
 
 
-async def _execute_pending_action(farm_id: int, skill_name: str, params: dict) -> str:
+async def _execute_pending_action(
+    farm_id: int, skill_name: str, params: dict, farm_uid: str | None = None
+) -> str:
     """执行 pending action 中存储的写操作 Skill。"""
     start = time.time()
     error_msg = None
     result_str = ""
     try:
-        tool_map = {t.name: t for t in get_langchain_tools(farm_id=farm_id)}
+        tool_map = {
+            t.name: t
+            for t in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
+        }
         tool = tool_map.get(skill_name)
         if not tool:
             return f"未知工具: {skill_name}"

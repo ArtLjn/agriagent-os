@@ -21,6 +21,7 @@ from app.infra.pending_actions import (
     store_pending,
 )
 from app.infra.trace_context import clear_trace, init_trace
+from app.models.farm import Farm
 from app.services.conversation_service import get_recent_messages
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,14 @@ def _build_history_messages(
     return messages
 
 
+def _resolve_farm_uid(db: Session | None, farm_id: int) -> str | None:
+    """从可信内部 farm_id 解析外部 UUID。"""
+    if db is None:
+        return None
+    farm = db.query(Farm).filter(Farm.id == farm_id).first()
+    return farm.uid if farm else None
+
+
 def _format_follow_up_intro(skill_name: str, params: dict) -> str:
     if skill_name == "create_crop_cycle":
         crop_name = str(params.get("crop_name") or "").strip()
@@ -81,10 +90,11 @@ def _extract_missing_template_crop(pending: PendingAction, reply: str) -> str:
 async def _execute_advisor_pending_action(
     farm_id: int,
     pending: PendingAction,
+    farm_uid: str | None = None,
 ) -> str:
     """执行 Advisor 兜底 pending action，并处理链式后续确认。"""
     manager = get_skill_manager()
-    ctx = build_skill_context(farm_id)
+    ctx = build_skill_context(farm_id, farm_uid=farm_uid)
     exec_result = await manager.execute(pending.skill_name, pending.params, ctx)
     reply = exec_result.result.reply if exec_result.result else "操作完成。"
 
@@ -167,6 +177,7 @@ async def invoke_advisor(
 
     init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
+    farm_uid = _resolve_farm_uid(db, farm_id)
 
     pending = get_pending(farm_id)
     if pending:
@@ -178,7 +189,9 @@ async def invoke_advisor(
                 pending.skill_name,
             )
             try:
-                reply = await _execute_advisor_pending_action(farm_id, pending)
+                reply = await _execute_advisor_pending_action(
+                    farm_id, pending, farm_uid=farm_uid
+                )
             except Exception as e:
                 logger.error(
                     "pending action 执行失败 | farm_id=%s | error=%s", farm_id, e
@@ -204,7 +217,12 @@ async def invoke_advisor(
 
     try:
         result = await graph.ainvoke(
-            {"messages": messages, "farm_id": farm_id, "intent": intent.value},
+            {
+                "messages": messages,
+                "farm_id": farm_id,
+                "farm_uid": farm_uid,
+                "intent": intent.value,
+            },
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_invoke",
@@ -246,6 +264,7 @@ async def stream_advisor(
 
     init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
+    farm_uid = _resolve_farm_uid(db, farm_id)
 
     pending = get_pending(farm_id)
     if pending:
@@ -257,7 +276,9 @@ async def stream_advisor(
                 pending.skill_name,
             )
             try:
-                reply = await _execute_advisor_pending_action(farm_id, pending)
+                reply = await _execute_advisor_pending_action(
+                    farm_id, pending, farm_uid=farm_uid
+                )
             except Exception as e:
                 logger.error(
                     "pending action 执行失败 | farm_id=%s | error=%s", farm_id, e
@@ -286,7 +307,12 @@ async def stream_advisor(
     step = 0
     try:
         async for event in graph.astream(
-            {"messages": messages, "farm_id": farm_id, "intent": intent.value},
+            {
+                "messages": messages,
+                "farm_id": farm_id,
+                "farm_uid": farm_uid,
+                "intent": intent.value,
+            },
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_stream",

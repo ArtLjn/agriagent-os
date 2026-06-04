@@ -5,6 +5,7 @@ from datetime import date
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.schemas.cost import CostRecordCreate
 from app.services.cost_service import create_record
@@ -81,7 +82,9 @@ class CreateCostRecordSkill(Skill):
         record_date = self._parse_date(params.get("record_date"))
         record_type = params.get("record_type", "cost")
         note = params.get("note")
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "记账")
+        if context_error:
+            return context_error
 
         # 构造 Schema 并创建记录
         record_create = CostRecordCreate(
