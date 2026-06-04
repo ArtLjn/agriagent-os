@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, require_admin
 from app.models.token_stats import TokenDailyStats
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -17,26 +18,31 @@ router = APIRouter(prefix="/admin/stats", tags=["admin-stats"])
 
 @router.get("/tokens")
 def token_summary(
-    farm_id: int = Query(1),
+    user_id: str | None = Query(None),
+    farm_id: int | None = Query(None),
     days: int = Query(7, ge=1, le=90),
     db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
 ) -> dict:
     """近 N 天 Token 用量汇总（按 model + call_type 分组）。"""
     start_date = (date.today() - timedelta(days=days)).isoformat()
 
+    query = db.query(
+        TokenDailyStats.model,
+        TokenDailyStats.call_type,
+        func.sum(TokenDailyStats.prompt_tokens),
+        func.sum(TokenDailyStats.completion_tokens),
+        func.sum(TokenDailyStats.total_tokens),
+        func.sum(TokenDailyStats.request_count),
+    )
+    filters = [TokenDailyStats.date >= start_date]
+    if user_id is not None:
+        filters.append(TokenDailyStats.user_id == user_id)
+    if farm_id is not None:
+        filters.append(TokenDailyStats.farm_id == farm_id)
+
     rows = (
-        db.query(
-            TokenDailyStats.model,
-            TokenDailyStats.call_type,
-            func.sum(TokenDailyStats.prompt_tokens),
-            func.sum(TokenDailyStats.completion_tokens),
-            func.sum(TokenDailyStats.total_tokens),
-            func.sum(TokenDailyStats.request_count),
-        )
-        .filter(
-            TokenDailyStats.farm_id == farm_id,
-            TokenDailyStats.date >= start_date,
-        )
+        query.filter(*filters)
         .group_by(TokenDailyStats.model, TokenDailyStats.call_type)
         .all()
     )
@@ -67,21 +73,23 @@ def token_summary(
 
 @router.get("/tokens/daily")
 def token_daily(
-    farm_id: int = Query(1),
+    user_id: str | None = Query(None),
+    farm_id: int | None = Query(None),
     date_str: str | None = Query(None, alias="date"),
     db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
 ) -> dict:
     """指定日期的 Token 用量明细。"""
     target = date_str or date.today().isoformat()
 
-    rows = (
-        db.query(TokenDailyStats)
-        .filter(
-            TokenDailyStats.farm_id == farm_id,
-            TokenDailyStats.date == target,
-        )
-        .all()
-    )
+    query = db.query(TokenDailyStats)
+    filters = [TokenDailyStats.date == target]
+    if user_id is not None:
+        filters.append(TokenDailyStats.user_id == user_id)
+    if farm_id is not None:
+        filters.append(TokenDailyStats.farm_id == farm_id)
+
+    rows = query.filter(*filters).all()
 
     return {
         "date": target,
@@ -89,6 +97,8 @@ def token_daily(
             {
                 "model": r.model,
                 "call_type": r.call_type,
+                "user_id": r.user_id,
+                "farm_id": r.farm_id,
                 "prompt_tokens": r.prompt_tokens,
                 "completion_tokens": r.completion_tokens,
                 "total_tokens": r.total_tokens,

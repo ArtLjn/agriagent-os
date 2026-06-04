@@ -30,6 +30,11 @@ class TestInitTrace:
         trace = init_trace(farm_id=1, session_id="sess-abc")
         assert trace.session_id == "sess-abc"
 
+    def test_init_with_user_id_and_call_type(self) -> None:
+        trace = init_trace(farm_id=1, user_id="u1", call_type="stream_chat")
+        assert trace.user_id == "u1"
+        assert trace.call_type == "stream_chat"
+
     def test_init_default_session_id_is_empty(self) -> None:
         trace = init_trace(farm_id=1)
         assert trace.session_id == ""

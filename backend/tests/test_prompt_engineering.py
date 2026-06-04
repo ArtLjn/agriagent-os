@@ -84,10 +84,14 @@ def test_system_prompt_snapshot_covers_layered_output():
     assert result.startswith("【语言规则】")
     assert "【安全护栏】" in result
     assert "【角色定义】" in result
+    assert "芽芽" in result
+    assert "轻松闲聊" in result
     assert "【能力范围】" in result
     assert "【工具调用规范】" in result
     assert result.index("【时间信息】") < result.index("【回复格式】")
     assert "<location>苏州</location>" in result
+    assert "称呼用户为" not in result
+    assert "不要使用 Markdown" not in result
     assert result.count("【语言规则】") == 1
 
 
@@ -101,9 +105,9 @@ def test_business_parse_prompt_snapshot_covers_cost_parse():
     )
 
     assert result.startswith("【语言规则】")
-    assert "【任务说明】" in result
+    assert "将记账描述解析为 JSON 对象" in result
     assert "昨天买化肥花了200" in result
-    assert '"record_date": "2026-05-28"' in result
+    assert '用户说的"昨天"对应 2026-05-28' in result
 
 
 def test_prompt_replay_can_compare_two_versions_manually():

@@ -161,13 +161,52 @@ def _detect_missed_tool_call(
 
 def _extract_tokens_used(response: AIMessage) -> int | None:
     """从 LLM 响应中提取 token 用量。"""
+    usage = extract_token_usage(response)
+    if usage is not None:
+        return usage["total_tokens"]
+    return None
+
+
+def _normalize_token_usage(usage: dict, usage_source: str) -> dict | None:
+    """把不同 provider 的 token 字段归一化为统一结构。"""
     try:
-        usage = response.response_metadata.get("token_usage", {})
-        total = usage.get("total_tokens")
-        if total is not None:
-            return int(total)
+        prompt_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
+        completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
+        total_tokens = usage.get("total_tokens")
+
+        if prompt_tokens is None:
+            prompt_tokens = 0
+        if completion_tokens is None:
+            completion_tokens = 0
+        if total_tokens is None:
+            total_tokens = int(prompt_tokens) + int(completion_tokens)
+
+        return {
+            "prompt_tokens": int(prompt_tokens),
+            "completion_tokens": int(completion_tokens),
+            "total_tokens": int(total_tokens),
+            "usage_source": usage_source,
+        }
     except (AttributeError, TypeError, ValueError):
-        pass
+        return None
+
+
+def extract_token_usage(response: AIMessage) -> dict | None:
+    """从 LLM 响应中提取真实 token usage，缺失时返回 None。"""
+    usage_metadata = getattr(response, "usage_metadata", None)
+    if usage_metadata:
+        normalized = _normalize_token_usage(usage_metadata, "usage_metadata")
+        if normalized is not None:
+            return normalized
+
+    response_metadata = getattr(response, "response_metadata", None) or {}
+    for key in ("token_usage", "usage"):
+        usage = response_metadata.get(key)
+        if usage:
+            normalized = _normalize_token_usage(usage, "provider")
+            if normalized is not None:
+                return normalized
+
     return None
 
 
@@ -176,5 +215,6 @@ __all__ = [
     "_extract_tokens_used",
     "_extract_tool_calls_from_content",
     "_find_last_human_message",
+    "extract_token_usage",
     "sliding_window_compact",
 ]

@@ -10,6 +10,7 @@ import {
   Descriptions,
   message,
   Statistic,
+  Progress,
   Row,
   Col,
   Card,
@@ -26,6 +27,8 @@ import {
   type UserListItem,
   type UserDetail,
   type ListUsersParams,
+  type UserQuotaStatus,
+  type UserQuotaOverviewItem,
 } from "../../api/users";
 
 const BG_SECONDARY = "#161b22";
@@ -50,6 +53,7 @@ export default function Users() {
   const [phoneKeyword, setPhoneKeyword] = useState("");
   const [detailVisible, setDetailVisible] = useState(false);
   const [detail, setDetail] = useState<UserDetail | null>(null);
+  const [detailQuota, setDetailQuota] = useState<UserQuotaStatus | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const fetchUsers = useCallback(async () => {
@@ -58,9 +62,21 @@ export default function Users() {
       const params: ListUsersParams = { page, size };
       if (statusFilter) params.status = statusFilter;
       if (phoneKeyword.trim()) params.phone_keyword = phoneKeyword.trim();
-      const res = await usersApi.list(params);
-      setUsers(res.data.items);
-      setTotal(res.data.total);
+      const quotaParams = statusFilter ? { page, size, status: statusFilter } : { page, size };
+      const [usersRes, quotaRes] = await Promise.all([
+        usersApi.list(params),
+        usersApi.getQuotaOverview(quotaParams),
+      ]);
+      const quotaMap = new Map(
+        quotaRes.data.items.map((item) => [item.user_id, item])
+      );
+      setUsers(
+        usersRes.data.items.map((user) => ({
+          ...user,
+          quota: quotaMap.get(user.id),
+        }))
+      );
+      setTotal(usersRes.data.total);
     } catch {
       message.error("加载用户列表失败");
     } finally {
@@ -69,15 +85,21 @@ export default function Users() {
   }, [page, size, statusFilter, phoneKeyword]);
 
   useEffect(() => {
-    fetchUsers();
+    void Promise.resolve().then(fetchUsers);
   }, [fetchUsers]);
 
   const handleViewDetail = async (userId: string) => {
     setDetailLoading(true);
     setDetailVisible(true);
+    setDetail(null);
+    setDetailQuota(null);
     try {
-      const res = await usersApi.getDetail(userId);
-      setDetail(res.data);
+      const [detailRes, quotaRes] = await Promise.all([
+        usersApi.getDetail(userId),
+        usersApi.getQuota(userId),
+      ]);
+      setDetail(detailRes.data);
+      setDetailQuota(quotaRes.data);
     } catch {
       message.error("加载用户详情失败");
     } finally {
@@ -112,6 +134,35 @@ export default function Users() {
 
   const activeCount = users.filter((u) => u.status === "active").length;
   const disabledCount = users.filter((u) => u.status === "disabled").length;
+
+  const getQuotaStatus = (percent: number) => {
+    if (percent >= 1) return "exception";
+    if (percent >= 0.8) return "exception";
+    if (percent >= 0.6) return "active";
+    return "success";
+  };
+
+  const renderQuotaProgress = (
+    quota: UserQuotaOverviewItem | undefined,
+    usageKey: "monthly_usage" | "weekly_usage",
+    limitKey: "monthly_limit" | "weekly_limit",
+    percentKey: "monthly_percent" | "weekly_percent"
+  ) => {
+    if (!quota) return "-";
+    const percent = Math.round(quota[percentKey] * 100);
+    return (
+      <div style={{ minWidth: 150 }}>
+        <Progress
+          percent={Math.min(100, percent)}
+          size="small"
+          status={getQuotaStatus(quota[percentKey])}
+        />
+        <div style={{ color: TEXT_SECONDARY, fontSize: 12 }}>
+          {quota[usageKey].toLocaleString()} / {quota[limitKey].toLocaleString()}
+        </div>
+      </div>
+    );
+  };
 
   const columns: ColumnsType<UserListItem> = [
     {
@@ -154,6 +205,20 @@ export default function Users() {
       key: "farm_name",
       width: 140,
       render: (text: string | null) => text || "-",
+    },
+    {
+      title: "月用量/月限额",
+      key: "monthly_quota",
+      width: 180,
+      render: (_: unknown, record: UserListItem) =>
+        renderQuotaProgress(record.quota, "monthly_usage", "monthly_limit", "monthly_percent"),
+    },
+    {
+      title: "周用量/周限额",
+      key: "weekly_quota",
+      width: 180,
+      render: (_: unknown, record: UserListItem) =>
+        renderQuotaProgress(record.quota, "weekly_usage", "weekly_limit", "weekly_percent"),
     },
     {
       title: "注册时间",
@@ -305,6 +370,39 @@ export default function Users() {
             <Descriptions.Item label="农场位置">
               {detail.farm_location || "-"}
             </Descriptions.Item>
+            {detailQuota && (
+              <>
+                <Descriptions.Item label="月限额">
+                  {detailQuota.monthly_limit.toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="月已用">
+                  {detailQuota.monthly_usage.toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="月剩余">
+                  {detailQuota.monthly_remaining.toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="月周期">
+                  {detailQuota.monthly_start} 至 {detailQuota.monthly_end}
+                </Descriptions.Item>
+                <Descriptions.Item label="周限额">
+                  {detailQuota.weekly_limit.toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="周已用">
+                  {detailQuota.weekly_usage.toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="周剩余">
+                  {detailQuota.weekly_remaining.toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="周周期">
+                  {detailQuota.weekly_start} 至 {detailQuota.weekly_end}
+                </Descriptions.Item>
+                <Descriptions.Item label="配额状态">
+                  <Tag color={detailQuota.status === "exceeded" ? "red" : detailQuota.status === "warning" ? "orange" : "green"}>
+                    {detailQuota.status}
+                  </Tag>
+                </Descriptions.Item>
+              </>
+            )}
           </Descriptions>
         ) : null}
         {detail && (

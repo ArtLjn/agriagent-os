@@ -5,7 +5,7 @@
 
 #### Scenario: 默认展示近 7 天全量统计
 - **WHEN** 用户进入 `/dev/tokens` 页面
-- **THEN** 顶部展示统计卡片（总 tokens、总请求数、月配额进度条、周配额进度条），下方展示近 7 天趋势图
+- **THEN** 顶部展示统计卡片（总 tokens、总请求数、全局默认月配额进度条、全局默认周配额进度条），下方展示近 7 天趋势图
 
 #### Scenario: 切换时间范围
 - **WHEN** 用户选择"近 30 天"
@@ -18,6 +18,7 @@
 #### Scenario: 未选择用户时展示全量
 - **WHEN** 用户选择器为"全部用户"
 - **THEN** 展示所有用户的汇总统计
+- **AND** API 请求 SHALL 不传 user_id 或 farm_id
 
 ## ADDED Requirements
 
@@ -31,3 +32,15 @@
 #### Scenario: 配额数据来源
 - **WHEN** 选中某用户
 - **THEN** 进度条使用该用户的个人配额限额；未选中时使用全局默认限额
+
+### Requirement: Token 配置展示同步
+配置页面 SHALL 展示后端返回的月/周默认 token 配额，并使用统一的 warn/reject 超额动作枚举。
+
+#### Scenario: 展示月/周默认限额
+- **WHEN** 管理员进入配置页面
+- **THEN** Token 配额区块 SHALL 展示 monthly_limit 和 weekly_limit
+- **AND** 不再展示旧的 daily_limit 作为主要配额
+
+#### Scenario: 展示 reject 动作
+- **WHEN** 后端返回 token_quota.over_quota_action 为 "reject"
+- **THEN** 前端 SHALL 显示拒绝调用状态

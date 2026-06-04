@@ -58,3 +58,47 @@ class UpdateUserStatusResponse(BaseModel):
     status: str
 
     model_config = {"from_attributes": True}
+
+
+class UserQuotaStatus(BaseModel):
+    """用户 Token 配额状态。"""
+
+    monthly_limit: int
+    monthly_usage: int
+    monthly_remaining: int
+    monthly_start: str
+    monthly_end: str
+    weekly_limit: int
+    weekly_usage: int
+    weekly_remaining: int
+    weekly_start: str
+    weekly_end: str
+    status: str
+
+
+class UpdateUserQuotaRequest(BaseModel):
+    """修改用户 Token 配额请求。"""
+
+    token_monthly_limit: int | None = Field(None, ge=0)
+    token_weekly_limit: int | None = Field(None, ge=0)
+
+
+class UserQuotaOverviewItem(BaseModel):
+    """用户配额概览项。"""
+
+    user_id: str
+    nickname: str
+    phone: str
+    monthly_limit: int
+    monthly_usage: int
+    monthly_percent: float
+    weekly_limit: int
+    weekly_usage: int
+    weekly_percent: float
+    status: str
+
+
+class UserQuotaOverviewResponse(PaginatedResponse[UserQuotaOverviewItem]):
+    """用户配额概览分页响应。"""
+
+    pass

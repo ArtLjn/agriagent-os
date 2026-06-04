@@ -29,6 +29,7 @@ interface AgentState {
   generateReport: (reportType: string, cycleId?: number) => Promise<void>;
   fetchWeather: (days?: number) => Promise<void>;
   fetchReports: () => Promise<void>;
+  deleteReports: (ids: number[]) => Promise<void>;
   loadCachedWeather: () => Promise<void>;
   setCity: (name: string, lat?: number, lon?: number) => Promise<void>;
   clearChat: () => void;
@@ -152,6 +153,18 @@ export const useAgentStore = create<AgentState, [["zustand/persist", unknown]]>(
           set({ reports: res.data.items });
         } catch (_e) {
           // 报告列表加载失败不阻塞主流程
+        }
+      },
+
+      deleteReports: async (ids) => {
+        set({ loading: true, error: null });
+        try {
+          await Promise.all(ids.map((id) => agentApi.deleteReport(id)));
+          const res = await agentApi.getReportHistory();
+          set({ reports: res.data.items, loading: false });
+        } catch (err: any) {
+          set({ error: err.message, loading: false });
+          throw err;
         }
       },
 

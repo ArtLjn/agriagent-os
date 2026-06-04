@@ -94,6 +94,7 @@ class TestTokenStatsAccumulation:
 
         dao.accumulate_token_stats(
             farm_id=1,
+            user_id="u1",
             date_str="2026-05-26",
             model="qwen3.6-flash",
             call_type="chat",
@@ -102,4 +103,6 @@ class TestTokenStatsAccumulation:
         )
 
         mock_session.add.assert_called_once()
+        created = mock_session.add.call_args[0][0]
+        assert created.user_id == "u1"
         mock_session.commit.assert_called_once()

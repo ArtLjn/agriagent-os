@@ -59,10 +59,18 @@ const PROMPT_TONES = {
 
 const getGreeting = () => {
   const hour = new Date().getHours();
-  if (hour < 6) return "夜深了，早点休息";
-  if (hour < 12) return "早上好";
-  if (hour < 14) return "中午好";
-  if (hour < 19) return "下午好";
+  if (hour < 6) {
+    return "夜深了，早点休息";
+  }
+  if (hour < 12) {
+    return "早上好";
+  }
+  if (hour < 14) {
+    return "中午好";
+  }
+  if (hour < 19) {
+    return "下午好";
+  }
   return "晚上好";
 };
 
@@ -75,6 +83,7 @@ export const AgentChatScreen: React.FC = () => {
     loading: isLoading,
     reports,
     fetchReports,
+    deleteReports,
   } = useAgentStore();
   const [inputText, setInputText] = useState("");
   const [activeTab, setActiveTab] = useState<"chat" | "report">("chat");
@@ -374,6 +383,7 @@ export const AgentChatScreen: React.FC = () => {
         <ReportListView
           reports={reports}
           onGenerate={() => navigation.navigate("AgentReport" as never)}
+          onDeleteReports={deleteReports}
           onViewReport={(r) =>
             (navigation as any).navigate("AgentReport", {
               content: r.content,

@@ -37,6 +37,15 @@ class TestGetConfig:
         key = data["ai"]["api_key"]
         assert "***" in key
 
+    def test_config_returns_monthly_and_weekly_quota(self, client) -> None:
+        resp = client.get("/admin/config")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["token_quota"]["monthly_limit"] == 3000000
+        assert data["token_quota"]["weekly_limit"] == 750000
+        assert data["token_quota"]["over_quota_action"] == "reject"
+        assert "daily_limit" not in data["token_quota"]
+
 
 class TestClearCache:
     def test_clear_cache(self, client) -> None:

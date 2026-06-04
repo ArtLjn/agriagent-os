@@ -23,6 +23,8 @@ class TraceInfo:
     session_id: str
     farm_id: int
     created_at: float
+    user_id: str | None = None
+    call_type: str = "chat"
 
 
 _trace_ctx: contextvars.ContextVar[TraceInfo | None] = contextvars.ContextVar(
@@ -33,13 +35,21 @@ _round_ctx: contextvars.ContextVar[int] = contextvars.ContextVar(
 )
 
 
-def init_trace(farm_id: int, session_id: str = "", request_id: str = "") -> TraceInfo:
+def init_trace(
+    farm_id: int,
+    session_id: str = "",
+    request_id: str = "",
+    user_id: str | None = None,
+    call_type: str = "chat",
+) -> TraceInfo:
     """初始化追踪上下文，生成唯一 request_id。"""
     trace = TraceInfo(
         request_id=request_id or uuid.uuid4().hex[:8],
         session_id=session_id,
         farm_id=farm_id,
         created_at=time.time(),
+        user_id=user_id,
+        call_type=call_type,
     )
     _trace_ctx.set(trace)
     _round_ctx.set(0)

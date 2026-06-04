@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-06-03
+last_updated: 2026-06-04
 status: active
 ---
 
@@ -7,17 +7,24 @@ status: active
 
 ## 当前架构
 
-当前后端是 FastAPI + SQLAlchemy + LangGraph + Skill 工具调用体系，目录仍以技术层为主：
+当前后端是 FastAPI + SQLAlchemy + LangGraph + Skill 工具调用体系。入口已迁移到 `app/bootstrap/`，Agent 平台已拆出 application、runtime、planner、executor、response、context、memory、evaluation、observability 等边界；迁移期仍保留部分旧技术层入口。
 
 ```text
 backend/app/
+├── bootstrap/    # 应用工厂、路由注册、中间件、异常、lifespan
 ├── api/          # HTTP 路由、请求校验、依赖注入
-├── services/     # 业务服务和应用编排
+├── modules/      # 已迁移模块：auth、farm
+├── services/     # 迁移期业务服务和应用编排
 ├── models/       # SQLAlchemy 数据模型
 ├── schemas/      # Pydantic 输入输出模型
-├── agent/        # LangGraph、Prompt、Skill、Guardrails
-├── infra/        # trace、限流、缓存、pending action 等适配
-├── core/         # 配置、数据库、安全基础能力
+├── agent/        # Agent application/runtime/planner/executor/skills
+├── prompt/       # Prompt 注册、组合、渲染、回放
+├── context/      # ContextBundle、selector、预算、压缩、缓存
+├── memory/       # 短时记忆、长时记忆接口、检索、observation
+├── evaluation/   # 回放、评测、指标、报告
+├── observability/# 平台观测事件
+├── infra/        # trace、限流、缓存、pending action、熔断等适配
+├── core/         # 配置、数据库、安全、日志、LLM client manager
 └── simulation/   # Agent 仿真和回归基础
 ```
 
@@ -43,6 +50,8 @@ backend/app/
 
 `modules/crop`、`modules/cycle`、`modules/ledger`、`modules/weather`、`modules/conversation`、`modules/feedback`、`modules/admin` 以及平台级 `skills/` 属于后续迁移目标。当前不保留只有 `__init__.py` 的空壳目录，避免目录树和真实职责脱节。
 
+更细的后端结构、请求链路和分图见 [backend-architecture.md](/Users/ljn/Documents/demo/explore/docs/architecture/backend-architecture.md)。
+
 ## Agent 平台边界
 
 Agent 平台由 `agent/`、`prompt/`、`context/`、`memory/`、`evaluation/`、`observability/` 共同组成；Skill 实现当前仍在 `agent/skills/`，后续若拆为平台级 `skills/`，必须同步迁移注册、权限、schema 和执行适配，而不是先建空目录。
@@ -65,12 +74,14 @@ Context 工程边界：Agent 不直接拼接全量业务数据。Runtime 通过 
 ```text
 认证与农场上下文
   → Agent application use case
-  → Planner 意图和任务规划
-  → Context Builder 构建 ContextBundle
-  → Prompt Composer 渲染 Prompt
-  → Runtime 执行图和节点
-  → Executor 调用 Skill
-  → Response Formatter 输出回复
+  → Service 保存会话并处理 pending action
+  → Advisor 兼容入口处理 Guardrails 和直接意图
+  → Runtime 执行 LangGraph 节点
+  → Planner/Tool Selector 筛选候选工具
+  → Context Builder + Memory Service 构建 ContextBundle
+  → Prompt Composer 渲染 system prompt
+  → Executor 并行调用 Skill
+  → Response Formatter / SSE 输出回复
   → Memory observation event
   → Trace 与 Evaluation capture
 ```

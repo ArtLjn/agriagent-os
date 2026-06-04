@@ -1,6 +1,7 @@
 ---
 name: web_search
 type: read-only
+description: 搜索实时网络信息，适合农业政策、新闻、价格、上市时间、热点等需要外部最新资料的问题。
 triggers:
   - 最新
   - 新闻
@@ -12,42 +13,42 @@ triggers:
   - 查一下
   - 最近
   - 实时
+parameters:
+  type: object
+  properties:
+    query:
+      type: string
+      description: "搜索关键词。"
+    categories:
+      type: string
+      description: "搜索类别: general/news/images/videos，默认 general。"
+      default: "general"
+  required:
+    - query
 ---
 
-# web_search
+# 网络搜索
 
-## 类型
-只读(read-only)
+## 何时使用
+用户的问题依赖最新外部信息时使用本 Skill，例如农业政策、新闻、市场价格、上市时间、热点事件和实时资料。
 
-## 触发场景
-- 用户问"最近有什么农业政策"时触发
-- 用户问"今年西瓜价格怎么样"时触发
-- 用户问"XX什么时候上市"时触发
-- 用户问"最新新闻/热点"时触发
-- 任何需要实时网络信息的问题
+## 不要使用
+- 用户查询本农场内部账单、农事、茬口或天气时，不要用搜索，应使用对应内部 Skill。
+- 用户问通用种植知识且不需要最新信息时，可直接回答或结合农场上下文。
+- 当前工具在路由层可能被禁用；禁用时不要声称已经搜索。
 
-## 参数
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| query | string | 是 | 搜索关键词 |
-| categories | string | 否 | 搜索类别: general/news/images/videos，默认 general |
+## 参数推断
+- “最近西瓜价格怎么样” -> `query=2026年 西瓜 价格`。
+- “今年农业补贴政策” -> `query=2026年 农业补贴政策`。
+- “番茄什么时候上市” -> `query=番茄 上市 时间`。
 
-## 返回
-成功时返回格式化的搜索结果，包含标题、摘要、链接、来源引擎。
+## 缺参策略
+- 缺少搜索关键词时必须追问。
+- 未说明类别时默认 `general`。
 
-## 依赖
-- 自建 SearXNG (`http://47.98.253.236:8888`) — 百度 + 360搜索引擎
-- `app/infra/skill_cache.py` — `@cached(ttl_seconds=600)` 10分钟缓存
+## 多工具协作
+如果用户问“结合我农场情况看最近价格”，可先用 `get_farm_status` 获取农场作物，再搜索外部价格信息。
 
-## 错误处理
-| 场景 | 返回 |
-|------|------|
-| query 为空 | FAILED + "请提供搜索关键词" |
-| 请求超时 | FAILED + "搜索请求超时" |
-| HTTP 错误 | FAILED + "搜索服务暂时不可用" |
-| 连接失败 | FAILED + "搜索服务异常" |
-
-## 示例对话
-用户：「最近西瓜价格怎么样」
-Agent → 调用 web_search(query="2026年西瓜价格")
-返回：「搜索关键词: 2026年西瓜价格\n找到 5 条结果\n\n1. ...\n2. ...」
+## 示例
+- 用户：“最近西瓜价格怎么样” -> `web_search(query="2026年 西瓜 价格")`
+- 用户：“最新农业政策有什么” -> `web_search(query="2026年 最新农业政策", categories="news")`

@@ -81,6 +81,7 @@ export const cropApi = {
   },
   createTemplate: (data: CreateTemplateRequest) =>
     apiClient.post('/crops/templates', data),
+  deleteTemplate: (id: number) => apiClient.delete(`/crops/templates/${id}`),
 };
 
 // 种植周期
@@ -93,6 +94,7 @@ export const cycleApi = {
     start_date: string;
     field_name?: string;
   }) => apiClient.post('/cycles', data),
+  deleteCycle: (id: number) => apiClient.delete(`/cycles/${id}`),
   parseCycle: (description: string) => {
     const idempotencyKey = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
       /[xy]/g,
@@ -224,6 +226,7 @@ export const agentApi = {
     apiClient.get('/agent/advice-history', { params: { cycle_id: cycleId } }),
   getReportHistory: (page: number = 1, size: number = 10) =>
     apiClient.get<ReportListResponse>('/agent/reports', { params: { page, size } }),
+  deleteReport: (id: number) => apiClient.delete(`/agent/reports/${id}`),
 };
 
 // 债务管理

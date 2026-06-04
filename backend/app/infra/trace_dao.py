@@ -57,6 +57,7 @@ class TraceDAO:
     def accumulate_token_stats(
         self,
         farm_id: int,
+        user_id: str | None,
         date_str: str,
         model: str,
         call_type: str,
@@ -70,6 +71,7 @@ class TraceDAO:
             existing = (
                 db.query(TokenDailyStats)
                 .filter(
+                    TokenDailyStats.user_id == user_id,
                     TokenDailyStats.farm_id == farm_id,
                     TokenDailyStats.date == date_str,
                     TokenDailyStats.model == model,
@@ -85,6 +87,7 @@ class TraceDAO:
             else:
                 db.add(
                     TokenDailyStats(
+                        user_id=user_id,
                         farm_id=farm_id,
                         date=date_str,
                         model=model,
