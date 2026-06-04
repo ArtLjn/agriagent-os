@@ -69,7 +69,11 @@ def _resolve_farm_uid(db: Session | None, farm_id: int) -> str | None:
 def _format_follow_up_intro(skill_name: str, params: dict) -> str:
     if skill_name == "create_crop_cycle":
         crop_name = str(params.get("crop_name") or "").strip()
-        return f"现在可以继续创建{crop_name}茬口。" if crop_name else "现在可以继续创建茬口。"
+        return (
+            f"现在可以继续创建{crop_name}茬口。"
+            if crop_name
+            else "现在可以继续创建茬口。"
+        )
 
     return "下一步需要继续确认。"
 
@@ -113,7 +117,11 @@ async def _execute_advisor_pending_action(
 
     remove_pending(farm_id)
 
-    if pending.skill_name == "create_crop_cycle" and "系统还没有" in reply and "模板" in reply:
+    if (
+        pending.skill_name == "create_crop_cycle"
+        and "系统还没有" in reply
+        and "模板" in reply
+    ):
         crop_name = _extract_missing_template_crop(pending, reply)
         if crop_name:
             store_pending(
@@ -131,8 +139,7 @@ async def _execute_advisor_pending_action(
                 original_input=f"系统还没有{crop_name}作物模板",
             )
             return (
-                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n"
-                f"{confirm}"
+                f"系统还没有{crop_name}作物模板。创建茬口前需要先创建模板。\n{confirm}"
             )
 
     if pending.follow_up_skill_name and pending.follow_up_params is not None:
@@ -163,6 +170,8 @@ async def invoke_advisor(
     conversation_id: int | None = None,
     session_id: str = "",
     request_id: str = "",
+    user_id: str | None = None,
+    call_type: str = "chat",
 ) -> str:
     """调用建议 Agent 回答用户问题。"""
     ok, reason = check_input(user_input)
@@ -175,7 +184,13 @@ async def invoke_advisor(
     if intent == IntentType.GREETING:
         return filter_output(get_greeting_reply(user_input))
 
-    init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
+    init_trace(
+        farm_id=farm_id,
+        session_id=session_id,
+        request_id=request_id,
+        user_id=user_id,
+        call_type=call_type,
+    )
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
     farm_uid = _resolve_farm_uid(db, farm_id)
 
@@ -222,11 +237,17 @@ async def invoke_advisor(
                 "farm_id": farm_id,
                 "farm_uid": farm_uid,
                 "intent": intent.value,
+                "user_id": user_id,
+                "session_id": session_id,
             },
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_invoke",
-                "metadata": {"farm_id": farm_id, "request_type": "chat"},
+                "metadata": {
+                    "farm_id": farm_id,
+                    "request_type": call_type,
+                    "user_id": user_id,
+                },
             },
         )
     except GraphRecursionError:
@@ -248,6 +269,8 @@ async def stream_advisor(
     conversation_id: int | None = None,
     session_id: str = "",
     request_id: str = "",
+    user_id: str | None = None,
+    call_type: str = "stream_chat",
 ) -> AsyncGenerator[str, None]:
     """流式调用建议 Agent，逐 token 返回最终 AI 回复。"""
     ok, reason = check_input(user_input)
@@ -262,7 +285,13 @@ async def stream_advisor(
         yield filter_output(get_greeting_reply(user_input))
         return
 
-    init_trace(farm_id=farm_id, session_id=session_id, request_id=request_id)
+    init_trace(
+        farm_id=farm_id,
+        session_id=session_id,
+        request_id=request_id,
+        user_id=user_id,
+        call_type=call_type,
+    )
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
     farm_uid = _resolve_farm_uid(db, farm_id)
 
@@ -312,11 +341,17 @@ async def stream_advisor(
                 "farm_id": farm_id,
                 "farm_uid": farm_uid,
                 "intent": intent.value,
+                "user_id": user_id,
+                "session_id": session_id,
             },
             config={
                 "recursion_limit": 15,
                 "run_name": "advisor_stream",
-                "metadata": {"farm_id": farm_id, "request_type": "stream_chat"},
+                "metadata": {
+                    "farm_id": farm_id,
+                    "request_type": call_type,
+                    "user_id": user_id,
+                },
             },
             stream_mode="updates",
         ):
