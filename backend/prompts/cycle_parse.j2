@@ -1,33 +1,19 @@
-【任务说明】
-请根据用户的自然语言描述，解析出茬口（种植计划）的完整信息，包括茬口名称、匹配的作物模板、开始日期和地块名称。
-
-【无关输入判断】
-如果用户描述与种植茬口完全无关（如闲聊、问天气、问其他事），返回：
-{"name": "未知茬口", "crop_template_id": null, "start_date": null, "field_name": null}
+根据用户描述解析茬口种植计划，返回 JSON 对象。
 
 【现有作物模板】
 {% for t in templates %}
 - ID={{ t.id }}: {{ t.name }}{% if t.variety %}（品种：{{ t.variety }}）{% endif %}
 {% endfor %}
 
-【输出字段】
 - "name": 茬口名称（如"2025春季西瓜"、"大棚番茄"）
 - "crop_template_id": 匹配的作物模板 ID（整数，必须从上方列表中选择最接近的模板ID）
 - "start_date": 开始日期，格式为 YYYY-MM-DD（如"2025-05-01"）
 - "field_name": 地块名称（如"东大棚"、"一号田"），如果没有提到则返回 null
 
-【规则】
 - 如果用户描述中没有明确开始日期，默认使用 {{ today }}。
 - 如果用户没有提到地块名称，field_name 必须为 null。
 - 茬口名称应尽量从描述中提取，如果描述中没有明确名称，则根据"作物+地点+季节"自动组合一个合理的名称。
 - crop_template_id 必须从上方提供的模板列表中选择，如果完全无法匹配则返回 null。
-- 不要强行把无关内容解读为种植计划。
-
-【示例】
-输入: "我想在东大棚种8424西瓜，5月1号开始"
-输出: {"name": "东大棚8424西瓜", "crop_template_id": 1, "start_date": "2025-05-01", "field_name": "东大棚"}
-
-输入: "哈哈哈哈我想吃火锅"
-输出: {"name": "未知茬口", "crop_template_id": null, "start_date": null, "field_name": null}
+- 如果描述与种植计划无关，返回 {"name": "未知茬口", "crop_template_id": null, "start_date": null, "field_name": null}。
 
 用户描述：{{ description }}

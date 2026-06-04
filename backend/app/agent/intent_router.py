@@ -18,8 +18,9 @@ class IntentType(enum.Enum):
 
 
 _GREETING_PATTERNS = re.compile(
-    r"^(你好|您好|在吗|在不在|嗨|hi|hello|hey|早上好|晚上好|下午好)"
-    r"[\s!！.。?？]*$",
+    r"^(你好|您好|在吗|在不在|嗨|hi|hello|hey|早上好|晚上好|下午好|"
+    r"谢谢|谢谢你|辛苦了|辛苦啦|你是谁|你叫什么|介绍一下自己)"
+    r"(呀|啊|哈|哇)?[\s!！.。?？～~]*$",
     re.IGNORECASE,
 )
 
@@ -91,14 +92,32 @@ def classify_intent(message: str) -> IntentType:
 
 
 _GREETING_REPLIES = [
-    "你好！有什么可以帮你的吗？可以问我农场管理相关的问题，也可以直接记账哦。",
-    "您好！我可以帮你记账、查收支、看天气，有什么需要？",
-    "嗨！随时可以问我问题或者记账。",
+    "你好呀，我是芽芽。想查天气、记一笔，或者看看农场情况都可以找我。",
+    "在呢，我是芽芽。今天想先看天气、收支，还是农事安排？",
+    "嗨，芽芽在这儿。你说一句，我来帮你查或记。",
+]
+
+_IDENTITY_REPLIES = [
+    "我是芽芽，你的农场管理助手。查天气、记账、看农事，我都可以陪你一起弄。",
+]
+
+_THANKS_REPLIES = [
+    "不客气，芽芽随时在。",
+    "收到，能帮上忙就好。",
 ]
 
 
 def get_greeting_reply(message: str) -> str:
     """返回问候语回复。"""
+    stripped = message.strip().lower()
+    if any(word in stripped for word in ("你是谁", "你叫什么", "介绍一下自己")):
+        return _IDENTITY_REPLIES[0]
+    if any(word in stripped for word in ("谢谢", "辛苦")):
+        idx = int(hashlib.md5(message.encode()).hexdigest()[:8], 16) % len(
+            _THANKS_REPLIES
+        )
+        return _THANKS_REPLIES[idx]
+
     idx = int(hashlib.md5(message.encode()).hexdigest()[:8], 16) % len(
         _GREETING_REPLIES
     )

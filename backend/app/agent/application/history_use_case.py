@@ -115,3 +115,17 @@ def list_report_page(
         for record in records
     ]
     return ReportListResponse(items=items, total=total)
+
+
+def delete_report_item(db: Session, farm: Farm, report_id: int) -> None:
+    """删除当前 farm 下的一条报告历史。"""
+    record = (
+        db.query(AgentRecord)
+        .filter(AgentRecord.id == report_id, AgentRecord.farm_id == farm.id)
+        .filter(AgentRecord.record_type.in_(["report", "weekly", "monthly"]))
+        .first()
+    )
+    if record is None:
+        raise ValueError("报告不存在")
+    db.delete(record)
+    db.commit()

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-06-03
+last_updated: 2026-06-04
 status: active
 ---
 
@@ -9,12 +9,12 @@ status: active
 
 ---
 
-## 一、当前架构全貌（2026-05）
+## 一、当前架构全貌（2026-06）
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        用户端 (规划中)                           │
-│              React Native App / 微信小程序                       │
+│                        用户端                                    │
+│              React Native App / Admin Web                        │
 └────────────────────────────┬────────────────────────────────────┘
                              │ HTTP
 ┌────────────────────────────▼────────────────────────────────────┐
@@ -29,44 +29,33 @@ status: active
 └────────────────────────────┬────────────────────────────────────┘
                              │ REST API
 ┌────────────────────────────▼────────────────────────────────────┐
-│                   FastAPI 后端 (v1, ~8,500 行)                   │
+│                   FastAPI 后端                                   │
 │                                                                  │
-│  api/                          services/                         │
-│  ├── agent.py (对话入口)        ├── agent_service.py              │
-│  ├── admin_trace.py            ├── conversation_service.py       │
-│  ├── cost/crop/cycle/log       ├── cost/crop/cycle_service.py    │
-│  ├── weather.py                ├── weather_service.py            │
-│  └── user_settings.py          └── quota_service.py              │
+│  bootstrap/                    api/                              │
+│  ├── app_factory/routes        ├── agent/auth/admin              │
+│  └── middleware/lifespan       ├── cost/crop/cycle/log/debt      │
+│                                └── weather/settings/feedback     │
 │                                                                  │
-│  agents/ (LangGraph Agent)     core/ (19个模块，待拆分)           │
-│  ├── graph.py (主图)            ├── config/database/logger       │
-│  ├── advisor.py                ├── llm/guardrails/prompt_*       │
-│  ├── report.py                 ├── trace_*/circuit_breaker       │
-│  └── state.py                  ├── limiter/skill_cache           │
-│                                 └── term_whitelist (死代码)       │
+│  agent/                        context/ memory/ prompt/          │
+│  ├── application               ├── ContextBundle/selector        │
+│  ├── runtime/planner/executor  ├── MemoryService/observation     │
+│  ├── response/sessions         └── Prompt composer/renderer      │
+│  └── skills                    services/ modules/                │
 │                                                                  │
-│  skills/ (10个Skill)           models/  schemas/                 │
-│  ├── cost-summary              6张核心表  Pydantic模型            │
-│  ├── create-cost-record                                            │
-│  ├── crop-cycle / update-crop-stage                                │
-│  ├── weather / farm-logs / log-farm-activity                       │
-│  ├── cost-analytics / settle-debt                                  │
-│  └── create-crop-cycle                                             │
-│                                                                  │
-│  prompts/                      skillify-sdk (Skill引擎)          │
-│  ├── base.j2 + config.yaml     ├── Skill注册/匹配/执行            │
-│  ├── cost_parse.j2             ├── 缓存 + 熔断                   │
-│  └── report.j2                                                    │
+│  infra/ core/                  evaluation/ simulation/            │
+│  ├── trace/limiter/cache       ├── replay/metrics/report          │
+│  ├── pending/circuit breaker   └── Agent 仿真回归                 │
+│  └── config/database/logger                                       │
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│                      MySQL 8.x (生产) / SQLite (开发)             │
+│                      MySQL 8.x (生产) / SQLite (兼容开发)          │
 │  farms | crops | cycles | costs | cost_categories | logs         │
 │  conversations | conversation_messages | trace_records           │
 │  token_stats | guardrails_logs | idempotency_keys | agents       │
 └─────────────────────────────────────────────────────────────────┘
 
-外部依赖: DashScope(Qwen) | LangSmith(观测) | Open-Meteo(天气)
+外部依赖: 多 LLM Provider | QWeather | Open-Meteo | LangSmith(可选观测)
 ```
 
 ### 2026-06-03 数据库迁移完成
@@ -78,7 +67,7 @@ status: active
 
 ---
 
-## 二、已规划变更（OpenSpec 提案，待实施）
+## 二、已规划变更与落地状态
 
 ```
                     ┌──────────────────────┐
@@ -102,21 +91,21 @@ status: active
    ┌──────────▼──────┐ ┌──────▼──────────┐ ┌──▼──────────────┐
    │  ③ Dual Weather │ │  ④ Session &    │ │  ⑤ Context      │
    │  Provider       │ │  Context        │ │  Engineering     │
-   │  和风天气+OpenMeteo│ │  对话管理       │ │  (后续规划)      │
+   │  和风天气+OpenMeteo│ │  对话管理       │ │  (持续演进)      │
    │  预警爬虫        │ │  多轮上下文注入  │ │  上下文压缩      │
    │  API Key 统一管理│ │  用户信息注入    │ │  渐进式加载      │
    └─────────────────┘ └─────────────────┘ └──────────────────┘
 ```
 
-### 执行顺序
+### 执行状态
 
-| 优先级 | Change | 核心价值 | 风险 | 工作量 |
-|-------|--------|---------|------|-------|
-| P0 | ① Architecture Cleanup | 架构清晰，为后续所有变更铺路 | import路径变更(30+处) | 25 tasks |
-| P0 | ② Storage Redesign | 多用户基础，数据安全 | 数据库迁移，API认证层 | 40 tasks |
-| P1 | ③ Dual Weather | 农业核心功能(预警) | Provider路由复杂度 | 52 tasks |
-| P1 | ④ Session & Context | 多轮对话，用户体验 | 对话持久化 | 30 tasks |
-| P2 | ⑤ Context Engineering | 长会话性能，成本控制 | 研究型，方案待定 | TBD |
+| 优先级 | Change | 当前状态 | 后续关注 |
+|-------|--------|---------|------|
+| P0 | ① Architecture Cleanup | 已部分落地：bootstrap、agent runtime、prompt/context/memory 边界已出现 | 清理兼容入口，继续迁移 `services/` |
+| P0 | ② Storage Redesign | 已落地多用户、JWT、MySQL 迁移、token 配额基础 | 完善模块边界和管理端能力 |
+| P1 | ③ Dual Weather | 已落地 QWeather/Open-Meteo 策略和预警注入 | 继续补齐稳定性和城市覆盖测试 |
+| P1 | ④ Session & Context | 已落地会话、ContextBuilder、Memory observation 骨架 | 收敛 runtime 对 context 的直接构建 |
+| P2 | ⑤ Context Engineering | 已进入工程化阶段：selector、budget、cache、memory | 增强长期记忆、检索和评测闭环 |
 
 ---
 
@@ -238,55 +227,54 @@ status: active
 
 ## 四、分阶段演进计划
 
-### Phase 1: 架构清理 (当前 → 1周)
+### Phase 1: 架构清理（已部分落地，持续收敛）
 
 > 目标：消除技术债，为所有后续工作铺路
 
 ```
-当前状态                              Phase 1 完成后
+旧状态                                当前状态
 ─────────                             ──────────────
 core/ (19个模块混在一起)               core/ (7个基础模块)
                                       agent/ (Agent领域)
                                       infra/ (可观测性)
 
-app/agents/ (旧名)                    app/agent/ (重命名)
+app/agents/ (旧名)                    app/agent/ (已重命名)
 _DEFAULT_PROMPTS (双数据源)           prompts/*.j2 (单一数据源)
 term_whitelist.py (死代码)            已删除
-farm_id=1 硬编码                      仍为 1 (Phase 2 处理)
+farm_id=1 硬编码                      user_id → farm_id 动态解析
 ```
 
 **关键交付物:**
 - [x] OpenSpec 提案: `backend-architecture-cleanup`
-- [ ] 执行 `/opsx:apply backend-architecture-cleanup`
-- [ ] 全量测试通过 + import路径零残留
+- [x] `bootstrap/`、`agent/runtime/`、`prompt/`、`context/`、`memory/` 初步落地
+- [ ] 清理剩余兼容入口并保持 import 路径零残留
 
 ---
 
-### Phase 2: 多用户 + 数据安全 (1-2周)
+### Phase 2: 多用户 + 数据安全（主体已落地）
 
 > 目标：支持多用户登录，数据隔离，生产级数据库配置
 
 ```
-Phase 1 完成后                        Phase 2 完成后
+旧状态                                当前状态
 ─────────                             ──────────────
 无认证                                JWT 认证
 farm_id=1 硬编码                       user_id → farm_id 动态
-SQLite 默认模式                        SQLite WAL + 定时备份
+SQLite 默认模式                        MySQL 8.x + Alembic
 单用户                                多用户隔离
 无反馈收集                             feedback_records 表
-advice + report 分开                   合并为 agent_records
+advice + report 分开                   agent_records + conversations
 ```
 
 **关键交付物:**
 - [x] OpenSpec 提案: `storage-redesign-multi-user`
-- [ ] 执行 `/opsx:apply storage-redesign-multi-user`
-- [ ] 用户注册/登录接口 + JWT 中间件
-- [ ] 数据迁移脚本
-- [ ] WAL 配置 + 备份脚本
+- [x] 用户注册/登录接口 + JWT 依赖
+- [x] SQLite → MySQL 迁移脚本和 Alembic schema 管理
+- [ ] 继续完善运维备份和回滚流程
 
 ---
 
-### Phase 3: 功能增强 (2-4周)
+### Phase 3: 功能增强（主体已落地，继续增强）
 
 > 目标：完善核心农业功能，提升对话质量
 
@@ -308,10 +296,10 @@ advice + report 分开                   合并为 agent_records
 │   ├── 并行 Tool 调用
 │   └── Tool Selection 优化 (description + prompt 映射表)
 │
-└── Tool RAG 预筛选 (Step 1a)
+└── Tool Pre-Filter / Tool Selection
     ├── Keyword Pre-filter 模块
     ├── 候选 Tool 2-3 个精准注入
-    └── 弱模型 tool selection 准确率 ↑↑
+    └── 弱模型 tool selection 准确率提升
 ```
 
 **关键交付物:**
@@ -319,8 +307,10 @@ advice + report 分开                   合并为 agent_records
 - [x] OpenSpec 提案: `session-management-and-context-injection`
 - [x] Function Calling 迁移 (`function-calling-migration`)
 - [x] Tool Selection Fix (`fc-tool-selection-fix`)
-- [ ] 执行 dual-weather + session-context apply
-- [ ] Tool RAG 预筛选模块
+- [x] Dual Weather Provider 主体实现
+- [x] Session & Context 主体实现
+- [x] Tool Pre-Filter / Tool Selection 主体实现
+- [ ] 长期记忆检索和评测闭环
 
 ---
 
@@ -356,8 +346,8 @@ Skill 文本匹配/Function Calling       Skill 精准路由
 ```
 Phase 4 完成后                        Phase 5 目标
 ─────────                             ──────────────
-Admin Web 仅                          + React Native App
-SQLite 单文件                         考虑 PostgreSQL (用户增长后)
+Admin Web + React Native              微信小程序 / 更多轻量入口
+MySQL 8.x / SQLite 兼容                按规模评估数据库演进
 单机部署                              容器化 + CI/CD
 中文仅                                多语言 (可选)
 ```
@@ -366,9 +356,9 @@ SQLite 单文件                         考虑 PostgreSQL (用户增长后)
 
 | 方向 | 描述 | 触发条件 |
 |------|------|---------|
-| 移动端 App | React Native 农户端 | Phase 3 完成 |
+| 移动端 App | React Native 农户端 | 持续迭代 |
 | 微信小程序 | 轻量入口，分享传播 | App 稳定后 |
-| 数据库迁移 | SQLite → PostgreSQL | 并发 > 50 或数据 > 1GB |
+| 数据库演进 | MySQL 连接池、备份、必要时迁移 PostgreSQL | 并发和运维复杂度上升 |
 | 容器化 | Docker + docker-compose | 部署需求 |
 | CI/CD | GitHub Actions 测试+部署 | 团队协作需求 |
 
@@ -436,7 +426,7 @@ SQLite 单文件                         考虑 PostgreSQL (用户增长后)
 - [x] system prompt 注入【可用工具】映射表（name → 触发关键词）
 - [x] directive 格式强化 tool 调用指令
 
-**待实施 — Tool Pre-Filter:**
+**已实施主体，后续持续调优 — Tool Pre-Filter:**
 
 ```python
 # agent/tool_selector.py
@@ -538,7 +528,7 @@ def select_tools(user_message, all_tools, top_k=3):
 | 阶段 | 方案 | 核心模块 | 效果 | 实施时机 |
 |------|------|---------|------|---------|
 | Step 0 | Description 优化 + Prompt 映射表 | `skills/*/main.py` + `base.j2` | ✅ 已完成 | 当前 |
-| Step 1 | Tool Pre-Filter (regex+keyword) | `agent/tool_selector.py` | 写操作100%, 查询~95% | Phase 3 FC 稳定后 |
+| Step 1 | Tool Pre-Filter (regex+keyword) | `agent/tool_selector.py` | 写操作100%, 查询~95% | 已实施主体，持续调优 |
 | Step 1b | Sliding Window + 摘要压缩 | `agent/history_compressor.py` | 历史 ~70% 压缩 | Phase 3 后 |
 | Step 2 | Progressive Disclosure | `agent/context_assembler.py` | Prompt ~90% 瘦身 | Tool 数量 >15 时 |
 | Step 3 | Scratchpad + Memory | `agent/scratchpad.py` + `agent/memory_store.py` | 多会话连续性 | Phase 4 智能化 |
@@ -553,14 +543,14 @@ def select_tools(user_message, all_tools, top_k=3):
 后端框架    FastAPI 0.115                    FastAPI (保持)
 LLM         DashScope (Qwen)                 DashScope + 可选多模型
 Agent       LangGraph 0.2                    LangGraph (升级)
-数据库      SQLite (默认模式)                  SQLite WAL → PostgreSQL*
-认证        无                                JWT (PyJWT)
+数据库      MySQL 8.x / SQLite 兼容            视规模评估 PostgreSQL*
+认证        JWT                               JWT + 权限策略增强
 缓存        内存 (skill_cache)                 内存 + 可选 Redis*
 观测        LangSmith + 自建 trace             保持 + 增强
 前端        React+TS+Vite (Admin)              + React Native (农户端)
 Skill引擎   skillify-sdk (自有)                skillify-sdk (持续迭代)
 
-* 根据用户规模决定，SQLite WAL 足以支撑 ~100 并发
+* 根据用户规模和运维要求决定是否继续迁移数据库。
 ```
 
 ---
@@ -572,7 +562,7 @@ Skill引擎   skillify-sdk (自有)                skillify-sdk (持续迭代)
 | 并发用户 | 1 | 5-10 | 100+ |
 | Agent 响应延迟 | ~3s | ~2s | <1.5s |
 | Skill 命中率 | ~75% (FC+描述优化后) | ~90% (Tool RAG) | ~95% |
-| 多轮对话连贯性 | 无 | 3轮上下文 | 10轮+摘要 |
+| 多轮对话连贯性 | 已有会话上下文 | 3轮上下文 | 10轮+摘要 |
 | Prompt token 消耗 | ~30K/轮 | ~10K/轮 (Tool RAG) | ~4K/轮 (Progressive) |
 | 测试覆盖率 | 部分 | >80% | >90% |
 | 部署频率 | 手动 | 手动 | CI/CD 自动 |
@@ -587,7 +577,7 @@ Skill引擎   skillify-sdk (自有)                skillify-sdk (持续迭代)
 | 数据库迁移失败 | 数据丢失 | 迁移前热备 + 回滚脚本 |
 | JWT 密钥泄露 | 安全漏洞 | 环境变量注入 + 密钥轮换 |
 | LLM API 变更/限流 | 服务中断 | 多模型 fallback + 熔断器 |
-| 用户增长超 SQLite 承载 | 性能瓶颈 | WAL 模式 + 预留 PostgreSQL 迁移路径 |
+| 用户增长超单机数据库承载 | 性能瓶颈 | 连接池、缓存、备份和数据库迁移预案 |
 | Prompt 注入攻击 | 数据泄露 | Guardrails 输入过滤 + 输出校验 |
 
 ---
@@ -595,11 +585,11 @@ Skill引擎   skillify-sdk (自有)                skillify-sdk (持续迭代)
 ## 九、里程碑总览
 
 ```
-2026-05 ─── Phase 1: 架构清理 ────────────────── 目标: 1周内
+2026-05 ─── Phase 1: 架构清理 ────────────────── 已部分落地
   │
-2026-06 ─── Phase 2: 多用户 + 数据安全 ───────── 目标: 2周内
+2026-06 ─── Phase 2: 多用户 + 数据安全 ───────── 主体已落地
   │
-2026-06 ─── Phase 3: 功能增强 ────────────────── 目标: 4周内
+2026-06 ─── Phase 3: 功能增强 ────────────────── 主体已落地，继续增强
   │         ├── Dual Weather
   │         ├── Session & Context
   │         └── Function Calling

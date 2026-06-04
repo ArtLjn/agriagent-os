@@ -20,8 +20,9 @@ class CostSummarySkill(Skill):
     def description(self) -> str:
         return (
             "查询农场收支汇总数据。当用户问余额、花了多少、赚了多少、"
-            "收支情况、成本多少、利润、账单、近期收支时，调用此工具获取真实数据。"
-            "支持按日期、分类筛选和分组。"
+            "收支情况、成本多少、利润、账单、周账单、月账单、年账单、"
+            "流水明细、分类汇总、近期收支时，调用此工具获取真实数据。"
+            "支持按日期、分类筛选，并按分类或月份分组。"
         )
 
     def parameters_schema(self) -> dict:
@@ -34,7 +35,10 @@ class CostSummarySkill(Skill):
                 },
                 "date_from": {
                     "type": "string",
-                    "description": "开始日期 YYYY-MM-DD",
+                    "description": (
+                        "开始日期 YYYY-MM-DD。用户说本周、本月、今年等相对周期时，"
+                        "先换算成明确日期。"
+                    ),
                 },
                 "date_to": {
                     "type": "string",
@@ -52,7 +56,9 @@ class CostSummarySkill(Skill):
                 "group_by": {
                     "type": "string",
                     "description": (
-                        "分组方式: none(不分组)/category(按分类)/month(按月)，默认none"
+                        "分组方式: none(汇总+明细)/category(按分类)/month(按月)，"
+                        "默认none。用户说分类汇总用category，说按月/年度趋势列表用month，"
+                        "说流水/明细用none。"
                     ),
                     "default": "none",
                 },

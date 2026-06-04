@@ -17,6 +17,7 @@ interface CycleState {
     start_date: string;
     field_name?: string;
   }) => Promise<void>;
+  deleteCycles: (ids: number[]) => Promise<void>;
   clearError: () => void;
 }
 
@@ -68,6 +69,19 @@ export const useCycleStore = create<CycleState>((set) => ({
       set({ cycles: items, loading: false });
     } catch (err: any) {
       set({ error: err.message, loading: false });
+    }
+  },
+
+  deleteCycles: async (ids) => {
+    set({ loading: true, error: null });
+    try {
+      await Promise.all(ids.map((id) => cycleApi.deleteCycle(id)));
+      const res = await cycleApi.getCycles();
+      const items = (res.data as any)?.items ?? res.data;
+      set({ cycles: items, loading: false });
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+      throw err;
     }
   },
 

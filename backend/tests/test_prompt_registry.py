@@ -13,8 +13,8 @@ def test_system_base_prompt_contains_tool_calling_rule():
     snippet = prompts_dir / "snippets" / "p1-tool-guardrails.j2"
     if snippet.exists():
         content = snippet.read_text()
-        assert "禁止凭记忆回答" in content
-        assert "必须调用工具" in content
+        assert "实时数据必须先调用工具" in content
+        assert "写操作必须通过工具完成" in content
 
 
 class TestUserContextInPrompt:
