@@ -19,6 +19,7 @@ from app.api import (
     debt,
     feedback,
     log,
+    planting,
     user_settings,
     weather,
 )
@@ -31,6 +32,7 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(crop.router)
     app.include_router(cycle.router)
     app.include_router(log.router)
+    app.include_router(planting.router)
     app.include_router(cost.router)
     app.include_router(cost_categories.router)
     app.include_router(agent.router)

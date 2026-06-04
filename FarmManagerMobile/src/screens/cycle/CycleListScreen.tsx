@@ -103,6 +103,21 @@ function getDaysSince(startDate: string): number {
   return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }
 
+function formatBatchMeta(item: any, days: number): string {
+  const parts = [item.crop_template_name, `已种植 ${days} 天`];
+  const area = item.total_area_mu || item.unit_area_mu;
+  if (area) {
+    parts.push(`${Number(area).toFixed(2).replace(/\.00$/, "")} 亩`);
+  }
+  if (item.unit_count) {
+    parts.push(`${item.unit_count} 个单元`);
+  }
+  if (item.season) {
+    parts.push(item.season);
+  }
+  return parts.join(" · ");
+}
+
 const STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bgColor: string }
@@ -142,8 +157,8 @@ export const CycleListScreen: React.FC = () => {
     return (
       <EmptyState
         title="暂无茬口"
-        subtitle="点击右下角按钮创建您的第一个种植茬口"
-        actionLabel="新建茬口"
+        subtitle="点击右下角按钮创建您的第一个种植批次"
+        actionLabel="新建批次"
         onAction={() => navigation.navigate("CycleCreate" as never)}
         icon="sprout-outline"
       />
@@ -189,7 +204,7 @@ export const CycleListScreen: React.FC = () => {
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statNumber}>{cycles.length}</Text>
-                <Text style={styles.statLabel}>总茬口</Text>
+                <Text style={styles.statLabel}>总批次</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
@@ -267,8 +282,8 @@ export const CycleListScreen: React.FC = () => {
                     </View>
 
                     {/* 作物 + 天数 */}
-                    <Text style={styles.metaText}>
-                      {item.crop_template_name} · 已种植 {days} 天
+                    <Text style={styles.metaText} numberOfLines={1}>
+                      {formatBatchMeta(item, days)}
                     </Text>
 
                     {/* 进度条 */}

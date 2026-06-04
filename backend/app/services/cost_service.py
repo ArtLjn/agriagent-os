@@ -52,6 +52,8 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         due_date=record.due_date,
         settled_at=record.settled_at,
         parent_record_id=record.parent_record_id,
+        source_type=record.source_type,
+        source_id=record.source_id,
     )
     db.add(db_record)
     try:

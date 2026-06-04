@@ -20,6 +20,12 @@ export interface CropCycle {
   crop_template_id: number;
   start_date: string;
   field_name: string | null;
+  total_area_mu?: string | null;
+  unit_area_mu?: string | null;
+  unit_count?: number;
+  current_stage_name?: string | null;
+  season?: string | null;
+  batch_note?: string | null;
   status: string;
   stages: CycleStage[];
 }
@@ -42,6 +48,64 @@ export interface CropCycleListItem {
   start_date: string;
   status: string;
   current_stage_name: string | null;
+  total_area_mu?: string | null;
+  unit_area_mu?: string | null;
+  unit_count?: number;
+  field_name?: string | null;
+  season?: string | null;
+}
+
+export interface PlantingUnit {
+  id: number;
+  farm_id: number;
+  cycle_id: number;
+  name: string;
+  area_mu: string | null;
+  planted_date: string | null;
+  status: string;
+  note: string | null;
+}
+
+export interface OperationType {
+  name: string;
+  crop: string | null;
+  is_builtin: boolean;
+  sort_order: number;
+}
+
+export interface Worker {
+  id: number;
+  farm_id: number;
+  name: string;
+  phone: string | null;
+  default_pay_type: string;
+  default_unit_price: string | null;
+  note: string | null;
+  status: string;
+}
+
+export interface LaborEntryCreate {
+  worker_id: number;
+  pay_type?: string;
+  quantity: string;
+  unit_price: string;
+  paid_amount?: string;
+}
+
+export interface OperationWorkOrder {
+  id: number;
+  farm_id: number;
+  cycle_id: number | null;
+  operation_type: string;
+  operation_date: string;
+  scope_type: string;
+  unit_ids: number[];
+  unit_names: string[];
+  note: string | null;
+  labor_cost_record_id: number | null;
+  total_payable_amount: string;
+  total_paid_amount: string;
+  total_unpaid_amount: string;
 }
 
 export interface FarmLog {
@@ -68,6 +132,9 @@ export interface CostRecord {
   due_date?: string;
   settled_at?: string;
   parent_record_id?: number;
+  source_type?: string | null;
+  source_id?: number | null;
+  source_label?: string | null;
   created_at?: string;
   createdAt?: string;
 }

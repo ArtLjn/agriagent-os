@@ -17,6 +17,7 @@ WRITE_SKILLS = frozenset(
         "create_crop_cycle",
         "create_crop_template",
         "log_farm_activity",
+        "create_operation_work_order",
         "settle_debt",
         "update_crop_stage",
     }
@@ -28,6 +29,12 @@ _CACHE_INVALIDATION_MAP: dict[str, list[str]] = {
     "create_crop_cycle": ["crop_cycle", "get_farm_status"],
     "create_crop_template": [],
     "log_farm_activity": ["farm_logs", "get_farm_status"],
+    "create_operation_work_order": [
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ],
     "settle_debt": ["cost_analytics", "cost_summary", "get_farm_status"],
     "update_crop_stage": ["crop_cycle", "get_farm_status"],
 }
@@ -43,6 +50,7 @@ _SKILL_DISPLAY: dict[str, str] = {
     "create_crop_cycle": "创建茬口",
     "create_crop_template": "创建作物模板",
     "log_farm_activity": "记录农事",
+    "create_operation_work_order": "创建农事作业单",
     "settle_debt": "还款",
     "update_crop_stage": "更新阶段",
 }
@@ -52,6 +60,7 @@ _SKILL_EMOJI: dict[str, str] = {
     "create_crop_cycle": "🌱",
     "create_crop_template": "📋",
     "log_farm_activity": "📝",
+    "create_operation_work_order": "🧑‍🌾",
     "settle_debt": "💳",
     "update_crop_stage": "🔄",
 }
@@ -61,6 +70,7 @@ _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
     "create_crop_cycle": ["crop_name", "season"],
     "create_crop_template": ["crop_name"],
     "log_farm_activity": ["operation_type"],
+    "create_operation_work_order": ["operation_type", "operation_date", "cycle_id"],
     "settle_debt": ["counterparty", "amount"],
     "update_crop_stage": ["stage_name"],
 }

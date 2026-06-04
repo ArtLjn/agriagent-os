@@ -64,6 +64,7 @@ export const RecordItem: React.FC<RecordItemProps> = ({
   const metaParts = [
     getRecordTimeText(item),
     paymentMethod ? PAYMENT_LABELS[paymentMethod] || paymentMethod : null,
+    item.source_label,
     isDebt ? item.counterparty || "赊账" : null,
     getRecordNoteText(item),
   ].filter(Boolean);

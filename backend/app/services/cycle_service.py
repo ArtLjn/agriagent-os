@@ -1,12 +1,14 @@
 from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.models.agent_record import AgentRecord
 from app.models.cost import CostRecord
 from app.models.crop import CropTemplate
 from app.models.cycle import CropCycle, CycleStage
 from app.models.log import FarmLog
+from app.models.planting import PlantingUnit
 from app.context.invalidation import invalidate_farm_context
 from app.schemas.cycle import CropCycleCreate
 
@@ -28,6 +30,9 @@ def create_crop_cycle(db: Session, cycle: CropCycleCreate, farm_id: int) -> Crop
         crop_template_id=cycle.crop_template_id,
         start_date=cycle.start_date,
         field_name=cycle.field_name,
+        total_area_mu=cycle.total_area_mu,
+        season=cycle.season,
+        batch_note=cycle.batch_note,
         farm_id=farm_id,
     )
     db.add(db_cycle)
@@ -149,6 +154,9 @@ def update_crop_cycle(
     cycle.crop_template_id = update.crop_template_id
     cycle.start_date = update.start_date
     cycle.field_name = update.field_name
+    cycle.total_area_mu = update.total_area_mu
+    cycle.season = update.season
+    cycle.batch_note = update.batch_note
 
     try:
         db.commit()
@@ -216,6 +224,26 @@ def advance_stage(db: Session, cycle_id: int, farm_id: int) -> CropCycle:
     return cycle
 
 
+def get_cycle_unit_stats(db: Session, cycle_ids: list[int], farm_id: int) -> dict[int, dict]:
+    """按批次汇总种植单元数量和面积。"""
+    if not cycle_ids:
+        return {}
+    rows = (
+        db.query(
+            PlantingUnit.cycle_id,
+            func.count(PlantingUnit.id),
+            func.sum(PlantingUnit.area_mu),
+        )
+        .filter(PlantingUnit.farm_id == farm_id, PlantingUnit.cycle_id.in_(cycle_ids))
+        .group_by(PlantingUnit.cycle_id)
+        .all()
+    )
+    return {
+        cycle_id: {"unit_count": count or 0, "unit_area_mu": area}
+        for cycle_id, count, area in rows
+    }
+
+
 __all__ = [
     "create_crop_cycle",
     "get_crop_cycles",
@@ -226,4 +254,5 @@ __all__ = [
     "update_crop_cycle",
     "delete_crop_cycle",
     "advance_stage",
+    "get_cycle_unit_stats",
 ]
