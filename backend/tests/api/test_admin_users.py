@@ -5,6 +5,7 @@ import pytest
 from app.api.deps import get_current_user, get_db
 from app.core.security import create_access_token
 from app.main import app
+from app.models.token_stats import TokenDailyStats
 from app.models.user import User
 
 
@@ -69,6 +70,44 @@ def target_user(client):
             status="active",
         )
         db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    finally:
+        db_iter.close()
+
+
+@pytest.fixture()
+def quota_user(client):
+    """创建一个用于配额接口的目标用户。"""
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        user = User(
+            id="test-quota-001",
+            phone="22222222222",
+            password_hash="h",
+            nickname="配额用户",
+            role="user",
+            status="active",
+            token_monthly_limit=1000,
+            token_weekly_limit=200,
+        )
+        db.add(user)
+        db.add(
+            TokenDailyStats(
+                user_id=user.id,
+                farm_id=1,
+                date="2026-06-04",
+                model="qwen3.6-flash",
+                call_type="chat",
+                prompt_tokens=300,
+                completion_tokens=500,
+                total_tokens=800,
+                request_count=3,
+                estimated_cost_cny=0.01,
+            )
+        )
         db.commit()
         db.refresh(user)
         return user
@@ -162,6 +201,70 @@ def test_update_admin_status_forbidden(client, admin_user, admin_headers):
         headers=admin_headers,
     )
     assert resp.status_code == 400
+
+
+def test_get_user_quota(client, admin_user, admin_headers, quota_user):
+    """查询用户配额状态。"""
+    resp = client.get(f"/admin/users/{quota_user.id}/quota", headers=admin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["monthly_limit"] == 1000
+    assert data["monthly_usage"] == 800
+    assert data["monthly_remaining"] == 200
+    assert data["weekly_limit"] == 200
+    assert data["weekly_usage"] == 800
+    assert data["weekly_remaining"] == 0
+    assert data["monthly_start"] <= "2026-06-04" <= data["monthly_end"]
+    assert data["weekly_start"] <= "2026-06-04" <= data["weekly_end"]
+    assert data["status"] == "exceeded"
+
+
+def test_get_user_quota_not_found(client, admin_user, admin_headers):
+    """查询不存在用户的配额返回 404。"""
+    resp = client.get("/admin/users/missing-user/quota", headers=admin_headers)
+    assert resp.status_code == 404
+
+
+def test_update_user_quota(client, admin_user, admin_headers, quota_user):
+    """更新用户配额后返回最新状态。"""
+    resp = client.put(
+        f"/admin/users/{quota_user.id}/quota",
+        json={"token_monthly_limit": 2000, "token_weekly_limit": None},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["monthly_limit"] == 2000
+    assert data["monthly_usage"] == 800
+    assert data["monthly_remaining"] == 1200
+
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        refreshed = db.query(User).filter(User.id == quota_user.id).first()
+        assert refreshed.token_monthly_limit == 2000
+        assert refreshed.token_weekly_limit is None
+    finally:
+        db_iter.close()
+
+
+def test_quota_overview(client, admin_user, admin_headers, quota_user):
+    """分页查询用户配额概览并支持状态筛选。"""
+    resp = client.get(
+        "/admin/users/quota-overview?status=exceeded",
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] >= 1
+    item = next(item for item in data["items"] if item["user_id"] == quota_user.id)
+    assert item["nickname"] == "配额用户"
+    assert item["phone"] == "22222222222"
+    assert item["monthly_usage"] == 800
+    assert item["monthly_percent"] == 0.8
+    assert item["weekly_usage"] == 800
+    assert item["weekly_percent"] == 4.0
+    assert item["status"] == "exceeded"
 
 
 def test_non_admin_forbidden(client, auth_headers):
