@@ -424,6 +424,8 @@ class TestKeyRotation:
         llm, info = manager.get_chat_model_with_info(role="generation")
 
         assert llm.model_name == "generation-model"
+        assert llm.streaming is False
+        assert llm.stream_usage is True
         assert info == {
             "provider": "primary",
             "model": "generation-model",

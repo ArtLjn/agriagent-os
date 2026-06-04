@@ -74,6 +74,8 @@ class TestGetLlm:
             call_kwargs["base_url"]
             == "https://dashscope.aliyuncs.com/compatible-mode/v1"
         )
+        assert call_kwargs["streaming"] is False
+        assert call_kwargs["stream_usage"] is True
 
     @patch("app.core.llm_client_manager.get_llm_manager")
     @patch("app.agent.llm.settings")

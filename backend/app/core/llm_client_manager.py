@@ -338,7 +338,7 @@ class LLMClientManager:
             api_key=result.api_key,
             base_url=result.provider.base_url,
             temperature=kwargs.pop("temperature", 0.7),
-            streaming=True,
+            streaming=kwargs.pop("streaming", False),
             stream_usage=True,
             extra_body=extra_body if extra_body else None,
             **kwargs,
