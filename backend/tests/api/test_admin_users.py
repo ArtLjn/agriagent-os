@@ -232,7 +232,7 @@ def test_update_user_quota(client, admin_user, admin_headers, quota_user):
     """更新用户配额后返回最新状态。"""
     resp = client.put(
         f"/admin/users/{quota_user.id}/quota",
-        json={"token_monthly_limit": 2000, "token_weekly_limit": None},
+        json={"token_monthly_limit": 2000, "token_weekly_limit": 1000},
         headers=admin_headers,
     )
     assert resp.status_code == 200
@@ -246,9 +246,22 @@ def test_update_user_quota(client, admin_user, admin_headers, quota_user):
     try:
         refreshed = db.query(User).filter(User.id == quota_user.id).first()
         assert refreshed.token_monthly_limit == 2000
-        assert refreshed.token_weekly_limit is None
+        assert refreshed.token_weekly_limit == 1000
     finally:
         db_iter.close()
+
+
+def test_update_user_quota_rejects_weekly_limit_over_monthly(
+    client, admin_user, admin_headers, quota_user
+):
+    """周额度不能大于月额度。"""
+    resp = client.put(
+        f"/admin/users/{quota_user.id}/quota",
+        json={"token_monthly_limit": 3000, "token_weekly_limit": 20000},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert "周额度不能大于月额度" in resp.json()["detail"]
 
 
 def test_batch_update_user_quota(client, admin_user, admin_headers, target_user, quota_user):
@@ -275,6 +288,23 @@ def test_batch_update_user_quota(client, admin_user, admin_headers, target_user,
         assert {user.token_weekly_limit for user in refreshed} == {2000000}
     finally:
         db_iter.close()
+
+
+def test_batch_update_user_quota_rejects_weekly_limit_over_monthly(
+    client, admin_user, admin_headers, target_user, quota_user
+):
+    """批量更新同样校验周额度不能大于月额度。"""
+    resp = client.put(
+        "/admin/users/quota/batch",
+        json={
+            "user_ids": [target_user.id, quota_user.id],
+            "token_monthly_limit": 3000,
+            "token_weekly_limit": 20000,
+        },
+        headers=admin_headers,
+    )
+    assert resp.status_code == 400
+    assert "周额度不能大于月额度" in resp.json()["detail"]
 
 
 def test_batch_update_user_quota_rejects_empty_user_ids(

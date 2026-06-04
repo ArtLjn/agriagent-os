@@ -176,6 +176,12 @@ export default function Users() {
       message.warning("请先选择用户");
       return;
     }
+    const effectiveMonthlyLimit = monthlyLimit ?? DEFAULT_MONTHLY_LIMIT;
+    const effectiveWeeklyLimit = weeklyLimit ?? DEFAULT_WEEKLY_LIMIT;
+    if (effectiveWeeklyLimit > effectiveMonthlyLimit) {
+      message.warning("周额度不能大于月额度");
+      return;
+    }
 
     setQuotaSaving(true);
     try {

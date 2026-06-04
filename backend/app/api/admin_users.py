@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin
+from app.infra.settings import settings
 from app.models.farm import Farm
 from app.models.user import User
 from app.schemas.admin_user import (
@@ -62,6 +63,25 @@ def _build_quota_status(user_id: str, db: Session) -> UserQuotaStatus:
         weekly_end=week_end.isoformat(),
         status=_quota_status_from_percent(monthly_percent, weekly_percent),
     )
+
+
+def _validate_quota_limits(
+    token_monthly_limit: int | None,
+    token_weekly_limit: int | None,
+) -> None:
+    """校验周额度不能超过月额度。"""
+    monthly_limit = (
+        token_monthly_limit
+        if token_monthly_limit is not None
+        else settings.token_quota.monthly_limit
+    )
+    weekly_limit = (
+        token_weekly_limit
+        if token_weekly_limit is not None
+        else settings.token_quota.weekly_limit
+    )
+    if weekly_limit > monthly_limit:
+        raise HTTPException(status_code=400, detail="周额度不能大于月额度")
 
 
 @router.get("", response_model=AdminUserListResponse)
@@ -182,6 +202,7 @@ def batch_update_user_quota(
     _admin: User = Depends(require_admin),
 ) -> BatchUpdateUserQuotaResponse:
     """批量修改用户 Token 配额。"""
+    _validate_quota_limits(req.token_monthly_limit, req.token_weekly_limit)
     users = db.query(User).filter(User.id.in_(req.user_ids)).all()
     if len(users) != len(set(req.user_ids)):
         found_ids = {user.id for user in users}
@@ -224,6 +245,7 @@ def update_user_quota(
     _admin: User = Depends(require_admin),
 ) -> UserQuotaStatus:
     """修改用户 Token 配额。"""
+    _validate_quota_limits(req.token_monthly_limit, req.token_weekly_limit)
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
