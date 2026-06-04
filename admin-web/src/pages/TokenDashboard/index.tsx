@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Empty, Progress, Row, Col, Select, Segmented, Space, Statistic, Table, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { Bar } from '@ant-design/charts';
 import {
   getTokenSummary,
   getDailyTokenStats,
@@ -18,7 +17,21 @@ const TEXT_DIM = '#8b949e';
 const TEXT_SOFT = '#c9d1d9';
 const GREEN = '#238636';
 
-const formatNumber = (value: number) => value.toLocaleString();
+type NormalizedModelStats = {
+  model: string;
+  call_type: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  request_count: number;
+};
+
+const toNumber = (value: unknown) => {
+  const num = Number(value ?? 0);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const formatNumber = (value: number) => Math.round(value).toLocaleString();
 
 const formatTime = (value: Date | null) => {
   if (!value) return '-';
@@ -38,6 +51,11 @@ const fieldLabelStyle = {
 const panelStyle = {
   background: CARD_BG,
   borderColor: BORDER,
+} as const;
+
+const monoStyle = {
+  color: TEXT_SOFT,
+  fontVariantNumeric: 'tabular-nums',
 } as const;
 
 export default function TokenDashboard() {
@@ -127,7 +145,7 @@ export default function TokenDashboard() {
   const todayUsage = useMemo(
     () => dailyItems
       .filter((item) => !selectedModel || item.model === selectedModel)
-      .reduce((sum, i) => sum + i.total_tokens, 0),
+      .reduce((sum, i) => sum + toNumber(i.total_tokens), 0),
     [dailyItems, selectedModel]
   );
 
@@ -146,9 +164,17 @@ export default function TokenDashboard() {
   const monthlyPercent = getQuotaPercent(userQuota?.monthly_usage, userQuota?.monthly_limit);
   const weeklyPercent = getQuotaPercent(userQuota?.weekly_usage, userQuota?.weekly_limit);
 
-  const modelStats = useMemo(() => {
+  const modelStats = useMemo<NormalizedModelStats[]>(() => {
     if (!summary) return [];
     return Object.values(summary.by_model)
+      .map((m) => ({
+        model: m.model,
+        call_type: m.call_type,
+        prompt_tokens: toNumber(m.prompt_tokens),
+        completion_tokens: toNumber(m.completion_tokens),
+        total_tokens: toNumber(m.total_tokens),
+        request_count: toNumber(m.request_count),
+      }))
       .filter((m) => !selectedModel || m.model === selectedModel)
       .sort((a, b) => b.total_tokens - a.total_tokens);
   }, [summary, selectedModel]);
@@ -173,56 +199,25 @@ export default function TokenDashboard() {
   );
 
   const filteredDailyItems = useMemo(
-    () => dailyItems.filter((item) => !selectedModel || item.model === selectedModel),
+    () => dailyItems
+      .filter((item) => !selectedModel || item.model === selectedModel)
+      .map((item) => ({
+        ...item,
+        prompt_tokens: toNumber(item.prompt_tokens),
+        completion_tokens: toNumber(item.completion_tokens),
+        total_tokens: toNumber(item.total_tokens),
+        request_count: toNumber(item.request_count),
+        estimated_cost_cny: item.estimated_cost_cny === undefined
+          ? undefined
+          : toNumber(item.estimated_cost_cny),
+      })),
     [dailyItems, selectedModel]
   );
 
-  const modelRankData = useMemo(
-    () => modelStats.map((m) => ({
-      model: m.model,
-      tokens: m.total_tokens,
-    })),
+  const maxModelTokens = useMemo(
+    () => Math.max(1, ...modelStats.map((item) => item.total_tokens)),
     [modelStats]
   );
-
-  const barData = useMemo(() => {
-    const out: { model: string; type: string; value: number }[] = [];
-    modelStats.forEach((m) => {
-      out.push({ model: m.model, type: 'Prompt', value: m.prompt_tokens });
-      out.push({ model: m.model, type: 'Completion', value: m.completion_tokens });
-    });
-    return out;
-  }, [modelStats]);
-
-  const modelRankConfig = {
-    data: modelRankData,
-    xField: 'model',
-    yField: 'tokens',
-    height: 260,
-    theme: 'dark',
-    color: '#58a6ff',
-    label: {
-      text: 'tokens',
-      style: { fill: TEXT_SOFT },
-    },
-    axis: {
-      x: { labelFormatter: (value: number) => formatNumber(value) },
-    },
-  };
-
-  const usageMixConfig = {
-    data: barData,
-    xField: 'value',
-    yField: 'model',
-    seriesField: 'type',
-    stack: true,
-    height: 260,
-    theme: 'dark',
-    color: ['#58a6ff', GREEN],
-    axis: {
-      x: { labelFormatter: (value: number) => formatNumber(value) },
-    },
-  };
 
   const selectedUser = useMemo(
     () => users.find((user) => user.id === selectedUserId),
@@ -233,7 +228,7 @@ export default function TokenDashboard() {
 
   const refresh = () => setRefreshKey((key) => key + 1);
 
-  const emptyChart = (description: string) => (
+  const emptyBlock = (description: string) => (
     <Empty
       description={<span style={{ color: TEXT_DIM }}>{description}</span>}
       image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -257,17 +252,105 @@ export default function TokenDashboard() {
   const columns = [
     { title: '模型', dataIndex: 'model', key: 'model' },
     { title: '调用类型', dataIndex: 'call_type', key: 'call_type' },
-    { title: 'Prompt Tokens', dataIndex: 'prompt_tokens', key: 'prompt_tokens' },
-    { title: 'Completion Tokens', dataIndex: 'completion_tokens', key: 'completion_tokens' },
-    { title: 'Total Tokens', dataIndex: 'total_tokens', key: 'total_tokens' },
-    { title: '请求数', dataIndex: 'request_count', key: 'request_count' },
+    {
+      title: 'Prompt Tokens',
+      dataIndex: 'prompt_tokens',
+      key: 'prompt_tokens',
+      render: (v: number) => formatNumber(toNumber(v)),
+    },
+    {
+      title: 'Completion Tokens',
+      dataIndex: 'completion_tokens',
+      key: 'completion_tokens',
+      render: (v: number) => formatNumber(toNumber(v)),
+    },
+    {
+      title: 'Total Tokens',
+      dataIndex: 'total_tokens',
+      key: 'total_tokens',
+      render: (v: number) => formatNumber(toNumber(v)),
+    },
+    {
+      title: '请求数',
+      dataIndex: 'request_count',
+      key: 'request_count',
+      render: (v: number) => formatNumber(toNumber(v)),
+    },
     {
       title: '预估费用(CNY)',
       dataIndex: 'estimated_cost_cny',
       key: 'estimated_cost_cny',
-      render: (v?: number) => (v !== undefined ? `¥${v.toFixed(4)}` : '-'),
+      render: (v?: number) => (v !== undefined ? `¥${toNumber(v).toFixed(4)}` : '-'),
     },
   ];
+
+  const renderModelRows = () => {
+    if (modelStats.length === 0) return emptyBlock('当前筛选下暂无模型用量');
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        {modelStats.map((item) => {
+          const width = `${Math.max(4, Math.round((item.total_tokens / maxModelTokens) * 100))}%`;
+          return (
+            <div
+              key={`${item.model}-${item.call_type}`}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(190px, 260px) 1fr 120px 90px',
+                gap: 12,
+                alignItems: 'center',
+              }}
+            >
+              <div>
+                <div style={{ color: TEXT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.model}
+                </div>
+                <div style={{ color: TEXT_DIM, fontSize: 12 }}>{item.call_type}</div>
+              </div>
+              <div style={{ height: 22, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width, height: '100%', background: '#2f81f7' }} />
+              </div>
+              <div style={{ ...monoStyle, textAlign: 'right', fontWeight: 600 }}>
+                {formatNumber(item.total_tokens)}
+              </div>
+              <div style={{ ...monoStyle, textAlign: 'right' }}>{formatNumber(item.request_count)} 次</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderCompositionRows = () => {
+    if (modelStats.length === 0) return emptyBlock('当前筛选下暂无 Prompt / Completion 数据');
+    return (
+      <div style={{ display: 'grid', gap: 14 }}>
+        {modelStats.map((item) => {
+          const promptPercent = item.total_tokens > 0
+            ? Math.round((item.prompt_tokens / item.total_tokens) * 100)
+            : 0;
+          const completionPercent = Math.max(0, 100 - promptPercent);
+          return (
+            <div key={`${item.model}-${item.call_type}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+                <span style={{ color: TEXT, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.model}
+                </span>
+                <span style={monoStyle}>{formatNumber(item.total_tokens)}</span>
+              </div>
+              <div style={{ display: 'flex', height: 24, background: '#21262d', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: `${promptPercent}%`, background: '#2f81f7' }} />
+                <div style={{ width: `${completionPercent}%`, background: GREEN }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: TEXT_DIM, fontSize: 12, marginTop: 6 }}>
+                <span>Prompt {formatNumber(item.prompt_tokens)} ({promptPercent}%)</span>
+                <span>Completion {formatNumber(item.completion_tokens)} ({completionPercent}%)</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div style={{ padding: 24, background: BG, minHeight: '100vh' }}>
@@ -410,9 +493,9 @@ export default function TokenDashboard() {
             title={<span style={{ color: TEXT }}>模型用量排行</span>}
             extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>非时间趋势，按模型聚合</span>}
             style={panelStyle}
-            bodyStyle={{ padding: 12 }}
+            bodyStyle={{ padding: 24 }}
           >
-            {modelRankData.length > 0 ? <Bar {...modelRankConfig} /> : emptyChart('当前筛选下暂无模型用量')}
+            {renderModelRows()}
           </Card>
         </Col>
         <Col xs={24} lg={12}>
@@ -420,9 +503,19 @@ export default function TokenDashboard() {
             title={<span style={{ color: TEXT }}>Prompt / Completion 分布</span>}
             extra={<span style={{ color: TEXT_DIM, fontSize: 12 }}>堆叠展示真实 token 构成</span>}
             style={panelStyle}
-            bodyStyle={{ padding: 12 }}
+            bodyStyle={{ padding: 24 }}
           >
-            {barData.length > 0 ? <Bar {...usageMixConfig} /> : emptyChart('当前筛选下暂无 Prompt / Completion 数据')}
+            <Space size={16} style={{ marginBottom: 18 }}>
+              <Space size={6}>
+                <span style={{ width: 10, height: 10, background: '#2f81f7', borderRadius: 2, display: 'inline-block' }} />
+                <span style={{ color: TEXT_DIM }}>Prompt</span>
+              </Space>
+              <Space size={6}>
+                <span style={{ width: 10, height: 10, background: GREEN, borderRadius: 2, display: 'inline-block' }} />
+                <span style={{ color: TEXT_DIM }}>Completion</span>
+              </Space>
+            </Space>
+            {renderCompositionRows()}
           </Card>
         </Col>
       </Row>
