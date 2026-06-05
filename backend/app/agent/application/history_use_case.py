@@ -15,6 +15,7 @@ from app.schemas.agent import (
 )
 from app.services.agent_service import get_report_history
 from app.services.conversation_service import (
+    get_conversation_by_session,
     get_conversation_messages,
     list_conversations,
 )
@@ -98,9 +99,14 @@ def list_conversation_items(
     return items
 
 
-def list_message_items(db: Session, session_id: str) -> list[ConversationMessageItem]:
+def list_message_items(
+    db: Session, farm: Farm, session_id: str
+) -> list[ConversationMessageItem]:
     """获取指定会话的消息列表。"""
-    messages = get_conversation_messages(db, session_id)
+    conversation = get_conversation_by_session(db, session_id, farm_id=farm.id)
+    if conversation is None:
+        raise ValueError("会话不存在")
+    messages = get_conversation_messages(db, session_id, farm_id=farm.id)
     result = []
     for message in messages:
         skills = None

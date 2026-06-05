@@ -2,8 +2,9 @@
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.deps import require_admin
 from app.agent.prompt_registry import get_registry
 from app.agent.skills import get_skill_manager
 from app.agent.skills.metadata import metadata_to_dict
@@ -12,7 +13,11 @@ from app.infra.skill_cache import clear_cache
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin-config"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin-config"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 @router.get("/skills")

@@ -84,7 +84,7 @@ def test_chat_passes_current_user_to_advisor(client):
     """POST /agent/chat 将当前用户透传给 advisor。"""
     advisor = AsyncMock(return_value="ok")
 
-    with patch("app.services.agent_service.invoke_advisor", advisor):
+    with patch("app.agent.application.chat_use_case.invoke_advisor", advisor):
         response = client.post(
             "/agent/chat",
             json={"message": "帮我看看农场状态", "session_id": "sess-user-1"},
@@ -142,9 +142,36 @@ class TestConversationApi:
         assert data[0]["role"] == "user"
         assert data[1]["role"] == "assistant"
 
+    def test_get_messages_rejects_other_farm_session(self, client, clean_db):
+        """不能读取其他 farm 的会话消息。"""
+        from app.services.conversation_service import (
+            get_or_create_conversation,
+            save_message,
+        )
+
+        db = _TestSession()
+        db.add(
+            User(
+                id="test-user-002",
+                phone="00000000002",
+                password_hash="h",
+                nickname="其他用户",
+                status="active",
+            )
+        )
+        db.add(Farm(id=2, name="其他农场", user_id="test-user-002"))
+        db.commit()
+        conv = get_or_create_conversation(db, farm_id=2, session_id="sess-other-farm")
+        save_message(db, conv.id, "user", "其他农场的私密消息")
+        db.close()
+
+        response = client.get("/agent/conversations/sess-other-farm/messages")
+
+        assert response.status_code == 404
+        assert "其他农场的私密消息" not in response.text
+
     def test_get_messages_not_found(self, client, clean_db):
-        """不存在的 session_id 返回空列表。"""
+        """不存在的 session_id 返回 404。"""
         response = client.get("/agent/conversations/nonexistent/messages")
 
-        assert response.status_code == 200
-        assert response.json() == []
+        assert response.status_code == 404
