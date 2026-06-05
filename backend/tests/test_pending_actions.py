@@ -3,9 +3,11 @@
 from unittest.mock import patch
 
 from app.infra.pending_actions import (
+    WRITE_SKILLS,
     build_confirm_message,
     build_confirmation_context,
     get_pending,
+    get_cache_groups_for_skill,
     store_pending,
 )
 
@@ -21,6 +23,38 @@ def test_confirm_message_hides_internal_param_keys():
     assert "参数：" not in message
     assert "小麦" in message
     assert "理解：" in message
+
+
+def test_write_skill_registry_covers_runtime_write_skills():
+    expected = {
+        "create_cost_record",
+        "create_crop_cycle",
+        "create_crop_template",
+        "create_operation_work_order",
+        "log_farm_activity",
+        "settle_debt",
+        "settle_labor_payment",
+        "update_crop_cycle",
+        "update_crop_stage",
+        "update_operation_work_order",
+    }
+
+    assert WRITE_SKILLS == expected
+    assert get_cache_groups_for_skill("settle_labor_payment") == [
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ]
+    assert get_cache_groups_for_skill("update_crop_cycle") == [
+        "crop_cycle",
+        "get_farm_status",
+    ]
+    assert get_cache_groups_for_skill("update_operation_work_order") == [
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ]
 
 
 def test_store_pending_keeps_follow_up_action():

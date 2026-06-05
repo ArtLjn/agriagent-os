@@ -20,7 +20,10 @@ WRITE_SKILLS = frozenset(
         "log_farm_activity",
         "create_operation_work_order",
         "settle_debt",
+        "settle_labor_payment",
+        "update_crop_cycle",
         "update_crop_stage",
+        "update_operation_work_order",
     }
 )
 
@@ -37,7 +40,15 @@ _CACHE_INVALIDATION_MAP: dict[str, list[str]] = {
         "get_farm_status",
     ],
     "settle_debt": ["cost_analytics", "cost_summary", "get_farm_status"],
+    "settle_labor_payment": ["cost_analytics", "cost_summary", "get_farm_status"],
+    "update_crop_cycle": ["crop_cycle", "get_farm_status"],
     "update_crop_stage": ["crop_cycle", "get_farm_status"],
+    "update_operation_work_order": [
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ],
 }
 
 
@@ -76,7 +87,11 @@ _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
     "create_crop_template": ["crop_name"],
     "log_farm_activity": ["operation_type"],
     "create_operation_work_order": ["operation_type", "operation_date", "cycle_id"],
-    "update_operation_work_order": ["work_order_id", "operation_type", "operation_date"],
+    "update_operation_work_order": [
+        "work_order_id",
+        "operation_type",
+        "operation_date",
+    ],
     "settle_labor_payment": ["worker", "amount", "work_order_id"],
     "settle_debt": ["counterparty", "amount"],
     "update_crop_stage": ["stage_name"],
@@ -250,8 +265,7 @@ def build_confirmation_context(
             "name": _SKILL_DISPLAY.get(skill_name, skill_name),
         },
         "changes": [
-            {"field": key, "old": None, "new": value}
-            for key, value in params.items()
+            {"field": key, "old": None, "new": value} for key, value in params.items()
         ],
         "inferred_fields": {},
         "risk_notes": [],
@@ -358,8 +372,7 @@ def _build_create_work_order_context(
             "paid_worker": params.get("paid_worker"),
         },
         "changes": [
-            {"field": key, "old": None, "new": value}
-            for key, value in params.items()
+            {"field": key, "old": None, "new": value} for key, value in params.items()
         ],
         "inferred_fields": {
             "operation_date": params.get("operation_date"),

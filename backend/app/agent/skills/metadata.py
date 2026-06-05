@@ -47,6 +47,8 @@ class SkillMetadata(BaseModel):
     cache_invalidation: list[str] = Field(default_factory=list)
     confirmation_schema: ConfirmationSchema = Field(default_factory=ConfirmationSchema)
     evaluation_tags: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    disabled_reason: str | None = None
     metadata_incomplete: bool = False
 
 
@@ -58,17 +60,131 @@ _DEFAULT_WRITE_CONFIRMATION = ConfirmationSchema(
 )
 
 _EXTERNAL_NETWORK_SKILLS = frozenset({"web_search", "get_weather_forecast"})
+_WEB_SEARCH_DISABLED_REASON = "SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用"
+
+_WRITE_CONFIRM_SKILLS = frozenset(
+    {
+        "create_cost_record",
+        "create_crop_cycle",
+        "create_crop_template",
+        "create_operation_work_order",
+        "log_farm_activity",
+        "settle_debt",
+        "settle_labor_payment",
+        "update_crop_cycle",
+        "update_crop_stage",
+        "update_operation_work_order",
+    }
+)
+
+_READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
+    "get_cost_analytics": {
+        "context_dependencies": ["farm", "cost_records"],
+        "evaluation_tags": ["read", "cost", "analytics"],
+    },
+    "get_cost_summary": {
+        "context_dependencies": ["farm", "cost_records"],
+        "evaluation_tags": ["read", "cost", "summary"],
+    },
+    "get_crop_cycle_info": {
+        "context_dependencies": ["farm", "active_cycles"],
+        "evaluation_tags": ["read", "crop_cycle"],
+    },
+    "get_recent_farm_logs": {
+        "context_dependencies": ["farm", "farm_logs"],
+        "evaluation_tags": ["read", "farm_logs"],
+    },
+    "get_farm_status": {
+        "context_dependencies": ["farm"],
+        "evaluation_tags": ["read", "farm_status"],
+    },
+    "get_labor_payables": {
+        "context_dependencies": ["workers", "unpaid_labor", "crop_cycles"],
+        "evaluation_tags": ["read", "labor", "payable"],
+    },
+    "get_operation_work_orders": {
+        "context_dependencies": ["crop_cycles", "planting_units", "workers"],
+        "evaluation_tags": ["read", "operation_work_order", "labor"],
+    },
+}
+
+_WRITE_SKILL_METADATA: dict[str, dict[str, Any]] = {
+    "create_cost_record": {
+        "context_dependencies": ["farm", "cost_categories"],
+        "evaluation_tags": ["write", "cost", "record"],
+    },
+    "create_crop_cycle": {
+        "context_dependencies": ["farm", "crop_templates"],
+        "evaluation_tags": ["write", "crop_cycle"],
+    },
+    "create_crop_template": {
+        "context_dependencies": ["farm"],
+        "evaluation_tags": ["write", "crop_template"],
+    },
+    "create_operation_work_order": {
+        "context_dependencies": ["farm", "crop_cycles", "planting_units", "workers"],
+        "evaluation_tags": ["write", "operation_work_order", "labor"],
+    },
+    "log_farm_activity": {
+        "context_dependencies": ["farm", "active_cycles"],
+        "evaluation_tags": ["write", "farm_logs"],
+    },
+    "settle_debt": {
+        "context_dependencies": ["farm", "cost_records"],
+        "evaluation_tags": ["write", "debt", "settlement"],
+    },
+    "settle_labor_payment": {
+        "context_dependencies": ["workers", "unpaid_labor", "operation_work_orders"],
+        "evaluation_tags": ["write", "labor", "settlement"],
+    },
+    "update_crop_cycle": {
+        "context_dependencies": ["farm", "active_cycles"],
+        "evaluation_tags": ["write", "crop_cycle", "date_update"],
+    },
+    "update_crop_stage": {
+        "context_dependencies": ["farm", "active_cycles"],
+        "evaluation_tags": ["write", "crop_stage"],
+    },
+    "update_operation_work_order": {
+        "context_dependencies": ["operation_work_orders", "planting_units", "workers"],
+        "evaluation_tags": ["write", "operation_work_order", "labor"],
+    },
+}
+
+_EXTERNAL_NETWORK_SKILL_METADATA: dict[str, dict[str, Any]] = {
+    "get_weather_forecast": {
+        "context_dependencies": ["farm", "weather_location"],
+        "evaluation_tags": ["read", "weather", "external_network"],
+        "enabled": True,
+    },
+    "web_search": {
+        "context_dependencies": ["external_search"],
+        "evaluation_tags": ["read", "search", "external_network"],
+        "enabled": False,
+        "disabled_reason": _WEB_SEARCH_DISABLED_REASON,
+    },
+}
 
 
 def get_skill_metadata(skill: Any) -> SkillMetadata:
     """从 Skill 读取 metadata，缺失时提供兼容默认值。"""
+    skill_name = _get_skill_name(skill)
+    default_metadata = _get_known_default_metadata(skill_name)
     raw_metadata = _call_metadata(skill)
     if raw_metadata is not None:
+        if default_metadata is not None and isinstance(raw_metadata, Mapping):
+            raw_metadata = {**default_metadata, **raw_metadata}
+            if skill_name in _WRITE_CONFIRM_SKILLS:
+                raw_metadata["cache_invalidation"] = get_cache_groups_for_skill(
+                    skill_name
+                )
         metadata = SkillMetadata.model_validate(raw_metadata)
         metadata.metadata_incomplete = False
         return metadata
 
-    skill_name = _get_skill_name(skill)
+    if default_metadata is not None:
+        return SkillMetadata.model_validate(default_metadata)
+
     if skill_name in WRITE_SKILLS:
         return SkillMetadata(
             permission_level=SkillPermissionLevel.WRITE_CONFIRM,
@@ -90,6 +206,37 @@ def get_skill_metadata(skill: Any) -> SkillMetadata:
         evaluation_tags=["read"],
         metadata_incomplete=True,
     )
+
+
+def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
+    if skill_name in _WRITE_CONFIRM_SKILLS:
+        metadata = {
+            "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
+            "risk_level": SkillRiskLevel.MEDIUM,
+            "cache_invalidation": get_cache_groups_for_skill(skill_name),
+            "confirmation_schema": _DEFAULT_WRITE_CONFIRMATION,
+            "metadata_incomplete": False,
+        }
+        metadata.update(_WRITE_SKILL_METADATA.get(skill_name, {}))
+        return metadata
+
+    if skill_name in _READ_SKILL_METADATA:
+        return {
+            "permission_level": SkillPermissionLevel.READ,
+            "risk_level": SkillRiskLevel.LOW,
+            "metadata_incomplete": False,
+            **_READ_SKILL_METADATA[skill_name],
+        }
+
+    if skill_name in _EXTERNAL_NETWORK_SKILL_METADATA:
+        return {
+            "permission_level": SkillPermissionLevel.EXTERNAL_NETWORK,
+            "risk_level": SkillRiskLevel.LOW,
+            "metadata_incomplete": False,
+            **_EXTERNAL_NETWORK_SKILL_METADATA[skill_name],
+        }
+
+    return None
 
 
 def metadata_to_dict(skill: Any) -> dict[str, Any]:

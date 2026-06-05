@@ -23,6 +23,8 @@ class TestListSkills:
         assert "metadata_incomplete" in metadata
         assert "context_dependencies" in metadata
         assert "cache_invalidation" in metadata
+        assert "enabled" in metadata
+        assert "disabled_reason" in metadata
 
 
 class TestListPrompts:
