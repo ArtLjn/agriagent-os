@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 auth-module-boundary 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Auth 独立安全边界
 系统 SHALL 将认证鉴权能力集中在 Auth 模块中。Auth 模块 SHALL 管理登录、注册、密码哈希、token 签发与验证、当前用户依赖、管理员权限和认证错误码。

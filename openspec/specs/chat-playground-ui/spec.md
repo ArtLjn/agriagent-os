@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 chat-playground-ui 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Chat Playground 对话界面
 系统 SHALL 提供 `/dev/playground` 页面，支持直接在 admin-web 与 Agent 进行 SSE 流式对话。

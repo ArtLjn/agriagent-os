@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 agent-trace 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 平台级 Trace 事件
 Agent Trace SHALL 覆盖 Agent 请求生命周期中的 context_build、prompt_render、llm_call、tool_call、memory_observe、response_format 和 evaluation_capture 事件。

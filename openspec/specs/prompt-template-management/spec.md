@@ -1,3 +1,7 @@
+## Purpose
+
+定义 prompt-template-management 能力的行为要求。
+
 ## Requirements
 
 ### Requirement: Prompt 模板单一数据源

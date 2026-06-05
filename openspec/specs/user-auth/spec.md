@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 user-auth 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Token payload 标准化
 系统 SHALL 签发包含 `sub`、`type`、`iat`、`exp`、`jti` 的 access token。`sub` 表示用户 ID，`type` SHALL 为 `access`。

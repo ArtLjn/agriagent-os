@@ -1,5 +1,8 @@
-## ADDED Requirements
+# labor-cost-accounting Specification
 
+## Purpose
+TBD - created by archiving change stabilize-labor-cost-accounting. Update Purpose after archive.
+## Requirements
 ### Requirement: 全局工人档案
 The system SHALL manage workers as farm-level resources that can participate in multiple crop cycles.
 
@@ -66,3 +69,4 @@ The system SHALL calculate profit total expense from the same cost records used 
 - **WHEN** the user taps a labor expense amount in profit or cycle labor summary
 - **THEN** the ledger page MUST open with filters for the same cycle and labor category or labor source
 - **AND** the displayed ledger total MUST match the tapped amount
+

@@ -1,4 +1,8 @@
-## MODIFIED Requirements
+## Purpose
+
+定义 agent-weather-context 能力的行为要求。
+
+## Requirements
 
 ### Requirement: farm_context 天气坐标来源
 系统 SHALL 从 `user_settings` 表读取用户的 `default_lat` / `default_lon` 作为天气查询坐标。当用户无设置时，降级使用 config.yaml 中的默认坐标。

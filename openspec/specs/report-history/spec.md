@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 report-history 能力的行为要求。
+
+## Requirements
 
 ### Requirement: AI 助手 Tab 包含对话和报告两个视图
 AgentChatScreen SHALL 在 header 下方提供 SegmentedControl（对话/报告），点击切换显示内容。默认选中"对话"视图。

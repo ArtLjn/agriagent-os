@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: 多轮对话历史注入 LangGraph
 `invoke_advisor` / `stream_advisor` 调用时 SHALL 通过短时记忆策略向 LangGraph 注入当前 session 的工作记忆。工作记忆 SHALL 包含最近消息窗口，并在历史超过窗口或 token 预算时使用会话摘要替代更早历史。系统不得仅按固定条数无预算地注入完整历史。

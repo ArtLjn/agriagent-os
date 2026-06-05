@@ -1,5 +1,8 @@
-## ADDED Requirements
+# daily-advice-preview Specification
 
+## Purpose
+TBD - created by archiving change compact-daily-advice-preview. Update Purpose after archive.
+## Requirements
 ### Requirement: 首页显示紧凑预览卡片
 `HomeScreen` SHALL 在 `WeatherCardV2` 下方展示 `CompactAdviceCard`，高度不超过 110px，不显示完整建议列表。
 
@@ -66,3 +69,4 @@
 #### Scenario: 寒冷
 - **WHEN** `weatherCondition` 为 "cold"
 - **THEN** 显示 ❄️，背景色 `#E8F4FF`
+

@@ -1,3 +1,7 @@
+## Purpose
+
+定义 composable-prompt 能力的行为要求。
+
 ## Requirements
 
 ### Requirement: Snippet 文件组织

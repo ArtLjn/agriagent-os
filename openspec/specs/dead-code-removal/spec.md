@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 dead-code-removal 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 删除无引用的死代码模块
 系统 SHALL 不包含零引用的模块文件。已确认 `core/term_whitelist.py`（`is_whitelisted` 函数和 `_AGRICULTURAL_TERMS` 集合）在整个项目中无任何调用，MUST 被删除。

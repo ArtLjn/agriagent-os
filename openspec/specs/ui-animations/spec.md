@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 ui-animations 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 卡片进入动画
 Cards SHALL use fade-in and slide-up animation when entering the screen.

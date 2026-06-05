@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 home-screen-redesign 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 页面结构
 The home screen SHALL follow a strict vertical layout with large whitespace between sections.

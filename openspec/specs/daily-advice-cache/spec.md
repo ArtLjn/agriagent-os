@@ -1,3 +1,7 @@
+## Purpose
+
+定义 daily-advice-cache 能力的行为要求。
+
 ## Requirements
 
 ### Requirement: 每日建议按天缓存

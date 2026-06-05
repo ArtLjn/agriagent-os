@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 write-skill-schema-constraint 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Category parameter must use existing user labels
 The `create_cost_record` skill's `category` parameter SHALL be constrained to values from the user's `cost_categories` table. The system SHALL NOT allow LLM to freely create new category labels during write operations.

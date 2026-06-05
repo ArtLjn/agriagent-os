@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 user-settings 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 用户称呼设置
 用户设置 SHALL 新增 `display_name` 字段，用于 Agent 回复时的个性化称呼。

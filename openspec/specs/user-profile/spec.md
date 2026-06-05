@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 user-profile 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 用户画像存储
 `users` 表 SHALL 存储用户基本信息：nickname（昵称，AI 使用此字段称呼用户）、avatar_url（头像）、role（角色，默认"user"）。

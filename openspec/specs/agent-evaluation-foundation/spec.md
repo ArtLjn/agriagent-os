@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 agent-evaluation-foundation 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Agent 回放评测
 系统 SHALL 支持保存和回放 Agent 测试用例。测试用例 SHALL 包含输入消息、用户上下文、农场上下文、预期 skill 调用、预期写操作和最低回复质量断言。

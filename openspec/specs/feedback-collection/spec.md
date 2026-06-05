@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 feedback-collection 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 用户对 AI 回复评价
 系统 SHALL 允许用户对 conversation_messages 中的 assistant 消息提交评价（good/bad），并可选提供修正文本。

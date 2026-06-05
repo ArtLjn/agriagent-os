@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 gps-city-detection 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 注册后自动定位
 移动端 SHALL 在用户注册成功后请求 GPS 位置权限。若用户授权，获取当前经纬度并匹配到最近的城市设为默认城市。

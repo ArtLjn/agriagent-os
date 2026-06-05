@@ -1,3 +1,7 @@
+## Purpose
+
+定义 admin-web-user-management 能力的行为要求。
+
 # Admin-web 用户管理页面
 
 ## 概述
@@ -50,3 +54,19 @@
 - 使用现有 Ant Design 组件（Table、Modal、Tag、Button、Input、Select）
 - 使用现有 API client（`api/client.ts`）
 - 深色主题风格与现有页面一致
+## Requirements
+### Requirement: 用户详情弹窗配额编辑
+用户详情弹窗 SHALL 展示配额信息并支持管理员修改。
+
+#### Scenario: 展示配额详情
+- **WHEN** 管理员打开用户详情弹窗
+- **THEN** 弹窗中新增"Token 配额"区块，展示月限额、月已用、月剩余、月周期起止、周限额、周已用、周剩余、周周期起止
+
+#### Scenario: 修改月限额
+- **WHEN** 管理员在配额区块修改月限额数值并保存
+- **THEN** 调用 PUT /admin/users/{user_id}/quota 更新配额，刷新展示
+
+#### Scenario: 恢复默认配额
+- **WHEN** 管理员清空限额输入框并保存
+- **THEN** 提交 null 值，用户回退到全局默认配额
+

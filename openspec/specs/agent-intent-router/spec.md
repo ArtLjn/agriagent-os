@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 agent-intent-router 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Intent-based routing for user input
 The system SHALL route user input based on intent classification: greetings/chitchat SHALL receive direct replies without tool calling; data queries SHALL prefer read skills; write operations SHALL follow the full tool calling flow.

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 time-calibration 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 客户端注入当前日期
 移动端 SHALL 在每个 HTTP 请求头中携带 `X-Current-Date`，值为设备本地日期，格式 `YYYY-MM-DD`。后端 SHALL 读取该请求头并注入到 prompt 模板变量中。
