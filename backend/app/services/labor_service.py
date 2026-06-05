@@ -12,7 +12,7 @@ from app.models.cost_category import CostCategory
 from app.models.cycle import CropCycle
 from app.models.planting import LaborEntry, OperationWorkOrder, Worker
 from app.schemas.planting import LaborEntryCreate, WageSaveRequest, WageUpdateRequest
-from app.services.cost_service import _find_category
+from app.services.cost_service import _find_category, settlement_status_for
 
 LABOR_CATEGORY = "人工"
 WORK_ORDER_SOURCE = "operation_work_order"
@@ -141,6 +141,11 @@ def sync_work_order_labor_cost_record(
         (entry.payable_amount for entry in work_order.labor_entries),
         Decimal("0"),
     )
+    total_paid = sum(
+        (entry.paid_amount for entry in work_order.labor_entries),
+        Decimal("0"),
+    )
+    settled_amount = min(total_paid, total_payable)
     existing = _get_single_source_cost_record(db, farm_id, WORK_ORDER_SOURCE, work_order.id)
     if total_payable <= 0:
         if existing:
@@ -164,6 +169,7 @@ def sync_work_order_labor_cost_record(
         cycle_id=cycle.id if cycle else None,
         category=category,
         amount=total_payable,
+        settled_amount=settled_amount,
         record_date=work_order.operation_date,
         note=note,
         subtype="作业单人工",
@@ -205,6 +211,7 @@ def sync_labor_entry_cost_record(
         cycle_id=cycle_id,
         category=category,
         amount=entry.payable_amount,
+        settled_amount=min(entry.paid_amount, entry.payable_amount),
         record_date=record_date,
         note=f"{worker_name}{operation_type}工资",
         subtype="工资记录人工",
@@ -404,6 +411,7 @@ def _apply_labor_cost_record(
     cycle_id: int | None,
     category: CostCategory | None,
     amount: Decimal,
+    settled_amount: Decimal,
     record_date,
     note: str,
     subtype: str,
@@ -414,6 +422,8 @@ def _apply_labor_cost_record(
     record.category_id = category.id if category else None
     record.category_name_snapshot = LABOR_CATEGORY
     record.amount = amount
+    record.settled_amount = settled_amount
+    record.settlement_status = settlement_status_for(amount, settled_amount)
     record.record_date = record_date
     record.note = note
     record.record_subtype = subtype

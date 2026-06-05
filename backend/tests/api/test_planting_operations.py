@@ -3,6 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
+from app.models.cost import CostRecord
 from app.models.planting import LaborEntry
 
 
@@ -116,7 +117,7 @@ def test_cycle_list_shows_batch_area_and_unit_count(client):
     assert item["season"] == "春茬"
 
 
-def test_create_work_order_with_labor_generates_cost_record(client):
+def test_create_work_order_with_labor_generates_cost_record(client, db_session):
     """作业单可选择多个棚和多个工人，并自动生成人工成本。"""
     cycle_id = _create_watermelon_cycle(client)
     unit_ids = []
@@ -187,12 +188,61 @@ def test_create_work_order_with_labor_generates_cost_record(client):
     costs = client.get(f"/costs?cycle_id={cycle_id}&category=人工").json()["items"]
     assert len(costs) == 1
     assert costs[0]["amount"] == "800.00"
+    assert costs[0]["settled_amount"] == "200.00"
+    assert costs[0]["unsettled_amount"] == "600.00"
+    assert costs[0]["settlement_status"] == "partial"
     assert costs[0]["source_type"] == "operation_work_order"
     assert costs[0]["source_id"] == data["id"]
     assert costs[0]["source_label"] == "来自农事作业单"
 
     profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
     assert Decimal(profit["total_cost"]) == Decimal("800.00")
+
+    overpaid_response = client.post(
+        "/planting/work-orders",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "绑蔓",
+            "operation_date": date.today().isoformat(),
+            "scope_type": "unit",
+            "unit_ids": unit_ids,
+            "labor_entries": [
+                {
+                    "worker_id": worker_ids[0],
+                    "pay_type": "daily",
+                    "quantity": "1",
+                    "unit_price": "100.00",
+                    "paid_amount": "130.00",
+                }
+            ],
+        },
+    )
+
+    assert overpaid_response.status_code == 200
+    overpaid_work_order = overpaid_response.json()
+    assert overpaid_work_order["total_payable_amount"] == "100.00"
+    assert overpaid_work_order["total_paid_amount"] == "130.00"
+    assert overpaid_work_order["total_unpaid_amount"] == "0.00"
+
+    overpaid_cost = client.get(
+        f"/costs?cycle_id={cycle_id}&category=人工"
+        f"&source_type=operation_work_order&source_id={overpaid_work_order['id']}"
+    ).json()["items"][0]
+    assert overpaid_cost["amount"] == "100.00"
+    assert overpaid_cost["settled_amount"] == "100.00"
+    assert overpaid_cost["unsettled_amount"] == "0.00"
+    assert overpaid_cost["settlement_status"] == "settled"
+
+    stored_cost = (
+        db_session.query(CostRecord)
+        .filter(
+            CostRecord.source_type == "operation_work_order",
+            CostRecord.source_id == overpaid_work_order["id"],
+        )
+        .one()
+    )
+    assert stored_cost.amount == Decimal("100.00")
+    assert stored_cost.settled_amount == Decimal("100.00")
 
 
 def test_save_wage_reuses_worker_across_cycles_and_groups_history(client):
@@ -233,7 +283,7 @@ def test_save_wage_reuses_worker_across_cycles_and_groups_history(client):
     }
 
 
-def test_save_wage_generates_single_traceable_labor_cost(client):
+def test_save_wage_generates_single_traceable_labor_cost(client, db_session):
     """保存工资生成一条可追溯到工资记录的人工成本账单。"""
     cycle_id = _create_watermelon_cycle(client)
 
@@ -266,9 +316,52 @@ def test_save_wage_generates_single_traceable_labor_cost(client):
     assert costs["total"] == 1
     cost = costs["items"][0]
     assert cost["amount"] == "360.00"
+    assert cost["settled_amount"] == "100.00"
+    assert cost["unsettled_amount"] == "260.00"
+    assert cost["settlement_status"] == "partial"
     assert cost["source_type"] == "labor_entry"
     assert cost["source_id"] == wage["id"]
     assert cost["source_label"] == "来自工资记录"
+
+    overpaid_response = client.post(
+        "/planting/labor/wages",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "压蔓",
+            "worker_name": "老李",
+            "quantity": "1",
+            "unit_price": "120.00",
+            "paid_amount": "150.00",
+            "work_date": "2026-04-03",
+            "client_request_id": "压蔓-老李-20260403",
+        },
+    )
+
+    assert overpaid_response.status_code == 200
+    overpaid_wage = overpaid_response.json()
+    assert overpaid_wage["payable_amount"] == "120.00"
+    assert overpaid_wage["paid_amount"] == "150.00"
+    assert overpaid_wage["unpaid_amount"] == "0.00"
+
+    overpaid_cost = client.get(
+        f"/costs?cycle_id={cycle_id}&category=人工&source_type=labor_entry"
+        f"&source_id={overpaid_wage['id']}"
+    ).json()["items"][0]
+    assert overpaid_cost["amount"] == "120.00"
+    assert overpaid_cost["settled_amount"] == "120.00"
+    assert overpaid_cost["unsettled_amount"] == "0.00"
+    assert overpaid_cost["settlement_status"] == "settled"
+
+    stored_cost = (
+        db_session.query(CostRecord)
+        .filter(
+            CostRecord.source_type == "labor_entry",
+            CostRecord.source_id == overpaid_wage["id"],
+        )
+        .one()
+    )
+    assert stored_cost.amount == Decimal("120.00")
+    assert stored_cost.settled_amount == Decimal("120.00")
 
 
 def test_duplicate_wage_save_updates_source_cost_without_duplicate_expense(client):
@@ -301,6 +394,9 @@ def test_duplicate_wage_save_updates_source_cost_without_duplicate_expense(clien
     costs = client.get(f"/costs?cycle_id={cycle_id}&category=人工").json()
     assert costs["total"] == 1
     assert costs["items"][0]["amount"] == "400.00"
+    assert costs["items"][0]["settled_amount"] == "150.00"
+    assert costs["items"][0]["unsettled_amount"] == "250.00"
+    assert costs["items"][0]["settlement_status"] == "partial"
 
     profit = client.get(f"/costs/cycles/{cycle_id}/profit").json()
     assert Decimal(profit["total_cost"]) == Decimal("400.00")
