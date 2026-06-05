@@ -107,6 +107,4 @@ def test_disabled_skills_have_disabled_reason() -> None:
         if not get_skill_metadata(skill).enabled
     }
 
-    assert disabled == {
-        "web_search": "SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用"
-    }
+    assert disabled == {"web_search": "SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用"}

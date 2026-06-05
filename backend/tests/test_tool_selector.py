@@ -49,7 +49,9 @@ def _make_tools_with_enabled(overrides: dict[str, bool]):
         m = MagicMock(spec=["name", "skill_metadata"])
         m.name = n
         if n in overrides:
-            m.skill_metadata = type("SkillMetadataStub", (), {"enabled": overrides[n]})()
+            m.skill_metadata = type(
+                "SkillMetadataStub", (), {"enabled": overrides[n]}
+            )()
         tools.append(m)
     return tools
 
@@ -128,7 +130,9 @@ class TestWritePatternMatching:
         assert result == ENABLED_TOOL_NAMES
 
     def test_create_operation_work_order_with_labor_detail(self):
-        result = select_tools("今天东大棚4个工人给西瓜授粉，每人200，先付老王200", _make_tools())
+        result = select_tools(
+            "今天东大棚4个工人给西瓜授粉，每人200，先付老王200", _make_tools()
+        )
         assert result == ["create_operation_work_order"]
 
     def test_create_operation_work_order_wins_over_query_word(self):

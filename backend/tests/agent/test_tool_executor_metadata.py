@@ -48,12 +48,15 @@ async def test_write_confirm_metadata_creates_pending_action():
         "farm_id": 1,
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=collector,
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -205,12 +208,15 @@ async def test_admin_permission_rejects_without_execution_and_records_trace():
         "farm_id": 1,
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=collector,
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -249,12 +255,15 @@ async def test_admin_permission_executes_for_admin_user_role_and_records_trace()
         "user_role": "admin",
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=collector,
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -296,12 +305,15 @@ async def test_validation_error_records_trace():
         "farm_id": 1,
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=collector,
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -360,12 +372,15 @@ async def test_disabled_read_or_external_tool_rejects_without_execution(
         "farm_id": 1,
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=collector,
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -414,12 +429,15 @@ async def test_disabled_write_confirm_tool_rejects_without_pending_action():
         "farm_id": 1,
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=collector,
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -462,12 +480,15 @@ async def test_external_network_permission_executes_and_records_permission_level
         "farm_id": 1,
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=collector,
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
     ):
         result = await _parallel_tool_node(state)
 
