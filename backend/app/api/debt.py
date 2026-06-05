@@ -1,6 +1,6 @@
 """债务管理 API 路由。"""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -54,7 +54,7 @@ def settle_debt(
     Request body:
         counterparty: 债权人名称（必填）
         amount: 还款金额（可选，不传则全额）
-        note: 备注（可选）
+        note: 兼容旧 payload 的备注（可选），当前不创建还款记录且不落库
     """
     counterparty = payload.get("counterparty")
     if not counterparty:
@@ -62,7 +62,16 @@ def settle_debt(
 
     amount = payload.get("amount")
     if amount is not None:
-        amount = Decimal(str(amount))
+        try:
+            amount = Decimal(str(amount))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=400, detail="amount 必须是有效数字"
+            ) from exc
+        if not amount.is_finite():
+            raise HTTPException(status_code=400, detail="amount 必须是有效数字")
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="结算金额必须大于 0")
 
     try:
         return debt_service.settle_debt(
@@ -72,6 +81,8 @@ def settle_debt(
             amount=amount,
             note=payload.get("note"),
         )
+    except debt_service.InvalidSettlementAmountError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
