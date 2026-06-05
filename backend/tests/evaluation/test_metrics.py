@@ -66,3 +66,42 @@ def test_compute_skill_quality_metrics() -> None:
     assert metrics.false_positive_rate == 0.5
     assert metrics.argument_accuracy == 0.0
     assert metrics.write_confirmation_hit_rate == 0.0
+
+
+def test_skill_quality_tracks_unnecessary_clarification() -> None:
+    result = ReplayResult(
+        case_id="crop-update",
+        passed=False,
+        reply="请问您是想修改现有茬口，还是创建新茬口？",
+        expected_skill_calls=[
+            ExpectedSkillCall(
+                name="update_crop_cycle",
+                arguments={"start_date": "2026-09-01"},
+            )
+        ],
+        actual_skill_calls=[],
+        expected_writes=[],
+        write_confirmations_hit=0,
+        errors=["unnecessary_clarification"],
+    )
+
+    metrics = compute_skill_quality([result])
+
+    assert metrics.unnecessary_clarification_rate == 1.0
+
+
+def test_skill_quality_tracks_execution_consistency() -> None:
+    result = ReplayResult(
+        case_id="crop-update",
+        passed=False,
+        reply="已修改",
+        expected_skill_calls=[],
+        actual_skill_calls=[],
+        expected_writes=[],
+        write_confirmations_hit=0,
+        errors=["execution_inconsistency"],
+    )
+
+    metrics = compute_skill_quality([result])
+
+    assert metrics.execution_consistency_rate == 0.0

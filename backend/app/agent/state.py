@@ -17,6 +17,7 @@ class AgentState(TypedDict):
     intent: str  # "greeting" | "query" | "write" | "agent"
     user_id: str | None
     session_id: str | None
+    user_role: NotRequired[str | None]
     system_prompt: NotRequired[str | None]
     context_bundle: NotRequired[ContextBundle | None]
     selected_tool_names: NotRequired[list[str] | None]

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, create_model
 from skillify.core.context import SkillContext
 from skillify.manager import SkillManager
 
+from app.agent.skills.metadata import get_skill_metadata
 from app.core.database import SessionLocal
 from app.services import cost_category_service
 
@@ -145,15 +146,15 @@ def skills_to_langchain_tools(
         args_schema = _schema_to_pydantic(
             skill.name(), skill.parameters_schema(), enums=enums_map
         )
-        tools.append(
-            StructuredTool(
-                name=skill.name(),
-                description=skill.description(),
-                args_schema=args_schema,
-                func=_make_sync_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
-                coroutine=_make_async_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
-            )
+        tool = StructuredTool(
+            name=skill.name(),
+            description=skill.description(),
+            args_schema=args_schema,
+            func=_make_sync_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
+            coroutine=_make_async_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
         )
+        _attach_skill_metadata(tool, skill)
+        tools.append(tool)
     return tools
 
 
@@ -186,10 +187,16 @@ def _build_registry() -> dict:
             skill = manager.get_skill(skill_def.name)
             if skill:
                 registry[skill.name()] = skill
+                _attach_skill_metadata(skill, skill)
                 logger.debug("Skill 注册 | name=%s", skill.name())
     except Exception as e:
         logger.warning("Skill 加载失败: %s", e)
     return registry
+
+
+def _attach_skill_metadata(target: Any, skill: Any) -> None:
+    """为 Skill 或 Pydantic Tool 对象挂载 runtime metadata。"""
+    object.__setattr__(target, "skill_metadata", get_skill_metadata(skill))
 
 
 def clear_skill_cache():

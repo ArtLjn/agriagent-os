@@ -137,13 +137,59 @@ async def test_handle_pending_missing_template_creates_template_pending():
 
 
 @pytest.mark.asyncio
-async def test_handle_pending_clears_cache_groups_for_write_skill():
+async def test_handle_pending_clears_cache_groups_from_tool_metadata():
     store_pending(1, "create_cost_record", {"amount": 100, "category": "化肥"})
+    tool = type(
+        "Tool",
+        (),
+        {
+            "name": "create_cost_record",
+            "skill_metadata": type(
+                "Metadata",
+                (),
+                {"cache_invalidation": ["metadata_cost_group"]},
+            )(),
+        },
+    )()
 
     with patch(
         "app.agent.executor.pending_actions._execute_write_skill",
         new_callable=AsyncMock,
     ) as mock_execute, patch(
+        "app.agent.executor.pending_actions.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.executor.pending_actions.clear_skill_cache",
+        return_value=2,
+    ) as mock_clear:
+        mock_execute.return_value = "已记账"
+        decision = await handle_pending_action(farm_id=1, message="确认")
+
+    assert decision.status == "confirmed"
+    assert get_pending(1) is None
+    assert decision.metadata["cache_groups_cleared"] == ["metadata_cost_group"]
+    mock_clear.assert_called_once_with("metadata_cost_group")
+
+
+@pytest.mark.asyncio
+async def test_handle_pending_clears_fallback_cache_groups_when_metadata_empty():
+    store_pending(1, "create_cost_record", {"amount": 100, "category": "化肥"})
+    tool = type(
+        "Tool",
+        (),
+        {
+            "name": "create_cost_record",
+            "skill_metadata": type("Metadata", (), {"cache_invalidation": []})(),
+        },
+    )()
+
+    with patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    ) as mock_execute, patch(
+        "app.agent.executor.pending_actions.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
         "app.agent.executor.pending_actions.clear_skill_cache",
         return_value=2,
     ) as mock_clear:

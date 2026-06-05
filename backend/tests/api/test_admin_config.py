@@ -18,6 +18,11 @@ class TestListSkills:
         data = resp.json()
         assert "items" in data
         assert "total" in data
+        assert data["items"]
+        metadata = data["items"][0]["metadata"]
+        assert "permission_level" in metadata
+        assert "risk_level" in metadata
+        assert "metadata_incomplete" in metadata
 
 
 class TestListPrompts:

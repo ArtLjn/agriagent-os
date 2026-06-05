@@ -1,0 +1,363 @@
+"""Tool executor metadata 权限测试。"""
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import BaseModel
+
+from app.agent.runtime.tool_executor import _parallel_tool_node
+from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
+from app.infra.pending_actions import get_pending, remove_pending
+
+
+@pytest.fixture(autouse=True)
+def clean_pending_action():
+    remove_pending(1)
+    yield
+    remove_pending(1)
+
+
+@pytest.mark.asyncio
+async def test_write_confirm_metadata_creates_pending_action():
+    tool = SimpleNamespace(
+        name="metadata_write_tool",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            cache_invalidation=["metadata_group"],
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="创建一条需要确认的记录"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "metadata_write_tool",
+                        "args": {"amount": 100},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.runtime.tool_executor.get_collector",
+        return_value=collector,
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is not None
+    assert pending.skill_name == "metadata_write_tool"
+    assert pending.params == {"amount": 100}
+    assert pending.original_input == "创建一条需要确认的记录"
+    assert "[PENDING_ACTION]" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+    collector.record.assert_called_once()
+    output_data = collector.record.call_args.kwargs["output_data"]
+    assert output_data["status"] == "pending"
+    assert output_data["permission_level"] == "write_confirm"
+    assert output_data["confirmation_context"] == pending.confirmation_context
+
+
+@pytest.mark.asyncio
+async def test_read_metadata_executes_immediately_even_when_name_matches_write_fallback():
+    tool = SimpleNamespace(
+        name="create_cost_record",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="已读取"),
+        skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.READ),
+    )
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "create_cost_record",
+                        "args": {"amount": 100},
+                    }
+                ],
+            )
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1) is None
+    tool.ainvoke.assert_awaited_once_with({"amount": 100})
+    assert result["messages"][0].content == "已读取"
+
+
+@pytest.mark.asyncio
+async def test_unknown_permission_on_legacy_write_skill_creates_pending_action():
+    tool = SimpleNamespace(
+        name="create_cost_record",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SimpleNamespace(permission_level="unknown_permission"),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="买了100块化肥"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "create_cost_record",
+                        "args": {"amount": 100, "category": "化肥"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is not None
+    assert pending.skill_name == "create_cost_record"
+    assert pending.params == {"amount": 100, "category": "化肥"}
+    assert "[PENDING_ACTION]" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_unknown_permission_on_non_write_skill_fails_closed_without_execution():
+    tool = SimpleNamespace(
+        name="metadata_read_tool",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行"),
+        skill_metadata=SimpleNamespace(permission_level="unknown_permission"),
+    )
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "metadata_read_tool",
+                        "args": {"keyword": "玉米"},
+                    }
+                ],
+            )
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1) is None
+    assert result["messages"][0].content == "工具调用失败：未知权限等级。"
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_admin_permission_rejects_without_execution_and_records_trace():
+    tool = SimpleNamespace(
+        name="admin_tool",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行"),
+        skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.ADMIN),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "admin_tool",
+                        "args": {"target": "quota"},
+                    }
+                ],
+            )
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.runtime.tool_executor.get_collector",
+        return_value=collector,
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert result["messages"][0].content == "工具调用失败：需要管理员权限。"
+    tool.ainvoke.assert_not_awaited()
+    collector.record.assert_called_once()
+    assert collector.record.call_args.kwargs["output_data"] == {
+        "status": "rejected",
+        "permission_level": "admin",
+    }
+
+
+@pytest.mark.asyncio
+async def test_admin_permission_executes_for_admin_user_role_and_records_trace():
+    tool = SimpleNamespace(
+        name="admin_tool",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="管理员工具已执行"),
+        skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.ADMIN),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "admin_tool",
+                        "args": {"target": "quota"},
+                    }
+                ],
+            )
+        ],
+        "farm_id": 1,
+        "user_role": "admin",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.runtime.tool_executor.get_collector",
+        return_value=collector,
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert result["messages"][0].content == "管理员工具已执行"
+    tool.ainvoke.assert_awaited_once_with({"target": "quota"})
+    collector.record.assert_called_once()
+    assert collector.record.call_args.kwargs["output_data"] == {
+        "status": "success",
+        "reply_preview": "管理员工具已执行",
+        "permission_level": "admin",
+    }
+
+
+@pytest.mark.asyncio
+async def test_validation_error_records_trace():
+    class RequiredArgs(BaseModel):
+        required_name: str
+
+    tool = SimpleNamespace(
+        name="metadata_read_tool",
+        args_schema=RequiredArgs,
+        ainvoke=AsyncMock(return_value="不应执行"),
+        skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.READ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "metadata_read_tool",
+                        "args": {},
+                    }
+                ],
+            )
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.runtime.tool_executor.get_collector",
+        return_value=collector,
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert result["messages"][0].content.startswith("参数校验失败:")
+    tool.ainvoke.assert_not_awaited()
+    collector.record.assert_called_once()
+    assert collector.record.call_args.kwargs["node_type"] == "skill_call"
+    assert collector.record.call_args.kwargs["node_name"] == "metadata_read_tool"
+    assert collector.record.call_args.kwargs["input_data"] == {}
+    assert collector.record.call_args.kwargs["output_data"] == {
+        "status": "validation_error",
+        "permission_level": "read",
+    }
+    assert "Field required" in collector.record.call_args.kwargs["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_external_network_permission_executes_and_records_permission_level():
+    tool = SimpleNamespace(
+        name="web_search",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="搜索结果"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.EXTERNAL_NETWORK
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "web_search",
+                        "args": {"query": "天气"},
+                    }
+                ],
+            )
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.runtime.tool_executor.get_collector",
+        return_value=collector,
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert result["messages"][0].content == "搜索结果"
+    tool.ainvoke.assert_awaited_once_with({"query": "天气"})
+    assert collector.record.call_args.kwargs["output_data"] == {
+        "status": "success",
+        "reply_preview": "搜索结果",
+        "permission_level": "external_network",
+    }

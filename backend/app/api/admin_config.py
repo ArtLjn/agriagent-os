@@ -4,10 +4,11 @@ import logging
 
 from fastapi import APIRouter
 
-from app.core.config import settings
 from app.agent.prompt_registry import get_registry
-from app.infra.skill_cache import clear_cache
 from app.agent.skills import get_skill_manager
+from app.agent.skills.metadata import metadata_to_dict
+from app.core.config import settings
+from app.infra.skill_cache import clear_cache
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ def list_skills() -> dict:
                     "name": skill.name(),
                     "description": skill.description(),
                     "parameters_schema": skill.parameters_schema(),
+                    "metadata": metadata_to_dict(skill),
                     "status": "active",
                 }
             )

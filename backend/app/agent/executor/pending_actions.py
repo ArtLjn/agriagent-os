@@ -60,10 +60,36 @@ async def _execute_write_skill(
         )
 
 
-def _clear_write_skill_caches(skill_name: str) -> list[str]:
-    """清理写操作影响的缓存组，并返回尝试清理的组名。"""
+def _get_metadata_cache_groups(
+    skill_name: str,
+    farm_id: int,
+    farm_uid: str | None = None,
+) -> list[str]:
+    """从 LangChain tool metadata 读取缓存失效组，缺失时回退旧映射。"""
+    try:
+        tool_map = {
+            tool.name: tool
+            for tool in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
+        }
+        tool = tool_map.get(skill_name)
+        metadata = getattr(tool, "skill_metadata", None) if tool else None
+        cache_groups = getattr(metadata, "cache_invalidation", None)
+        if cache_groups:
+            return list(cache_groups)
+    except Exception as exc:
+        logger.warning(
+            "读取 Skill metadata 缓存失效配置失败，使用 fallback | skill=%s error=%s",
+            skill_name,
+            exc,
+        )
+
+    return get_cache_groups_for_skill(skill_name)
+
+
+def _clear_cache_groups(skill_name: str, cache_groups: list[str]) -> list[str]:
+    """清理指定缓存组。"""
     cleared_groups = []
-    for group in get_cache_groups_for_skill(skill_name):
+    for group in cache_groups:
         cleared = clear_skill_cache(group)
         cleared_groups.append(group)
         if cleared:
@@ -111,7 +137,12 @@ async def _confirm_pending(
         params=pending.params,
         farm_uid=farm_uid,
     )
-    cleared_groups = _clear_write_skill_caches(pending.skill_name)
+    cache_groups = _get_metadata_cache_groups(
+        pending.skill_name,
+        farm_id=farm_id,
+        farm_uid=farm_uid,
+    )
+    cleared_groups = _clear_cache_groups(pending.skill_name, cache_groups)
     remove_pending(farm_id)
     metadata = {"cache_groups_cleared": cleared_groups}
 
