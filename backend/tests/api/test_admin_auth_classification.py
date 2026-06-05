@@ -31,6 +31,10 @@ ADMIN_TRACE_REQUESTS: list[AdminRequest] = [
     ("DELETE", "/admin/traces?before=2026-05-20", lambda _method: {}),
 ]
 
+ADMIN_GUARDRAILS_REQUESTS: list[AdminRequest] = [
+    ("GET", "/admin/guardrails-logs", lambda _method: {}),
+]
+
 
 @pytest.mark.parametrize(("method", "path", "kwargs_factory"), ADMIN_CONFIG_REQUESTS)
 def test_admin_config_endpoints_reject_anonymous(
@@ -122,3 +126,65 @@ def test_admin_trace_endpoints_reject_regular_user(
 
     assert resp.status_code == 403
     assert resp.json()["detail"]["code"] == "AUTH_ADMIN_REQUIRED"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs_factory"), ADMIN_GUARDRAILS_REQUESTS
+)
+def test_admin_guardrails_endpoints_reject_anonymous(
+    db_session,
+    method: str,
+    path: str,
+    kwargs_factory: Callable[[str], dict],
+):
+    """匿名访问 admin guardrails 相关接口返回 401。"""
+    with auth_override_scope(app):
+        resp = TestClient(app).request(method, path, **kwargs_factory(method))
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_MISSING_TOKEN"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs_factory"), ADMIN_GUARDRAILS_REQUESTS
+)
+def test_admin_guardrails_endpoints_reject_regular_user(
+    db_session,
+    method: str,
+    path: str,
+    kwargs_factory: Callable[[str], dict],
+):
+    """普通用户访问 admin guardrails 相关接口返回 403。"""
+    ensure_regular_user(db_session)
+    with auth_override_scope(app):
+        resp = TestClient(app).request(
+            method,
+            path,
+            headers=regular_headers(),
+            **kwargs_factory(method),
+        )
+
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "AUTH_ADMIN_REQUIRED"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs_factory"), ADMIN_GUARDRAILS_REQUESTS
+)
+def test_admin_guardrails_endpoints_allow_admin(
+    db_session,
+    method: str,
+    path: str,
+    kwargs_factory: Callable[[str], dict],
+):
+    """管理员访问 admin guardrails 相关接口返回业务结果。"""
+    ensure_admin_user(db_session)
+    with auth_override_scope(app):
+        resp = TestClient(app).request(
+            method,
+            path,
+            headers=admin_headers(),
+            **kwargs_factory(method),
+        )
+
+    assert resp.status_code == 200
