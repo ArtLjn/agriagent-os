@@ -38,8 +38,32 @@ const BG_CARD = "#21262d";
 const BORDER = "#30363d";
 const TEXT_SECONDARY = "#8b949e";
 const ACCENT = "#58a6ff";
-const DEFAULT_MONTHLY_LIMIT = 3000000;
-const DEFAULT_WEEKLY_LIMIT = 750000;
+const DEFAULT_MONTHLY_LIMIT = 200000;
+const DEFAULT_WEEKLY_LIMIT = 50000;
+
+const quotaPresets = [
+  {
+    key: "light",
+    label: "轻量",
+    description: "少量问答和偶发报告",
+    monthly: 50000,
+    weekly: 15000,
+  },
+  {
+    key: "standard",
+    label: "标准",
+    description: "日常使用推荐",
+    monthly: DEFAULT_MONTHLY_LIMIT,
+    weekly: DEFAULT_WEEKLY_LIMIT,
+  },
+  {
+    key: "heavy",
+    label: "重度",
+    description: "高频测试和多模型使用",
+    monthly: 800000,
+    weekly: 200000,
+  },
+];
 
 const statusFilters = [
   { label: "全部", value: "" },
@@ -166,6 +190,11 @@ export default function Users() {
   const handleRestoreDefaultQuota = () => {
     setMonthlyLimit(null);
     setWeeklyLimit(null);
+  };
+
+  const applyQuotaPreset = (preset: (typeof quotaPresets)[number]) => {
+    setMonthlyLimit(preset.monthly);
+    setWeeklyLimit(preset.weekly);
   };
 
   const handleSaveQuota = async () => {
@@ -444,6 +473,42 @@ export default function Users() {
               : `将更新 ${selectedRowKeys.length} 个已选用户`}
           </div>
           <div>
+            <div style={{ marginBottom: 8 }}>额度档位</div>
+            <Row gutter={10}>
+              {quotaPresets.map((preset) => {
+                const active = monthlyLimit === preset.monthly && weeklyLimit === preset.weekly;
+                return (
+                  <Col span={8} key={preset.key}>
+                    <button
+                      type="button"
+                      onClick={() => applyQuotaPreset(preset)}
+                      style={{
+                        width: "100%",
+                        minHeight: 92,
+                        padding: "10px 12px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        color: active ? "#e6edf3" : TEXT_SECONDARY,
+                        background: active ? "rgba(47,129,247,0.16)" : BG_SECONDARY,
+                        border: `1px solid ${active ? ACCENT : BORDER}`,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <div style={{ color: active ? ACCENT : "#e6edf3", fontWeight: 700 }}>
+                        {preset.label}
+                      </div>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>{preset.description}</div>
+                      <div style={{ fontSize: 12, marginTop: 8 }}>
+                        月 {preset.monthly.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: 12 }}>周 {preset.weekly.toLocaleString()}</div>
+                    </button>
+                  </Col>
+                );
+              })}
+            </Row>
+          </div>
+          <div>
             <div style={{ marginBottom: 8 }}>月 Token 额度</div>
             <InputNumber
               min={0}
@@ -470,9 +535,9 @@ export default function Users() {
             />
           </div>
           <Space>
-            <Button onClick={handleRestoreDefaultQuota}>恢复系统默认额度</Button>
+            <Button onClick={handleRestoreDefaultQuota}>恢复标准默认</Button>
             <span style={{ color: TEXT_SECONDARY, fontSize: 12 }}>
-              恢复后按后端系统配置生效；填 0 表示禁止使用。
+              默认按标准档后端配置生效；填 0 表示禁止使用，也可手动输入自定义额度。
             </span>
           </Space>
         </Space>

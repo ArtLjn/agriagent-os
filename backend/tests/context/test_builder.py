@@ -116,3 +116,31 @@ def test_builder_builds_runtime_context_bundle_with_policy_and_memory(
     }.issubset(block_keys)
     assert bundle.metadata["policy"]["intent"] == "query"
     assert bundle.metadata["policy"]["selected_tool_names"] == ["get_cost_summary"]
+
+
+def test_builder_trace_records_skill_dependency_context_status(db_session) -> None:
+    collector = FakeCollector()
+    builder = ContextBuilder(policy=ContextPolicy(), trace_collector=collector)
+
+    bundle = builder.build_runtime_context_bundle(
+        db=db_session,
+        request=ContextBuildRequest(
+            intent="agent",
+            selected_tool_names=["settle_labor_payment"],
+            farm_id=1,
+            user_id="test-user-001",
+        ),
+    )
+
+    diagnostics = bundle.metadata["context_dependency_diagnostics"]
+    statuses = {item["block_key"]: item["status"] for item in diagnostics}
+    assert statuses["workers"] in {"selected", "unavailable"}
+    assert statuses["unpaid_labor"] in {"selected", "unavailable"}
+    trace_output = collector.records[0]["output_data"]
+    assert "context_dependency_diagnostics" in trace_output
+    dependency_blocks = [
+        block
+        for block in trace_output["blocks"]
+        if block["selected_by_skill_dependencies"]
+    ]
+    assert dependency_blocks

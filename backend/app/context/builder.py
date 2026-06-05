@@ -9,13 +9,18 @@ from app.context.budget import TokenBudget
 from app.context.models import ContextBlock, ContextBundle
 from app.context.selectors import (
     ConversationSelector,
+    CostCategorySelector,
     CycleSelector,
     FarmSelector,
     LedgerSelector,
     MemorySelector,
+    OperationWorkOrderSelector,
+    PlantingUnitSelector,
     RetrievalSelector,
+    UnpaidLaborSummarySelector,
     UserSettingsSelector,
     WeatherSelector,
+    WorkerSelector,
 )
 from app.infra.trace_collector import get_collector
 from app.models.farm import Farm
@@ -51,6 +56,11 @@ class ContextBuilder:
             WeatherSelector(),
             ConversationSelector(),
             MemorySelector(),
+            PlantingUnitSelector(),
+            OperationWorkOrderSelector(),
+            WorkerSelector(),
+            UnpaidLaborSummarySelector(),
+            CostCategorySelector(),
             RetrievalSelector(),
         ]
         self.policy = policy
@@ -71,13 +81,17 @@ class ContextBuilder:
         selector_errors: list[dict[str, str]] = []
         for selector in self.selectors:
             try:
+                selected_blocks = selector.select(
+                    db=db,
+                    farm_id=farm_id,
+                    user_id=user_id,
+                    session_id=session_id,
+                    **kwargs,
+                )
                 blocks.extend(
-                    selector.select(
-                        db=db,
-                        farm_id=farm_id,
-                        user_id=user_id,
-                        session_id=session_id,
-                        **kwargs,
+                    self._apply_dependency_metadata(
+                        selected_blocks,
+                        kwargs.get("context_dependency_map") or {},
                     )
                 )
             except Exception as exc:
@@ -90,6 +104,10 @@ class ContextBuilder:
 
         bundle = self.budget.apply(blocks)
         bundle.metadata["selector_errors"] = selector_errors
+        self._attach_dependency_summary(
+            bundle,
+            kwargs.get("context_dependency_map") or {},
+        )
         self._record_trace(bundle, start)
         return bundle
 
@@ -116,6 +134,7 @@ class ContextBuilder:
                 user_id=request.user_id,
                 session_id=request.session_id,
                 memory_context=memory_context,
+                context_dependency_map=policy_result.dependency_map,
             )
         finally:
             self.selectors = previous_selectors
@@ -127,6 +146,7 @@ class ContextBuilder:
             "enabled_layers": sorted(
                 layer.value for layer in policy_result.enabled_layers
             ),
+            "context_dependency_map": policy_result.dependency_map,
         }
         return bundle
 
@@ -171,6 +191,57 @@ class ContextBuilder:
             "display_name": display_name,
             "active_crops": active_crops,
         }
+
+    @staticmethod
+    def _apply_dependency_metadata(
+        blocks: list[ContextBlock],
+        dependency_map: dict[str, list[str]],
+    ) -> list[ContextBlock]:
+        if not dependency_map:
+            return blocks
+        annotated = []
+        for block in blocks:
+            dependencies = dependency_map.get(block.key, [])
+            if dependencies:
+                annotated.append(
+                    block.with_metadata(
+                        selected_by_skill_dependencies=sorted(set(dependencies)),
+                        required_reason="skill_metadata_dependency",
+                    )
+                )
+            else:
+                annotated.append(block)
+        return annotated
+
+    @staticmethod
+    def _attach_dependency_summary(
+        bundle: ContextBundle,
+        dependency_map: dict[str, list[str]],
+    ) -> None:
+        if not dependency_map:
+            bundle.metadata["context_dependency_diagnostics"] = []
+            return
+        selected_keys = {block.key for block in bundle.blocks}
+        compressed_keys = {block.key for block in bundle.compressed_blocks}
+        dropped_keys = {block.key for block in bundle.dropped_blocks}
+        diagnostics = []
+        for block_key, dependencies in sorted(dependency_map.items()):
+            if block_key in dropped_keys:
+                status = "dropped"
+            elif block_key in compressed_keys:
+                status = "compressed"
+            elif block_key in selected_keys:
+                status = "selected"
+            else:
+                status = "unavailable"
+            diagnostics.append(
+                {
+                    "block_key": block_key,
+                    "dependencies": sorted(set(dependencies)),
+                    "status": status,
+                }
+            )
+        bundle.metadata["context_dependency_diagnostics"] = diagnostics
 
     def _record_trace(self, bundle: ContextBundle, start: float) -> None:
         collector = self.trace_collector

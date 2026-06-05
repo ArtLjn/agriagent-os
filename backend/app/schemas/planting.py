@@ -228,6 +228,19 @@ class OperationWorkOrderCreate(OperationWorkOrderBase):
     labor_entries: list[LaborEntryCreate] = Field(default_factory=list)
 
 
+class OperationWorkOrderUpdate(BaseModel):
+    """更新农事作业单请求。"""
+
+    cycle_id: int | None = None
+    operation_type: str | None = Field(None, min_length=1, max_length=50)
+    operation_date: date | None = None
+    scope_type: str | None = Field(None, max_length=20)
+    unit_ids: list[int] | None = None
+    note: str | None = Field(None, max_length=500)
+    photo_urls: str | None = None
+    labor_entries: list[LaborEntryCreate] | None = None
+
+
 class OperationWorkOrderResponse(OperationWorkOrderBase):
     """农事作业单响应。"""
 

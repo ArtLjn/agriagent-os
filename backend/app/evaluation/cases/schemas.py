@@ -25,6 +25,36 @@ class ExpectedWriteOperation:
 
 
 @dataclass
+class ExpectedPendingAction:
+    """期望 pending action。"""
+
+    skill_name: str
+    params: dict[str, Any] = field(default_factory=dict)
+    status: str = "created"
+    confirmation_required: bool = True
+
+
+@dataclass
+class ConfirmationFlowStep:
+    """用户确认流程步骤。"""
+
+    user_input: str
+    expected_status: str
+    expected_pending_action: ExpectedPendingAction | None = None
+
+
+@dataclass
+class ExpectedDatabaseDiff:
+    """期望数据库差异。"""
+
+    table: str
+    operation: str
+    match_fields: dict[str, Any] = field(default_factory=dict)
+    before: dict[str, Any] = field(default_factory=dict)
+    after: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ReplyAssertion:
     """回复断言。"""
 
@@ -53,6 +83,10 @@ class AgentReplayCase:
     user_context: dict[str, Any] = field(default_factory=dict)
     context: ContextExpectation = field(default_factory=ContextExpectation)
     expected_skills: list[ExpectedSkillCall] = field(default_factory=list)
+    expected_parameters: dict[str, Any] = field(default_factory=dict)
+    expected_pending_action: ExpectedPendingAction | None = None
+    confirmation_flow: list[ConfirmationFlowStep] = field(default_factory=list)
+    expected_database_diff: list[ExpectedDatabaseDiff] = field(default_factory=list)
     expected_writes: list[ExpectedWriteOperation] = field(default_factory=list)
     reply_assertions: list[ReplyAssertion] = field(default_factory=list)
     category: str = "basic"

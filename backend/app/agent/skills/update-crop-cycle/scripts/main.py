@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
@@ -19,19 +20,21 @@ from app.models.cycle import CropCycle
 from app.services import cycle_service
 
 _ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_VALID_STATUSES = {"active", "planned", "finished"}
 
 
 class UpdateCropCycleSkill(Skill):
-    """更新种植茬口开始日期的 Skill。"""
+    """更新种植茬口字段的 Skill。"""
 
     def name(self) -> str:
         return "update_crop_cycle"
 
     def description(self) -> str:
         return (
-            "修改、调整或更正已有茬口的开始日期、播种期或起始日期。"
+            "修改、调整或更正已有茬口的开始日期、季节、名称、面积、状态、"
+            "当前阶段或备注。"
             "当用户说修改玉米茬口9月1开始、把夏季玉米播种期改到9月1日、"
-            "调整某茬口起始日期时调用此工具。需要 start_date，"
+            "调整茬口名称、面积、状态或备注时调用此工具。"
             "可用 cycle_id、crop_name 或 cycle_name 定位茬口。"
         )
 
@@ -55,8 +58,15 @@ class UpdateCropCycleSkill(Skill):
                     "type": "string",
                     "description": "新的开始日期 YYYY-MM-DD，上游应补全年份。",
                 },
+                "season": {"type": "string", "description": "季节，如夏季、秋季"},
+                "name": {"type": "string", "description": "新的茬口名称"},
+                "area": {"type": "number", "description": "面积，亩"},
+                "status": {"type": "string", "description": "状态 active/planned/finished"},
+                "current_stage": {"type": "string", "description": "当前阶段名称"},
+                "stage": {"type": "string", "description": "当前阶段名称别名"},
+                "note": {"type": "string", "description": "批次备注"},
+                "batch_note": {"type": "string", "description": "批次备注"},
             },
-            "required": ["start_date"],
         }
 
     def metadata(self) -> dict:
@@ -68,12 +78,18 @@ class UpdateCropCycleSkill(Skill):
             "confirmation_schema": {
                 "target_fields": ["cycle_id", "cycle_name", "crop_name"],
                 "changed_fields": ["start_date"],
-                "inferred_fields": ["crop_name", "cycle_name"],
+                "inferred_fields": ["crop_name", "cycle_name", "current_context"],
                 "editable_fields": [
                     "cycle_id",
                     "cycle_name",
                     "crop_name",
                     "start_date",
+                    "season",
+                    "name",
+                    "area",
+                    "status",
+                    "current_stage",
+                    "note",
                 ],
                 "risk_notes": ["修改开始日期会同步重算该茬口所有阶段起止日期。"],
             },
@@ -81,16 +97,14 @@ class UpdateCropCycleSkill(Skill):
         }
 
     async def execute(self, params: dict, context) -> SkillResult:
-        """执行茬口开始日期更新。"""
-        new_start_date, date_error = _parse_required_start_date(
-            params.get("start_date")
-        )
-        if date_error:
-            return date_error
-
+        """执行茬口更新。"""
         farm_id, context_error = require_farm_context(context, "修改茬口")
         if context_error:
             return context_error
+
+        changes, change_error = _parse_changes(params)
+        if change_error:
+            return change_error
 
         db = SessionLocal()
         try:
@@ -98,19 +112,14 @@ class UpdateCropCycleSkill(Skill):
             if isinstance(cycle, SkillResult):
                 return cycle
 
-            old_start_date = cycle.start_date
-            cycle.start_date = new_start_date
-            cycle_service._recalculate_stages(db, cycle.id)
+            old_values = _snapshot_cycle(cycle)
+            _apply_changes(db, cycle, changes)
 
             db.commit()
             invalidate_farm_context(farm_id)
             db.refresh(cycle)
 
-            reply = (
-                f"已将茬口「{cycle.name}」开始日期从 "
-                f"{old_start_date.isoformat()} 修改为 {new_start_date.isoformat()}，"
-                "阶段日期已同步重算。"
-            )
+            reply = _format_success_reply(cycle, old_values, changes)
             return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
         except Exception as exc:
             db.rollback()
@@ -122,13 +131,55 @@ class UpdateCropCycleSkill(Skill):
             db.close()
 
 
-def _parse_required_start_date(value) -> tuple[date | None, SkillResult | None]:
-    """校验并解析必填 YYYY-MM-DD 日期。"""
-    if not isinstance(value, str) or not value.strip():
-        return None, SkillResult(
+def _parse_changes(params: dict) -> tuple[dict, SkillResult | None]:
+    changes = {}
+    if "start_date" in params and params.get("start_date") not in (None, ""):
+        new_start_date, date_error = _parse_start_date(params.get("start_date"))
+        if date_error:
+            return {}, date_error
+        changes["start_date"] = new_start_date
+    for source, target in (
+        ("season", "season"),
+        ("name", "name"),
+        ("note", "batch_note"),
+        ("batch_note", "batch_note"),
+    ):
+        if source in params and params.get(source) is not None:
+            changes[target] = str(params.get(source)).strip()
+    if "status" in params and params.get("status") is not None:
+        status = str(params.get("status")).strip()
+        if status not in _VALID_STATUSES:
+            return {}, SkillResult(
+                status=ResultStatus.FAILED,
+                reply="修改茬口失败：status 必须是 active、planned 或 finished。",
+            )
+        changes["status"] = status
+    if "area" in params and params.get("area") not in (None, ""):
+        area = _to_decimal(params.get("area"))
+        if area is None:
+            return {}, SkillResult(
+                status=ResultStatus.FAILED,
+                reply="修改茬口失败：area 必须是有效数字。",
+            )
+        changes["total_area_mu"] = area
+    stage_name = params.get("current_stage") or params.get("stage")
+    if stage_name not in (None, ""):
+        changes["current_stage"] = str(stage_name).strip()
+    if not changes:
+        return {}, SkillResult(
             status=ResultStatus.FAILED,
-            reply="修改茬口失败：请提供 start_date，格式为 YYYY-MM-DD。",
+            reply=(
+                "修改茬口失败：请提供要修改的字段，如 start_date、season、"
+                "name、area、status、current_stage 或 note。"
+            ),
         )
+    return changes, None
+
+
+def _parse_start_date(value) -> tuple[date | None, SkillResult | None]:
+    """校验并解析 YYYY-MM-DD 日期。"""
+    if not isinstance(value, str) or not value.strip():
+        return None, _invalid_date_result()
 
     raw = value.strip()
     if not _ISO_DATE_PATTERN.fullmatch(raw):
@@ -149,6 +200,8 @@ def _invalid_date_result() -> SkillResult:
 
 def _resolve_cycle(db, *, params: dict, farm_id: int) -> CropCycle | SkillResult:
     cycle_id = params.get("cycle_id")
+    if cycle_id is None:
+        cycle_id = params.get("current_cycle_id") or params.get("context_cycle_id")
     if cycle_id is not None:
         cycle = _get_cycle_by_id(db, cycle_id, farm_id)
         if cycle is None:
@@ -172,6 +225,13 @@ def _resolve_cycle(db, *, params: dict, farm_id: int) -> CropCycle | SkillResult
         crop_name=crop_name,
         cycle_name=cycle_name,
     )
+    if not matches:
+        matches = _match_recent_planned_cycles(
+            db,
+            farm_id=farm_id,
+            crop_name=crop_name,
+            cycle_name=cycle_name,
+        )
     if not matches:
         target = cycle_name or crop_name or "目标茬口"
         return SkillResult(
@@ -206,13 +266,39 @@ def _match_active_cycles(
 ) -> list[CropCycle]:
     active_cycles = (
         db.query(CropCycle)
-        .filter(CropCycle.farm_id == farm_id, CropCycle.status == "active")
+        .filter(CropCycle.farm_id == farm_id, CropCycle.status.in_(("active", "planned")))
+        .order_by(CropCycle.status, CropCycle.start_date.desc(), CropCycle.id.desc())
         .all()
     )
 
     return [
         cycle
         for cycle in active_cycles
+        if _cycle_matches(cycle, crop_name=crop_name, cycle_name=cycle_name)
+    ]
+
+
+def _match_recent_planned_cycles(
+    db,
+    *,
+    farm_id: int,
+    crop_name: str | None,
+    cycle_name: str | None,
+) -> list[CropCycle]:
+    cutoff = date.today() - timedelta(days=90)
+    cycles = (
+        db.query(CropCycle)
+        .filter(
+            CropCycle.farm_id == farm_id,
+            CropCycle.status == "planned",
+            CropCycle.start_date >= cutoff,
+        )
+        .order_by(CropCycle.start_date.desc(), CropCycle.id.desc())
+        .all()
+    )
+    return [
+        cycle
+        for cycle in cycles
         if _cycle_matches(cycle, crop_name=crop_name, cycle_name=cycle_name)
     ]
 
@@ -251,3 +337,79 @@ def _clean_text(value) -> str | None:
 
 def _normalize(value: str) -> str:
     return re.sub(r"\s+", "", value).lower()
+
+
+def _to_decimal(value) -> Decimal | None:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _snapshot_cycle(cycle: CropCycle) -> dict:
+    current = next((stage for stage in cycle.stages if stage.is_current), None)
+    return {
+        "name": cycle.name,
+        "start_date": cycle.start_date,
+        "season": cycle.season,
+        "total_area_mu": cycle.total_area_mu,
+        "status": cycle.status,
+        "batch_note": cycle.batch_note,
+        "current_stage": current.name if current else None,
+    }
+
+
+def _apply_changes(db, cycle: CropCycle, changes: dict) -> None:
+    if "name" in changes:
+        cycle.name = changes["name"]
+    if "season" in changes:
+        cycle.season = changes["season"]
+    if "total_area_mu" in changes:
+        cycle.total_area_mu = changes["total_area_mu"]
+    if "status" in changes:
+        cycle.status = changes["status"]
+    if "batch_note" in changes:
+        cycle.batch_note = changes["batch_note"]
+    if "start_date" in changes:
+        cycle.start_date = changes["start_date"]
+        cycle_service._recalculate_stages(db, cycle.id)
+    if "current_stage" in changes:
+        _set_current_stage(cycle, changes["current_stage"])
+
+
+def _set_current_stage(cycle: CropCycle, stage_name: str) -> None:
+    target = None
+    normalized = _normalize(stage_name)
+    for stage in cycle.stages:
+        if _normalize(stage.name) == normalized:
+            target = stage
+            break
+    if target is None:
+        raise ValueError(f"未找到阶段「{stage_name}」")
+    for stage in cycle.stages:
+        stage.is_current = stage.id == target.id
+
+
+def _format_success_reply(cycle: CropCycle, old_values: dict, changes: dict) -> str:
+    labels = {
+        "name": "名称",
+        "start_date": "开始日期",
+        "season": "季节",
+        "total_area_mu": "面积",
+        "status": "状态",
+        "batch_note": "备注",
+        "current_stage": "当前阶段",
+    }
+    new_values = _snapshot_cycle(cycle)
+    lines = [f"已更新茬口「{cycle.name}」："]
+    for field in changes:
+        if field == "current_stage":
+            old_value = old_values.get("current_stage")
+            new_value = changes[field]
+        else:
+            old_value = old_values.get(field)
+            new_value = new_values.get(field)
+        lines.append(f"- {labels.get(field, field)}：{old_value} → {new_value}")
+    if "start_date" in changes:
+        lines.append("阶段日期已同步重算。")
+    return "\n".join(lines)

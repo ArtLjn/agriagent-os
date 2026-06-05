@@ -26,6 +26,7 @@ from app.schemas.agent import (
     PendingActionResponse,
 )
 from app.services.conversation_service import get_or_create_conversation, save_message
+from app.services.conversation_service import ConversationAccessError
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +304,9 @@ async def stream_chat_events(
     except LlmNotConfiguredError as exc:
         logger.error("[%s] /chat/stream 失败: %s", request_id, exc)
         yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+    except ConversationAccessError as exc:
+        logger.warning("[%s] /chat/stream 会话不可访问: %s", request_id, exc)
+        yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
     yield "data: [DONE]\n\n"
 
 
@@ -367,7 +371,10 @@ def _save_stream_reply(
     if chat_request.session_id:
         conversation = (
             db.query(Conversation)
-            .filter(Conversation.session_id == chat_request.session_id)
+            .filter(
+                Conversation.session_id == chat_request.session_id,
+                Conversation.farm_id == farm.id,
+            )
             .first()
         )
         if conversation:

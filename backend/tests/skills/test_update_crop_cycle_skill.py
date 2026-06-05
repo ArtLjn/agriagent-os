@@ -2,6 +2,7 @@
 
 import importlib
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from skillify.core.context import SkillContext
@@ -70,6 +71,9 @@ def _create_cycle(
         name=name,
         crop_template_id=template.id,
         start_date=start_date,
+        total_area_mu=Decimal("10"),
+        season="夏季",
+        batch_note="原备注",
         status=status,
     )
     db.add(cycle)
@@ -189,6 +193,81 @@ async def test_multiple_active_cycles_return_need_clarify(skill_session, ctx):
     assert "多个" in result.reply
     assert f"ID: {first.id}" in result.reply
     assert f"ID: {second.id}" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_updates_cycle_fields_stage_and_note(skill_session, ctx):
+    cycle = _create_cycle(skill_session)
+
+    result = await UpdateCropCycleSkill().execute(
+        {
+            "cycle_id": cycle.id,
+            "name": "秋季玉米",
+            "season": "秋季",
+            "area": 18.5,
+            "status": "planned",
+            "current_stage": "生长期",
+            "note": "调整播期后备注",
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    updated = skill_session.get(CropCycle, cycle.id)
+    assert updated.name == "秋季玉米"
+    assert updated.season == "秋季"
+    assert updated.total_area_mu == Decimal("18.50")
+    assert updated.status == "planned"
+    assert updated.batch_note == "调整播期后备注"
+    stages = {stage.name: stage.is_current for stage in updated.stages}
+    assert stages["生长期"] is True
+    assert stages["播种期"] is False
+
+
+@pytest.mark.asyncio
+async def test_rejects_invalid_cycle_status(skill_session, ctx):
+    cycle = _create_cycle(skill_session)
+
+    result = await UpdateCropCycleSkill().execute(
+        {"cycle_id": cycle.id, "status": "archived"},
+        ctx,
+    )
+
+    assert result.status.value == "failed"
+    assert "status 必须是 active、planned 或 finished" in result.reply
+    assert skill_session.get(CropCycle, cycle.id).status == "active"
+
+
+@pytest.mark.asyncio
+async def test_matches_unique_planned_cycle_by_crop_name(skill_session, ctx):
+    cycle = _create_cycle(
+        skill_session,
+        name="计划玉米",
+        crop_name="玉米",
+        status="planned",
+    )
+
+    result = await UpdateCropCycleSkill().execute(
+        {"crop_name": "玉米", "season": "秋季"},
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert skill_session.get(CropCycle, cycle.id).season == "秋季"
+
+
+@pytest.mark.asyncio
+async def test_uses_current_context_cycle_id(skill_session, ctx):
+    cycle = _create_cycle(skill_session, name="当前上下文玉米")
+    _create_cycle(skill_session, name="另一个玉米")
+
+    result = await UpdateCropCycleSkill().execute(
+        {"current_cycle_id": cycle.id, "batch_note": "来自上下文定位"},
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert skill_session.get(CropCycle, cycle.id).batch_note == "来自上下文定位"
 
 
 @pytest.mark.asyncio

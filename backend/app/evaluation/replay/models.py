@@ -47,3 +47,6 @@ class ReplayResult:
     context_budget_limit: int = 0
     retrieval_results_count: int = 0
     retrieval_results_used: int = 0
+    evaluation_tags: list[str] = field(default_factory=list)
+    drilldown_links: dict[str, str] = field(default_factory=dict)
+    case_metadata: dict[str, Any] = field(default_factory=dict)

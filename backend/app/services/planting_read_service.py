@@ -4,10 +4,17 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
+from app.models.cycle import CropCycle
 from app.models.log import FarmLog
-from app.models.planting import LaborEntry, OperationWorkOrder, Worker
+from app.models.planting import (
+    LaborEntry,
+    OperationWorkOrder,
+    OperationWorkOrderUnit,
+    PlantingUnit,
+    Worker,
+)
 from app.schemas.planting import (
     OperationWorkOrderResponse,
     RecentOperationResponse,
@@ -153,6 +160,101 @@ def list_recent_operations(
     return items[:limit]
 
 
+def list_operation_work_orders(
+    db: Session,
+    farm_id: int,
+    cycle_id: int | None = None,
+    cycle_name: str | None = None,
+    unit_id: int | None = None,
+    unit_name: str | None = None,
+    operation_type: str | None = None,
+    worker_name: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    payment_status: str | None = None,
+    limit: int = 20,
+) -> list[OperationWorkOrder]:
+    """按业务条件查询农事作业单。"""
+    query = db.query(OperationWorkOrder).filter(OperationWorkOrder.farm_id == farm_id)
+    if cycle_id is not None:
+        query = query.filter(OperationWorkOrder.cycle_id == cycle_id)
+    if cycle_name:
+        query = query.join(CropCycle).filter(CropCycle.name.contains(cycle_name.strip()))
+    if unit_id is not None:
+        query = query.join(OperationWorkOrderUnit).filter(
+            OperationWorkOrderUnit.unit_id == unit_id
+        )
+    if unit_name:
+        query = (
+            query.join(OperationWorkOrderUnit)
+            .join(PlantingUnit)
+            .filter(PlantingUnit.name.contains(unit_name.strip()))
+        )
+    if operation_type:
+        query = query.filter(OperationWorkOrder.operation_type.contains(operation_type.strip()))
+    if worker_name:
+        query = (
+            query.join(LaborEntry)
+            .join(Worker)
+            .filter(Worker.name.contains(worker_name.strip()))
+        )
+    if start_date is not None:
+        query = query.filter(OperationWorkOrder.operation_date >= start_date)
+    if end_date is not None:
+        query = query.filter(OperationWorkOrder.operation_date <= end_date)
+    status = (payment_status or "").strip().lower()
+    if status:
+        query = _apply_work_order_payment_status_filter(query, status)
+
+    items = (
+        query.distinct()
+        .order_by(OperationWorkOrder.operation_date.desc(), OperationWorkOrder.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return items
+
+
+def list_labor_payables(
+    db: Session,
+    farm_id: int,
+    worker_name: str | None = None,
+    cycle_id: int | None = None,
+    cycle_name: str | None = None,
+    work_order_id: int | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    limit: int = 50,
+) -> list[LaborEntry]:
+    """查询未付人工明细。"""
+    query = (
+        db.query(LaborEntry)
+        .join(OperationWorkOrder, OperationWorkOrder.id == LaborEntry.work_order_id)
+        .join(Worker, Worker.id == LaborEntry.worker_id)
+        .filter(
+            LaborEntry.farm_id == farm_id,
+            LaborEntry.unpaid_amount > 0,
+        )
+    )
+    if worker_name:
+        query = query.filter(Worker.name.contains(worker_name.strip()))
+    if cycle_id is not None:
+        query = query.filter(OperationWorkOrder.cycle_id == cycle_id)
+    if cycle_name:
+        query = query.join(CropCycle).filter(CropCycle.name.contains(cycle_name.strip()))
+    if work_order_id is not None:
+        query = query.filter(LaborEntry.work_order_id == work_order_id)
+    if start_date is not None:
+        query = query.filter(OperationWorkOrder.operation_date >= start_date)
+    if end_date is not None:
+        query = query.filter(OperationWorkOrder.operation_date <= end_date)
+    return (
+        query.order_by(OperationWorkOrder.operation_date, LaborEntry.id)
+        .limit(limit)
+        .all()
+    )
+
+
 def get_unsettled_labor_summary(db: Session, farm_id: int) -> dict:
     """汇总未结人工。"""
     rows = (
@@ -181,6 +283,26 @@ def get_unsettled_labor_summary(db: Session, farm_id: int) -> dict:
             for name, amount, count in rows
         ],
     }
+
+
+def _apply_work_order_payment_status_filter(query, payment_status: str):
+    payment_entry = aliased(LaborEntry)
+    payable = func.coalesce(func.sum(payment_entry.payable_amount), 0)
+    paid = func.coalesce(func.sum(payment_entry.paid_amount), 0)
+    unpaid = func.coalesce(func.sum(payment_entry.unpaid_amount), 0)
+    query = query.outerjoin(
+        payment_entry,
+        payment_entry.work_order_id == OperationWorkOrder.id,
+    ).group_by(OperationWorkOrder.id)
+    if payment_status in {"unpaid", "未付"}:
+        return query.having(payable > 0).having(paid <= 0).having(unpaid > 0)
+    if payment_status in {"partial", "partially_paid", "部分", "部分支付"}:
+        return query.having(paid > 0).having(unpaid > 0)
+    if payment_status in {"settled", "paid", "已付", "已结清"}:
+        return query.having(payable > 0).having(unpaid <= 0)
+    if payment_status in {"has_unpaid", "欠款", "未结清"}:
+        return query.having(unpaid > 0)
+    return query
 
 
 def list_worker_labor_summaries(

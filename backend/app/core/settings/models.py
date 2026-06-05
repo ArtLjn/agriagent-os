@@ -14,8 +14,8 @@ class TraceConfig(BaseModel):
 
 
 class TokenQuotaConfig(BaseModel):
-    monthly_limit: int = 3000000
-    weekly_limit: int = 750000
+    monthly_limit: int = 200000
+    weekly_limit: int = 50000
     over_quota_action: str = "reject"
 
 

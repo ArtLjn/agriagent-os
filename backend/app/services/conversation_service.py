@@ -17,6 +17,10 @@ _EXPIRE_HOURS = 24
 _MAX_INJECT_MESSAGES = 20  # 10 轮 = 20 条消息
 
 
+class ConversationAccessError(ValueError):
+    """会话不属于当前 farm。"""
+
+
 def get_or_create_conversation(
     db: Session, farm_id: int, session_id: str, user_id: str | None = None
 ) -> Conversation:
@@ -25,6 +29,8 @@ def get_or_create_conversation(
         db.query(Conversation).filter(Conversation.session_id == session_id).first()
     )
     if existing:
+        if existing.farm_id != farm_id:
+            raise ConversationAccessError("会话不存在")
         return existing
 
     # 关闭同一 farm 的其他活跃会话
@@ -155,6 +161,7 @@ def get_conversation_messages(
 
 
 __all__ = [
+    "ConversationAccessError",
     "get_or_create_conversation",
     "close_expired_conversations",
     "save_message",

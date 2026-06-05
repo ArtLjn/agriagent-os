@@ -10,6 +10,7 @@ ALL_TOOL_NAMES = [
     "create_crop_cycle",
     "log_farm_activity",
     "update_crop_stage",
+    "update_crop_cycle",
     "get_weather_forecast",
     "get_cost_summary",
     "get_cost_analytics",
@@ -88,6 +89,14 @@ class TestWritePatternMatching:
     def test_update_crop_stage_flowering(self):
         result = select_tools("到开花期了", _make_tools())
         assert "update_crop_stage" in result
+
+    def test_update_crop_cycle_colloquial_date_change(self):
+        result = select_tools("玉米修改下9月开始", _make_tools())
+        assert result == ["update_crop_cycle"]
+
+    def test_update_crop_cycle_named_cycle_date_change(self):
+        result = select_tools("把玉米茬口改成9月1开始", _make_tools())
+        assert result == ["update_crop_cycle"]
 
     def test_ambiguous_triggers_fallback(self):
         result = select_tools("买化肥", _make_tools())

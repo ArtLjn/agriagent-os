@@ -15,6 +15,10 @@ def compute_skill_quality(results: list[ReplayResult]) -> SkillQualityMetrics:
     confirmation_total = 0
     confirmation_hit = 0
     unnecessary_clarification_total = 0
+    correction_total = 0
+    correction_success = 0
+    cancellation_total = 0
+    cancellation_success = 0
     execution_inconsistency_total = 0
 
     for result in results:
@@ -26,6 +30,14 @@ def compute_skill_quality(results: list[ReplayResult]) -> SkillQualityMetrics:
             unnecessary_clarification_total += 1
         if "execution_inconsistency" in errors:
             execution_inconsistency_total += 1
+        if "correction_flow" in result.evaluation_tags:
+            correction_total += 1
+            if "correction_failed" not in errors:
+                correction_success += 1
+        if "cancellation_flow" in result.evaluation_tags:
+            cancellation_total += 1
+            if "cancellation_failed" not in errors:
+                cancellation_success += 1
 
         for expected in result.expected_skill_calls:
             matching_actual = next(
@@ -69,6 +81,12 @@ def compute_skill_quality(results: list[ReplayResult]) -> SkillQualityMetrics:
     execution_consistency_rate = (
         1.0 - execution_inconsistency_total / result_total if result_total else 1.0
     )
+    correction_success_rate = (
+        correction_success / correction_total if correction_total else 1.0
+    )
+    cancellation_success_rate = (
+        cancellation_success / cancellation_total if cancellation_total else 1.0
+    )
     return SkillQualityMetrics(
         accuracy=accuracy,
         miss_rate=miss_rate,
@@ -76,5 +94,7 @@ def compute_skill_quality(results: list[ReplayResult]) -> SkillQualityMetrics:
         argument_accuracy=argument_accuracy,
         write_confirmation_hit_rate=write_confirmation_hit_rate,
         unnecessary_clarification_rate=unnecessary_clarification_rate,
+        correction_success_rate=correction_success_rate,
+        cancellation_success_rate=cancellation_success_rate,
         execution_consistency_rate=execution_consistency_rate,
     )

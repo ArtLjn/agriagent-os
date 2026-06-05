@@ -1,6 +1,6 @@
 """确定性工具路由测试。"""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -59,3 +59,122 @@ async def test_strong_read_tool_match_skips_initial_llm_call():
     ]
     mock_get_llm.assert_not_called()
     mock_classifier.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_generic_crop_cycle_query_routes_to_farm_status_without_llm():
+    """泛问“我的茬口”时应先查农场状态，避免让 LLM 编造 cycle_id。"""
+    from app.agent.graph import _llm_node
+
+    with (
+        patch(
+            "app.agent.runtime.nodes._get_farm_context",
+            return_value={
+                "farm_location": "睢宁",
+                "display_name": "农友",
+                "farm_coords": "",
+                "active_crops": "",
+            },
+        ),
+        patch(
+            "app.agent.runtime.nodes.get_langchain_tools",
+            return_value=[
+                _make_tool("get_crop_cycle_info"),
+                _make_tool("get_farm_status"),
+            ],
+        ),
+        patch(
+            "app.agent.runtime.nodes.select_tools",
+            return_value=["get_crop_cycle_info", "get_farm_status"],
+        ),
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch("app.agent.runtime.nodes._get_classifier") as mock_classifier,
+        patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+    ):
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我的茬口")],
+                "farm_id": 1,
+                "intent": "query",
+            }
+        )
+
+    message = result["messages"][0]
+    assert isinstance(message, AIMessage)
+    assert message.tool_calls == [
+        {
+            "name": "get_farm_status",
+            "args": {},
+            "id": "direct_get_farm_status",
+            "type": "tool_call",
+        }
+    ]
+    mock_get_llm.assert_not_called()
+    mock_classifier.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_specific_crop_cycle_query_with_id_does_not_fold_to_farm_status():
+    """明确给出茬口 ID 时，不应把详情查询折叠成整体状态。"""
+    from app.agent.graph import _llm_node
+
+    llm = MagicMock()
+    llm.model_name = "test-model"
+    llm.bind_tools.return_value = llm
+    llm.ainvoke = AsyncMock(
+        return_value=AIMessage(
+            content="需要调用 3 号茬口详情",
+            response_metadata={"token_usage": {"total_tokens": 1}},
+        )
+    )
+
+    with (
+        patch(
+            "app.agent.runtime.nodes._get_runtime_context_bundle",
+            return_value=(
+                MagicMock(blocks=[], render_text=lambda: ""),
+                {
+                    "farm_location": "睢宁",
+                    "display_name": "农友",
+                    "farm_coords": "",
+                    "active_crops": "",
+                },
+            ),
+        ),
+        patch(
+            "app.agent.runtime.nodes._get_farm_context",
+            return_value={
+                "farm_location": "睢宁",
+                "display_name": "农友",
+                "farm_coords": "",
+                "active_crops": "",
+            },
+        ),
+        patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+        patch("app.agent.runtime.nodes.get_collector", return_value=MagicMock()),
+        patch(
+            "app.agent.runtime.nodes.get_langchain_tools",
+            return_value=[
+                _make_tool("get_crop_cycle_info"),
+                _make_tool("get_farm_status"),
+            ],
+        ),
+        patch(
+            "app.agent.runtime.nodes.select_tools",
+            return_value=["get_crop_cycle_info", "get_farm_status"],
+        ),
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+        patch("app.agent.runtime.nodes.get_llm", return_value=llm) as mock_get_llm,
+    ):
+        mock_get_composer.return_value.compose.return_value = "system prompt"
+        await _llm_node(
+            {
+                "messages": [HumanMessage(content="看一下3号茬口")],
+                "farm_id": 1,
+                "intent": "query",
+            }
+        )
+
+    mock_get_llm.assert_called_once()
+    llm.bind_tools.assert_called_once()

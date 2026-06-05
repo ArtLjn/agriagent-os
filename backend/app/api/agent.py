@@ -39,6 +39,7 @@ from app.schemas.agent import (
 from app.services.agent_service import (
     get_advice_history,
 )
+from app.services.conversation_service import ConversationAccessError
 
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -57,6 +58,8 @@ async def agent_chat(
     rid = new_request_id()
     try:
         return await chat(db, chat_request, farm, request_id=rid)
+    except ConversationAccessError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except LlmNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
@@ -89,10 +92,14 @@ def get_conversations(
     request: Request,
     response: Response,
     limit: int = Query(20, ge=1, le=100),
+    simulate_user_id: str | None = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     farm: Farm = Depends(get_current_farm),
 ) -> list[ConversationListItem]:
     """获取当前 farm 的会话列表。"""
+    if simulate_user_id:
+        _, farm = resolve_stream_user_and_farm(db, current_user, simulate_user_id)
     return list_conversation_items(db, farm=farm, limit=limit)
 
 
@@ -105,11 +112,15 @@ def get_messages_by_session(
     request: Request,
     response: Response,
     session_id: str,
+    simulate_user_id: str | None = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     farm: Farm = Depends(get_current_farm),
 ) -> list[ConversationMessageItem]:
     """获取指定会话的消息列表。"""
     try:
+        if simulate_user_id:
+            _, farm = resolve_stream_user_and_farm(db, current_user, simulate_user_id)
         return list_message_items(db, farm=farm, session_id=session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

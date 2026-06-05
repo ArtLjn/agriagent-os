@@ -141,9 +141,14 @@ def sync_work_order_labor_cost_record(
         (entry.payable_amount for entry in work_order.labor_entries),
         Decimal("0"),
     )
-    if total_payable <= 0:
-        return
     existing = _get_single_source_cost_record(db, farm_id, WORK_ORDER_SOURCE, work_order.id)
+    if total_payable <= 0:
+        if existing:
+            existing.deleted_at = datetime.now(timezone.utc)
+            existing.source_active_key = None
+        work_order.labor_cost_record_id = None
+        db.flush()
+        return
     category = _ensure_labor_category(db, farm_id)
     scope_text = _format_scope_text(work_order)
     note = f"{work_order.operation_type}人工费"

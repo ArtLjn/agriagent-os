@@ -57,9 +57,11 @@ def _infer_category(text: str) -> str:
     return "对话"
 
 
-def _build_conversation_summary(db: Session, session_id: str) -> tuple[str, str, str]:
+def _build_conversation_summary(
+    db: Session, session_id: str, farm_id: int
+) -> tuple[str, str, str]:
     """从会话消息生成列表标题、预览和分类。"""
-    messages = get_conversation_messages(db, session_id)
+    messages = get_conversation_messages(db, session_id, farm_id=farm_id)
     if not messages:
         return (
             _DEFAULT_CONVERSATION_TITLE,
@@ -83,7 +85,7 @@ def list_conversation_items(
     conversations = list_conversations(db, farm_id=farm.id, limit=limit)
     items: list[ConversationListItem] = []
     for c in conversations:
-        title, preview, category = _build_conversation_summary(db, c.session_id)
+        title, preview, category = _build_conversation_summary(db, c.session_id, farm.id)
         items.append(
             ConversationListItem(
                 id=c.id,

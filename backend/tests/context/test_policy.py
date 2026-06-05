@@ -59,6 +59,76 @@ def test_policy_enables_cycle_context_for_update_crop_cycle() -> None:
 
     assert "CycleSelector" in _selector_names(result)
     assert result.max_tokens >= 700
+    assert result.dependency_map["cycle"] == ["crop_cycle"]
+
+
+def test_policy_uses_skill_metadata_context_dependencies() -> None:
+    result = ContextPolicy().resolve(
+        ContextBuildRequest(
+            intent="agent",
+            selected_tool_names=["custom_skill"],
+            selected_skill_metadata={
+                "custom_skill": {
+                    "context_dependencies": [
+                        "planting_units",
+                        "workers",
+                        "unpaid_labor",
+                        "weather",
+                        "ledger",
+                    ]
+                }
+            },
+        )
+    )
+
+    selector_names = _selector_names(result)
+    assert {
+        "PlantingUnitSelector",
+        "WorkerSelector",
+        "UnpaidLaborSummarySelector",
+        "WeatherSelector",
+        "LedgerSelector",
+    }.issubset(selector_names)
+    assert result.dependency_map["planting_units"] == ["planting_units"]
+    assert result.dependency_map["workers"] == ["workers"]
+
+
+def test_policy_enables_labor_context_for_settle_labor_payment() -> None:
+    result = ContextPolicy().resolve(
+        ContextBuildRequest(
+            intent="agent",
+            selected_tool_names=["settle_labor_payment"],
+            farm_id=1,
+        )
+    )
+
+    selector_names = _selector_names(result)
+    assert {"WorkerSelector", "UnpaidLaborSummarySelector", "LedgerSelector"}.issubset(
+        selector_names
+    )
+    assert result.dependency_map["workers"] == ["workers"]
+    assert result.dependency_map["unpaid_labor"] == ["unpaid_labor"]
+
+
+def test_policy_enables_work_order_query_context() -> None:
+    result = ContextPolicy().resolve(
+        ContextBuildRequest(
+            intent="agent",
+            selected_tool_names=["get_operation_work_orders"],
+            farm_id=1,
+        )
+    )
+
+    selector_names = _selector_names(result)
+    assert {
+        "CycleSelector",
+        "PlantingUnitSelector",
+        "OperationWorkOrderSelector",
+        "WorkerSelector",
+    }.issubset(selector_names)
+    assert result.dependency_map["operation_work_orders"] == [
+        "operation_work_orders"
+    ]
 
 
 def test_policy_request_keeps_runtime_identity_and_retrieval_flag() -> None:

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin
+from app.evaluation.diagnostics import SkillDiagnosticService
 from app.models.trace import TraceRecord
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,33 @@ def get_timeline(request_id: str, db: Session = Depends(get_db)) -> TimelineResp
         for idx, nodes in sorted(rounds_map.items())
     ]
     return TimelineResponse(request_id=request_id, rounds=rounds)
+
+
+@router.get("/traces/{request_id}/diagnostics")
+def get_trace_diagnostics(request_id: str, db: Session = Depends(get_db)) -> dict:
+    """获取 Skill 诊断汇总。"""
+    records = (
+        db.query(TraceRecord)
+        .filter(TraceRecord.request_id == request_id)
+        .order_by(TraceRecord.round_index, TraceRecord.id)
+        .all()
+    )
+    report = SkillDiagnosticService().build_report(request_id, records)
+    return {
+        "request_id": report.request_id,
+        "tool_selection": report.tool_selection,
+        "context_injection": report.context_injection,
+        "tool_calls": report.tool_calls,
+        "pending_actions": report.pending_actions,
+        "pending_lifecycle": report.pending_lifecycle,
+        "context_dependencies": report.context_dependencies,
+        "context_dependency_diagnostic": report.context_dependency_diagnostic,
+        "tool_not_called_reason": report.tool_not_called_reason,
+        "pending_action_diagnostic": report.pending_action_diagnostic,
+        "errors": report.errors,
+        "final_response": report.final_response,
+        "drilldown_links": report.drilldown_links,
+    }
 
 
 def _format_datetime(value: Any) -> str | None:

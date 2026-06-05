@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import time as _time
 
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
@@ -45,7 +46,11 @@ from app.services.quota_service import QuotaCheckResult, check_user_quota
 
 logger = logging.getLogger(__name__)
 
-_DIRECT_READ_TOOLS: set[str] = {"get_weather_forecast", "get_cost_summary", "get_farm_status"}
+_DIRECT_READ_TOOLS: set[str] = {
+    "get_weather_forecast",
+    "get_cost_summary",
+    "get_farm_status",
+}
 
 _QUOTA_REJECT_MESSAGES = {
     "month": "本月用量已达上限，配额将在下月重置。",
@@ -82,6 +87,52 @@ def _filter_tool_calls_by_selected(
             sorted(allowed_names),
         )
     return filtered
+
+
+def _direct_query_tool_names(user_msg: str, selected_names: list[str]) -> list[str]:
+    """返回可跳过 LLM 的读工具名称。"""
+    names = list(selected_names)
+    if (
+        "get_crop_cycle_info" in names
+        and "get_farm_status" in names
+        and not _mentions_cycle_id(user_msg)
+    ):
+        return ["get_farm_status"]
+    return [name for name in names if name in _DIRECT_READ_TOOLS]
+
+
+def _can_direct_route(
+    user_msg: str, selected_names: list[str], direct_names: list[str]
+) -> bool:
+    if len(direct_names) == len(selected_names):
+        return True
+    return (
+        direct_names == ["get_farm_status"]
+        and set(selected_names) == {"get_crop_cycle_info", "get_farm_status"}
+        and not _mentions_cycle_id(user_msg)
+    )
+
+
+def _can_skip_llm_tool_selection(
+    *,
+    user_msg: str,
+    tools: list,
+    selected_names: list[str],
+    direct_names: list[str],
+) -> bool:
+    if len(tools) == 1 or len(selected_names) < len(tools):
+        return True
+    return (
+        direct_names == ["get_farm_status"]
+        and set(selected_names) == {"get_crop_cycle_info", "get_farm_status"}
+        and not _mentions_cycle_id(user_msg)
+    )
+
+
+def _mentions_cycle_id(user_msg: str) -> bool:
+    """判断用户是否明确给出茬口/周期 ID。"""
+    pattern = r"(?:茬口|周期|cycle)\s*\d+|\d+\s*(?:号|#)?\s*(?:茬口|周期)"
+    return bool(re.search(pattern, user_msg))
 
 
 def _should_continue(state: AgentState) -> str:
@@ -122,6 +173,17 @@ async def _llm_node(state: AgentState) -> dict:
         confirm = pending_msgs[-1].content.replace(PENDING_MARKER, "").strip()
         logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
         return {"messages": [AIMessage(content=confirm)]}
+
+    if normal_msgs and all(
+        str(getattr(msg, "tool_call_id", "")).startswith("direct_")
+        for msg in normal_msgs
+    ):
+        content = "\n\n".join(str(msg.content or "") for msg in normal_msgs).strip()
+        logger.info(
+            "检测到确定性直达 ToolMessage，跳过 LLM 直接返回 | count=%d",
+            len(normal_msgs),
+        )
+        return {"messages": [AIMessage(content=content)]}
 
     prepared_system_prompt = state.get("system_prompt")
     prepared_context_bundle = state.get("context_bundle")
@@ -164,13 +226,18 @@ async def _llm_node(state: AgentState) -> dict:
     )
     if prepared_selected_tool_names is not None:
         selected_names = list(prepared_selected_tool_names)
-    direct_names = [name for name in selected_names if name in _DIRECT_READ_TOOLS]
+    direct_names = _direct_query_tool_names(user_msg, selected_names)
     if (
         intent == "query"
         and not has_tool_results
         and direct_names
-        and (len(tools) == 1 or len(selected_names) < len(tools))
-        and len(direct_names) == len(selected_names)
+        and _can_skip_llm_tool_selection(
+            user_msg=user_msg,
+            tools=tools,
+            selected_names=selected_names,
+            direct_names=direct_names,
+        )
+        and _can_direct_route(user_msg, selected_names, direct_names)
     ):
         tool_calls = [
             {
@@ -478,6 +545,18 @@ async def _llm_node(state: AgentState) -> dict:
         output_summary = f"tool_calls: {tool_names}"
     else:
         content = response.content or ""
+        if not str(content).strip():
+            content = "这次没有生成有效回复，请换个说法再试一次。"
+            response = AIMessage(
+                content=content,
+                response_metadata=response.response_metadata,
+                id=response.id,
+            )
+            logger.warning(
+                "LLM 返回空内容，已使用兜底回复 | model=%s | selected_tools=%s",
+                model_name,
+                selected_tool_names,
+            )
         logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
         output_summary = content[:200]
 

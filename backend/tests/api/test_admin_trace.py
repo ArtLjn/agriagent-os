@@ -135,6 +135,66 @@ class TestGetTimeline:
             assert node["output_data"] == {"blocks": [{"key": "farm"}]}
 
 
+class TestGetDiagnostics:
+    def test_diagnostics_returns_structured_pending_and_context(self, db_session) -> None:
+        admin_user = ensure_admin_user(db_session)
+        context_record = MagicMock()
+        context_record.id = 1
+        context_record.round_index = 0
+        context_record.node_type = "context_build"
+        context_record.node_name = "context_bundle"
+        context_record.input_data = {"block_count": 1}
+        context_record.output_data = {
+            "context_dependency_diagnostics": [
+                {"block_key": "workers", "status": "selected"}
+            ]
+        }
+        context_record.status = "success"
+        context_record.error_message = None
+
+        pending_record = MagicMock()
+        pending_record.id = 2
+        pending_record.round_index = 0
+        pending_record.node_type = "pending_action"
+        pending_record.node_name = "settle_labor_payment"
+        pending_record.input_data = {}
+        pending_record.output_data = {
+            "status": "created",
+            "confirmation_context": {"target_object": {"worker": "张三"}},
+            "metadata": {"cache_groups_cleared": ["cost_summary"]},
+        }
+        pending_record.status = "success"
+        pending_record.error_message = None
+
+        mock_db = _mock_db(admin_user)
+        mock_db.trace_query.all.return_value = [context_record, pending_record]
+
+        with auth_override_scope(app), _db_override(mock_db):
+            resp = TestClient(app).get(
+                "/admin/traces/abc12345/diagnostics",
+                headers=admin_headers(),
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["context_dependencies"][0]["block_key"] == "workers"
+        assert data["context_dependency_diagnostic"][0]["diagnosis"] == (
+            "selected_by_skill_metadata"
+        )
+        assert data["pending_lifecycle"][0]["structured_context"] == {
+            "target_object": {"worker": "张三"}
+        }
+        assert data["pending_action_diagnostic"]["statuses"] == ["created"]
+        assert data["pending_action_diagnostic"]["cache_invalidation"] == {
+            "status": "recorded",
+            "groups": ["cost_summary"],
+        }
+        assert data["tool_not_called_reason"] == (
+            "request_bypassed_agent_or_tool_selection_missing"
+        )
+        assert "timeline" in data["drilldown_links"]
+
+
 class TestDeleteTraces:
     def test_delete_before_date(self, db_session) -> None:
         admin_user = ensure_admin_user(db_session)

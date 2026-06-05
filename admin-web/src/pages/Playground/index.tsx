@@ -1,16 +1,15 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Input, Button, Space, Typography, Drawer, Tag, Tooltip, message, Select } from 'antd';
-import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
+import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
 import { listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
 import type { PendingAction } from '../../api/agent';
-import GanttTimeline from '../../components/GanttTimeline';
-import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
 import { authStore } from '../../stores/authStore';
+import { buildConversationRows } from './conversationRows';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -22,14 +21,39 @@ const USER_BG = '#1f6feb';
 const AI_BG = '#21262d';
 
 interface Message {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
   skills?: string[];
   pendingAction?: PendingAction | null;
 }
 
+interface ChatSessionState {
+  messages: Message[];
+  loading: boolean;
+  traceLoading: boolean;
+  timeline: TraceTimeline | null;
+}
+
 function generateSessionId(): string {
   return `playground-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createMessage(role: Message['role'], content: string): Message {
+  return {
+    id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role,
+    content,
+  };
+}
+
+function emptySessionState(): ChatSessionState {
+  return {
+    messages: [],
+    loading: false,
+    traceLoading: false,
+    timeline: null,
+  };
 }
 
 /* ── Markdown 渲染容器 ── */
@@ -184,29 +208,44 @@ async function fetchLatestTimeline(): Promise<TraceTimeline | null> {
 
 export default function Playground() {
   const [sessionId, setSessionId] = useState<string>(generateSessionId);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [sessions, setSessions] = useState<Record<string, ChatSessionState>>(() => ({
+    [sessionId]: emptySessionState(),
+  }));
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [timeline, setTimeline] = useState<TraceTimeline | null>(null);
-  const [traceLoading, setTraceLoading] = useState(false);
-  const [traceExpanded, setTraceExpanded] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [nodeDetail, setNodeDetail] = useState<TraceNodeDetail | null>(null);
+  const [nodeDetail] = useState<TraceNodeDetail | null>(null);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeSession = sessions[sessionId] ?? emptySessionState();
+  const messages = activeSession.messages;
+  const loading = activeSession.loading;
+  const traceLoading = activeSession.traceLoading;
+  const timeline = activeSession.timeline;
+  const conversationRows = buildConversationRows(sessions, conversations);
+
+  const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
+    setSessions((prev) => {
+      const current = prev[sid] ?? emptySessionState();
+      return { ...prev, [sid]: updater(current) };
+    });
+  }, []);
+
+  const ensureSession = useCallback((sid: string) => {
+    setSessions((prev) => (prev[sid] ? prev : { ...prev, [sid]: emptySessionState() }));
+  }, []);
 
   /* ── 加载会话列表 ── */
   const loadConversations = useCallback(async () => {
     try {
-      const list = await listConversations(50);
+      const list = await listConversations(50, selectedUserId);
       setConversations(list);
     } catch {
       // 静默失败
     }
-  }, []);
+  }, [selectedUserId]);
 
   /* ── 加载用户列表 ── */
   const loadUsers = useCallback(async () => {
@@ -219,52 +258,56 @@ export default function Playground() {
   }, []);
 
   useEffect(() => {
-    loadConversations();
-    loadUsers();
+    void Promise.resolve().then(() => {
+      loadConversations();
+      loadUsers();
+    });
   }, [loadConversations, loadUsers]);
 
   /* ── 切换会话 ── */
   const switchConversation = useCallback(async (sid: string) => {
     setSessionId(sid);
-    setMessages([]);
-    setTimeline(null);
+    updateSession(sid, () => ({ ...emptySessionState(), loading: true }));
     try {
-      const msgs = await getConversationMessages(sid);
-      setMessages(
-        msgs.map((m: ConversationMessage) => ({
+      const msgs = await getConversationMessages(sid, selectedUserId);
+      updateSession(sid, (state) => ({
+        ...state,
+        loading: false,
+        messages: msgs.map((m: ConversationMessage) => ({
+          id: `history-${m.id}`,
           role: m.role as 'user' | 'assistant',
           content: m.content,
           skills: m.skills,
-        }))
-      );
+        })),
+        timeline: null,
+      }));
     } catch {
+      updateSession(sid, (state) => ({ ...state, loading: false }));
       message.error('加载会话失败');
     }
-  }, []);
+  }, [selectedUserId, updateSession]);
 
   /* ── 新建会话 ── */
   const createNewSession = useCallback(() => {
     const sid = generateSessionId();
     setSessionId(sid);
-    setMessages([]);
-    setTimeline(null);
-  }, []);
+    ensureSession(sid);
+  }, [ensureSession]);
 
-  /* ── 复制会话 JSON ── */
-  const copyConversationJson = useCallback(async () => {
+  const copySessionJson = useCallback(async (sid: string) => {
     try {
-      const msgs = messages.map((m) => ({
+      const state = sessions[sid] ?? emptySessionState();
+      const msgs = state.messages.map((m) => ({
         role: m.role,
         content: m.content,
         skills: m.skills,
       }));
-      const json = JSON.stringify(msgs, null, 2);
-      await navigator.clipboard.writeText(json);
+      await navigator.clipboard.writeText(JSON.stringify(msgs, null, 2));
       message.success('已复制到剪贴板');
     } catch {
       message.error('复制失败');
     }
-  }, [messages]);
+  }, [sessions]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -273,98 +316,89 @@ export default function Playground() {
   }, []);
 
   const handleClear = useCallback(() => {
-    setMessages([]);
-    setTimeline(null);
-    setSessionId(generateSessionId());
+    const sid = generateSessionId();
+    setSessionId(sid);
+    setSessions((prev) => ({ ...prev, [sid]: emptySessionState() }));
   }, []);
 
   const handleSend = useCallback(async (overrideMsg?: string) => {
     const userMsg = overrideMsg ?? input.trim();
     if (!userMsg) return;
+    const targetSessionId = sessionId;
+    const targetSession = sessions[targetSessionId] ?? emptySessionState();
+    if (targetSession.loading) {
+      message.warning('当前会话正在生成中，请先切换到其他会话并行发送');
+      return;
+    }
+    const userMessage = createMessage('user', userMsg);
+    const assistantMessage = createMessage('assistant', '');
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
-    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
-    setLoading(true);
-    setTimeline(null);
+    updateSession(targetSessionId, (state) => ({
+      ...state,
+      messages: [...state.messages, userMessage, assistantMessage],
+      loading: true,
+      traceLoading: false,
+      timeline: null,
+    }));
     scrollToBottom();
 
-    let assistantIdx = -1;
-    setMessages((prev) => { assistantIdx = prev.length - 1; return prev; });
-
     try {
-      for await (const chunk of streamPlaygroundChat(userMsg, sessionId, selectedUserId)) {
+      for await (const chunk of streamPlaygroundChat(userMsg, targetSessionId, selectedUserId)) {
         if (chunk.type === 'content') {
-          setMessages((prev) => {
-            const next = [...prev];
-            if (assistantIdx >= 0 && assistantIdx < next.length) {
-              next[assistantIdx] = { ...next[assistantIdx], content: next[assistantIdx].content + chunk.data };
-            }
-            return next;
+          updateSession(targetSessionId, (state) => {
+            const next = state.messages.map((item) => (
+              item.id === assistantMessage.id
+                ? { ...item, content: item.content + chunk.data }
+                : item
+            ));
+            return { ...state, messages: next };
           });
-          scrollToBottom();
+          if (targetSessionId === sessionId) scrollToBottom();
         } else if (chunk.type === 'skills') {
-          setMessages((prev) => {
-            const next = [...prev];
-            if (assistantIdx >= 0 && assistantIdx < next.length) {
-              next[assistantIdx] = { ...next[assistantIdx], skills: chunk.data };
-            }
-            return next;
+          updateSession(targetSessionId, (state) => {
+            const next = state.messages.map((item) => (
+              item.id === assistantMessage.id ? { ...item, skills: chunk.data } : item
+            ));
+            return { ...state, messages: next };
           });
         } else if (chunk.type === 'pending_action') {
-          setMessages((prev) => {
-            const next = [...prev];
-            if (assistantIdx >= 0 && assistantIdx < next.length) {
-              next[assistantIdx] = { ...next[assistantIdx], pendingAction: chunk.data };
-            }
-            return next;
+          updateSession(targetSessionId, (state) => {
+            const next = state.messages.map((item) => (
+              item.id === assistantMessage.id ? { ...item, pendingAction: chunk.data } : item
+            ));
+            return { ...state, messages: next };
           });
         }
       }
 
-      setTraceLoading(true);
+      updateSession(targetSessionId, (state) => ({ ...state, traceLoading: true }));
       const latestTimeline = await fetchLatestTimeline();
-      setTimeline(latestTimeline);
+      updateSession(targetSessionId, (state) => ({
+        ...state,
+        timeline: latestTimeline,
+        traceLoading: false,
+      }));
 
       await loadConversations();
     } catch {
-      setMessages((prev) => {
-        const next = [...prev];
-        if (assistantIdx >= 0 && assistantIdx < next.length) {
-          next[assistantIdx] = { role: 'assistant', content: '对话失败，请重试' };
-        }
-        return next;
+      updateSession(targetSessionId, (state) => {
+        const next = state.messages.map((item) => (
+          item.id === assistantMessage.id
+            ? { ...item, content: '对话失败，请重试' }
+            : item
+        ));
+        return { ...state, messages: next };
       });
     } finally {
-      setLoading(false);
-      setTraceLoading(false);
+      updateSession(targetSessionId, (state) => ({
+        ...state,
+        loading: false,
+        traceLoading: false,
+      }));
     }
-  }, [input, scrollToBottom, sessionId, loadConversations, selectedUserId]);
+  }, [input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, selectedUserId]);
 
   const isThinking = loading && messages.length > 0 && messages[messages.length - 1].content === '';
-
-  const handleNodeClick = (
-    _roundIndex: number,
-    _nodeIndex: number,
-    nodeData: GanttNode
-  ) => {
-    const detail: TraceNodeDetail = {
-      id: 0,
-      request_id: '',
-      round_index: _roundIndex,
-      node_type: nodeData.node_type,
-      node_name: nodeData.node_name,
-      input_data: nodeData.input_data ?? null,
-      output_data: nodeData.output_data ?? null,
-      duration_ms: nodeData.duration_ms,
-      token_usage: null,
-      status: nodeData.status,
-      error_message: nodeData.error_message ?? null,
-      start_time: nodeData.start_time,
-      end_time: null,
-    };
-    setNodeDetail(detail);
-    setDrawerOpen(true);
-  };
 
   return (
     <div style={{ height: '100%', display: 'flex' }}>
@@ -421,11 +455,13 @@ export default function Playground() {
 
         {/* 会话列表 */}
         <div style={{ flex: 1, overflow: 'auto', padding: sidebarCollapsed ? '8px 0' : '8px' }}>
-          {conversations.map((conv) => {
+          {conversationRows.map((conv) => {
             const isActive = conv.session_id === sessionId;
+            const sessionState = sessions[conv.session_id];
+            const isRunning = Boolean(sessionState?.loading);
             return (
               <div
-                key={conv.id}
+                key={conv.session_id}
                 onClick={() => switchConversation(conv.session_id)}
                 style={{
                   padding: '8px 10px',
@@ -440,8 +476,11 @@ export default function Playground() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ overflow: 'hidden' }}>
-                    <div style={{ color: TEXT, fontSize: 13, fontWeight: isActive ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {conv.session_id.slice(0, 10)}...
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      {isRunning && <LoadingOutlined style={{ color: ACCENT, fontSize: 11 }} />}
+                      <div style={{ color: TEXT, fontSize: 13, fontWeight: isActive ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {conv.session_id.slice(0, 10)}...
+                      </div>
                     </div>
                     <div style={{ color: TEXT_DIM, fontSize: 11, marginTop: 2 }}>
                       {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -452,7 +491,7 @@ export default function Playground() {
                       type="text"
                       size="small"
                       icon={<CopyOutlined />}
-                      onClick={(e) => { e.stopPropagation(); copyConversationJson(); }}
+                      onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
                       style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24 }}
                     />
                   </Tooltip>
@@ -485,8 +524,13 @@ export default function Playground() {
               value={selectedUserId}
               onChange={(value) => {
                 setSelectedUserId(value);
-                setMessages([]);
-                setTimeline(null);
+                const sid = generateSessionId();
+                setSessionId(sid);
+                setSessions({ [sid]: emptySessionState() });
+                setConversations([]);
+                void listConversations(50, value).then(setConversations).catch(() => {
+                  message.error('加载会话列表失败');
+                });
               }}
               style={{ width: 180 }}
               dropdownStyle={{ background: CARD }}
@@ -521,9 +565,9 @@ export default function Playground() {
               <div style={{ fontSize: 13 }}>直接输入消息与 AI 对话，或从左侧切换历史会话</div>
             </div>
           )}
-          {messages.map((m, i) => (
+          {messages.map((m) => (
             <ChatBubble
-              key={i}
+              key={m.id}
               role={m.role}
               content={m.content}
               skills={m.skills}
@@ -602,7 +646,7 @@ export default function Playground() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPressEnter={() => handleSend()}
-            placeholder="输入你的问题..."
+            placeholder={loading ? '当前会话生成中，可切换或新建会话并行聊天' : '输入你的问题...'}
             disabled={loading}
             style={{ background: CARD, borderColor: BORDER, color: TEXT }}
           />

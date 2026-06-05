@@ -36,6 +36,12 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r"(?:进[了入]?).*(?:期|阶段)"),
         re.compile(r"(?:到[了]?|进入)\s*(?:苗期|开花期|结果期|采收期|伸蔓期|定植期)"),
     ],
+    "update_crop_cycle": [
+        re.compile(r"(?:修改|更改|调整|改|改成|改到).*(?:茬口|周期|开始|播种期|起始)"),
+        re.compile(
+            r"(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米|水稻).*(?:修改|更改|调整|改|改成|改到).*(?:\d{1,2}月|开始|播种期|起始)"
+        ),
+    ],
 }
 
 QUERY_TRIGGERS: dict[str, set[str]] = {
@@ -261,6 +267,9 @@ def select_tools(
             if trigger in user_message:
                 candidates.add(tool_name)
                 break
+
+    if "update_crop_cycle" in candidates:
+        candidates.difference_update({"get_crop_cycle_info", "get_farm_status"})
 
     candidates.difference_update(DISABLED_SKILLS)
 

@@ -1,5 +1,7 @@
 """种植单元、农事作业单和工人档案服务。"""
 
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
@@ -12,6 +14,7 @@ from app.models.planting import (
 )
 from app.schemas.planting import (
     OperationWorkOrderCreate,
+    OperationWorkOrderUpdate,
     PlantingUnitCreate,
     PlantingUnitUpdate,
     WorkerCreate,
@@ -303,3 +306,181 @@ def get_work_order(
         .filter(OperationWorkOrder.id == work_order_id, OperationWorkOrder.farm_id == farm_id)
         .first()
     )
+
+
+def update_work_order(
+    db: Session,
+    work_order_id: int,
+    data: OperationWorkOrderUpdate,
+    farm_id: int,
+) -> OperationWorkOrder:
+    """更新作业单和可选用工明细。"""
+    work_order = _get_work_order_or_raise(db, work_order_id, farm_id)
+    cycle_id = data.cycle_id if data.cycle_id is not None else work_order.cycle_id
+    scope_type = data.scope_type if data.scope_type is not None else work_order.scope_type
+    unit_ids = data.unit_ids if data.unit_ids is not None else [
+        link.unit_id for link in work_order.unit_links
+    ]
+    validation_data = OperationWorkOrderCreate(
+        cycle_id=cycle_id,
+        operation_type=data.operation_type or work_order.operation_type,
+        operation_date=data.operation_date or work_order.operation_date,
+        scope_type=scope_type,
+        unit_ids=unit_ids,
+        note=data.note if "note" in data.model_fields_set else work_order.note,
+        photo_urls=(
+            data.photo_urls
+            if "photo_urls" in data.model_fields_set
+            else work_order.photo_urls
+        ),
+        labor_entries=data.labor_entries or [],
+    )
+    cycle = _validate_work_order_scope(db, validation_data, farm_id)
+
+    if data.cycle_id is not None:
+        work_order.cycle_id = data.cycle_id
+    if data.operation_type is not None:
+        work_order.operation_type = data.operation_type
+    if data.operation_date is not None:
+        work_order.operation_date = data.operation_date
+    if data.scope_type is not None:
+        work_order.scope_type = data.scope_type
+    if "note" in data.model_fields_set:
+        work_order.note = data.note
+    if "photo_urls" in data.model_fields_set:
+        work_order.photo_urls = data.photo_urls
+    if data.unit_ids is not None:
+        _replace_work_order_units(db, work_order, data.unit_ids)
+    if data.labor_entries is not None:
+        _replace_work_order_labor_entries(db, work_order, data.labor_entries, farm_id)
+
+    db.flush()
+    if data.labor_entries is not None:
+        db.expire(work_order, ["labor_entries"])
+    labor_service.sync_work_order_labor_cost_record(db, work_order, cycle, farm_id)
+    try:
+        db.commit()
+        invalidate_farm_context(farm_id)
+        db.refresh(work_order)
+    except Exception:
+        db.rollback()
+        raise
+    return work_order
+
+
+def settle_labor_payment(
+    db: Session,
+    farm_id: int,
+    amount: Decimal | None = None,
+    worker_name: str | None = None,
+    cycle_id: int | None = None,
+    work_order_id: int | None = None,
+    start_date=None,
+    end_date=None,
+) -> dict:
+    """按筛选条件结算未付人工，amount 为空时全额结算。"""
+    from app.services import planting_read_service
+
+    entries = planting_read_service.list_labor_payables(
+        db,
+        farm_id=farm_id,
+        worker_name=worker_name,
+        cycle_id=cycle_id,
+        work_order_id=work_order_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    if not entries:
+        raise ValueError("未找到可结算的未付人工")
+
+    total_unpaid = sum((entry.unpaid_amount for entry in entries), Decimal("0"))
+    remaining = total_unpaid if amount is None else _quantize_money(amount)
+    if remaining <= 0:
+        raise ValueError("结算金额必须大于 0")
+    affected = []
+    paid_total = Decimal("0")
+    for entry in entries:
+        if remaining <= 0:
+            break
+        pay_amount = min(entry.unpaid_amount, remaining)
+        entry.paid_amount = _quantize_money(entry.paid_amount + pay_amount)
+        entry.unpaid_amount = _quantize_money(max(entry.payable_amount - entry.paid_amount, Decimal("0")))
+        entry.settlement_status = _settlement_status(entry.paid_amount, entry.unpaid_amount)
+        remaining -= pay_amount
+        paid_total += pay_amount
+        affected.append(
+            {
+                "entry_id": entry.id,
+                "work_order_id": entry.work_order_id,
+                "worker_name": entry.worker.name if entry.worker else "",
+                "paid_amount": _quantize_money(pay_amount),
+                "remaining_unpaid": entry.unpaid_amount,
+            }
+        )
+
+    db.flush()
+    for entry in entries:
+        if entry.work_order:
+            labor_service.sync_work_order_labor_cost_record(
+                db, entry.work_order, entry.work_order.cycle, farm_id
+            )
+    try:
+        db.commit()
+        invalidate_farm_context(farm_id)
+    except Exception:
+        db.rollback()
+        raise
+    return {
+        "paid_amount": _quantize_money(paid_total),
+        "total_unpaid_before": _quantize_money(total_unpaid),
+        "remaining_unpaid": _quantize_money(total_unpaid - paid_total),
+        "affected_entries": affected,
+    }
+
+
+def _get_work_order_or_raise(
+    db: Session, work_order_id: int, farm_id: int
+) -> OperationWorkOrder:
+    work_order = get_work_order(db, work_order_id, farm_id)
+    if not work_order:
+        raise ValueError("农事作业单不存在")
+    return work_order
+
+
+def _replace_work_order_units(
+    db: Session, work_order: OperationWorkOrder, unit_ids: list[int]
+) -> None:
+    for link in list(work_order.unit_links):
+        db.delete(link)
+    db.flush()
+    for unit_id in unit_ids:
+        db.add(OperationWorkOrderUnit(work_order_id=work_order.id, unit_id=unit_id))
+
+
+def _replace_work_order_labor_entries(
+    db: Session,
+    work_order: OperationWorkOrder,
+    labor_entries,
+    farm_id: int,
+) -> None:
+    for entry in list(work_order.labor_entries):
+        db.delete(entry)
+    db.flush()
+    work_order.labor_entries = []
+    for data in labor_entries:
+        entry = labor_service.build_labor_entry(db, data, work_order.id, farm_id)
+        db.add(entry)
+        work_order.labor_entries.append(entry)
+    db.flush()
+
+
+def _quantize_money(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(Decimal("0.01"))
+
+
+def _settlement_status(paid: Decimal, unpaid: Decimal) -> str:
+    if paid <= 0:
+        return "unpaid"
+    if unpaid <= 0:
+        return "settled"
+    return "partial"

@@ -10,6 +10,7 @@ from app.core.database import Base
 from app.models.conversation import ConversationStatus
 from app.models.farm import Farm
 from app.services.conversation_service import (
+    ConversationAccessError,
     close_expired_conversations,
     get_conversation_messages,
     get_or_create_conversation,
@@ -67,6 +68,22 @@ class TestGetOrCreateConversation:
         conv2 = get_or_create_conversation(db, farm_id=1, session_id="sess-reuse")
 
         assert conv1.id == conv2.id
+        db.close()
+
+    def test_reject_reusing_other_farm_session_id(self):
+        """不能复用其他 farm 已存在的 session_id。"""
+        db = _TestSession()
+        db.add(Farm(id=2, name="其他农场"))
+        db.commit()
+        existing = get_or_create_conversation(
+            db, farm_id=1, session_id="sess-cross-farm"
+        )
+
+        with pytest.raises(ConversationAccessError):
+            get_or_create_conversation(db, farm_id=2, session_id="sess-cross-farm")
+
+        db.refresh(existing)
+        assert existing.farm_id == 1
         db.close()
 
     def test_close_old_active_when_new_session(self):

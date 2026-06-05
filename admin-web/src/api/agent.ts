@@ -63,7 +63,7 @@ export interface PendingActionContext {
 export interface PendingAction {
   action_id: string;
   skill_name: string;
-  params: Record<string, any>;
+  params: Record<string, unknown>;
   context?: PendingActionContext | null;
 }
 
@@ -147,12 +147,16 @@ export interface ConversationMessage {
   created_at: string;
 }
 
-export async function listConversations(limit?: number): Promise<ConversationItem[]> {
-  const res = await apiClient.get<ConversationItem[]>("/agent/conversations", { params: { limit } });
+export async function listConversations(limit?: number, simulateUserId?: string | null): Promise<ConversationItem[]> {
+  const res = await apiClient.get<ConversationItem[]>("/agent/conversations", {
+    params: { limit, simulate_user_id: simulateUserId || undefined },
+  });
   return res.data;
 }
 
-export async function getConversationMessages(sessionId: string): Promise<ConversationMessage[]> {
-  const res = await apiClient.get<ConversationMessage[]>(`/agent/conversations/${sessionId}/messages`);
+export async function getConversationMessages(sessionId: string, simulateUserId?: string | null): Promise<ConversationMessage[]> {
+  const res = await apiClient.get<ConversationMessage[]>(`/agent/conversations/${sessionId}/messages`, {
+    params: { simulate_user_id: simulateUserId || undefined },
+  });
   return res.data;
 }

@@ -17,6 +17,7 @@ class EvaluationCaseResult:
     latency_ms: int = 0
     token_cost: float = 0.0
     skill_calls: list[str] = field(default_factory=list)
+    drilldown_links: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -30,3 +31,4 @@ class EvaluationReport:
     config_summary: dict[str, Any]
     metrics: EvaluationMetrics
     cases: list[EvaluationCaseResult] = field(default_factory=list)
+    coverage: dict[str, Any] = field(default_factory=dict)

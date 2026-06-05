@@ -1,40 +1,6 @@
 {
   "default_provider": "local",
   "providers": [
-    {
-      "name": "nvidia",
-      "base_url": "https://integrate.api.nvidia.com/v1",
-      "api_keys": [
-        "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"
-      ],
-      "priority": 2,
-      "weight": 1,
-      "enabled": true,
-      "models": [
-        {"id": "meta/llama-3.3-70b-instruct", "priority": 1, "enabled": true, "roles": ["all"]},
-        {"id": "deepseek-ai/deepseek-v4-flash", "priority": 2, "enabled": true, "roles": ["all"]},
-        {"id": "z-ai/glm-5.1", "priority": 3, "enabled": true, "roles": ["all"]},
-        {"id": "qwen/qwen3.5-122b-a10b", "priority": 4, "enabled": true, "roles": ["all"]}
-      ]
-    },
-    {
-      "name": "ollama",
-      "base_url": "https://ollama.com/v1",
-      "api_keys": [
-        "09437a9e878f481fb4d14034d806143f.51eK2q98YjFdeu3ce62USw0q",
-        "5e0fe7c7b4d0421cbc96f22b16fd963c.IWKW59wdP2fihQhHdZlTxluM"
-      ],
-      "priority": 3,
-      "weight": 1,
-      "enabled": true,
-      "models": [
-        {"id": "gemma3:12b", "priority": 1, "enabled": true, "roles": ["tool-selection"]},
-        {"id": "gemma4:31b", "priority": 2, "enabled": true, "roles": ["generation"]},
-        {"id": "glm-4.7", "priority": 3, "enabled": true, "roles": ["all"]},
-        {"id": "qwen3-next:80b", "priority": 3, "enabled": true, "roles": ["generation"]},
-        {"id": "qwen3-coder-next", "priority": 4, "enabled": true, "roles": ["generation"]}
-      ]
-    },
     
     {
       "name": "dashscope",
@@ -93,10 +59,9 @@
       "weight": 7,
       "enabled": true,
       "models": [
-        {"id": "deepseek-ai/DeepSeek-V4-Flash", "priority": 1, "enabled": true, "roles": ["all"]},
-        {"id": "Qwen/Qwen3.5-35B-A3B", "priority": 2, "enabled": true, "roles": ["all"]},
-        {"id": "Qwen/Qwen3-30B-A3B-Instruct-2507", "priority": 3, "enabled": true, "roles": ["all"]},
-        {"id": "Qwen/Qwen2.5-7B-Instruct", "priority": 4, "enabled": true, "roles": ["all"]}
+        {"id": "Qwen/Qwen3.5-35B-A3B", "priority": 1, "enabled": true, "roles": ["all"]},
+        {"id": "Qwen/Qwen3-30B-A3B-Instruct-2507", "priority": 2, "enabled": true, "roles": ["all"]},
+        {"id": "Qwen/Qwen2.5-7B-Instruct", "priority": 3, "enabled": true, "roles": ["all"]}
       ]
     }
   ]

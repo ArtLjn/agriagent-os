@@ -21,6 +21,8 @@ class TestListSkills:
         assert "permission_level" in metadata
         assert "risk_level" in metadata
         assert "metadata_incomplete" in metadata
+        assert "context_dependencies" in metadata
+        assert "cache_invalidation" in metadata
 
 
 class TestListPrompts:
@@ -53,8 +55,8 @@ class TestGetConfig:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["token_quota"]["monthly_limit"] == 3000000
-        assert data["token_quota"]["weekly_limit"] == 750000
+        assert data["token_quota"]["monthly_limit"] == 200000
+        assert data["token_quota"]["weekly_limit"] == 50000
         assert data["token_quota"]["over_quota_action"] == "reject"
         assert "daily_limit" not in data["token_quota"]
 

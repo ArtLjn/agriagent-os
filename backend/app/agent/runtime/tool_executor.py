@@ -82,6 +82,8 @@ def _build_pending_confirmation_args(name: str, args: dict, farm_id: int) -> dic
     context_args = dict(args or {})
     if name == "update_crop_cycle":
         _fill_update_crop_cycle_context_args(context_args, farm_id)
+    if name == "settle_labor_payment":
+        _fill_settle_labor_context_args(context_args, farm_id)
     return context_args
 
 
@@ -168,6 +170,40 @@ def _pending_cycle_matches(
         )
 
     return False
+
+
+def _fill_settle_labor_context_args(args: dict, farm_id: int) -> None:
+    """为人工结算确认补齐受影响未付条目预览。"""
+    if args.get("affected_entries"):
+        return
+    db = SessionLocal()
+    try:
+        from app.services import planting_read_service
+
+        entries = planting_read_service.list_labor_payables(
+            db,
+            farm_id=farm_id,
+            worker_name=_clean_text(args.get("worker")),
+            cycle_id=args.get("cycle_id"),
+            work_order_id=args.get("work_order_id"),
+        )
+        args["affected_entries"] = [
+            {
+                "entry_id": entry.id,
+                "work_order_id": entry.work_order_id,
+                "worker_name": entry.worker.name if entry.worker else "",
+                "unpaid_amount": _date_to_iso(entry.unpaid_amount),
+            }
+            for entry in entries[:10]
+        ]
+    except Exception as exc:
+        logger.warning(
+            "构建 settle_labor_payment pending context 失败 | farm_id=%s | error=%s",
+            farm_id,
+            exc,
+        )
+    finally:
+        db.close()
 
 
 def _date_to_iso(value) -> str | None:

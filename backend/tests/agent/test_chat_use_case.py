@@ -443,3 +443,29 @@ async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():
         user_id=user.id,
         call_type="stream_chat",
     )
+
+
+async def test_save_stream_reply_filters_conversation_by_farm_id():
+    """流式回复落库时必须按当前 farm 限定 session_id。"""
+    from app.agent.application.chat_use_case import _save_stream_reply
+
+    db = MagicMock()
+    user = _mock_user()
+    farm = _mock_farm()
+    query = db.query.return_value
+    query.filter.return_value.first.return_value = None
+
+    _save_stream_reply(
+        db,
+        ChatRequest(message="问题", session_id="shared-session"),
+        user,
+        farm,
+        "回复",
+        [],
+    )
+
+    filter_sql = [str(expr) for expr in query.filter.call_args.args]
+    assert "conversations.session_id" in filter_sql[0]
+    assert "conversations.farm_id" in filter_sql[1]
+    added_record = db.add.call_args.args[0]
+    assert added_record.conversation_id is None

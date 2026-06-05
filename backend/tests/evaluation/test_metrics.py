@@ -105,3 +105,24 @@ def test_skill_quality_tracks_execution_consistency() -> None:
     metrics = compute_skill_quality([result])
 
     assert metrics.execution_consistency_rate == 0.0
+
+
+def test_skill_quality_tracks_correction_and_cancellation_success() -> None:
+    results = [
+        ReplayResult(
+            case_id="correction-ok",
+            passed=True,
+            evaluation_tags=["correction_flow"],
+        ),
+        ReplayResult(
+            case_id="cancellation-fail",
+            passed=False,
+            evaluation_tags=["cancellation_flow"],
+            errors=["cancellation_failed"],
+        ),
+    ]
+
+    metrics = compute_skill_quality(results)
+
+    assert metrics.correction_success_rate == 1.0
+    assert metrics.cancellation_success_rate == 0.0

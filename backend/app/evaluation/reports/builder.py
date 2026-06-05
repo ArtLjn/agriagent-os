@@ -51,9 +51,11 @@ class EvaluationReportBuilder:
                     latency_ms=result.latency_ms,
                     token_cost=result.token_cost,
                     skill_calls=[call.name for call in result.actual_skill_calls],
+                    drilldown_links=result.drilldown_links,
                 )
                 for result in results
             ],
+            coverage=self._build_coverage(results),
         )
 
     def to_dict(self, report: EvaluationReport) -> dict[str, Any]:
@@ -61,3 +63,31 @@ class EvaluationReportBuilder:
         data = asdict(report)
         data["created_at"] = report.created_at.isoformat()
         return data
+
+    def _build_coverage(self, results: list[ReplayResult]) -> dict[str, Any]:
+        coverage = {
+            "by_skill": {},
+            "by_business_domain": {},
+            "by_permission_level": {},
+            "by_confirmation_path": {},
+            "by_context_dependency": {},
+        }
+        for result in results:
+            metadata = result.case_metadata
+            self._count(coverage["by_business_domain"], metadata.get("business_domain"))
+            self._count(coverage["by_permission_level"], metadata.get("permission_level"))
+            self._count(
+                coverage["by_confirmation_path"],
+                metadata.get("confirmation_path"),
+            )
+            for dependency in metadata.get("context_dependencies", []):
+                self._count(coverage["by_context_dependency"], dependency)
+            for expected in result.expected_skill_calls:
+                self._count(coverage["by_skill"], expected.name)
+        return coverage
+
+    @staticmethod
+    def _count(bucket: dict[str, int], key: Any) -> None:
+        if not key:
+            return
+        bucket[str(key)] = bucket.get(str(key), 0) + 1

@@ -1,4 +1,6 @@
-"""pending action 文案与链式动作测试。"""
+"""pending action 文案、生命周期与链式动作测试。"""
+
+from unittest.mock import patch
 
 from app.infra.pending_actions import (
     build_confirm_message,
@@ -37,6 +39,29 @@ def test_store_pending_keeps_follow_up_action():
     assert pending.follow_up_skill_name == "create_crop_cycle"
     assert pending.follow_up_params == {"crop_name": "小麦"}
     assert pending.follow_up_original_input == "我想种小麦"
+
+
+def test_pending_action_times_out_after_ttl():
+    with patch("app.infra.pending_actions.time.time", return_value=1_000):
+        store_pending(1, "create_cost_record", {"amount": 100})
+
+    with patch("app.infra.pending_actions.time.time", return_value=1_301):
+        pending = get_pending(1)
+
+    assert pending is None
+
+
+def test_store_pending_overwrites_existing_action_for_same_farm():
+    first_id = store_pending(1, "create_cost_record", {"amount": 100})
+    second_id = store_pending(1, "update_crop_cycle", {"start_date": "2026-09-01"})
+
+    pending = get_pending(1)
+
+    assert pending is not None
+    assert pending.action_id == second_id
+    assert pending.action_id != first_id
+    assert pending.skill_name == "update_crop_cycle"
+    assert pending.params == {"start_date": "2026-09-01"}
 
 
 def test_build_confirmation_context_for_crop_cycle_update():
@@ -88,6 +113,62 @@ def test_confirm_message_includes_crop_cycle_date_diff():
     assert "2026-06-05" in message
     assert "2026-09-01" in message
     assert "修改玉米茬口9月1开始" in message
+
+
+def test_build_confirmation_context_for_operation_work_order_labor_details():
+    context = build_confirmation_context(
+        "create_operation_work_order",
+        {
+            "operation_type": "人工授粉",
+            "operation_date": "2026-06-05",
+            "cycle_id": 9,
+            "cycle_name": "夏季玉米",
+            "unit_names": "东棚1号",
+            "workers": "老王,老李",
+            "unit_price": 200,
+            "paid_worker": "老王",
+            "paid_amount": 200,
+        },
+        original_input="今天东棚授粉，老王老李各200，先付老王",
+    )
+
+    assert context["target"]["type"] == "operation_work_order"
+    assert context["target"]["operation_type"] == "人工授粉"
+    assert context["target"]["operation_date"] == "2026-06-05"
+    assert context["target"]["cycle_id"] == 9
+    assert context["scope"]["scope_type"] == "unit"
+    assert context["scope"]["units"] == ["东棚1号"]
+    labor = context["labor"]
+    assert labor["workers"] == ["老王", "老李"]
+    assert labor["payable_amount"] == "400.00"
+    assert labor["paid_amount"] == "200.00"
+    assert labor["unpaid_amount"] == "200.00"
+    assert context["inferred_fields"]["cycle_id"] == 9
+    assert "workers" in context["editable_fields"]
+    assert context["risk_notes"]
+
+
+def test_confirm_message_includes_operation_work_order_payment_summary():
+    message = build_confirm_message(
+        "create_operation_work_order",
+        {
+            "operation_type": "人工授粉",
+            "operation_date": "2026-06-05",
+            "unit_names": "东棚1号",
+            "workers": ["老王", "老李"],
+            "unit_price": 200,
+            "paid_amount": 200,
+        },
+        original_input="今天东棚授粉，老王老李各200，先付200",
+    )
+
+    assert "确认创建农事作业单：人工授粉" in message
+    assert "日期：2026-06-05" in message
+    assert "范围：东棚1号" in message
+    assert "人工：老王、老李" in message
+    assert "应付400.00元" in message
+    assert "已付200.00元" in message
+    assert "未付200.00元" in message
 
 
 def test_store_pending_keeps_confirmation_context():

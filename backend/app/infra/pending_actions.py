@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 from langchain_core.messages import ToolMessage
 
@@ -51,6 +52,8 @@ _SKILL_DISPLAY: dict[str, str] = {
     "create_crop_template": "创建作物模板",
     "log_farm_activity": "记录农事",
     "create_operation_work_order": "创建农事作业单",
+    "update_operation_work_order": "更新农事作业单",
+    "settle_labor_payment": "结算人工",
     "settle_debt": "还款",
     "update_crop_stage": "更新阶段",
 }
@@ -61,6 +64,8 @@ _SKILL_EMOJI: dict[str, str] = {
     "create_crop_template": "📋",
     "log_farm_activity": "📝",
     "create_operation_work_order": "🧑‍🌾",
+    "update_operation_work_order": "🧑‍🌾",
+    "settle_labor_payment": "💳",
     "settle_debt": "💳",
     "update_crop_stage": "🔄",
 }
@@ -71,6 +76,8 @@ _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
     "create_crop_template": ["crop_name"],
     "log_farm_activity": ["operation_type"],
     "create_operation_work_order": ["operation_type", "operation_date", "cycle_id"],
+    "update_operation_work_order": ["work_order_id", "operation_type", "operation_date"],
+    "settle_labor_payment": ["worker", "amount", "work_order_id"],
     "settle_debt": ["counterparty", "amount"],
     "update_crop_stage": ["stage_name"],
 }
@@ -174,6 +181,9 @@ def build_confirmation_context(
     original_input: str = "",
 ) -> dict:
     """构建结构化确认上下文。"""
+    if skill_name == "create_operation_work_order":
+        return _build_create_work_order_context(skill_name, params, original_input)
+
     if skill_name == "update_crop_cycle":
         return {
             "skill_name": skill_name,
@@ -199,6 +209,39 @@ def build_confirmation_context(
             "editable_fields": ["start_date", "season", "batch_note"],
         }
 
+    if skill_name == "settle_labor_payment":
+        return {
+            "skill_name": skill_name,
+            "original_input": original_input,
+            "target": {
+                "type": "labor_payment",
+                "worker": params.get("worker"),
+                "work_order_id": params.get("work_order_id"),
+                "cycle_id": params.get("cycle_id"),
+            },
+            "changes": [
+                {
+                    "field": "amount",
+                    "label": "结算金额",
+                    "old": None,
+                    "new": params.get("amount") or "全额结清",
+                }
+            ],
+            "inferred_fields": {
+                "worker": params.get("worker"),
+                "affected_entries": params.get("affected_entries"),
+            },
+            "risk_notes": ["确认后会增加人工已付金额。"],
+            "editable_fields": [
+                "worker",
+                "amount",
+                "cycle_id",
+                "work_order_id",
+                "start_date",
+                "end_date",
+            ],
+        }
+
     return {
         "skill_name": skill_name,
         "original_input": original_input,
@@ -220,6 +263,28 @@ def build_confirm_message(
     skill_name: str, params: dict, original_input: str = ""
 ) -> str:
     context = build_confirmation_context(skill_name, params, original_input)
+    if skill_name == "create_operation_work_order":
+        target = context["target"]
+        labor = context["labor"]
+        lines = [
+            f"🧑‍🌾 确认创建农事作业单：{target['operation_type']}",
+            f"日期：{target.get('operation_date') or '今天'}",
+        ]
+        units = context["scope"].get("units") or []
+        if units:
+            lines.append(f"范围：{'、'.join(units)}")
+        if labor.get("workers"):
+            lines.append(f"人工：{'、'.join(labor['workers'])}")
+            lines.append(
+                f"付款：应付{labor['payable_amount']}元，"
+                f"已付{labor['paid_amount']}元，"
+                f"未付{labor['unpaid_amount']}元"
+            )
+        if original_input:
+            lines.append(f"理解：您说的是「{original_input}」")
+        lines.append("确认吗？")
+        return "\n".join(lines)
+
     if skill_name == "update_crop_cycle":
         target = context["target"]["name"]
         change = context["changes"][0]
@@ -258,6 +323,88 @@ def build_confirm_message(
 
     lines.append("确认吗？")
     return "\n".join(lines)
+
+
+def _build_create_work_order_context(
+    skill_name: str,
+    params: dict,
+    original_input: str,
+) -> dict:
+    workers = _split_names(params.get("workers"))
+    unit_price = _to_decimal(params.get("unit_price")) or Decimal("0")
+    paid_amount = _to_decimal(params.get("paid_amount")) or Decimal("0")
+    payable = _to_decimal(params.get("payable_amount"))
+    total_payable = (payable if payable is not None else unit_price) * len(workers)
+    total_paid = paid_amount
+    total_unpaid = max(total_payable - total_paid, Decimal("0"))
+    return {
+        "skill_name": skill_name,
+        "original_input": original_input,
+        "target": {
+            "type": "operation_work_order",
+            "operation_type": params.get("operation_type"),
+            "operation_date": params.get("operation_date"),
+            "cycle_id": params.get("cycle_id"),
+        },
+        "scope": {
+            "scope_type": "unit" if params.get("unit_names") else "cycle",
+            "units": _split_names(params.get("unit_names")),
+        },
+        "labor": {
+            "workers": workers,
+            "payable_amount": _money_text(total_payable),
+            "paid_amount": _money_text(total_paid),
+            "unpaid_amount": _money_text(total_unpaid),
+            "paid_worker": params.get("paid_worker"),
+        },
+        "changes": [
+            {"field": key, "old": None, "new": value}
+            for key, value in params.items()
+        ],
+        "inferred_fields": {
+            "operation_date": params.get("operation_date"),
+            "cycle_id": params.get("cycle_id"),
+            "paid_worker": params.get("paid_worker"),
+        },
+        "risk_notes": ["确认后会创建作业单和人工成本。"],
+        "editable_fields": [
+            "operation_type",
+            "operation_date",
+            "cycle_id",
+            "unit_names",
+            "workers",
+            "unit_price",
+            "payable_amount",
+            "paid_worker",
+            "paid_amount",
+            "note",
+        ],
+    }
+
+
+def _split_names(value) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [
+        part.strip()
+        for part in str(value).replace("，", ",").split(",")
+        if part.strip()
+    ]
+
+
+def _to_decimal(value) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _money_text(value: Decimal) -> str:
+    return str(value.quantize(Decimal("0.01")))
 
 
 def is_pending_tool_message(message) -> bool:

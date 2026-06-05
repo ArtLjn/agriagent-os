@@ -110,6 +110,9 @@ class ContextBlock:
             "intent_tags": self.metadata.get("intent_tags", []),
             "required_reason": self.metadata.get("required_reason", ""),
             "cache_scope": self.metadata.get("cache_scope", ""),
+            "selected_by_skill_dependencies": self.metadata.get(
+                "selected_by_skill_dependencies", []
+            ),
         }
 
 
