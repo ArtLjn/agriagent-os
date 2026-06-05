@@ -49,6 +49,16 @@ parameters:
 ## 多工具协作
 如果用户问“结合我农场情况看最近价格”，可先用 `get_farm_status` 获取农场作物，再搜索外部价格信息。
 
+## Runtime 策略
+- permission: read
+- direct_call: false
+- direct_return: false
+- cache: none
+
+## 失败处理
+- 查询词不明确时，用中文追问用户想搜索的主题。
+- 搜索失败时返回中文说明，不暴露内部异常。
+
 ## 示例
 - 用户：“最近西瓜价格怎么样” -> `web_search(query="2026年 西瓜 价格")`
 - 用户：“最新农业政策有什么” -> `web_search(query="2026年 最新农业政策", categories="news")`

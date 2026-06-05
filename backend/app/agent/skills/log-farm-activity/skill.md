@@ -53,6 +53,16 @@ parameters:
 ## 多工具协作
 记录后用户追问“最近都干了什么”，调用 `get_recent_farm_logs` 查询最新记录。
 
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使农事记录、茬口和农场状态相关查询缓存失效。
+
+## 失败处理
+- 操作类型、日期或茬口无法确定时，用中文追问必要信息。
+- 写入失败时返回中文说明和可重试建议，不暴露内部异常。
+
 ## 示例
 - 用户：“今天浇了水” -> `log_farm_activity(operation_type="浇水")`
 - 用户：“昨天给 3 号茬口打药防蚜虫” -> `log_farm_activity(cycle_id=3, operation_type="打药", operation_date="昨天", note="防蚜虫")`

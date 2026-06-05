@@ -44,6 +44,16 @@ parameters:
 ## 多工具协作
 如果这是创建茬口过程中的补充动作，模板创建成功后应继续执行原来的 `create_crop_cycle`。
 
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使作物模板和茬口创建候选相关缓存失效。
+
+## 失败处理
+- 作物名称不明确时，用中文追问必要信息。
+- 创建失败时返回中文说明和可重试建议，不暴露内部异常。
+
 ## 示例
 - 用户：“帮我创建番茄模板” -> `create_crop_template(crop_name="番茄")`
 - 用户：“新增 8424 西瓜模板” -> `create_crop_template(crop_name="西瓜", variety="8424")`

@@ -1,8 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # scripts/harness-check.sh
 # Harness Engineering 全量验证入口，一键跑完所有检查
 
-set -e
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
 
 echo "╔══════════════════════════════════════╗"
 echo "║   Harness Engineering 全量验证        ║"
@@ -17,7 +20,7 @@ run_check() {
   local name="$1"
   local cmd="$2"
   echo "── $name ──"
-  if eval "$cmd"; then
+  if (eval "$cmd"); then
     echo "✅ $name 通过"
     PASS=$((PASS + 1))
   else
@@ -35,15 +38,15 @@ else
   SKIP=$((SKIP + 1))
 fi
 
-if [ -d "admin-web" ]; then
-  run_check "Frontend Lint" "cd admin-web && pnpm lint 2>/dev/null || echo 'lint not configured'"
+if [ -d "admin-web" ] && command -v pnpm &>/dev/null; then
+  run_check "Frontend Lint" "cd admin-web && pnpm lint"
 else
   echo "⏭️  Frontend Lint: 跳过"
   SKIP=$((SKIP + 1))
 fi
 
 # ── 类型检查 ──
-if [ -d "admin-web" ] && [ -f "admin-web/tsconfig.json" ]; then
+if [ -d "admin-web" ] && [ -f "admin-web/tsconfig.json" ] && command -v npx &>/dev/null; then
   run_check "TypeScript Check" "cd admin-web && npx tsc --noEmit"
 else
   echo "⏭️  TypeScript Check: 跳过"
@@ -58,8 +61,8 @@ else
   SKIP=$((SKIP + 1))
 fi
 
-if [ -d "admin-web" ]; then
-  run_check "Frontend Tests" "cd admin-web && pnpm test 2>/dev/null || echo 'no tests'"
+if [ -d "admin-web" ] && command -v pnpm &>/dev/null; then
+  run_check "Frontend Tests" "cd admin-web && pnpm test"
 else
   echo "⏭️  Frontend Tests: 跳过"
   SKIP=$((SKIP + 1))
@@ -84,6 +87,14 @@ if [ -f "scripts/check-doc-freshness.sh" ]; then
   run_check "文档新鲜度" "bash scripts/check-doc-freshness.sh"
 else
   echo "⏭️  文档新鲜度: 跳过"
+  SKIP=$((SKIP + 1))
+fi
+
+# ── Skill 文档契约 ──
+if [ -f "scripts/check-skill-docs.sh" ]; then
+  run_check "Skill 文档契约" "bash scripts/check-skill-docs.sh"
+else
+  echo "⏭️  Skill 文档契约: 跳过"
   SKIP=$((SKIP + 1))
 fi
 

@@ -79,6 +79,23 @@ class TestFallbackToJsonParse:
         assert isinstance(result, CostParseResult)
         assert result.amount == "0"
 
+    async def test_over_limit_amount_is_not_silently_capped(self, logger):
+        """超过记账上限的金额不能被静默截断成上限值。"""
+        llm = MagicMock()
+
+        structured_llm = AsyncMock()
+        structured_llm.ainvoke.side_effect = RuntimeError("failed")
+        llm.with_structured_output.return_value = structured_llm
+
+        mock_result = MagicMock()
+        mock_result.content = '{"record_type":"income","category":"销售收入","amount":"1000000000","record_date":"2026-06-05"}'
+        llm.ainvoke = AsyncMock(return_value=mock_result)
+
+        result = await _parse_cost_with_llm(llm, "test prompt", logger)
+
+        assert isinstance(result, CostParseResult)
+        assert result.amount == "0"
+
 
 class TestErrorHandling:
     """异常处理路径。"""

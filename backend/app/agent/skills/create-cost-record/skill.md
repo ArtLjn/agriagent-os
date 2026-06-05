@@ -18,7 +18,7 @@ parameters:
   properties:
     amount:
       type: number
-      description: "金额，必须大于 0。"
+      description: "金额，必须大于 0 且不超过 10000000。w/万表示乘以 10000，超过上限时不要调用本 Skill，应向用户确认。"
     category:
       type: string
       description: "分类，如化肥、人工、种子、大棚膜、番茄销售。"
@@ -50,6 +50,8 @@ parameters:
 ## 参数推断
 - “买了 200 块化肥” -> `amount=200`, `category=化肥`, `record_type=cost`。
 - “卖了番茄赚了 5000” -> `amount=5000`, `category=番茄销售`, `record_type=income`。
+- “收入 100w” -> `amount=1000000`, `record_type=income`。
+- “收入 100000w” -> 金额为 1000000000，超过系统上限，不要写入，应提示用户确认。
 - “昨天买了 100 块种子” -> `record_date=昨天对应日期`。
 - “在农资店老王那赊了 3000 块大棚膜” -> `amount=3000`, `category=大棚膜`, `record_type=cost`, `note=赊账-农资店老王`。
 
@@ -61,6 +63,16 @@ parameters:
 
 ## 多工具协作
 写入成功后，相关账单缓存应失效。用户记账后又问“这个月一共多少”，再调用 `get_cost_summary` 查询最新数据。
+
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使账务汇总和收支分析相关查询缓存失效。
+
+## 失败处理
+- 金额、分类或日期不明确时，用中文追问必要信息。
+- 写入失败时返回中文说明和可重试建议，不暴露内部异常。
 
 ## 示例
 - 用户：“昨天买了 200 块化肥” -> `create_cost_record(amount=200, category="化肥", record_date="昨天", record_type="cost")`

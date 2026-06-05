@@ -219,7 +219,7 @@ class CostParseResult(BaseModel):
         if d <= 0:
             return "0"
         if d > 10_000_000:
-            return "10000000"
+            return "0"
         return str(v)
 
     @field_validator("record_date")

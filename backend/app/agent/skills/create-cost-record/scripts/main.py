@@ -33,7 +33,7 @@ class CreateCostRecordSkill(Skill):
             "properties": {
                 "amount": {
                     "type": "number",
-                    "description": "金额，必须大于0",
+                    "description": "金额，必须大于0且不超过10000000。w/万表示乘以10000，超过上限时不要调用本工具，应向用户确认。",
                 },
                 "category": {
                     "type": "string",

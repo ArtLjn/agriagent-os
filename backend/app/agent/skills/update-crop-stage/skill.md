@@ -44,6 +44,16 @@ parameters:
 ## 多工具协作
 更新后用户问“现在整体情况”，调用 `get_farm_status` 查看最新状态。
 
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使茬口、阶段计划和农场状态相关查询缓存失效。
+
+## 失败处理
+- 无法唯一确定茬口或阶段名称不明确时，用中文追问必要信息。
+- 更新失败时返回中文说明和可重试建议，不暴露内部异常。
+
 ## 示例
 - 用户：“西瓜进膨大期了” -> `update_crop_stage(stage_name="膨大期")`
 - 用户：“3 号茬口到采收期了” -> `update_crop_stage(cycle_id=3, stage_name="采收期")`

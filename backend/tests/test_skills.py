@@ -2,7 +2,7 @@
 
 import importlib
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from skillify.core.context import SkillContext
 
@@ -13,8 +13,10 @@ _cost_summary_mod = importlib.import_module(
 _cost_analytics_mod = importlib.import_module(
     "app.agent.skills.cost-analytics.scripts.main"
 )
+_crop_cycle_mod = importlib.import_module("app.agent.skills.crop-cycle.scripts.main")
 CostSummarySkill = _cost_summary_mod.CostSummarySkill
 CostAnalyticsSkill = _cost_analytics_mod.CostAnalyticsSkill
+CropCycleSkill = _crop_cycle_mod.CropCycleSkill
 
 
 class TestCostSummarySkillMeta:
@@ -51,6 +53,14 @@ class TestCostAnalyticsSkillMeta:
         skill = CostAnalyticsSkill()
         schema = skill.parameters_schema()
         assert "compare_period" in schema["properties"]
+
+
+class TestCropCycleSkillMeta:
+    def test_cycle_id_is_optional_for_safe_fallback(self):
+        skill = CropCycleSkill()
+        schema = skill.parameters_schema()
+        assert "cycle_id" in schema["properties"]
+        assert schema["required"] == []
 
 
 @pytest.fixture
@@ -289,4 +299,26 @@ class TestCostAnalyticsSkill:
 
         assert "收支分析" in result.reply
         assert "对比期" in result.reply
+        mock_db.close.assert_called_once()
+
+
+class TestCropCycleSkill:
+    @pytest.mark.asyncio
+    @patch.object(_crop_cycle_mod, "SessionLocal")
+    @patch.object(_crop_cycle_mod, "farm_context_service")
+    async def test_missing_cycle_id_returns_farm_status_fallback(
+        self, mock_fcs, mock_session, ctx
+    ):
+        mock_db = MagicMock()
+        mock_session.return_value = mock_db
+        mock_fcs.build_summary = AsyncMock(
+            return_value="【农场现状】\n茬口：夏季玉米(播种期)"
+        )
+
+        skill = CropCycleSkill()
+        result = await skill.execute({}, ctx)
+
+        assert "未指定茬口 ID" in result.reply
+        assert "夏季玉米" in result.reply
+        mock_fcs.build_summary.assert_called_once_with(mock_db, farm_id=1)
         mock_db.close.assert_called_once()

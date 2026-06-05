@@ -7,6 +7,8 @@
 - record_type: "cost" 或 "income"
 - category: 简短类别名，如"种子"、"化肥"、"人工"、"销售收入"
 - amount: 数字字符串，不含单位
+  - "w" 和 "万" 表示乘以 10000，例如 100w = 1000000
+  - 如果换算后金额超过 10000000，amount 返回 "0"，并在 note 中说明需要用户确认
 - record_date: YYYY-MM-DD 格式
 - note: 可选备注
 

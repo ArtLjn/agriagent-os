@@ -57,6 +57,16 @@ parameters:
 ## 多工具协作
 如果创建茬口时发现模板不存在，可引导用户确认 `create_crop_template`，模板创建后再继续创建茬口。
 
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使茬口、阶段计划和农场状态相关查询缓存失效。
+
+## 失败处理
+- 作物、地块或开始日期不明确时，用中文追问必要信息。
+- 创建失败时返回中文说明和可重试建议，不暴露内部异常。
+
 ## 示例
 - 用户：“帮我建一个秋季辣椒茬口” -> `create_crop_cycle(crop_name="辣椒", season="秋季")`
 - 用户：“我想种小麦” -> `create_crop_cycle(crop_name="小麦")`

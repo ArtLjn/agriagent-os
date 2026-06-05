@@ -58,6 +58,16 @@ parameters:
 ## 多工具协作
 执行成功后，`crop_cycle` 和 `get_farm_status` 相关缓存应失效。用户继续询问整体情况时，可调用 `get_farm_status` 读取最新状态；用户查询该茬口详情时，可调用 `get_crop_cycle_info`。
 
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使茬口、阶段计划和农场状态相关查询缓存失效。
+
+## 失败处理
+- 无法唯一确定茬口或日期时，用中文追问必要信息。
+- 更新失败时返回中文说明和可重试建议，不暴露内部异常。
+
 ## 示例
 - 用户：“修改玉米茬口9月1开始” -> `update_crop_cycle(crop_name="玉米", start_date="2026-09-01")`
 - 用户：“把夏季玉米播种期改到9月1日” -> `update_crop_cycle(cycle_name="夏季玉米", crop_name="玉米", start_date="2026-09-01")`

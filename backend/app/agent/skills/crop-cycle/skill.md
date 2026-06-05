@@ -15,9 +15,8 @@ parameters:
   properties:
     cycle_id:
       type: integer
-      description: "种植周期 ID。当前实现需要明确 ID。"
-  required:
-    - cycle_id
+      description: "种植周期 ID。可选；缺失时先返回当前农场状态供用户选择。"
+  required: []
 ---
 
 # 种植周期查询
@@ -35,10 +34,20 @@ parameters:
 - “查询周期 5 的阶段” -> `cycle_id=5`。
 
 ## 缺参策略
-- 当前实现需要 `cycle_id`。用户只说作物名或“当前茬口”时，不要编造 ID，可先使用 `get_farm_status` 获取上下文，或追问用户选择具体茬口。
+- 缺少 `cycle_id` 时不要编造 ID。本 Skill 会先返回当前农场状态，供用户选择具体茬口。
 
 ## 多工具协作
-如果用户不知道茬口 ID，可先调用 `get_farm_status` 获取活跃茬口摘要，再决定是否追问。
+如果用户不知道茬口 ID，可调用本 Skill 空参数或 `get_farm_status` 获取活跃茬口摘要，再决定是否追问。
+
+## Runtime 策略
+- permission: read
+- direct_call: false
+- direct_return: false
+- cache: none
+
+## 失败处理
+- 无法唯一确定茬口时，用中文提示候选项或追问。
+- 查询失败时返回中文说明，不暴露内部异常。
 
 ## 示例
 - 用户：“看一下 3 号茬口阶段” -> `get_crop_cycle_info(cycle_id=3)`

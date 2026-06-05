@@ -136,6 +136,57 @@ class TestPureNormalPath:
         mock_get_llm.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_direct_cost_summary_result_goes_through_llm(self):
+        """账单 Skill 的原始结果必须经过 LLM 最终表达，避免暴露内部格式。"""
+        from unittest.mock import AsyncMock, patch
+
+        normal_msg = ToolMessage(
+            content="收支汇总：\n  总成本：100.00 元\n  明细：\n    2026-06-05: income - 销售收入 10000000.00 元",
+            tool_call_id="direct_get_cost_summary",
+        )
+        state = {
+            "messages": [HumanMessage(content="我的余额"), normal_msg],
+            "farm_id": 1,
+            "intent": "query",
+        }
+
+        with (
+            patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+            patch("app.agent.runtime.nodes.get_langchain_tools", return_value=[]),
+            patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+            patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+            patch("app.agent.runtime.nodes.get_collector") as mock_collector,
+            patch("app.agent.runtime.nodes.check_quota", return_value=True),
+            patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+            patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+            patch("app.agent.runtime.llm_support.SessionLocal") as mock_session,
+        ):
+            mock_get_date.return_value = __import__("datetime").date(2026, 6, 5)
+            mock_composer = MagicMock()
+            mock_composer.compose.return_value = "system prompt"
+            mock_get_composer.return_value = mock_composer
+            mock_collector.return_value = MagicMock()
+
+            mock_db = MagicMock()
+            mock_db.query.return_value.filter.return_value.first.return_value = None
+            mock_session.return_value = mock_db
+
+            llm = MagicMock()
+            llm.model_name = "test-model"
+            response = AIMessage(
+                content="你的当前净利润是 100 元。",
+                response_metadata={"token_usage": {"total_tokens": 10}},
+            )
+            llm.ainvoke = AsyncMock(return_value=response)
+            mock_get_llm.return_value = llm
+
+            result = await _llm_node(state)
+
+        ai_msg = result["messages"][0]
+        assert ai_msg.content == "你的当前净利润是 100 元。"
+        llm.ainvoke.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_pure_normal_does_not_early_return(self):
         """只有 normal ToolMessage 时，不提前返回（走 LLM 流程）。"""
         from unittest.mock import AsyncMock, patch

@@ -1,3 +1,36 @@
+---
+name: settle_labor_payment
+type: write
+description: 结算或部分支付未付人工，需要确认并展示受影响人工条目。
+triggers:
+  - 支付人工
+  - 结清人工
+  - 补付工资
+  - 工人工资结算
+parameters:
+  type: object
+  properties:
+    worker:
+      type: string
+      description: 工人姓名。
+    amount:
+      type: number
+      description: 本次支付金额，不传表示全额结清。
+    cycle_id:
+      type: integer
+      description: 茬口 ID。
+    work_order_id:
+      type: integer
+      description: 作业单 ID。
+    start_date:
+      type: string
+      description: 开始日期 YYYY-MM-DD。
+    end_date:
+      type: string
+      description: 结束日期 YYYY-MM-DD。
+  required: []
+---
+
 # settle_labor_payment
 
 结算或部分支付未付人工。此 Skill 为写操作，需要确认并展示受影响人工条目。
@@ -23,6 +56,16 @@
 - 缺少金额时按全额结清处理。
 - 缺少工人、茬口或作业单时，可按当前上下文筛选；无法确定影响范围时先追问。
 - 确认前必须展示受影响未付人工条目。
+
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使人工应付、作业单和账务相关查询缓存失效。
+
+## 失败处理
+- 无法唯一确定结算范围时，用中文追问必要信息。
+- 结算失败时返回中文说明和可重试建议，不暴露内部异常。
 
 ## 示例
 

@@ -44,5 +44,15 @@ parameters:
 ## 多工具协作
 当用户问“最近农场整体做了什么”，可先用 `get_farm_status`；当用户指定具体周期，再用本 Skill 返回明细。
 
+## Runtime 策略
+- permission: read
+- direct_call: false
+- direct_return: false
+- cache: none
+
+## 失败处理
+- 无法确定茬口或时间范围时，用中文说明默认范围或追问。
+- 查询失败时返回中文说明，不暴露内部异常。
+
 ## 示例
 - 用户：“3 号茬口最近一周干了什么” -> `get_recent_farm_logs(cycle_id=3, days=7)`

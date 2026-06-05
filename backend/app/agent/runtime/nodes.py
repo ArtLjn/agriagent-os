@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import re
 import time as _time
 
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
@@ -23,6 +22,13 @@ from app.agent.runtime.llm_support import (
     _warm_tool_caches,
 )
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
+from app.agent.runtime.direct_routing import (
+    can_direct_route,
+    can_return_direct_tool_messages,
+    can_skip_llm_tool_selection,
+    direct_query_tool_names,
+    filter_tool_calls_by_selected,
+)
 from app.agent.runtime.messages import (
     _detect_missed_tool_call,
     _extract_tokens_used,
@@ -31,108 +37,19 @@ from app.agent.runtime.messages import (
     extract_token_usage,
     sliding_window_compact,
 )
+from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES, check_quota
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.tool_selector import expand_by_chain, select_tools
 from app.core.config import settings
-from app.core.database import SessionLocal
 from app.core.date_context import get_request_date
 from app.context.models import ContextBundle
 from app.infra.pending_actions import PENDING_MARKER, is_pending_tool_message
 from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round
-from app.services.quota_service import QuotaCheckResult, check_user_quota
 
 logger = logging.getLogger(__name__)
-
-_DIRECT_READ_TOOLS: set[str] = {
-    "get_weather_forecast",
-    "get_cost_summary",
-    "get_farm_status",
-}
-
-_QUOTA_REJECT_MESSAGES = {
-    "month": "本月用量已达上限，配额将在下月重置。",
-    "week": "本周用量已达上限，配额将在下周一重置。",
-    "identity": "缺少可信用户上下文，无法继续处理。",
-}
-
-
-def check_quota(user_id: str | None) -> QuotaCheckResult:
-    db = SessionLocal()
-    try:
-        return check_user_quota(user_id, db)
-    finally:
-        db.close()
-
-
-def _filter_tool_calls_by_selected(
-    tool_calls: list[dict],
-    selected_tools: list,
-) -> list[dict]:
-    """只保留本轮绑定给 LLM 的工具调用，避免手动 JSON 解析越权执行。"""
-    allowed_names = {tool.name for tool in selected_tools}
-    if not allowed_names:
-        return []
-
-    filtered = [tc for tc in tool_calls if tc.get("name") in allowed_names]
-    dropped = [
-        tc.get("name") for tc in tool_calls if tc.get("name") not in allowed_names
-    ]
-    if dropped:
-        logger.warning(
-            "过滤未绑定工具调用 | dropped=%s | allowed=%s",
-            dropped,
-            sorted(allowed_names),
-        )
-    return filtered
-
-
-def _direct_query_tool_names(user_msg: str, selected_names: list[str]) -> list[str]:
-    """返回可跳过 LLM 的读工具名称。"""
-    names = list(selected_names)
-    if (
-        "get_crop_cycle_info" in names
-        and "get_farm_status" in names
-        and not _mentions_cycle_id(user_msg)
-    ):
-        return ["get_farm_status"]
-    return [name for name in names if name in _DIRECT_READ_TOOLS]
-
-
-def _can_direct_route(
-    user_msg: str, selected_names: list[str], direct_names: list[str]
-) -> bool:
-    if len(direct_names) == len(selected_names):
-        return True
-    return (
-        direct_names == ["get_farm_status"]
-        and set(selected_names) == {"get_crop_cycle_info", "get_farm_status"}
-        and not _mentions_cycle_id(user_msg)
-    )
-
-
-def _can_skip_llm_tool_selection(
-    *,
-    user_msg: str,
-    tools: list,
-    selected_names: list[str],
-    direct_names: list[str],
-) -> bool:
-    if len(tools) == 1 or len(selected_names) < len(tools):
-        return True
-    return (
-        direct_names == ["get_farm_status"]
-        and set(selected_names) == {"get_crop_cycle_info", "get_farm_status"}
-        and not _mentions_cycle_id(user_msg)
-    )
-
-
-def _mentions_cycle_id(user_msg: str) -> bool:
-    """判断用户是否明确给出茬口/周期 ID。"""
-    pattern = r"(?:茬口|周期|cycle)\s*\d+|\d+\s*(?:号|#)?\s*(?:茬口|周期)"
-    return bool(re.search(pattern, user_msg))
 
 
 def _should_continue(state: AgentState) -> str:
@@ -174,10 +91,7 @@ async def _llm_node(state: AgentState) -> dict:
         logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
         return {"messages": [AIMessage(content=confirm)]}
 
-    if normal_msgs and all(
-        str(getattr(msg, "tool_call_id", "")).startswith("direct_")
-        for msg in normal_msgs
-    ):
+    if normal_msgs and can_return_direct_tool_messages(normal_msgs):
         content = "\n\n".join(str(msg.content or "") for msg in normal_msgs).strip()
         logger.info(
             "检测到确定性直达 ToolMessage，跳过 LLM 直接返回 | count=%d",
@@ -204,7 +118,7 @@ async def _llm_node(state: AgentState) -> dict:
                 "Token 配额超限，拒绝调用（reject 模式）| period=%s",
                 exceeded_period,
             )
-            content = _QUOTA_REJECT_MESSAGES.get(
+            content = QUOTA_REJECT_MESSAGES.get(
                 exceeded_period,
                 "用量已达上限，请稍后再试。",
             )
@@ -226,18 +140,18 @@ async def _llm_node(state: AgentState) -> dict:
     )
     if prepared_selected_tool_names is not None:
         selected_names = list(prepared_selected_tool_names)
-    direct_names = _direct_query_tool_names(user_msg, selected_names)
+    direct_names = direct_query_tool_names(user_msg, selected_names)
     if (
         intent == "query"
         and not has_tool_results
         and direct_names
-        and _can_skip_llm_tool_selection(
+        and can_skip_llm_tool_selection(
             user_msg=user_msg,
             tools=tools,
             selected_names=selected_names,
             direct_names=direct_names,
         )
-        and _can_direct_route(user_msg, selected_names, direct_names)
+        and can_direct_route(user_msg, selected_names, direct_names)
     ):
         tool_calls = [
             {
@@ -458,7 +372,7 @@ async def _llm_node(state: AgentState) -> dict:
     if not response.tool_calls:
         parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
         if parsed_tool_calls:
-            filtered_tool_calls = _filter_tool_calls_by_selected(
+            filtered_tool_calls = filter_tool_calls_by_selected(
                 parsed_tool_calls,
                 selected_tools,
             )
@@ -498,7 +412,7 @@ async def _llm_node(state: AgentState) -> dict:
                     retry_response.content or ""
                 )
                 if retry_parsed:
-                    filtered_retry_calls = _filter_tool_calls_by_selected(
+                    filtered_retry_calls = filter_tool_calls_by_selected(
                         retry_parsed,
                         selected_tools,
                     )

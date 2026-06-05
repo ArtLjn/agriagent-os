@@ -102,8 +102,8 @@ class TestChatWithAgentRouting:
 
     @pytest.mark.asyncio
     @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.save_message")
-    @patch("app.services.agent_service.get_or_create_conversation")
+    @patch("app.agent.application.chat_use_case.save_message")
+    @patch("app.agent.application.chat_use_case.get_or_create_conversation")
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_routes_with_session_id(
         self,
@@ -128,7 +128,10 @@ class TestPendingActionPreserved:
 
     @pytest.mark.asyncio
     @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.agent.application.chat_use_case.handle_pending_action", new_callable=AsyncMock)
+    @patch(
+        "app.agent.application.chat_use_case.handle_pending_action",
+        new_callable=AsyncMock,
+    )
     async def test_confirm_executes_pending_action(
         self,
         mock_handle: AsyncMock,
@@ -147,7 +150,10 @@ class TestPendingActionPreserved:
 
     @pytest.mark.asyncio
     @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.agent.application.chat_use_case.handle_pending_action", new_callable=AsyncMock)
+    @patch(
+        "app.agent.application.chat_use_case.handle_pending_action",
+        new_callable=AsyncMock,
+    )
     async def test_cancel_removes_pending(
         self,
         mock_handle: AsyncMock,

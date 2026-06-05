@@ -49,6 +49,16 @@ parameters:
 ## 多工具协作
 还款成功后，如果用户继续问欠款余额，应调用账务查询或债务查询能力读取最新数据。
 
+## Runtime 策略
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: none；写入成功后使账务、欠款和收支分析相关查询缓存失效。
+
+## 失败处理
+- 债权人、金额或还款范围不明确时，用中文追问必要信息。
+- 结算失败时返回中文说明和可重试建议，不暴露内部异常。
+
 ## 示例
 - 用户：“还了老王 1000 块” -> `settle_debt(counterparty="老王", amount=1000)`
 - 用户：“农资店的账全清了” -> `settle_debt(counterparty="农资店")`

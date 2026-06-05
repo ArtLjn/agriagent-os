@@ -32,7 +32,11 @@ _TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine
 
 
 @pytest.fixture(autouse=True)
-def clean_db():
+def clean_db(request):
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
+
     Base.metadata.drop_all(bind=_test_engine)
     Base.metadata.create_all(bind=_test_engine)
 

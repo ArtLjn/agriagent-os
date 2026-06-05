@@ -35,6 +35,16 @@ parameters:
 ## 多工具协作
 本 Skill 适合作为上下文补充。账单、天气、农事明细等精确问题，应结合对应专用 Skill。
 
+## Runtime 策略
+- permission: read
+- direct_call: true
+- direct_return: true
+- cache: none
+
+## 失败处理
+- 缺少可信农场上下文时，用中文说明无法获取当前农场信息。
+- 查询失败时返回中文说明，不暴露内部异常。
+
 ## 示例
 - 用户：“我的农场现在怎么样” -> `get_farm_status()`
 - 用户：“给我看看整体种植情况” -> `get_farm_status()`

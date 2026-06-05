@@ -41,6 +41,16 @@ parameters:
 ## 多工具协作
 用户问“明天适合打药吗”时，可结合天气结果和农场状态给建议。用户同时问天气和账务时，可并行调用对应 Skill。
 
+## Runtime 策略
+- permission: read
+- direct_call: true
+- direct_return: true
+- cache: none
+
+## 失败处理
+- 地点或日期范围不明确时，用中文说明默认查询范围。
+- 查询失败时返回中文说明，不暴露内部异常。
+
 ## 示例
 - 用户：“明天天气怎么样” -> `get_weather_forecast()`
 - 用户：“杭州未来 7 天会下雨吗” -> `get_weather_forecast(location="杭州")`

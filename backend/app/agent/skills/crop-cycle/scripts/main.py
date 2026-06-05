@@ -6,6 +6,7 @@ from skillify.skills.base import Skill
 from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.models.cycle import CropCycle
+from app.services import farm_context_service
 
 
 class CropCycleSkill(Skill):
@@ -25,14 +26,20 @@ class CropCycleSkill(Skill):
             "properties": {
                 "cycle_id": {"type": "integer", "description": "种植周期 ID"},
             },
-            "required": ["cycle_id"],
+            "required": [],
         }
 
     @cached(ttl_seconds=600, key_fn=lambda p: f"cycle:{p.get('cycle_id')}")
     async def execute(self, params: dict, context) -> SkillResult:
-        cycle_id = params["cycle_id"]
+        cycle_id = params.get("cycle_id")
+        farm_id = getattr(context, "farm_id", 1) or 1
         db = SessionLocal()
         try:
+            if cycle_id is None:
+                summary = await farm_context_service.build_summary(db, farm_id=farm_id)
+                reply = "未指定茬口 ID，已先返回当前农场状态：\n" + summary
+                return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
+
             cycle = db.query(CropCycle).filter(CropCycle.id == cycle_id).first()
             if not cycle:
                 return SkillResult(

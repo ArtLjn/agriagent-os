@@ -28,7 +28,7 @@ def _make_llm_mock(response_content="OK", tool_calls=None):
 
 def test_filter_tool_calls_by_selected_drops_unbound_tool():
     """手动 JSON 工具调用只能执行本轮绑定的候选工具。"""
-    from app.agent.runtime.nodes import _filter_tool_calls_by_selected
+    from app.agent.runtime.direct_routing import filter_tool_calls_by_selected
 
     selected_tool = MagicMock()
     selected_tool.name = "create_crop_cycle"
@@ -37,7 +37,7 @@ def test_filter_tool_calls_by_selected_drops_unbound_tool():
         {"name": "create_crop_cycle", "args": {"crop_name": "小麦"}, "id": "tc2"},
     ]
 
-    result = _filter_tool_calls_by_selected(tool_calls, [selected_tool])
+    result = filter_tool_calls_by_selected(tool_calls, [selected_tool])
 
     assert result == [
         {"name": "create_crop_cycle", "args": {"crop_name": "小麦"}, "id": "tc2"}

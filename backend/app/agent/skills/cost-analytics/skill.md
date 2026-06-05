@@ -54,6 +54,16 @@ parameters:
 ## 多工具协作
 如果用户先问趋势再追问“具体哪几笔导致的”，使用 `get_cost_summary` 查询明细。如果趋势解释需要农场状态背景，可结合 `get_farm_status`。
 
+## Runtime 策略
+- permission: read
+- direct_call: false
+- direct_return: false
+- cache: none
+
+## 失败处理
+- 缺少可分析周期时，用中文追问或说明默认分析范围。
+- 查询失败时返回中文说明，不暴露内部异常。
+
 ## 示例
 - 用户：“分析一下这个月收支，跟上个月比” -> `get_cost_analytics(date_from="本月1日", date_to="本月最后一天", compare_period="last_month")`
 - 用户：“今年比去年赚得多吗” -> `get_cost_analytics(date_from="今年1月1日", date_to="今年12月31日", compare_period="last_year")`

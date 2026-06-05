@@ -71,6 +71,16 @@ parameters:
 ## 多工具协作
 如果用户同时问账务和农场整体情况，可与 `get_farm_status` 一起使用。如果用户问“比上个月多花多少”，应使用 `get_cost_analytics`，必要时再用本 Skill 补充明细。
 
+## Runtime 策略
+- permission: read
+- direct_call: true
+- direct_return: false
+- cache: none
+
+## 失败处理
+- 日期或筛选条件不明确时，用中文说明默认查询范围。
+- 查询失败时返回中文说明，不暴露内部异常。
+
 ## 示例
 - 用户：“查一下本周账单” -> `get_cost_summary(date_from="本周一", date_to="本周日", record_type="all", group_by="none")`
 - 用户：“这个月化肥花了多少” -> `get_cost_summary(date_from="本月1日", date_to="本月最后一天", record_type="cost", category="化肥")`

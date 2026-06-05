@@ -14,13 +14,6 @@ from openai import AsyncOpenAI, OpenAI
 
 from app.core.config import settings
 
-try:
-    from watchfiles import watch as _watchfiles_watch
-
-    _HAS_WATCHFILES = True
-except ImportError:
-    _HAS_WATCHFILES = False
-
 logger = logging.getLogger(__name__)
 
 _BASE_COOLDOWN_MINUTES = 2
@@ -452,28 +445,9 @@ class LLMClientManager:
 
     def start_file_watcher(self) -> None:
         """启动后台线程监听 providers.json 变化，自动 reload。"""
-        if not _HAS_WATCHFILES:
-            logger.debug("watchfiles 未安装，跳过自动监听")
-            return
-        if getattr(self, "_watcher_started", False):
-            return
-        self._watcher_started = True
+        from app.core.llm_config_watcher import start_llm_config_watcher
 
-        logging.getLogger("watchfiles").setLevel(logging.WARNING)
-        logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
-
-        config_path = Path(__file__).parent.parent.parent / "providers.json"
-
-        def _watch():
-            logger.info("providers.json 文件监听已启动 | path=%s", config_path)
-            for changes in _watchfiles_watch(config_path.parent):
-                for _change_type, changed_path in changes:
-                    if Path(changed_path).name == config_path.name:
-                        logger.info("检测到 providers.json 变化，执行热更新")
-                        self.reload()
-
-        thread = threading.Thread(target=_watch, daemon=True, name="llm-config-watcher")
-        thread.start()
+        start_llm_config_watcher(self)
 
 
 _manager: LLMClientManager | None = None
