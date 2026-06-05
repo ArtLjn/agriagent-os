@@ -5,6 +5,7 @@ import logging
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.services import farm_context_service
@@ -28,7 +29,9 @@ class FarmStatusSkill(Skill):
 
     @cached(ttl_seconds=300, key_fn=lambda p: "farm_status")
     async def execute(self, params: dict, context) -> SkillResult:
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "获取农场状态")
+        if context_error:
+            return context_error
         db = SessionLocal()
         try:
             summary = await farm_context_service.build_summary(db, farm_id=farm_id)

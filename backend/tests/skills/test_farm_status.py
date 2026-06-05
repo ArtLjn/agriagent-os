@@ -8,6 +8,8 @@ import pytest
 from app.infra.skill_cache import clear_cache
 from skillify.models.schemas import ResultStatus
 
+pytestmark = pytest.mark.no_db
+
 # kebab-case 目录名需要通过 importlib 导入
 _mod = importlib.import_module("app.agent.skills.farm-status.scripts.main")
 FarmStatusSkill = _mod.FarmStatusSkill
@@ -67,6 +69,25 @@ class TestFarmStatusExecution:
     @pytest.mark.asyncio
     @patch.object(_mod, "SessionLocal")
     @patch.object(_mod, "farm_context_service")
+    async def test_cache_is_isolated_by_farm_id(self, mock_fcs, mock_session_local):
+        mock_session_local.side_effect = [MagicMock(), MagicMock()]
+        mock_fcs.build_summary = AsyncMock(
+            side_effect=["farm 1 summary", "farm 2 summary"]
+        )
+
+        skill = FarmStatusSkill()
+        result1 = await skill.execute({}, MagicMock(farm_id=1))
+        result2 = await skill.execute({}, MagicMock(farm_id=2))
+
+        assert result1.reply == "farm 1 summary"
+        assert result2.reply == "farm 2 summary"
+        assert mock_fcs.build_summary.call_count == 2
+        assert mock_fcs.build_summary.call_args_list[0].kwargs == {"farm_id": 1}
+        assert mock_fcs.build_summary.call_args_list[1].kwargs == {"farm_id": 2}
+
+    @pytest.mark.asyncio
+    @patch.object(_mod, "SessionLocal")
+    @patch.object(_mod, "farm_context_service")
     async def test_handles_db_error(self, mock_fcs, mock_session_local):
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
@@ -82,34 +103,26 @@ class TestFarmStatusExecution:
 
     @pytest.mark.asyncio
     @patch.object(_mod, "SessionLocal")
-    @patch.object(_mod, "farm_context_service")
-    async def test_default_farm_id_when_context_has_none(
-        self, mock_fcs, mock_session_local
+    async def test_missing_context_farm_id_fails_without_db_access(
+        self, mock_session_local
     ):
-        mock_db = MagicMock()
-        mock_session_local.return_value = mock_db
-        mock_fcs.build_summary = AsyncMock(return_value="test summary")
-
         skill = FarmStatusSkill()
         context = MagicMock(farm_id=None)
         result = await skill.execute({}, context)
 
-        assert result.status == ResultStatus.SUCCESS
-        mock_fcs.build_summary.assert_called_once_with(mock_db, farm_id=1)
+        assert result.status == ResultStatus.FAILED
+        assert "缺少农场上下文" in result.reply
+        mock_session_local.assert_not_called()
 
     @pytest.mark.asyncio
     @patch.object(_mod, "SessionLocal")
-    @patch.object(_mod, "farm_context_service")
-    async def test_default_farm_id_when_context_has_no_attr(
-        self, mock_fcs, mock_session_local
+    async def test_missing_context_farm_id_attr_fails_without_db_access(
+        self, mock_session_local
     ):
-        mock_db = MagicMock()
-        mock_session_local.return_value = mock_db
-        mock_fcs.build_summary = AsyncMock(return_value="test summary")
-
         skill = FarmStatusSkill()
         context = MagicMock(spec=[])  # 无 farm_id 属性
         result = await skill.execute({}, context)
 
-        assert result.status == ResultStatus.SUCCESS
-        mock_fcs.build_summary.assert_called_once_with(mock_db, farm_id=1)
+        assert result.status == ResultStatus.FAILED
+        assert "缺少农场上下文" in result.reply
+        mock_session_local.assert_not_called()

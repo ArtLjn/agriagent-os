@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 _cache: dict[tuple[str, str], tuple[str, float]] = {}
 
 
-def _make_key(skill_name: str, params: dict) -> str:
-    raw = json.dumps(params, sort_keys=True, ensure_ascii=False)
+def _make_key(skill_name: str, params: dict, farm_id: int | None = None) -> str:
+    key_payload = {"farm_id": farm_id, "params": params}
+    raw = json.dumps(key_payload, sort_keys=True, ensure_ascii=False)
     return hashlib.md5(raw.encode()).hexdigest()
 
 
@@ -31,7 +32,12 @@ def cached(ttl_seconds: int, key_fn: Callable[[dict], str] | None = None):
     def decorator(fn: Callable) -> Callable:
         @wraps(fn)
         async def wrapper(self, params: dict, context, **kwargs):
-            cache_key = key_fn(params) if key_fn else _make_key(self.name(), params)
+            farm_id = getattr(context, "farm_id", None)
+            farm_cache_prefix = (
+                f"farm:{farm_id}" if isinstance(farm_id, int) else "farm:none"
+            )
+            params_key = key_fn(params) if key_fn else _make_key(self.name(), params)
+            cache_key = f"{farm_cache_prefix}:{params_key}"
             full_key = (self.name(), cache_key)
 
             if full_key in _cache:

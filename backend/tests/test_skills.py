@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from skillify.core.context import SkillContext
 
+pytestmark = pytest.mark.no_db
+
 # 目录名含连字符，无法直接 import，使用 importlib 动态加载
 _cost_summary_mod = importlib.import_module(
     "app.agent.skills.cost-summary.scripts.main"
@@ -341,6 +343,30 @@ class TestCostAnalyticsSkill:
 class TestCropCycleSkill:
     @pytest.mark.asyncio
     @patch.object(_crop_cycle_mod, "SessionLocal")
+    async def test_missing_context_farm_id_fails_without_db_access(self, mock_session):
+        skill = CropCycleSkill()
+
+        result = await skill.execute({}, SkillContext())
+
+        assert result.status.value == "failed"
+        assert "缺少农场上下文" in result.reply
+        mock_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch.object(_crop_cycle_mod, "SessionLocal")
+    async def test_missing_context_farm_id_attr_fails_without_db_access(
+        self, mock_session
+    ):
+        skill = CropCycleSkill()
+
+        result = await skill.execute({}, MagicMock(spec=[]))
+
+        assert result.status.value == "failed"
+        assert "缺少农场上下文" in result.reply
+        mock_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch.object(_crop_cycle_mod, "SessionLocal")
     @patch.object(_crop_cycle_mod, "farm_context_service")
     async def test_missing_cycle_id_returns_farm_status_fallback(
         self, mock_fcs, mock_session, ctx
@@ -357,4 +383,24 @@ class TestCropCycleSkill:
         assert "未指定茬口 ID" in result.reply
         assert "夏季玉米" in result.reply
         mock_fcs.build_summary.assert_called_once_with(mock_db, farm_id=1)
+        mock_db.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch.object(_crop_cycle_mod, "SessionLocal")
+    async def test_cycle_id_query_filters_by_context_farm_id(self, mock_session, ctx):
+        query = MagicMock()
+        query.filter.return_value = query
+        query.first.return_value = None
+        mock_db = MagicMock()
+        mock_db.query.return_value = query
+        mock_session.return_value = mock_db
+
+        skill = CropCycleSkill()
+        result = await skill.execute({"cycle_id": 9}, ctx)
+
+        assert result.status.value == "success"
+        assert "未找到 ID 为 9" in result.reply
+        filter_args = query.filter.call_args.args
+        assert len(filter_args) == 2
+        assert "crop_cycles.farm_id" in str(filter_args[1])
         mock_db.close.assert_called_once()
