@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 
 from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_farm, get_current_user, require_admin
 from app.main import app
@@ -29,6 +30,31 @@ PROTECTION_DEPENDENCIES = {
     get_current_farm,
     require_admin,
 }
+
+PUBLIC_ROUTE_SMOKE_REQUESTS: list[tuple[str, str, dict, set[int]]] = [
+    ("GET", "/health", {}, {200}),
+    (
+        "POST",
+        "/auth/login",
+        {"json": {"phone": "18899990000", "password": "wrong-password"}},
+        {401, 422},
+    ),
+    (
+        "POST",
+        "/auth/register",
+        {
+            "json": {
+                "phone": "18899990000",
+                "password": "password123",
+                "nickname": "公开注册用户",
+            }
+        },
+        {200, 201, 400, 422},
+    ),
+    ("GET", "/api/app/version", {}, {200}),
+    ("GET", "/weather/forecast?location=上海", {}, {200, 500, 502}),
+    ("GET", "/planting/operation-types", {}, {200}),
+]
 
 
 def test_all_http_routes_have_auth_classification():
@@ -60,6 +86,18 @@ def test_public_routes_are_explicit_and_limited():
     missing = sorted(PUBLIC_ROUTES - registered)
 
     assert missing == []
+
+
+def test_public_whitelist_routes_do_not_require_token():
+    """公开白名单接口匿名请求不返回认证错误。"""
+    client = TestClient(app, raise_server_exceptions=False)
+
+    for method, path, kwargs, allowed_statuses in PUBLIC_ROUTE_SMOKE_REQUESTS:
+        resp = client.request(method, path, **kwargs)
+        assert resp.status_code in allowed_statuses, f"{method} {path}: {resp.text}"
+        if resp.status_code == 401:
+            detail = resp.json().get("detail", {})
+            assert detail.get("code") != "AUTH_MISSING_TOKEN"
 
 
 def _api_routes() -> Iterable[APIRoute]:
