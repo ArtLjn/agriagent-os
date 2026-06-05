@@ -8,12 +8,12 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.cost import CostRecord
 from app.models.cycle import CropCycle, CycleStage
 from app.models.log import FarmLog
+from app.services.cost_service import is_legacy_repayment
 
 logger = logging.getLogger(__name__)
 
@@ -177,29 +177,17 @@ def _build_report_data(
         .order_by(CostRecord.record_date.desc())
         .all()
     )
+    costs = [cost for cost in costs if not is_legacy_repayment(cost)]
 
     # 4. 计算概览指标
-    total_cost = (
-        db.query(func.sum(CostRecord.amount))
-        .filter(
-            CostRecord.farm_id == farm_id,
-            CostRecord.record_type == "cost",
-            CostRecord.record_date >= period_start,
-            CostRecord.record_date <= period_end,
-        )
-        .scalar()
-    ) or Decimal("0")
-
-    total_income = (
-        db.query(func.sum(CostRecord.amount))
-        .filter(
-            CostRecord.farm_id == farm_id,
-            CostRecord.record_type == "income",
-            CostRecord.record_date >= period_start,
-            CostRecord.record_date <= period_end,
-        )
-        .scalar()
-    ) or Decimal("0")
+    total_cost = sum(
+        (cost.amount for cost in costs if cost.record_type == "cost"),
+        Decimal("0"),
+    )
+    total_income = sum(
+        (cost.amount for cost in costs if cost.record_type == "income"),
+        Decimal("0"),
+    )
 
     net_profit = total_income - total_cost
 

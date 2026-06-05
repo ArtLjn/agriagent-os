@@ -149,6 +149,10 @@ class CycleProfit(BaseModel):
     total_cost: Decimal
     total_income: Decimal
     net_profit: Decimal
+    settled_cost: Decimal = Decimal("0")
+    settled_income: Decimal = Decimal("0")
+    unsettled_cost: Decimal = Decimal("0")
+    unsettled_income: Decimal = Decimal("0")
     labor_cost: Decimal = Decimal("0")
     labor_entry_cost: Decimal = Decimal("0")
     operation_labor_cost: Decimal = Decimal("0")
@@ -162,6 +166,10 @@ class YearlySummary(BaseModel):
     total_cost: Decimal
     total_income: Decimal
     net_profit: Decimal
+    settled_cost: Decimal = Decimal("0")
+    settled_income: Decimal = Decimal("0")
+    unsettled_cost: Decimal = Decimal("0")
+    unsettled_income: Decimal = Decimal("0")
     by_category: dict[str, Decimal]
     model_config = ConfigDict(from_attributes=True)
 

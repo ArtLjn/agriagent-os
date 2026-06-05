@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.main import app
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordUpdate
+from app.services.report_data_service import _build_report_data
 
 client = TestClient(app)
 
@@ -189,6 +190,10 @@ def test_cycle_profit(cycle_id):
     assert data["total_cost"] == "800.00"
     assert data["total_income"] == "5000.00"
     assert data["net_profit"] == "4200.00"
+    assert data["settled_cost"] == "800.00"
+    assert data["unsettled_cost"] == "0.00"
+    assert data["settled_income"] == "5000.00"
+    assert data["unsettled_income"] == "0.00"
     assert data["labor_cost"] == "0"
     assert data["labor_entry_cost"] == "0"
     assert data["operation_labor_cost"] == "0"
@@ -253,6 +258,131 @@ def test_yearly_summary(cycle_id):
     assert "by_category" in data
 
 
+def test_yearly_summary_separates_occurred_settled_and_unsettled(cycle_id):
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "肥料",
+            "amount": "100.00",
+            "record_date": "2025-03-01",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "农资赊账",
+            "amount": "80.00",
+            "settled_amount": "0.00",
+            "record_date": "2025-03-02",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "income",
+            "category": "批发未收款",
+            "amount": "200.00",
+            "settled_amount": "0.00",
+            "record_date": "2025-03-03",
+        },
+    )
+
+    response = client.get("/costs/summary/2025")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_cost"] == "180.00"
+    assert data["settled_cost"] == "100.00"
+    assert data["unsettled_cost"] == "80.00"
+    assert data["total_income"] == "200.00"
+    assert data["settled_income"] == "0.00"
+    assert data["unsettled_income"] == "200.00"
+    assert data["net_profit"] == "20.00"
+
+
+def test_legacy_repayment_record_is_excluded_from_income_summary(cycle_id):
+    debt_response = client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "农资赊账",
+            "amount": "80.00",
+            "settled_amount": "0.00",
+            "record_date": "2025-03-01",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "income",
+            "category": "还款",
+            "amount": "80.00",
+            "record_date": "2025-03-02",
+            "parent_record_id": debt_response.json()["id"],
+        },
+    )
+
+    response = client.get("/costs/summary/2025")
+    profit_response = client.get(f"/costs/cycles/{cycle_id}/profit")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_cost"] == "80.00"
+    assert data["total_income"] == "0"
+    assert data["net_profit"] == "-80.00"
+    assert "income:还款" not in data["by_category"]
+
+    assert profit_response.status_code == 200
+    profit_data = profit_response.json()
+    assert profit_data["total_income"] == "0"
+    assert profit_data["net_profit"] == "-80.00"
+
+
+def test_legacy_repayment_record_is_excluded_from_report_data(cycle_id, db_session):
+    debt_response = client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "农资赊账",
+            "amount": "80.00",
+            "settled_amount": "0.00",
+            "record_date": "2025-03-01",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "income",
+            "category": "还款",
+            "amount": "80.00",
+            "record_date": "2025-03-02",
+            "parent_record_id": debt_response.json()["id"],
+        },
+    )
+
+    report_data = _build_report_data(
+        db_session,
+        farm_id=1,
+        period_start=date(2025, 3, 1),
+        period_end=date(2025, 3, 31),
+        report_type="monthly",
+    )
+
+    assert report_data.overview["total_cost"] == "80"
+    assert report_data.overview["total_income"] == "0"
+    assert report_data.overview["net_profit"] == "-80"
+    assert all(cost["category"] != "还款" for cost in report_data.costs)
+
+
 def test_cycle_profit_empty():
     response = client.get("/costs/cycles/99999/profit")
     assert response.status_code == 200
@@ -272,7 +402,11 @@ def test_parse_cost_record_returns_422_on_invalid_amount():
     from unittest.mock import patch
     from app.schemas.cost import CostParseResult
 
-    with patch("app.api.cost._parse_cost_with_llm") as mock_parse:
+    with (
+        patch("app.api.cost.get_composer") as mock_get_composer,
+        patch("app.api.cost._parse_cost_with_llm") as mock_parse,
+    ):
+        mock_get_composer.return_value.compose.return_value = "解析提示词"
         mock_parse.return_value = CostParseResult(
             record_type="cost",
             category="其他",
