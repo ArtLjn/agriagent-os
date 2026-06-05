@@ -97,6 +97,42 @@ class TestCostSummarySkill:
 
     @pytest.mark.asyncio
     @patch.object(_cost_summary_mod, "SessionLocal")
+    async def test_does_not_cache_empty_balance_result(self, mock_session, ctx):
+        empty_chain = MagicMock()
+        empty_chain.filter.return_value = empty_chain
+        empty_chain.order_by.return_value = empty_chain
+        empty_chain.all.return_value = []
+
+        fresh_chain = MagicMock()
+        fresh_chain.filter.return_value = fresh_chain
+        fresh_chain.order_by.return_value = fresh_chain
+        fresh_chain.all.return_value = [
+            MockRecord(
+                record_type="income",
+                category="销售",
+                amount=100,
+                record_date="2026-06-05",
+                note="",
+                farm_id=1,
+            )
+        ]
+
+        empty_db = MagicMock()
+        empty_db.query.return_value = empty_chain
+        fresh_db = MagicMock()
+        fresh_db.query.return_value = fresh_chain
+        mock_session.side_effect = [empty_db, fresh_db]
+
+        skill = CostSummarySkill()
+
+        first = await skill.execute({}, ctx)
+        second = await skill.execute({}, ctx)
+
+        assert "暂无成本或收入记录" in first.reply
+        assert "总收入：100.00 元" in second.reply
+
+    @pytest.mark.asyncio
+    @patch.object(_cost_summary_mod, "SessionLocal")
     async def test_group_by_category(self, mock_session, ctx):
         records = [
             MockRecord(

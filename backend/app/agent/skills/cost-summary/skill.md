@@ -16,7 +16,6 @@ triggers:
   - 利润
   - 流水
   - 明细
-cache_ttl: 300
 parameters:
   type: object
   properties:

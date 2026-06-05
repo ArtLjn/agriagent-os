@@ -44,7 +44,7 @@ parameters:
 ## Runtime 策略
 - permission: read
 - direct_call: true
-- direct_return: true
+- direct_return: false
 - cache: none
 
 ## 失败处理

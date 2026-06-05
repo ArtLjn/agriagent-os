@@ -113,8 +113,10 @@ class TestPureNormalPath:
     """测试纯 normal ToolMessage 路径不变（正常走 LLM）。"""
 
     @pytest.mark.asyncio
-    async def test_direct_normal_tool_result_returns_without_llm(self):
-        """确定性直达工具结果应直接返回，避免 LLM 改写表格或摘要格式。"""
+    async def test_direct_normal_tool_result_goes_through_llm(self):
+        """确定性直达工具结果也必须经过最终 LLM 表达。"""
+        from unittest.mock import AsyncMock, patch
+
         normal_msg = ToolMessage(
             content="【农场现状】\n茬口：夏季玉米(播种期)",
             tool_call_id="direct_get_farm_status",
@@ -128,12 +130,38 @@ class TestPureNormalPath:
         with (
             patch("app.agent.runtime.nodes.check_quota", return_value=True),
             patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+            patch("app.agent.runtime.nodes.get_langchain_tools", return_value=[]),
+            patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+            patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+            patch("app.agent.runtime.nodes.get_collector") as mock_collector,
+            patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+            patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+            patch("app.agent.runtime.llm_support.SessionLocal") as mock_session,
         ):
+            mock_get_date.return_value = __import__("datetime").date(2026, 6, 5)
+            mock_composer = MagicMock()
+            mock_composer.compose.return_value = "system prompt"
+            mock_get_composer.return_value = mock_composer
+            mock_collector.return_value = MagicMock()
+
+            mock_db = MagicMock()
+            mock_db.query.return_value.filter.return_value.first.return_value = None
+            mock_session.return_value = mock_db
+
+            llm = MagicMock()
+            llm.model_name = "test-model"
+            response = AIMessage(
+                content="你的夏季玉米目前处于播种期。",
+                response_metadata={"token_usage": {"total_tokens": 10}},
+            )
+            llm.ainvoke = AsyncMock(return_value=response)
+            mock_get_llm.return_value = llm
+
             result = await _llm_node(state)
 
         ai_msg = result["messages"][0]
-        assert ai_msg.content == "【农场现状】\n茬口：夏季玉米(播种期)"
-        mock_get_llm.assert_not_called()
+        assert ai_msg.content == "你的夏季玉米目前处于播种期。"
+        llm.ainvoke.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_direct_cost_summary_result_goes_through_llm(self):

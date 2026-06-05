@@ -7,7 +7,6 @@ from skillify.skills.base import Skill
 
 from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
-from app.infra.skill_cache import cached
 from app.models.cost import CostRecord
 
 
@@ -66,10 +65,6 @@ class CostSummarySkill(Skill):
             "required": [],
         }
 
-    @cached(
-        ttl_seconds=300,
-        key_fn=lambda p: f"cost_summary:{hash(str(sorted(p.items())))}",
-    )
     async def execute(self, params: dict, context) -> SkillResult:
         """执行成本汇总查询。"""
         farm_id, context_error = require_farm_context(context, "查询收支汇总")
