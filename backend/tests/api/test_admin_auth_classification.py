@@ -24,6 +24,13 @@ ADMIN_CONFIG_REQUESTS: list[AdminRequest] = [
     ("POST", "/admin/prompts/reload", lambda _method: {}),
 ]
 
+ADMIN_TRACE_REQUESTS: list[AdminRequest] = [
+    ("GET", "/admin/traces?limit=10", lambda _method: {}),
+    ("GET", "/admin/traces/missing-request/timeline", lambda _method: {}),
+    ("GET", "/admin/traces/missing-request/nodes/1", lambda _method: {}),
+    ("DELETE", "/admin/traces?before=2026-05-20", lambda _method: {}),
+]
+
 
 @pytest.mark.parametrize(("method", "path", "kwargs_factory"), ADMIN_CONFIG_REQUESTS)
 def test_admin_config_endpoints_reject_anonymous(
@@ -79,3 +86,39 @@ def test_admin_config_endpoints_allow_admin(
         )
 
     assert resp.status_code == 200
+
+
+@pytest.mark.parametrize(("method", "path", "kwargs_factory"), ADMIN_TRACE_REQUESTS)
+def test_admin_trace_endpoints_reject_anonymous(
+    db_session,
+    method: str,
+    path: str,
+    kwargs_factory: Callable[[str], dict],
+):
+    """匿名访问 admin trace 相关接口返回 401。"""
+    with auth_override_scope(app):
+        resp = TestClient(app).request(method, path, **kwargs_factory(method))
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_MISSING_TOKEN"
+
+
+@pytest.mark.parametrize(("method", "path", "kwargs_factory"), ADMIN_TRACE_REQUESTS)
+def test_admin_trace_endpoints_reject_regular_user(
+    db_session,
+    method: str,
+    path: str,
+    kwargs_factory: Callable[[str], dict],
+):
+    """普通用户访问 admin trace 相关接口返回 403。"""
+    ensure_regular_user(db_session)
+    with auth_override_scope(app):
+        resp = TestClient(app).request(
+            method,
+            path,
+            headers=regular_headers(),
+            **kwargs_factory(method),
+        )
+
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["code"] == "AUTH_ADMIN_REQUIRED"
