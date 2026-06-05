@@ -1,7 +1,13 @@
+from datetime import date, datetime, timezone
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.main import app
+from app.models.cost import CostRecord
+from app.schemas.cost import CostRecordUpdate
 
 client = TestClient(app)
 
@@ -50,6 +56,88 @@ def test_create_cost_record(cycle_id):
     assert data["category"] == "肥料"
     assert data["amount"] == "800.00"
     assert data["created_at"]
+
+
+def test_create_settled_cost_record_defaults_settlement_fields(cycle_id):
+    payload = {
+        "cycle_id": cycle_id,
+        "record_type": "cost",
+        "category": "肥料",
+        "amount": "100.00",
+        "record_date": "2025-03-10",
+    }
+
+    response = client.post("/costs", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["amount"] == "100.00"
+    assert data["settled_amount"] == "100.00"
+    assert data["unsettled_amount"] == "0.00"
+    assert data["settlement_status"] == "settled"
+
+
+def test_create_record_rejects_settled_amount_greater_than_amount(cycle_id):
+    payload = {
+        "cycle_id": cycle_id,
+        "record_type": "cost",
+        "category": "肥料",
+        "amount": "100.00",
+        "settled_amount": "120.00",
+        "record_date": "2025-03-10",
+    }
+
+    response = client.post("/costs", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_cost_update_rejects_settled_amount_greater_than_amount():
+    with pytest.raises(ValidationError):
+        CostRecordUpdate(
+            amount=Decimal("100.00"),
+            settled_amount=Decimal("120.00"),
+        )
+
+
+def test_direct_cost_record_normalizes_settlement_fields(db_session):
+    debt_record = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="肥料",
+        amount="180.00",
+        record_subtype="赊账",
+        settlement_status="settled",
+        record_date=date(2025, 3, 10),
+    )
+    labor_record = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="人工",
+        amount="240.00",
+        record_subtype="工资记录人工",
+        record_date=date(2025, 3, 11),
+    )
+
+    db_session.add_all([debt_record, labor_record])
+    db_session.commit()
+    db_session.refresh(debt_record)
+    db_session.refresh(labor_record)
+
+    assert debt_record.settled_amount == Decimal("0.00")
+    assert debt_record.unsettled_amount == debt_record.amount
+    assert debt_record.settlement_status == "unsettled"
+    assert labor_record.settled_amount == labor_record.amount
+    assert labor_record.unsettled_amount == Decimal("0.00")
+    assert labor_record.settlement_status == "settled"
+
+    debt_record.settled_at = datetime.now(timezone.utc)
+    db_session.commit()
+    db_session.refresh(debt_record)
+
+    assert debt_record.settled_amount == debt_record.amount
+    assert debt_record.unsettled_amount == Decimal("0.00")
+    assert debt_record.settlement_status == "settled"
 
 
 def test_create_income_record(cycle_id):

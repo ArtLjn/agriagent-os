@@ -1,10 +1,11 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 RECORD_TYPE_ENUM = {"cost", "income"}
+SETTLEMENT_STATUS_ENUM = {"unsettled", "partial", "settled"}
 
 
 class CostRecordBase(BaseModel):
@@ -14,6 +15,8 @@ class CostRecordBase(BaseModel):
     record_type: str
     category: str = Field(..., min_length=1, max_length=50)
     amount: Decimal = Field(..., gt=0, le=10_000_000)
+    settled_amount: Decimal | None = Field(None, ge=0, le=10_000_000)
+    settlement_status: str | None = Field(None, max_length=20)
     record_date: date
     note: str | None = Field(None, max_length=500)
     record_subtype: str | None = Field(None, max_length=50)
@@ -39,17 +42,42 @@ class CostRecordBase(BaseModel):
             raise ValueError("amount 最多保留两位小数")
         return v
 
+    @field_validator("settlement_status")
+    @classmethod
+    def _validate_settlement_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in SETTLEMENT_STATUS_ENUM:
+            raise ValueError(f"settlement_status 必须是 {SETTLEMENT_STATUS_ENUM} 之一")
+        return v
+
+    @field_validator("settled_amount")
+    @classmethod
+    def _validate_settled_amount_precision(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v.as_tuple().exponent < -2:
+            raise ValueError("settled_amount 最多保留两位小数")
+        return v
+
 
 class CostRecordCreate(CostRecordBase):
     """创建成本记账记录请求 Schema。"""
 
-    pass
+    @field_validator("settled_amount")
+    @classmethod
+    def _validate_settled_not_over_amount(
+        cls, v: Decimal | None, info
+    ) -> Decimal | None:
+        amount = info.data.get("amount")
+        if v is not None and amount is not None and v > amount:
+            raise ValueError("settled_amount 不能大于 amount")
+        return v
 
 
 class CostRecordResponse(CostRecordBase):
     """成本记账记录响应 Schema。"""
 
     id: int
+    settled_amount: Decimal
+    settlement_status: str
+    unsettled_amount: Decimal
     source_label: str | None = None
     created_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
@@ -62,6 +90,8 @@ class CostRecordUpdate(BaseModel):
     record_type: str | None = None
     category: str | None = Field(None, min_length=1, max_length=50)
     amount: Decimal | None = Field(None, gt=0, le=10_000_000)
+    settled_amount: Decimal | None = Field(None, ge=0, le=10_000_000)
+    settlement_status: str | None = Field(None, max_length=20)
     record_date: date | None = None
     note: str | None = Field(None, max_length=500)
     record_subtype: str | None = Field(None, max_length=50)
@@ -85,6 +115,30 @@ class CostRecordUpdate(BaseModel):
     def _validate_amount_precision(cls, v: Decimal | None) -> Decimal | None:
         if v is not None and v.as_tuple().exponent < -2:
             raise ValueError("amount 最多保留两位小数")
+        return v
+
+    @field_validator("settled_amount")
+    @classmethod
+    def _validate_settled_amount_precision(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v.as_tuple().exponent < -2:
+            raise ValueError("settled_amount 最多保留两位小数")
+        return v
+
+    @model_validator(mode="after")
+    def _validate_settled_not_over_amount(self) -> "CostRecordUpdate":
+        if (
+            self.amount is not None
+            and self.settled_amount is not None
+            and self.settled_amount > self.amount
+        ):
+            raise ValueError("settled_amount 不能大于 amount")
+        return self
+
+    @field_validator("settlement_status")
+    @classmethod
+    def _validate_settlement_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in SETTLEMENT_STATUS_ENUM:
+            raise ValueError(f"settlement_status 必须是 {SETTLEMENT_STATUS_ENUM} 之一")
         return v
 
 

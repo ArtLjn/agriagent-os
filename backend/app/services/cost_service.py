@@ -13,10 +13,35 @@ ACTIVE_SOURCE_KEY = "active"
 LABOR_CATEGORY = "人工"
 LABOR_ENTRY_SOURCE = "labor_entry"
 WORK_ORDER_SOURCE = "operation_work_order"
+SETTLED = "settled"
+PARTIAL = "partial"
+UNSETTLED = "unsettled"
 
 
 class DuplicateSourceRecordError(ValueError):
     """同一来源已存在活动账单。"""
+
+
+def _quantize_money(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(Decimal("0.01"))
+
+
+def settlement_status_for(amount: Decimal, settled_amount: Decimal) -> str:
+    amount = _quantize_money(amount)
+    settled_amount = _quantize_money(settled_amount)
+    if settled_amount <= 0:
+        return UNSETTLED
+    if settled_amount >= amount:
+        return SETTLED
+    return PARTIAL
+
+
+def default_settled_amount(record: CostRecordCreate) -> Decimal:
+    if record.settled_amount is not None:
+        return _quantize_money(record.settled_amount)
+    if record.record_subtype == "赊账":
+        return Decimal("0.00")
+    return _quantize_money(record.amount)
 
 
 def _find_category(
@@ -49,6 +74,11 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
     source_active_key = _source_active_key(record.source_type, record.source_id)
     if source_active_key:
         _ensure_source_record_unique(db, farm_id, record.source_type, record.source_id)
+    settled_amount = default_settled_amount(record)
+    settlement_status = settlement_status_for(
+        record.amount,
+        settled_amount,
+    )
     db_record = CostRecord(
         cycle_id=record.cycle_id,
         record_type=record.record_type,
@@ -56,6 +86,8 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         category_id=category.id if category else None,
         category_name_snapshot=category.name if category else record.category,
         amount=record.amount,
+        settled_amount=settled_amount,
+        settlement_status=settlement_status,
         record_date=record.record_date,
         note=record.note,
         farm_id=farm_id,
