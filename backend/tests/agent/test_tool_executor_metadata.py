@@ -319,6 +319,123 @@ async def test_validation_error_records_trace():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("permission_level", "tool_name", "reason"),
+    [
+        (SkillPermissionLevel.READ, "metadata_read_tool", None),
+        (
+            SkillPermissionLevel.EXTERNAL_NETWORK,
+            "web_search",
+            "外部搜索暂不可用",
+        ),
+    ],
+)
+async def test_disabled_read_or_external_tool_rejects_without_execution(
+    permission_level, tool_name, reason
+):
+    tool = SimpleNamespace(
+        name=tool_name,
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=permission_level,
+            enabled=False,
+            disabled_reason=reason,
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": tool_name,
+                        "args": {"query": "天气"},
+                    }
+                ],
+            )
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.runtime.tool_executor.get_collector",
+        return_value=collector,
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1) is None
+    assert "工具已禁用" in result["messages"][0].content
+    if reason is not None:
+        assert reason in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+    expected_output = {
+        "status": "disabled",
+        "permission_level": permission_level.value,
+    }
+    if reason is not None:
+        expected_output["disabled_reason"] = reason
+    collector.record.assert_called_once()
+    assert collector.record.call_args.kwargs["output_data"] == expected_output
+
+
+@pytest.mark.asyncio
+async def test_disabled_write_confirm_tool_rejects_without_pending_action():
+    tool = SimpleNamespace(
+        name="metadata_write_tool",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            enabled=False,
+            disabled_reason="写入功能维护中",
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="创建一条需要确认的记录"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "metadata_write_tool",
+                        "args": {"amount": 100},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ), patch(
+        "app.agent.runtime.tool_executor.get_collector",
+        return_value=collector,
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1) is None
+    assert "工具已禁用" in result["messages"][0].content
+    assert "写入功能维护中" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+    collector.record.assert_called_once()
+    assert collector.record.call_args.kwargs["output_data"] == {
+        "status": "disabled",
+        "permission_level": "write_confirm",
+        "disabled_reason": "写入功能维护中",
+    }
+
+
+@pytest.mark.asyncio
 async def test_external_network_permission_executes_and_records_permission_level():
     tool = SimpleNamespace(
         name="web_search",

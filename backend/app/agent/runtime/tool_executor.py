@@ -29,6 +29,12 @@ class _PermissionDecision:
     permission_level: str
     requires_confirmation: bool = False
     reject_message: str | None = None
+    disabled: bool = False
+    disabled_reason: str | None = None
+
+    @property
+    def is_disabled(self) -> bool:
+        return self.disabled
 
 
 _KNOWN_PERMISSION_LEVELS = {level.value for level in SkillPermissionLevel}
@@ -42,6 +48,22 @@ def _permission_decision(
     if metadata is not None:
         permission_level = getattr(metadata, "permission_level", None)
         permission_value = getattr(permission_level, "value", permission_level)
+        enabled = getattr(metadata, "enabled", None)
+        disabled_reason = getattr(metadata, "disabled_reason", None)
+        if enabled is False:
+            if permission_value in _KNOWN_PERMISSION_LEVELS:
+                permission_level_value = permission_value
+            elif is_write_skill(skill_name):
+                permission_level_value = SkillPermissionLevel.WRITE_CONFIRM.value
+            elif isinstance(permission_value, str):
+                permission_level_value = permission_value
+            else:
+                permission_level_value = SkillPermissionLevel.READ.value
+            return _PermissionDecision(
+                permission_level=permission_level_value,
+                disabled=True,
+                disabled_reason=disabled_reason,
+            )
         if permission_value in _KNOWN_PERMISSION_LEVELS:
             if permission_value == SkillPermissionLevel.WRITE_CONFIRM.value:
                 return _PermissionDecision(
@@ -267,6 +289,32 @@ async def _parallel_tool_node(state: AgentState) -> dict:
 
         tool = tool_map.get(name)
         permission_decision = _permission_decision(tool, name, state)
+
+        if permission_decision.is_disabled:
+            output_data = {
+                "status": "disabled",
+                "permission_level": permission_decision.permission_level,
+            }
+            content = "工具调用失败：工具已禁用。"
+            if permission_decision.disabled_reason:
+                output_data["disabled_reason"] = permission_decision.disabled_reason
+                content = f"{content} 原因：{permission_decision.disabled_reason}"
+            logger.warning(
+                "Skill 已禁用 | name=%s | permission_level=%s",
+                name,
+                permission_decision.permission_level,
+            )
+            collector.record(
+                node_type="skill_call",
+                node_name=name,
+                input_data=args,
+                output_data=output_data,
+                duration_ms=0,
+            )
+            return ToolMessage(
+                content=content,
+                tool_call_id=tool_call_id,
+            )
 
         # Pydantic 参数校验：在写操作拦截前校验，校验失败反馈 LLM 自纠错
         if tool and hasattr(tool, "args_schema") and tool.args_schema:
