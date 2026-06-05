@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.api.agent import router
-from app.api.deps import get_current_farm, get_db
+from app.api.deps import get_current_farm, get_current_user, get_db
 from app.core.database import Base
 from app.infra.limiter import limiter
 from app.models.farm import Farm
@@ -72,8 +72,18 @@ def client():
     ) -> Farm:
         return db.query(Farm).filter(Farm.id == 1).first()
 
+    def override_get_current_user() -> User:
+        return User(
+            id="test-user-001",
+            phone="00000000000",
+            password_hash="h",
+            nickname="测试用户",
+            status="active",
+        )
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_farm] = override_get_current_farm
+    app.dependency_overrides[get_current_user] = override_get_current_user
 
     client = TestClient(app)
     yield client
@@ -84,7 +94,7 @@ def test_chat_passes_current_user_to_advisor(client):
     """POST /agent/chat 将当前用户透传给 advisor。"""
     advisor = AsyncMock(return_value="ok")
 
-    with patch("app.services.agent_service.invoke_advisor", advisor):
+    with patch("app.agent.application.chat_use_case.invoke_advisor", advisor):
         response = client.post(
             "/agent/chat",
             json={"message": "帮我看看农场状态", "session_id": "sess-user-1"},

@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import Base
 from app.models.cost_category import CostCategory
+from app.models.farm import Farm
+from app.models.user import User
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -29,6 +31,33 @@ _TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine
 def clean_db():
     Base.metadata.drop_all(bind=_test_engine)
     Base.metadata.create_all(bind=_test_engine)
+    session = _TestSession()
+    session.add_all(
+        [
+            User(
+                id="test-user-001",
+                phone="00000000000",
+                password_hash="h",
+                nickname="测试用户",
+                status="active",
+            ),
+            User(
+                id="test-user-002",
+                phone="00000000001",
+                password_hash="h",
+                nickname="测试用户2",
+                status="active",
+            ),
+        ]
+    )
+    session.add_all(
+        [
+            Farm(id=1, name="默认农场", user_id="test-user-001"),
+            Farm(id=2, name="第二农场", user_id="test-user-002"),
+        ]
+    )
+    session.commit()
+    session.close()
     yield
 
 

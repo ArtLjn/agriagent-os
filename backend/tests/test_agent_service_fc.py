@@ -19,7 +19,10 @@ def mock_db() -> MagicMock:
     db.commit.return_value = None
     db.rollback.return_value = None
     db.add.return_value = None
-    db.query.return_value.filter.return_value.first.return_value = None
+    farm = MagicMock()
+    farm.id = 1
+    farm.user_id = "test-user-001"
+    db.query.return_value.filter.return_value.first.return_value = farm
     return db
 
 
@@ -71,7 +74,7 @@ class TestChatWithAgentRouting:
     """验证 chat_with_agent 所有请求走 invoke_advisor，无预路由。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_routes_through_invoke_advisor(
         self,
@@ -85,7 +88,7 @@ class TestChatWithAgentRouting:
         mock_invoke.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_no_skillify_pre_route(
         self,
@@ -98,7 +101,7 @@ class TestChatWithAgentRouting:
         mock_invoke.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.agent_service.save_message")
     @patch("app.services.agent_service.get_or_create_conversation")
     @patch("app.services.agent_service.get_pending", return_value=None)
@@ -124,63 +127,42 @@ class TestPendingActionPreserved:
     """验证 pending action confirm/cancel 流程保留完整。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.remove_pending")
-    @patch("app.services.agent_service._execute_pending_action", new_callable=AsyncMock)
-    @patch("app.services.agent_service.detect_user_intent", return_value="confirm")
-    @patch("app.services.agent_service.get_pending")
+    @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.agent.application.chat_use_case.handle_pending_action", new_callable=AsyncMock)
     async def test_confirm_executes_pending_action(
         self,
-        mock_get_pending: MagicMock,
-        mock_detect: MagicMock,
-        mock_exec: AsyncMock,
-        mock_remove: MagicMock,
+        mock_handle: AsyncMock,
         mock_invoke: AsyncMock,
         mock_db: MagicMock,
     ):
-        pending = MagicMock(
-            skill_name="create_cost_record",
-            params={"category": "化肥", "amount": 200},
-        )
-        mock_get_pending.return_value = pending
-        mock_exec.return_value = "已创建成本记录"
+        from app.agent.executor.models import PendingActionDecision
+
+        mock_handle.return_value = PendingActionDecision.confirmed("已创建成本记录")
 
         result = await _call_chat(mock_db, "确认", farm_id=1)
 
-        assert "已创建成本记录" in result.reply or "已执行" in result.reply
-        mock_exec.assert_called_once_with(
-            1, "create_cost_record", {"category": "化肥", "amount": 200}
-        )
-        mock_remove.assert_called_once_with(1)
-        mock_invoke.assert_not_called()
+        assert "已创建成本记录" in result.reply
+        mock_handle.assert_awaited_once()
+        mock_invoke.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.remove_pending")
-    @patch("app.services.agent_service._execute_pending_action", new_callable=AsyncMock)
-    @patch("app.services.agent_service.detect_user_intent", return_value="cancel")
-    @patch("app.services.agent_service.get_pending")
+    @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.agent.application.chat_use_case.handle_pending_action", new_callable=AsyncMock)
     async def test_cancel_removes_pending(
         self,
-        mock_get_pending: MagicMock,
-        mock_detect: MagicMock,
-        mock_exec: AsyncMock,
-        mock_remove: MagicMock,
+        mock_handle: AsyncMock,
         mock_invoke: AsyncMock,
         mock_db: MagicMock,
     ):
-        pending = MagicMock(
-            skill_name="create_cost_record",
-            params={"category": "化肥", "amount": 200},
-        )
-        mock_get_pending.return_value = pending
+        from app.agent.executor.models import PendingActionDecision
+
+        mock_handle.return_value = PendingActionDecision.canceled()
 
         result = await _call_chat(mock_db, "取消", farm_id=1)
 
         assert "取消" in result.reply
-        mock_remove.assert_called_once_with(1)
-        mock_exec.assert_not_called()
-        mock_invoke.assert_not_called()
+        mock_handle.assert_awaited_once()
+        mock_invoke.assert_not_awaited()
 
 
 class TestStreamChatWithAgentRouting:
