@@ -35,6 +35,7 @@ async def test_strong_read_tool_match_skips_initial_llm_call():
             "app.agent.runtime.nodes.select_tools",
             return_value=["get_weather_forecast"],
         ),
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
         patch("app.agent.runtime.nodes._get_classifier") as mock_classifier,
         patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
     ):
