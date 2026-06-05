@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 trace-monitor-ui 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Trace 列表查询页
 系统 SHALL 提供 `/dev/traces` 页面，展示 trace 记录列表，支持按 request_id、session_id、farm_id 筛选，按 created_at 倒序分页。

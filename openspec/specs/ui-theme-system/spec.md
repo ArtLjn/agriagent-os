@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 ui-theme-system 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 全局配色系统
 The theme system SHALL provide a unified color palette with three primary colors.

@@ -10,12 +10,16 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, require_admin
 from app.models.trace import TraceRecord
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin-trace"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin-trace"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 class TimelineNode(BaseModel):

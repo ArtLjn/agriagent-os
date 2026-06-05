@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 admin-tooling-ui 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Skill Registry 列表页
 系统 SHALL 提供 `/dev/skills` 页面，展示所有已注册 Skill 的名称、描述、参数 schema、状态。

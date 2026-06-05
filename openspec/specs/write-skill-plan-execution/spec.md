@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 write-skill-plan-execution 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Write skills use Plan-Then-Execute flow
 All write operation skills SHALL follow a Plan-Then-Execute pattern: the LLM generates a plan (intent + parameters), an orchestrator validates the plan, the user confirms, and only then the write operation executes.

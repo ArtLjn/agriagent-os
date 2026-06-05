@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 user-settings-api 能力的行为要求。
+
+## Requirements
 
 ### Requirement: User settings 数据模型
 系统 SHALL 提供 `user_settings` 表，每个用户最多一条记录，包含 `user_id`（unique）、`default_city`、`default_lat`、`default_lon`、`created_at`、`updated_at`。

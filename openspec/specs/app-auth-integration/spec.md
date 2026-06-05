@@ -1,86 +1,64 @@
-# App 端认证接入
+## Purpose
 
-## 概述
-FarmManagerMobile 接入后端多用户认证系统，实现注册/登录/个人中心功能。
+定义 App 端认证接入能力的行为要求。
 
-## 功能模块
+## Requirements
 
-### 登录页面 (LoginScreen)
+### Requirement: 登录接入
+FarmManagerMobile SHALL 提供手机号和密码登录流程，并在登录成功后保存后端返回的访问令牌。
 
-**UI 元素：**
-- App Logo/标题
-- 手机号输入框（numeric keyboard，maxLength=11）
-- 密码输入框（secureTextEntry）
-- 登录按钮（禁用条件：手机号不满11位或密码空）
-- "还没有账号？去注册" 文本链接
-- 错误提示区域（API 错误消息）
+#### Scenario: 登录成功
+- **WHEN** 用户输入合法手机号和密码并调用 `POST /auth/login` 成功
+- **THEN** App SHALL 保存 `access_token`，获取当前用户信息，并进入主界面
 
-**流程：**
-1. 用户输入手机号 + 密码
-2. 前端校验：手机号正则 `^1[3-9]\d{9}$`，密码非空
-3. 调用 `POST /auth/login`
-4. 成功：存储 token → 调用 `GET /auth/me` 获取用户信息 → 跳转主界面
-5. 失败：展示错误消息（手机号或密码错误）
+#### Scenario: 登录失败
+- **WHEN** `POST /auth/login` 返回认证失败
+- **THEN** App SHALL 展示错误提示，并保持用户在登录页面
 
-### 注册页面 (RegisterScreen)
+### Requirement: 注册接入
+FarmManagerMobile SHALL 提供手机号、密码、确认密码和可选昵称的注册流程。
 
-**UI 元素：**
-- 手机号输入框
-- 密码输入框（提示：至少8位）
-- 确认密码输入框
-- 昵称输入框（可选，placeholder="农友"）
-- 注册按钮
-- "已有账号？去登录" 文本链接
+#### Scenario: 注册成功
+- **WHEN** 用户填写合法注册信息并调用 `POST /auth/register` 成功
+- **THEN** App SHALL 保存 `access_token` 并进入主界面
 
-**流程：**
-1. 用户填写信息
-2. 前端校验：手机号格式、密码≥8位、两次密码一致
-3. 调用 `POST /auth/register`
-4. 成功：存储 token → 跳转主界面
-5. 失败：展示错误消息（手机号已注册等）
+#### Scenario: 注册输入无效
+- **WHEN** 手机号格式不合法、密码不足 8 位或两次密码不一致
+- **THEN** App SHALL 阻止提交并展示对应错误提示
 
-### 个人中心页面 (ProfileScreen)
+### Requirement: 个人中心
+FarmManagerMobile SHALL 提供个人中心页面展示当前用户信息，并支持更新昵称和退出登录。
 
-**UI 元素：**
-- 头像区域（默认占位图）
-- 昵称（可点击编辑）
-- 手机号（只读）
-- 角色（只读）
-- 退出登录按钮
+#### Scenario: 查看个人信息
+- **WHEN** 用户已登录并进入个人中心
+- **THEN** App SHALL 展示昵称、手机号、角色和头像占位或头像地址
 
-**交互：**
-- 点击昵称 → 弹出编辑框 → 调用 `PUT /auth/me` → 更新本地状态
-- 点击退出登录 → Alert 二次确认 → 清除 token → 跳转登录页
+#### Scenario: 更新昵称
+- **WHEN** 用户修改昵称并调用 `PUT /auth/me` 成功
+- **THEN** App SHALL 更新本地用户状态并展示最新昵称
 
-### Token 管理
+#### Scenario: 退出登录
+- **WHEN** 用户确认退出登录
+- **THEN** App SHALL 清除本地 token 和用户信息，并返回登录流程
 
-**存储：**
-- 使用 `expo-secure-store` 存储 JWT token
-- Key: `farm_manager_auth_token`
+### Requirement: Token 存储和注入
+FarmManagerMobile SHALL 安全保存 JWT access token，并在请求受保护 API 时注入 `Authorization: Bearer <token>` 请求头。
 
-**注入：**
-- 修改 `api/client.ts`，每次请求前从 SecureStore 读取 token
-- 添加 `Authorization: Bearer <token>` header
+#### Scenario: 请求受保护接口
+- **WHEN** App 已保存有效 token 并请求受保护 API
+- **THEN** API client SHALL 添加 `Authorization: Bearer <token>` 请求头
 
-**过期处理：**
-- API 收到 401 响应 → 清除 token → 跳转登录页
-- App 启动时调用 `GET /auth/me` 验证 token 有效性
+#### Scenario: 请求公开接口
+- **WHEN** App 请求注册、登录、健康检查、版本检查、天气预报或通用作业类型接口
+- **THEN** API client MAY 不携带 `Authorization` 请求头
 
-## 导航调整
+### Requirement: Token 过期处理
+FarmManagerMobile SHALL 在 token 缺失、无效或过期时引导用户重新登录。
 
-**AppNavigator.tsx：**
-```
-启动 → loadToken()
-  ├─ token 有效 → MainTabNavigator
-  └─ token 无效/无 token → AuthStack (Login/Register)
-```
+#### Scenario: 受保护 API 返回 401
+- **WHEN** 受保护 API 返回 401
+- **THEN** App SHALL 清除本地 token 和用户信息，并跳转到登录页面
 
-**AuthStack：**
-- LoginScreen（默认）
-- RegisterScreen
-
-## 技术约束
-- 使用现有 API client 封装
-- 使用 Zustand 管理认证状态（与现有 stores/* 一致）
-- React Navigation 处理页面跳转
-- 登录后清除 AuthStack，防止返回键回到登录页
+#### Scenario: App 启动校验 token
+- **WHEN** App 启动且本地存在 token
+- **THEN** App SHALL 调用 `GET /auth/me` 校验 token 有效性，并根据结果进入主界面或登录流程

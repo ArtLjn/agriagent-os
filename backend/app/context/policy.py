@@ -57,6 +57,9 @@ class ContextPolicy:
 
     COST_TOOLS = frozenset({"get_cost_summary"})
     WEATHER_TOOLS = frozenset({"get_weather_forecast"})
+    CROP_CYCLE_TOOLS = frozenset(
+        {"update_crop_cycle", "create_crop_cycle", "update_crop_stage"}
+    )
 
     def resolve(self, request: ContextBuildRequest) -> ContextPolicyResult:
         """解析 Context 层、selector 和 token 预算。"""
@@ -75,6 +78,9 @@ class ContextPolicy:
             selectors.append(LedgerSelector())
             layers.append(ContextLayer.RETRIEVAL)
             max_tokens = max(max_tokens, 900)
+
+        if selected_tool_names & self.CROP_CYCLE_TOOLS:
+            max_tokens = max(max_tokens, 700)
 
         if selected_tool_names & self.WEATHER_TOOLS:
             selectors.append(WeatherSelector())

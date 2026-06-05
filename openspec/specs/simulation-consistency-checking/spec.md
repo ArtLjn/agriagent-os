@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 simulation-consistency-checking 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Distinguish hallucination from execution failure
 The consistency checker SHALL detect when a skill was actually invoked (via trace evidence) but the database write failed, reporting this as `execution_failure` rather than `hallucination`.

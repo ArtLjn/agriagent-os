@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 simulation-test-execution 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Session isolation for background execution
 The simulation test execution engine SHALL create an independent database session for the background task, separate from the FastAPI request context session.

@@ -90,6 +90,7 @@ class PendingAction:
     created_at: float
     farm_id: int
     original_input: str = ""
+    confirmation_context: dict | None = None
     follow_up_skill_name: str | None = None
     follow_up_params: dict | None = None
     follow_up_original_input: str = ""
@@ -104,6 +105,7 @@ def store_pending(
     skill_name: str,
     params: dict,
     original_input: str = "",
+    confirmation_context: dict | None = None,
     follow_up_skill_name: str | None = None,
     follow_up_params: dict | None = None,
     follow_up_original_input: str = "",
@@ -117,6 +119,7 @@ def store_pending(
         created_at=time.time(),
         farm_id=farm_id,
         original_input=original_input,
+        confirmation_context=confirmation_context,
         follow_up_skill_name=follow_up_skill_name,
         follow_up_params=follow_up_params,
         follow_up_original_input=follow_up_original_input,
@@ -165,9 +168,70 @@ def is_write_skill(skill_name: str) -> bool:
 PENDING_MARKER = "[PENDING_ACTION]"
 
 
+def build_confirmation_context(
+    skill_name: str,
+    params: dict,
+    original_input: str = "",
+) -> dict:
+    """构建结构化确认上下文。"""
+    if skill_name == "update_crop_cycle":
+        return {
+            "skill_name": skill_name,
+            "original_input": original_input,
+            "target": {
+                "type": "crop_cycle",
+                "id": params.get("cycle_id"),
+                "name": params.get("cycle_name") or params.get("crop_name") or "茬口",
+            },
+            "changes": [
+                {
+                    "field": "start_date",
+                    "label": "开始日期",
+                    "old": params.get("old_start_date"),
+                    "new": params.get("start_date"),
+                }
+            ],
+            "inferred_fields": {
+                "crop_name": params.get("crop_name"),
+                "start_date": params.get("start_date"),
+            },
+            "risk_notes": [],
+            "editable_fields": ["start_date", "season", "batch_note"],
+        }
+
+    return {
+        "skill_name": skill_name,
+        "original_input": original_input,
+        "target": {
+            "type": skill_name,
+            "name": _SKILL_DISPLAY.get(skill_name, skill_name),
+        },
+        "changes": [
+            {"field": key, "old": None, "new": value}
+            for key, value in params.items()
+        ],
+        "inferred_fields": {},
+        "risk_notes": [],
+        "editable_fields": list(params.keys()),
+    }
+
+
 def build_confirm_message(
     skill_name: str, params: dict, original_input: str = ""
 ) -> str:
+    context = build_confirmation_context(skill_name, params, original_input)
+    if skill_name == "update_crop_cycle":
+        target = context["target"]["name"]
+        change = context["changes"][0]
+        lines = [
+            f"🔄 确认修改茬口：{target}",
+            f"{change['label']}：{change['old']} → {change['new']}",
+        ]
+        if original_input:
+            lines.append(f"理解：您说的是「{original_input}」")
+        lines.append("确认吗？")
+        return "\n".join(lines)
+
     emoji = _SKILL_EMOJI.get(skill_name, "❓")
     action = _SKILL_DISPLAY.get(skill_name, skill_name)
 
@@ -249,6 +313,7 @@ __all__ = [
     "is_write_skill",
     "detect_user_intent",
     "build_confirm_message",
+    "build_confirmation_context",
     "is_pending_tool_message",
     "PENDING_MARKER",
     "_pending",

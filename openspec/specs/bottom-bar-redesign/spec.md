@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 bottom-bar-redesign 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 毛玻璃背景
 The bottom navigation bar SHALL use a glassmorphism background.

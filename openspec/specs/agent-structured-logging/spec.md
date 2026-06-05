@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 agent-structured-logging 能力的行为要求。
+
+## Requirements
 
 ### Requirement: _llm_node 记录 LLM 工具选择决策
 `_llm_node` 在获取 LLM 响应后 SHALL 以 INFO 级别记录日志，包含以下字段：

@@ -1,3 +1,7 @@
+## Purpose
+
+定义 prompt-priority-stack 能力的行为要求。
+
 ## Requirements
 
 ### Requirement: Priority Stack 层级定义

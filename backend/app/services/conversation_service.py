@@ -129,11 +129,21 @@ def list_conversations(
     )
 
 
+def get_conversation_by_session(
+    db: Session, session_id: str, farm_id: int | None = None
+) -> Conversation | None:
+    """按 session_id 获取会话，可限定 farm。"""
+    query = db.query(Conversation).filter(Conversation.session_id == session_id)
+    if farm_id is not None:
+        query = query.filter(Conversation.farm_id == farm_id)
+    return query.first()
+
+
 def get_conversation_messages(
-    db: Session, session_id: str
+    db: Session, session_id: str, farm_id: int | None = None
 ) -> list[ConversationMessage]:
     """通过 session_id 返回完整消息列表，按创建时间正序。"""
-    conv = db.query(Conversation).filter(Conversation.session_id == session_id).first()
+    conv = get_conversation_by_session(db, session_id, farm_id=farm_id)
     if not conv:
         return []
     return (
@@ -150,5 +160,6 @@ __all__ = [
     "save_message",
     "get_recent_messages",
     "list_conversations",
+    "get_conversation_by_session",
     "get_conversation_messages",
 ]

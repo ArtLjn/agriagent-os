@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 ai-chat-ui-upgrade 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 页面背景
 The AI chat screen SHALL use a gradient background instead of pure white.

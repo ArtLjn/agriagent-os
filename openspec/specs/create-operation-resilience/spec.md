@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 create-operation-resilience 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Pydantic 输出校验
 AI 解析记账描述后，后端 SHALL 使用 Pydantic 模型对 LLM 输出进行结构化校验。字段包括：record_type（枚举 cost/income）、category（str，最大 50 字）、amount（数字字符串）、record_date（YYYY-MM-DD）、note（可选 str）。

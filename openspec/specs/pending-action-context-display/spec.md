@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 pending-action-context-display 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Confirmation message shows three-layer context
 The pending action confirmation message SHALL include three layers of information: (1) the user's original message understanding, (2) the extracted parameters, and (3) the action to be executed.

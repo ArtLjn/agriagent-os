@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 weather-detail-page 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 页面背景
 The weather detail screen SHALL use a sky-themed gradient background.

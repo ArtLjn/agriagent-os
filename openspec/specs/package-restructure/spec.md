@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 package-restructure 能力的行为要求。
+
+## Requirements
 
 ### Requirement: core/ 仅保留基础设施模块
 `app/core/` 包 SHALL 只包含被多个领域共用的基础设施模块：config、database、security、logger、date_context、json_repair、seed。Agent 专属模块和可观测性模块 MUST 移至对应包。

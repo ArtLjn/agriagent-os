@@ -109,7 +109,10 @@ def get_messages_by_session(
     farm: Farm = Depends(get_current_farm),
 ) -> list[ConversationMessageItem]:
     """获取指定会话的消息列表。"""
-    return list_message_items(db, session_id)
+    try:
+        return list_message_items(db, farm=farm, session_id=session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/daily", response_model=DailyAdviceResponse)

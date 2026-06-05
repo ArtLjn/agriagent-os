@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 agent-response-format 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Agent 回复格式遵守短句式约束
 Agent 回复（每日建议和聊天）SHALL 遵守以下格式规则，通过 prompt 模板注入：

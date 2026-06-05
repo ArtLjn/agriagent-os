@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 output-language-guard 能力的行为要求。
+
+## Requirements
 
 ### Requirement: System Prompt 语言规则置顶
 所有 Agent system prompt SHALL 将语言规则放在文档最顶部，并标注 "【语言规则】（最高优先级）"。规则内容 SHALL 包括：必须用简体中文回答、禁止输出英文单词、专有名词必须翻译。

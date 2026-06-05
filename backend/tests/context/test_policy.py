@@ -48,6 +48,19 @@ def test_weather_forecast_tool_enables_weather_and_retrieval_layer() -> None:
     assert "WeatherSelector" in _selector_names(result)
 
 
+def test_policy_enables_cycle_context_for_update_crop_cycle() -> None:
+    result = ContextPolicy().resolve(
+        ContextBuildRequest(
+            intent="agent",
+            selected_tool_names=["update_crop_cycle"],
+            farm_id=1,
+        )
+    )
+
+    assert "CycleSelector" in _selector_names(result)
+    assert result.max_tokens >= 700
+
+
 def test_policy_request_keeps_runtime_identity_and_retrieval_flag() -> None:
     request = ContextBuildRequest(
         intent="query",

@@ -22,6 +22,8 @@ class SkillQualityMetrics:
     false_positive_rate: float = 0.0
     argument_accuracy: float = 0.0
     write_confirmation_hit_rate: float = 0.0
+    unnecessary_clarification_rate: float = 0.0
+    execution_consistency_rate: float = 1.0
 
 
 @dataclass

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 prompt-management 能力的行为要求。
+
+## Requirements
 
 ### Requirement: Prompt 版本化回归
 系统 SHALL 为关键 Prompt 组合记录版本，并支持对指定版本执行回放评测。Prompt 变更进入生产前 MUST 至少通过渲染快照测试。

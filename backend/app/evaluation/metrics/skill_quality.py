@@ -14,11 +14,18 @@ def compute_skill_quality(results: list[ReplayResult]) -> SkillQualityMetrics:
     argument_correct = 0
     confirmation_total = 0
     confirmation_hit = 0
+    unnecessary_clarification_total = 0
+    execution_inconsistency_total = 0
 
     for result in results:
         expected_names = [call.name for call in result.expected_skill_calls]
         actual_names = [call.name for call in result.actual_skill_calls]
         expected_total += len(expected_names)
+        errors = set(result.errors)
+        if "unnecessary_clarification" in errors:
+            unnecessary_clarification_total += 1
+        if "execution_inconsistency" in errors:
+            execution_inconsistency_total += 1
 
         for expected in result.expected_skill_calls:
             matching_actual = next(
@@ -55,10 +62,19 @@ def compute_skill_quality(results: list[ReplayResult]) -> SkillQualityMetrics:
     write_confirmation_hit_rate = (
         confirmation_hit / confirmation_total if confirmation_total else 1.0
     )
+    result_total = len(results)
+    unnecessary_clarification_rate = (
+        unnecessary_clarification_total / result_total if result_total else 0.0
+    )
+    execution_consistency_rate = (
+        1.0 - execution_inconsistency_total / result_total if result_total else 1.0
+    )
     return SkillQualityMetrics(
         accuracy=accuracy,
         miss_rate=miss_rate,
         false_positive_rate=false_positive_rate,
         argument_accuracy=argument_accuracy,
         write_confirmation_hit_rate=write_confirmation_hit_rate,
+        unnecessary_clarification_rate=unnecessary_clarification_rate,
+        execution_consistency_rate=execution_consistency_rate,
     )

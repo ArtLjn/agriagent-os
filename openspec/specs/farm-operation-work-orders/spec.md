@@ -1,0 +1,34 @@
+# farm-operation-work-orders Specification
+
+## Purpose
+TBD - created by archiving change mvp-planting-operations. Update Purpose after archive.
+## Requirements
+### Requirement: 用户可以创建农事作业单
+系统 SHALL 支持用户创建农事作业单，记录作业类型、作业日期、关联批次、作用范围、备注和照片。
+
+#### Scenario: 创建批次级作业单
+- **WHEN** 用户记录“今天春茬 8424 西瓜全部浇水”
+- **THEN** 系统 SHALL 创建作用范围为整个批次的农事作业单
+
+#### Scenario: 创建部分种植单元作业单
+- **WHEN** 用户记录“东大棚 1-3 号人工授粉”
+- **THEN** 系统 SHALL 创建关联到指定种植单元的农事作业单
+
+### Requirement: 西瓜批次提供内置作业类型
+系统 SHALL 在西瓜批次中提供内置作业类型快捷选择，包括定植、补苗、整枝打杈、理蔓、压蔓、人工授粉、留瓜/疏瓜、垫瓜/翻瓜、浇水、冲肥、打药、采收、装车。
+
+#### Scenario: 西瓜作业快捷选择
+- **WHEN** 用户在西瓜批次下新增作业单
+- **THEN** 系统 SHALL 优先展示西瓜内置作业类型
+
+#### Scenario: 非西瓜作物保持通用入口
+- **WHEN** 用户在番茄或辣椒批次下新增作业单
+- **THEN** 系统 SHALL 展示通用作业类型并允许用户自定义作业名称
+
+### Requirement: 作业单成为近期农事的主要来源
+系统 SHALL 将新作业单纳入近期农事、批次详情和报告数据来源，并兼容展示旧农事日志。
+
+#### Scenario: 近期农事包含新作业单
+- **WHEN** 用户查看农场近期农事
+- **THEN** 系统 SHALL 展示新作业单，并在存在旧日志时合并展示旧日志
+

@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+定义 settings-ui-minimal 能力的行为要求。
+
+## Requirements
 
 ### Requirement: 页面背景
 The settings screen SHALL use a minimal light gray background.
