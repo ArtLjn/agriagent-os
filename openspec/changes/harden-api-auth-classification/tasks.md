@@ -3,7 +3,7 @@
 - [ ] 1.1 在 `admin_config.py` 的 router 上添加 `require_admin` 管理员鉴权
 - [ ] 1.2 在 `admin_trace.py` 的 router 上添加 `require_admin` 管理员鉴权
 - [ ] 1.3 在 `admin.py` 的 router 上添加 `require_admin` 管理员鉴权
-- [ ] 1.4 确认现有 `admin_stats.py` 和 `admin_users.py` 继续使用管理员鉴权
+- [x] 1.4 确认现有 `admin_stats.py` 和 `admin_users.py` 继续使用管理员鉴权
 
 ## 2. 行为测试更新
 
@@ -27,8 +27,8 @@
 
 ## 5. 前端兼容检查
 
-- [ ] 5.1 确认 admin-web 统一 API client 对 `/admin/*` 请求注入 Bearer token
-- [ ] 5.2 确认未登录或 token 过期时 admin-web 能处理 401 并回到登录态
+- [x] 5.1 确认 admin-web 统一 API client 对 `/admin/*` 请求注入 Bearer token
+- [x] 5.2 确认未登录或 token 过期时 admin-web 能处理 401 并回到登录态
 
 ## 6. 验证
 
