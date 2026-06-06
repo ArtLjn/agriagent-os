@@ -215,6 +215,9 @@ export interface CostRecord {
   counterparty?: string;
   due_date?: string;
   settled_at?: string;
+  settled_amount?: string;
+  settlement_status?: "unsettled" | "partial" | "settled" | string;
+  unsettled_amount?: string;
   parent_record_id?: number;
   source_type?: string | null;
   source_id?: number | null;

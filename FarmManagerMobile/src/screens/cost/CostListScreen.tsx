@@ -31,6 +31,7 @@ import { RecordDetailModal } from "./components/RecordDetailModal";
 import {
   filterCostRecords,
   formatRecordAmount,
+  getLedgerSummary,
   type DateRangeFilter,
   type RecordFilterType,
 } from "./utils/recordDisplay";
@@ -50,36 +51,62 @@ interface Section {
   dayIncome: number;
 }
 
-const AssetCard: React.FC<{ income: number; cost: number }> = ({
-  income,
-  cost,
+const AssetCard: React.FC<{
+  occurredIncome: number;
+  occurredCost: number;
+  settledIncome: number;
+  settledCost: number;
+  unsettledIncome: number;
+  unsettledCost: number;
+}> = ({
+  occurredIncome,
+  occurredCost,
+  settledIncome,
+  settledCost,
+  unsettledIncome,
+  unsettledCost,
 }) => {
-  const total = income - cost;
-  const isPositive = total >= 0;
+  const cashBalance = settledIncome - settledCost;
+  const isPositive = cashBalance >= 0;
   const accentColor = isPositive ? colors.income : colors.expense;
   const bgColor = isPositive ? colors.incomeBg : colors.expenseBg;
 
   return (
     <View style={[assetStyles.card, { backgroundColor: bgColor }]}>
       <View style={assetStyles.mainSection}>
-        <Text style={assetStyles.label}>本月结余</Text>
+        <Text style={assetStyles.label}>本月已结余</Text>
         <Text style={[assetStyles.total, { color: accentColor }]}>
           {isPositive ? "+" : ""}
-          {total.toFixed(2)}
+          {cashBalance.toFixed(2)}
         </Text>
       </View>
       <View style={assetStyles.subRow}>
         <View style={assetStyles.subItem}>
-          <Text style={assetStyles.subLabel}>收入</Text>
+          <Text style={assetStyles.subLabel}>发生收入</Text>
           <Text style={[assetStyles.subAmount, { color: colors.income }]}>
-            +{income.toFixed(2)}
+            +{occurredIncome.toFixed(2)}
           </Text>
         </View>
         <View style={assetStyles.subDivider} />
         <View style={assetStyles.subItem}>
-          <Text style={assetStyles.subLabel}>支出</Text>
+          <Text style={assetStyles.subLabel}>发生支出</Text>
           <Text style={[assetStyles.subAmount, { color: colors.expense }]}>
-            -{cost.toFixed(2)}
+            -{occurredCost.toFixed(2)}
+          </Text>
+        </View>
+      </View>
+      <View style={assetStyles.subRow}>
+        <View style={assetStyles.subItem}>
+          <Text style={assetStyles.subLabel}>未收</Text>
+          <Text style={[assetStyles.subAmount, { color: colors.income }]}>
+            {unsettledIncome.toFixed(2)}
+          </Text>
+        </View>
+        <View style={assetStyles.subDivider} />
+        <View style={assetStyles.subItem}>
+          <Text style={assetStyles.subLabel}>未付</Text>
+          <Text style={[assetStyles.subAmount, { color: colors.expense }]}>
+            {unsettledCost.toFixed(2)}
           </Text>
         </View>
       </View>
@@ -144,13 +171,7 @@ export const CostListScreen: React.FC = () => {
     const monthRecords = records.filter((r) =>
       r.record_date.startsWith(currentMonth)
     );
-    const cost = monthRecords
-      .filter((r) => r.record_type === "cost")
-      .reduce((sum, r) => sum + parseFloat(r.amount), 0);
-    const income = monthRecords
-      .filter((r) => r.record_type === "income")
-      .reduce((sum, r) => sum + parseFloat(r.amount), 0);
-    return { cost, income, balance: income - cost };
+    return getLedgerSummary(monthRecords);
   }, [records, currentMonth]);
 
   const categoryList = useMemo(() => {
@@ -342,7 +363,14 @@ export const CostListScreen: React.FC = () => {
               onPreviousMonth={handlePreviousMonth}
               onNextMonth={handleNextMonth}
             />
-            <AssetCard income={stats.income} cost={stats.cost} />
+            <AssetCard
+              occurredIncome={stats.occurredIncome}
+              occurredCost={stats.occurredCost}
+              settledIncome={stats.settledIncome}
+              settledCost={stats.settledCost}
+              unsettledIncome={stats.unsettledIncome}
+              unsettledCost={stats.unsettledCost}
+            />
 
             {routeFilters ? (
               <View style={styles.deepLinkBanner}>

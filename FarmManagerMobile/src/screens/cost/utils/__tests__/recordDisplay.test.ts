@@ -2,8 +2,11 @@ import {
   filterCostRecords,
   formatRecordAmount,
   formatRecordTimestamp,
+  getLedgerSummary,
   getRecordNoteText,
   getRecordTimeText,
+  getSettlementLabel,
+  getUnsettledAmount,
 } from "../recordDisplay";
 import type { CostRecord } from "../../../../api/types";
 
@@ -183,5 +186,112 @@ describe("recordDisplay", () => {
         category: "人工",
       }).map((r) => r.id)
     ).toEqual([1, 2]);
+  });
+
+  it("按发生额、已结和未结口径聚合成本与收入账单", () => {
+    const records: CostRecord[] = [
+      {
+        ...baseRecord,
+        id: 1,
+        record_type: "cost",
+        amount: "1,200",
+        settled_amount: "900",
+        unsettled_amount: "300",
+      },
+      {
+        ...baseRecord,
+        id: 2,
+        record_type: "cost",
+        amount: "500",
+        settlement_status: "unsettled",
+      },
+      {
+        ...baseRecord,
+        id: 3,
+        record_type: "income",
+        amount: "2,000",
+        settled_amount: "1,500",
+      },
+      {
+        ...baseRecord,
+        id: 4,
+        record_type: "income",
+        amount: "800",
+      },
+    ];
+
+    expect(getLedgerSummary(records)).toEqual({
+      occurredCost: 1700,
+      settledCost: 900,
+      unsettledCost: 800,
+      occurredIncome: 2800,
+      settledIncome: 2300,
+      unsettledIncome: 500,
+    });
+  });
+
+  it("生成部分结算和未结算文案，并在已结或无欠款时隐藏", () => {
+    expect(
+      getSettlementLabel({
+        ...baseRecord,
+        record_type: "cost",
+        amount: "80",
+        settled_amount: "30",
+        settlement_status: "partial",
+      })
+    ).toBe("已付 ¥30 · 未付 ¥50");
+
+    expect(
+      getSettlementLabel({
+        ...baseRecord,
+        record_type: "income",
+        amount: "200",
+        settlement_status: "unsettled",
+      })
+    ).toBe("未收 ¥200");
+
+    expect(
+      getSettlementLabel({
+        ...baseRecord,
+        amount: "120",
+        settled_amount: "120",
+        settlement_status: "settled",
+      })
+    ).toBeNull();
+
+    expect(
+      getSettlementLabel({
+        ...baseRecord,
+        amount: "120",
+        unsettled_amount: "0",
+      })
+    ).toBeNull();
+  });
+
+  it("未结金额优先使用后端字段，否则按发生额减已结金额回退", () => {
+    expect(
+      getUnsettledAmount({
+        ...baseRecord,
+        amount: "100",
+        settled_amount: "20",
+        unsettled_amount: "70",
+      })
+    ).toBe(70);
+
+    expect(
+      getUnsettledAmount({
+        ...baseRecord,
+        amount: "100",
+        settled_amount: "20",
+      })
+    ).toBe(80);
+
+    expect(
+      getUnsettledAmount({
+        ...baseRecord,
+        amount: "100",
+        settled_amount: "120",
+      })
+    ).toBe(0);
   });
 });

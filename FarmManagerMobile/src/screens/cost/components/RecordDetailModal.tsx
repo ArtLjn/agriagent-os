@@ -5,9 +5,13 @@ import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import {
+  formatRecordAmount,
   formatRecordTimestamp,
   getRecordCreatedAtText,
   getRecordNoteText,
+  getSettlementLabel,
+  getSettledAmount,
+  getUnsettledAmount,
 } from "../utils/recordDisplay";
 
 interface RecordDetailModalProps {
@@ -36,6 +40,9 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const prefix = isCost ? "-" : "+";
   const createdAtText = getRecordCreatedAtText(record);
   const noteText = getRecordNoteText(record);
+  const settlementLabel = getSettlementLabel(record);
+  const settledLabel = isCost ? "已付" : "已收";
+  const unsettledLabel = isCost ? "未付" : "未收";
   const hasSource = Boolean(record.source_type && record.source_id);
   const sourceLabel =
     record.source_label ||
@@ -98,6 +105,38 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 {formatRecordTimestamp(record)}
               </Text>
             </View>
+
+            {settlementLabel ? (
+              <>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Icon
+                      name="check-circle-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.detailLabel}>{settledLabel}</Text>
+                  </View>
+                  <Text style={styles.detailValue}>
+                    {formatRecordAmount(String(getSettledAmount(record)))}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Icon
+                      name="clock-alert-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.detailLabel}>{unsettledLabel}</Text>
+                  </View>
+                  <Text style={styles.detailValue}>
+                    {formatRecordAmount(String(getUnsettledAmount(record)))}
+                  </Text>
+                </View>
+              </>
+            ) : null}
 
             {createdAtText ? (
               <View style={styles.detailRow}>
