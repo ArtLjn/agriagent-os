@@ -27,6 +27,7 @@ import type { RootStackParamList } from "../../navigation/AppNavigator";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { MonthlyStats } from "./components/MonthlyStats";
 import { RecordItem } from "./components/RecordItem";
+import { FadeInListItem } from "../../components/animations/FadeInListItem";
 import { RecordDetailModal } from "./components/RecordDetailModal";
 import {
   filterCostRecords,
@@ -539,12 +540,14 @@ export const CostListScreen: React.FC = () => {
             </View>
           </View>
         )}
-        renderItem={({ item }) => (
-          <RecordItem
-            item={item}
-            onPress={() => handleShowDetail(item)}
-            onLongPress={() => handleDelete(item)}
-          />
+        renderItem={({ item, index }) => (
+          <FadeInListItem index={index}>
+            <RecordItem
+              item={item}
+              onPress={() => handleShowDetail(item)}
+              onLongPress={() => handleDelete(item)}
+            />
+          </FadeInListItem>
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

@@ -12,6 +12,7 @@ from app.agent.advisor import invoke_advisor, stream_advisor
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.llm import get_llm
 from app.agent.prompt_composer import get_composer
+from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES
 from app.infra.json_repair import safe_parse_json
 from app.infra.pending_actions import (
     get_pending,
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 # title 超过此长度截断并加省略号
 _TITLE_MAX_DISPLAY = 10
 _ADVICE_ITEM_MAX = 5
+_NON_ADVICE_RESPONSES = set(QUOTA_REJECT_MESSAGES.values())
 application_chat = None
 
 
@@ -107,6 +109,23 @@ def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
         return "", [fallback_item]
 
 
+def _build_notice_response(message: str, cycle_id: int | None) -> DailyAdviceResponse:
+    """构造不应写入建议缓存的系统提示响应。"""
+    return DailyAdviceResponse(
+        cycle_id=cycle_id,
+        preview="",
+        items=[
+            AdviceItem(
+                title="无法生成建议",
+                detail=message[:50],
+                priority=1,
+                icon="📋",
+            )
+        ],
+        created_at=datetime.now(),
+    )
+
+
 async def chat_with_agent(
     db: Session,
     message: str,
@@ -157,9 +176,13 @@ async def stream_chat_with_agent(
         save_message(db, conversation.id, "user", message)
 
     # 检查是否有 pending action（写操作确认流程）
-    pending = get_pending(farm_id)
+    pending = get_pending(farm_id, session_id=session_id)
     if pending is not None:
-        decision = await handle_pending_action(farm_id=farm_id, message=message)
+        decision = await handle_pending_action(
+            farm_id=farm_id,
+            message=message,
+            session_id=session_id,
+        )
         if decision.handled:
             yield decision.reply
             return
@@ -185,9 +208,13 @@ async def stream_chat_with_agent(
 
 
 async def get_daily_advice(
-    db: Session, farm_id: int, cycle_id: int | None = None
+    db: Session,
+    farm_id: int,
+    cycle_id: int | None = None,
+    user_id: str | None = None,
 ) -> DailyAdviceResponse:
     """生成每日农事建议并保存。命中今日缓存则直接返回。"""
+    user_id = _resolve_user_id(db, farm_id, user_id)
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     cached = (
         db.query(AgentRecord)
@@ -200,14 +227,17 @@ async def get_daily_advice(
         .first()
     )
     if cached:
-        preview, items = _parse_advice_items(cached.content)
-        logger.info("缓存命中 | record_id=%s", cached.id)
-        return DailyAdviceResponse(
-            cycle_id=cached.cycle_id,
-            preview=preview,
-            items=items,
-            created_at=cached.created_at,
-        )
+        if cached.content.strip() in _NON_ADVICE_RESPONSES:
+            logger.warning("忽略非建议缓存 | record_id=%s", cached.id)
+        else:
+            preview, items = _parse_advice_items(cached.content)
+            logger.info("缓存命中 | record_id=%s", cached.id)
+            return DailyAdviceResponse(
+                cycle_id=cached.cycle_id,
+                preview=preview,
+                items=items,
+                created_at=cached.created_at,
+            )
 
     # 注入农场上下文，通过 PromptComposer 渲染模板
     context = await farm_context_service.build_summary(db, farm_id)
@@ -217,7 +247,17 @@ async def get_daily_advice(
     )
 
     logger.info("生成每日建议 | farm=%s cycle=%s", farm_id, cycle_id)
-    advice = await invoke_advisor(prompt, farm_id=farm_id)
+    advice = await invoke_advisor(
+        prompt,
+        farm_id=farm_id,
+        db=db,
+        user_id=user_id,
+        call_type="daily_advice",
+    )
+
+    if advice.strip() in _NON_ADVICE_RESPONSES:
+        logger.warning("Agent 返回非建议内容，跳过缓存写入 | farm=%s", farm_id)
+        return _build_notice_response(advice.strip(), cycle_id)
 
     preview, items = _parse_advice_items(advice)
 
@@ -242,7 +282,10 @@ async def get_daily_advice(
 
 
 async def refresh_daily_advice(
-    db: Session, farm_id: int, cycle_id: int | None = None
+    db: Session,
+    farm_id: int,
+    cycle_id: int | None = None,
+    user_id: str | None = None,
 ) -> DailyAdviceResponse:
     """强制刷新每日农事建议：删除今日旧记录后重新生成。"""
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -258,7 +301,7 @@ async def refresh_daily_advice(
         db.rollback()
         raise
     logger.info("已清除今日旧建议 | farm=%s cycle=%s", farm_id, cycle_id)
-    return await get_daily_advice(db, farm_id, cycle_id)
+    return await get_daily_advice(db, farm_id, cycle_id, user_id=user_id)
 
 
 async def generate_report(

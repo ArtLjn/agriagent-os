@@ -30,6 +30,7 @@ async def test_advisor_delegates_pending_confirm_to_executor():
         farm_id=1,
         message="确认",
         farm_uid=None,
+        session_id="",
     )
 
 
@@ -67,3 +68,17 @@ async def test_stream_advisor_clears_trace_for_pending_handled_reply():
 
     assert chunks == ["已执行：已记账"]
     mock_clear_trace.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_stream_advisor_refuses_unsupported_delete_cost_request():
+    """没有删除账单 Skill 时，不应让模型承诺清理所有账单。"""
+    with patch("app.agent.advisor._get_advisor_graph") as mock_graph:
+        chunks = [
+            chunk
+            async for chunk in stream_advisor("清理所有账单", farm_id=1, user_id="user-1")
+        ]
+
+    assert "暂不支持" in "".join(chunks)
+    assert "删除账单" in "".join(chunks)
+    mock_graph.assert_not_called()

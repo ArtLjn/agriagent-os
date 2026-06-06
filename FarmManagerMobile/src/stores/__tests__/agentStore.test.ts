@@ -386,6 +386,49 @@ describe("chat sessions", () => {
       category: "天气",
     });
   });
+
+  it("切换后端会话时保留待确认动作，继续展示确认按钮", async () => {
+    useAgentStore.setState({
+      sessionId: "remote-session-3",
+      sessions: [
+        {
+          id: "remote-session-3",
+          title: "历史对话",
+          preview: "",
+          category: "对话",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          messages: [],
+        },
+      ],
+      messages: [],
+    });
+    agentApi.getConversationMessages.mockResolvedValueOnce({
+      data: [
+        {
+          id: 1,
+          role: "assistant",
+          content: "需要我帮你创建一个「橘子」茬口吗？",
+          pending_action: {
+            action_id: "action-orange",
+            skill_name: "create_crop_cycle",
+            params: { 作物: "橘子" },
+          },
+          created_at: "2026-06-06T10:00:00",
+        },
+      ],
+    });
+
+    await useAgentStore.getState().switchChatSession("remote-session-3");
+
+    expect(useAgentStore.getState().messages[0]).toMatchObject({
+      role: "agent",
+      pending_action: {
+        action_id: "action-orange",
+        skill_name: "create_crop_cycle",
+      },
+    });
+  });
 });
 
 describe("markPendingActionHandled", () => {

@@ -10,6 +10,7 @@ from app.models.farm import Farm
 from app.schemas.agent import (
     ConversationListItem,
     ConversationMessageItem,
+    PendingActionResponse,
     ReportHistoryItem,
     ReportListResponse,
 )
@@ -112,10 +113,14 @@ def list_message_items(
     result = []
     for message in messages:
         skills = None
+        pending_action = None
         if message.meta:
             try:
                 meta_obj = json.loads(message.meta)
                 skills = meta_obj.get("skills")
+                pending_raw = meta_obj.get("pending_action")
+                if pending_raw:
+                    pending_action = PendingActionResponse.model_validate(pending_raw)
             except (json.JSONDecodeError, AttributeError):
                 pass
         result.append(
@@ -124,6 +129,7 @@ def list_message_items(
                 role=message.role,
                 content=message.content,
                 skills=skills,
+                pending_action=pending_action,
                 created_at=message.created_at,
             )
         )

@@ -5,28 +5,13 @@ import { colors } from "../theme/colors";
 import { spacingV2, fontSizeV2 } from "../theme/spacing";
 import { HomeScreen } from "../screens/home/HomeScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
+import { CycleListScreen } from "../screens/cycle/CycleListScreen";
 import { CostListScreen } from "../screens/cost/CostListScreen";
 import { ProfileScreen } from "../screens/profile/ProfileScreen";
+import { TAB_CONFIG, type MainTabParamList } from "./tabConfig";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-export type MainTabParamList = {
-  Home: undefined;
-  AgentChat: undefined;
-  Costs: undefined;
-  Settings: undefined;
-};
-
 const Tab = createBottomTabNavigator<MainTabParamList>();
-
-const TAB_CONFIG: Record<
-  keyof MainTabParamList,
-  { label: string; icon: string; activeIcon: string }
-> = {
-  Home: { label: "首页", icon: "home-outline", activeIcon: "home" },
-  AgentChat: { label: "芽芽", icon: "sprout", activeIcon: "sprout" },
-  Costs: { label: "记账", icon: "cash-multiple", activeIcon: "cash-multiple" },
-  Settings: { label: "我的", icon: "account-outline", activeIcon: "account" },
-};
 
 export const MainTabNavigator: React.FC = () => (
   <Tab.Navigator
@@ -40,8 +25,8 @@ export const MainTabNavigator: React.FC = () => (
           <View style={focused ? styles.tabItemActive : styles.tabItem}>
             <Icon
               name={focused ? config.activeIcon : config.icon}
-              size={22}
-              color={focused ? colors.primary : colors.tabInactive}
+              size={route.name === "AgentChat" ? 24 : 21}
+              color={focused ? colors.success : colors.tabInactive}
             />
             <Text
               style={focused ? styles.tabLabelActive : styles.tabLabel}
@@ -55,6 +40,7 @@ export const MainTabNavigator: React.FC = () => (
     })}
   >
     <Tab.Screen name="Home" component={HomeScreen} />
+    <Tab.Screen name="Cycles" component={CycleListScreen} />
     <Tab.Screen name="AgentChat" component={AgentChatScreen} />
     <Tab.Screen name="Costs" component={CostListScreen} />
     <Tab.Screen name="Settings" component={ProfileScreen} />
@@ -63,17 +49,17 @@ export const MainTabNavigator: React.FC = () => (
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 72,
-    backgroundColor: colors.surface,
+    height: 76,
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
     borderTopWidth: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    shadowColor: colors.success,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
     elevation: 8,
-    paddingHorizontal: spacingV2.sm,
+    paddingHorizontal: spacingV2.xs,
     paddingBottom: 8,
   },
   tabItem: {
@@ -87,7 +73,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
+    minWidth: 54,
+    paddingHorizontal: spacingV2.sm,
     paddingVertical: spacingV2.xs,
+    borderRadius: 20,
+    backgroundColor: colors.successMuted,
     gap: 2,
   },
   tabLabel: {
@@ -97,7 +87,7 @@ const styles = StyleSheet.create({
   },
   tabLabelActive: {
     fontSize: fontSizeV2.xs,
-    color: colors.primary,
-    fontWeight: "600",
+    color: colors.success,
+    fontWeight: "700",
   },
 });

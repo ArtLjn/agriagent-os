@@ -26,6 +26,7 @@ import { ReportListView } from "../../components/ReportListView";
 import { colors } from "../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import { appGradients } from "../../theme/gradients";
+import { touchOpacity } from "../../theme/animations";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 type PromptTone = "sky" | "leaf" | "amber" | "slate";
@@ -69,8 +70,8 @@ const PROMPT_TONES = {
   slate: { bg: "#F1F5F9", icon: "#64748B" },
 } as const;
 
-const DRAWER_ENTER_MS = 280;
-const DRAWER_EXIT_MS = 180;
+const DRAWER_ENTER_MS = 300;
+const DRAWER_EXIT_MS = 200;
 const DRAWER_EASING = Easing.bezier(0.32, 0.72, 0, 1);
 
 const getGreeting = () => {
@@ -280,7 +281,7 @@ export const AgentChatScreen: React.FC = () => {
                   pendingActionDisabled && styles.actionBtnDisabled,
                 ]}
                 onPress={() => handlePendingAction(item, "确认")}
-                activeOpacity={0.7}
+                activeOpacity={touchOpacity.primary}
                 disabled={pendingActionDisabled}
               >
                 <Icon
@@ -296,7 +297,7 @@ export const AgentChatScreen: React.FC = () => {
                   pendingActionDisabled && styles.actionBtnDisabled,
                 ]}
                 onPress={() => handlePendingAction(item, "取消")}
-                activeOpacity={0.7}
+                activeOpacity={touchOpacity.secondary}
                 disabled={pendingActionDisabled}
               >
                 <Icon
@@ -351,7 +352,7 @@ export const AgentChatScreen: React.FC = () => {
                 key={index}
                 style={styles.promptPill}
                 onPress={() => handleSend(prompt.prompt)}
-                activeOpacity={0.78}
+                activeOpacity={touchOpacity.card}
               >
                 <View
                   style={[
@@ -447,21 +448,21 @@ export const AgentChatScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.drawerIconBtn}
                 onPress={() => setDrawerVisible(false)}
-                activeOpacity={0.7}
+                activeOpacity={touchOpacity.icon}
               >
                 <Icon name="menu" size={24} color={colors.text} />
               </TouchableOpacity>
               <View style={styles.drawerActionRow}>
                 <TouchableOpacity
                   style={styles.drawerIconBtn}
-                  activeOpacity={0.7}
+                  activeOpacity={touchOpacity.icon}
                 >
                   <Icon name="magnify" size={22} color={colors.text} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.drawerIconBtn}
                   onPress={handleStartNewSession}
-                  activeOpacity={0.7}
+                  activeOpacity={touchOpacity.icon}
                 >
                   <Icon
                     name="message-plus-outline"
@@ -475,7 +476,7 @@ export const AgentChatScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.newSessionCard}
               onPress={handleStartNewSession}
-              activeOpacity={0.78}
+              activeOpacity={touchOpacity.card}
             >
               <View style={styles.newSessionIcon}>
                 <Icon
@@ -524,7 +525,7 @@ export const AgentChatScreen: React.FC = () => {
                         isActive && styles.sessionItemActive,
                       ]}
                       onPress={() => handleSwitchSession(session.id)}
-                      activeOpacity={0.76}
+                      activeOpacity={touchOpacity.card}
                     >
                       <Text
                         style={[
@@ -565,7 +566,7 @@ export const AgentChatScreen: React.FC = () => {
               </View>
               <TouchableOpacity
                 style={styles.drawerIconBtn}
-                activeOpacity={0.7}
+                activeOpacity={touchOpacity.icon}
               >
                 <Icon name="cog-outline" size={23} color={colors.text} />
               </TouchableOpacity>
@@ -588,7 +589,7 @@ export const AgentChatScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.headerMenuBtn}
           onPress={() => setDrawerVisible(true)}
-          activeOpacity={0.7}
+          activeOpacity={touchOpacity.icon}
         >
           <Icon name="menu" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -607,7 +608,7 @@ export const AgentChatScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.headerNewBtn}
           onPress={handleStartNewSession}
-          activeOpacity={0.7}
+          activeOpacity={touchOpacity.icon}
         >
           <Icon name="plus" size={22} color={colors.text} />
         </TouchableOpacity>
@@ -618,7 +619,7 @@ export const AgentChatScreen: React.FC = () => {
         <TouchableOpacity
           style={[styles.segBtn, activeTab === "chat" && styles.segBtnActive]}
           onPress={() => setActiveTab("chat")}
-          activeOpacity={0.7}
+          activeOpacity={touchOpacity.primary}
         >
           <Text
             style={[
@@ -632,7 +633,7 @@ export const AgentChatScreen: React.FC = () => {
         <TouchableOpacity
           style={[styles.segBtn, activeTab === "report" && styles.segBtnActive]}
           onPress={() => setActiveTab("report")}
-          activeOpacity={0.7}
+          activeOpacity={touchOpacity.primary}
         >
           <Text
             style={[
@@ -708,7 +709,7 @@ export const AgentChatScreen: React.FC = () => {
                 ]}
                 onPress={handleInputSend}
                 disabled={!inputText.trim() || isLoading}
-                activeOpacity={0.7}
+                activeOpacity={touchOpacity.primary}
               >
                 <Icon
                   name="arrow-up"

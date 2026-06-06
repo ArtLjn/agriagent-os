@@ -116,10 +116,15 @@ class PendingAction:
     follow_up_skill_name: str | None = None
     follow_up_params: dict | None = None
     follow_up_original_input: str = ""
+    session_id: str | None = None
 
 
-# 内存字典：farm_id -> PendingAction
-_pending: dict[int, PendingAction] = {}
+# 内存字典：(farm_id, session_id) -> PendingAction
+_pending: dict[tuple[int, str | None], PendingAction] = {}
+
+
+def _pending_key(farm_id: int, session_id: str | None = None) -> tuple[int, str | None]:
+    return farm_id, session_id or None
 
 
 def store_pending(
@@ -131,10 +136,11 @@ def store_pending(
     follow_up_skill_name: str | None = None,
     follow_up_params: dict | None = None,
     follow_up_original_input: str = "",
+    session_id: str | None = None,
 ) -> str:
     """存储 pending action，返回 action_id。"""
     action_id = uuid.uuid4().hex
-    _pending[farm_id] = PendingAction(
+    _pending[_pending_key(farm_id, session_id)] = PendingAction(
         action_id=action_id,
         skill_name=skill_name,
         params=params,
@@ -145,6 +151,7 @@ def store_pending(
         follow_up_skill_name=follow_up_skill_name,
         follow_up_params=follow_up_params,
         follow_up_original_input=follow_up_original_input,
+        session_id=session_id,
     )
     logger.info(
         "Pending action 已存储 | farm_id=%d | action_id=%s | skill=%s",
@@ -155,9 +162,10 @@ def store_pending(
     return action_id
 
 
-def get_pending(farm_id: int) -> PendingAction | None:
+def get_pending(farm_id: int, session_id: str | None = None) -> PendingAction | None:
     """获取 pending action，超时则删除返回 None。"""
-    action = _pending.get(farm_id)
+    key = _pending_key(farm_id, session_id)
+    action = _pending.get(key)
     if action is None:
         return None
     if time.time() - action.created_at > _TIMEOUT_SECONDS:
@@ -166,7 +174,7 @@ def get_pending(farm_id: int) -> PendingAction | None:
             farm_id,
             action.skill_name,
         )
-        del _pending[farm_id]
+        del _pending[key]
         return None
     logger.debug(
         "Pending action 获取 | farm_id=%d | skill=%s",
@@ -176,9 +184,13 @@ def get_pending(farm_id: int) -> PendingAction | None:
     return action
 
 
-def remove_pending(farm_id: int) -> None:
+def remove_pending(farm_id: int, session_id: str | None = None) -> None:
     """删除 pending action。"""
-    _pending.pop(farm_id, None)
+    if session_id is None:
+        for key in [key for key in _pending if key[0] == farm_id]:
+            _pending.pop(key, None)
+    else:
+        _pending.pop(_pending_key(farm_id, session_id), None)
     logger.debug("Pending action 已删除 | farm_id=%d", farm_id)
 
 

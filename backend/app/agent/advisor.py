@@ -12,6 +12,7 @@ from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
 from app.agent.intent_router import IntentType, classify_intent, get_greeting_reply
+from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.infra.trace_context import clear_trace, init_trace
 from app.models.farm import Farm
 from app.services.conversation_service import get_recent_messages
@@ -19,6 +20,13 @@ from app.services.conversation_service import get_recent_messages
 logger = logging.getLogger(__name__)
 
 _ADVISOR_GRAPH = None
+_UNSUPPORTED_DELETE_COST_PATTERNS = (
+    "清理所有账单",
+    "删除所有账单",
+    "清空账单",
+    "清除账单",
+    "删除账单",
+)
 
 
 def _get_advisor_graph():
@@ -35,7 +43,11 @@ def build_advisor_agent():
 
 
 def _build_history_messages(
-    db: Session | None, conversation_id: int | None, limit: int = 20
+    db: Session | None,
+    conversation_id: int | None,
+    limit: int = 20,
+    current_user_input: str | None = None,
+    recent_message_limit: int = 10,
 ) -> list[HumanMessage | AIMessage]:
     """从数据库加载最近 N 条消息，转为 LangChain message 列表。"""
     if db is None or conversation_id is None:
@@ -47,7 +59,26 @@ def _build_history_messages(
             messages.append(HumanMessage(content=rec.content))
         elif rec.role == "assistant":
             messages.append(AIMessage(content=rec.content))
+    if (
+        current_user_input is not None
+        and messages
+        and isinstance(messages[-1], HumanMessage)
+        and messages[-1].content == current_user_input
+    ):
+        messages = messages[:-1]
+    messages = _summarize_history_messages(messages, recent_message_limit)
     return messages
+
+
+def _summarize_history_messages(
+    messages: list[HumanMessage | AIMessage],
+    recent_message_limit: int,
+) -> list[HumanMessage | AIMessage]:
+    if len(messages) <= recent_message_limit:
+        return messages
+    return FinalPromptBudget(
+        recent_messages=recent_message_limit,
+    ).summarize_old_messages(messages)
 
 
 def _resolve_farm_uid(db: Session | None, farm_id: int) -> str | None:
@@ -56,6 +87,14 @@ def _resolve_farm_uid(db: Session | None, farm_id: int) -> str | None:
         return None
     farm = db.query(Farm).filter(Farm.id == farm_id).first()
     return farm.uid if farm else None
+
+
+def _unsupported_capability_reply(user_input: str) -> str | None:
+    """拦截当前没有 Skill 支撑的高风险能力，避免模型承诺幻觉。"""
+    normalized = "".join(user_input.split())
+    if any(pattern in normalized for pattern in _UNSUPPORTED_DELETE_COST_PATTERNS):
+        return "暂不支持通过对话删除账单或清理所有账单。你可以先查询账单明细，再到成本列表里手动删除需要移除的记录。"
+    return None
 
 
 async def invoke_advisor(
@@ -79,6 +118,10 @@ async def invoke_advisor(
     if intent == IntentType.GREETING:
         return filter_output(get_greeting_reply(user_input))
 
+    unsupported_reply = _unsupported_capability_reply(user_input)
+    if unsupported_reply:
+        return unsupported_reply
+
     init_trace(
         farm_id=farm_id,
         session_id=session_id,
@@ -94,6 +137,7 @@ async def invoke_advisor(
             farm_id=farm_id,
             message=user_input,
             farm_uid=farm_uid,
+            session_id=session_id,
         )
         if pending_decision.handled:
             return filter_output(pending_decision.reply)
@@ -101,7 +145,9 @@ async def invoke_advisor(
         graph = _get_advisor_graph()
 
         # 构建历史消息 + 当前消息
-        history = _build_history_messages(db, conversation_id)
+        history = _build_history_messages(
+            db, conversation_id, current_user_input=user_input
+        )
         messages = history + [HumanMessage(content=user_input)]
 
         result = await graph.ainvoke(
@@ -158,6 +204,11 @@ async def stream_advisor(
         yield filter_output(get_greeting_reply(user_input))
         return
 
+    unsupported_reply = _unsupported_capability_reply(user_input)
+    if unsupported_reply:
+        yield unsupported_reply
+        return
+
     init_trace(
         farm_id=farm_id,
         session_id=session_id,
@@ -174,6 +225,7 @@ async def stream_advisor(
             farm_id=farm_id,
             message=user_input,
             farm_uid=farm_uid,
+            session_id=session_id,
         )
         if pending_decision.handled:
             yield filter_output(pending_decision.reply)
@@ -182,7 +234,9 @@ async def stream_advisor(
         graph = _get_advisor_graph()
 
         # 构建历史消息 + 当前消息
-        history = _build_history_messages(db, conversation_id)
+        history = _build_history_messages(
+            db, conversation_id, current_user_input=user_input
+        )
         messages = history + [HumanMessage(content=user_input)]
 
         async for event in graph.astream(

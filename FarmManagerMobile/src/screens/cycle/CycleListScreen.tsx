@@ -19,6 +19,8 @@ import { BulkActionBar } from "../../components/BulkActionBar";
 import { SelectionCircle } from "../../components/SelectionCircle";
 import { useBulkSelection } from "../../hooks/useBulkSelection";
 import { showAlert } from "../../utils/alert";
+import { FadeInListItem } from "../../components/animations/FadeInListItem";
+import { touchOpacity } from "../../theme/animations";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -250,7 +252,7 @@ export const CycleListScreen: React.FC = () => {
             </View>
           </View>
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const baseStatus = STATUS_CONFIG[item.status] || {
             label: item.status,
             color: colors.textSecondary,
@@ -274,8 +276,9 @@ export const CycleListScreen: React.FC = () => {
             : estimateProgress(item.current_stage_name);
 
           return (
-            <View style={styles.selectableRow}>
-              {selection.isSelecting && (
+            <FadeInListItem index={index}>
+              <View style={styles.selectableRow}>
+                {selection.isSelecting && (
                 <View style={styles.selectionSlot}>
                   <SelectionCircle selected={selection.isSelected(item.id)} />
                 </View>
@@ -294,7 +297,7 @@ export const CycleListScreen: React.FC = () => {
                   );
                 }}
                 onLongPress={() => selection.beginSelection(item.id)}
-                activeOpacity={0.7}
+                activeOpacity={touchOpacity.card}
                 style={[
                   styles.card,
                   selection.isSelected(item.id) && styles.cardSelected,
@@ -372,6 +375,7 @@ export const CycleListScreen: React.FC = () => {
                 </View>
               </TouchableOpacity>
             </View>
+          </FadeInListItem>
           );
         }}
       />
@@ -387,7 +391,7 @@ export const CycleListScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.fab}
           onPress={() => navigation.navigate("CycleCreate" as never)}
-          activeOpacity={0.8}
+          activeOpacity={touchOpacity.icon}
         >
           <Icon name="plus" size={22} color={colors.textInverse} />
         </TouchableOpacity>

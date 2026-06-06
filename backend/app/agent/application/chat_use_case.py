@@ -38,9 +38,11 @@ def new_request_id() -> str:
     return rid
 
 
-def build_pending_action_response(farm_id: int) -> PendingActionResponse | None:
+def build_pending_action_response(
+    farm_id: int, session_id: str | None = None
+) -> PendingActionResponse | None:
     """构造 pending action 响应。"""
-    pending = get_pending(farm_id)
+    pending = get_pending(farm_id, session_id=session_id)
     if not pending:
         return None
     notes = []
@@ -125,6 +127,7 @@ async def chat(
     decision = await handle_pending_action(
         farm_id=farm.id,
         message=chat_request.message,
+        session_id=chat_request.session_id,
     )
     if decision.handled:
         reply = decision.reply
@@ -164,7 +167,9 @@ async def chat(
         save_message(db, conversation.id, "assistant", reply)
 
     result = ChatResponse(reply=reply)
-    pending_action = build_pending_action_response(farm.id)
+    pending_action = build_pending_action_response(
+        farm.id, session_id=chat_request.session_id
+    )
     if pending_action:
         result.pending_action = pending_action
     await _observe_chat_completion(
@@ -223,11 +228,6 @@ async def stream_chat_events(
     conversation = None
     start = time.perf_counter()
     try:
-        decision = await handle_pending_action(
-            farm_id=farm.id,
-            message=chat_request.message,
-        )
-
         if chat_request.session_id:
             conversation = get_or_create_conversation(
                 db,
@@ -236,6 +236,12 @@ async def stream_chat_events(
                 user_id=user.id,
             )
             save_message(db, conversation.id, "user", chat_request.message)
+
+        decision = await handle_pending_action(
+            farm_id=farm.id,
+            message=chat_request.message,
+            session_id=chat_request.session_id,
+        )
 
         if decision.handled:
             full_reply = decision.reply
@@ -263,6 +269,9 @@ async def stream_chat_events(
 
         await _flush_trace_queue()
         skill_names = _get_skill_names(db, request_id)
+        pending_action = build_pending_action_response(
+            farm.id, session_id=chat_request.session_id
+        )
         conversation = _save_stream_reply(
             db,
             chat_request=chat_request,
@@ -270,6 +279,7 @@ async def stream_chat_events(
             farm=farm,
             full_reply=full_reply,
             skill_names=skill_names,
+            pending_action=pending_action,
         )
         await _observe_chat_completion(
             user_id=user.id,
@@ -284,7 +294,6 @@ async def stream_chat_events(
         if skill_names:
             yield f"data: {json.dumps({'skills': skill_names}, ensure_ascii=False)}\n\n"
 
-        pending_action = build_pending_action_response(farm.id)
         if pending_action:
             logger.info(
                 "[%s] 发送 pending_action SSE 事件 | skill=%s",
@@ -365,6 +374,7 @@ def _save_stream_reply(
     farm: Farm,
     full_reply: str,
     skill_names: list[str],
+    pending_action: PendingActionResponse | None = None,
 ) -> Conversation | None:
     """保存流式回复和 AgentRecord。"""
     conversation = None
@@ -378,11 +388,12 @@ def _save_stream_reply(
             .first()
         )
         if conversation:
-            meta = (
-                json.dumps({"skills": skill_names}, ensure_ascii=False)
-                if skill_names
-                else None
-            )
+            meta_obj = {}
+            if skill_names:
+                meta_obj["skills"] = skill_names
+            if pending_action:
+                meta_obj["pending_action"] = pending_action.model_dump(mode="json")
+            meta = json.dumps(meta_obj, ensure_ascii=False) if meta_obj else None
             save_message(db, conversation.id, "assistant", full_reply, meta=meta)
 
     record = AgentRecord(

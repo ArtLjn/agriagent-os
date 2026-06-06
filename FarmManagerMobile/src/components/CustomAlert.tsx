@@ -10,6 +10,7 @@ import {
 import { useAlertStore } from "../stores/alertStore";
 import { colors } from "../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../theme/spacing";
+import { touchOpacity } from "../theme/animations";
 
 export const CustomAlert: React.FC = () => {
   const { visible, title, message, buttons, hide } = useAlertStore();
@@ -26,8 +27,8 @@ export const CustomAlert: React.FC = () => {
         }),
         Animated.spring(scaleAnim, {
           toValue: 1,
-          friction: 8,
-          tension: 100,
+          friction: 7,
+          tension: 110,
           useNativeDriver: true,
         }),
       ]).start();
@@ -90,7 +91,7 @@ export const CustomAlert: React.FC = () => {
                     index > 0 && !isSingleButton && styles.buttonLeftBorder,
                   ]}
                   onPress={() => handlePress(btn.onPress)}
-                  activeOpacity={0.7}
+                  activeOpacity={touchOpacity.primary}
                 >
                   <Text
                     style={[

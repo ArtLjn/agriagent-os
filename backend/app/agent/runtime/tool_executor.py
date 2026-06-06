@@ -366,12 +366,14 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             confirmation_context = build_confirmation_context(
                 name, confirmation_args, original_input=original_input
             )
+            session_id = state.get("session_id")
             action_id = store_pending(
                 farm_id,
                 name,
                 args,
                 original_input=original_input,
                 confirmation_context=confirmation_context,
+                session_id=session_id,
             )
             logger.info(
                 "写操作 Skill 已拦截 | farm=%s action_id=%s skill=%s",

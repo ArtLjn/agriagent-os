@@ -22,6 +22,14 @@ def _make_mock_db() -> MagicMock:
     return mock_db
 
 
+@pytest.fixture(autouse=True)
+def mock_composer():
+    """隔离 prompt 渲染，让结构化建议测试聚焦解析行为。"""
+    with patch("app.services.agent_service.get_composer") as mock:
+        mock.return_value.compose.return_value = "daily prompt"
+        yield mock
+
+
 # ---------- Schema 校验 ----------
 
 

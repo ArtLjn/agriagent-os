@@ -32,11 +32,19 @@ def db():
     session.close()
 
 
+@pytest.fixture
+def mock_composer():
+    """隔离 prompt 渲染，缓存测试只关注命中/未命中行为。"""
+    with patch("app.services.agent_service.get_composer") as mock:
+        mock.return_value.compose.return_value = "daily prompt"
+        yield mock
+
+
 class TestDailyAdviceCache:
     """测试 get_daily_advice 缓存命中/未命中逻辑。"""
 
     @pytest.mark.asyncio
-    async def test_cache_miss_calls_llm(self, db):
+    async def test_cache_miss_calls_llm(self, db, mock_composer):
         """无缓存时应调用 LLM。"""
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
@@ -74,7 +82,31 @@ class TestDailyAdviceCache:
         assert result.items[0].title == "缓存建议"
 
     @pytest.mark.asyncio
-    async def test_different_farm_cache_miss(self, db):
+    async def test_quota_reject_message_cache_is_ignored(self, db, mock_composer):
+        """身份/配额拦截文案不应作为每日建议缓存复用。"""
+        today = _today_start()
+        cached = AgentRecord(
+            farm_id=1,
+            record_type="daily",
+            content="缺少可信用户上下文，无法继续处理。",
+            created_at=today,
+        )
+        db.add(cached)
+        db.commit()
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = _json_items_response("重新生成")
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=1)
+
+        mock_llm.assert_called_once()
+        assert result.items[0].title == "重新生成"
+
+    @pytest.mark.asyncio
+    async def test_different_farm_cache_miss(self, db, mock_composer):
         """不同 farm_id 应视为缓存未命中。"""
         today = _today_start()
         db.add(
@@ -99,7 +131,7 @@ class TestDailyAdviceCache:
         assert result.items[0].title == "农场2建议"
 
     @pytest.mark.asyncio
-    async def test_yesterday_record_is_expired(self, db):
+    async def test_yesterday_record_is_expired(self, db, mock_composer):
         """昨天生成的缓存应已过期，需重新生成。"""
         yesterday = _today_start() - timedelta(days=1)
         db.add(
@@ -124,7 +156,7 @@ class TestDailyAdviceCache:
         assert result.items[0].title == "新建议"
 
     @pytest.mark.asyncio
-    async def test_refresh_deletes_old_and_regenerates(self, db):
+    async def test_refresh_deletes_old_and_regenerates(self, db, mock_composer):
         """刷新应删除旧缓存并重新生成。"""
         today = _today_start()
         db.add(

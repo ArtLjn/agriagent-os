@@ -24,7 +24,9 @@ async def get_daily(
     rid = new_request_id()
     logger.info("[%s] GET /agent/daily | cycle_id=%s", rid, cycle_id)
     start = time.perf_counter()
-    result = await get_daily_advice(db, farm_id=farm.id, cycle_id=cycle_id)
+    result = await get_daily_advice(
+        db, farm_id=farm.id, cycle_id=cycle_id, user_id=farm.user_id
+    )
     logger.info("[%s] /agent/daily 完成 | 耗时 %.2fs", rid, time.perf_counter() - start)
     return result
 
@@ -36,7 +38,9 @@ async def refresh_daily(
     rid = new_request_id()
     logger.info("[%s] POST /agent/daily/refresh | cycle_id=%s", rid, cycle_id)
     start = time.perf_counter()
-    result = await refresh_daily_advice(db, farm_id=farm.id, cycle_id=cycle_id)
+    result = await refresh_daily_advice(
+        db, farm_id=farm.id, cycle_id=cycle_id, user_id=farm.user_id
+    )
     logger.info(
         "[%s] /agent/daily/refresh 完成 | 耗时 %.2fs",
         rid,

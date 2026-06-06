@@ -8,6 +8,7 @@ from app.infra.pending_actions import (
     build_confirmation_context,
     get_pending,
     get_cache_groups_for_skill,
+    remove_pending,
     store_pending,
 )
 
@@ -96,6 +97,22 @@ def test_store_pending_overwrites_existing_action_for_same_farm():
     assert pending.action_id != first_id
     assert pending.skill_name == "update_crop_cycle"
     assert pending.params == {"start_date": "2026-09-01"}
+
+
+def test_pending_actions_are_scoped_by_session_id():
+    remove_pending(1)
+    store_pending(
+        1,
+        "create_crop_cycle",
+        {"crop_name": "韭菜"},
+        session_id="session-a",
+    )
+
+    assert get_pending(1, session_id="session-a") is not None
+    assert get_pending(1, session_id="session-b") is None
+    assert get_pending(1) is None
+
+    remove_pending(1, session_id="session-a")
 
 
 def test_build_confirmation_context_for_crop_cycle_update():

@@ -69,10 +69,16 @@ const normalizeBackendRole = (
   role: ConversationMessageItem["role"]
 ): ChatMessage["role"] => (role === "assistant" ? "agent" : role);
 
-const mapBackendMessage = (message: ConversationMessageItem): ChatMessage => ({
-  role: normalizeBackendRole(message.role),
-  content: message.content,
-});
+const mapBackendMessage = (message: ConversationMessageItem): ChatMessage => {
+  const mapped: ChatMessage = {
+    role: normalizeBackendRole(message.role),
+    content: message.content,
+  };
+  if (message.pending_action) {
+    mapped.pending_action = message.pending_action;
+  }
+  return mapped;
+};
 
 const mapBackendConversation = (
   conversation: ConversationListItem,

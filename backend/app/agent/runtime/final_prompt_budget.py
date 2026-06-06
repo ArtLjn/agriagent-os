@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from langchain_core.messages import BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 from app.context.models import estimate_tokens
 
@@ -35,9 +35,17 @@ class FinalPromptBudgetResult:
 class FinalPromptBudget:
     """覆盖 system prompt、上下文、消息和工具结果的最终预算检查。"""
 
-    def __init__(self, max_tokens: int = 6000, tool_result_limit: int = 800) -> None:
+    def __init__(
+        self,
+        max_tokens: int = 6000,
+        tool_result_limit: int = 800,
+        recent_messages: int = 6,
+        summary_item_limit: int = 12,
+    ) -> None:
         self.max_tokens = max_tokens
         self.tool_result_limit = tool_result_limit
+        self.recent_messages = recent_messages
+        self.summary_item_limit = summary_item_limit
 
     def apply(
         self,
@@ -55,8 +63,8 @@ class FinalPromptBudget:
         if result.total_tokens <= self.max_tokens:
             return compacted, result
 
-        compacted = self._drop_oldest_messages(compacted)
-        actions.append("drop_oldest_messages")
+        compacted = self.summarize_old_messages(compacted)
+        actions.append("summarize_old_messages")
         return compacted, self._measure(system_text, compacted, actions)
 
     def _measure(
@@ -107,6 +115,39 @@ class FinalPromptBudget:
         if len(messages) <= 4:
             return messages
         return messages[-4:]
+
+    def summarize_old_messages(self, messages: list[BaseMessage]) -> list[BaseMessage]:
+        if len(messages) <= self.recent_messages:
+            return messages
+
+        split_at = max(1, len(messages) - self.recent_messages)
+        old_messages = messages[:split_at]
+        recent = messages[split_at:]
+        summary = self._build_message_summary(old_messages)
+        return [AIMessage(content=summary), *recent]
+
+    def _build_message_summary(self, messages: list[BaseMessage]) -> str:
+        lines = ["早期对话摘要："]
+        omitted = max(0, len(messages) - self.summary_item_limit)
+        for message in messages[-self.summary_item_limit :]:
+            prefix = self._message_prefix(message)
+            content = " ".join(str(message.content or "").split())
+            if not content:
+                continue
+            lines.append(f"- {prefix}: {content[:80]}")
+        if omitted:
+            lines.insert(1, f"- 已省略更早的 {omitted} 条消息。")
+        if len(lines) == 1:
+            lines.append("- 无可用早期对话内容。")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _message_prefix(message: BaseMessage) -> str:
+        if isinstance(message, HumanMessage):
+            return "用户"
+        if isinstance(message, ToolMessage):
+            return "工具"
+        return "助手"
 
 
 __all__ = ["FinalPromptBudget", "FinalPromptBudgetResult"]

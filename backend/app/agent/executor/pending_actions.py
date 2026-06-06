@@ -129,6 +129,7 @@ async def _confirm_pending(
     farm_id: int,
     pending: PendingAction,
     farm_uid: str | None = None,
+    session_id: str | None = None,
 ) -> PendingActionDecision:
     """执行已确认的 pending action，并处理缺模板和链式动作。"""
     result = await _execute_write_skill(
@@ -143,7 +144,7 @@ async def _confirm_pending(
         farm_uid=farm_uid,
     )
     cleared_groups = _clear_cache_groups(pending.skill_name, cache_groups)
-    remove_pending(farm_id)
+    remove_pending(farm_id, session_id=session_id)
     metadata = {"cache_groups_cleared": cleared_groups}
 
     if (
@@ -161,6 +162,7 @@ async def _confirm_pending(
                 follow_up_skill_name="create_crop_cycle",
                 follow_up_params=dict(pending.params),
                 follow_up_original_input=pending.original_input,
+                session_id=session_id,
             )
             confirm = build_confirm_message(
                 "create_crop_template",
@@ -178,6 +180,7 @@ async def _confirm_pending(
             pending.follow_up_skill_name,
             dict(pending.follow_up_params),
             original_input=pending.follow_up_original_input,
+            session_id=session_id,
         )
         confirm = build_confirm_message(
             pending.follow_up_skill_name,
@@ -202,9 +205,10 @@ async def handle_pending_action(
     farm_id: int,
     message: str,
     farm_uid: str | None = None,
+    session_id: str | None = None,
 ) -> PendingActionDecision:
     """根据用户消息处理当前农场的 pending action。"""
-    pending = get_pending(farm_id)
+    pending = get_pending(farm_id, session_id=session_id)
     if pending is None:
         return PendingActionDecision.unhandled()
 
@@ -217,16 +221,21 @@ async def handle_pending_action(
                 pending.skill_name,
                 pending.params,
             )
-            return await _confirm_pending(farm_id, pending, farm_uid=farm_uid)
+            return await _confirm_pending(
+                farm_id,
+                pending,
+                farm_uid=farm_uid,
+                session_id=session_id,
+            )
 
         if intent == "cancel":
-            remove_pending(farm_id)
+            remove_pending(farm_id, session_id=session_id)
             return PendingActionDecision.canceled()
 
         return PendingActionDecision.modified()
     except Exception as exc:
         logger.exception("执行 pending action 失败")
-        remove_pending(farm_id)
+        remove_pending(farm_id, session_id=session_id)
         return PendingActionDecision.failed(f"执行失败：{exc}")
 
 

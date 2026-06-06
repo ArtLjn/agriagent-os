@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, ViewStyle } from "react-native";
+import { Animated, Easing, ViewStyle } from "react-native";
 import { animationConfig } from "../../theme/animations";
 
 interface FadeInSlideUpProps {
@@ -19,18 +19,15 @@ export const FadeInSlideUp: React.FC<FadeInSlideUpProps> = ({
   ).current;
 
   useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: 1,
+    const enter = animationConfig.easing.enter;
+    const cfg = {
       duration: animationConfig.entrance.duration,
       delay,
       useNativeDriver: animationConfig.entrance.useNativeDriver,
-    }).start();
-    Animated.timing(translateY, {
-      toValue: 0,
-      duration: animationConfig.entrance.duration,
-      delay,
-      useNativeDriver: animationConfig.entrance.useNativeDriver,
-    }).start();
+    };
+
+    Animated.timing(opacity, { ...cfg, toValue: 1, easing: enter }).start();
+    Animated.timing(translateY, { ...cfg, toValue: 0, easing: enter }).start();
   }, [opacity, translateY, delay]);
 
   return (
