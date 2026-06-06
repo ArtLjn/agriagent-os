@@ -386,9 +386,7 @@ class TestSettleDebt:
             .all()
         )
         child_records = (
-            db.query(CostRecord)
-            .filter(CostRecord.parent_record_id == db_debt.id)
-            .all()
+            db.query(CostRecord).filter(CostRecord.parent_record_id == db_debt.id).all()
         )
         assert repayment_records == []
         assert child_records == []
@@ -418,9 +416,7 @@ class TestSettleDebt:
         with pytest.raises(ValueError, match="未找到"):
             settle_debt(db, farm_id=1, counterparty="字段已结")
 
-    def test_settle_rejects_non_positive_amount(
-        self, db: Session, db_debt: CostRecord
-    ):
+    def test_settle_rejects_non_positive_amount(self, db: Session, db_debt: CostRecord):
         """结算金额必须大于 0。"""
         with pytest.raises(InvalidSettlementAmountError, match="必须大于 0"):
             settle_debt(db, farm_id=1, counterparty="老王农资", amount=Decimal("0"))

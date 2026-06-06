@@ -218,6 +218,14 @@ describe("recordDisplay", () => {
         record_type: "income",
         amount: "800",
       },
+      {
+        ...baseRecord,
+        id: 5,
+        record_type: "income",
+        category: "还款",
+        amount: "600",
+        parent_record_id: 2,
+      },
     ];
 
     expect(getLedgerSummary(records)).toEqual({

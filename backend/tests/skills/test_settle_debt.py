@@ -78,9 +78,7 @@ class TestSettleDebtPartial:
     @patch.object(_settle_mod, "SessionLocal")
     @patch.object(_settle_mod, "create_record", create=True)
     @patch("app.services.debt_service.settle_debt")
-    async def test_partial_repayment(
-        self, mock_settle, mock_create, mock_session, ctx
-    ):
+    async def test_partial_repayment(self, mock_settle, mock_create, mock_session, ctx):
         """还了老王1000块 — 部分还款。"""
         mock_db = MagicMock()
         mock_session.return_value = mock_db

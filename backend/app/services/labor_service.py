@@ -80,7 +80,9 @@ def save_wage_entry(
         existing_entry = _find_existing_wage_entry(db, data, farm_id)
         if existing_entry is None:
             raise
-        return existing_entry, _get_labor_entry_cost_record_id(db, existing_entry, farm_id)
+        return existing_entry, _get_labor_entry_cost_record_id(
+            db, existing_entry, farm_id
+        )
     except Exception:
         db.rollback()
         raise
@@ -146,7 +148,9 @@ def sync_work_order_labor_cost_record(
         Decimal("0"),
     )
     settled_amount = min(total_paid, total_payable)
-    existing = _get_single_source_cost_record(db, farm_id, WORK_ORDER_SOURCE, work_order.id)
+    existing = _get_single_source_cost_record(
+        db, farm_id, WORK_ORDER_SOURCE, work_order.id
+    )
     if total_payable <= 0:
         if existing:
             existing.deleted_at = datetime.now(timezone.utc)
@@ -298,7 +302,9 @@ def _resolve_updated_wage_worker(
     if data.worker_id is not None:
         return _get_worker(db, data.worker_id, farm_id)
     if data.worker_name is not None:
-        return find_or_create_worker_by_name(db, farm_id, data.worker_name, data.unit_price)
+        return find_or_create_worker_by_name(
+            db, farm_id, data.worker_name, data.unit_price
+        )
     return _get_worker(db, current_worker_id, farm_id)
 
 

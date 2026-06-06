@@ -69,6 +69,14 @@ export function getUnsettledAmount(record: CostRecord): number {
   return Math.max(toAmountNumber(record.amount) - getSettledAmount(record), 0);
 }
 
+function isLegacyRepaymentRecord(record: CostRecord): boolean {
+  return (
+    record.record_type === "income" &&
+    record.category === "还款" &&
+    record.parent_record_id != null
+  );
+}
+
 export function getLedgerSummary(records: CostRecord[]): LedgerSummary {
   return records.reduce<LedgerSummary>(
     (summary, record) => {
@@ -81,7 +89,7 @@ export function getLedgerSummary(records: CostRecord[]): LedgerSummary {
         summary.settledCost += settled;
         summary.unsettledCost += unsettled;
       }
-      if (record.record_type === "income") {
+      if (record.record_type === "income" && !isLegacyRepaymentRecord(record)) {
         summary.occurredIncome += amount;
         summary.settledIncome += settled;
         summary.unsettledIncome += unsettled;

@@ -143,11 +143,7 @@ class SettleDebtSkill(Skill):
             normalized = Decimal(str(amount))
         except Exception:
             normalized = None
-        if (
-            normalized is None
-            or not normalized.is_finite()
-            or normalized <= 0
-        ):
+        if normalized is None or not normalized.is_finite() or normalized <= 0:
             return SkillResult(
                 status=ResultStatus.FAILED,
                 reply="还款失败：金额无效，请提供大于0的金额。",

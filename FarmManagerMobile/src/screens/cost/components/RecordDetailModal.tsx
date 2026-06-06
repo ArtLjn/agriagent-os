@@ -49,8 +49,8 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     (record.source_type === "labor_entry"
       ? "来自工资记录"
       : record.source_type === "operation_work_order"
-        ? "来自农事作业"
-        : record.source_type);
+      ? "来自农事作业"
+      : record.source_type);
 
   return (
     <Modal
@@ -173,20 +173,12 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 activeOpacity={0.75}
               >
                 <View style={styles.detailLeft}>
-                  <Icon
-                    name="link-variant"
-                    size={18}
-                    color={colors.primary}
-                  />
+                  <Icon name="link-variant" size={18} color={colors.primary} />
                   <Text style={styles.sourceLabel}>来源</Text>
                 </View>
                 <View style={styles.sourceRight}>
                   <Text style={styles.sourceValue}>{sourceLabel}</Text>
-                  <Icon
-                    name="chevron-right"
-                    size={18}
-                    color={colors.primary}
-                  />
+                  <Icon name="chevron-right" size={18} color={colors.primary} />
                 </View>
               </TouchableOpacity>
             ) : null}

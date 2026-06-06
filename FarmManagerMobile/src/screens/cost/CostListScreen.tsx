@@ -394,8 +394,8 @@ export const CostListScreen: React.FC = () => {
                       routeFilters.sourceType === "labor_entry"
                         ? "来自工资记录"
                         : routeFilters.sourceType === "operation_work_order"
-                          ? "来自农事作业"
-                          : routeFilters.sourceType || null,
+                        ? "来自农事作业"
+                        : routeFilters.sourceType || null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
