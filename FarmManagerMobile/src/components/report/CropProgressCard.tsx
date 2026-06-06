@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import { farmTheme } from "../../theme/farmTheme";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import type { ReportCycleItem } from "../../api/types";
 
@@ -9,9 +10,7 @@ interface CropProgressCardProps {
   data: ReportCycleItem;
 }
 
-export const CropProgressCard: React.FC<CropProgressCardProps> = ({
-  data,
-}) => {
+export const CropProgressCard: React.FC<CropProgressCardProps> = ({ data }) => {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -24,7 +23,8 @@ export const CropProgressCard: React.FC<CropProgressCardProps> = ({
           )}
         </View>
         <Text style={styles.stage}>
-          {data.current_stage} · 第 {data.current_stage_index}/{data.total_stages} 阶段
+          {data.current_stage} · 第 {data.current_stage_index}/
+          {data.total_stages} 阶段
         </Text>
       </View>
 
@@ -58,73 +58,71 @@ export const CropProgressCard: React.FC<CropProgressCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    backgroundColor: farmTheme.colors.surface,
+    borderRadius: farmTheme.radius.card,
+    padding: spacingV2.lg,
+    marginBottom: spacingV2.md,
+    borderWidth: 1,
+    borderColor: farmTheme.colors.line,
+    ...farmTheme.shadow.card,
   },
   header: {
-    marginBottom: spacing.md,
+    marginBottom: spacingV2.md,
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
+    gap: spacingV2.sm,
+    marginBottom: spacingV2.xs,
   },
   name: {
-    fontSize: fontSize.lg,
-    fontWeight: "700",
+    fontSize: fontSizeV2.lg,
+    fontWeight: "900",
     color: colors.text,
   },
   fieldBadge: {
-    backgroundColor: colors.surfaceMuted,
-    paddingHorizontal: spacing.sm,
+    backgroundColor: farmTheme.colors.surfaceSoft,
+    paddingHorizontal: spacingV2.sm,
     paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadiusV2.full,
   },
   fieldText: {
-    fontSize: fontSize.xs,
+    fontSize: fontSizeV2.xs,
     color: colors.textSecondary,
     fontWeight: "500",
   },
   stage: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
   },
   progressRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    gap: spacingV2.md,
+    marginBottom: spacingV2.md,
   },
   progressTrack: {
     flex: 1,
     height: 6,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: borderRadius.full,
+    backgroundColor: farmTheme.colors.surfaceSoft,
+    borderRadius: borderRadiusV2.full,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.full,
+    backgroundColor: farmTheme.colors.leaf,
+    borderRadius: borderRadiusV2.full,
   },
   progressText: {
-    fontSize: fontSize.md,
-    fontWeight: "700",
-    color: colors.primary,
+    fontSize: fontSizeV2.md,
+    fontWeight: "900",
+    color: farmTheme.colors.leaf,
     minWidth: 40,
     textAlign: "right",
   },
   footer: {
     flexDirection: "row",
-    gap: spacing.lg,
+    gap: spacingV2.lg,
   },
   footerItem: {
     flexDirection: "row",
@@ -132,7 +130,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   footerText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
   },
 });

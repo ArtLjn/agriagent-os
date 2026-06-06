@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../theme/spacing";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { farmTheme } from "../../theme/farmTheme";
+import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import type { ReportLogItem } from "../../api/types";
 
 interface FarmLogListCardProps {
@@ -29,7 +29,9 @@ export const FarmLogListCard: React.FC<FarmLogListCardProps> = ({ logs }) => {
           <View style={styles.logContent}>
             <View style={styles.logHeader}>
               <Text style={styles.logType}>{log.operation_type}</Text>
-              <Text style={styles.logDate}>{formatDate(log.operation_date)}</Text>
+              <Text style={styles.logDate}>
+                {formatDate(log.operation_date)}
+              </Text>
             </View>
             {log.cycle_name && (
               <Text style={styles.logCycle}>{log.cycle_name}</Text>
@@ -48,21 +50,19 @@ export const FarmLogListCard: React.FC<FarmLogListCardProps> = ({ logs }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    backgroundColor: farmTheme.colors.surface,
+    borderRadius: farmTheme.radius.card,
+    padding: spacingV2.lg,
+    borderWidth: 1,
+    borderColor: farmTheme.colors.line,
+    ...farmTheme.shadow.card,
   },
   logItem: {
     flexDirection: "row",
-    paddingBottom: spacing.md,
-    marginBottom: spacing.md,
+    paddingBottom: spacingV2.md,
+    marginBottom: spacingV2.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: farmTheme.colors.line,
   },
   logItemLast: {
     paddingBottom: 0,
@@ -72,10 +72,10 @@ const styles = StyleSheet.create({
   timelineDot: {
     width: 8,
     height: 8,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
+    borderRadius: borderRadiusV2.full,
+    backgroundColor: farmTheme.colors.leaf,
     marginTop: 6,
-    marginRight: spacing.md,
+    marginRight: spacingV2.md,
   },
   logContent: {
     flex: 1,
@@ -87,21 +87,21 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   logType: {
-    fontSize: fontSize.md,
-    fontWeight: "600",
+    fontSize: fontSizeV2.md,
+    fontWeight: "900",
     color: colors.text,
   },
   logDate: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
   },
   logCycle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     marginBottom: 2,
   },
   logNote: {
-    fontSize: fontSize.sm,
+    fontSize: fontSizeV2.sm,
     color: colors.textTertiary,
     lineHeight: 20,
   },

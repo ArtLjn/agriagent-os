@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Card, Row, Col, Statistic, message } from 'antd';
-import { PlusOutlined, BugOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Card, Row, Col, Statistic, message, Tag } from 'antd';
+import { PlusOutlined, BugOutlined, DollarOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
 import { listRecords, createRecord, getCycleProfit, getYearlySummary, type CostRecord, type CycleProfit, type YearlySummary } from '../../api/costs';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import ApiDebugger from '../../components/ApiDebugger';
+import { MetricCard, PageShell, Toolbar } from '../../components/PageShell';
+import { cardStyle, palette } from '../../styles/theme';
 
 export default function Costs() {
   const [data, setData] = useState<CostRecord[]>([]);
@@ -58,39 +60,54 @@ export default function Costs() {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '类型', dataIndex: 'record_type', render: (t: string) => t === 'cost' ? '支出' : '收入' },
+    {
+      title: '类型',
+      dataIndex: 'record_type',
+      render: (t: string) => (
+        <Tag color={t === 'cost' ? 'red' : 'green'}>{t === 'cost' ? '支出' : '收入'}</Tag>
+      ),
+    },
     { title: '分类', dataIndex: 'category' },
-    { title: '金额', dataIndex: 'amount' },
+    { title: '金额', dataIndex: 'amount', render: (value: string) => `¥ ${Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}` },
     { title: '日期', dataIndex: 'record_date' },
     { title: '备注', dataIndex: 'note', ellipsis: true },
   ];
 
   return (
-    <div>
+    <PageShell
+      title="成本记账"
+      description="汇总年度收入支出，并按茬口查看利润表现。"
+    >
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={8}><Card><Statistic title="年度总支出" value={yearly?.total_cost ?? '--'} precision={2} /></Card></Col>
-        <Col span={8}><Card><Statistic title="年度总收入" value={yearly?.total_income ?? '--'} precision={2} /></Card></Col>
-        <Col span={8}>
-          <Card>
+        <Col xs={24} md={8}><MetricCard accent={palette.danger}><Statistic title="年度总支出" value={yearly?.total_cost ?? '--'} precision={2} prefix={<FallOutlined />} /></MetricCard></Col>
+        <Col xs={24} md={8}><MetricCard accent={palette.success}><Statistic title="年度总收入" value={yearly?.total_income ?? '--'} precision={2} prefix={<RiseOutlined />} /></MetricCard></Col>
+        <Col xs={24} md={8}>
+          <MetricCard accent={yearly && Number(yearly.net_profit) >= 0 ? palette.success : palette.danger}>
             <Statistic title="年度净利润" value={yearly?.net_profit ?? '--'} precision={2}
-              valueStyle={{ color: yearly && Number(yearly.net_profit) >= 0 ? '#3f8600' : '#cf1322' }} />
-          </Card>
+              prefix={<DollarOutlined />}
+              valueStyle={{ color: yearly && Number(yearly.net_profit) >= 0 ? palette.success : palette.danger }} />
+          </MetricCard>
         </Col>
       </Row>
 
-      <Space style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新增记录</Button>
-        <Select placeholder="按茬口筛选" allowClear style={{ width: 200 }} value={selectedCycle}
-          onChange={(v) => setSelectedCycle(v)} options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
-        <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
-      </Space>
+      <Toolbar
+        left={(
+          <>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新增记录</Button>
+            <Select placeholder="按茬口筛选" allowClear style={{ width: 220 }} value={selectedCycle}
+              onChange={(v) => setSelectedCycle(v)} options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
+            <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
+          </>
+        )}
+        right={<span style={{ color: palette.textMuted, fontSize: 13 }}>共 {pagination.total} 条记录</span>}
+      />
 
       {profit && (
-        <Card size="small" style={{ marginBottom: 16 }}>
-          <Space>
-            <span>周期支出: {profit.total_cost}</span>
-            <span>周期收入: {profit.total_income}</span>
-            <span>净利润: <strong style={{ color: Number(profit.net_profit) >= 0 ? '#3f8600' : '#cf1322' }}>{profit.net_profit}</strong></span>
+        <Card size="small" style={{ ...cardStyle, marginBottom: 16 }}>
+          <Space wrap>
+            <span>周期支出: ¥ {Number(profit.total_cost).toLocaleString('zh-CN')}</span>
+            <span>周期收入: ¥ {Number(profit.total_income).toLocaleString('zh-CN')}</span>
+            <span>净利润: <strong style={{ color: Number(profit.net_profit) >= 0 ? palette.success : palette.danger }}>¥ {Number(profit.net_profit).toLocaleString('zh-CN')}</strong></span>
           </Space>
         </Card>
       )}
@@ -100,12 +117,15 @@ export default function Costs() {
         dataSource={data}
         columns={columns}
         loading={loading}
+        size="middle"
+        scroll={{ x: 760 }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
           total: pagination.total,
           showSizeChanger: true,
           pageSizeOptions: [10, 20, 50],
+          showTotal: (count) => `共 ${count} 条`,
         }}
         onChange={(p) => fetchData(p.current, p.pageSize)}
       />
@@ -128,6 +148,6 @@ export default function Costs() {
       </Modal>
 
       <ApiDebugger open={debugOpen} onClose={() => setDebugOpen(false)} defaultMethod="GET" defaultUrl="/costs" />
-    </div>
+    </PageShell>
   );
 }

@@ -213,7 +213,7 @@ function ExpectedVsActual({ expected, actual }: { expected: Record<string, unkno
               </Space>
             }
           >
-            {exp?.match_fields && (
+            {'match_fields' in exp && exp.match_fields !== undefined && (
               <Text type="secondary">
                 匹配字段: {JSON.stringify(exp.match_fields)}
               </Text>
@@ -285,7 +285,7 @@ function ResultDetail({ result }: { result: SimulationResult }) {
                 const tag = getErrorTag(err);
                 return (
                   <li key={i} style={{ marginBottom: 4 }}>
-                    <Tag color={tag.color} size="small">{tag.label}</Tag>
+                    <Tag color={tag.color}>{tag.label}</Tag>
                     <Text type="danger" style={{ marginLeft: 8 }}>{err}</Text>
                   </li>
                 );

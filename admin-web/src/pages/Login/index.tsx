@@ -1,14 +1,10 @@
 import { useState } from 'react';
-import { Button, Input, Card, message } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Button, Input, Card, message, Typography } from 'antd';
+import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { isAxiosError } from 'axios';
 import apiClient from '../../api/client';
 import { authStore } from '../../stores/authStore';
-
-const BG_PRIMARY = '#0d1117';
-const BG_CARD = '#21262d';
-const BORDER = '#30363d';
-const TEXT_PRIMARY = '#c9d1d9';
-const ACCENT = '#58a6ff';
+import { palette } from '../../styles/theme';
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [phone, setPhone] = useState('');
@@ -27,8 +23,9 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       authStore.setToken(access_token);
       message.success('登录成功');
       onLogin();
-    } catch (e: any) {
-      message.error(e.response?.data?.detail || '登录失败');
+    } catch (e: unknown) {
+      const detail = isAxiosError(e) ? e.response?.data?.detail : undefined;
+      message.error(typeof detail === 'string' ? detail : '登录失败');
     } finally {
       setLoading(false);
     }
@@ -38,17 +35,19 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     <div
       style={{
         height: '100vh',
-        background: BG_PRIMARY,
+        background: `radial-gradient(circle at 20% 18%, rgba(88, 166, 255, 0.16), transparent 28%), ${palette.bg}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        padding: 24,
       }}
     >
       <Card
         style={{
-          width: 360,
-          background: BG_CARD,
-          borderColor: BORDER,
+          width: 'min(400px, 100%)',
+          background: palette.bgElevated,
+          borderColor: palette.border,
+          boxShadow: '0 24px 80px rgba(1, 4, 9, 0.46)',
         }}
         styles={{ body: { padding: '32px' } }}
       >
@@ -58,8 +57,12 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             alt="农博社"
             style={{ width: 64, height: 64, marginBottom: 16 }}
           />
-          <h2 style={{ color: TEXT_PRIMARY, margin: 0, fontSize: 22 }}>农博社</h2>
-          <p style={{ color: '#8b949e', margin: '8px 0 0' }}>智能种植管理平台</p>
+          <Typography.Title level={3} style={{ color: palette.text, margin: 0 }}>农博社</Typography.Title>
+          <p style={{ color: palette.textMuted, margin: '8px 0 0' }}>智能种植管理平台</p>
+          <div style={{ color: palette.textSubtle, fontSize: 12, marginTop: 10 }}>
+            <SafetyCertificateOutlined style={{ marginRight: 6 }} />
+            管理员安全入口
+          </div>
         </div>
 
         <Input
@@ -68,7 +71,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           onPressEnter={handleLogin}
-          style={{ marginBottom: 16, background: '#161b22', borderColor: BORDER, color: TEXT_PRIMARY }}
+          style={{ marginBottom: 16, background: palette.bg, borderColor: palette.border, color: palette.text }}
         />
         <Input.Password
           prefix={<LockOutlined style={{ color: '#8b949e' }} />}
@@ -76,7 +79,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onPressEnter={handleLogin}
-          style={{ marginBottom: 24, background: '#161b22', borderColor: BORDER, color: TEXT_PRIMARY }}
+          style={{ marginBottom: 24, background: palette.bg, borderColor: palette.border, color: palette.text }}
         />
 
         <Button
@@ -84,7 +87,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           block
           loading={loading}
           onClick={handleLogin}
-          style={{ background: ACCENT, height: 40 }}
+          style={{ height: 40 }}
         >
           登录
         </Button>

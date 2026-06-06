@@ -1,7 +1,20 @@
-import { AppRegistry } from 'react-native';
+import { AppRegistry } from "react-native";
+import materialCommunityIconsFont from "react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf";
+
+const iconFontStyle = document.createElement("style");
+iconFontStyle.appendChild(
+  document.createTextNode(`
+    @font-face {
+      src: url(${materialCommunityIconsFont});
+      font-family: "MaterialCommunityIcons";
+      font-display: block;
+    }
+  `)
+);
+document.head.appendChild(iconFontStyle);
 
 // 全局错误捕获，白屏时显示错误信息
-const root = document.getElementById('root');
+const root = document.getElementById("root");
 const showError = (title, detail) => {
   if (root) {
     root.innerHTML = `
@@ -14,17 +27,23 @@ const showError = (title, detail) => {
 };
 
 window.onerror = (msg, url, line, col, err) => {
-  showError('Runtime Error', `${msg}\n at ${url}:${line}:${col}\n${err?.stack || ''}`);
+  showError(
+    "Runtime Error",
+    `${msg}\n at ${url}:${line}:${col}\n${err?.stack || ""}`
+  );
   return false;
 };
 
 window.onunhandledrejection = (e) => {
-  showError('Unhandled Promise Rejection', `${e.reason}\n${e.reason?.stack || ''}`);
+  showError(
+    "Unhandled Promise Rejection",
+    `${e.reason}\n${e.reason?.stack || ""}`
+  );
 };
 
 try {
-  const App = require('../App').default;
-  const { name: appName } = require('../app.json');
+  const App = require("../App").default;
+  const { name: appName } = require("../app.json");
 
   AppRegistry.registerComponent(appName, () => App);
   AppRegistry.runApplication(appName, {
@@ -32,5 +51,5 @@ try {
     rootTag: root,
   });
 } catch (e) {
-  showError('Module Load Error', `${e.message}\n${e.stack || ''}`);
+  showError("Module Load Error", `${e.message}\n${e.stack || ""}`);
 }

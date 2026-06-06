@@ -44,6 +44,26 @@ interface TraceItem {
   timelineLoading: boolean;
 }
 
+const aggregateTraces = (records: TraceRecord[]): TraceItem[] => {
+  const groups = new Map<string, TraceRecord[]>();
+  records.forEach((item) => {
+    const arr = groups.get(item.request_id) || [];
+    arr.push(item);
+    groups.set(item.request_id, arr);
+  });
+
+  return Array.from(groups.entries()).map(([request_id, records]) => ({
+    request_id,
+    session_id: records[0].session_id,
+    farm_id: records[0].farm_id,
+    node_count: records.length,
+    total_duration_ms: records.reduce((s, r) => s + (r.duration_ms || 0), 0),
+    created_at: records[0].created_at,
+    timeline: null,
+    timelineLoading: true,
+  }));
+};
+
 export default function TraceMonitor() {
   const [items, setItems] = useState<TraceItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -92,26 +112,6 @@ export default function TraceMonitor() {
   useEffect(() => {
     fetchData();
   }, []);
-
-  const aggregateTraces = (records: TraceRecord[]): TraceItem[] => {
-    const groups = new Map<string, TraceRecord[]>();
-    records.forEach((item) => {
-      const arr = groups.get(item.request_id) || [];
-      arr.push(item);
-      groups.set(item.request_id, arr);
-    });
-
-    return Array.from(groups.entries()).map(([request_id, records]) => ({
-      request_id,
-      session_id: records[0].session_id,
-      farm_id: records[0].farm_id,
-      node_count: records.length,
-      total_duration_ms: records.reduce((s, r) => s + (r.duration_ms || 0), 0),
-      created_at: records[0].created_at,
-      timeline: null,
-      timelineLoading: true,
-    }));
-  };
 
   const loadTimeline = async (requestId: string) => {
     try {

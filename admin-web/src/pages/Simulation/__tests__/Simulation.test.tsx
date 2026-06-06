@@ -149,29 +149,6 @@ describe('Simulation Page', () => {
     });
 
     it('应显示运行结果表格', async () => {
-      const mockResults = [
-        {
-          case_id: 'TC-001',
-          passed: true,
-          agent_reply: '已记账',
-          errors: [],
-          db_diff: { added: [], removed: [], modified: [] },
-          extracted_claims: [],
-          latency_ms: 120,
-          category: 'basic',
-        },
-        {
-          case_id: 'TC-002',
-          passed: false,
-          agent_reply: '我帮你查了',
-          errors: ['hallucination: LLM声称查询了不存在的作物'],
-          db_diff: { added: [], removed: [], modified: [] },
-          extracted_claims: [{ op_type: 'query', description: '查询作物', keywords_matched: [] }],
-          latency_ms: 200,
-          category: 'hallucination',
-        },
-      ];
-
       const mockCases = [
         { case_id: 'TC-001', description: '记账', user_input: 'test', category: 'basic', expected_response_matches: [], expected_db_changes: {}, verify_tables: [] },
         { case_id: 'TC-002', description: '幻觉', user_input: 'test', category: 'hallucination', expected_response_matches: [], expected_db_changes: {}, verify_tables: [] },

@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
-import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import { farmTheme } from "../../theme/farmTheme";
+import { spacingV2, fontSizeV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { formatCompactNumber } from "../../utils/numberFormat";
 import type { ReportOverviewMetrics } from "../../api/types";
@@ -45,9 +46,7 @@ export const ReportOverviewRow: React.FC<ReportOverviewRowProps> = ({
   const profitColor =
     parseFloat(metrics.net_profit) >= 0 ? colors.income : colors.expense;
   const profitBg =
-    parseFloat(metrics.net_profit) >= 0
-      ? colors.incomeBg
-      : colors.expenseBg;
+    parseFloat(metrics.net_profit) >= 0 ? colors.incomeBg : colors.expenseBg;
 
   return (
     <View style={styles.container}>
@@ -86,27 +85,31 @@ export const ReportOverviewRow: React.FC<ReportOverviewRowProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginBottom: spacing.xl,
+    flexWrap: "wrap",
+    gap: spacingV2.md,
+    marginBottom: spacingV2.lg,
   },
   card: {
-    flex: 1,
+    width: "47%",
     alignItems: "center",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.xl,
+    paddingVertical: spacingV2.lg,
+    paddingHorizontal: spacingV2.sm,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: farmTheme.colors.line,
+    ...farmTheme.shadow.card,
   },
   icon: {
-    marginBottom: spacing.sm,
+    marginBottom: spacingV2.sm,
   },
   value: {
-    fontSize: fontSize.lg,
-    fontWeight: "800",
+    fontSize: fontSizeV2.xl,
+    fontWeight: "900",
     marginBottom: 2,
   },
   label: {
-    fontSize: fontSize.xs,
+    fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });

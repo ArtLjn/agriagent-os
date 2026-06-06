@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider, Popconfirm } from 'antd';
-import { PlusOutlined, MinusCircleOutlined, BugOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider, Popconfirm, Tag } from 'antd';
+import { PlusOutlined, MinusCircleOutlined, BugOutlined, EditOutlined, DeleteOutlined, ReadOutlined } from '@ant-design/icons';
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate, type CropTemplate } from '../../api/crops';
 import ApiDebugger from '../../components/ApiDebugger';
+import { PageShell, Toolbar } from '../../components/PageShell';
+
+type StageFormValue = {
+  name?: string;
+  duration_days?: number;
+  key_tasks?: string;
+};
 
 export default function Crops() {
   const [data, setData] = useState<CropTemplate[]>([]);
@@ -33,7 +40,7 @@ export default function Crops() {
     const payload = {
       name: values.name,
       variety: values.variety,
-      stages: (values.stages || []).map((s: any, i: number) => ({
+      stages: (values.stages || []).map((s: StageFormValue, i: number) => ({
         ...s,
         order_index: i + 1,
       })),
@@ -69,7 +76,7 @@ export default function Crops() {
     const payload = {
       name: values.name,
       variety: values.variety,
-      stages: (values.stages || []).map((s: any, i: number) => ({
+      stages: (values.stages || []).map((s: StageFormValue, i: number) => ({
         ...s,
         order_index: i + 1,
       })),
@@ -98,12 +105,23 @@ export default function Crops() {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name' },
-    { title: '品种', dataIndex: 'variety' },
-    { title: '阶段数', key: 'stages', render: (_: unknown, r: CropTemplate) => r.stages?.length ?? 0 },
+    { title: '名称', dataIndex: 'name', width: 150, render: (text: string) => <strong>{text}</strong> },
+    { title: '品种', dataIndex: 'variety', width: 120, render: (text: string | undefined) => text || '-' },
+    {
+      title: '生长阶段',
+      key: 'stages',
+      render: (_: unknown, r: CropTemplate) => (
+        <Space wrap>
+          <Tag color="blue">{r.stages?.length ?? 0} 个阶段</Tag>
+          {r.stages?.slice(0, 3).map((stage) => <Tag key={stage.order_index}>{stage.name}</Tag>)}
+        </Space>
+      ),
+    },
     {
       title: '操作',
       key: 'action',
+      width: 210,
+      fixed: 'right' as const,
       render: (_: unknown, record: CropTemplate) => (
         <Space>
           <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)}>编辑</Button>
@@ -122,22 +140,33 @@ export default function Crops() {
   ];
 
   return (
-    <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建模板</Button>
-        <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
-      </Space>
+    <PageShell
+      title="作物模板"
+      description="维护作物品种与生长阶段，为种植周期、日志和 AI 建议提供基础数据。"
+    >
+      <Toolbar
+        left={(
+          <>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建模板</Button>
+            <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
+          </>
+        )}
+        right={<span style={{ color: '#8b949e', fontSize: 13 }}><ReadOutlined /> 共 {pagination.total} 个模板</span>}
+      />
       <Table
         rowKey="id"
         dataSource={data}
         columns={columns}
         loading={loading}
+        size="middle"
+        scroll={{ x: 760 }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
           total: pagination.total,
           showSizeChanger: true,
           pageSizeOptions: [10, 20, 50],
+          showTotal: (count) => `共 ${count} 条`,
         }}
         onChange={(p) => fetchData(p.current, p.pageSize)}
       />
@@ -173,6 +202,6 @@ export default function Crops() {
       </Modal>
 
       <ApiDebugger open={debugOpen} onClose={() => setDebugOpen(false)} defaultMethod="GET" defaultUrl="/crops/templates" />
-    </div>
+    </PageShell>
   );
 }

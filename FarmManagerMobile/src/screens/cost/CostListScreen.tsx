@@ -22,6 +22,7 @@ import type { CostRecord } from "../../api/types";
 import { EmptyState } from "../../components/EmptyState";
 import { Loading } from "../../components/Loading";
 import { colors } from "../../theme/colors";
+import { farmTheme } from "../../theme/farmTheme";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -130,13 +131,7 @@ export const CostListScreen: React.FC = () => {
             }
           : undefined
       );
-    }, [
-      fetchRecords,
-      routeFilters?.category,
-      routeFilters?.cycleId,
-      routeFilters?.sourceId,
-      routeFilters?.sourceType,
-    ])
+    }, [fetchRecords, routeFilters])
   );
 
   const currentMonth = dayjs(selectedMonth).format("YYYY-MM");
@@ -367,8 +362,8 @@ export const CostListScreen: React.FC = () => {
                       routeFilters.sourceType === "labor_entry"
                         ? "来自工资记录"
                         : routeFilters.sourceType === "operation_work_order"
-                          ? "来自农事作业"
-                          : routeFilters.sourceType || null,
+                        ? "来自农事作业"
+                        : routeFilters.sourceType || null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -587,7 +582,7 @@ export const CostListScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: farmTheme.colors.page,
   },
   listContent: {
     paddingBottom: 100,
@@ -603,9 +598,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: spacingV2.md,
     borderRadius: borderRadiusV2.xl,
-    backgroundColor: colors.surface,
+    backgroundColor: farmTheme.colors.surface,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: farmTheme.colors.line,
+    ...farmTheme.shadow.card,
   },
   searchInput: {
     flex: 1,
@@ -625,7 +621,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingV2.lg,
     padding: spacingV2.md,
     borderRadius: borderRadiusV2.xl,
-    backgroundColor: colors.primaryMuted,
+    backgroundColor: farmTheme.colors.leafSoft,
     flexDirection: "row",
     alignItems: "center",
     gap: spacingV2.sm,
@@ -644,7 +640,7 @@ const styles = StyleSheet.create({
   },
   deepLinkTitle: {
     fontSize: fontSizeV2.sm,
-    color: colors.primary,
+    color: farmTheme.colors.leaf,
     fontWeight: "800",
   },
   deepLinkText: {
@@ -666,10 +662,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.md,
     paddingVertical: 7,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: farmTheme.colors.surfaceSoft,
   },
   rangeChipActive: {
-    backgroundColor: colors.text,
+    backgroundColor: farmTheme.colors.ink,
   },
   rangeChipText: {
     fontSize: fontSizeV2.sm,
@@ -689,15 +685,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.md,
     paddingVertical: 6,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surface,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: farmTheme.colors.surface,
+    ...farmTheme.shadow.card,
   },
   filterChipActive: {
-    backgroundColor: colors.primaryMuted,
+    backgroundColor: farmTheme.colors.leafSoft,
   },
   filterChipText: {
     fontSize: fontSizeV2.sm,
@@ -705,7 +697,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   filterChipTextActive: {
-    color: colors.primary,
+    color: farmTheme.colors.leaf,
     fontWeight: "700",
   },
   filterCatScrollContent: {
@@ -718,10 +710,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: farmTheme.colors.surfaceSoft,
   },
   filterCatChipActive: {
-    backgroundColor: colors.primaryMuted,
+    backgroundColor: farmTheme.colors.leafSoft,
   },
   filterCatChipText: {
     fontSize: 12,
@@ -729,7 +721,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   filterCatChipTextActive: {
-    color: colors.primary,
+    color: farmTheme.colors.leaf,
     fontWeight: "600",
   },
   sectionHeader: {
@@ -783,10 +775,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.primary,
+    backgroundColor: farmTheme.colors.leaf,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: colors.primary,
+    shadowColor: farmTheme.colors.leaf,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -798,8 +790,9 @@ const assetStyles = StyleSheet.create({
   card: {
     marginHorizontal: spacingV2.lg,
     marginBottom: spacingV2.lg,
-    borderRadius: borderRadiusV2.xxxl,
+    borderRadius: farmTheme.radius.panel,
     overflow: "hidden",
+    ...farmTheme.shadow.card,
   },
   mainSection: {
     padding: spacingV2.xl,
