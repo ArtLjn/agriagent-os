@@ -8,6 +8,7 @@ import {
   formatRecordAmount,
   getRecordNoteText,
   getRecordTimeText,
+  getSettlementLabel,
 } from "../utils/recordDisplay";
 
 const TYPE_CONFIG: Record<string, { color: string; bgColor: string }> = {
@@ -61,9 +62,11 @@ export const RecordItem: React.FC<RecordItemProps> = ({
   const paymentMethod = (item as CostRecord & { payment_method?: string })
     .payment_method;
   const isDebt = Boolean(item.record_subtype || item.counterparty);
+  const settlementLabel = getSettlementLabel(item);
   const metaParts = [
     getRecordTimeText(item),
     paymentMethod ? PAYMENT_LABELS[paymentMethod] || paymentMethod : null,
+    settlementLabel,
     item.source_label,
     isDebt ? item.counterparty || "赊账" : null,
     getRecordNoteText(item),

@@ -5,9 +5,13 @@ import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import {
+  formatRecordAmount,
   formatRecordTimestamp,
   getRecordCreatedAtText,
   getRecordNoteText,
+  getSettlementLabel,
+  getSettledAmount,
+  getUnsettledAmount,
 } from "../utils/recordDisplay";
 
 interface RecordDetailModalProps {
@@ -36,14 +40,17 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const prefix = isCost ? "-" : "+";
   const createdAtText = getRecordCreatedAtText(record);
   const noteText = getRecordNoteText(record);
+  const settlementLabel = getSettlementLabel(record);
+  const settledLabel = isCost ? "已付" : "已收";
+  const unsettledLabel = isCost ? "未付" : "未收";
   const hasSource = Boolean(record.source_type && record.source_id);
   const sourceLabel =
     record.source_label ||
     (record.source_type === "labor_entry"
       ? "来自工资记录"
       : record.source_type === "operation_work_order"
-        ? "来自农事作业"
-        : record.source_type);
+      ? "来自农事作业"
+      : record.source_type);
 
   return (
     <Modal
@@ -99,6 +106,38 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               </Text>
             </View>
 
+            {settlementLabel ? (
+              <>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Icon
+                      name="check-circle-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.detailLabel}>{settledLabel}</Text>
+                  </View>
+                  <Text style={styles.detailValue}>
+                    {formatRecordAmount(String(getSettledAmount(record)))}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Icon
+                      name="clock-alert-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.detailLabel}>{unsettledLabel}</Text>
+                  </View>
+                  <Text style={styles.detailValue}>
+                    {formatRecordAmount(String(getUnsettledAmount(record)))}
+                  </Text>
+                </View>
+              </>
+            ) : null}
+
             {createdAtText ? (
               <View style={styles.detailRow}>
                 <View style={styles.detailLeft}>
@@ -134,20 +173,12 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 activeOpacity={0.75}
               >
                 <View style={styles.detailLeft}>
-                  <Icon
-                    name="link-variant"
-                    size={18}
-                    color={colors.primary}
-                  />
+                  <Icon name="link-variant" size={18} color={colors.primary} />
                   <Text style={styles.sourceLabel}>来源</Text>
                 </View>
                 <View style={styles.sourceRight}>
                   <Text style={styles.sourceValue}>{sourceLabel}</Text>
-                  <Icon
-                    name="chevron-right"
-                    size={18}
-                    color={colors.primary}
-                  />
+                  <Icon name="chevron-right" size={18} color={colors.primary} />
                 </View>
               </TouchableOpacity>
             ) : null}

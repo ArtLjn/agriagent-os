@@ -1,6 +1,5 @@
 """还赊账 Skill — 对话式结清欠款记录。"""
 
-from datetime import date, datetime
 from decimal import Decimal
 
 from skillify.models.schemas import ResultStatus, SkillResult
@@ -8,9 +7,7 @@ from skillify.skills.base import Skill
 
 from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
-from app.models.cost import CostRecord
-from app.schemas.cost import CostRecordCreate
-from app.services.cost_service import create_record
+from app.services import debt_service
 
 
 class SettleDebtSkill(Skill):
@@ -83,6 +80,11 @@ class SettleDebtSkill(Skill):
             return self._do_settle(
                 db, farm_id, counterparty, amount, params.get("note")
             )
+        except ValueError as exc:
+            return SkillResult(
+                status=ResultStatus.FAILED,
+                reply=f"还款失败：{exc}",
+            )
         except Exception as exc:
             return SkillResult(
                 status=ResultStatus.FAILED,
@@ -106,94 +108,18 @@ class SettleDebtSkill(Skill):
         Returns:
             SkillResult 包含成功/失败状态和回复消息。
         """
-        # 查找赊账记录
-        debt_records = self._find_debt_records(db, farm_id, counterparty)
-
-        if not debt_records:
-            return SkillResult(
-                status=ResultStatus.FAILED,
-                reply=f"没找到'{counterparty}'的赊账记录。",
-            )
-
-        # 判断是否为结构化赊账记录
-        is_structured = any(
-            getattr(r, "record_subtype", None) == "赊账" for r in debt_records
+        settlement_amount = None if amount is None else Decimal(str(amount))
+        updated = debt_service.settle_debt(
+            db,
+            farm_id=farm_id,
+            counterparty=counterparty,
+            amount=settlement_amount,
+            note=note,
         )
-
-        # 计算还款金额
-        if amount is None:
-            total_debt = sum(
-                (r.amount for r in debt_records),
-                Decimal("0"),
-            )
-            settle_amount = total_debt
-            settle_note = f"还{counterparty}（全额）"
-        else:
-            settle_amount = Decimal(str(amount))
-            settle_note = f"还{counterparty}"
-
-        # 追加用户备注
-        if note:
-            settle_note = f"{settle_note}，{note}"
-
-        # 确定 parent_record_id（结构化记录取第一条）
-        parent_id = debt_records[0].id if is_structured else None
-
-        # 创建还款记录
-        record_create = CostRecordCreate(
-            record_type="income",
-            category="还款",
-            amount=settle_amount,
-            record_date=date.today(),
-            note=settle_note,
-            parent_record_id=parent_id,
-        )
-        created = create_record(db, record_create, farm_id=farm_id)
-
-        # 结构化记录全额还款时标记已结清
-        if is_structured and amount is None:
-            for r in debt_records:
-                if getattr(r, "record_subtype", None) == "赊账":
-                    r.settled_at = datetime.now()
-            db.commit()
 
         return SkillResult(
             status=ResultStatus.SUCCESS,
-            reply=self._format_reply(created, counterparty),
-        )
-
-    @staticmethod
-    def _find_debt_records(db, farm_id: int, counterparty: str) -> list:
-        """查找指定债权人的未结清赊账记录。
-
-        优先使用结构化字段 counterparty + record_subtype 匹配，
-        回退到 note 模糊匹配（兼容旧数据）。
-
-        Args:
-            db: 数据库会话。
-            farm_id: 农场 ID。
-            counterparty: 债权人名称关键词。
-
-        Returns:
-            匹配的赊账 CostRecord 列表。
-        """
-        structured = (
-            db.query(CostRecord)
-            .filter(CostRecord.farm_id == farm_id)
-            .filter(CostRecord.record_subtype == "赊账")
-            .filter(CostRecord.settled_at.is_(None))
-            .filter(CostRecord.counterparty.ilike(f"%{counterparty}%"))
-            .all()
-        )
-        if structured:
-            return structured
-
-        return (
-            db.query(CostRecord)
-            .filter(CostRecord.farm_id == farm_id)
-            .filter(CostRecord.record_type == "cost")
-            .filter(CostRecord.note.ilike(f"%{counterparty}%"))
-            .all()
+            reply=self._format_reply(updated, counterparty),
         )
 
     @staticmethod
@@ -213,7 +139,11 @@ class SettleDebtSkill(Skill):
     @staticmethod
     def _validate_amount(amount) -> SkillResult | None:
         """校验还款金额，返回 None 表示通过。"""
-        if not isinstance(amount, (int, float)) or amount <= 0:
+        try:
+            normalized = Decimal(str(amount))
+        except Exception:
+            normalized = None
+        if normalized is None or not normalized.is_finite() or normalized <= 0:
             return SkillResult(
                 status=ResultStatus.FAILED,
                 reply="还款失败：金额无效，请提供大于0的金额。",
@@ -223,10 +153,18 @@ class SettleDebtSkill(Skill):
     @staticmethod
     def _format_reply(record, counterparty: str) -> str:
         """格式化成功回复消息。"""
+        settled_amount = getattr(record, "settled_amount", None)
+        remaining_amount = getattr(record, "unsettled_amount", None)
+        if remaining_amount is None and settled_amount is not None:
+            remaining_amount = Decimal(str(record.amount)) - Decimal(
+                str(settled_amount)
+            )
         lines = [
-            f"已还款：还{counterparty} {record.amount}元",
+            f"已更新{counterparty}账单",
+            f"账单：{record.category}",
+            f"已结：{settled_amount}元",
+            f"剩余：{remaining_amount}元",
+            f"settlement_status：{record.settlement_status}",
             f"日期 {record.record_date}",
         ]
-        if record.note:
-            lines.append(f"备注：{record.note}")
         return "，".join(lines)

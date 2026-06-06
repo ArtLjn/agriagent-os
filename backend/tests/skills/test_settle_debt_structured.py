@@ -71,41 +71,50 @@ def structured_debt(db: Session) -> CostRecord:
 
 
 class TestSettleDebtSkillStructured:
-    """结构化赊账记录查询与还款测试。"""
+    """结构化赊账记录还款测试。"""
 
     @pytest.mark.asyncio
-    async def test_find_by_counterparty_structured(
+    async def test_execute_updates_structured_debt_without_creating_repayment_record(
         self, db: Session, structured_debt: CostRecord
     ):
-        """通过 counterparty 模糊匹配找到结构化赊账记录。"""
-        skill = SettleDebtSkill()
-
-        records = skill._find_debt_records(db, farm_id=1, counterparty="老王")
-
-        assert len(records) == 1
-        assert records[0].counterparty == "老王农资店"
-
-    @pytest.mark.asyncio
-    async def test_settle_structured_debt(
-        self, db: Session, structured_debt: CostRecord
-    ):
-        """全额还清结构化赊账记录。"""
+        """Skill 复用 service 更新原账单，不创建 income/还款 或子记录。"""
         skill = SettleDebtSkill()
         context = type("Context", (), {"farm_id": 1})()
 
         result = await skill.execute(
-            {"counterparty": "老王农资店"},
+            {"counterparty": "老王农资店", "amount": 120},
             context,
         )
 
         assert result.status.value == "success"
-        assert "300" in result.reply
+        db.refresh(structured_debt)
+        assert structured_debt.id == 1
+        assert structured_debt.record_type == "cost"
+        assert structured_debt.record_subtype == "赊账"
+        assert structured_debt.counterparty == "老王农资店"
+        assert structured_debt.settled_amount == Decimal("120.00")
+        assert structured_debt.unsettled_amount == Decimal("180.00")
+        assert structured_debt.settlement_status == "partial"
+        assert structured_debt.settled_at is None
+        repayment_records = (
+            db.query(CostRecord)
+            .filter(CostRecord.record_type == "income")
+            .filter(CostRecord.category == "还款")
+            .all()
+        )
+        child_records = (
+            db.query(CostRecord)
+            .filter(CostRecord.parent_record_id == structured_debt.id)
+            .all()
+        )
+        assert repayment_records == []
+        assert child_records == []
 
     @pytest.mark.asyncio
-    async def test_settle_structured_debt_sets_parent_id(
+    async def test_execute_full_settle_structured_debt_updates_original_record(
         self, db: Session, structured_debt: CostRecord
     ):
-        """全额还款后原记录 settled_at 被设置，还款记录带 parent_record_id。"""
+        """全额还清结构化赊账记录时更新原账单结算字段。"""
         skill = SettleDebtSkill()
         context = type("Context", (), {"farm_id": 1})()
 
@@ -116,55 +125,28 @@ class TestSettleDebtSkillStructured:
 
         assert result.status.value == "success"
         db.refresh(structured_debt)
+        assert structured_debt.settled_amount == Decimal("300.00")
+        assert structured_debt.unsettled_amount == Decimal("0.00")
+        assert structured_debt.settlement_status == "settled"
         assert structured_debt.settled_at is not None
 
     @pytest.mark.asyncio
-    async def test_structured_not_match_settled_record(
+    async def test_execute_does_not_settle_already_settled_structured_debt_again(
         self, db: Session, structured_debt: CostRecord
     ):
-        """已结清的记录不应再被匹配到。"""
-        structured_debt.settled_at = date.today()
-        db.commit()
+        """已结清记录不会再次被 service 匹配，Skill 返回失败。"""
         skill = SettleDebtSkill()
+        context = type("Context", (), {"farm_id": 1})()
 
-        records = skill._find_debt_records(db, farm_id=1, counterparty="老王")
-
-        assert len(records) == 0
-
-    @pytest.mark.asyncio
-    async def test_fallback_to_note_for_legacy_records(self, db: Session):
-        """无结构化字段的旧数据通过 note 回退匹配。"""
-        record = CostRecordCreate(
-            record_type="cost",
-            category="化肥",
-            amount=Decimal("200"),
-            record_date=date.today(),
-            note="赊账-老王农资店",
+        first = await skill.execute(
+            {"counterparty": "老王农资店"},
+            context,
         )
-        create_record(db, record, farm_id=1)
-        skill = SettleDebtSkill()
-
-        records = skill._find_debt_records(db, farm_id=1, counterparty="老王")
-
-        assert len(records) == 1
-        assert records[0].note == "赊账-老王农资店"
-
-    @pytest.mark.asyncio
-    async def test_structured_takes_priority_over_legacy(
-        self, db: Session, structured_debt: CostRecord
-    ):
-        """同时存在结构化和旧记录时优先返回结构化记录。"""
-        legacy = CostRecordCreate(
-            record_type="cost",
-            category="农药",
-            amount=Decimal("100"),
-            record_date=date.today(),
-            note="赊账-老王农资店",
+        second = await skill.execute(
+            {"counterparty": "老王农资店"},
+            context,
         )
-        create_record(db, legacy, farm_id=1)
-        skill = SettleDebtSkill()
 
-        records = skill._find_debt_records(db, farm_id=1, counterparty="老王")
-
-        assert len(records) == 1
-        assert records[0].record_subtype == "赊账"
+        assert first.status.value == "success"
+        assert second.status.value == "failed"
+        assert "未找到" in second.reply

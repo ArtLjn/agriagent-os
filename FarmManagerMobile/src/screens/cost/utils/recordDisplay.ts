@@ -16,7 +16,18 @@ interface FilterOptions {
   sourceId?: number | null;
 }
 
-function toAmountNumber(amount: string): number {
+export interface LedgerSummary {
+  occurredCost: number;
+  settledCost: number;
+  unsettledCost: number;
+  occurredIncome: number;
+  settledIncome: number;
+  unsettledIncome: number;
+}
+
+export function toAmountNumber(
+  amount: string | number | undefined | null
+): number {
   const parsed = Number(String(amount).replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -36,6 +47,85 @@ export function formatRecordAmount(amount: string): string {
   return `¥${new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
   }).format(value)}`;
+}
+
+export function getSettledAmount(record: CostRecord): number {
+  if (record.settled_amount !== undefined && record.settled_amount !== null) {
+    return toAmountNumber(record.settled_amount);
+  }
+  if (record.settlement_status === "unsettled") {
+    return 0;
+  }
+  return toAmountNumber(record.amount);
+}
+
+export function getUnsettledAmount(record: CostRecord): number {
+  if (
+    record.unsettled_amount !== undefined &&
+    record.unsettled_amount !== null
+  ) {
+    return toAmountNumber(record.unsettled_amount);
+  }
+  return Math.max(toAmountNumber(record.amount) - getSettledAmount(record), 0);
+}
+
+function isLegacyRepaymentRecord(record: CostRecord): boolean {
+  return (
+    record.record_type === "income" &&
+    record.category === "还款" &&
+    record.parent_record_id != null
+  );
+}
+
+export function getLedgerSummary(records: CostRecord[]): LedgerSummary {
+  return records.reduce<LedgerSummary>(
+    (summary, record) => {
+      const amount = toAmountNumber(record.amount);
+      const settled = getSettledAmount(record);
+      const unsettled = getUnsettledAmount(record);
+
+      if (record.record_type === "cost") {
+        summary.occurredCost += amount;
+        summary.settledCost += settled;
+        summary.unsettledCost += unsettled;
+      }
+      if (record.record_type === "income" && !isLegacyRepaymentRecord(record)) {
+        summary.occurredIncome += amount;
+        summary.settledIncome += settled;
+        summary.unsettledIncome += unsettled;
+      }
+
+      return summary;
+    },
+    {
+      occurredCost: 0,
+      settledCost: 0,
+      unsettledCost: 0,
+      occurredIncome: 0,
+      settledIncome: 0,
+      unsettledIncome: 0,
+    }
+  );
+}
+
+export function getSettlementLabel(record: CostRecord): string | null {
+  const unsettled = getUnsettledAmount(record);
+  if (unsettled <= 0) {
+    return null;
+  }
+
+  const isCost = record.record_type === "cost";
+  const unsettledLabel = isCost ? "未付" : "未收";
+  const settled = getSettledAmount(record);
+
+  if (settled <= 0) {
+    return `${unsettledLabel} ${formatRecordAmount(String(unsettled))}`;
+  }
+
+  const settledLabel = isCost ? "已付" : "已收";
+  return `${settledLabel} ${formatRecordAmount(
+    String(settled)
+  )} · ${unsettledLabel} ${formatRecordAmount(String(unsettled))}`;
 }
 
 export function formatRecordTimestamp(

@@ -13,10 +13,59 @@ ACTIVE_SOURCE_KEY = "active"
 LABOR_CATEGORY = "人工"
 LABOR_ENTRY_SOURCE = "labor_entry"
 WORK_ORDER_SOURCE = "operation_work_order"
+REPAY_CATEGORY = "还款"
+SETTLED = "settled"
+PARTIAL = "partial"
+UNSETTLED = "unsettled"
 
 
 class DuplicateSourceRecordError(ValueError):
     """同一来源已存在活动账单。"""
+
+
+def _quantize_money(value: Decimal) -> Decimal:
+    return Decimal(value).quantize(Decimal("0.01"))
+
+
+def is_legacy_repayment(record: CostRecord) -> bool:
+    return (
+        record.record_type == "income"
+        and record.category == REPAY_CATEGORY
+        and record.parent_record_id is not None
+    )
+
+
+def _active_business_records(records: list[CostRecord]) -> list[CostRecord]:
+    return [record for record in records if not is_legacy_repayment(record)]
+
+
+def _settled_amount(record: CostRecord) -> Decimal:
+    amount = _quantize_money(record.amount or Decimal("0"))
+    settled_amount = _quantize_money(record.settled_amount or Decimal("0"))
+    return min(max(settled_amount, Decimal("0.00")), amount)
+
+
+def _unsettled_amount(record: CostRecord) -> Decimal:
+    amount = _quantize_money(record.amount or Decimal("0"))
+    return max(amount - _settled_amount(record), Decimal("0.00"))
+
+
+def settlement_status_for(amount: Decimal, settled_amount: Decimal) -> str:
+    amount = _quantize_money(amount)
+    settled_amount = _quantize_money(settled_amount)
+    if settled_amount <= 0:
+        return UNSETTLED
+    if settled_amount >= amount:
+        return SETTLED
+    return PARTIAL
+
+
+def default_settled_amount(record: CostRecordCreate) -> Decimal:
+    if record.settled_amount is not None:
+        return _quantize_money(record.settled_amount)
+    if record.record_subtype == "赊账":
+        return Decimal("0.00")
+    return _quantize_money(record.amount)
 
 
 def _find_category(
@@ -49,6 +98,11 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
     source_active_key = _source_active_key(record.source_type, record.source_id)
     if source_active_key:
         _ensure_source_record_unique(db, farm_id, record.source_type, record.source_id)
+    settled_amount = default_settled_amount(record)
+    settlement_status = settlement_status_for(
+        record.amount,
+        settled_amount,
+    )
     db_record = CostRecord(
         cycle_id=record.cycle_id,
         record_type=record.record_type,
@@ -56,6 +110,8 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         category_id=category.id if category else None,
         category_name_snapshot=category.name if category else record.category,
         amount=record.amount,
+        settled_amount=settled_amount,
+        settlement_status=settlement_status,
         record_date=record.record_date,
         note=record.note,
         farm_id=farm_id,
@@ -195,6 +251,7 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
         )
         .all()
     )
+    records = _active_business_records(records)
     total_cost = sum(
         (r.amount for r in records if r.record_type == "cost"),
         Decimal("0"),
@@ -203,6 +260,10 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
         (r.amount for r in records if r.record_type == "income"),
         Decimal("0"),
     )
+    settled_cost = _sum_by_type(records, "cost", _settled_amount)
+    settled_income = _sum_by_type(records, "income", _settled_amount)
+    unsettled_cost = _sum_by_type(records, "cost", _unsettled_amount)
+    unsettled_income = _sum_by_type(records, "income", _unsettled_amount)
     labor_entry_cost = _sum_labor_source(records, LABOR_ENTRY_SOURCE)
     operation_labor_cost = _sum_labor_source(records, WORK_ORDER_SOURCE)
     labor_cost = labor_entry_cost + operation_labor_cost
@@ -211,9 +272,24 @@ def get_cycle_profit(db: Session, cycle_id: int, farm_id: int) -> CycleProfit:
         total_cost=total_cost,
         total_income=total_income,
         net_profit=total_income - total_cost,
+        settled_cost=settled_cost,
+        settled_income=settled_income,
+        unsettled_cost=unsettled_cost,
+        unsettled_income=unsettled_income,
         labor_cost=labor_cost,
         labor_entry_cost=labor_entry_cost,
         operation_labor_cost=operation_labor_cost,
+    )
+
+
+def _sum_by_type(records: list[CostRecord], record_type: str, amount_getter) -> Decimal:
+    return sum(
+        (
+            amount_getter(record)
+            for record in records
+            if record.record_type == record_type
+        ),
+        Decimal("0"),
     )
 
 
@@ -275,15 +351,24 @@ def get_yearly_summary(db: Session, year: int, farm_id: int) -> YearlySummary:
         )
         .all()
     )
+    records = _active_business_records(records)
     total_cost = Decimal("0")
     total_income = Decimal("0")
+    settled_cost = Decimal("0")
+    settled_income = Decimal("0")
+    unsettled_cost = Decimal("0")
+    unsettled_income = Decimal("0")
     by_category: dict[str, Decimal] = {}
 
     for r in records:
         if r.record_type == "cost":
             total_cost += r.amount
+            settled_cost += _settled_amount(r)
+            unsettled_cost += _unsettled_amount(r)
         elif r.record_type == "income":
             total_income += r.amount
+            settled_income += _settled_amount(r)
+            unsettled_income += _unsettled_amount(r)
         cat = f"{r.record_type}:{r.category}"
         by_category[cat] = by_category.get(cat, Decimal("0")) + r.amount
 
@@ -292,6 +377,10 @@ def get_yearly_summary(db: Session, year: int, farm_id: int) -> YearlySummary:
         total_cost=total_cost,
         total_income=total_income,
         net_profit=total_income - total_cost,
+        settled_cost=settled_cost,
+        settled_income=settled_income,
+        unsettled_cost=unsettled_cost,
+        unsettled_income=unsettled_income,
         by_category=by_category,
     )
 
@@ -303,4 +392,5 @@ __all__ = [
     "get_cycle_profit",
     "get_yearly_summary",
     "delete_record",
+    "is_legacy_repayment",
 ]
