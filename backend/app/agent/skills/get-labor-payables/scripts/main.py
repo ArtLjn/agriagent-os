@@ -63,8 +63,12 @@ class GetLaborPayablesSkill(Skill):
                 limit=int(params.get("limit") or 50),
             )
             if not entries:
-                return SkillResult(status=ResultStatus.SUCCESS, reply="未找到未付人工。")
-            total_payable = sum((entry.payable_amount for entry in entries), Decimal("0"))
+                return SkillResult(
+                    status=ResultStatus.SUCCESS, reply="未找到未付人工。"
+                )
+            total_payable = sum(
+                (entry.payable_amount for entry in entries), Decimal("0")
+            )
             total_paid = sum((entry.paid_amount for entry in entries), Decimal("0"))
             total_unpaid = sum((entry.unpaid_amount for entry in entries), Decimal("0"))
             lines = [
@@ -72,7 +76,9 @@ class GetLaborPayablesSkill(Skill):
             ]
             for entry in entries:
                 order = entry.work_order
-                worker_name = entry.worker.name if entry.worker else f"工人{entry.worker_id}"
+                worker_name = (
+                    entry.worker.name if entry.worker else f"工人{entry.worker_id}"
+                )
                 lines.append(
                     f"- {worker_name}｜作业单#{entry.work_order_id} "
                     f"{order.operation_date if order else ''} "
@@ -82,7 +88,9 @@ class GetLaborPayablesSkill(Skill):
                 )
             return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
         except Exception as exc:
-            return SkillResult(status=ResultStatus.FAILED, reply=f"查询未付人工失败：{exc}")
+            return SkillResult(
+                status=ResultStatus.FAILED, reply=f"查询未付人工失败：{exc}"
+            )
         finally:
             db.close()
 

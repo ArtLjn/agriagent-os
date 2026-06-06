@@ -12,7 +12,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { colors } from "../../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../../theme/spacing";
 
-const AI_EXAMPLES = ["化肥120块", "卖瓜3000元", "大棚租金5000"];
+const AI_EXAMPLES = ["化肥120块", "卖瓜3000元", "地租5000"];
 
 interface AIHelperProps {
   aiInput: string;
@@ -34,17 +34,19 @@ export const AIHelper: React.FC<AIHelperProps> = ({
   <View style={styles.card}>
     <View style={styles.header}>
       <View style={[styles.iconBadge, { backgroundColor: themeMuted }]}>
-        <Icon name="text-recognition" size={18} color={themeColor} />
+        <Icon name="auto-fix" size={18} color={themeColor} />
       </View>
       <View style={styles.headerText}>
-        <Text style={styles.title}>智能记账</Text>
-        <Text style={styles.subtitle}>说一句话，自动识别类型和金额</Text>
+        <Text style={styles.title}>一句话快速记账</Text>
+        <Text style={styles.subtitle}>
+          输入"买化肥120块"，自动识别类型、金额和分类
+        </Text>
       </View>
     </View>
     <View style={styles.inputRow}>
       <TextInput
         style={styles.input}
-        placeholder="例如：买化肥120块"
+        placeholder="例如：浇水工资100"
         placeholderTextColor={colors.textTertiary}
         value={aiInput}
         onChangeText={onInputChange}
@@ -90,14 +92,11 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxl,
-    padding: spacingV2.md,
+    padding: spacingV2.lg,
     marginHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.md,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    marginBottom: spacingV2.sm,
+    borderWidth: 1,
+    borderColor: "#EDF0F5",
   },
   header: {
     flexDirection: "row",
@@ -106,9 +105,9 @@ const styles = StyleSheet.create({
     gap: spacingV2.sm,
   },
   iconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: borderRadiusV2.full,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -120,11 +119,13 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.md,
     fontWeight: "700",
     color: colors.text,
+    letterSpacing: -0.2,
   },
   subtitle: {
     fontSize: fontSizeV2.xs,
-    color: colors.textSecondary,
+    color: colors.textTertiary,
     marginTop: 2,
+    fontWeight: "500",
   },
   inputRow: {
     flexDirection: "row",
@@ -140,6 +141,7 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.md,
     color: colors.text,
     backgroundColor: colors.surfaceMuted,
+    fontWeight: "500",
   },
   button: {
     width: 44,
@@ -149,7 +151,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   examplesRail: {
-    height: 38,
+    height: 36,
     justifyContent: "center",
     overflow: "visible",
   },
@@ -170,5 +172,6 @@ const styles = StyleSheet.create({
   exampleText: {
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
+    fontWeight: "500",
   },
 });

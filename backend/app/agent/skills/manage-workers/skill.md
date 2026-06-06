@@ -1,0 +1,92 @@
+---
+name: manage_workers
+type: write
+description: 创建、更新、停用或恢复工人档案；删除语义为停用/离职并保留历史用工。
+triggers:
+  - 我的工人
+  - 创建工人
+  - 招工人
+  - 修改工人
+  - 停用工人
+  - 离职工人
+parameters:
+  type: object
+  properties:
+    action:
+      type: string
+      description: 操作：create/update/deactivate/restore。
+    worker_id:
+      type: integer
+      description: 工人 ID。
+    name:
+      type: string
+      description: 工人姓名。
+    phone:
+      type: string
+      description: 手机号。
+    default_pay_type:
+      type: string
+      description: 默认计薪方式，如 daily、hourly、piece。
+    default_unit_price:
+      type: number
+      description: 默认单价，如日薪 150。
+    note:
+      type: string
+      description: 备注。
+    status:
+      type: string
+      description: 状态 active 或 inactive。
+  required:
+    - action
+---
+
+# manage_workers
+
+创建、更新、停用或恢复工人档案。工人删除统一按停用/离职处理，保留历史用工、作业单和账务。
+
+## 何时使用
+
+用户明确要创建、修改、停用、恢复工人档案时使用。
+
+- “招了李四，日薪 150” -> 创建工人。
+- “把李四日薪改成 180” -> 更新工人。
+- “李四不用了/离职了/删除李四” -> 停用工人。
+- “李四又回来了” -> 恢复工人。
+
+## 不要使用
+
+- 用户只是查询当前工人或离职工人时，使用 `get_workers`。
+- 用户记录一次具体农事作业和用工时，优先使用 `create_operation_work_order`。
+- 用户查询未付工资或结算工资时，使用 `get_labor_payables` 或 `settle_labor_payment`。
+- 用户只是在普通对话中提到人名，但没有工人档案意图时，不要创建工人。
+
+## 参数推断
+
+- “招了李四，日薪 150” -> `action=create`, `name=李四`, `default_pay_type=daily`, `default_unit_price=150`。
+- “删除李四” -> `action=deactivate`, `name=李四`，确认文案必须说“停用/离职”，不要说数据库删除。
+- “恢复李四” -> `action=restore`, `name=李四`。
+
+## 缺参策略
+
+- 写操作缺少工人姓名和 `worker_id` 时必须追问。
+- 创建工人缺少工资时可以创建，但确认文案必须展示“默认单价未设置”。
+- 遇到已停用同名工人时，先追问恢复还是新建同名工人。
+- 不要把入职时间、负责茬口或地块当作已存在字段写入备注，除非用户明确要求写入备注。
+
+## Runtime 策略
+
+- permission: write_confirm
+- direct_call: false
+- direct_return: false
+- cache: 写入成功后使工人、人工和农场状态上下文失效。
+
+## 失败处理
+
+- 找不到工人时，用中文提示用户提供姓名或 ID。
+- 参数非法时返回中文说明，不暴露内部异常。
+- 停用工人时说明历史用工和账务会保留。
+
+## 示例
+
+- 用户：“我招了李四，日薪 150” -> 待确认后创建李四。
+- 用户：“删除李四” -> 待确认后停用李四并保留历史记录。

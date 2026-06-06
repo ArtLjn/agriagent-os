@@ -1,0 +1,130 @@
+"""工人档案 Skill 测试。"""
+
+import importlib
+from decimal import Decimal
+
+import pytest
+from skillify.core.context import SkillContext
+
+from app.models.planting import Worker
+
+_get_workers_mod = importlib.import_module("app.agent.skills.get-workers.scripts.main")
+_manage_workers_mod = importlib.import_module(
+    "app.agent.skills.manage-workers.scripts.main"
+)
+
+GetWorkersSkill = _get_workers_mod.GetWorkersSkill
+ManageWorkersSkill = _manage_workers_mod.ManageWorkersSkill
+
+
+@pytest.fixture
+def ctx():
+    return SkillContext(farm_id=1)
+
+
+@pytest.fixture
+def worker_skill_sessions(monkeypatch, db_session):
+    for module in (_get_workers_mod, _manage_workers_mod):
+        monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
+    return db_session
+
+
+def _add_worker(db, name: str, status: str = "active") -> Worker:
+    worker = Worker(
+        farm_id=1,
+        name=name,
+        status=status,
+        default_pay_type="daily",
+        default_unit_price=Decimal("150"),
+    )
+    db.add(worker)
+    db.commit()
+    db.refresh(worker)
+    return worker
+
+
+@pytest.mark.asyncio
+async def test_get_workers_defaults_to_active_only(worker_skill_sessions, ctx):
+    _add_worker(worker_skill_sessions, "李四")
+    _add_worker(worker_skill_sessions, "王五", status="inactive")
+
+    result = await GetWorkersSkill().execute({}, ctx)
+
+    assert result.status.value == "success"
+    assert "李四" in result.reply
+    assert "王五" not in result.reply
+
+
+@pytest.mark.asyncio
+async def test_get_workers_can_include_inactive(worker_skill_sessions, ctx):
+    _add_worker(worker_skill_sessions, "王五", status="inactive")
+
+    result = await GetWorkersSkill().execute({"active_only": False}, ctx)
+
+    assert result.status.value == "success"
+    assert "王五" in result.reply
+    assert "已停用" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_manage_workers_creates_worker(worker_skill_sessions, ctx):
+    result = await ManageWorkersSkill().execute(
+        {
+            "action": "create",
+            "name": "赵六",
+            "default_pay_type": "daily",
+            "default_unit_price": 180,
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "赵六" in result.reply
+    worker = worker_skill_sessions.query(Worker).filter(Worker.name == "赵六").one()
+    assert worker.default_unit_price == Decimal("180.00")
+
+
+@pytest.mark.asyncio
+async def test_manage_workers_deactivates_without_hard_delete(
+    worker_skill_sessions, ctx
+):
+    worker = _add_worker(worker_skill_sessions, "李四")
+
+    result = await ManageWorkersSkill().execute(
+        {"action": "deactivate", "worker_id": worker.id},
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "已停用工人" in result.reply
+    saved = worker_skill_sessions.query(Worker).filter(Worker.id == worker.id).one()
+    assert saved.status == "inactive"
+
+
+@pytest.mark.asyncio
+async def test_manage_workers_restores_worker(worker_skill_sessions, ctx):
+    worker = _add_worker(worker_skill_sessions, "王五", status="inactive")
+
+    result = await ManageWorkersSkill().execute(
+        {"action": "restore", "worker_id": worker.id},
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    saved = worker_skill_sessions.query(Worker).filter(Worker.id == worker.id).one()
+    assert saved.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_create_inactive_duplicate_requires_clarification(
+    worker_skill_sessions, ctx
+):
+    _add_worker(worker_skill_sessions, "李四", status="inactive")
+
+    result = await ManageWorkersSkill().execute(
+        {"action": "create", "name": "李四", "default_unit_price": 150},
+        ctx,
+    )
+
+    assert result.status.value == "need_clarify"
+    assert "已停用" in result.reply

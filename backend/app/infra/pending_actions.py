@@ -5,9 +5,13 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
 
 from langchain_core.messages import ToolMessage
+
+from app.infra.pending_action_presenter import (
+    build_confirm_message,
+    build_confirmation_context,
+)
 
 _CONFIRM_PATTERNS = re.compile(r"(确认|好的|是的|没问题|对)")
 _CANCEL_PATTERNS = re.compile(r"(算了|取消|不要了|不需要了)")
@@ -24,6 +28,15 @@ WRITE_SKILLS = frozenset(
         "update_crop_cycle",
         "update_crop_stage",
         "update_operation_work_order",
+        "manage_workers",
+        "manage_wages",
+        "delete_cost_record",
+        "manage_cost_categories",
+        "manage_planting_units",
+        "manage_crop_templates",
+        "manage_farm_logs",
+        "delete_crop_cycle",
+        "manage_user_settings",
     }
 )
 
@@ -49,6 +62,27 @@ _CACHE_INVALIDATION_MAP: dict[str, list[str]] = {
         "cost_summary",
         "get_farm_status",
     ],
+    "manage_workers": ["get_farm_status"],
+    "manage_wages": ["cost_analytics", "cost_summary", "get_farm_status"],
+    "delete_cost_record": ["cost_analytics", "cost_summary", "get_farm_status"],
+    "manage_cost_categories": ["cost_analytics", "cost_summary", "get_farm_status"],
+    "manage_planting_units": ["get_farm_status"],
+    "manage_crop_templates": [
+        "crop_cycle",
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ],
+    "manage_farm_logs": ["farm_logs", "get_farm_status"],
+    "delete_crop_cycle": [
+        "crop_cycle",
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ],
+    "manage_user_settings": ["get_farm_status"],
 }
 
 
@@ -56,46 +90,6 @@ def get_cache_groups_for_skill(skill_name: str) -> list[str]:
     """返回写操作 skill 执行后需要清除的 skill 缓存组。"""
     return _CACHE_INVALIDATION_MAP.get(skill_name, [])
 
-
-_SKILL_DISPLAY: dict[str, str] = {
-    "create_cost_record": "记账",
-    "create_crop_cycle": "创建茬口",
-    "create_crop_template": "创建作物模板",
-    "log_farm_activity": "记录农事",
-    "create_operation_work_order": "创建农事作业单",
-    "update_operation_work_order": "更新农事作业单",
-    "settle_labor_payment": "结算人工",
-    "settle_debt": "还款",
-    "update_crop_stage": "更新阶段",
-}
-
-_SKILL_EMOJI: dict[str, str] = {
-    "create_cost_record": "💰",
-    "create_crop_cycle": "🌱",
-    "create_crop_template": "📋",
-    "log_farm_activity": "📝",
-    "create_operation_work_order": "🧑‍🌾",
-    "update_operation_work_order": "🧑‍🌾",
-    "settle_labor_payment": "💳",
-    "settle_debt": "💳",
-    "update_crop_stage": "🔄",
-}
-
-_SKILL_PARAM_FORMAT: dict[str, list[str]] = {
-    "create_cost_record": ["category", "amount", "record_type"],
-    "create_crop_cycle": ["crop_name", "season"],
-    "create_crop_template": ["crop_name"],
-    "log_farm_activity": ["operation_type"],
-    "create_operation_work_order": ["operation_type", "operation_date", "cycle_id"],
-    "update_operation_work_order": [
-        "work_order_id",
-        "operation_type",
-        "operation_date",
-    ],
-    "settle_labor_payment": ["worker", "amount", "work_order_id"],
-    "settle_debt": ["counterparty", "amount"],
-    "update_crop_stage": ["stage_name"],
-}
 
 _TIMEOUT_SECONDS = 300  # 5分钟超时
 
@@ -200,236 +194,6 @@ def is_write_skill(skill_name: str) -> bool:
 
 
 PENDING_MARKER = "[PENDING_ACTION]"
-
-
-def build_confirmation_context(
-    skill_name: str,
-    params: dict,
-    original_input: str = "",
-) -> dict:
-    """构建结构化确认上下文。"""
-    if skill_name == "create_operation_work_order":
-        return _build_create_work_order_context(skill_name, params, original_input)
-
-    if skill_name == "update_crop_cycle":
-        return {
-            "skill_name": skill_name,
-            "original_input": original_input,
-            "target": {
-                "type": "crop_cycle",
-                "id": params.get("cycle_id"),
-                "name": params.get("cycle_name") or params.get("crop_name") or "茬口",
-            },
-            "changes": [
-                {
-                    "field": "start_date",
-                    "label": "开始日期",
-                    "old": params.get("old_start_date"),
-                    "new": params.get("start_date"),
-                }
-            ],
-            "inferred_fields": {
-                "crop_name": params.get("crop_name"),
-                "start_date": params.get("start_date"),
-            },
-            "risk_notes": [],
-            "editable_fields": ["start_date", "season", "batch_note"],
-        }
-
-    if skill_name == "settle_labor_payment":
-        return {
-            "skill_name": skill_name,
-            "original_input": original_input,
-            "target": {
-                "type": "labor_payment",
-                "worker": params.get("worker"),
-                "work_order_id": params.get("work_order_id"),
-                "cycle_id": params.get("cycle_id"),
-            },
-            "changes": [
-                {
-                    "field": "amount",
-                    "label": "结算金额",
-                    "old": None,
-                    "new": params.get("amount") or "全额结清",
-                }
-            ],
-            "inferred_fields": {
-                "worker": params.get("worker"),
-                "affected_entries": params.get("affected_entries"),
-            },
-            "risk_notes": ["确认后会增加人工已付金额。"],
-            "editable_fields": [
-                "worker",
-                "amount",
-                "cycle_id",
-                "work_order_id",
-                "start_date",
-                "end_date",
-            ],
-        }
-
-    return {
-        "skill_name": skill_name,
-        "original_input": original_input,
-        "target": {
-            "type": skill_name,
-            "name": _SKILL_DISPLAY.get(skill_name, skill_name),
-        },
-        "changes": [
-            {"field": key, "old": None, "new": value} for key, value in params.items()
-        ],
-        "inferred_fields": {},
-        "risk_notes": [],
-        "editable_fields": list(params.keys()),
-    }
-
-
-def build_confirm_message(
-    skill_name: str, params: dict, original_input: str = ""
-) -> str:
-    context = build_confirmation_context(skill_name, params, original_input)
-    if skill_name == "create_operation_work_order":
-        target = context["target"]
-        labor = context["labor"]
-        lines = [
-            f"🧑‍🌾 确认创建农事作业单：{target['operation_type']}",
-            f"日期：{target.get('operation_date') or '今天'}",
-        ]
-        units = context["scope"].get("units") or []
-        if units:
-            lines.append(f"范围：{'、'.join(units)}")
-        if labor.get("workers"):
-            lines.append(f"人工：{'、'.join(labor['workers'])}")
-            lines.append(
-                f"付款：应付{labor['payable_amount']}元，"
-                f"已付{labor['paid_amount']}元，"
-                f"未付{labor['unpaid_amount']}元"
-            )
-        if original_input:
-            lines.append(f"理解：您说的是「{original_input}」")
-        lines.append("确认吗？")
-        return "\n".join(lines)
-
-    if skill_name == "update_crop_cycle":
-        target = context["target"]["name"]
-        change = context["changes"][0]
-        lines = [
-            f"🔄 确认修改茬口：{target}",
-            f"{change['label']}：{change['old']} → {change['new']}",
-        ]
-        if original_input:
-            lines.append(f"理解：您说的是「{original_input}」")
-        lines.append("确认吗？")
-        return "\n".join(lines)
-
-    emoji = _SKILL_EMOJI.get(skill_name, "❓")
-    action = _SKILL_DISPLAY.get(skill_name, skill_name)
-
-    param_keys = _SKILL_PARAM_FORMAT.get(skill_name, list(params.keys()))
-    parts = []
-    for k in param_keys:
-        v = params.get(k)
-        if v is not None:
-            if k == "amount":
-                parts.append(f"{v}元")
-            elif k == "record_type":
-                label = "收入" if v == "income" else "支出"
-                parts.append(label)
-            else:
-                parts.append(str(v))
-
-    detail = " ".join(parts) if parts else ""
-
-    lines = []
-    lines.append(f"{emoji} 确认{action}：{detail}")
-
-    if original_input:
-        lines.append(f"理解：您说的是「{original_input}」")
-
-    lines.append("确认吗？")
-    return "\n".join(lines)
-
-
-def _build_create_work_order_context(
-    skill_name: str,
-    params: dict,
-    original_input: str,
-) -> dict:
-    workers = _split_names(params.get("workers"))
-    unit_price = _to_decimal(params.get("unit_price")) or Decimal("0")
-    paid_amount = _to_decimal(params.get("paid_amount")) or Decimal("0")
-    payable = _to_decimal(params.get("payable_amount"))
-    total_payable = (payable if payable is not None else unit_price) * len(workers)
-    total_paid = paid_amount
-    total_unpaid = max(total_payable - total_paid, Decimal("0"))
-    return {
-        "skill_name": skill_name,
-        "original_input": original_input,
-        "target": {
-            "type": "operation_work_order",
-            "operation_type": params.get("operation_type"),
-            "operation_date": params.get("operation_date"),
-            "cycle_id": params.get("cycle_id"),
-        },
-        "scope": {
-            "scope_type": "unit" if params.get("unit_names") else "cycle",
-            "units": _split_names(params.get("unit_names")),
-        },
-        "labor": {
-            "workers": workers,
-            "payable_amount": _money_text(total_payable),
-            "paid_amount": _money_text(total_paid),
-            "unpaid_amount": _money_text(total_unpaid),
-            "paid_worker": params.get("paid_worker"),
-        },
-        "changes": [
-            {"field": key, "old": None, "new": value} for key, value in params.items()
-        ],
-        "inferred_fields": {
-            "operation_date": params.get("operation_date"),
-            "cycle_id": params.get("cycle_id"),
-            "paid_worker": params.get("paid_worker"),
-        },
-        "risk_notes": ["确认后会创建作业单和人工成本。"],
-        "editable_fields": [
-            "operation_type",
-            "operation_date",
-            "cycle_id",
-            "unit_names",
-            "workers",
-            "unit_price",
-            "payable_amount",
-            "paid_worker",
-            "paid_amount",
-            "note",
-        ],
-    }
-
-
-def _split_names(value) -> list[str]:
-    if not value:
-        return []
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    return [
-        part.strip()
-        for part in str(value).replace("，", ",").split(",")
-        if part.strip()
-    ]
-
-
-def _to_decimal(value) -> Decimal | None:
-    if value in (None, ""):
-        return None
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def _money_text(value: Decimal) -> str:
-    return str(value.quantize(Decimal("0.01")))
 
 
 def is_pending_tool_message(message) -> bool:

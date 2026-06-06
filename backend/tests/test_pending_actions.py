@@ -38,6 +38,15 @@ def test_write_skill_registry_covers_runtime_write_skills():
         "update_crop_cycle",
         "update_crop_stage",
         "update_operation_work_order",
+        "manage_workers",
+        "manage_wages",
+        "delete_cost_record",
+        "manage_cost_categories",
+        "manage_planting_units",
+        "manage_crop_templates",
+        "manage_farm_logs",
+        "delete_crop_cycle",
+        "manage_user_settings",
     }
 
     assert WRITE_SKILLS == expected

@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>记一笔 redesign preview</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 390px;
+        height: 844px;
+        margin: 0;
+        overflow: hidden;
+        background: #f6f8fc;
+        color: #1a1d23;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+          sans-serif;
+      }
+
+      .screen {
+        position: relative;
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 70% 4%, rgba(74, 123, 247, 0.14), transparent 32%),
+          linear-gradient(180deg, #f7faff 0%, #f6f8fc 35%, #ffffff 100%);
+      }
+
+      .status {
+        height: 32px;
+        padding: 8px 18px 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .status-icons {
+        display: flex;
+        gap: 5px;
+      }
+
+      .dot {
+        width: 4px;
+        height: 4px;
+        border-radius: 99px;
+        background: #111827;
+      }
+
+      .top {
+        padding: 10px 18px 0;
+      }
+
+      .nav-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .back {
+        width: 40px;
+        height: 40px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #edf0f5;
+        color: #1f2937;
+      }
+
+      .draft {
+        height: 36px;
+        border-radius: 18px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #ffffff;
+        border: 1px solid rgba(74, 123, 247, 0.14);
+        color: #4a7bf7;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .eyebrow {
+        margin-top: 12px;
+        font-size: 12px;
+        line-height: 16px;
+        font-weight: 700;
+        color: #6b7280;
+      }
+
+      .title {
+        margin: 2px 0 0;
+        font-size: 28px;
+        line-height: 34px;
+        font-weight: 850;
+        letter-spacing: 0;
+      }
+
+      .ai-card {
+        margin-top: 10px;
+        border-radius: 22px;
+        padding: 10px;
+        background: #ffffff;
+        border: 1px solid #edf0f5;
+        box-shadow: 0 12px 30px rgba(31, 41, 55, 0.06);
+      }
+
+      .ai-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 8px;
+      }
+
+      .ai-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        color: #4a7bf7;
+        background: rgba(74, 123, 247, 0.08);
+      }
+
+      .ai-title {
+        font-size: 14px;
+        line-height: 18px;
+        font-weight: 800;
+      }
+
+      .ai-sub {
+        margin-top: 1px;
+        font-size: 11px;
+        line-height: 14px;
+        font-weight: 650;
+        color: #8a93a3;
+      }
+
+      .ai-input {
+        height: 40px;
+        border-radius: 18px;
+        padding: 0 8px 0 13px;
+        display: grid;
+        grid-template-columns: 1fr 38px;
+        align-items: center;
+        gap: 8px;
+        background: #f3f6fb;
+        color: #9ca3af;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .send {
+        width: 36px;
+        height: 36px;
+        border-radius: 15px;
+        display: grid;
+        place-items: center;
+        background: #4a7bf7;
+        color: #ffffff;
+      }
+
+      .examples {
+        margin-top: 7px;
+        display: flex;
+        gap: 7px;
+      }
+
+      .example {
+        height: 30px;
+        border-radius: 15px;
+        padding: 0 10px;
+        display: flex;
+        align-items: center;
+        background: #f6f8fc;
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .amount-panel {
+        margin: 10px 18px 0;
+        border-radius: 24px;
+        padding: 11px 14px 14px;
+        color: #ffffff;
+        background: #111827;
+        box-shadow: 0 18px 44px rgba(17, 24, 39, 0.18);
+      }
+
+      .type-toggle {
+        height: 40px;
+        border-radius: 20px;
+        padding: 4px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .type {
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 800;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      .type.active {
+        color: #ff9a9a;
+        background: #ffffff;
+      }
+
+      .amount-row {
+        margin-top: 8px;
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        color: #ff9a9a;
+      }
+
+      .symbol {
+        font-size: 28px;
+        line-height: 34px;
+        font-weight: 650;
+        margin-right: 6px;
+      }
+
+      .amount {
+        font-size: 48px;
+        line-height: 54px;
+        font-weight: 900;
+        letter-spacing: 0;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .quick {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+
+      .quick-chip {
+        height: 34px;
+        border-radius: 17px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .content {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 502px;
+        bottom: 104px;
+        padding: 0 18px;
+        overflow: hidden;
+      }
+
+      .section-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 34px;
+      }
+
+      .section-title {
+        font-size: 15px;
+        font-weight: 850;
+      }
+
+      .section-link {
+        font-size: 12px;
+        font-weight: 800;
+        color: #4a7bf7;
+      }
+
+      .categories {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 2px;
+      }
+
+      .cat {
+        height: 64px;
+        border-radius: 18px;
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 6px;
+        background: #ffffff;
+        border: 1px solid #edf0f5;
+        color: #6b7280;
+        font-size: 12px;
+        font-weight: 800;
+        box-shadow: 0 8px 20px rgba(31, 41, 55, 0.04);
+      }
+
+      .cat.active {
+        color: #c45b5b;
+        background: #fff3f3;
+        border-color: rgba(196, 91, 91, 0.24);
+      }
+
+      .cat-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 13px;
+        display: grid;
+        place-items: center;
+        background: #f3f6fb;
+      }
+
+      .cat.active .cat-icon {
+        background: #ffffff;
+      }
+
+      .settings-card {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: 1.16fr 0.84fr;
+        gap: 8px;
+      }
+
+      .setting {
+        min-height: 66px;
+        border-radius: 20px;
+        padding: 10px;
+        display: grid;
+        grid-template-columns: 32px 1fr;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid #edf0f5;
+        box-shadow: 0 10px 24px rgba(31, 41, 55, 0.04);
+      }
+
+      .setting-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 13px;
+        display: grid;
+        place-items: center;
+        color: #4a7bf7;
+        background: rgba(74, 123, 247, 0.08);
+      }
+
+      .setting-title {
+        font-size: 13px;
+        line-height: 18px;
+        font-weight: 800;
+      }
+
+      .setting-sub {
+        margin-top: 2px;
+        font-size: 11px;
+        line-height: 14px;
+        font-weight: 650;
+        color: #8a93a3;
+      }
+
+      .setting-value {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: #6b7280;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .switch {
+        margin-top: 6px;
+        width: 42px;
+        height: 24px;
+        border-radius: 14px;
+        padding: 3px;
+        background: #e5eaf2;
+      }
+
+      .thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 11px;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(31, 41, 55, 0.18);
+      }
+
+      .note {
+        height: 38px;
+        border-radius: 18px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #ffffff;
+        border: 1px dashed #d9e0eb;
+        color: #8a93a3;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .bottom {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 96px;
+        padding: 12px 18px 18px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.86), #ffffff 28%);
+        box-shadow: 0 -12px 34px rgba(31, 41, 55, 0.08);
+      }
+
+      .save {
+        height: 54px;
+        border-radius: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: #4a7bf7;
+        color: #ffffff;
+        font-size: 16px;
+        font-weight: 850;
+        box-shadow: 0 16px 28px rgba(74, 123, 247, 0.24);
+      }
+
+      i {
+        width: 18px;
+        height: 18px;
+        stroke-width: 2.25;
+      }
+
+      .back i,
+      .draft i,
+      .send i {
+        width: 19px;
+        height: 19px;
+      }
+
+      .cat i {
+        width: 19px;
+        height: 19px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="screen">
+      <div class="status">
+        <span>17:16</span>
+        <div class="status-icons">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+      </div>
+
+      <section class="top">
+        <div class="nav-row">
+          <div class="back"><i data-lucide="chevron-left"></i></div>
+          <div class="draft"><i data-lucide="sparkles"></i><span>智能识别</span></div>
+        </div>
+        <div class="eyebrow">记账</div>
+        <h1 class="title">记一笔</h1>
+
+        <div class="ai-card">
+          <div class="ai-head">
+            <div class="ai-icon"><i data-lucide="wand-sparkles"></i></div>
+            <div>
+              <div class="ai-title">一句话快速记账</div>
+              <div class="ai-sub">输入“买化肥120块”，自动填类型、金额和分类</div>
+            </div>
+          </div>
+          <div class="ai-input">
+            <span>例如：浇水工资100</span>
+            <div class="send"><i data-lucide="arrow-right"></i></div>
+          </div>
+          <div class="examples">
+            <div class="example">化肥120块</div>
+            <div class="example">卖瓜3000元</div>
+            <div class="example">地租5000</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="amount-panel">
+        <div class="type-toggle">
+          <div class="type active"><i data-lucide="arrow-down-left"></i>支出</div>
+          <div class="type"><i data-lucide="arrow-up-right"></i>收入</div>
+        </div>
+        <div class="amount-row">
+          <span class="symbol">¥</span>
+          <span class="amount">100</span>
+        </div>
+        <div class="quick">
+          <div class="quick-chip">¥50</div>
+          <div class="quick-chip">¥100</div>
+          <div class="quick-chip">¥200</div>
+          <div class="quick-chip">¥500</div>
+        </div>
+      </section>
+
+      <section class="content">
+        <div class="section-row">
+          <div class="section-title">选择分类</div>
+          <div class="section-link">管理分类</div>
+        </div>
+        <div class="categories">
+          <div class="cat">
+            <div class="cat-icon"><i data-lucide="sprout"></i></div>
+            <span>种子</span>
+          </div>
+          <div class="cat active">
+            <div class="cat-icon"><i data-lucide="flask-conical"></i></div>
+            <span>化肥</span>
+          </div>
+          <div class="cat">
+            <div class="cat-icon"><i data-lucide="spray-can"></i></div>
+            <span>农药</span>
+          </div>
+          <div class="cat">
+            <div class="cat-icon"><i data-lucide="hard-hat"></i></div>
+            <span>人工</span>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="setting">
+            <div class="setting-icon"><i data-lucide="calendar-clock"></i></div>
+            <div>
+              <div class="setting-title">日期时间</div>
+              <div class="setting-value">6月6日 17:16 <i data-lucide="chevron-right"></i></div>
+            </div>
+          </div>
+
+          <div class="setting">
+            <div class="setting-icon"><i data-lucide="hand-coins"></i></div>
+            <div>
+              <div class="setting-title">这笔先赊着</div>
+              <div class="setting-sub">应付账款</div>
+              <div class="switch"><div class="thumb"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height: 12px"></div>
+        <div class="note"><i data-lucide="pencil-line"></i><span>添加备注、对方或作业来源</span></div>
+      </section>
+
+      <footer class="bottom">
+        <div class="save"><i data-lucide="check"></i><span>保存这笔支出</span></div>
+      </footer>
+    </main>
+    <script>
+      lucide.createIcons();
+    </script>
+  </body>
+</html>

@@ -61,7 +61,10 @@ class UpdateCropCycleSkill(Skill):
                 "season": {"type": "string", "description": "季节，如夏季、秋季"},
                 "name": {"type": "string", "description": "新的茬口名称"},
                 "area": {"type": "number", "description": "面积，亩"},
-                "status": {"type": "string", "description": "状态 active/planned/finished"},
+                "status": {
+                    "type": "string",
+                    "description": "状态 active/planned/finished",
+                },
                 "current_stage": {"type": "string", "description": "当前阶段名称"},
                 "stage": {"type": "string", "description": "当前阶段名称别名"},
                 "note": {"type": "string", "description": "批次备注"},
@@ -266,7 +269,9 @@ def _match_active_cycles(
 ) -> list[CropCycle]:
     active_cycles = (
         db.query(CropCycle)
-        .filter(CropCycle.farm_id == farm_id, CropCycle.status.in_(("active", "planned")))
+        .filter(
+            CropCycle.farm_id == farm_id, CropCycle.status.in_(("active", "planned"))
+        )
         .order_by(CropCycle.status, CropCycle.start_date.desc(), CropCycle.id.desc())
         .all()
     )

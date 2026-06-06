@@ -19,14 +19,19 @@ class SettleLaborPaymentSkill(Skill):
         return "settle_labor_payment"
 
     def description(self) -> str:
-        return "结算或部分支付未付人工，支持按工人、茬口、作业单和日期范围筛选，需确认。"
+        return (
+            "结算或部分支付未付人工，支持按工人、茬口、作业单和日期范围筛选，需确认。"
+        )
 
     def parameters_schema(self) -> dict:
         return {
             "type": "object",
             "properties": {
                 "worker": {"type": "string", "description": "工人姓名"},
-                "amount": {"type": "number", "description": "本次支付金额，不传表示全额结清"},
+                "amount": {
+                    "type": "number",
+                    "description": "本次支付金额，不传表示全额结清",
+                },
                 "cycle_id": {"type": "integer", "description": "茬口 ID"},
                 "work_order_id": {"type": "integer", "description": "作业单 ID"},
                 "start_date": {"type": "string", "description": "开始日期 YYYY-MM-DD"},
@@ -38,7 +43,11 @@ class SettleLaborPaymentSkill(Skill):
         return {
             "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
             "risk_level": SkillRiskLevel.MEDIUM,
-            "context_dependencies": ["workers", "unpaid_labor", "operation_work_orders"],
+            "context_dependencies": [
+                "workers",
+                "unpaid_labor",
+                "operation_work_orders",
+            ],
             "cache_invalidation": ["cost_analytics", "cost_summary", "get_farm_status"],
             "confirmation_schema": {
                 "target_fields": ["worker", "cycle_id", "work_order_id"],

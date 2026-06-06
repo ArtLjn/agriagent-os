@@ -3,11 +3,9 @@ import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
-  SectionList,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   StyleSheet,
-  TextInput,
 } from "react-native";
 import {
   useFocusEffect,
@@ -25,7 +23,11 @@ import { colors } from "../../theme/colors";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { MonthlyStats } from "./components/MonthlyStats";
+import { LedgerHeroHeader } from "./components/LedgerHeroHeader";
+import { LedgerFilters } from "./components/LedgerFilters";
+import { LedgerSearchBox } from "./components/LedgerSearchBox";
+import { LedgerSourceBanner } from "./components/LedgerSourceBanner";
+import { LedgerSummaryCard } from "./components/LedgerSummaryCard";
 import { RecordItem } from "./components/RecordItem";
 import { RecordDetailModal } from "./components/RecordDetailModal";
 import {
@@ -43,49 +45,13 @@ type CostListNavigationProp = NativeStackNavigationProp<
 >;
 type CostListRouteProp = RouteProp<RootStackParamList, "CostList">;
 
-interface Section {
+interface DayGroup {
+  date: string;
   title: string;
-  data: CostRecord[];
+  records: CostRecord[];
   dayCost: number;
   dayIncome: number;
 }
-
-const AssetCard: React.FC<{ income: number; cost: number }> = ({
-  income,
-  cost,
-}) => {
-  const total = income - cost;
-  const isPositive = total >= 0;
-  const accentColor = isPositive ? colors.income : colors.expense;
-  const bgColor = isPositive ? colors.incomeBg : colors.expenseBg;
-
-  return (
-    <View style={[assetStyles.card, { backgroundColor: bgColor }]}>
-      <View style={assetStyles.mainSection}>
-        <Text style={assetStyles.label}>本月结余</Text>
-        <Text style={[assetStyles.total, { color: accentColor }]}>
-          {isPositive ? "+" : ""}
-          {total.toFixed(2)}
-        </Text>
-      </View>
-      <View style={assetStyles.subRow}>
-        <View style={assetStyles.subItem}>
-          <Text style={assetStyles.subLabel}>收入</Text>
-          <Text style={[assetStyles.subAmount, { color: colors.income }]}>
-            +{income.toFixed(2)}
-          </Text>
-        </View>
-        <View style={assetStyles.subDivider} />
-        <View style={assetStyles.subItem}>
-          <Text style={assetStyles.subLabel}>支出</Text>
-          <Text style={[assetStyles.subAmount, { color: colors.expense }]}>
-            -{cost.toFixed(2)}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-};
 
 function formatSectionTitle(dateStr: string): string {
   const d = dayjs(dateStr);
@@ -107,6 +73,10 @@ export const CostListScreen: React.FC = () => {
   const route = useRoute<CostListRouteProp>();
   const { records, loading, fetchRecords, deleteRecord } = useCostStore();
   const routeFilters = route.params?.filters;
+  const routeCategory = routeFilters?.category;
+  const routeCycleId = routeFilters?.cycleId;
+  const routeSourceId = routeFilters?.sourceId;
+  const routeSourceType = routeFilters?.sourceType;
   const [filter, setFilter] = useState<FilterType>("all");
   const [dateRange, setDateRange] = useState<DateRangeFilter>(
     routeFilters ? "all" : "month"
@@ -122,19 +92,20 @@ export const CostListScreen: React.FC = () => {
       fetchRecords(
         routeFilters
           ? {
-              cycle_id: routeFilters.cycleId,
-              category: routeFilters.category,
-              source_type: routeFilters.sourceType,
-              source_id: routeFilters.sourceId,
+              cycle_id: routeCycleId,
+              category: routeCategory,
+              source_type: routeSourceType,
+              source_id: routeSourceId,
             }
           : undefined
       );
     }, [
       fetchRecords,
-      routeFilters?.category,
-      routeFilters?.cycleId,
-      routeFilters?.sourceId,
-      routeFilters?.sourceType,
+      routeCategory,
+      routeCycleId,
+      routeFilters,
+      routeSourceId,
+      routeSourceType,
     ])
   );
 
@@ -150,7 +121,7 @@ export const CostListScreen: React.FC = () => {
     const income = monthRecords
       .filter((r) => r.record_type === "income")
       .reduce((sum, r) => sum + parseFloat(r.amount), 0);
-    return { cost, income, balance: income - cost };
+    return { cost, income, balance: income - cost, count: monthRecords.length };
   }, [records, currentMonth]);
 
   const categoryList = useMemo(() => {
@@ -165,10 +136,10 @@ export const CostListScreen: React.FC = () => {
         type: filter,
         dateRange,
         month: currentMonth,
-        category: categoryFilter ?? routeFilters?.category,
-        cycleId: routeFilters?.cycleId,
-        sourceType: routeFilters?.sourceType,
-        sourceId: routeFilters?.sourceId,
+        category: categoryFilter ?? routeCategory,
+        cycleId: routeCycleId,
+        sourceType: routeSourceType,
+        sourceId: routeSourceId,
       }),
     [
       records,
@@ -177,10 +148,10 @@ export const CostListScreen: React.FC = () => {
       dateRange,
       currentMonth,
       categoryFilter,
-      routeFilters?.category,
-      routeFilters?.cycleId,
-      routeFilters?.sourceType,
-      routeFilters?.sourceId,
+      routeCategory,
+      routeCycleId,
+      routeSourceId,
+      routeSourceType,
     ]
   );
 
@@ -194,7 +165,7 @@ export const CostListScreen: React.FC = () => {
     return { cost, income, count: filteredRecords.length };
   }, [filteredRecords]);
 
-  const sections = useMemo<Section[]>(() => {
+  const dayGroups = useMemo<DayGroup[]>(() => {
     const groups: Record<string, CostRecord[]> = {};
     for (const r of filteredRecords) {
       if (!groups[r.record_date]) {
@@ -206,8 +177,9 @@ export const CostListScreen: React.FC = () => {
     return Object.entries(groups)
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([date, data]) => ({
+        date,
         title: formatSectionTitle(date),
-        data: data.sort((a, b) => {
+        records: data.sort((a, b) => {
           const aTime = a.created_at ? dayjs(a.created_at).valueOf() : 0;
           const bTime = b.created_at ? dayjs(b.created_at).valueOf() : 0;
           return bTime - aTime || b.id - a.id;
@@ -265,7 +237,7 @@ export const CostListScreen: React.FC = () => {
         onPress: async () => {
           try {
             await deleteRecord(record.id, record.cycle_id || undefined);
-          } catch (err) {
+          } catch {
             // Error 已在 store 中处理
           }
         },
@@ -305,6 +277,80 @@ export const CostListScreen: React.FC = () => {
     }
   };
 
+  const renderDayCard = ({ item }: { item: DayGroup }) => (
+    <View style={styles.dayCard}>
+      <View style={styles.dayHeader}>
+        <Text style={styles.dayTitle}>{item.title}</Text>
+        <View style={styles.daySummary}>
+          {item.dayIncome > 0 && (
+            <Text style={styles.dayIncomeBadge}>
+              +{formatRecordAmount(String(item.dayIncome))}
+            </Text>
+          )}
+          {item.dayCost > 0 && (
+            <Text style={styles.dayCostBadge}>
+              -{formatRecordAmount(String(item.dayCost))}
+            </Text>
+          )}
+        </View>
+      </View>
+      {item.records.map((record, index) => (
+        <React.Fragment key={record.id}>
+          {index > 0 && <View style={styles.divider} />}
+          <RecordItem
+            item={record}
+            onPress={() => handleShowDetail(record)}
+            onLongPress={() => handleDelete(record)}
+          />
+        </React.Fragment>
+      ))}
+    </View>
+  );
+
+  const ListFooter = <View style={{ height: 90 }} />;
+
+  const ListHeader = (
+    <>
+      <LedgerHeroHeader
+        selectedMonth={selectedMonth}
+        onPreviousMonth={handlePreviousMonth}
+        onNextMonth={handleNextMonth}
+      />
+      <LedgerSummaryCard
+        income={stats.income}
+        cost={stats.cost}
+        count={stats.count}
+      />
+
+      {routeFilters ? (
+        <LedgerSourceBanner
+          title={routeFilters.title}
+          cycleId={routeFilters.cycleId}
+          category={routeFilters.category}
+          sourceType={routeFilters.sourceType}
+        />
+      ) : null}
+
+      <LedgerSearchBox value={searchQuery} onChange={setSearchQuery} />
+
+      <Text style={styles.resultSummary}>
+        {searchQuery || filter !== "all" || dateRange !== "month" || categoryFilter
+          ? `找到 ${resultStats.count} 条 · 收入 +${formatRecordAmount(String(resultStats.income))} · 支出 -${formatRecordAmount(String(resultStats.cost))}`
+          : `共 ${resultStats.count} 条记录 · 本月`}
+      </Text>
+
+      <LedgerFilters
+        filter={filter}
+        dateRange={dateRange}
+        categoryList={categoryList}
+        categoryFilter={categoryFilter}
+        onFilterChange={handleFilterChange}
+        onDateRangeChange={handleDateRangeChange}
+        onCategoryFilterChange={setCategoryFilter}
+      />
+    </>
+  );
+
   if (loading && records.length === 0) {
     return <Loading message="加载账单中..." />;
   }
@@ -312,7 +358,7 @@ export const CostListScreen: React.FC = () => {
   if (records.length === 0) {
     return (
       <View style={styles.container}>
-        <MonthlyStats
+        <LedgerHeroHeader
           selectedMonth={selectedMonth}
           onPreviousMonth={handlePreviousMonth}
           onNextMonth={handleNextMonth}
@@ -330,239 +376,34 @@ export const CostListScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => String(item.id)}
+      <FlatList
+        data={dayGroups}
+        keyExtractor={(item) => item.date}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <>
-            <MonthlyStats
-              selectedMonth={selectedMonth}
-              onPreviousMonth={handlePreviousMonth}
-              onNextMonth={handleNextMonth}
-            />
-            <AssetCard income={stats.income} cost={stats.cost} />
-
-            {routeFilters ? (
-              <View style={styles.deepLinkBanner}>
-                <View style={styles.deepLinkIcon}>
-                  <Icon
-                    name="filter-check-outline"
-                    size={18}
-                    color={colors.primary}
-                  />
-                </View>
-                <View style={styles.deepLinkInfo}>
-                  <Text style={styles.deepLinkTitle}>
-                    {routeFilters.title || "已应用来源筛选"}
-                  </Text>
-                  <Text style={styles.deepLinkText}>
-                    {[
-                      routeFilters.cycleId
-                        ? `茬口 ${routeFilters.cycleId}`
-                        : null,
-                      routeFilters.category || null,
-                      routeFilters.sourceType === "labor_entry"
-                        ? "来自工资记录"
-                        : routeFilters.sourceType === "operation_work_order"
-                          ? "来自农事作业"
-                          : routeFilters.sourceType || null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-
-            <View style={styles.searchSection}>
-              <View style={styles.searchBox}>
-                <Icon name="magnify" size={20} color={colors.textTertiary} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="搜索分类、备注、对方、金额"
-                  placeholderTextColor={colors.textTertiary}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  returnKeyType="search"
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchQuery("")}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Icon
-                      name="close-circle"
-                      size={18}
-                      color={colors.textTertiary}
-                    />
-                  </TouchableOpacity>
-                )}
-              </View>
-              {(searchQuery ||
-                filter !== "all" ||
-                dateRange !== "month" ||
-                routeFilters) && (
-                <Text style={styles.resultSummary}>
-                  找到 {resultStats.count} 条 · 收入 +
-                  {formatRecordAmount(String(resultStats.income))} · 支出 -
-                  {formatRecordAmount(String(resultStats.cost))}
-                </Text>
-              )}
-            </View>
-
-            {/* Filters */}
-            <View style={styles.filterSection}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rangeScrollContent}
-              >
-                {(
-                  [
-                    { key: "all", label: "全部" },
-                    { key: "today", label: "今天" },
-                    { key: "week", label: "近7天" },
-                    { key: "month", label: "本月" },
-                  ] as { key: DateRangeFilter; label: string }[]
-                ).map((item) => {
-                  const isActive = dateRange === item.key;
-                  return (
-                    <TouchableOpacity
-                      key={`date-${item.key}`}
-                      style={[
-                        styles.rangeChip,
-                        isActive && styles.rangeChipActive,
-                      ]}
-                      onPress={() => handleDateRangeChange(item.key)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.rangeChipText,
-                          isActive && styles.rangeChipTextActive,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterScrollContent}
-              >
-                {(
-                  [
-                    { key: "all", label: "全部" },
-                    { key: "cost", label: "支出" },
-                    { key: "income", label: "收入" },
-                    { key: "debt", label: "赊账" },
-                  ] as { key: FilterType; label: string }[]
-                ).map((item) => {
-                  const isActive = filter === item.key;
-                  return (
-                    <TouchableOpacity
-                      key={`type-${item.key}`}
-                      style={[
-                        styles.filterChip,
-                        isActive && styles.filterChipActive,
-                      ]}
-                      onPress={() => handleFilterChange(item.key)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          isActive && styles.filterChipTextActive,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {categoryList.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.filterCatScrollContent}
-                >
-                  {categoryList.map((cat) => {
-                    const isActive = categoryFilter === cat;
-                    return (
-                      <TouchableOpacity
-                        key={`cat-${cat}`}
-                        style={[
-                          styles.filterCatChip,
-                          isActive && styles.filterCatChipActive,
-                        ]}
-                        onPress={() => setCategoryFilter(isActive ? null : cat)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.filterCatChipText,
-                            isActive && styles.filterCatChipTextActive,
-                          ]}
-                        >
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              )}
-            </View>
-          </>
-        }
-        renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <View style={styles.sectionSummary}>
-              {section.dayIncome > 0 && (
-                <Text style={styles.sectionIncome}>
-                  +{section.dayIncome.toFixed(0)}
-                </Text>
-              )}
-              {section.dayCost > 0 && (
-                <Text style={styles.sectionCost}>
-                  -{section.dayCost.toFixed(0)}
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
-        renderItem={({ item }) => (
-          <RecordItem
-            item={item}
-            onPress={() => handleShowDetail(item)}
-            onLongPress={() => handleDelete(item)}
-          />
-        )}
+        ListHeaderComponent={ListHeader}
+        renderItem={renderDayCard}
+        ListFooterComponent={ListFooter}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon
-              name="clipboard-text-outline"
-              size={48}
-              color={colors.textTertiary}
-            />
-            <Text style={styles.emptyText}>没有找到记录</Text>
-            <Text style={styles.emptySubtext}>
-              试试搜索关键词或切换筛选条件
-            </Text>
+          <View style={styles.emptyWrap}>
+            <View style={styles.emptyContainer}>
+              <Icon
+                name="clipboard-text-outline"
+                size={48}
+                color={colors.textTertiary}
+              />
+              <Text style={styles.emptyText}>没有找到记录</Text>
+              <Text style={styles.emptySubtext}>
+                试试搜索关键词或切换筛选条件
+              </Text>
+            </View>
           </View>
         }
       />
 
       <TouchableOpacity style={styles.fab} onPress={handleCreate}>
-        <Icon name="plus" size={22} color={colors.textInverse} />
+        <Icon name="plus" size={20} color={colors.textInverse} />
+        <Text style={styles.fabText}>记一笔</Text>
       </TouchableOpacity>
 
       <RecordDetailModal
@@ -589,147 +430,27 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 100,
   },
-  searchSection: {
-    paddingHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.md,
-  },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingV2.sm,
-    minHeight: 44,
-    paddingHorizontal: spacingV2.md,
-    borderRadius: borderRadiusV2.xl,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    paddingVertical: spacingV2.sm,
-    fontSize: fontSizeV2.md,
-    color: colors.text,
-  },
   resultSummary: {
-    marginTop: spacingV2.xs,
+    marginHorizontal: spacingV2.lg,
+    marginTop: -spacingV2.xs,
+    marginBottom: spacingV2.sm,
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     fontWeight: "500",
   },
-  deepLinkBanner: {
+  dayCard: {
     marginHorizontal: spacingV2.lg,
     marginBottom: spacingV2.lg,
-    padding: spacingV2.md,
-    borderRadius: borderRadiusV2.xl,
-    backgroundColor: colors.primaryMuted,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingV2.sm,
-  },
-  deepLinkIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    borderRadius: borderRadiusV2.xxxl,
     backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 3,
+    overflow: "hidden",
   },
-  deepLinkInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  deepLinkTitle: {
-    fontSize: fontSizeV2.sm,
-    color: colors.primary,
-    fontWeight: "800",
-  },
-  deepLinkText: {
-    marginTop: 2,
-    fontSize: fontSizeV2.xs,
-    color: colors.textSecondary,
-    fontWeight: "600",
-  },
-  filterSection: {
-    marginBottom: spacingV2.sm,
-  },
-  rangeScrollContent: {
-    paddingHorizontal: spacingV2.lg,
-    paddingBottom: spacingV2.xs,
-    gap: spacingV2.xs,
-    alignItems: "center",
-  },
-  rangeChip: {
-    paddingHorizontal: spacingV2.md,
-    paddingVertical: 7,
-    borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surfaceMuted,
-  },
-  rangeChipActive: {
-    backgroundColor: colors.text,
-  },
-  rangeChipText: {
-    fontSize: fontSizeV2.sm,
-    color: colors.textSecondary,
-    fontWeight: "600",
-  },
-  rangeChipTextActive: {
-    color: colors.textInverse,
-  },
-  filterScrollContent: {
-    paddingHorizontal: spacingV2.lg,
-    paddingVertical: spacingV2.xs,
-    gap: spacingV2.xs,
-    alignItems: "center",
-  },
-  filterChip: {
-    paddingHorizontal: spacingV2.md,
-    paddingVertical: 6,
-    borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surface,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primaryMuted,
-  },
-  filterChipText: {
-    fontSize: fontSizeV2.sm,
-    color: colors.textSecondary,
-    fontWeight: "500",
-  },
-  filterChipTextActive: {
-    color: colors.primary,
-    fontWeight: "700",
-  },
-  filterCatScrollContent: {
-    paddingHorizontal: spacingV2.lg,
-    paddingTop: spacingV2.xs,
-    gap: spacingV2.xs,
-    alignItems: "center",
-  },
-  filterCatChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadiusV2.full,
-    backgroundColor: colors.surfaceMuted,
-  },
-  filterCatChipActive: {
-    backgroundColor: colors.primaryMuted,
-  },
-  filterCatChipText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: "500",
-  },
-  filterCatChipTextActive: {
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  sectionHeader: {
+  dayHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -737,30 +458,41 @@ const styles = StyleSheet.create({
     paddingTop: spacingV2.md,
     paddingBottom: spacingV2.sm,
   },
-  sectionTitle: {
+  dayTitle: {
     fontSize: fontSizeV2.sm,
     fontWeight: "700",
     color: colors.textSecondary,
+    letterSpacing: -0.2,
   },
-  sectionSummary: {
+  daySummary: {
     flexDirection: "row",
     gap: spacingV2.sm,
   },
-  sectionIncome: {
+  dayIncomeBadge: {
     fontSize: fontSizeV2.sm,
     fontWeight: "600",
     color: colors.income,
   },
-  sectionCost: {
+  dayCostBadge: {
     fontSize: fontSizeV2.sm,
     fontWeight: "600",
     color: colors.expense,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(0,0,0,0.04)",
+    marginHorizontal: spacingV2.lg,
+  },
+  emptyWrap: {
+    flex: 1,
+    minHeight: 400,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacingV2.xxxl,
-    minHeight: 280,
   },
   emptyText: {
     fontSize: fontSizeV2.lg,
@@ -777,65 +509,23 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: spacingV2.lg,
     bottom: spacingV2.lg,
-    width: 52,
     height: 52,
-    borderRadius: borderRadiusV2.full,
+    paddingHorizontal: spacingV2.lg,
+    borderRadius: borderRadiusV2.xl,
     backgroundColor: colors.primary,
+    flexDirection: "row",
+    gap: spacingV2.xs,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
     elevation: 5,
   },
-});
-
-const assetStyles = StyleSheet.create({
-  card: {
-    marginHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.lg,
-    borderRadius: borderRadiusV2.xxxl,
-    overflow: "hidden",
-  },
-  mainSection: {
-    padding: spacingV2.xl,
-    paddingBottom: spacingV2.lg,
-    alignItems: "center",
-  },
-  label: {
-    fontSize: fontSizeV2.sm,
-    fontWeight: "600",
-    marginBottom: spacingV2.xs,
-  },
-  total: {
-    fontSize: fontSizeV2.xxxxl,
-    fontWeight: "800",
-    letterSpacing: -1.5,
-  },
-  subRow: {
-    flexDirection: "row",
-    paddingVertical: spacingV2.md,
-    paddingHorizontal: spacingV2.lg,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.06)",
-  },
-  subItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 2,
-  },
-  subDivider: {
-    width: 1,
-  },
-  subLabel: {
-    fontSize: fontSizeV2.xs,
-    color: colors.textTertiary,
-    fontWeight: "500",
-  },
-  subAmount: {
+  fabText: {
     fontSize: fontSizeV2.md,
+    color: colors.textInverse,
     fontWeight: "700",
-    letterSpacing: -0.2,
   },
 });

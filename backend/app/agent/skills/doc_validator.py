@@ -75,7 +75,9 @@ def _extract_frontmatter(text: str) -> str | None:
 
 
 def _has_empty_parameter_properties(frontmatter: str) -> bool:
-    return re.search(r"^\s*properties:\s*\{\}\s*$", frontmatter, re.MULTILINE) is not None
+    return (
+        re.search(r"^\s*properties:\s*\{\}\s*$", frontmatter, re.MULTILINE) is not None
+    )
 
 
 def _section_has_parameters(text: str) -> bool:

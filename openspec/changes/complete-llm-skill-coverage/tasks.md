@@ -34,20 +34,21 @@
 
 ## 5. Coverage Matrix
 
-- [ ] 5.1 Implement a coverage matrix model for domain, operation, source endpoint/service, status, Skill name, permission level, risk level, rationale, priority, and test status.
-- [ ] 5.2 Add a scanner or curated inventory for current FastAPI routes and key service operations.
-- [ ] 5.3 Classify existing API/service functions into `covered_by_skill`, `needs_skill`, `admin_skill`, `forbidden_for_llm`, and `no_skill_required`.
-- [ ] 5.4 Add a generated report or checked-in document summarizing high-priority `needs_skill` gaps.
-- [ ] 5.5 Add tests that ensure high-priority ordinary-user functions are not left unclassified.
+- [x] 5.1 Implement a coverage matrix model for domain, operation, source endpoint/service, status, Skill name, permission level, risk level, rationale, priority, and test status.
+- [x] 5.2 Add a scanner or curated inventory for current FastAPI routes and key service operations.
+- [x] 5.3 Classify existing API/service functions into `covered_by_skill`, `needs_skill`, `admin_skill`, `forbidden_for_llm`, and `no_skill_required`.
+- [x] 5.4 Add a generated report or checked-in document summarizing high-priority `needs_skill` gaps.
+- [x] 5.5 Add tests that ensure high-priority ordinary-user functions are not left unclassified.
 
 ## 6. Missing Ordinary User Skills
 
-- [ ] 6.1 Add or update Skill coverage for cost category list/create/delete with appropriate write confirmation for mutations.
-- [ ] 6.2 Add or update Skill coverage for crop template list/update/delete where safe for ordinary users.
-- [ ] 6.3 Add or update Skill coverage for farm log update/delete with confirmation and cache invalidation.
-- [ ] 6.4 Add or update Skill coverage for planting units and workers CRUD where useful through natural language.
-- [ ] 6.5 Add or update Skill coverage for wage save/update flows with confirmation and labor context.
-- [ ] 6.6 Add regression tests for every new ordinary-user Skill.
+- [x] 6.1 Add or update Skill coverage for cost category list/create/delete with appropriate write confirmation for mutations.
+- [x] 6.2 Add or update Skill coverage for crop template list/update/delete where safe for ordinary users.
+- [x] 6.3 Add or update Skill coverage for farm log update/delete with confirmation and cache invalidation.
+- [x] 6.4 Add or update Skill coverage for planting units where useful through natural language.
+- [x] 6.4a Add or update Skill coverage for workers CRUD where useful through natural language.
+- [x] 6.5 Add or update Skill coverage for wage save/update flows with confirmation and labor context.
+- [x] 6.6 Add regression tests for every new ordinary-user Skill.
 
 ## 7. Admin And Sensitive Capability Policy
 
@@ -67,8 +68,8 @@
 
 ## 9. Verification
 
-- [ ] 9.1 Run `openspec validate complete-llm-skill-coverage --strict`.
-- [ ] 9.2 Run backend targeted tests for skills, agent runtime, selector, evaluation, diagnostics, and admin config.
-- [ ] 9.3 Run `ruff check . && ruff format .` from the backend directory.
-- [ ] 9.4 Run `bash scripts/check-skill-docs.sh` and `bash scripts/harness-check.sh`.
-- [ ] 9.5 Review the coverage matrix and ensure no enabled registered Skill has selector, chain, metadata, or regression coverage gaps.
+- [x] 9.1 Run `openspec validate complete-llm-skill-coverage --strict`.
+- [x] 9.2 Run backend targeted tests for skills, agent runtime, selector, evaluation, diagnostics, and admin config.
+- [x] 9.3 Run `ruff check . && ruff format .` from the backend directory.
+- [x] 9.4 Run `bash scripts/check-skill-docs.sh` and `bash scripts/harness-check.sh`.
+- [x] 9.5 Review the coverage matrix and ensure no enabled registered Skill has selector, chain, metadata, or regression coverage gaps.
