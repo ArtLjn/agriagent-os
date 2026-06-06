@@ -287,7 +287,6 @@ export interface ConversationMessageItem {
   role: "user" | "assistant" | "agent";
   content: string;
   skills?: string[] | null;
-  pending_action?: PendingAction | null;
   created_at: string;
 }
 

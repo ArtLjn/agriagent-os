@@ -13,4 +13,3 @@ ios/build/
 .env
 .DS_Store
 *.log
-.superpowers/

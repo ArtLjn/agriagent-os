@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MainTabNavigator } from "./MainTabNavigator";
@@ -122,9 +122,6 @@ const screenOptions = {
   contentStyle: {
     backgroundColor: colors.background,
   },
-  animation: Platform.OS === "ios" ? "default" : ("slide_from_right" as const),
-  animationDuration: 250,
-  gestureEnabled: true,
 };
 
 export const AppNavigator: React.FC = () => {

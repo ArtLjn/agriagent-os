@@ -25,17 +25,15 @@ export const ScalePress: React.FC<ScalePressProps> = ({
   const handlePressIn = useCallback(() => {
     Animated.timing(scale, {
       toValue: animationConfig.press.scale,
-      duration: animationConfig.press.durationIn,
+      duration: animationConfig.press.duration,
       useNativeDriver: animationConfig.press.useNativeDriver,
-      easing: animationConfig.easing.enter,
     }).start();
   }, [scale]);
 
   const handlePressOut = useCallback(() => {
-    Animated.spring(scale, {
+    Animated.timing(scale, {
       toValue: 1,
-      friction: 6,
-      tension: 120,
+      duration: animationConfig.press.duration,
       useNativeDriver: animationConfig.press.useNativeDriver,
     }).start();
   }, [scale]);

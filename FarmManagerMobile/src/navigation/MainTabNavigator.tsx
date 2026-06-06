@@ -2,19 +2,31 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../theme/colors";
-import { farmTheme } from "../theme/farmTheme";
 import { spacingV2, fontSizeV2 } from "../theme/spacing";
 import { HomeScreen } from "../screens/home/HomeScreen";
 import { AgentChatScreen } from "../screens/agent/AgentChatScreen";
-import { CycleListScreen } from "../screens/cycle/CycleListScreen";
 import { CostListScreen } from "../screens/cost/CostListScreen";
 import { ProfileScreen } from "../screens/profile/ProfileScreen";
-import { TAB_CONFIG, type MainTabParamList } from "./tabConfig";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
-export type { MainTabParamList } from "./tabConfig";
+export type MainTabParamList = {
+  Home: undefined;
+  AgentChat: undefined;
+  Costs: undefined;
+  Settings: undefined;
+};
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
+
+const TAB_CONFIG: Record<
+  keyof MainTabParamList,
+  { label: string; icon: string; activeIcon: string }
+> = {
+  Home: { label: "首页", icon: "home-outline", activeIcon: "home" },
+  AgentChat: { label: "芽芽", icon: "sprout", activeIcon: "sprout" },
+  Costs: { label: "记账", icon: "cash-multiple", activeIcon: "cash-multiple" },
+  Settings: { label: "我的", icon: "account-outline", activeIcon: "account" },
+};
 
 export const MainTabNavigator: React.FC = () => (
   <Tab.Navigator
@@ -24,44 +36,25 @@ export const MainTabNavigator: React.FC = () => (
       tabBarShowLabel: false,
       tabBarIcon: ({ focused }) => {
         const config = TAB_CONFIG[route.name];
-        const isAssistant = route.name === "AgentChat";
         return (
-          <View
-            style={[
-              styles.tabItem,
-              focused && styles.tabItemActive,
-              isAssistant && styles.assistantTab,
-              isAssistant && focused && styles.assistantTabActive,
-            ]}
-          >
-            <View style={isAssistant ? styles.assistantIconWrap : undefined}>
-              <Icon
-                name={focused ? config.activeIcon : config.icon}
-                size={isAssistant ? 25 : 21}
-                color={
-                  isAssistant
-                    ? "#FFFFFF"
-                    : focused
-                    ? farmTheme.colors.leaf
-                    : colors.tabInactive
-                }
-              />
-            </View>
-            {!isAssistant && (
-              <Text
-                style={focused ? styles.tabLabelActive : styles.tabLabel}
-                numberOfLines={1}
-              >
-                {config.label}
-              </Text>
-            )}
+          <View style={focused ? styles.tabItemActive : styles.tabItem}>
+            <Icon
+              name={focused ? config.activeIcon : config.icon}
+              size={22}
+              color={focused ? colors.primary : colors.tabInactive}
+            />
+            <Text
+              style={focused ? styles.tabLabelActive : styles.tabLabel}
+              numberOfLines={1}
+            >
+              {config.label}
+            </Text>
           </View>
         );
       },
     })}
   >
     <Tab.Screen name="Home" component={HomeScreen} />
-    <Tab.Screen name="Cycles" component={CycleListScreen} />
     <Tab.Screen name="AgentChat" component={AgentChatScreen} />
     <Tab.Screen name="Costs" component={CostListScreen} />
     <Tab.Screen name="Settings" component={ProfileScreen} />
@@ -70,17 +63,17 @@ export const MainTabNavigator: React.FC = () => (
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 80,
-    backgroundColor: "rgba(255, 255, 255, 0.97)",
+    height: 72,
+    backgroundColor: colors.surface,
     borderTopWidth: 0,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    shadowColor: farmTheme.colors.leaf,
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
     elevation: 8,
-    paddingHorizontal: spacingV2.xs,
+    paddingHorizontal: spacingV2.sm,
     paddingBottom: 8,
   },
   tabItem: {
@@ -91,29 +84,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tabItemActive: {
-    minWidth: 52,
-    paddingHorizontal: spacingV2.sm,
-    borderRadius: 20,
-    backgroundColor: farmTheme.colors.leafSoft,
-  },
-  assistantTab: {
-    marginTop: -18,
-  },
-  assistantTabActive: {
-    backgroundColor: "transparent",
-  },
-  assistantIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: farmTheme.colors.leaf,
-    shadowColor: farmTheme.colors.leaf,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 8,
+    flex: 1,
+    paddingVertical: spacingV2.xs,
+    gap: 2,
   },
   tabLabel: {
     fontSize: fontSizeV2.xs,
@@ -122,7 +97,7 @@ const styles = StyleSheet.create({
   },
   tabLabelActive: {
     fontSize: fontSizeV2.xs,
-    color: farmTheme.colors.leaf,
-    fontWeight: "700",
+    color: colors.primary,
+    fontWeight: "600",
   },
 });

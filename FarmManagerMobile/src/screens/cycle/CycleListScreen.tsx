@@ -12,7 +12,6 @@ import { useCycleStore } from "../../stores/cycleStore";
 import { EmptyState } from "../../components/EmptyState";
 import { Loading } from "../../components/Loading";
 import { colors } from "../../theme/colors";
-import { farmTheme } from "../../theme/farmTheme";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -20,8 +19,6 @@ import { BulkActionBar } from "../../components/BulkActionBar";
 import { SelectionCircle } from "../../components/SelectionCircle";
 import { useBulkSelection } from "../../hooks/useBulkSelection";
 import { showAlert } from "../../utils/alert";
-import { FadeInListItem } from "../../components/animations/FadeInListItem";
-import { touchOpacity } from "../../theme/animations";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -253,7 +250,7 @@ export const CycleListScreen: React.FC = () => {
             </View>
           </View>
         }
-        renderItem={({ item, index }) => {
+        renderItem={({ item }) => {
           const baseStatus = STATUS_CONFIG[item.status] || {
             label: item.status,
             color: colors.textSecondary,
@@ -277,109 +274,104 @@ export const CycleListScreen: React.FC = () => {
             : estimateProgress(item.current_stage_name);
 
           return (
-            <FadeInListItem index={index}>
-              <View style={styles.selectableRow}>
-                {selection.isSelecting && (
-                  <View style={styles.selectionSlot}>
-                    <SelectionCircle selected={selection.isSelected(item.id)} />
+            <View style={styles.selectableRow}>
+              {selection.isSelecting && (
+                <View style={styles.selectionSlot}>
+                  <SelectionCircle selected={selection.isSelected(item.id)} />
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => {
+                  if (selection.isSelecting) {
+                    selection.toggleSelection(item.id);
+                    return;
+                  }
+                  navigation.navigate(
+                    "CycleDetail" as never,
+                    {
+                      cycleId: item.id,
+                    } as never
+                  );
+                }}
+                onLongPress={() => selection.beginSelection(item.id)}
+                activeOpacity={0.7}
+                style={[
+                  styles.card,
+                  selection.isSelected(item.id) && styles.cardSelected,
+                ]}
+              >
+                <View style={styles.cardInner}>
+                  {/* 左侧图标 */}
+                  <View style={styles.iconWrap}>
+                    <Text style={styles.iconEmoji}>{emoji}</Text>
                   </View>
-                )}
-                <TouchableOpacity
-                  onPress={() => {
-                    if (selection.isSelecting) {
-                      selection.toggleSelection(item.id);
-                      return;
-                    }
-                    navigation.navigate(
-                      "CycleDetail" as never,
-                      {
-                        cycleId: item.id,
-                      } as never
-                    );
-                  }}
-                  onLongPress={() => selection.beginSelection(item.id)}
-                  activeOpacity={touchOpacity.card}
-                  style={[
-                    styles.card,
-                    selection.isSelected(item.id) && styles.cardSelected,
-                  ]}
-                >
-                  <View style={styles.cardInner}>
-                    {/* 左侧图标 */}
-                    <View style={styles.iconWrap}>
-                      <Text style={styles.iconEmoji}>{emoji}</Text>
+
+                  {/* 右侧内容 */}
+                  <View style={styles.cardContent}>
+                    {/* 名称行 */}
+                    <View style={styles.nameRow}>
+                      <Text style={styles.cardName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          { backgroundColor: status.bgColor },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.statusText, { color: status.color }]}
+                        >
+                          {status.label}
+                        </Text>
+                      </View>
                     </View>
 
-                    {/* 右侧内容 */}
-                    <View style={styles.cardContent}>
-                      {/* 名称行 */}
-                      <View style={styles.nameRow}>
-                        <Text style={styles.cardName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
+                    {/* 作物 + 天数 */}
+                    <Text style={styles.metaText} numberOfLines={1}>
+                      {formatBatchMeta(item, timing)}
+                    </Text>
+
+                    {/* 阶段标签 */}
+                    <View style={styles.cardFooter}>
+                      {stageName ? (
                         <View
                           style={[
-                            styles.statusPill,
+                            styles.stagePill,
                             { backgroundColor: status.bgColor },
                           ]}
                         >
-                          <Text
-                            style={[styles.statusText, { color: status.color }]}
-                          >
-                            {status.label}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* 作物 + 天数 */}
-                      <Text style={styles.metaText} numberOfLines={1}>
-                        {formatBatchMeta(item, timing)}
-                      </Text>
-
-                      {/* 阶段标签 */}
-                      <View style={styles.cardFooter}>
-                        {stageName ? (
                           <View
                             style={[
-                              styles.stagePill,
-                              { backgroundColor: status.bgColor },
-                            ]}
-                          >
-                            <View
-                              style={[
-                                styles.stageDot,
-                                { backgroundColor: status.color },
-                              ]}
-                            />
-                            <Text
-                              style={[
-                                styles.stageText,
-                                { color: status.color },
-                              ]}
-                            >
-                              {stageName}
-                            </Text>
-                          </View>
-                        ) : (
-                          <Text style={styles.stageMuted}>未设置阶段</Text>
-                        )}
-                        <View style={styles.progressMini}>
-                          <View
-                            style={[
-                              styles.progressMiniFill,
-                              {
-                                width: `${Math.round(progress * 100)}%`,
-                                backgroundColor: status.color,
-                              },
+                              styles.stageDot,
+                              { backgroundColor: status.color },
                             ]}
                           />
+                          <Text
+                            style={[styles.stageText, { color: status.color }]}
+                          >
+                            {stageName}
+                          </Text>
                         </View>
+                      ) : (
+                        <Text style={styles.stageMuted}>未设置阶段</Text>
+                      )}
+                      <View style={styles.progressMini}>
+                        <View
+                          style={[
+                            styles.progressMiniFill,
+                            {
+                              width: `${Math.round(progress * 100)}%`,
+                              backgroundColor: status.color,
+                            },
+                          ]}
+                        />
                       </View>
                     </View>
                   </View>
-                </TouchableOpacity>
-              </View>
-            </FadeInListItem>
+                </View>
+              </TouchableOpacity>
+            </View>
           );
         }}
       />
@@ -395,7 +387,7 @@ export const CycleListScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.fab}
           onPress={() => navigation.navigate("CycleCreate" as never)}
-          activeOpacity={touchOpacity.icon}
+          activeOpacity={0.8}
         >
           <Icon name="plus" size={22} color={colors.textInverse} />
         </TouchableOpacity>
@@ -407,7 +399,7 @@ export const CycleListScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: farmTheme.colors.page,
+    backgroundColor: colors.background,
   },
   listContent: {
     padding: spacingV2.lg,
@@ -433,13 +425,14 @@ const styles = StyleSheet.create({
   overviewCard: {
     minHeight: 92,
     padding: spacingV2.lg,
-    borderRadius: farmTheme.radius.panel,
-    backgroundColor: "#213327",
+    borderRadius: borderRadiusV2.xxl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacingV2.md,
-    ...farmTheme.shadow.float,
   },
   statItem: {
     alignItems: "flex-start",
@@ -447,50 +440,49 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: fontSizeV2.xxl,
     fontWeight: "900",
-    color: "#FFFFFF",
+    color: colors.text,
     lineHeight: 34,
   },
   statActive: {
-    color: "#D8F0BC",
+    color: colors.success,
   },
   statLabel: {
     fontSize: fontSizeV2.sm,
-    color: "rgba(255, 255, 255, 0.66)",
+    color: colors.textSecondary,
     marginTop: 2,
     fontWeight: "700",
   },
   statDivider: {
     width: 1,
     height: 38,
-    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    backgroundColor: colors.borderLight,
   },
   headerAction: {
     minHeight: 40,
     paddingHorizontal: spacingV2.md,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    backgroundColor: colors.successMuted,
     flexDirection: "row",
     alignItems: "center",
     gap: spacingV2.xs,
   },
   headerActionText: {
     fontSize: fontSizeV2.sm,
-    color: "#D8F0BC",
+    color: colors.success,
     fontWeight: "800",
   },
   card: {
     flex: 1,
-    backgroundColor: farmTheme.colors.surface,
-    borderRadius: farmTheme.radius.card,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xxl,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
+    borderColor: colors.borderLight,
     overflow: "hidden",
-    ...farmTheme.shadow.card,
   },
   cardSelected: {
     borderWidth: 1,
-    borderColor: farmTheme.colors.leaf,
-    backgroundColor: "#FBFFF8",
+    borderColor: colors.primary,
+    backgroundColor: "#FBFCFF",
   },
   cardInner: {
     flexDirection: "row",
@@ -502,7 +494,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: farmTheme.colors.leafSoft,
+    backgroundColor: colors.successMuted,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -586,10 +578,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: farmTheme.colors.leaf,
+    backgroundColor: colors.success,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: farmTheme.colors.leaf,
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,

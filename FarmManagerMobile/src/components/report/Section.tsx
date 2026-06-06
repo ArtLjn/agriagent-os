@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
-import { spacingV2, fontSizeV2 } from "../../theme/spacing";
+import { spacing, fontSize } from "../../theme/spacing";
 
 interface SectionProps {
   title: string;
@@ -19,14 +19,14 @@ export const Section: React.FC<SectionProps> = ({ title, children }) => {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: spacingV2.lg,
+    marginBottom: spacing.xl,
   },
   title: {
-    fontSize: fontSizeV2.md,
-    fontWeight: "900",
+    fontSize: fontSize.sm,
+    fontWeight: "700",
     color: colors.textSecondary,
-    marginBottom: spacingV2.sm,
-    marginLeft: spacingV2.xs,
-    letterSpacing: 0,
+    marginBottom: spacing.md,
+    marginLeft: spacing.xs,
+    letterSpacing: 0.5,
   },
 });

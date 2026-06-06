@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
-import { farmTheme } from "../../theme/farmTheme";
-import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
+import { spacing, fontSize, borderRadius } from "../../theme/spacing";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { formatCompactNumber } from "../../utils/numberFormat";
 import type { ReportCostItem } from "../../api/types";
 
@@ -90,7 +90,9 @@ export const CostBreakdownCard: React.FC<CostBreakdownCardProps> = ({
                   <Text style={styles.breakdownValue}>{amount.toFixed(0)}</Text>
                 </View>
                 <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${percent}%` }]} />
+                  <View
+                    style={[styles.barFill, { width: `${percent}%` }]}
+                  />
                 </View>
               </View>
             );
@@ -103,76 +105,78 @@ export const CostBreakdownCard: React.FC<CostBreakdownCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: farmTheme.colors.surface,
-    borderRadius: farmTheme.radius.card,
-    padding: spacingV2.lg,
-    borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   summaryRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingBottom: spacingV2.lg,
+    paddingBottom: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: farmTheme.colors.line,
+    borderBottomColor: colors.borderLight,
   },
   summaryItem: {
     flex: 1,
     alignItems: "center",
   },
   summaryValue: {
-    fontSize: fontSizeV2.xl,
-    fontWeight: "900",
+    fontSize: fontSize.xl,
+    fontWeight: "800",
     marginBottom: 2,
   },
   summaryLabel: {
-    fontSize: fontSizeV2.sm,
+    fontSize: fontSize.sm,
     color: colors.textTertiary,
   },
   divider: {
     width: 1,
     height: 32,
-    backgroundColor: farmTheme.colors.line,
+    backgroundColor: colors.borderLight,
   },
   breakdown: {
-    marginTop: spacingV2.lg,
+    marginTop: spacing.lg,
   },
   breakdownTitle: {
-    fontSize: fontSizeV2.sm,
-    fontWeight: "900",
+    fontSize: fontSize.sm,
+    fontWeight: "700",
     color: colors.textSecondary,
-    marginBottom: spacingV2.md,
-    letterSpacing: 0,
+    marginBottom: spacing.md,
+    letterSpacing: 0.5,
   },
   breakdownItem: {
-    marginBottom: spacingV2.md,
+    marginBottom: spacing.md,
   },
   breakdownRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacingV2.xs,
+    marginBottom: spacing.xs,
   },
   breakdownLabel: {
-    fontSize: fontSizeV2.sm,
+    fontSize: fontSize.sm,
     color: colors.textSecondary,
   },
   breakdownValue: {
-    fontSize: fontSizeV2.sm,
-    fontWeight: "900",
+    fontSize: fontSize.sm,
+    fontWeight: "700",
     color: colors.text,
   },
   barTrack: {
     height: 4,
-    backgroundColor: farmTheme.colors.surfaceSoft,
-    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: borderRadius.full,
     overflow: "hidden",
   },
   barFill: {
     height: "100%",
-    backgroundColor: farmTheme.colors.leaf,
-    borderRadius: borderRadiusV2.full,
-    opacity: 0.78,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    opacity: 0.6,
   },
 });

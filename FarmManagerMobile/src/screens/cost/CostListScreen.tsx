@@ -22,13 +22,11 @@ import type { CostRecord } from "../../api/types";
 import { EmptyState } from "../../components/EmptyState";
 import { Loading } from "../../components/Loading";
 import { colors } from "../../theme/colors";
-import { farmTheme } from "../../theme/farmTheme";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import type { RootStackParamList } from "../../navigation/AppNavigator";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { MonthlyStats } from "./components/MonthlyStats";
 import { RecordItem } from "./components/RecordItem";
-import { FadeInListItem } from "../../components/animations/FadeInListItem";
 import { RecordDetailModal } from "./components/RecordDetailModal";
 import {
   filterCostRecords,
@@ -131,7 +129,13 @@ export const CostListScreen: React.FC = () => {
             }
           : undefined
       );
-    }, [fetchRecords, routeFilters])
+    }, [
+      fetchRecords,
+      routeFilters?.category,
+      routeFilters?.cycleId,
+      routeFilters?.sourceId,
+      routeFilters?.sourceType,
+    ])
   );
 
   const currentMonth = dayjs(selectedMonth).format("YYYY-MM");
@@ -362,8 +366,8 @@ export const CostListScreen: React.FC = () => {
                       routeFilters.sourceType === "labor_entry"
                         ? "来自工资记录"
                         : routeFilters.sourceType === "operation_work_order"
-                        ? "来自农事作业"
-                        : routeFilters.sourceType || null,
+                          ? "来自农事作业"
+                          : routeFilters.sourceType || null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -535,14 +539,12 @@ export const CostListScreen: React.FC = () => {
             </View>
           </View>
         )}
-        renderItem={({ item, index }) => (
-          <FadeInListItem index={index}>
-            <RecordItem
-              item={item}
-              onPress={() => handleShowDetail(item)}
-              onLongPress={() => handleDelete(item)}
-            />
-          </FadeInListItem>
+        renderItem={({ item }) => (
+          <RecordItem
+            item={item}
+            onPress={() => handleShowDetail(item)}
+            onLongPress={() => handleDelete(item)}
+          />
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -582,7 +584,7 @@ export const CostListScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: farmTheme.colors.page,
+    backgroundColor: colors.background,
   },
   listContent: {
     paddingBottom: 100,
@@ -598,10 +600,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: spacingV2.md,
     borderRadius: borderRadiusV2.xl,
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
+    borderColor: colors.borderLight,
   },
   searchInput: {
     flex: 1,
@@ -621,7 +622,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingV2.lg,
     padding: spacingV2.md,
     borderRadius: borderRadiusV2.xl,
-    backgroundColor: farmTheme.colors.leafSoft,
+    backgroundColor: colors.primaryMuted,
     flexDirection: "row",
     alignItems: "center",
     gap: spacingV2.sm,
@@ -640,7 +641,7 @@ const styles = StyleSheet.create({
   },
   deepLinkTitle: {
     fontSize: fontSizeV2.sm,
-    color: farmTheme.colors.leaf,
+    color: colors.primary,
     fontWeight: "800",
   },
   deepLinkText: {
@@ -662,10 +663,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.md,
     paddingVertical: 7,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: farmTheme.colors.surfaceSoft,
+    backgroundColor: colors.surfaceMuted,
   },
   rangeChipActive: {
-    backgroundColor: farmTheme.colors.ink,
+    backgroundColor: colors.text,
   },
   rangeChipText: {
     fontSize: fontSizeV2.sm,
@@ -685,11 +686,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.md,
     paddingVertical: 6,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: farmTheme.colors.surface,
-    ...farmTheme.shadow.card,
+    backgroundColor: colors.surface,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   filterChipActive: {
-    backgroundColor: farmTheme.colors.leafSoft,
+    backgroundColor: colors.primaryMuted,
   },
   filterChipText: {
     fontSize: fontSizeV2.sm,
@@ -697,7 +702,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   filterChipTextActive: {
-    color: farmTheme.colors.leaf,
+    color: colors.primary,
     fontWeight: "700",
   },
   filterCatScrollContent: {
@@ -710,10 +715,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: farmTheme.colors.surfaceSoft,
+    backgroundColor: colors.surfaceMuted,
   },
   filterCatChipActive: {
-    backgroundColor: farmTheme.colors.leafSoft,
+    backgroundColor: colors.primaryMuted,
   },
   filterCatChipText: {
     fontSize: 12,
@@ -721,7 +726,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   filterCatChipTextActive: {
-    color: farmTheme.colors.leaf,
+    color: colors.primary,
     fontWeight: "600",
   },
   sectionHeader: {
@@ -775,10 +780,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: farmTheme.colors.leaf,
+    backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: farmTheme.colors.leaf,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -790,9 +795,8 @@ const assetStyles = StyleSheet.create({
   card: {
     marginHorizontal: spacingV2.lg,
     marginBottom: spacingV2.lg,
-    borderRadius: farmTheme.radius.panel,
+    borderRadius: borderRadiusV2.xxxl,
     overflow: "hidden",
-    ...farmTheme.shadow.card,
   },
   mainSection: {
     padding: spacingV2.xl,

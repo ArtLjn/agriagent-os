@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { farmTheme } from "../../theme/farmTheme";
-import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
+import { colors } from "../../theme/colors";
+import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 interface ReportHeaderProps {
@@ -28,17 +28,10 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.glow} />
-      <View style={styles.topRow}>
-        <View style={styles.badge}>
-          <Icon name={iconName} size={15} color="#FFFFFF" />
-          <Text style={styles.badgeText}>{typeLabel}</Text>
-        </View>
-        <View style={styles.iconPlate}>
-          <Icon name="file-chart-outline" size={28} color="#FFFFFF" />
-        </View>
+      <View style={styles.badge}>
+        <Icon name={iconName} size={14} color={colors.primary} />
+        <Text style={styles.badgeText}>{typeLabel}</Text>
       </View>
-      <Text style={styles.title}>农事复盘报告</Text>
       <Text style={styles.period}>
         {formatDate(periodStart)} ~ {formatDate(periodEnd)}
       </Text>
@@ -51,66 +44,32 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: farmTheme.radius.panel,
-    backgroundColor: "#254130",
-    padding: spacingV2.lg,
-    marginBottom: spacingV2.lg,
-    overflow: "hidden",
-    ...farmTheme.shadow.float,
-  },
-  glow: {
-    position: "absolute",
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: "rgba(216, 240, 188, 0.14)",
-    right: -46,
-    top: -48,
-  },
-  topRow: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacingV2.lg,
+    marginBottom: spacing.xl,
   },
   badge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.14)",
-    paddingHorizontal: spacingV2.md,
-    paddingVertical: spacingV2.sm,
-    borderRadius: borderRadiusV2.full,
+    backgroundColor: colors.primaryMuted,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
   },
   badgeText: {
-    fontSize: fontSizeV2.sm,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  iconPlate: {
-    width: 52,
-    height: 52,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.14)",
-  },
-  title: {
-    fontSize: 25,
-    lineHeight: 31,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    marginBottom: spacingV2.sm,
+    fontSize: fontSize.md,
+    fontWeight: "700",
+    color: colors.primary,
   },
   period: {
-    fontSize: fontSizeV2.md,
-    fontWeight: "800",
-    color: "rgba(255, 255, 255, 0.78)",
-    marginBottom: spacingV2.xs,
+    fontSize: fontSize.lg,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.xs,
   },
   date: {
-    fontSize: fontSizeV2.xs,
-    color: "rgba(255, 255, 255, 0.62)",
-    fontWeight: "600",
+    fontSize: fontSize.sm,
+    color: colors.textTertiary,
   },
 });

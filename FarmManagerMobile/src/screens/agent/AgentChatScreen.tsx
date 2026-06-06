@@ -23,48 +23,39 @@ import { useAuthStore } from "../../stores/authStore";
 import type { ChatMessage } from "../../api/types";
 import { MarkdownText } from "../../components/MarkdownText";
 import { ReportListView } from "../../components/ReportListView";
-import { BreathingFloat } from "../../components/animations/BreathingFloat";
-import { FadeInSlideUp } from "../../components/animations/FadeInSlideUp";
-import { ScalePress } from "../../components/animations/ScalePress";
 import { colors } from "../../theme/colors";
-import { farmTheme } from "../../theme/farmTheme";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
-import { touchOpacity } from "../../theme/animations";
+import { appGradients } from "../../theme/gradients";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 type PromptTone = "sky" | "leaf" | "amber" | "slate";
 
 const QUICK_PROMPTS: Array<{
   text: string;
-  hint: string;
   prompt: string;
   icon: string;
   tone: PromptTone;
 }> = [
   {
     text: "天气判断",
-    hint: "看能不能打药",
     prompt: "今日天气对作物有什么影响？",
     icon: "weather-partly-cloudy",
     tone: "sky",
   },
   {
     text: "种植建议",
-    hint: "按茬口阶段整理",
     prompt: "给我一些种植建议",
     icon: "sprout",
     tone: "leaf",
   },
   {
     text: "病虫害",
-    hint: "先判断再处理",
     prompt: "常见的病虫害怎么防治？",
     icon: "bug-outline",
     tone: "amber",
   },
   {
     text: "本周报告",
-    hint: "汇总农事和账本",
     prompt: "生成本周种植报告",
     icon: "file-document-outline",
     tone: "slate",
@@ -78,28 +69,9 @@ const PROMPT_TONES = {
   slate: { bg: "#F1F5F9", icon: "#64748B" },
 } as const;
 
-const DRAWER_ENTER_MS = 300;
-const DRAWER_EXIT_MS = 200;
+const DRAWER_ENTER_MS = 280;
+const DRAWER_EXIT_MS = 180;
 const DRAWER_EASING = Easing.bezier(0.32, 0.72, 0, 1);
-
-const SESSION_CATEGORY_META: Record<
-  string,
-  { icon: string; color: string; bg: string }
-> = {
-  天气: { icon: "weather-partly-cloudy", color: "#3D7BD9", bg: "#EEF6FF" },
-  病虫害: { icon: "bug-outline", color: "#B7791F", bg: "#FFF7E8" },
-  报告: { icon: "file-document-outline", color: "#64748B", bg: "#F1F5F9" },
-  记账: { icon: "cash-plus", color: "#B7791F", bg: "#FFF3E4" },
-  种植: { icon: "sprout", color: farmTheme.colors.leaf, bg: "#ECFDF3" },
-  对话: {
-    icon: "message-text-outline",
-    color: farmTheme.colors.leaf,
-    bg: farmTheme.colors.leafSoft,
-  },
-};
-
-const getSessionMeta = (category?: string) =>
-  SESSION_CATEGORY_META[category || ""] || SESSION_CATEGORY_META.对话;
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -308,7 +280,7 @@ export const AgentChatScreen: React.FC = () => {
                   pendingActionDisabled && styles.actionBtnDisabled,
                 ]}
                 onPress={() => handlePendingAction(item, "确认")}
-                activeOpacity={touchOpacity.primary}
+                activeOpacity={0.7}
                 disabled={pendingActionDisabled}
               >
                 <Icon
@@ -324,7 +296,7 @@ export const AgentChatScreen: React.FC = () => {
                   pendingActionDisabled && styles.actionBtnDisabled,
                 ]}
                 onPress={() => handlePendingAction(item, "取消")}
-                activeOpacity={touchOpacity.secondary}
+                activeOpacity={0.7}
                 disabled={pendingActionDisabled}
               >
                 <Icon
@@ -351,78 +323,53 @@ export const AgentChatScreen: React.FC = () => {
 
     return (
       <View style={styles.welcomeContainer}>
-        <FadeInSlideUp delay={40}>
-          <View style={styles.heroBlock}>
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroCopy}>
-                <Text style={styles.welcomeEyebrow}>
-                  {greeting}，{nickname}
-                </Text>
-                <Text style={styles.welcomeTitle}>今天要处理什么？</Text>
-                <Text style={styles.welcomeSubtitle}>
-                  我可以把天气、农事、账本和报告串起来，先帮你理出下一步。
-                </Text>
-              </View>
-              <BreathingFloat>
-                <LinearGradient
-                  colors={["#F4F9E9", "#FFFFFF"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.heroIcon}
-                >
-                  <Icon name="sprout" size={28} color={farmTheme.colors.leaf} />
-                </LinearGradient>
-              </BreathingFloat>
-            </View>
-            <View style={styles.heroHintCard}>
-              <View style={styles.heroHintIcon}>
-                <Icon
-                  name="lightbulb-on-outline"
-                  size={18}
-                  color={farmTheme.colors.soil}
-                />
-              </View>
-              <View style={styles.heroHintCopy}>
-                <Text style={styles.heroHintTitle}>你可以直接说一句话</Text>
-                <Text style={styles.heroHintText}>
-                  比如“昨天买肥料 230 元”或“今天适合巡田吗”
-                </Text>
-              </View>
-            </View>
+        <View style={styles.heroBlock}>
+          <LinearGradient
+            colors={["rgba(59, 178, 115, 0.14)", "rgba(74, 123, 247, 0.08)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroIcon}
+          >
+            <Icon name="sprout" size={24} color={colors.success} />
+          </LinearGradient>
+          <View style={styles.heroCopy}>
+            <Text style={styles.welcomeEyebrow}>
+              {greeting}，{nickname}
+            </Text>
+            <Text style={styles.welcomeTitle}>今天要处理什么？</Text>
+            <Text style={styles.welcomeSubtitle}>
+              可以直接问，也可以点一个场景开始。
+            </Text>
           </View>
-        </FadeInSlideUp>
+        </View>
 
-        <FadeInSlideUp delay={100} style={styles.promptSection}>
+        <View style={styles.promptSection}>
           <Text style={styles.promptTitle}>常用场景</Text>
           <View style={styles.promptCards}>
             {QUICK_PROMPTS.map((prompt, index) => (
-              <View key={index} style={styles.promptPressable}>
-                <ScalePress onPress={() => handleSend(prompt.prompt)}>
-                  <View style={styles.promptPill}>
-                    <View
-                      style={[
-                        styles.promptIconBox,
-                        { backgroundColor: PROMPT_TONES[prompt.tone].bg },
-                      ]}
-                    >
-                      <Icon
-                        name={prompt.icon as any}
-                        size={18}
-                        color={PROMPT_TONES[prompt.tone].icon}
-                      />
-                    </View>
-                    <View style={styles.promptCopy}>
-                      <Text style={styles.promptPillText}>{prompt.text}</Text>
-                      <Text style={styles.promptHint} numberOfLines={1}>
-                        {prompt.hint}
-                      </Text>
-                    </View>
-                  </View>
-                </ScalePress>
-              </View>
+              <TouchableOpacity
+                key={index}
+                style={styles.promptPill}
+                onPress={() => handleSend(prompt.prompt)}
+                activeOpacity={0.78}
+              >
+                <View
+                  style={[
+                    styles.promptIconBox,
+                    { backgroundColor: PROMPT_TONES[prompt.tone].bg },
+                  ]}
+                >
+                  <Icon
+                    name={prompt.icon as any}
+                    size={16}
+                    color={PROMPT_TONES[prompt.tone].icon}
+                  />
+                </View>
+                <Text style={styles.promptPillText}>{prompt.text}</Text>
+              </TouchableOpacity>
             ))}
           </View>
-        </FadeInSlideUp>
+        </View>
       </View>
     );
   };
@@ -460,34 +407,14 @@ export const AgentChatScreen: React.FC = () => {
       (a, b) => b.updatedAt - a.updatedAt
     );
     const renderedPeriods = new Set<string>();
-    const drawerWidth = Math.min(Dimensions.get("window").width * 0.86, 360);
+    const drawerWidth = Math.min(Dimensions.get("window").width * 0.78, 320);
     const drawerTranslateX = drawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [-drawerWidth, 0],
     });
-    const drawerScale = drawerProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.985, 1],
-    });
     const scrimOpacity = drawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [0, 1],
-    });
-    const contentTranslateX = drawerProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [-18, 0],
-    });
-    const contentOpacity = drawerProgress.interpolate({
-      inputRange: [0, 0.55, 1],
-      outputRange: [0, 0.4, 1],
-    });
-    const sessionTranslateX = drawerProgress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [-10, 0],
-    });
-    const sessionOpacity = drawerProgress.interpolate({
-      inputRange: [0, 0.72, 1],
-      outputRange: [0, 0.55, 1],
     });
 
     return (
@@ -512,99 +439,60 @@ export const AgentChatScreen: React.FC = () => {
               styles.drawerPanel,
               {
                 width: drawerWidth,
-                transform: [
-                  { translateX: drawerTranslateX },
-                  { scale: drawerScale },
-                ],
+                transform: [{ translateX: drawerTranslateX }],
               },
             ]}
           >
-            <Animated.View
-              style={{
-                opacity: contentOpacity,
-                transform: [{ translateX: contentTranslateX }],
-              }}
-            >
-              <View style={styles.drawerTop}>
+            <View style={styles.drawerTop}>
+              <TouchableOpacity
+                style={styles.drawerIconBtn}
+                onPress={() => setDrawerVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Icon name="menu" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <View style={styles.drawerActionRow}>
                 <TouchableOpacity
                   style={styles.drawerIconBtn}
-                  onPress={() => setDrawerVisible(false)}
-                  activeOpacity={touchOpacity.icon}
+                  activeOpacity={0.7}
                 >
-                  <Icon
-                    name="menu-open"
-                    size={24}
-                    color={farmTheme.colors.ink}
-                  />
+                  <Icon name="magnify" size={22} color={colors.text} />
                 </TouchableOpacity>
-                <View style={styles.drawerActionRow}>
-                  <TouchableOpacity
-                    style={styles.drawerIconBtn}
-                    activeOpacity={touchOpacity.icon}
-                  >
-                    <Icon
-                      name="magnify"
-                      size={22}
-                      color={farmTheme.colors.ink}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.memoryHero}>
-                <View style={styles.memoryHeroGlow} />
-                <View style={styles.memoryHeroIcon}>
-                  <Icon name="history" size={24} color="#FFFFFF" />
-                </View>
-                <Text style={styles.memoryHeroEyebrow}>芽芽记忆库</Text>
-                <Text style={styles.memoryHeroTitle}>历史农事对话</Text>
-                <Text style={styles.memoryHeroMeta}>
-                  已沉淀 {orderedSessions.length} 个会话，方便继续追问和补录
-                </Text>
-              </View>
-            </Animated.View>
-
-            <Animated.View
-              style={{
-                opacity: contentOpacity,
-                transform: [{ translateX: contentTranslateX }],
-              }}
-            >
-              <TouchableOpacity
-                style={styles.newSessionCard}
-                onPress={handleStartNewSession}
-                activeOpacity={touchOpacity.card}
-              >
-                <View style={styles.newSessionIcon}>
+                <TouchableOpacity
+                  style={styles.drawerIconBtn}
+                  onPress={handleStartNewSession}
+                  activeOpacity={0.7}
+                >
                   <Icon
                     name="message-plus-outline"
                     size={22}
-                    color={farmTheme.colors.leaf}
+                    color={colors.text}
                   />
-                </View>
-                <View style={styles.newSessionCopy}>
-                  <Text style={styles.newSessionText}>开启新对话</Text>
-                  <Text style={styles.newSessionMeta}>
-                    重新问天气、记账或生成报告
-                  </Text>
-                </View>
-                <Icon
-                  name="chevron-right"
-                  size={22}
-                  color={colors.textTertiary}
-                />
-              </TouchableOpacity>
-            </Animated.View>
+                </TouchableOpacity>
+              </View>
+            </View>
 
-            <Animated.View
-              style={[
-                styles.drawerHeading,
-                {
-                  opacity: contentOpacity,
-                  transform: [{ translateX: contentTranslateX }],
-                },
-              ]}
+            <TouchableOpacity
+              style={styles.newSessionCard}
+              onPress={handleStartNewSession}
+              activeOpacity={0.78}
             >
+              <View style={styles.newSessionIcon}>
+                <Icon
+                  name="layers-triple-outline"
+                  size={22}
+                  color={colors.success}
+                />
+              </View>
+              <Text style={styles.newSessionText}>新对话</Text>
+              <Icon
+                name="chevron-right"
+                size={22}
+                color={colors.textTertiary}
+              />
+            </TouchableOpacity>
+
+            <View style={styles.drawerHeading}>
               <Text style={styles.drawerTitle}>会话列表</Text>
               <View style={styles.drawerFilter}>
                 <Text style={styles.drawerFilterText}>农事对话</Text>
@@ -614,161 +502,74 @@ export const AgentChatScreen: React.FC = () => {
                   color={colors.textSecondary}
                 />
               </View>
-            </Animated.View>
+            </View>
 
-            <Animated.View
-              style={[
-                styles.sessionListWrap,
-                {
-                  opacity: contentOpacity,
-                  transform: [{ translateX: contentTranslateX }],
-                },
-              ]}
+            <ScrollView
+              style={styles.sessionList}
+              showsVerticalScrollIndicator={false}
             >
-              <ScrollView
-                style={styles.sessionList}
-                showsVerticalScrollIndicator={false}
-              >
-                {orderedSessions.map((session) => {
-                  const period = formatSessionPeriod(session.updatedAt);
-                  const shouldShowPeriod = !renderedPeriods.has(period);
-                  renderedPeriods.add(period);
-                  const isActive = session.id === sessionId;
-                  const meta = getSessionMeta(session.category);
-                  return (
-                    <View key={session.id}>
-                      {shouldShowPeriod && (
-                        <Text style={styles.sessionPeriod}>{period}</Text>
-                      )}
-                      <Animated.View
-                        style={{
-                          opacity: sessionOpacity,
-                          transform: [{ translateX: sessionTranslateX }],
-                        }}
+              {orderedSessions.map((session) => {
+                const period = formatSessionPeriod(session.updatedAt);
+                const shouldShowPeriod = !renderedPeriods.has(period);
+                renderedPeriods.add(period);
+                const isActive = session.id === sessionId;
+                return (
+                  <View key={session.id}>
+                    {shouldShowPeriod && (
+                      <Text style={styles.sessionPeriod}>{period}</Text>
+                    )}
+                    <TouchableOpacity
+                      style={[
+                        styles.sessionItem,
+                        isActive && styles.sessionItemActive,
+                      ]}
+                      onPress={() => handleSwitchSession(session.id)}
+                      activeOpacity={0.76}
+                    >
+                      <Text
+                        style={[
+                          styles.sessionTitle,
+                          isActive && styles.sessionTitleActive,
+                        ]}
+                        numberOfLines={1}
                       >
-                        <TouchableOpacity
-                          style={[
-                            styles.sessionItem,
-                            isActive && styles.sessionItemActive,
-                          ]}
-                          onPress={() => handleSwitchSession(session.id)}
-                          activeOpacity={touchOpacity.card}
-                        >
-                          {isActive && (
-                            <View style={styles.sessionActiveRail} />
-                          )}
-                          <View
-                            style={[
-                              styles.sessionIcon,
-                              { backgroundColor: meta.bg },
-                            ]}
-                          >
-                            <Icon
-                              name={meta.icon}
-                              size={18}
-                              color={meta.color}
-                            />
-                          </View>
-                          <View style={styles.sessionCopy}>
-                            <View style={styles.sessionTitleRow}>
-                              <Text
-                                style={[
-                                  styles.sessionTitle,
-                                  isActive && styles.sessionTitleActive,
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {session.title}
-                              </Text>
-                              {isActive && (
-                                <View style={styles.sessionLiveBadge}>
-                                  <Text style={styles.sessionLiveBadgeText}>
-                                    当前
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text
-                              style={styles.sessionPreview}
-                              numberOfLines={1}
-                            >
-                              {session.preview || "点击继续这轮农事对话"}
-                            </Text>
-                            <View style={styles.sessionMetaRow}>
-                              <Text style={styles.sessionTag}>
-                                {session.category || "对话"}
-                              </Text>
-                              <Text style={styles.sessionTime}>
-                                {formatSessionTime(session.updatedAt)}
-                              </Text>
-                            </View>
-                          </View>
-                          <Icon
-                            name="chevron-right"
-                            size={18}
-                            color={
-                              isActive
-                                ? farmTheme.colors.leaf
-                                : colors.textTertiary
-                            }
-                          />
-                        </TouchableOpacity>
-                      </Animated.View>
-                    </View>
-                  );
-                })}
-                {orderedSessions.length === 0 && (
-                  <View style={styles.emptySessionCard}>
-                    <Icon
-                      name="chat-processing-outline"
-                      size={24}
-                      color={farmTheme.colors.leaf}
-                    />
-                    <Text style={styles.emptySessionTitle}>还没有历史对话</Text>
-                    <Text style={styles.emptySessionText}>
-                      开启一次问答后，会自动保存在这里。
-                    </Text>
+                        {session.title}
+                      </Text>
+                      <View style={styles.sessionMetaRow}>
+                        <Text style={styles.sessionTag}>
+                          {session.category}
+                        </Text>
+                        <Text style={styles.sessionTime}>
+                          {formatSessionTime(session.updatedAt)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
                   </View>
-                )}
-              </ScrollView>
-            </Animated.View>
+                );
+              })}
+            </ScrollView>
 
-            <Animated.View
-              style={[
-                styles.drawerFooter,
-                {
-                  opacity: contentOpacity,
-                  transform: [{ translateX: contentTranslateX }],
-                },
-              ]}
-            >
+            <View style={styles.drawerFooter}>
               <View style={styles.drawerUser}>
                 <LinearGradient
-                  colors={[farmTheme.colors.leaf, farmTheme.colors.leafDark]}
+                  colors={[colors.success, colors.primary]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.drawerUserAvatar}
                 >
                   <Text style={styles.drawerUserAvatarText}>农</Text>
                 </LinearGradient>
-                <View style={styles.drawerUserCopy}>
-                  <Text style={styles.drawerUserName} numberOfLines={1}>
-                    {user?.nickname || "系统管理员"}
-                  </Text>
-                  <Text style={styles.drawerUserMeta}>本地农场账号</Text>
-                </View>
+                <Text style={styles.drawerUserName} numberOfLines={1}>
+                  {user?.nickname || "系统管理员"}
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.drawerIconBtn}
-                activeOpacity={touchOpacity.icon}
+                activeOpacity={0.7}
               >
-                <Icon
-                  name="cog-outline"
-                  size={23}
-                  color={farmTheme.colors.ink}
-                />
+                <Icon name="cog-outline" size={23} color={colors.text} />
               </TouchableOpacity>
-            </Animated.View>
+            </View>
           </Animated.View>
         </View>
       </Modal>
@@ -777,32 +578,39 @@ export const AgentChatScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        {...appGradients.chatBg}
+        style={StyleSheet.absoluteFill}
+      />
 
       {/* Header */}
       <View style={styles.header}>
-        <ScalePress onPress={() => setDrawerVisible(true)}>
-          <View style={styles.headerMenuBtn}>
-            <Icon name="menu" size={23} color={farmTheme.colors.ink} />
-          </View>
-        </ScalePress>
+        <TouchableOpacity
+          style={styles.headerMenuBtn}
+          onPress={() => setDrawerVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Icon name="menu" size={24} color={colors.text} />
+        </TouchableOpacity>
         <View style={styles.headerLeft}>
           <View style={styles.headerAvatar}>
-            <Icon name="sprout" size={18} color={farmTheme.colors.leaf} />
+            <Icon name="sprout" size={18} color={colors.success} />
           </View>
           <View>
             <Text style={styles.headerTitle}>芽芽</Text>
             <View style={styles.statusRow}>
               <View style={styles.statusDot} />
-              <Text style={styles.headerSubtitle}>农事顾问 · 正在待命</Text>
+              <Text style={styles.headerSubtitle}>在线</Text>
             </View>
           </View>
         </View>
-        <ScalePress onPress={handleStartNewSession}>
-          <View style={styles.headerNewBtn}>
-            <Icon name="plus" size={22} color={farmTheme.colors.ink} />
-          </View>
-        </ScalePress>
+        <TouchableOpacity
+          style={styles.headerNewBtn}
+          onPress={handleStartNewSession}
+          activeOpacity={0.7}
+        >
+          <Icon name="plus" size={22} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       {/* SegmentedControl */}
@@ -810,7 +618,7 @@ export const AgentChatScreen: React.FC = () => {
         <TouchableOpacity
           style={[styles.segBtn, activeTab === "chat" && styles.segBtnActive]}
           onPress={() => setActiveTab("chat")}
-          activeOpacity={touchOpacity.primary}
+          activeOpacity={0.7}
         >
           <Text
             style={[
@@ -824,7 +632,7 @@ export const AgentChatScreen: React.FC = () => {
         <TouchableOpacity
           style={[styles.segBtn, activeTab === "report" && styles.segBtnActive]}
           onPress={() => setActiveTab("report")}
-          activeOpacity={touchOpacity.primary}
+          activeOpacity={0.7}
         >
           <Text
             style={[
@@ -884,16 +692,6 @@ export const AgentChatScreen: React.FC = () => {
           {/* Input */}
           <View style={styles.inputBar}>
             <View style={styles.inputWrapper}>
-              <TouchableOpacity
-                style={styles.inputToolBtn}
-                activeOpacity={touchOpacity.icon}
-              >
-                <Icon
-                  name="microphone-outline"
-                  size={20}
-                  color={farmTheme.colors.leaf}
-                />
-              </TouchableOpacity>
               <TextInput
                 style={styles.input}
                 value={inputText}
@@ -910,7 +708,7 @@ export const AgentChatScreen: React.FC = () => {
                 ]}
                 onPress={handleInputSend}
                 disabled={!inputText.trim() || isLoading}
-                activeOpacity={touchOpacity.primary}
+                activeOpacity={0.7}
               >
                 <Icon
                   name="arrow-up"
@@ -945,7 +743,6 @@ export const AgentChatScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: farmTheme.colors.page,
   },
   flex: {
     flex: 1,
@@ -957,20 +754,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacingV2.lg,
-    paddingTop: spacingV2.lg,
-    paddingBottom: spacingV2.md,
+    paddingTop: spacingV2.md,
+    paddingBottom: spacingV2.sm,
     backgroundColor: "transparent",
   },
   headerMenuBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: "rgba(255, 255, 255, 0.76)",
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
+    borderColor: "rgba(226, 232, 240, 0.7)",
   },
   headerLeft: {
     flexDirection: "row",
@@ -980,17 +776,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   headerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 17,
-    backgroundColor: farmTheme.colors.leafSoft,
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    backgroundColor: colors.successMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacingV2.md,
   },
   headerTitle: {
-    fontSize: fontSizeV2.lg,
-    fontWeight: "900",
+    fontSize: fontSizeV2.md,
+    fontWeight: "700",
     color: colors.text,
   },
   statusRow: {
@@ -1008,26 +804,24 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: fontSizeV2.xs,
     color: colors.textSecondary,
-    fontWeight: "600",
   },
   headerNewBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: "rgba(255, 255, 255, 0.76)",
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
+    borderColor: "rgba(226, 232, 240, 0.7)",
   },
 
   // ─── Segment ───
   segmentRow: {
     flexDirection: "row",
     marginHorizontal: spacingV2.lg,
-    marginBottom: spacingV2.md,
-    backgroundColor: farmTheme.colors.surfaceSoft,
+    marginBottom: spacingV2.sm,
+    backgroundColor: "rgba(235, 240, 247, 0.72)",
     borderRadius: borderRadiusV2.tab,
     padding: 4,
   },
@@ -1039,8 +833,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadiusV2.full,
   },
   segBtnActive: {
-    backgroundColor: farmTheme.colors.surface,
-    ...farmTheme.shadow.card,
+    backgroundColor: colors.surface,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
   segText: {
     fontSize: fontSizeV2.sm,
@@ -1059,93 +857,46 @@ const styles = StyleSheet.create({
   // ─── Welcome — left-aligned ───
   welcomeScrollContent: {
     flexGrow: 1,
-    justifyContent: "flex-start",
+    justifyContent: "center",
   },
   welcomeContainer: {
     paddingHorizontal: spacingV2.lg,
-    paddingTop: spacingV2.md,
+    paddingTop: spacingV2.lg,
     paddingBottom: spacingV2.lg,
   },
   heroBlock: {
-    borderRadius: farmTheme.radius.panel,
-    backgroundColor: "#254130",
-    padding: spacingV2.lg,
+    minHeight: 148,
+    justifyContent: "flex-end",
     marginBottom: spacingV2.lg,
-    overflow: "hidden",
-    ...farmTheme.shadow.float,
-  },
-  heroTopRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacingV2.md,
   },
   heroIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 22,
+    width: 56,
+    height: 56,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#D8F0BC",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    elevation: 5,
+    marginBottom: spacingV2.lg,
   },
   heroCopy: {
-    flex: 1,
     maxWidth: 360,
   },
   welcomeEyebrow: {
     fontSize: fontSizeV2.sm,
-    color: "rgba(228, 242, 214, 0.76)",
-    fontWeight: "800",
+    color: colors.success,
+    fontWeight: "700",
     marginBottom: spacingV2.sm,
   },
   welcomeTitle: {
-    fontSize: 25,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    lineHeight: 31,
+    fontSize: fontSizeV2.xl,
+    fontWeight: "700",
+    color: colors.text,
+    lineHeight: 30,
     marginBottom: spacingV2.sm,
   },
   welcomeSubtitle: {
-    fontSize: fontSizeV2.sm,
-    color: "rgba(255, 255, 255, 0.72)",
-    lineHeight: 21,
-  },
-  heroHintCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingV2.md,
-    marginTop: spacingV2.lg,
-    padding: spacingV2.md,
-    borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.10)",
-  },
-  heroHintIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFF6DC",
-  },
-  heroHintCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  heroHintTitle: {
-    fontSize: fontSizeV2.sm,
-    color: "#FFFFFF",
-    fontWeight: "800",
-    marginBottom: 2,
-  },
-  heroHintText: {
-    fontSize: fontSizeV2.xs,
-    color: "rgba(255, 255, 255, 0.62)",
-    fontWeight: "600",
+    fontSize: fontSizeV2.md,
+    color: colors.textSecondary,
+    lineHeight: 24,
   },
 
   // ─── Prompt pills ───
@@ -1163,19 +914,17 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacingV2.md,
   },
-  promptPressable: {
-    width: "48%",
-  },
   promptPill: {
-    width: "100%",
+    width: "47%",
     minHeight: 72,
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: farmTheme.colors.surface,
-    borderRadius: 24,
+    alignItems: "flex-start",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadiusV2.xl,
     padding: spacingV2.md,
     gap: spacingV2.md,
-    ...farmTheme.shadow.card,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.9)",
   },
   promptIconBox: {
     width: 32,
@@ -1187,18 +936,9 @@ const styles = StyleSheet.create({
   promptPillText: {
     fontSize: fontSizeV2.sm,
     color: colors.text,
-    fontWeight: "900",
-    lineHeight: 18,
-  },
-  promptCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  promptHint: {
-    marginTop: 3,
-    fontSize: fontSizeV2.xs,
-    color: colors.textTertiary,
     fontWeight: "600",
+    lineHeight: 20,
+    flex: 1,
   },
 
   // ─── Messages ───
@@ -1217,7 +957,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 12,
-    backgroundColor: farmTheme.colors.leafSoft,
+    backgroundColor: colors.successMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacingV2.sm,
@@ -1226,7 +966,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 8,
-    backgroundColor: farmTheme.colors.leafSoft,
+    backgroundColor: colors.primaryMuted,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacingV2.sm,
@@ -1238,29 +978,23 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   userBubbleInner: {
-    backgroundColor: farmTheme.colors.leaf,
+    backgroundColor: colors.primary,
     borderRadius: borderRadiusV2.xxl,
     borderBottomRightRadius: 8,
     paddingHorizontal: spacingV2.lg,
     paddingVertical: spacingV2.md,
-    shadowColor: farmTheme.colors.leaf,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 4,
   },
   agentBubble: {
     alignSelf: "flex-start",
   },
   agentBubbleInner: {
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxl,
     borderBottomLeftRadius: 8,
     paddingHorizontal: spacingV2.lg,
     paddingVertical: spacingV2.md,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
+    borderColor: colors.chatAiBorder,
   },
   userText: {
     fontSize: fontSizeV2.md,
@@ -1294,20 +1028,20 @@ const styles = StyleSheet.create({
   typingBubble: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.lg,
     borderBottomLeftRadius: 4,
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
+    borderColor: colors.borderLight,
     gap: 4,
   },
   typingDot: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: farmTheme.colors.leaf,
+    backgroundColor: colors.textTertiary,
   },
   typingDot2: {
     opacity: 0.4,
@@ -1321,65 +1055,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.lg,
     paddingTop: spacingV2.md,
     paddingBottom: spacingV2.lg,
-    backgroundColor: "rgba(247, 250, 241, 0.96)",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderTopWidth: 1,
-    borderTopColor: farmTheme.colors.line,
+    borderTopColor: "rgba(226, 232, 240, 0.76)",
   },
   inputWrapper: {
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: farmTheme.colors.surface,
+    alignItems: "flex-end",
+    backgroundColor: "#F1F5F9",
     borderRadius: borderRadiusV2.xxxl,
-    paddingLeft: 6,
-    paddingRight: 6,
-    paddingVertical: 6,
+    paddingLeft: spacingV2.lg,
+    paddingRight: spacingV2.sm,
+    paddingVertical: spacingV2.sm,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
-  },
-  inputToolBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadiusV2.full,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: farmTheme.colors.leafSoft,
-    marginRight: spacingV2.xs,
+    borderColor: "rgba(226, 232, 240, 0.9)",
   },
   input: {
     flex: 1,
     maxHeight: 100,
     fontSize: fontSizeV2.md,
     color: colors.text,
-    paddingTop: Platform.OS === "web" ? 9 : spacingV2.sm,
-    paddingBottom: Platform.OS === "web" ? 9 : spacingV2.sm,
+    paddingVertical: spacingV2.sm,
     paddingRight: spacingV2.sm,
-    minHeight: 40,
-    textAlignVertical: "center",
+    minHeight: 38,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: borderRadiusV2.full,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: farmTheme.colors.leaf,
-    shadowColor: farmTheme.colors.leaf,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 4,
+    backgroundColor: colors.text,
   },
   sendBtnDisabled: {
     backgroundColor: "rgba(226, 232, 240, 0.88)",
-    shadowOpacity: 0,
   },
 
   // ─── Context box ───
   contextBox: {
     marginTop: spacingV2.sm,
     padding: spacingV2.md,
-    backgroundColor: farmTheme.colors.leafSoft,
+    backgroundColor: colors.successMuted,
     borderRadius: borderRadiusV2.lg,
   },
   contextText: {
@@ -1402,7 +1118,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: farmTheme.colors.leaf,
+    backgroundColor: colors.primary,
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
     borderRadius: borderRadiusV2.full,
@@ -1416,7 +1132,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: farmTheme.colors.surfaceSoft,
+    backgroundColor: colors.disabledBg,
     paddingHorizontal: spacingV2.md,
     paddingVertical: spacingV2.sm,
     borderRadius: borderRadiusV2.full,
@@ -1441,13 +1157,13 @@ const styles = StyleSheet.create({
   },
   drawerPanel: {
     height: "100%",
-    backgroundColor: farmTheme.colors.page,
+    backgroundColor: "#F8FBFF",
     paddingTop: Platform.OS === "ios" ? 52 : spacingV2.xl,
     paddingHorizontal: spacingV2.lg,
     paddingBottom: spacingV2.lg,
     borderRightWidth: 1,
-    borderRightColor: farmTheme.colors.line,
-    shadowColor: farmTheme.colors.leaf,
+    borderRightColor: "rgba(226, 232, 240, 0.96)",
+    shadowColor: "#0F172A",
     shadowOffset: { width: 16, height: 0 },
     shadowOpacity: 0.14,
     shadowRadius: 28,
@@ -1457,8 +1173,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacingV2.md,
-    gap: spacingV2.sm,
+    marginBottom: spacingV2.lg,
   },
   drawerActionRow: {
     flexDirection: "row",
@@ -1470,56 +1185,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
-  },
-  memoryHero: {
-    minHeight: 154,
-    borderRadius: farmTheme.radius.panel,
-    backgroundColor: "#254130",
-    padding: spacingV2.lg,
-    marginBottom: spacingV2.lg,
-    overflow: "hidden",
-    ...farmTheme.shadow.float,
-  },
-  memoryHeroGlow: {
-    position: "absolute",
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    backgroundColor: "rgba(216, 240, 188, 0.14)",
-    right: -36,
-    top: -36,
-  },
-  memoryHeroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.14)",
-    marginBottom: spacingV2.md,
-  },
-  memoryHeroEyebrow: {
-    fontSize: fontSizeV2.xs,
-    color: "rgba(228, 242, 214, 0.72)",
-    fontWeight: "800",
-    marginBottom: spacingV2.xs,
-  },
-  memoryHeroTitle: {
-    fontSize: 22,
-    lineHeight: 28,
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
-  memoryHeroMeta: {
-    marginTop: spacingV2.sm,
-    fontSize: fontSizeV2.xs,
-    lineHeight: 18,
-    color: "rgba(255, 255, 255, 0.66)",
-    fontWeight: "600",
+    borderColor: "rgba(226, 232, 240, 0.94)",
   },
   newSessionCard: {
     minHeight: 62,
@@ -1528,11 +1196,10 @@ const styles = StyleSheet.create({
     gap: spacingV2.md,
     paddingHorizontal: spacingV2.md,
     borderRadius: borderRadiusV2.xxl,
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
+    borderColor: "rgba(226, 232, 240, 0.94)",
     marginBottom: spacingV2.xl,
-    ...farmTheme.shadow.card,
   },
   newSessionIcon: {
     width: 40,
@@ -1540,22 +1207,13 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: farmTheme.colors.leafSoft,
-  },
-  newSessionCopy: {
-    flex: 1,
-    minWidth: 0,
+    backgroundColor: colors.successMuted,
   },
   newSessionText: {
+    flex: 1,
     fontSize: fontSizeV2.md,
     color: colors.text,
-    fontWeight: "900",
-  },
-  newSessionMeta: {
-    marginTop: 3,
-    fontSize: fontSizeV2.xs,
-    color: colors.textSecondary,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   drawerHeading: {
     flexDirection: "row",
@@ -1566,7 +1224,7 @@ const styles = StyleSheet.create({
   drawerTitle: {
     fontSize: fontSizeV2.md,
     color: colors.text,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   drawerFilter: {
     flexDirection: "row",
@@ -1577,10 +1235,6 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.xs,
     color: colors.textSecondary,
     fontWeight: "600",
-  },
-  sessionListWrap: {
-    flex: 1,
-    minHeight: 0,
   },
   sessionList: {
     flex: 1,
@@ -1594,74 +1248,25 @@ const styles = StyleSheet.create({
   },
   sessionItem: {
     position: "relative",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingV2.md,
-    padding: spacingV2.md,
-    borderRadius: 22,
-    marginBottom: spacingV2.sm,
-    backgroundColor: farmTheme.colors.surface,
+    paddingHorizontal: spacingV2.md,
+    paddingVertical: spacingV2.md,
+    borderRadius: borderRadiusV2.lg,
+    marginBottom: spacingV2.xs,
     borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    overflow: "hidden",
-    ...farmTheme.shadow.card,
+    borderColor: "transparent",
   },
   sessionItemActive: {
-    backgroundColor: "#EAF7EE",
+    backgroundColor: "#EEF8F3",
     borderColor: "rgba(59, 178, 115, 0.24)",
   },
-  sessionActiveRail: {
-    position: "absolute",
-    left: 0,
-    top: 14,
-    bottom: 14,
-    width: 4,
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-    backgroundColor: farmTheme.colors.leaf,
-  },
-  sessionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sessionCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  sessionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacingV2.xs,
-  },
   sessionTitle: {
-    flex: 1,
     fontSize: fontSizeV2.sm,
     color: colors.text,
-    fontWeight: "900",
+    fontWeight: "700",
     lineHeight: 20,
   },
   sessionTitleActive: {
     color: "#147A4C",
-  },
-  sessionLiveBadge: {
-    paddingHorizontal: spacingV2.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadiusV2.full,
-    backgroundColor: farmTheme.colors.leaf,
-  },
-  sessionLiveBadgeText: {
-    fontSize: 10,
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
-  sessionPreview: {
-    marginTop: 3,
-    fontSize: fontSizeV2.xs,
-    color: colors.textSecondary,
-    fontWeight: "600",
   },
   sessionMetaRow: {
     flexDirection: "row",
@@ -1674,10 +1279,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacingV2.sm,
     paddingVertical: 2,
     borderRadius: borderRadiusV2.full,
-    backgroundColor: farmTheme.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: "rgba(59, 178, 115, 0.18)",
-    color: farmTheme.colors.leaf,
+    color: colors.success,
     fontSize: 11,
     fontWeight: "700",
   },
@@ -1686,29 +1291,6 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.xs,
     color: colors.textTertiary,
   },
-  emptySessionCard: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacingV2.xl,
-    borderRadius: 24,
-    backgroundColor: farmTheme.colors.surface,
-    borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
-  },
-  emptySessionTitle: {
-    marginTop: spacingV2.md,
-    fontSize: fontSizeV2.md,
-    color: farmTheme.colors.ink,
-    fontWeight: "900",
-  },
-  emptySessionText: {
-    marginTop: spacingV2.xs,
-    fontSize: fontSizeV2.xs,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    textAlign: "center",
-  },
   drawerFooter: {
     minHeight: 64,
     flexDirection: "row",
@@ -1716,7 +1298,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacingV2.md,
     borderTopWidth: 1,
-    borderTopColor: farmTheme.colors.line,
+    borderTopColor: "rgba(226, 232, 240, 0.96)",
     paddingTop: spacingV2.md,
   },
   drawerUser: {
@@ -1725,10 +1307,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacingV2.sm,
-  },
-  drawerUserCopy: {
-    flex: 1,
-    minWidth: 0,
   },
   drawerUserAvatar: {
     width: 40,
@@ -1743,14 +1321,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   drawerUserName: {
+    flex: 1,
     fontSize: fontSizeV2.sm,
     color: colors.text,
     fontWeight: "800",
-  },
-  drawerUserMeta: {
-    marginTop: 2,
-    fontSize: fontSizeV2.xs,
-    color: colors.textSecondary,
-    fontWeight: "600",
   },
 });

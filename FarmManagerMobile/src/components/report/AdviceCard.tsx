@@ -1,8 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "../../theme/colors";
-import { farmTheme } from "../../theme/farmTheme";
-import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
+import { spacing, fontSize, borderRadius } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import type { ReportAdviceItem } from "../../api/types";
 
@@ -48,10 +47,7 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({ items }) => {
             ]}
           >
             <View
-              style={[
-                styles.priorityBadge,
-                { backgroundColor: config.bgColor },
-              ]}
+              style={[styles.priorityBadge, { backgroundColor: config.bgColor }]}
             >
               <Icon name={config.icon} size={14} color={config.color} />
             </View>
@@ -80,19 +76,21 @@ export const AdviceCard: React.FC<AdviceCardProps> = ({ items }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: farmTheme.colors.surface,
-    borderRadius: farmTheme.radius.card,
-    padding: spacingV2.lg,
-    borderWidth: 1,
-    borderColor: farmTheme.colors.line,
-    ...farmTheme.shadow.card,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   adviceItem: {
     flexDirection: "row",
-    paddingBottom: spacingV2.md,
-    marginBottom: spacingV2.md,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: farmTheme.colors.line,
+    borderBottomColor: colors.borderLight,
   },
   adviceItemLast: {
     paddingBottom: 0,
@@ -102,10 +100,10 @@ const styles = StyleSheet.create({
   priorityBadge: {
     width: 32,
     height: 32,
-    borderRadius: borderRadiusV2.lg,
+    borderRadius: borderRadius.lg,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacingV2.md,
+    marginRight: spacing.md,
   },
   adviceContent: {
     flex: 1,
@@ -114,24 +112,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacingV2.xs,
+    marginBottom: spacing.xs,
   },
   adviceTitle: {
-    fontSize: fontSizeV2.md,
-    fontWeight: "900",
+    fontSize: fontSize.md,
+    fontWeight: "700",
     color: colors.text,
   },
   priorityLabel: {
-    paddingHorizontal: spacingV2.sm,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: borderRadiusV2.full,
+    borderRadius: borderRadius.sm,
   },
   priorityText: {
-    fontSize: fontSizeV2.xs,
-    fontWeight: "900",
+    fontSize: fontSize.xs,
+    fontWeight: "700",
   },
   adviceDetail: {
-    fontSize: fontSizeV2.sm,
+    fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 20,
   },

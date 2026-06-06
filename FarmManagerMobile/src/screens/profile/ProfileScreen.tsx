@@ -15,7 +15,6 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuthStore } from "../../stores/authStore";
 import { useCycleStore } from "../../stores/cycleStore";
 import { colors } from "../../theme/colors";
-import { farmTheme } from "../../theme/farmTheme";
 import { spacingV2, fontSizeV2, borderRadiusV2 } from "../../theme/spacing";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import type { MainTabParamList } from "../../navigation/MainTabNavigator";
@@ -29,7 +28,7 @@ type ProfileNavigationProp = CompositeNavigationProp<
 const FARM_MENU = [
   {
     icon: "view-dashboard",
-    iconColor: farmTheme.colors.leaf,
+    iconColor: colors.primary,
     label: "农场概览",
     action: "dashboard" as const,
   },
@@ -90,6 +89,11 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleFarmDashboardPress = () => {
+    const parentNav = navigation.getParent();
+    if (parentNav) parentNav.navigate("FarmDashboard");
+  };
+
   const handleSettingsPress = () => {
     const parentNav = navigation.getParent();
     if (parentNav) parentNav.navigate("Settings");
@@ -113,7 +117,11 @@ export const ProfileScreen: React.FC = () => {
               <Icon name={item.icon} size={20} color={item.iconColor} />
               <Text style={styles.menuText}>{item.label}</Text>
             </View>
-            <Icon name="chevron-right" size={20} color={colors.textTertiary} />
+            <Icon
+              name="chevron-right"
+              size={20}
+              color={colors.textTertiary}
+            />
           </TouchableOpacity>
         ))}
       </View>
@@ -128,7 +136,7 @@ export const ProfileScreen: React.FC = () => {
       >
         {/* Profile Header */}
         <LinearGradient
-          colors={["#213327", "#4F8B56", "#EAF6DF"]}
+          colors={["#B8D0FF", "#DBE5FF", "#F6F8FC"]}
           locations={[0, 0.6, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
@@ -140,10 +148,12 @@ export const ProfileScreen: React.FC = () => {
 
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
-              <Icon name="account" size={36} color={farmTheme.colors.leaf} />
+              <Icon name="account" size={36} color={colors.primary} />
             </View>
           </View>
-          <Text style={styles.profileName}>{user?.nickname || "农友"}</Text>
+          <Text style={styles.profileName}>
+            {user?.nickname || "农友"}
+          </Text>
           {farmAge > 0 && (
             <View style={styles.ageBadge}>
               <Text style={styles.ageText}>已种植 {farmAge} 天</Text>
@@ -181,11 +191,7 @@ export const ProfileScreen: React.FC = () => {
           activeOpacity={0.6}
         >
           <View style={styles.settingsLeft}>
-            <Icon
-              name={SETTINGS_ITEM.icon}
-              size={20}
-              color={SETTINGS_ITEM.iconColor}
-            />
+            <Icon name={SETTINGS_ITEM.icon} size={20} color={SETTINGS_ITEM.iconColor} />
             <Text style={styles.menuText}>{SETTINGS_ITEM.label}</Text>
           </View>
           <Icon name="chevron-right" size={20} color={colors.textTertiary} />
@@ -198,7 +204,7 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: farmTheme.colors.page,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     padding: spacingV2.lg,
@@ -218,7 +224,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 100,
-    backgroundColor: "rgba(216, 240, 188, 0.18)",
+    backgroundColor: "rgba(74, 123, 247, 0.10)",
     top: -60,
     right: -40,
   },
@@ -227,7 +233,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    backgroundColor: "rgba(74, 123, 247, 0.08)",
     top: 20,
     left: 20,
   },
@@ -242,7 +248,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "rgba(22, 182, 122, 0.18)",
+    borderColor: "rgba(74, 123, 247, 0.15)",
   },
   profileName: {
     fontSize: fontSizeV2.xl,
@@ -271,7 +277,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadiusV2.xxxl,
     paddingVertical: spacingV2.xl,
     marginBottom: spacingV2.xxl,
-    ...farmTheme.shadow.card,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   statItem: {
     alignItems: "center",
@@ -311,7 +321,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: borderRadiusV2.xxxl,
     overflow: "hidden",
-    ...farmTheme.shadow.card,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   menuItem: {
     flexDirection: "row",
@@ -343,7 +357,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadiusV2.xxxl,
     paddingVertical: spacingV2.md + 2,
     paddingHorizontal: spacingV2.lg,
-    ...farmTheme.shadow.card,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   settingsLeft: {
     flexDirection: "row",
