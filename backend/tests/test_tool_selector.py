@@ -2,21 +2,35 @@
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.agent.tool_selector import select_tools
 
+pytestmark = pytest.mark.no_db
+
 ALL_TOOL_NAMES = [
-    "create_cost_record",
-    "settle_debt",
-    "create_crop_cycle",
-    "log_farm_activity",
-    "update_crop_stage",
-    "update_crop_cycle",
-    "get_weather_forecast",
-    "get_cost_summary",
     "get_cost_analytics",
+    "get_cost_summary",
+    "create_cost_record",
+    "create_crop_cycle",
+    "create_crop_template",
+    "create_operation_work_order",
     "get_crop_cycle_info",
     "get_recent_farm_logs",
+    "get_farm_status",
+    "get_labor_payables",
+    "get_operation_work_orders",
+    "log_farm_activity",
+    "settle_debt",
+    "settle_labor_payment",
+    "update_crop_cycle",
+    "update_crop_stage",
+    "update_operation_work_order",
+    "get_weather_forecast",
+    "web_search",
 ]
+
+ENABLED_TOOL_NAMES = [name for name in ALL_TOOL_NAMES if name != "web_search"]
 
 
 def _make_tools(names=None):
@@ -25,6 +39,19 @@ def _make_tools(names=None):
     for n in names:
         m = MagicMock(spec=["name"])
         m.name = n
+        tools.append(m)
+    return tools
+
+
+def _make_tools_with_enabled(overrides: dict[str, bool]):
+    tools = []
+    for n in ALL_TOOL_NAMES:
+        m = MagicMock(spec=["name", "skill_metadata"])
+        m.name = n
+        if n in overrides:
+            m.skill_metadata = type(
+                "SkillMetadataStub", (), {"enabled": overrides[n]}
+            )()
         tools.append(m)
     return tools
 
@@ -68,7 +95,7 @@ class TestWritePatternMatching:
 
     def test_planting_advice_with_intent_phrase_does_not_write(self):
         result = select_tools("我想种小麦要注意什么", _make_tools())
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
 
     def test_log_farm_activity_watering(self):
         result = select_tools("今天浇了水", _make_tools())
@@ -100,7 +127,25 @@ class TestWritePatternMatching:
 
     def test_ambiguous_triggers_fallback(self):
         result = select_tools("买化肥", _make_tools())
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
+
+    def test_create_operation_work_order_with_labor_detail(self):
+        result = select_tools(
+            "今天东大棚4个工人给西瓜授粉，每人200，先付老王200", _make_tools()
+        )
+        assert result == ["create_operation_work_order"]
+
+    def test_create_operation_work_order_wins_over_query_word(self):
+        result = select_tools("新建今天授粉作业，3个工人，每人200", _make_tools())
+        assert result == ["create_operation_work_order"]
+
+    def test_settle_labor_payment_partial_payment(self):
+        result = select_tools("给老王补付300人工", _make_tools())
+        assert result == ["settle_labor_payment"]
+
+    def test_update_operation_work_order_correction(self):
+        result = select_tools("刚才那条授粉记录不是付老王，是付老李200", _make_tools())
+        assert result == ["update_operation_work_order"]
 
 
 class TestQueryKeywordMatching:
@@ -150,33 +195,56 @@ class TestQueryKeywordMatching:
         assert "candidates=['get_weather_forecast']" in caplog.text
         assert "returned=['get_weather_forecast']" in caplog.text
 
+    def test_labor_payable_query_prefers_labor_skill(self):
+        result = select_tools("老王还欠多少人工钱", _make_tools())
+        assert result[0] == "get_labor_payables"
+        assert "get_cost_summary" not in result
+
+    def test_operation_work_order_query(self):
+        result = select_tools("最近玉米授粉作业有哪些", _make_tools())
+        assert result == ["get_operation_work_orders"]
+
 
 class TestFallback:
     def test_greeting_returns_all(self):
         result = select_tools("你好", _make_tools())
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
 
     def test_planting_advice_returns_all(self):
         result = select_tools("西瓜怎么种", _make_tools())
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
 
     def test_how_to_plant_new_crop_returns_all(self):
         result = select_tools("怎么种小麦", _make_tools())
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
 
     def test_planting_attention_returns_all(self):
         result = select_tools("种小麦要注意什么", _make_tools())
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
 
     def test_all_tools_present(self):
         tools = _make_tools()
         result = select_tools("随便聊聊", tools)
-        assert set(result) == set(ALL_TOOL_NAMES)
-        assert len(result) == len(ALL_TOOL_NAMES)
+        assert set(result) == set(ENABLED_TOOL_NAMES)
+        assert len(result) == len(ENABLED_TOOL_NAMES)
+
+    def test_metadata_enabled_false_excludes_tool(self):
+        result = select_tools(
+            "随便聊聊",
+            _make_tools_with_enabled({"get_farm_status": False}),
+        )
+        assert "get_farm_status" not in result
+
+    def test_metadata_enabled_true_overrides_legacy_disabled_set(self):
+        result = select_tools(
+            "随便聊聊",
+            _make_tools_with_enabled({"web_search": True}),
+        )
+        assert "web_search" in result
 
     def test_empty_message_returns_all(self):
         result = select_tools("", _make_tools())
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
 
     def test_empty_tools_returns_empty(self):
         result = select_tools("今天天气", [])
@@ -205,6 +273,6 @@ class TestFallback:
         with caplog.at_level("INFO", logger="app.agent.tool_selector"):
             result = select_tools("你好", _make_tools())
 
-        assert result == ALL_TOOL_NAMES
+        assert result == ENABLED_TOOL_NAMES
         assert "tool_select | layer=fallback_all" in caplog.text
         assert "returned=[" in caplog.text

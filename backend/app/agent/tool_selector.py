@@ -9,6 +9,9 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+WRITE_INTENT_HINTS = {"创建", "新建", "记录", "记下", "添加"}
+QUERY_INTENT_HINTS = {"查询", "查看", "最近", "有哪些", "多少", "还欠", "统计"}
+
 WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
     "create_cost_record": [
         re.compile(r"(?:买了|卖了|花了|收入|支出|赊账|记账|记一笔|付了|收了)"),
@@ -41,6 +44,25 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(
             r"(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米|水稻).*(?:修改|更改|调整|改|改成|改到).*(?:\d{1,2}月|开始|播种期|起始)"
         ),
+    ],
+    "create_operation_work_order": [
+        re.compile(
+            r"(?:授粉|压蔓|留瓜|垫瓜|采收|装车|打杈|绑蔓|整枝).*(?:工人|每人|人工|作业|干活)"
+        ),
+        re.compile(r"(?:创建|新建|记录).*(?:作业单|农事作业|用工)"),
+        re.compile(
+            r"(?:东大棚|西大棚|地块|棚).*(?:工人|每人|人工).*(?:\d+\s*(?:元|块|人))"
+        ),
+    ],
+    "settle_labor_payment": [
+        re.compile(r"(?:补付|支付|结算|付清|结清).*(?:人工|工钱|工资)"),
+        re.compile(r"(?:给|付给).{1,12}(?:\d+\s*(?:元|块|百|千)).*(?:人工|工钱|工资)"),
+    ],
+    "update_operation_work_order": [
+        re.compile(
+            r"(?:刚才|上一条|那条|这条).*(?:不是|改成|改为|改到|更正|纠正).*(?:作业|记录|授粉|人工|工人|付)"
+        ),
+        re.compile(r"(?:修改|更改|调整|纠正).*(?:作业单|农事作业|用工记录)"),
     ],
 }
 
@@ -93,6 +115,24 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "操作日志",
         "干了啥",
         "记录",
+    },
+    "get_labor_payables": {
+        "人工钱",
+        "工钱",
+        "工资",
+        "未付人工",
+        "欠人工",
+        "还欠多少人工",
+        "人工欠款",
+    },
+    "get_operation_work_orders": {
+        "作业单",
+        "农事作业",
+        "授粉作业",
+        "作业有哪些",
+        "用工记录",
+        "最近授粉",
+        "最近采收",
     },
     "get_farm_status": {
         "农场",
@@ -243,6 +283,14 @@ DISABLED_SKILLS: set[str] = {
 }
 
 
+def _tool_enabled(tool: BaseTool) -> bool:
+    metadata = getattr(tool, "skill_metadata", None)
+    enabled = getattr(metadata, "enabled", None)
+    if isinstance(enabled, bool):
+        return enabled
+    return tool.name not in DISABLED_SKILLS
+
+
 def select_tools(
     user_message: str,
     all_tools: list[BaseTool],
@@ -250,9 +298,12 @@ def select_tools(
     intent_classifier: LLMIntentClassifier | None = None,
 ) -> list[str]:
     # 过滤掉禁用的 skill
-    all_tools = [t for t in all_tools if t.name not in DISABLED_SKILLS]
+    all_tools = [t for t in all_tools if _tool_enabled(t)]
+    enabled_tool_names = {t.name for t in all_tools}
     candidates: set[str] = set()
     is_planting_advice = any(hint in user_message for hint in PLANTING_ADVICE_HINTS)
+    has_write_intent = any(hint in user_message for hint in WRITE_INTENT_HINTS)
+    has_query_intent = any(hint in user_message for hint in QUERY_INTENT_HINTS)
 
     for tool_name, patterns in WRITE_PATTERNS.items():
         if tool_name == "create_crop_cycle" and is_planting_advice:
@@ -271,7 +322,34 @@ def select_tools(
     if "update_crop_cycle" in candidates:
         candidates.difference_update({"get_crop_cycle_info", "get_farm_status"})
 
-    candidates.difference_update(DISABLED_SKILLS)
+    if "get_labor_payables" in candidates:
+        candidates.difference_update({"get_cost_summary"})
+
+    if (
+        "get_operation_work_orders" in candidates
+        and "create_operation_work_order" not in candidates
+    ):
+        candidates.difference_update(
+            {"create_operation_work_order", "get_recent_farm_logs", "get_farm_status"}
+        )
+    elif (
+        "get_operation_work_orders" in candidates
+        and "create_operation_work_order" in candidates
+    ):
+        if has_write_intent and not has_query_intent:
+            candidates.remove("get_operation_work_orders")
+        elif has_query_intent and not has_write_intent:
+            candidates.remove("create_operation_work_order")
+
+    if "settle_labor_payment" in candidates:
+        candidates.difference_update({"settle_debt", "create_cost_record"})
+
+    if "update_operation_work_order" in candidates:
+        candidates.difference_update(
+            {"create_operation_work_order", "get_recent_farm_logs", "log_farm_activity"}
+        )
+
+    candidates.intersection_update(enabled_tool_names)
 
     if not candidates:
         if intent_classifier is not None:
@@ -325,12 +403,18 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_cost_analytics": ["get_farm_status"],
     "get_crop_cycle_info": ["get_farm_status"],
     "get_recent_farm_logs": ["get_farm_status"],
+    "get_labor_payables": ["get_farm_status"],
+    "get_operation_work_orders": ["get_farm_status"],
     "create_cost_record": [],
     "create_crop_cycle": [],
     "create_crop_template": [],
+    "create_operation_work_order": [],
     "log_farm_activity": [],
-    "update_crop_stage": [],
     "settle_debt": [],
+    "settle_labor_payment": [],
+    "update_crop_cycle": [],
+    "update_crop_stage": [],
+    "update_operation_work_order": [],
     "get_farm_status": [],
     "web_search": [],
 }

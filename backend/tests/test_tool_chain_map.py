@@ -1,6 +1,10 @@
 """TOOL_CHAIN_MAP + expand_by_chain 单元测试。"""
 
+import pytest
+
 from app.agent.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
+
+pytestmark = pytest.mark.no_db
 
 
 class TestToolChainMap:
@@ -11,18 +15,24 @@ class TestToolChainMap:
 
     def test_map_contains_all_known_tools(self):
         expected_keys = {
-            "get_weather_forecast",
-            "get_cost_summary",
             "get_cost_analytics",
-            "get_crop_cycle_info",
-            "get_recent_farm_logs",
+            "get_cost_summary",
             "create_cost_record",
             "create_crop_cycle",
             "create_crop_template",
-            "log_farm_activity",
-            "update_crop_stage",
-            "settle_debt",
+            "create_operation_work_order",
+            "get_crop_cycle_info",
+            "get_recent_farm_logs",
             "get_farm_status",
+            "get_labor_payables",
+            "get_operation_work_orders",
+            "log_farm_activity",
+            "settle_debt",
+            "settle_labor_payment",
+            "update_crop_cycle",
+            "update_crop_stage",
+            "update_operation_work_order",
+            "get_weather_forecast",
             "web_search",
         }
         assert set(TOOL_CHAIN_MAP.keys()) == expected_keys
@@ -35,6 +45,8 @@ class TestToolChainMap:
             "get_cost_analytics",
             "get_crop_cycle_info",
             "get_recent_farm_logs",
+            "get_labor_payables",
+            "get_operation_work_orders",
         ]
         for tool in query_tools:
             assert "get_farm_status" in TOOL_CHAIN_MAP[tool], (
@@ -47,9 +59,13 @@ class TestToolChainMap:
             "create_cost_record",
             "create_crop_cycle",
             "create_crop_template",
+            "create_operation_work_order",
             "log_farm_activity",
-            "update_crop_stage",
             "settle_debt",
+            "settle_labor_payment",
+            "update_crop_cycle",
+            "update_crop_stage",
+            "update_operation_work_order",
             "get_farm_status",
         ]
         for tool in write_tools:
@@ -69,6 +85,14 @@ class TestExpandByChain:
 
     def test_crop_chain(self):
         result = expand_by_chain({"get_crop_cycle_info"})
+        assert "get_farm_status" in result
+
+    def test_labor_payables_chain(self):
+        result = expand_by_chain({"get_labor_payables"})
+        assert "get_farm_status" in result
+
+    def test_operation_work_orders_chain(self):
+        result = expand_by_chain({"get_operation_work_orders"})
         assert "get_farm_status" in result
 
     def test_write_skill_no_chain(self):

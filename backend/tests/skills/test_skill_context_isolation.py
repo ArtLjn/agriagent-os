@@ -8,6 +8,8 @@ from skillify.models.schemas import ResultStatus, SkillResult
 
 from app.agent.skills import skills_to_langchain_tools
 
+pytestmark = pytest.mark.no_db
+
 
 class _FakeSkill:
     """记录调用上下文的假 Skill。"""
@@ -58,9 +60,9 @@ async def test_langchain_tool_injects_trusted_farm_context(monkeypatch):
     monkeypatch.setattr("app.agent.skills.get_category_enum", lambda _farm_id: [])
     monkeypatch.setattr("app.agent.skills.build_skill_context", fake_context_builder)
 
-    tool = skills_to_langchain_tools(
-        _FakeManager(skill), farm_id=7, farm_uid=farm_uid
-    )[0]
+    tool = skills_to_langchain_tools(_FakeManager(skill), farm_id=7, farm_uid=farm_uid)[
+        0
+    ]
 
     result = await tool.ainvoke({"value": "ok"})
 

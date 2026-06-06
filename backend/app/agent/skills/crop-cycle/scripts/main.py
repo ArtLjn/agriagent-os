@@ -3,6 +3,7 @@
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.models.cycle import CropCycle
@@ -32,7 +33,9 @@ class CropCycleSkill(Skill):
     @cached(ttl_seconds=600, key_fn=lambda p: f"cycle:{p.get('cycle_id')}")
     async def execute(self, params: dict, context) -> SkillResult:
         cycle_id = params.get("cycle_id")
-        farm_id = getattr(context, "farm_id", 1) or 1
+        farm_id, context_error = require_farm_context(context, "查询茬口")
+        if context_error:
+            return context_error
         db = SessionLocal()
         try:
             if cycle_id is None:
@@ -40,7 +43,11 @@ class CropCycleSkill(Skill):
                 reply = "未指定茬口 ID，已先返回当前农场状态：\n" + summary
                 return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
 
-            cycle = db.query(CropCycle).filter(CropCycle.id == cycle_id).first()
+            cycle = (
+                db.query(CropCycle)
+                .filter(CropCycle.id == cycle_id, CropCycle.farm_id == farm_id)
+                .first()
+            )
             if not cycle:
                 return SkillResult(
                     status=ResultStatus.SUCCESS,
