@@ -22,16 +22,16 @@ class BillingScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 150),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   FinanceHeroCard(),
-                  SizedBox(height: 14),
+                  SizedBox(height: 12),
                   QuickLedgerActions(),
-                  SizedBox(height: 14),
+                  SizedBox(height: 12),
                   CostBreakdownCard(),
-                  SizedBox(height: 14),
+                  SizedBox(height: 12),
                   RecentLedgerCard(),
                 ],
               ),
@@ -49,37 +49,51 @@ class FinanceHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
-      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: EdgeInsets.all(20),
       borderColor: Colors.transparent,
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFF182033), Color(0xFF29436F)],
+        colors: [AppColors.navy, AppColors.navy2],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '本月净支出',
-            style: TextStyle(
-              color: Color(0xB8FFFFFF),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '本月净支出',
+                style: TextStyle(
+                  color: Color(0xB8FFFFFF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
+              Text(
+                '较上月 -8%',
+                style: TextStyle(
+                  color: Color(0xFF9FE5CE),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 6),
+          SizedBox(height: 8),
           Text(
             '¥18,426',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 29,
+              fontSize: 32,
               height: 1,
               fontWeight: FontWeight.w800,
               letterSpacing: 0,
             ),
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -114,6 +128,7 @@ class FinanceMetric extends StatelessWidget {
             letterSpacing: 0,
           ),
         ),
+        const SizedBox(height: 3),
         Text(
           label,
           style: const TextStyle(
@@ -150,6 +165,7 @@ class QuickLedgerActions extends StatelessWidget {
             label: '智能记账',
             color: AppColors.blue,
             background: AppColors.blueSoft,
+            emphasized: true,
           ),
         ),
         SizedBox(width: 8),
@@ -173,35 +189,34 @@ class LedgerAction extends StatelessWidget {
     required this.label,
     required this.color,
     required this.background,
+    this.emphasized = false,
   });
 
   final IconData icon;
   final String label;
   final Color color;
   final Color background;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 68),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.line),
-      ),
+    return CardPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      shadow: emphasized,
+      borderColor: emphasized ? const Color(0x224078FF) : AppColors.lineSoft,
+      background: Colors.white,
       child: Column(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, size: 18, color: color),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             label,
             textAlign: TextAlign.center,
@@ -229,20 +244,23 @@ class CostBreakdownCard extends StatelessWidget {
         children: [
           SectionHeading(title: '成本构成', action: '详情'),
           CostBar(
-              label: '人工',
-              amount: '¥8,620',
-              progress: 0.68,
-              color: AppColors.teal),
+            label: '人工',
+            amount: '¥8,620',
+            progress: 0.68,
+            color: AppColors.teal,
+          ),
           CostBar(
-              label: '农资',
-              amount: '¥6,910',
-              progress: 0.54,
-              color: AppColors.blue),
+            label: '农资',
+            amount: '¥6,910',
+            progress: 0.54,
+            color: AppColors.blue,
+          ),
           CostBar(
-              label: '水肥',
-              amount: '¥2,430',
-              progress: 0.30,
-              color: AppColors.cyan),
+            label: '水肥',
+            amount: '¥2,430',
+            progress: 0.30,
+            color: AppColors.cyan,
+          ),
         ],
       ),
     );
@@ -266,14 +284,25 @@ class CostBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.only(top: 14),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label,
-                  style: AppTextStyles.body.copyWith(color: AppColors.ink)),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration:
+                        BoxDecoration(color: color, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(label,
+                      style: AppTextStyles.body.copyWith(color: AppColors.ink)),
+                ],
+              ),
               Text(
                 amount,
                 style: const TextStyle(
@@ -290,7 +319,7 @@ class CostBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
               value: progress,
-              minHeight: 6,
+              minHeight: 7,
               backgroundColor: AppColors.surface2,
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
@@ -311,7 +340,7 @@ class RecentLedgerCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeading(title: '最近流水', action: '筛选'),
-          SizedBox(height: 12),
+          SizedBox(height: 14),
           LedgerRow(
             icon: LucideIcons.usersRound,
             iconColor: AppColors.teal,
@@ -320,7 +349,10 @@ class RecentLedgerCard extends StatelessWidget {
             subtitle: '来自作业单 · 今日',
             amount: '-¥860',
           ),
-          SizedBox(height: 12),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(height: 1, color: AppColors.lineSoft),
+          ),
           LedgerRow(
             icon: LucideIcons.arrowDownLeft,
             iconColor: AppColors.green,
@@ -364,15 +396,15 @@ class LedgerRow extends StatelessWidget {
         Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: iconBackground,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, size: 18, color: iconColor),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

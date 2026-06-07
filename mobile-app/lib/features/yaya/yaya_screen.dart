@@ -26,11 +26,13 @@ class YayaScreen extends StatelessWidget {
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 172),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 184),
                   child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      AskSuggestionCard(),
+                      ContextPromptCard(),
+                      SizedBox(height: 12),
+                      ContextPills(),
                       SizedBox(height: 14),
                       ChatList(),
                     ],
@@ -42,7 +44,7 @@ class YayaScreen extends StatelessWidget {
           const Positioned(
             left: 16,
             right: 16,
-            bottom: 96,
+            bottom: 104,
             child: ChatComposer(),
           ),
         ],
@@ -51,41 +53,48 @@ class YayaScreen extends StatelessWidget {
   }
 }
 
-class AskSuggestionCard extends StatelessWidget {
-  const AskSuggestionCard({super.key});
+class ContextPromptCard extends StatelessWidget {
+  const ContextPromptCard({super.key});
 
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.all(16),
+      child: Row(
         children: [
-          Row(
-            children: [
-              SuggestionIcon(),
-              SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('今天可以这样问', style: AppTextStyles.sectionTitle),
-                  Text('芽芽会读取你的经营上下文', style: AppTextStyles.small),
-                ],
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+          SuggestionIcon(),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ChipLabel.blue('安排今天作业'),
-                SizedBox(width: 8),
-                ChipLabel.teal('分析成本'),
-                SizedBox(width: 8),
-                ChipLabel.neutral('生成周报'),
+                Text('今天可以这样问', style: AppTextStyles.sectionTitle),
+                SizedBox(height: 4),
+                Text('芽芽会读取你的经营上下文', style: AppTextStyles.small),
               ],
             ),
           ),
+          Icon(LucideIcons.chevronRight, size: 18, color: AppColors.subtle),
+        ],
+      ),
+    );
+  }
+}
+
+class ContextPills extends StatelessWidget {
+  const ContextPills({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ChipLabel.blue('安排今天作业'),
+          SizedBox(width: 8),
+          ChipLabel.teal('分析成本'),
+          SizedBox(width: 8),
+          ChipLabel.neutral('生成周报'),
         ],
       ),
     );
@@ -98,13 +107,15 @@ class SuggestionIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 36,
-      height: 36,
+      width: 42,
+      height: 42,
       decoration: BoxDecoration(
-        color: AppColors.tealSoft,
-        borderRadius: BorderRadius.circular(12),
+        gradient: const LinearGradient(
+          colors: [AppColors.tealSoft, AppColors.blueSoft],
+        ),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: const Icon(LucideIcons.sparkles, size: 18, color: AppColors.teal),
+      child: const Icon(LucideIcons.sparkles, size: 19, color: AppColors.teal),
     );
   }
 }
@@ -144,23 +155,30 @@ class ChatBubble extends StatelessWidget {
     return Align(
       alignment: fromUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 292),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        constraints: const BoxConstraints(maxWidth: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
         decoration: BoxDecoration(
           color: fromUser ? AppColors.blue : Colors.white,
           borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(fromUser ? 18 : 8),
-            topRight: Radius.circular(fromUser ? 8 : 18),
-            bottomLeft: const Radius.circular(18),
-            bottomRight: const Radius.circular(18),
+            topLeft: Radius.circular(fromUser ? 20 : 10),
+            topRight: Radius.circular(fromUser ? 10 : 20),
+            bottomLeft: const Radius.circular(20),
+            bottomRight: const Radius.circular(20),
           ),
+          border: fromUser ? null : Border.all(color: AppColors.lineSoft),
           boxShadow: fromUser
-              ? null
+              ? const [
+                  BoxShadow(
+                    color: Color(0x224078FF),
+                    blurRadius: 22,
+                    offset: Offset(0, 10),
+                  ),
+                ]
               : const [
                   BoxShadow(
-                    color: Color(0x0F101828),
-                    blurRadius: 22,
-                    offset: Offset(0, 8),
+                    color: Color(0x0A101828),
+                    blurRadius: 20,
+                    offset: Offset(0, 10),
                   ),
                 ],
         ),
@@ -185,17 +203,17 @@ class ChatComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 54),
-      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14101828),
+            color: Color(0x1824405F),
             blurRadius: 28,
-            offset: Offset(0, 12),
+            offset: Offset(0, 14),
           ),
         ],
       ),
@@ -213,6 +231,13 @@ class ChatComposer extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.navy,
               borderRadius: BorderRadius.circular(15),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x24172033),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
             ),
             child:
                 const Icon(LucideIcons.arrowUp, size: 18, color: Colors.white),

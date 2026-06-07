@@ -6,7 +6,7 @@ class AppTextStyles {
   const AppTextStyles._();
 
   static const title = TextStyle(
-    fontSize: 23,
+    fontSize: 24,
     height: 1.05,
     fontWeight: FontWeight.w800,
     color: AppColors.ink,
@@ -14,7 +14,7 @@ class AppTextStyles {
   );
 
   static const sectionTitle = TextStyle(
-    fontSize: 16,
+    fontSize: 17,
     height: 1.2,
     fontWeight: FontWeight.w800,
     color: AppColors.ink,
@@ -41,6 +41,14 @@ class AppTextStyles {
     fontSize: 10,
     height: 1.2,
     fontWeight: FontWeight.w700,
+    letterSpacing: 0,
+  );
+
+  static const metric = TextStyle(
+    fontSize: 20,
+    height: 1.05,
+    fontWeight: FontWeight.w800,
+    color: AppColors.ink,
     letterSpacing: 0,
   );
 }

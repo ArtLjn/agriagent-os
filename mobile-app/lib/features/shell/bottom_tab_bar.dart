@@ -28,16 +28,16 @@ class AppBottomTabBar extends StatelessWidget {
     return Center(
       child: Container(
         width: 335,
-        height: 66,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        height: 68,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.line),
+          color: Colors.white.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.82)),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x1F101828),
-              blurRadius: 40,
+              color: Color(0x1A24405F),
+              blurRadius: 34,
               offset: Offset(0, 16),
             ),
           ],
@@ -88,13 +88,13 @@ class NormalTab extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: AnimatedContainer(
-        width: 55,
-        height: 48,
+        width: 56,
+        height: 50,
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
           color: selected ? AppColors.blueSoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -126,26 +126,26 @@ class YayaTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Transform.translate(
-      offset: const Offset(0, -11),
+      offset: const Offset(0, -10),
       child: PressableScale(
         onTap: onTap,
         child: SizedBox(
           width: 55,
-          height: 48,
+          height: 50,
           child: Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.topCenter,
             children: [
               Positioned(
-                top: -1,
+                top: -2,
                 child: AnimatedContainer(
-                  width: 52,
-                  height: 52,
+                  width: 50,
+                  height: 50,
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white, width: 4),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white, width: 3),
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -159,9 +159,9 @@ class YayaTab extends StatelessWidget {
                     ),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x3D4078FF),
-                        blurRadius: 28,
-                        offset: Offset(0, 12),
+                        color: Color(0x334078FF),
+                        blurRadius: 22,
+                        offset: Offset(0, 10),
                       ),
                     ],
                   ),

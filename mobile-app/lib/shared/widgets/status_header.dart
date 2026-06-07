@@ -32,7 +32,7 @@ class StatusHeader extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

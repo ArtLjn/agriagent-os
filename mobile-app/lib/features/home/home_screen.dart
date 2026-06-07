@@ -23,12 +23,14 @@ class HomeScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 148),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  HomeHeroCard(),
-                  SizedBox(height: 14),
+                  HomeDecisionCard(),
+                  SizedBox(height: 12),
+                  TodayFocusStrip(),
+                  SizedBox(height: 12),
                   TodayTasksCard(),
                 ],
               ),
@@ -40,37 +42,35 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class HomeHeroCard extends StatelessWidget {
-  const HomeHeroCard({super.key});
+class HomeDecisionCard extends StatelessWidget {
+  const HomeDecisionCard({super.key});
 
   @override
   Widget build(BuildContext context) {
     return CardPanel(
-      padding: const EdgeInsets.all(18),
-      borderColor: const Color(0x294078FF),
+      padding: const EdgeInsets.all(20),
+      borderColor: const Color(0x1A4078FF),
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Colors.white, Color(0xFFF5F9FF)],
+        colors: [Colors.white, Color(0xFFF4F8FF)],
       ),
       child: Stack(
         children: [
           Positioned(
-            right: 0,
-            top: 52,
+            right: -6,
+            top: 28,
             child: Container(
-              width: 62,
-              height: 62,
+              width: 74,
+              height: 74,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: const LinearGradient(
-                  colors: [Colors.white, Color(0xFFE9F2FF)],
-                ),
+                shape: BoxShape.circle,
+                color: AppColors.blueSoft.withValues(alpha: 0.9),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x384078FF),
-                    blurRadius: 38,
-                    offset: Offset(0, 18),
+                    color: Color(0x224078FF),
+                    blurRadius: 32,
+                    offset: Offset(0, 14),
                   ),
                 ],
               ),
@@ -87,14 +87,14 @@ class HomeHeroCard extends StatelessWidget {
                   Text('07:30 更新', style: AppTextStyles.small),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               const SizedBox(
-                width: 248,
+                width: 266,
                 child: Text(
                   '今天先做东棚授粉复核，傍晚前处理降温风险。',
                   style: TextStyle(
-                    fontSize: 23,
-                    height: 31 / 23,
+                    fontSize: 24,
+                    height: 31 / 24,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
                     letterSpacing: 0,
@@ -109,22 +109,15 @@ class HomeHeroCard extends StatelessWidget {
               const SizedBox(height: 16),
               const Row(
                 children: [
-                  WeatherItem(
-                      value: '24℃', label: '当前温度', color: AppColors.blue),
-                  SizedBox(width: 8),
-                  WeatherItem(
-                      value: '8℃', label: '夜间最低', color: AppColors.amber),
-                  SizedBox(width: 8),
-                  WeatherItem(
-                      value: '良好', label: '作业窗口', color: AppColors.green),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Row(
-                children: [
-                  HomeButton(label: '查看建议', primary: true),
+                  HomeButton(
+                      label: '查看建议',
+                      icon: LucideIcons.listChecks,
+                      primary: true),
                   SizedBox(width: 10),
-                  HomeButton(label: '查看天气', primary: false),
+                  HomeButton(
+                      label: '查看天气',
+                      icon: LucideIcons.cloudSun,
+                      primary: false),
                 ],
               ),
             ],
@@ -135,8 +128,25 @@ class HomeHeroCard extends StatelessWidget {
   }
 }
 
-class WeatherItem extends StatelessWidget {
-  const WeatherItem({
+class TodayFocusStrip extends StatelessWidget {
+  const TodayFocusStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        FocusMetric(value: '24℃', label: '当前温度', color: AppColors.blue),
+        SizedBox(width: 8),
+        FocusMetric(value: '8℃', label: '夜间最低', color: AppColors.amber),
+        SizedBox(width: 8),
+        FocusMetric(value: '良好', label: '作业窗口', color: AppColors.green),
+      ],
+    );
+  }
+}
+
+class FocusMetric extends StatelessWidget {
+  const FocusMetric({
     super.key,
     required this.value,
     required this.label,
@@ -150,27 +160,15 @@ class WeatherItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        height: 62,
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.78),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: const Color(0x144078FF)),
-        ),
+      child: CardPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        shadow: false,
+        borderColor: AppColors.lineSoft,
+        background: AppColors.elevated,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                height: 1,
-                fontWeight: FontWeight.w800,
-                color: color,
-                letterSpacing: 0,
-              ),
-            ),
+            Text(value, style: AppTextStyles.metric.copyWith(color: color)),
             const SizedBox(height: 4),
             Text(label, style: AppTextStyles.small),
           ],
@@ -181,31 +179,45 @@ class WeatherItem extends StatelessWidget {
 }
 
 class HomeButton extends StatelessWidget {
-  const HomeButton({super.key, required this.label, required this.primary});
+  const HomeButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.primary,
+  });
 
   final String label;
+  final IconData icon;
   final bool primary;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 38,
-      constraints: const BoxConstraints(minWidth: 92),
+      height: 40,
+      constraints: const BoxConstraints(minWidth: 104),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: primary ? AppColors.navy : Colors.white,
         borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: primary ? AppColors.navy : AppColors.lineSoft),
       ),
-      child: Center(
-        child: Text(
-          label,
-          style: TextStyle(
-            color: primary ? Colors.white : AppColors.blue,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 15, color: primary ? Colors.white : AppColors.blue),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: primary ? Colors.white : AppColors.blue,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -221,32 +233,47 @@ class TodayTasksCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeading(title: '今天要处理', action: '全部'),
-          SizedBox(height: 12),
+          SizedBox(height: 14),
           TaskRow(
             icon: LucideIcons.clipboardCheck,
             tone: AppColors.blueSoft,
             color: AppColors.blue,
             title: '东棚 1-6 号授粉复核',
             subtitle: '10:30 · 3 人 · 来自作业单',
+            tag: '上午',
           ),
-          SizedBox(height: 12),
+          TaskDivider(),
           TaskRow(
             icon: LucideIcons.triangleAlert,
             tone: AppColors.amberSoft,
             color: AppColors.amber,
             title: '夜间降温防护',
             subtitle: '最低 8℃ · 建议提前覆盖保温',
+            tag: '傍晚前',
           ),
-          SizedBox(height: 12),
+          TaskDivider(),
           TaskRow(
             icon: LucideIcons.walletCards,
             tone: AppColors.tealSoft,
             color: AppColors.teal,
             title: '昨日人工工资待确认',
             subtitle: '2 笔 · ¥860 · 可直接结算',
+            tag: '待确认',
           ),
         ],
       ),
+    );
+  }
+}
+
+class TaskDivider extends StatelessWidget {
+  const TaskDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 10),
+      child: Divider(height: 1, color: AppColors.lineSoft),
     );
   }
 }
@@ -259,6 +286,7 @@ class TaskRow extends StatelessWidget {
     required this.color,
     required this.title,
     required this.subtitle,
+    required this.tag,
   });
 
   final IconData icon;
@@ -266,21 +294,22 @@ class TaskRow extends StatelessWidget {
   final Color color;
   final String title;
   final String subtitle;
+  final String tag;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Container(
-          width: 36,
-          height: 36,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
             color: tone,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(icon, size: 18, color: color),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,6 +326,14 @@ class TaskRow extends StatelessWidget {
               ),
               Text(subtitle, style: AppTextStyles.small),
             ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          tag,
+          style: AppTextStyles.small.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],

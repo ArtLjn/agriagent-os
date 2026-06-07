@@ -42,14 +42,15 @@ class WorkbenchScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ToolGridCard(title: '常用功能', action: '编辑', tools: commonTools),
-                  SizedBox(height: 14),
-                  ToolGridCard(title: '生产管理', tools: productionTools),
-                  SizedBox(height: 14),
+                  SizedBox(height: 12),
+                  ToolGridCard(
+                      title: '生产管理', compact: true, tools: productionTools),
+                  SizedBox(height: 12),
                   ActiveCyclesCard(),
                 ],
               ),
@@ -67,27 +68,30 @@ class ToolGridCard extends StatelessWidget {
     required this.title,
     required this.tools,
     this.action,
+    this.compact = false,
   });
 
   final String title;
   final String? action;
   final List<ToolSpec> tools;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return CardPanel(
+      padding: EdgeInsets.all(compact ? 16 : 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeading(title: title, action: action),
-          const SizedBox(height: 14),
+          SizedBox(height: compact ? 12 : 16),
           GridView.count(
             crossAxisCount: 4,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
+            mainAxisSpacing: compact ? 10 : 14,
             crossAxisSpacing: 8,
-            childAspectRatio: 0.82,
+            childAspectRatio: compact ? 0.92 : 0.86,
             children: tools
                 .map(
                   (tool) => AppIconTile(
@@ -114,18 +118,20 @@ class ActiveCyclesCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeading(title: '进行中的批次', action: '管理'),
-          SizedBox(height: 12),
+          SizedBox(height: 14),
           CycleProgressCard(
             title: '春茬西瓜 · A 批',
             stage: '授粉期',
             meta: '28 亩 · 12 个种植单元',
+            action: '今日复核',
             progress: 0.76,
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 10),
           CycleProgressCard(
             title: '番茄试种 · B 批',
             stage: '缓苗期',
             meta: '6 亩 · 3 个种植单元',
+            action: '观察温差',
             progress: 0.38,
           ),
         ],
@@ -140,51 +146,79 @@ class CycleProgressCard extends StatelessWidget {
     required this.title,
     required this.stage,
     required this.meta,
+    required this.action,
     required this.progress,
   });
 
   final String title;
   final String stage;
   final String meta;
+  final String action;
   final double progress;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface3,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lineSoft),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.ink,
-                  letterSpacing: 0,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(meta, style: AppTextStyles.small),
+                  ],
                 ),
               ),
               ChipLabel.blue(stage),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(meta, style: AppTextStyles.small),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
               value: progress,
-              minHeight: 6,
-              backgroundColor: const Color(0xFFDBE3EE),
+              minHeight: 7,
+              backgroundColor: const Color(0xFFE2E9F2),
               valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blue),
             ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${(progress * 100).round()}% 已推进',
+                style: AppTextStyles.small.copyWith(color: AppColors.subtle),
+              ),
+              Text(
+                action,
+                style: AppTextStyles.small.copyWith(
+                  color: AppColors.blue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
         ],
       ),

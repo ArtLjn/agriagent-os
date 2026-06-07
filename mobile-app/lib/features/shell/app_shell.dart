@@ -32,37 +32,28 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeOutCubic,
-            transitionBuilder: (child, animation) {
-              final offset = Tween<Offset>(
-                begin: const Offset(0, 0.015),
-                end: Offset.zero,
-              ).animate(animation);
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(position: offset, child: child),
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey<int>(selectedIndex),
-              child: pages[selectedIndex],
-            ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.backgroundTop, AppColors.background],
           ),
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 26,
-            child: AppBottomTabBar(
-              selectedIndex: selectedIndex,
-              onChanged: (index) => setState(() => selectedIndex = index),
+        ),
+        child: Stack(
+          children: [
+            IndexedStack(index: selectedIndex, children: pages),
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 26,
+              child: AppBottomTabBar(
+                selectedIndex: selectedIndex,
+                onChanged: (index) => setState(() => selectedIndex = index),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

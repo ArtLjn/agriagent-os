@@ -22,12 +22,12 @@ class ProfileScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 150),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ProfileTopCard(),
-                  SizedBox(height: 14),
+                  SizedBox(height: 12),
                   ProfileListCard(
                     title: '常用设置',
                     rows: [
@@ -61,7 +61,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  SizedBox(height: 14),
+                  SizedBox(height: 12),
                   ProfileListCard(
                     title: '帮助与系统',
                     rows: [
@@ -97,37 +97,40 @@ class ProfileTopCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
-      padding: EdgeInsets.all(18),
+      padding: EdgeInsets.all(20),
       child: Column(
         children: [
           Row(
             children: [
               ProfileAvatar(),
-              SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '刘文洁的农场',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                      letterSpacing: 0,
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '刘文洁的农场',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                        letterSpacing: 0,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Text('经营者', style: AppTextStyles.small),
-                      Text(' · 2 个农场 · 12 个成员', style: AppTextStyles.small),
-                    ],
-                  ),
-                ],
+                    SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Text('经营者', style: AppTextStyles.small),
+                        Text(' · 2 个农场 · 12 个成员', style: AppTextStyles.small),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+              Icon(LucideIcons.chevronRight, size: 18, color: AppColors.subtle),
             ],
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 18),
           Row(
             children: [
               ProfileStat(value: '14 天', label: '芽芽连续运行'),
@@ -149,11 +152,22 @@ class ProfileAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 56,
-      height: 56,
+      width: 58,
+      height: 58,
       decoration: BoxDecoration(
-        color: AppColors.navy,
-        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.navy, AppColors.navy2],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x24172033),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: const Center(
         child: Text(
@@ -180,23 +194,17 @@ class ProfileStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(14),
+          color: AppColors.surface3,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.lineSoft),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: AppColors.ink,
-                letterSpacing: 0,
-              ),
-            ),
+            Text(value, style: AppTextStyles.metric.copyWith(fontSize: 17)),
+            const SizedBox(height: 4),
             Text(
               label,
               maxLines: 1,
@@ -223,13 +231,18 @@ class ProfileListCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeading(title: title),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           ...rows.indexed.map((entry) {
             final row = ProfileRow(row: entry.$2);
             if (entry.$1 == rows.length - 1) return row;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: row,
+            return Column(
+              children: [
+                row,
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(height: 1, color: AppColors.lineSoft),
+                ),
+              ],
             );
           }),
         ],
@@ -248,15 +261,15 @@ class ProfileRow extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 36,
-          height: 36,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
             color: row.background,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(row.icon, size: 18, color: row.color),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,6 +287,7 @@ class ProfileRow extends StatelessWidget {
             ],
           ),
         ),
+        const Icon(LucideIcons.chevronRight, size: 17, color: AppColors.subtle),
       ],
     );
   }

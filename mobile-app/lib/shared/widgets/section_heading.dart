@@ -16,13 +16,20 @@ class SectionHeading extends StatelessWidget {
       children: [
         Text(title, style: AppTextStyles.sectionTitle),
         if (action != null)
-          Text(
-            action!,
-            style: const TextStyle(
-              color: AppColors.blue,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.blueSoft,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              action!,
+              style: const TextStyle(
+                color: AppColors.blue,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
             ),
           ),
       ],

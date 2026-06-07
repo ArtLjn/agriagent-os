@@ -7,13 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
-  testWidgets('CardPanel 使用 18 圆角和边框', (tester) async {
+  testWidgets('CardPanel 使用 22 圆角和边框', (tester) async {
     await tester
         .pumpWidget(const MaterialApp(home: CardPanel(child: Text('卡片'))));
     final decorated =
         tester.widget<DecoratedBox>(find.byType(DecoratedBox).first);
     final decoration = decorated.decoration as BoxDecoration;
-    expect(decoration.borderRadius, BorderRadius.circular(18));
+    expect(decoration.borderRadius, BorderRadius.circular(22));
     expect(decoration.color, AppColors.surface);
   });
 

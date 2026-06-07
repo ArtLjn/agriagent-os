@@ -16,6 +16,8 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: AppColors.background,
       fontFamily: 'System',
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
     );
   }
 }
