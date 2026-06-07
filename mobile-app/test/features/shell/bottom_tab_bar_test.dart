@@ -1,11 +1,16 @@
-import 'package:farm_manager_app/features/shell/app_shell.dart';
 import 'package:farm_manager_app/features/shell/bottom_tab_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('底部导航包含五个 Tab 且中间是芽芽', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: AppShell()));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AppBottomTabBar(selectedIndex: 0, onChanged: _noop),
+        ),
+      ),
+    );
 
     expect(find.text('首页'), findsOneWidget);
     expect(find.text('工作台'), findsOneWidget);

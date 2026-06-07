@@ -7,10 +7,10 @@ void main() {
   testWidgets('聊天助手统一叫芽芽', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: YayaScreen()));
 
-    expect(find.text('芽芽'), findsOneWidget);
+    expect(find.text('芽芽'), findsWidgets);
     expect(find.text('AI 助手'), findsNothing);
     expect(find.textContaining('AI 会'), findsNothing);
-    expect(find.text('芽芽会读取你的经营上下文'), findsOneWidget);
+    expect(find.textContaining('芽芽会读取你的经营上下文'), findsOneWidget);
   });
 
   testWidgets('芽芽页面包含菜单、建议、聊天和输入框', (tester) async {

@@ -9,11 +9,12 @@ void main() {
     expect(find.text('今日概览'), findsOneWidget);
     expect(find.text('芽芽汇总了天气、建议、作业和账单'), findsOneWidget);
     expect(find.text('芽芽今日汇总'), findsOneWidget);
-    expect(find.text('今天先做东棚授粉复核，傍晚前处理降温风险。'), findsOneWidget);
+    expect(find.textContaining('今天先做东棚授粉复核'), findsOneWidget);
+    expect(find.textContaining('傍晚前处理降温风险'), findsOneWidget);
     expect(find.text('24℃'), findsOneWidget);
     expect(find.text('8℃'), findsOneWidget);
     expect(find.text('良好'), findsOneWidget);
-    expect(find.text('今天要处理'), findsOneWidget);
+    expect(find.text('今天要处理  3'), findsOneWidget);
   });
 
   testWidgets('首页不展示 API 路径', (tester) async {

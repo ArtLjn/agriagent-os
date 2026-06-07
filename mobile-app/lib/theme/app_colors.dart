@@ -4,9 +4,9 @@ class AppColors {
   const AppColors._();
 
   static const background = Color(0xFFF6F8FB);
-  static const backgroundTop = Color(0xFFF9FBFF);
+  static const backgroundTop = Color(0xFFFAFCFF);
   static const surface = Color(0xFFFFFFFF);
-  static const surface2 = Color(0xFFEEF3F8);
+  static const surface2 = Color(0xFFF2F6FA);
   static const surface3 = Color(0xFFF8FAFC);
   static const elevated = Color(0xFFFCFDFF);
   static const ink = Color(0xFF101828);
@@ -27,6 +27,7 @@ class AppColors {
   static const amberSoft = Color(0xFFFFF4E5);
   static const red = Color(0xFFE24B55);
   static const redSoft = Color(0xFFFFF0F1);
-  static const navy = Color(0xFF172033);
-  static const navy2 = Color(0xFF263A5F);
+  static const navy = Color(0xFF092642);
+  static const navy2 = Color(0xFF0F3656);
+  static const navy3 = Color(0xFF061E35);
 }

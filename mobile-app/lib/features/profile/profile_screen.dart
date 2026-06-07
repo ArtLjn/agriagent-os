@@ -22,12 +22,12 @@ class ProfileScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 150),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ProfileTopCard(),
-                  SizedBox(height: 12),
+                  SizedBox(height: 20),
                   ProfileListCard(
                     title: '常用设置',
                     rows: [
@@ -61,7 +61,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  SizedBox(height: 12),
+                  SizedBox(height: 20),
                   ProfileListCard(
                     title: '帮助与系统',
                     rows: [
@@ -97,7 +97,14 @@ class ProfileTopCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
-      padding: EdgeInsets.all(20),
+      padding: EdgeInsets.all(18),
+      radius: 16,
+      borderColor: Colors.transparent,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [AppColors.navy, AppColors.navy3],
+      ),
       child: Column(
         children: [
           Row(
@@ -113,21 +120,41 @@ class ProfileTopCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.ink,
+                        color: Colors.white,
                         letterSpacing: 0,
                       ),
                     ),
                     SizedBox(height: 5),
                     Row(
                       children: [
-                        Text('经营者', style: AppTextStyles.small),
-                        Text(' · 2 个农场 · 12 个成员', style: AppTextStyles.small),
+                        Text(
+                          '经营者',
+                          style: TextStyle(
+                            color: Color(0x99FFFFFF),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        Text(
+                          ' · 2 个农场 · 12 个成员',
+                          style: TextStyle(
+                            color: Color(0x99FFFFFF),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
-              Icon(LucideIcons.chevronRight, size: 18, color: AppColors.subtle),
+              Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(LucideIcons.chevronRight,
+                    size: 18, color: Color(0x99FFFFFF)),
+              ),
             ],
           ),
           SizedBox(height: 18),
@@ -155,25 +182,14 @@ class ProfileAvatar extends StatelessWidget {
       width: 58,
       height: 58,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.navy, AppColors.navy2],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x24172033),
-            blurRadius: 20,
-            offset: Offset(0, 10),
-          ),
-        ],
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(29),
       ),
       child: const Center(
         child: Text(
-          'L',
+          '刘',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.navy,
             fontSize: 22,
             fontWeight: FontWeight.w800,
             letterSpacing: 0,
@@ -196,20 +212,29 @@ class ProfileStat extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.surface3,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.lineSoft),
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white10),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: AppTextStyles.metric.copyWith(fontSize: 17)),
+            Text(
+              value,
+              style: AppTextStyles.metric.copyWith(
+                color: Colors.white,
+                fontSize: 17,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.small.copyWith(fontSize: 10),
+              style: AppTextStyles.small.copyWith(
+                color: const Color(0x99FFFFFF),
+                fontSize: 12,
+              ),
             ),
           ],
         ),
@@ -227,6 +252,7 @@ class ProfileListCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CardPanel(
+      radius: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -264,10 +290,10 @@ class ProfileRow extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: row.background,
-            borderRadius: BorderRadius.circular(14),
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(row.icon, size: 18, color: row.color),
+          child: Icon(row.icon, size: 18, color: AppColors.ink2),
         ),
         const SizedBox(width: 12),
         Expanded(

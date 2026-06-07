@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../shared/widgets/card_panel.dart';
-import '../../shared/widgets/chip_label.dart';
 import '../../shared/widgets/section_heading.dart';
 import '../../shared/widgets/status_header.dart';
 import '../../theme/app_colors.dart';
@@ -23,7 +22,7 @@ class HomeScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 148),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -48,77 +47,68 @@ class HomeDecisionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CardPanel(
-      padding: const EdgeInsets.all(20),
-      borderColor: const Color(0x1A4078FF),
+      padding: const EdgeInsets.all(18),
+      borderColor: Colors.transparent,
+      radius: 16,
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Colors.white, Color(0xFFF4F8FF)],
+        colors: [AppColors.navy, AppColors.navy3],
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -6,
-            top: 28,
-            child: Container(
-              width: 74,
-              height: 74,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.blueSoft.withValues(alpha: 0.9),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x224078FF),
-                    blurRadius: 32,
-                    offset: Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: const Icon(LucideIcons.sparkles, color: AppColors.blue),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  ChipLabel.blue('芽芽今日汇总'),
-                  Text('07:30 更新', style: AppTextStyles.small),
-                ],
+              Text(
+                '芽芽今日汇总',
+                style: TextStyle(
+                  color: Color(0xC7FFFFFF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
               ),
-              const SizedBox(height: 16),
-              const SizedBox(
-                width: 266,
+              Text(
+                '07:30 更新',
+                style: TextStyle(
+                  color: Color(0x99FFFFFF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Expanded(
                 child: Text(
-                  '今天先做东棚授粉复核，傍晚前处理降温风险。',
+                  '今天先做东棚授粉复核，\n傍晚前处理降温风险。',
                   style: TextStyle(
-                    fontSize: 24,
-                    height: 31 / 24,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
+                    color: Colors.white,
+                    fontSize: 22,
+                    height: 30 / 22,
+                    fontWeight: FontWeight.w900,
                     letterSpacing: 0,
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                '已结合今日建议、天气预报、最近作业单和未结人工，给出今天的执行顺序。',
-                style: AppTextStyles.body,
-              ),
-              const SizedBox(height: 16),
-              const Row(
-                children: [
-                  HomeButton(
-                      label: '查看建议',
-                      icon: LucideIcons.listChecks,
-                      primary: true),
-                  SizedBox(width: 10),
-                  HomeButton(
-                      label: '查看天气',
-                      icon: LucideIcons.cloudSun,
-                      primary: false),
-                ],
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(17),
+                ),
+                child: const Icon(
+                  LucideIcons.arrowRight,
+                  size: 18,
+                  color: Colors.white,
+                ),
               ),
             ],
           ),
@@ -161,16 +151,42 @@ class FocusMetric extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: CardPanel(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        shadow: false,
-        borderColor: AppColors.lineSoft,
-        background: AppColors.elevated,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        shadow: true,
+        borderColor: Colors.transparent,
+        background: Colors.white,
+        radius: 16,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: AppTextStyles.metric.copyWith(color: color)),
-            const SizedBox(height: 4),
-            Text(label, style: AppTextStyles.small),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.small,
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(value, style: AppTextStyles.metric.copyWith(color: color)),
+                const SizedBox(width: 6),
+                if (value == '24℃')
+                  const Icon(LucideIcons.sunMedium,
+                      size: 14, color: AppColors.subtle)
+                else if (value == '8℃')
+                  const Icon(LucideIcons.moon,
+                      size: 14, color: AppColors.subtle)
+                else
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -232,15 +248,16 @@ class TodayTasksCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeading(title: '今天要处理', action: '全部'),
+          SectionHeading(title: '今天要处理  3'),
           SizedBox(height: 14),
           TaskRow(
             icon: LucideIcons.clipboardCheck,
             tone: AppColors.blueSoft,
             color: AppColors.blue,
             title: '东棚 1-6 号授粉复核',
-            subtitle: '10:30 · 3 人 · 来自作业单',
-            tag: '上午',
+            subtitle: '10:30  ·  3 人',
+            tag: '作业',
+            tagMuted: true,
           ),
           TaskDivider(),
           TaskRow(
@@ -248,8 +265,9 @@ class TodayTasksCard extends StatelessWidget {
             tone: AppColors.amberSoft,
             color: AppColors.amber,
             title: '夜间降温防护',
-            subtitle: '最低 8℃ · 建议提前覆盖保温',
-            tag: '傍晚前',
+            subtitle: '最低 8℃，傍晚前',
+            tag: '风险',
+            tagMuted: false,
           ),
           TaskDivider(),
           TaskRow(
@@ -258,10 +276,38 @@ class TodayTasksCard extends StatelessWidget {
             color: AppColors.teal,
             title: '昨日人工工资待确认',
             subtitle: '2 笔 · ¥860 · 可直接结算',
-            tag: '待确认',
+            tag: '账单',
+            tagMuted: true,
           ),
+          SizedBox(height: 14),
+          _ViewAllTasksRow(),
         ],
       ),
+    );
+  }
+}
+
+class _ViewAllTasksRow extends StatelessWidget {
+  const _ViewAllTasksRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          '查看全部任务',
+          style: AppTextStyles.small.copyWith(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 4),
+        const Icon(
+          LucideIcons.chevronRight,
+          size: 14,
+          color: AppColors.muted,
+        ),
+      ],
     );
   }
 }
@@ -287,6 +333,7 @@ class TaskRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.tag,
+    this.tagMuted = false,
   });
 
   final IconData icon;
@@ -295,9 +342,12 @@ class TaskRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final String tag;
+  final bool tagMuted;
 
   @override
   Widget build(BuildContext context) {
+    final tagBg = tagMuted ? AppColors.surface3 : tone;
+    final tagFg = tagMuted ? AppColors.muted : color;
     return Row(
       children: [
         Container(
@@ -305,7 +355,7 @@ class TaskRow extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             color: tone,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 18, color: color),
         ),
@@ -317,23 +367,34 @@ class TaskRow extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 13,
-                  height: 18 / 13,
+                  fontSize: 14,
+                  height: 20 / 14,
                   fontWeight: FontWeight.w800,
                   color: AppColors.ink,
                   letterSpacing: 0,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(subtitle, style: AppTextStyles.small),
             ],
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          tag,
-          style: AppTextStyles.small.copyWith(
-            color: color,
-            fontWeight: FontWeight.w800,
+        Container(
+          height: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            color: tagBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              tag,
+              style: AppTextStyles.small.copyWith(
+                color: tagFg,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ),
       ],

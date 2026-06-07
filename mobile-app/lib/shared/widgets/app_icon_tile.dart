@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
 
 enum IconTone { blue, cyan, teal, green, amber }
 
@@ -35,32 +36,47 @@ class AppIconTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 70,
+      width: 76,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.lineSoft),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x08000000),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
-            child: Icon(icon, size: 22, color: foreground),
+            child: Center(
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 20, color: foreground),
+              ),
+            ),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: AppTextStyles.small.copyWith(
               color: AppColors.ink,
               fontSize: 11,
-              height: 15 / 11,
               fontWeight: FontWeight.w800,
-              letterSpacing: 0,
             ),
           ),
         ],

@@ -42,15 +42,15 @@ class WorkbenchScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ToolGridCard(title: '常用功能', action: '编辑', tools: commonTools),
-                  SizedBox(height: 12),
+                  SizedBox(height: 16),
                   ToolGridCard(
                       title: '生产管理', compact: true, tools: productionTools),
-                  SizedBox(height: 12),
+                  SizedBox(height: 16),
                   ActiveCyclesCard(),
                 ],
               ),
@@ -80,6 +80,10 @@ class ToolGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return CardPanel(
       padding: EdgeInsets.all(compact ? 16 : 18),
+      radius: 16,
+      shadow: false,
+      borderColor: Colors.transparent,
+      background: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -89,9 +93,9 @@ class ToolGridCard extends StatelessWidget {
             crossAxisCount: 4,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: compact ? 10 : 14,
+            mainAxisSpacing: compact ? 12 : 16,
             crossAxisSpacing: 8,
-            childAspectRatio: compact ? 0.92 : 0.86,
+            childAspectRatio: compact ? 0.9 : 0.84,
             children: tools
                 .map(
                   (tool) => AppIconTile(
@@ -114,6 +118,7 @@ class ActiveCyclesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
+      radius: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -126,7 +131,7 @@ class ActiveCyclesCard extends StatelessWidget {
             action: '今日复核',
             progress: 0.76,
           ),
-          SizedBox(height: 10),
+          SizedBox(height: 16),
           CycleProgressCard(
             title: '番茄试种 · B 批',
             stage: '缓苗期',
@@ -162,7 +167,7 @@ class CycleProgressCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface3,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.lineSoft),
       ),
       child: Column(
@@ -190,7 +195,11 @@ class CycleProgressCard extends StatelessWidget {
                   ],
                 ),
               ),
-              ChipLabel.blue(stage),
+              ChipLabel(
+                text: stage,
+                background: AppColors.greenSoft,
+                foreground: AppColors.green,
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -200,7 +209,9 @@ class CycleProgressCard extends StatelessWidget {
               value: progress,
               minHeight: 7,
               backgroundColor: const Color(0xFFE2E9F2),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blue),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.blue,
+              ),
             ),
           ),
           const SizedBox(height: 8),

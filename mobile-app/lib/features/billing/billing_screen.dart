@@ -22,7 +22,7 @@ class BillingScreen extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 150),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -49,12 +49,13 @@ class FinanceHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
-      padding: EdgeInsets.all(20),
+      padding: EdgeInsets.all(18),
+      radius: 16,
       borderColor: Colors.transparent,
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [AppColors.navy, AppColors.navy2],
+        colors: [AppColors.navy, AppColors.navy3],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,27 +202,28 @@ class LedgerAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CardPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       shadow: emphasized,
       borderColor: emphasized ? const Color(0x224078FF) : AppColors.lineSoft,
       background: Colors.white,
+      radius: 16,
       child: Column(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 18, color: color),
+            child: Icon(icon, size: 20, color: color),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             label,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: FontWeight.w800,
               color: AppColors.ink,
               letterSpacing: 0,
@@ -239,32 +241,151 @@ class CostBreakdownCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
+      radius: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeading(title: '成本构成', action: '详情'),
-          CostBar(
-            label: '人工',
-            amount: '¥8,620',
-            progress: 0.68,
-            color: AppColors.teal,
-          ),
-          CostBar(
-            label: '农资',
-            amount: '¥6,910',
-            progress: 0.54,
-            color: AppColors.blue,
-          ),
-          CostBar(
-            label: '水肥',
-            amount: '¥2,430',
-            progress: 0.30,
-            color: AppColors.cyan,
-          ),
+          SizedBox(height: 14),
+          CostDonutSummary(),
         ],
       ),
     );
   }
+}
+
+class CostDonutSummary extends StatelessWidget {
+  const CostDonutSummary({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(
+          width: 84,
+          height: 84,
+          child: CustomPaint(painter: CostDonutPainter()),
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+          child: Column(
+            children: const [
+              CostLegend(
+                  label: '人工',
+                  amount: '¥8,620',
+                  percent: '42%',
+                  color: AppColors.blue),
+              SizedBox(height: 7),
+              CostLegend(
+                  label: '农资',
+                  amount: '¥6,910',
+                  percent: '33%',
+                  color: AppColors.teal),
+              SizedBox(height: 7),
+              CostLegend(
+                  label: '水肥',
+                  amount: '¥2,430',
+                  percent: '12%',
+                  color: AppColors.cyan),
+              SizedBox(height: 7),
+              CostLegend(
+                  label: '其他',
+                  amount: '¥2,566',
+                  percent: '13%',
+                  color: AppColors.subtle),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class CostLegend extends StatelessWidget {
+  const CostLegend({
+    super.key,
+    required this.label,
+    required this.amount,
+    required this.percent,
+    required this.color,
+  });
+
+  final String label;
+  final String amount;
+  final String percent;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 36,
+          child: Text(
+            label,
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const Spacer(),
+        Text(
+          amount,
+          style: AppTextStyles.small.copyWith(
+            color: AppColors.ink,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 36,
+          child: Text(
+            percent,
+            textAlign: TextAlign.right,
+            style: AppTextStyles.small.copyWith(color: AppColors.subtle),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class CostDonutPainter extends CustomPainter {
+  const CostDonutPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 16
+      ..strokeCap = StrokeCap.butt;
+
+    const colors = [
+      AppColors.blue,
+      AppColors.teal,
+      AppColors.cyan,
+      AppColors.subtle,
+    ];
+    const values = [0.42, 0.33, 0.12, 0.13];
+    var start = -1.5708;
+    for (var i = 0; i < values.length; i++) {
+      stroke.color = colors[i];
+      final sweep = values[i] * 6.28318;
+      canvas.drawArc(rect.deflate(8), start, sweep, false, stroke);
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CostDonutPainter oldDelegate) => false;
 }
 
 class CostBar extends StatelessWidget {
@@ -336,6 +457,7 @@ class RecentLedgerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
+      radius: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -348,11 +470,9 @@ class RecentLedgerCard extends StatelessWidget {
             title: '授粉人工',
             subtitle: '来自作业单 · 今日',
             amount: '-¥860',
+            amountColor: AppColors.amber,
           ),
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 10),
-            child: Divider(height: 1, color: AppColors.lineSoft),
-          ),
+          Divider(height: 1, color: AppColors.lineSoft),
           LedgerRow(
             icon: LucideIcons.arrowDownLeft,
             iconColor: AppColors.green,
@@ -390,48 +510,52 @@ class LedgerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: iconBackground,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, size: 18, color: iconColor),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                    letterSpacing: 0,
-                  ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: iconBackground,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                Text(subtitle, style: AppTextStyles.small),
-              ],
-            ),
-          ],
-        ),
-        Text(
-          amount,
-          style: TextStyle(
-            color: amountColor,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
+                child: Icon(icon, size: 20, color: iconColor),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: AppTextStyles.small),
+                ],
+              ),
+            ],
           ),
-        ),
-      ],
+          Text(
+            amount,
+            style: TextStyle(
+              color: amountColor,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
