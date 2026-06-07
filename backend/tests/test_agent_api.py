@@ -197,6 +197,55 @@ class TestAgentHistory:
         assert response.status_code == 200
         assert response.json() == []
 
+    def test_conversation_messages_include_pending_action(self, db_session) -> None:
+        """历史会话消息应保留 pending_action，前端切回会话后继续显示按钮。"""
+        import json
+
+        from app.agent.application.chat_use_case import build_pending_action_response
+        from app.agent.application.history_use_case import list_message_items
+        from app.models.conversation import Conversation, ConversationMessage
+        from app.models.farm import Farm
+        from app.infra.pending_actions import remove_pending, store_pending
+
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
+        session_id = "sess-pending-history"
+        remove_pending(farm.id, session_id=session_id)
+        store_pending(
+            farm.id,
+            "create_crop_cycle",
+            {"crop_name": "橘子"},
+            original_input="我想种橘子",
+            session_id=session_id,
+        )
+        pending = build_pending_action_response(farm.id, session_id=session_id)
+        conversation = Conversation(
+            farm_id=farm.id,
+            user_id=farm.user_id,
+            session_id=session_id,
+        )
+        db_session.add(conversation)
+        db_session.commit()
+        db_session.refresh(conversation)
+        db_session.add(
+            ConversationMessage(
+                conversation_id=conversation.id,
+                role="assistant",
+                content="需要我帮你创建一个「橘子」茬口吗？",
+                meta=json.dumps(
+                    {"pending_action": pending.model_dump(mode="json")},
+                    ensure_ascii=False,
+                ),
+            )
+        )
+        db_session.commit()
+
+        items = list_message_items(db_session, farm=farm, session_id=session_id)
+
+        assert items[0].pending_action is not None
+        assert items[0].pending_action.skill_name == "create_crop_cycle"
+
+        remove_pending(farm.id, session_id=session_id)
+
 
 class TestAgentTraceFilter:
     """验证 trace 查询只查 skill_call 类型。"""

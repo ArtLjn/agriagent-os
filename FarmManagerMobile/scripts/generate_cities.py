@@ -3,7 +3,6 @@ import urllib.request
 import urllib.parse
 import concurrent.futures
 import os
-import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)

@@ -20,6 +20,7 @@ import Simulation from './pages/Simulation';
 import Users from './pages/Users';
 import Login from './pages/Login';
 import { authStore } from './stores/authStore';
+import { palette, layout } from './styles/theme';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!authStore.isLoggedIn()) {
@@ -30,7 +31,45 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <ConfigProvider locale={zhCN} theme={{ algorithm: theme.darkAlgorithm }}>
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        algorithm: theme.darkAlgorithm,
+        token: {
+          colorPrimary: palette.accentStrong,
+          colorBgBase: palette.bg,
+          colorBgContainer: palette.bgElevated,
+          colorBgElevated: palette.bgPanel,
+          colorBorder: palette.border,
+          colorText: palette.text,
+          colorTextSecondary: palette.textMuted,
+          borderRadius: layout.radius,
+          fontSize: 14,
+          controlHeight: 34,
+        },
+        components: {
+          Button: {
+            borderRadius: layout.radius,
+            controlHeight: 34,
+          },
+          Card: {
+            borderRadiusLG: layout.radius,
+            headerBg: palette.bgElevated,
+          },
+          Input: {
+            activeBorderColor: palette.accent,
+            hoverBorderColor: palette.accent,
+          },
+          Select: {
+            optionSelectedBg: 'rgba(88, 166, 255, 0.16)',
+          },
+          Table: {
+            headerBg: palette.bgElevated,
+            rowHoverBg: 'rgba(88, 166, 255, 0.06)',
+          },
+        },
+      }}
+    >
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login onLogin={() => window.location.href = '/'} />} />

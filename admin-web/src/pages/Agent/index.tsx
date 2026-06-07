@@ -2,7 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { Tabs, Input, Button, Select, Space, message, Typography } from 'antd';
 import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
-import { streamChat, getDailyAdvice, generateReport, getAdviceHistory, getReportHistory, type PendingAction, type StreamChunk } from '../../api/agent';
+import {
+  streamChat,
+  getDailyAdvice,
+  generateReport,
+  getAdviceHistory,
+  getReportHistory,
+  type AdviceHistoryItem,
+  type PendingAction,
+  type ReportHistoryItem,
+} from '../../api/agent';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 
 const BG = '#0d1117';
@@ -21,7 +30,6 @@ function generateSessionId(): string {
 export default function Agent() {
   const [cycles, setCycles] = useState<CropCycleListItem[]>([]);
   const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
-  const [sessionId] = useState<string>(generateSessionId);
 
   useEffect(() => {
     listCycles().then((res) => setCycles(res.items)).catch(() => {});
@@ -97,6 +105,7 @@ function ChatBubble({ role, content, pendingAction, onAction }: { role: string; 
 
 /* ── 对话 Tab ── */
 function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycleListItem[]; selectedCycle?: number; setSelectedCycle: (v?: number) => void }) {
+  const [sessionId] = useState<string>(generateSessionId);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string; content: string; pendingAction?: PendingAction | null }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -286,8 +295,25 @@ function ReportTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCy
 }
 
 /* ── 历史记录条目（可展开） ── */
-function HistoryItem({ item, icon }: { item: any; icon: string }) {
+function HistoryItem({
+  item,
+  icon,
+}: {
+  item: AdviceHistoryItem | ReportHistoryItem;
+  icon: string;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const itemType =
+    'advice_type' in item
+      ? item.advice_type === 'daily'
+        ? '每日建议'
+        : item.advice_type === 'chat'
+          ? '对话'
+          : item.advice_type
+      : item.report_type === 'weekly'
+        ? '周报'
+        : '月报';
+
   return (
     <div style={{
       background: CARD, borderRadius: 8, border: `1px solid ${BORDER}`,
@@ -301,7 +327,7 @@ function HistoryItem({ item, icon }: { item: any; icon: string }) {
         }}
       >
         <span style={{ color: TEXT }}>
-          {icon} {item.advice_type === 'daily' ? '每日建议' : item.report_type === 'weekly' ? '周报' : item.advice_type === 'chat' ? '对话' : '月报'}
+          {icon} {itemType}
           {' · '}
           <span style={{ color: TEXT_DIM }}>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
         </span>
@@ -321,8 +347,8 @@ function HistoryItem({ item, icon }: { item: any; icon: string }) {
 
 /* ── 历史记录 Tab ── */
 function HistoryTab({ cycleId }: { cycleId?: number }) {
-  const [adviceHistory, setAdviceHistory] = useState<any[]>([]);
-  const [reportHistory, setReportHistory] = useState<any[]>([]);
+  const [adviceHistory, setAdviceHistory] = useState<AdviceHistoryItem[]>([]);
+  const [reportHistory, setReportHistory] = useState<ReportHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchData = async () => {

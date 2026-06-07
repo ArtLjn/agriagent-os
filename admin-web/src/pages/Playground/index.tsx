@@ -411,7 +411,7 @@ export default function Playground() {
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
-          transition: 'width 0.2s',
+          transition: 'width 200ms cubic-bezier(0.25, 1, 0.5, 1)',
           overflow: 'hidden',
         }}
       >

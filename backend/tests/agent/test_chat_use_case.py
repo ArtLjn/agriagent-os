@@ -64,6 +64,7 @@ async def test_chat_invokes_pending_executor_and_advisor_without_legacy_service(
     mock_pending.assert_awaited_once_with(
         farm_id=farm.id,
         message="今天做什么",
+        session_id=None,
     )
     mock_advisor.assert_awaited_once()
     mock_observe.assert_awaited_once()
@@ -110,6 +111,7 @@ async def test_chat_saves_handled_pending_reply_without_invoking_advisor():
     mock_pending.assert_awaited_once_with(
         farm_id=farm.id,
         message="确认",
+        session_id=None,
     )
     mock_advisor.assert_not_awaited()
     mock_observe.assert_awaited_once()
@@ -350,7 +352,11 @@ async def test_stream_chat_handles_pending_without_legacy_service_or_advisor():
 
     assert events[0] == 'data: {"content": "已执行：已记账"}\n\n'
     assert events[-1] == "data: [DONE]\n\n"
-    mock_pending.assert_awaited_once_with(farm_id=farm.id, message="确认")
+    mock_pending.assert_awaited_once_with(
+        farm_id=farm.id,
+        message="确认",
+        session_id=None,
+    )
     mock_stream_advisor.assert_not_called()
     mock_flush.assert_awaited_once()
     mock_get_skills.assert_called_once_with(db, "req-stream-1")

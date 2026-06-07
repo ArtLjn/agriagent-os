@@ -136,5 +136,6 @@ class ConversationMessageItem(BaseModel):
     role: str
     content: str
     skills: list[str] | None = None
+    pending_action: PendingActionResponse | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

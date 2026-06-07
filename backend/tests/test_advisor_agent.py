@@ -85,6 +85,60 @@ class TestBuildHistoryMessages:
 
         mock_get_recent.assert_called_once_with(mock_db, 5, limit=50)
 
+    @patch("app.agent.advisor.get_recent_messages")
+    def test_long_history_keeps_summary_and_recent_messages(
+        self, mock_get_recent: MagicMock
+    ) -> None:
+        """长会话历史应摘要早期内容，并完整保留最近消息。"""
+        from app.agent.advisor import _build_history_messages
+
+        mock_get_recent.return_value = [
+            MagicMock(role="user", content="你的功能"),
+            MagicMock(role="assistant", content="我是芽芽，可以查数据、记账、管理种植。"),
+            MagicMock(role="user", content="我的茬口"),
+            MagicMock(role="assistant", content="活跃茬口有夏季水稻、夏季苹果、夏季玉米。"),
+            MagicMock(role="user", content="水稻今天打药了"),
+            MagicMock(role="assistant", content="已记录水稻打药。"),
+            MagicMock(role="user", content="我想种橘子"),
+            MagicMock(role="assistant", content="需要我帮你创建橘子茬口吗？"),
+        ]
+
+        result = _build_history_messages(
+            MagicMock(),
+            42,
+            recent_message_limit=2,
+        )
+
+        assert len(result) == 3
+        assert isinstance(result[0], AIMessage)
+        assert "早期对话摘要" in result[0].content
+        assert "你的功能" in result[0].content
+        assert "夏季水稻" in result[0].content
+        assert isinstance(result[1], HumanMessage)
+        assert result[1].content == "我想种橘子"
+
+    @patch("app.agent.advisor.get_recent_messages")
+    def test_current_user_input_removed_before_history_summary(
+        self, mock_get_recent: MagicMock
+    ) -> None:
+        """当前用户输入如果已写入数据库，应先去重再做历史摘要。"""
+        from app.agent.advisor import _build_history_messages
+
+        mock_get_recent.return_value = [
+            MagicMock(role="user", content="你的功能"),
+            MagicMock(role="assistant", content="我是芽芽。"),
+            MagicMock(role="user", content="第一个问题是"),
+        ]
+
+        result = _build_history_messages(
+            MagicMock(),
+            42,
+            current_user_input="第一个问题是",
+            recent_message_limit=1,
+        )
+
+        assert all(message.content != "第一个问题是" for message in result)
+
 
 class TestAdvisorInvoke:
     """测试建议 Agent 调用。"""
@@ -214,4 +268,8 @@ class TestAdvisorStream:
             chunks.append(chunk)
 
         assert len(chunks) >= 1
-        mock_build_history.assert_called_once_with(mock_db, 5)
+        mock_build_history.assert_called_once_with(
+            mock_db,
+            5,
+            current_user_input="新问题",
+        )

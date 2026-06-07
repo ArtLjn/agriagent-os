@@ -275,6 +275,32 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_passes_trusted_user_context(
+        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
+    ) -> None:
+        """每日建议调用 Agent 时应携带可信 user_id，避免 quota 身份拦截。"""
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
+        mock_invoke.return_value = (
+            '[{"title":"巡田","detail":"检查长势","priority":1,"icon":"📋"}]'
+        )
+        mock_db = _make_mock_db()
+        farm = MagicMock()
+        farm.user_id = "user-1"
+        mock_db.query.return_value.filter.return_value.first.return_value = farm
+
+        await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        mock_invoke.assert_awaited_once_with(
+            "daily prompt",
+            farm_id=1,
+            db=mock_db,
+            user_id="user-1",
+            call_type="daily_advice",
+        )
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.get_composer")
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_new_format_with_preview(
         self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
     ) -> None:

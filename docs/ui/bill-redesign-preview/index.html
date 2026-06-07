@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>账单页 redesign preview</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 390px;
+        height: 844px;
+        margin: 0;
+        overflow: hidden;
+        background: #f6f8fc;
+        color: #1a1d23;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+          sans-serif;
+      }
+
+      .screen {
+        position: relative;
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 72% 2%, rgba(74, 123, 247, 0.12), transparent 30%),
+          linear-gradient(180deg, #f7faff 0%, #f6f8fc 28%, #ffffff 100%);
+      }
+
+      .status {
+        height: 32px;
+        padding: 8px 18px 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        font-weight: 700;
+        color: #111827;
+      }
+
+      .status-icons {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .dot {
+        width: 4px;
+        height: 4px;
+        border-radius: 99px;
+        background: #111827;
+      }
+
+      .header {
+        padding: 10px 18px 0;
+      }
+
+      .top-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .title-group {
+        display: grid;
+        gap: 2px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        line-height: 16px;
+        font-weight: 600;
+        color: #6b7280;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 24px;
+        line-height: 32px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .month-pill {
+        min-width: 104px;
+        height: 40px;
+        border: 1px solid rgba(74, 123, 247, 0.14);
+        border-radius: 20px;
+        padding: 0 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 8px 24px rgba(74, 123, 247, 0.08);
+        font-size: 13px;
+        font-weight: 700;
+        color: #1f2937;
+      }
+
+      .summary-card {
+        margin-top: 14px;
+        border-radius: 22px;
+        padding: 14px;
+        background: #111827;
+        color: white;
+        box-shadow: 0 18px 44px rgba(17, 24, 39, 0.18);
+      }
+
+      .summary-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .summary-label {
+        font-size: 12px;
+        line-height: 16px;
+        color: rgba(255, 255, 255, 0.66);
+        font-weight: 600;
+      }
+
+      .balance {
+        margin-top: 4px;
+        font-size: 30px;
+        line-height: 36px;
+        font-weight: 850;
+        letter-spacing: 0;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .mini-chip {
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.86);
+        white-space: nowrap;
+      }
+
+      .summary-stats {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .stat {
+        border-radius: 16px;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .stat-label {
+        font-size: 11px;
+        line-height: 14px;
+        color: rgba(255, 255, 255, 0.58);
+        font-weight: 600;
+      }
+
+      .stat-value {
+        margin-top: 3px;
+        font-size: 16px;
+        line-height: 20px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .income {
+        color: #70d39a;
+      }
+
+      .expense {
+        color: #ff9a9a;
+      }
+
+      .controls {
+        padding: 10px 18px 0;
+      }
+
+      .search {
+        height: 42px;
+        border-radius: 18px;
+        padding: 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #edf0f5;
+        box-shadow: 0 8px 24px rgba(31, 41, 55, 0.05);
+        color: #9ca3af;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .tabs {
+        margin-top: 8px;
+        height: 40px;
+        border-radius: 20px;
+        padding: 4px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+        background: #edf1f7;
+      }
+
+      .tab {
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        line-height: 16px;
+        font-weight: 700;
+        color: #6b7280;
+      }
+
+      .tab.active {
+        color: #ffffff;
+        background: #4a7bf7;
+        box-shadow: 0 8px 18px rgba(74, 123, 247, 0.24);
+      }
+
+      .quick {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+      }
+
+      .quick-chip {
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: #ffffff;
+        border: 1px solid #edf0f5;
+        font-size: 12px;
+        font-weight: 700;
+        color: #6b7280;
+      }
+
+      .quick-chip.active {
+        color: #3a6ae0;
+        background: rgba(74, 123, 247, 0.08);
+        border-color: rgba(74, 123, 247, 0.16);
+      }
+
+      .list {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 414px;
+        bottom: 130px;
+        padding: 0 18px 18px;
+        overflow: hidden;
+      }
+
+      .section-head {
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .section-title {
+        font-size: 14px;
+        line-height: 20px;
+        font-weight: 800;
+        color: #1f2937;
+      }
+
+      .section-total {
+        font-size: 12px;
+        line-height: 16px;
+        font-weight: 750;
+        color: #9ca3af;
+      }
+
+      .ledger {
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #edf0f5;
+        box-shadow: 0 12px 30px rgba(31, 41, 55, 0.06);
+        overflow: hidden;
+      }
+
+      .item {
+        min-height: 72px;
+        padding: 11px 12px;
+        display: grid;
+        grid-template-columns: 42px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid #f1f3f6;
+      }
+
+      .item:last-child {
+        border-bottom: 0;
+      }
+
+      .icon-wrap {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .labor {
+        background: #eef4ff;
+        color: #4a7bf7;
+      }
+
+      .fertilizer {
+        background: #eef8f2;
+        color: #3b8b5c;
+      }
+
+      .sale {
+        background: #fff8e8;
+        color: #d49a4a;
+      }
+
+      .seed {
+        background: #edfdf3;
+        color: #3bb273;
+      }
+
+      .item-main {
+        min-width: 0;
+      }
+
+      .item-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 15px;
+        line-height: 20px;
+        font-weight: 760;
+        color: #1f2937;
+      }
+
+      .source-tag {
+        height: 18px;
+        max-width: 72px;
+        border-radius: 9px;
+        padding: 0 6px;
+        display: inline-flex;
+        align-items: center;
+        background: #f3f6fb;
+        color: #6b7280;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .item-sub {
+        margin-top: 3px;
+        font-size: 12px;
+        line-height: 16px;
+        color: #8a93a3;
+        font-weight: 520;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .amount {
+        min-width: 74px;
+        text-align: right;
+        font-size: 16px;
+        line-height: 22px;
+        font-weight: 850;
+        letter-spacing: 0;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .more-day {
+        margin-top: 12px;
+      }
+
+      .bottom-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 74px;
+        border-radius: 24px 24px 0 0;
+        padding: 8px 14px 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 -12px 34px rgba(31, 41, 55, 0.08);
+      }
+
+      .nav {
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 2px;
+        color: #9ca3af;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .nav.active {
+        color: #4a7bf7;
+      }
+
+      .fab {
+        position: absolute;
+        right: 18px;
+        bottom: 86px;
+        height: 48px;
+        border-radius: 20px;
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        background: #4a7bf7;
+        color: white;
+        box-shadow: 0 16px 28px rgba(74, 123, 247, 0.3);
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      i {
+        width: 18px;
+        height: 18px;
+        stroke-width: 2.2;
+      }
+
+      .fab i {
+        width: 20px;
+        height: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="screen">
+      <div class="status">
+        <span>22:10</span>
+        <div class="status-icons">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+      </div>
+
+      <section class="header">
+        <div class="top-row">
+          <div class="title-group">
+            <span class="eyebrow">账单记录</span>
+            <h1 class="title">本月账本</h1>
+          </div>
+          <div class="month-pill">
+            <i data-lucide="chevron-left"></i>
+            <span>2026年6月</span>
+          </div>
+        </div>
+
+        <div class="summary-card">
+          <div class="summary-top">
+            <div>
+              <div class="summary-label">本月结余</div>
+              <div class="balance">+¥3,449.84</div>
+            </div>
+            <div class="mini-chip">
+              <i data-lucide="receipt-text"></i>
+              <span>34 条</span>
+            </div>
+          </div>
+          <div class="summary-stats">
+            <div class="stat">
+              <div class="stat-label">收入</div>
+              <div class="stat-value income">+¥5,000</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">支出</div>
+              <div class="stat-value expense">-¥1,550.16</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="search">
+          <i data-lucide="search"></i>
+          <span>搜索分类、备注、对方、金额</span>
+        </div>
+        <div class="tabs">
+          <div class="tab active">全部</div>
+          <div class="tab">支出</div>
+          <div class="tab">收入</div>
+          <div class="tab">赊账</div>
+        </div>
+        <div class="quick">
+          <div class="quick-chip active"><i data-lucide="calendar-days"></i>本月</div>
+          <div class="quick-chip">今天</div>
+          <div class="quick-chip">近7天</div>
+          <div class="quick-chip"><i data-lucide="sliders-horizontal"></i>筛选</div>
+        </div>
+      </section>
+
+      <section class="list">
+        <div class="section-head">
+          <div class="section-title">今天</div>
+          <div class="section-total">收入 +5,000 · 支出 -1,550</div>
+        </div>
+
+        <div class="ledger">
+          <div class="item">
+            <div class="icon-wrap labor"><i data-lucide="hard-hat"></i></div>
+            <div class="item-main">
+              <div class="item-title">人工 <span class="source-tag">工资记录</span></div>
+              <div class="item-sub">22:09 · 赊账 · 哈哈哈浇水工资</div>
+            </div>
+            <div class="amount expense">-¥100</div>
+          </div>
+
+          <div class="item">
+            <div class="icon-wrap labor"><i data-lucide="hard-hat"></i></div>
+            <div class="item-main">
+              <div class="item-title">人工 <span class="source-tag">工资记录</span></div>
+              <div class="item-sub">21:56 · 赊账 · 哈哈哈定植工资</div>
+            </div>
+            <div class="amount expense">-¥100</div>
+          </div>
+
+          <div class="item">
+            <div class="icon-wrap fertilizer"><i data-lucide="flask-conical"></i></div>
+            <div class="item-main">
+              <div class="item-title">化肥</div>
+              <div class="item-sub">20:56 · 复合肥采购</div>
+            </div>
+            <div class="amount expense">-¥250.16</div>
+          </div>
+
+          <div class="item">
+            <div class="icon-wrap sale"><i data-lucide="badge-dollar-sign"></i></div>
+            <div class="item-main">
+              <div class="item-title">销售</div>
+              <div class="item-sub">14:51 · 水稻苗销售入账</div>
+            </div>
+            <div class="amount income">+¥5,000</div>
+          </div>
+
+          <div class="item">
+            <div class="icon-wrap fertilizer"><i data-lucide="flask-conical"></i></div>
+            <div class="item-main">
+              <div class="item-title">化肥</div>
+              <div class="item-sub">14:40 · 农资店现付</div>
+            </div>
+            <div class="amount expense">-¥1,000</div>
+          </div>
+        </div>
+
+        <div class="section-head more-day">
+          <div class="section-title">6月3日</div>
+          <div class="section-total">支出 -100</div>
+        </div>
+        <div class="ledger">
+          <div class="item">
+            <div class="icon-wrap seed"><i data-lucide="sprout"></i></div>
+            <div class="item-main">
+              <div class="item-title">种苗</div>
+              <div class="item-sub">21:13 · 我买了一个水稻苗100</div>
+            </div>
+            <div class="amount expense">-¥100</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="fab"><i data-lucide="plus"></i><span>记一笔</span></div>
+
+      <nav class="bottom-bar">
+        <div class="nav"><i data-lucide="home"></i><span>首页</span></div>
+        <div class="nav"><i data-lucide="sprout"></i><span>芽芽</span></div>
+        <div class="nav active"><i data-lucide="wallet-cards"></i><span>记账</span></div>
+        <div class="nav"><i data-lucide="user"></i><span>我的</span></div>
+      </nav>
+    </main>
+    <script>
+      lucide.createIcons();
+    </script>
+  </body>
+</html>

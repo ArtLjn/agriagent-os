@@ -215,12 +215,12 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen
               name="CostCreate"
               component={CostCreateScreen}
-              options={{ title: "记一笔" }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="CostList"
               component={CostListScreen}
-              options={{ title: "账单记录" }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="CostCategory"

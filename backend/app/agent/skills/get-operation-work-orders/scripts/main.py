@@ -74,11 +74,17 @@ class GetOperationWorkOrdersSkill(Skill):
                 limit=int(params.get("limit") or 20),
             )
             if not items:
-                return SkillResult(status=ResultStatus.SUCCESS, reply="未找到匹配的农事作业单。")
+                return SkillResult(
+                    status=ResultStatus.SUCCESS, reply="未找到匹配的农事作业单。"
+                )
             lines = ["匹配的农事作业单："]
             for item in items:
                 response = planting_read_service.to_work_order_response(item)
-                scope = "、".join(response.unit_names) or response.cycle_name or response.scope_type
+                scope = (
+                    "、".join(response.unit_names)
+                    or response.cycle_name
+                    or response.scope_type
+                )
                 workers = "、".join(
                     entry.worker_name or f"工人{entry.worker_id}"
                     for entry in response.labor_entries

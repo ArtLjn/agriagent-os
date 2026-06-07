@@ -12,20 +12,34 @@ ALL_TOOL_NAMES = [
     "get_cost_analytics",
     "get_cost_summary",
     "create_cost_record",
+    "delete_cost_record",
     "create_crop_cycle",
+    "delete_crop_cycle",
     "create_crop_template",
+    "get_crop_templates",
+    "manage_crop_templates",
     "create_operation_work_order",
     "get_crop_cycle_info",
     "get_recent_farm_logs",
+    "manage_farm_logs",
     "get_farm_status",
     "get_labor_payables",
+    "get_workers",
     "get_operation_work_orders",
+    "get_cost_categories",
+    "manage_cost_categories",
+    "get_planting_units",
+    "manage_planting_units",
+    "get_user_settings",
+    "manage_user_settings",
     "log_farm_activity",
     "settle_debt",
     "settle_labor_payment",
     "update_crop_cycle",
     "update_crop_stage",
     "update_operation_work_order",
+    "manage_workers",
+    "manage_wages",
     "get_weather_forecast",
     "web_search",
 ]
@@ -147,6 +161,46 @@ class TestWritePatternMatching:
         result = select_tools("刚才那条授粉记录不是付老王，是付老李200", _make_tools())
         assert result == ["update_operation_work_order"]
 
+    def test_save_wage_uses_manage_wages(self):
+        result = select_tools("给老王记一笔采收工资，每天180", _make_tools())
+        assert result == ["manage_wages"]
+
+    def test_update_wage_uses_manage_wages(self):
+        result = select_tools("把工资记录12的日薪改成200", _make_tools())
+        assert result == ["manage_wages"]
+
+    def test_update_worker_default_wage_uses_manage_workers(self):
+        result = select_tools("猪八戒工资更新150一天", _make_tools())
+        assert result == ["manage_workers"]
+
+    def test_delete_cost_record_uses_delete_cost_record(self):
+        result = select_tools("删除账务记录12", _make_tools())
+        assert result == ["delete_cost_record"]
+
+    def test_manage_cost_category_uses_category_skill(self):
+        result = select_tools("新增成本分类农机", _make_tools())
+        assert result == ["manage_cost_categories"]
+
+    def test_manage_crop_template_uses_template_skill(self):
+        result = select_tools("把作物模板5名字改成麒麟西瓜", _make_tools())
+        assert result == ["manage_crop_templates"]
+
+    def test_delete_crop_cycle_uses_delete_skill(self):
+        result = select_tools("删除茬口12", _make_tools())
+        assert result == ["delete_crop_cycle"]
+
+    def test_manage_farm_log_uses_log_skill(self):
+        result = select_tools("删除农事记录8", _make_tools())
+        assert result == ["manage_farm_logs"]
+
+    def test_manage_planting_unit_uses_unit_skill(self):
+        result = select_tools("新增东大棚种植单元", _make_tools())
+        assert result == ["manage_planting_units"]
+
+    def test_manage_user_settings_uses_settings_skill(self):
+        result = select_tools("默认城市改成杭州", _make_tools())
+        assert result == ["manage_user_settings"]
+
 
 class TestQueryKeywordMatching:
     def test_weather_query(self):
@@ -203,6 +257,38 @@ class TestQueryKeywordMatching:
     def test_operation_work_order_query(self):
         result = select_tools("最近玉米授粉作业有哪些", _make_tools())
         assert result == ["get_operation_work_orders"]
+
+    def test_workers_query_defaults_to_worker_skill(self):
+        result = select_tools("我的工人", _make_tools())
+        assert result == ["get_workers"]
+
+    def test_inactive_workers_query_uses_worker_skill(self):
+        result = select_tools("看看离职工人", _make_tools())
+        assert result == ["get_workers"]
+
+    def test_cost_category_query_uses_category_skill(self):
+        result = select_tools("有哪些成本分类", _make_tools())
+        assert result == ["get_cost_categories"]
+
+    def test_crop_template_query_uses_template_skill(self):
+        result = select_tools("有哪些作物模板", _make_tools())
+        assert result == ["get_crop_templates"]
+
+    def test_planting_unit_query_uses_unit_skill(self):
+        result = select_tools("有哪些大棚", _make_tools())
+        assert result == ["get_planting_units"]
+
+    def test_user_settings_query_uses_settings_skill(self):
+        result = select_tools("我的默认城市是什么", _make_tools())
+        assert result == ["get_user_settings"]
+
+    def test_create_worker_uses_manage_workers(self):
+        result = select_tools("我招了一个工人李四，日薪150", _make_tools())
+        assert result == ["manage_workers"]
+
+    def test_deactivate_worker_uses_manage_workers(self):
+        result = select_tools("删除工人李四", _make_tools())
+        assert result == ["manage_workers"]
 
 
 class TestFallback:

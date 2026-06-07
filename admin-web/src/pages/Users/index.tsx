@@ -13,7 +13,6 @@ import {
   Progress,
   Row,
   Col,
-  Card,
   InputNumber,
 } from "antd";
 import {
@@ -24,6 +23,8 @@ import {
   SettingOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
+import { MetricCard, PageShell, Toolbar } from "../../components/PageShell";
+import { palette } from "../../styles/theme";
 import {
   usersApi,
   type UserListItem,
@@ -33,7 +34,6 @@ import {
   type UserQuotaOverviewItem,
 } from "../../api/users";
 
-const BG_SECONDARY = "#161b22";
 const BG_CARD = "#21262d";
 const BORDER = "#30363d";
 const TEXT_SECONDARY = "#8b949e";
@@ -360,82 +360,82 @@ export default function Users() {
   ];
 
   return (
-    <div>
+    <PageShell
+      title="用户管理"
+      description="查看账号状态、农场信息和 Token 配额，支持单人或批量调整额度。"
+    >
       <Row gutter={16} style={{ marginBottom: 20 }}>
-        <Col span={6}>
-          <Card
-            style={{ background: BG_SECONDARY, borderColor: BORDER }}
-            styles={{ body: { padding: "16px 24px" } }}
-          >
+        <Col xs={24} sm={12} lg={6}>
+          <MetricCard>
             <Statistic
               title={<span style={{ color: TEXT_SECONDARY }}>总用户</span>}
               value={total}
               prefix={<TeamOutlined />}
               valueStyle={{ color: ACCENT }}
             />
-          </Card>
+          </MetricCard>
         </Col>
-        <Col span={6}>
-          <Card
-            style={{ background: BG_SECONDARY, borderColor: BORDER }}
-            styles={{ body: { padding: "16px 24px" } }}
-          >
+        <Col xs={24} sm={12} lg={6}>
+          <MetricCard accent={palette.success}>
             <Statistic
               title={<span style={{ color: TEXT_SECONDARY }}>当前页活跃</span>}
               value={activeCount}
               prefix={<CheckCircleOutlined />}
               valueStyle={{ color: "#3fb950" }}
             />
-          </Card>
+          </MetricCard>
         </Col>
-        <Col span={6}>
-          <Card
-            style={{ background: BG_SECONDARY, borderColor: BORDER }}
-            styles={{ body: { padding: "16px 24px" } }}
-          >
+        <Col xs={24} sm={12} lg={6}>
+          <MetricCard accent={palette.danger}>
             <Statistic
               title={<span style={{ color: TEXT_SECONDARY }}>当前页禁用</span>}
               value={disabledCount}
               prefix={<StopOutlined />}
               valueStyle={{ color: "#f85149" }}
             />
-          </Card>
+          </MetricCard>
         </Col>
       </Row>
 
-      <Space style={{ marginBottom: 16 }}>
-        <Select
-          value={statusFilter || undefined}
-          onChange={(v) => {
-            setStatusFilter(v);
-            setPage(1);
-          }}
-          style={{ width: 120 }}
-          options={statusFilters.map((f) => ({ label: f.label, value: f.value }))}
-          placeholder="状态筛选"
-          allowClear
-        />
-        <Input.Search
-          placeholder="搜索手机号"
-          style={{ width: 200 }}
-          onSearch={(v) => {
-            setPhoneKeyword(v);
-            setPage(1);
-          }}
-          allowClear
-          onClear={() => {
-            setPhoneKeyword("");
-            setPage(1);
-          }}
-        />
-        <Button
-          icon={<SettingOutlined />}
-          disabled={selectedRowKeys.length === 0}
-          onClick={openBatchQuotaModal}
-        >
-          批量设置额度{selectedRowKeys.length ? `（${selectedRowKeys.length}）` : ""}
-        </Button>
-      </Space>
+      <Toolbar
+        left={(
+          <>
+            <Select
+              value={statusFilter || undefined}
+              onChange={(v) => {
+                setStatusFilter(v);
+                setPage(1);
+              }}
+              style={{ width: 140 }}
+              options={statusFilters.map((f) => ({ label: f.label, value: f.value }))}
+              placeholder="状态筛选"
+              allowClear
+            />
+            <Input.Search
+              placeholder="搜索手机号"
+              style={{ width: 220 }}
+              onSearch={(v) => {
+                setPhoneKeyword(v);
+                setPage(1);
+              }}
+              allowClear
+              onClear={() => {
+                setPhoneKeyword("");
+                setPage(1);
+              }}
+            />
+          </>
+        )}
+        right={(
+          <Button
+            icon={<SettingOutlined />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={openBatchQuotaModal}
+          >
+            批量设置额度{selectedRowKeys.length ? `（${selectedRowKeys.length}）` : ""}
+          </Button>
+        )}
+      />
 
       <Table<UserListItem>
         columns={columns}
@@ -451,8 +451,10 @@ export default function Users() {
           pageSize: size,
           total,
           showSizeChanger: false,
+          showTotal: (count) => `共 ${count} 个用户`,
           onChange: (p) => setPage(p),
         }}
+        scroll={{ x: 1180 }}
         style={{ background: BG_CARD, borderRadius: 8 }}
       />
 
@@ -489,7 +491,7 @@ export default function Users() {
                         textAlign: "left",
                         cursor: "pointer",
                         color: active ? "#e6edf3" : TEXT_SECONDARY,
-                        background: active ? "rgba(47,129,247,0.16)" : BG_SECONDARY,
+                        background: active ? "rgba(47,129,247,0.16)" : palette.bgElevated,
                         border: `1px solid ${active ? ACCENT : BORDER}`,
                         borderRadius: 8,
                       }}
@@ -632,6 +634,6 @@ export default function Users() {
           </div>
         )}
       </Modal>
-    </div>
+    </PageShell>
   );
 }

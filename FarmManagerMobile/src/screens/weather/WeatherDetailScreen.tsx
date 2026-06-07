@@ -30,6 +30,14 @@ import Svg, {
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
+type WeekDayForecast = {
+  date: string;
+  weekday: string;
+  maxTemp: number;
+  minTemp: number;
+  precipitation: number;
+};
+
 const getWeatherIcon = (precipitation: number, maxTemp: number) => {
   if (precipitation > 5) {
     return "weather-pouring";
@@ -243,7 +251,7 @@ export const WeatherDetailScreen: React.FC = () => {
     if (weather.hourly?.time && weather.hourly?.temperature_2m && weather.hourly.time.length > 0) {
       const times: string[] = weather.hourly.time;
       const temps: number[] = weather.hourly.temperature_2m;
-      const data = times.slice(0, 24).map((t, i) => ({
+      const data = times.slice(0, 24).map((t: string, i: number) => ({
         hour: new Date(t).getHours(),
         temp: temps[i] !== undefined && temps[i] !== null ? Math.round(temps[i]) : 20,
       }));
@@ -257,7 +265,7 @@ export const WeatherDetailScreen: React.FC = () => {
   const weekMax = temperature_2m_max.length > 0 ? Math.max(...temperature_2m_max.slice(0, 7)) : 30;
   const weekRange = weekMax - weekMin || 1;
 
-  const weekDays = time.slice(0, 7).map((t, i) => {
+  const weekDays: WeekDayForecast[] = time.slice(0, 7).map((t: string, i: number) => {
     const d = new Date(t);
     return {
       date: i === 0 ? "今天" : `${d.getMonth() + 1}/${d.getDate()}`,
@@ -380,7 +388,7 @@ export const WeatherDetailScreen: React.FC = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>7日预报</Text>
             <View style={[styles.weekCard, shadowV2.light]}>
-              {weekDays.map((d, i) => {
+              {weekDays.map((d: WeekDayForecast, i: number) => {
                 const icon = getWeatherIcon(d.precipitation, d.maxTemp);
                 const leftPct = ((d.minTemp - weekMin) / weekRange) * 100;
                 const widthPct = ((d.maxTemp - d.minTemp) / weekRange) * 100;

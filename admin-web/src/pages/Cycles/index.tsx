@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, message, Tag, Popconfirm } from 'antd';
-import { PlusOutlined, BugOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, BugOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FieldTimeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
 import { listCycles, createCycle, updateCycle, deleteCycle, type CropCycleListItem } from '../../api/cycles';
 import { listTemplates, type CropTemplate } from '../../api/crops';
 import ApiDebugger from '../../components/ApiDebugger';
+import { PageShell, Toolbar } from '../../components/PageShell';
 
 export default function Cycles() {
   const [data, setData] = useState<CropCycleListItem[]>([]);
@@ -53,8 +55,8 @@ export default function Cycles() {
     setEditingId(record.id);
     form.setFieldsValue({
       name: record.name,
-      crop_template_id: record.crop_template_name,
-      start_date: record.start_date,
+      crop_template_id: templates.find((item) => item.name === record.crop_template_name)?.id,
+      start_date: dayjs(record.start_date),
     });
     setModalOpen(true);
   };
@@ -87,10 +89,10 @@ export default function Cycles() {
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     { title: '名称', dataIndex: 'name' },
-    { title: '作物', dataIndex: 'crop_template_name' },
+    { title: '作物', dataIndex: 'crop_template_name', render: (text: string) => <Tag color="green">{text}</Tag> },
     { title: '开始日期', dataIndex: 'start_date' },
-    { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={s === 'active' ? 'green' : 'default'}>{s}</Tag> },
-    { title: '当前阶段', dataIndex: 'current_stage_name' },
+    { title: '状态', dataIndex: 'status', render: (s: string) => <Tag color={s === 'active' ? 'green' : 'default'}>{s === 'active' ? '进行中' : s}</Tag> },
+    { title: '当前阶段', dataIndex: 'current_stage_name', render: (text: string | undefined) => text || '-' },
     {
       title: '操作',
       key: 'action',
@@ -113,22 +115,33 @@ export default function Cycles() {
   ];
 
   return (
-    <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建茬口</Button>
-        <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
-      </Space>
+    <PageShell
+      title="种植周期"
+      description="跟踪每个茬口从开始日期到当前阶段的进度，支持推进、编辑和日志联动。"
+    >
+      <Toolbar
+        left={(
+          <>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建茬口</Button>
+            <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
+          </>
+        )}
+        right={<span style={{ color: '#8b949e', fontSize: 13 }}><FieldTimeOutlined /> 共 {pagination.total} 个周期</span>}
+      />
       <Table
         rowKey="id"
         dataSource={data}
         columns={columns}
         loading={loading}
+        size="middle"
+        scroll={{ x: 860 }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
           total: pagination.total,
           showSizeChanger: true,
           pageSizeOptions: [10, 20, 50],
+          showTotal: (count) => `共 ${count} 条`,
         }}
         onChange={(p) => fetchData(p.current, p.pageSize)}
       />
@@ -145,6 +158,6 @@ export default function Cycles() {
       </Modal>
 
       <ApiDebugger open={debugOpen} onClose={() => setDebugOpen(false)} defaultMethod="GET" defaultUrl="/cycles" />
-    </div>
+    </PageShell>
   );
 }

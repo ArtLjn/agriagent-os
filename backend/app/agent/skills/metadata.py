@@ -74,6 +74,15 @@ _WRITE_CONFIRM_SKILLS = frozenset(
         "update_crop_cycle",
         "update_crop_stage",
         "update_operation_work_order",
+        "manage_workers",
+        "manage_wages",
+        "delete_cost_record",
+        "manage_cost_categories",
+        "manage_planting_units",
+        "manage_crop_templates",
+        "manage_farm_logs",
+        "delete_crop_cycle",
+        "manage_user_settings",
     }
 )
 
@@ -102,6 +111,26 @@ _READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
         "context_dependencies": ["workers", "unpaid_labor", "crop_cycles"],
         "evaluation_tags": ["read", "labor", "payable"],
     },
+    "get_workers": {
+        "context_dependencies": ["workers", "unpaid_labor"],
+        "evaluation_tags": ["read", "worker", "labor"],
+    },
+    "get_cost_categories": {
+        "context_dependencies": ["cost_categories"],
+        "evaluation_tags": ["read", "cost_category"],
+    },
+    "get_planting_units": {
+        "context_dependencies": ["farm", "crop_cycles", "planting_units"],
+        "evaluation_tags": ["read", "planting_unit"],
+    },
+    "get_crop_templates": {
+        "context_dependencies": ["farm", "crop_templates"],
+        "evaluation_tags": ["read", "crop_template"],
+    },
+    "get_user_settings": {
+        "context_dependencies": ["user"],
+        "evaluation_tags": ["read", "user_settings"],
+    },
     "get_operation_work_orders": {
         "context_dependencies": ["crop_cycles", "planting_units", "workers"],
         "evaluation_tags": ["read", "operation_work_order", "labor"],
@@ -128,6 +157,44 @@ _WRITE_SKILL_METADATA: dict[str, dict[str, Any]] = {
     "log_farm_activity": {
         "context_dependencies": ["farm", "active_cycles"],
         "evaluation_tags": ["write", "farm_logs"],
+    },
+    "manage_workers": {
+        "context_dependencies": ["workers", "unpaid_labor"],
+        "evaluation_tags": ["write", "worker", "labor"],
+    },
+    "manage_wages": {
+        "context_dependencies": ["workers", "crop_cycles", "unpaid_labor"],
+        "evaluation_tags": ["write", "labor", "wage"],
+    },
+    "delete_cost_record": {
+        "context_dependencies": ["cost_records"],
+        "evaluation_tags": ["write", "cost", "delete"],
+    },
+    "manage_cost_categories": {
+        "context_dependencies": ["cost_categories"],
+        "evaluation_tags": ["write", "cost_category"],
+    },
+    "manage_planting_units": {
+        "context_dependencies": ["crop_cycles", "planting_units"],
+        "evaluation_tags": ["write", "planting_unit"],
+    },
+    "manage_crop_templates": {
+        "context_dependencies": ["crop_templates", "crop_cycles"],
+        "risk_level": SkillRiskLevel.HIGH,
+        "evaluation_tags": ["write", "crop_template"],
+    },
+    "manage_farm_logs": {
+        "context_dependencies": ["farm_logs", "crop_cycles"],
+        "evaluation_tags": ["write", "farm_logs"],
+    },
+    "delete_crop_cycle": {
+        "context_dependencies": ["crop_cycles", "farm_logs", "cost_records"],
+        "risk_level": SkillRiskLevel.HIGH,
+        "evaluation_tags": ["write", "crop_cycle", "delete"],
+    },
+    "manage_user_settings": {
+        "context_dependencies": ["user"],
+        "evaluation_tags": ["write", "user_settings"],
     },
     "settle_debt": {
         "context_dependencies": ["farm", "cost_records"],

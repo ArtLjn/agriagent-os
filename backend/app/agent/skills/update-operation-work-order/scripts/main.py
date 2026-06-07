@@ -31,10 +31,19 @@ class UpdateOperationWorkOrderSkill(Skill):
             "type": "object",
             "properties": {
                 "work_order_id": {"type": "integer", "description": "作业单 ID"},
-                "operation_date": {"type": "string", "description": "新日期 YYYY-MM-DD"},
+                "operation_date": {
+                    "type": "string",
+                    "description": "新日期 YYYY-MM-DD",
+                },
                 "operation_type": {"type": "string", "description": "新作业类型"},
-                "scope_type": {"type": "string", "description": "范围类型 cycle/unit/farm"},
-                "unit_names": {"type": "string", "description": "棚/地块名称，逗号分隔"},
+                "scope_type": {
+                    "type": "string",
+                    "description": "范围类型 cycle/unit/farm",
+                },
+                "unit_names": {
+                    "type": "string",
+                    "description": "棚/地块名称，逗号分隔",
+                },
                 "note": {"type": "string", "description": "备注"},
                 "workers": {"type": "string", "description": "工人姓名，逗号分隔"},
                 "unit_price": {"type": "number", "description": "每人单价"},
@@ -48,7 +57,11 @@ class UpdateOperationWorkOrderSkill(Skill):
         return {
             "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
             "risk_level": SkillRiskLevel.MEDIUM,
-            "context_dependencies": ["operation_work_orders", "planting_units", "workers"],
+            "context_dependencies": [
+                "operation_work_orders",
+                "planting_units",
+                "workers",
+            ],
             "cache_invalidation": [
                 "farm_logs",
                 "cost_analytics",
@@ -90,17 +103,25 @@ class UpdateOperationWorkOrderSkill(Skill):
             return context_error
         work_order_id = params.get("work_order_id")
         if not work_order_id:
-            return SkillResult(status=ResultStatus.FAILED, reply="更新农事作业单失败：请提供 work_order_id。")
+            return SkillResult(
+                status=ResultStatus.FAILED,
+                reply="更新农事作业单失败：请提供 work_order_id。",
+            )
         db = SessionLocal()
         try:
             current = planting_service.get_work_order(db, int(work_order_id), farm_id)
             if not current:
-                return SkillResult(status=ResultStatus.FAILED, reply="更新农事作业单失败：未找到作业单。")
+                return SkillResult(
+                    status=ResultStatus.FAILED,
+                    reply="更新农事作业单失败：未找到作业单。",
+                )
             update = OperationWorkOrderUpdate(
                 operation_date=_parse_date(params.get("operation_date")),
                 operation_type=_clean(params.get("operation_type")),
                 scope_type=_clean(params.get("scope_type")),
-                unit_ids=_resolve_unit_ids(db, farm_id, current.cycle_id, params.get("unit_names")),
+                unit_ids=_resolve_unit_ids(
+                    db, farm_id, current.cycle_id, params.get("unit_names")
+                ),
                 note=params.get("note") if "note" in params else None,
                 labor_entries=_build_labor_entries(db, farm_id, params),
             )
@@ -108,9 +129,13 @@ class UpdateOperationWorkOrderSkill(Skill):
                 db, int(work_order_id), update, farm_id
             )
             response = planting_read_service.to_work_order_response(updated)
-            return SkillResult(status=ResultStatus.SUCCESS, reply=_format_reply(response))
+            return SkillResult(
+                status=ResultStatus.SUCCESS, reply=_format_reply(response)
+            )
         except Exception as exc:
-            return SkillResult(status=ResultStatus.FAILED, reply=f"更新农事作业单失败：{exc}")
+            return SkillResult(
+                status=ResultStatus.FAILED, reply=f"更新农事作业单失败：{exc}"
+            )
         finally:
             db.close()
 
@@ -141,7 +166,9 @@ def _split_names(value) -> list[str]:
     ]
 
 
-def _resolve_unit_ids(db, farm_id: int, cycle_id: int | None, value) -> list[int] | None:
+def _resolve_unit_ids(
+    db, farm_id: int, cycle_id: int | None, value
+) -> list[int] | None:
     names = _split_names(value)
     if not names:
         return None
@@ -154,7 +181,9 @@ def _resolve_unit_ids(db, farm_id: int, cycle_id: int | None, value) -> list[int
     return [unit.id for unit in query.all()]
 
 
-def _build_labor_entries(db, farm_id: int, params: dict) -> list[LaborEntryCreate] | None:
+def _build_labor_entries(
+    db, farm_id: int, params: dict
+) -> list[LaborEntryCreate] | None:
     names = _split_names(params.get("workers"))
     if not names:
         return None

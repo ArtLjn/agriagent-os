@@ -196,12 +196,15 @@ export const CycleCreateScreen: React.FC = () => {
               <Text style={styles.sectionSub}>创建一个种植批次</Text>
             </View>
             <View
-              style={[styles.formStatus, isFormValid && styles.formStatusReady]}
+              style={[
+                styles.formStatus,
+                isFormValid ? styles.formStatusReady : null,
+              ]}
             >
               <Text
                 style={[
                   styles.formStatusText,
-                  isFormValid && styles.formStatusTextReady,
+                  isFormValid ? styles.formStatusTextReady : null,
                 ]}
               >
                 {isFormValid ? "可创建" : "待完善"}

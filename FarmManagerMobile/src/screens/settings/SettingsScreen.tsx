@@ -3,10 +3,11 @@ import { showAlert } from "../../utils/alert";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
- 
+  Modal,
   Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -105,6 +106,9 @@ const ToggleItem: React.FC<ToggleItemProps> = ({
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
+  const [displayNameDialogVisible, setDisplayNameDialogVisible] =
+    useState(false);
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
 
   const logout = useAuthStore((s) => s.logout);
 
@@ -164,25 +168,17 @@ export const SettingsScreen: React.FC = () => {
   }, []);
 
   const handleDisplayNamePress = useCallback(() => {
-    Alert.prompt(
-      "AI 称呼我",
-      "输入你希望 AI 怎么称呼你",
-      [
-        { text: "取消", style: "cancel" },
-        {
-          text: "确定",
-          onPress: (value?: string) => {
-            const trimmed = (value || "").trim();
-            if (trimmed) {
-              setDisplayName(trimmed);
-            }
-          },
-        },
-      ],
-      "plain-text",
-      displayName
-    );
-  }, [displayName, setDisplayName]);
+    setDisplayNameDraft(displayName || "");
+    setDisplayNameDialogVisible(true);
+  }, [displayName]);
+
+  const handleSaveDisplayName = useCallback(() => {
+    const trimmed = displayNameDraft.trim();
+    if (trimmed) {
+      setDisplayName(trimmed);
+      setDisplayNameDialogVisible(false);
+    }
+  }, [displayNameDraft, setDisplayName]);
 
   const handleCropPress = useCallback(() => {
     const currentCrops = new Set(crops);
@@ -372,6 +368,49 @@ export const SettingsScreen: React.FC = () => {
         onSelect={handleCitySelect}
         onClose={() => setCityPickerVisible(false)}
       />
+
+      <Modal
+        visible={displayNameDialogVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDisplayNameDialogVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.inputDialog}>
+            <Text style={styles.inputDialogTitle}>AI 称呼我</Text>
+            <Text style={styles.inputDialogMessage}>
+              输入你希望 AI 怎么称呼你
+            </Text>
+            <TextInput
+              style={styles.inputDialogField}
+              value={displayNameDraft}
+              onChangeText={setDisplayNameDraft}
+              placeholder="例如：老李、农友、管理员"
+              placeholderTextColor={colors.textTertiary}
+              autoFocus
+              maxLength={20}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveDisplayName}
+            />
+            <View style={styles.inputDialogActions}>
+              <TouchableOpacity
+                style={[styles.inputDialogButton, styles.inputDialogCancel]}
+                onPress={() => setDisplayNameDialogVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.inputDialogCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.inputDialogButton, styles.inputDialogSave]}
+                onPress={handleSaveDisplayName}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.inputDialogSaveText}>保存</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -454,5 +493,73 @@ const styles = StyleSheet.create({
     fontSize: fontSizeV2.sm,
     color: colors.textSecondary,
     fontWeight: "500",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.scrim,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacingV2.xxl,
+  },
+  inputDialog: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: borderRadiusV2.xxxl,
+    backgroundColor: colors.surface,
+    padding: spacingV2.xl,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  inputDialogTitle: {
+    fontSize: fontSizeV2.lg,
+    fontWeight: "700",
+    color: colors.text,
+    textAlign: "center",
+  },
+  inputDialogMessage: {
+    fontSize: fontSizeV2.sm,
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginTop: spacingV2.sm,
+    marginBottom: spacingV2.lg,
+  },
+  inputDialogField: {
+    minHeight: 48,
+    borderRadius: borderRadiusV2.lg,
+    backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: spacingV2.md,
+    fontSize: fontSizeV2.md,
+    color: colors.text,
+  },
+  inputDialogActions: {
+    flexDirection: "row",
+    gap: spacingV2.md,
+    marginTop: spacingV2.lg,
+  },
+  inputDialogButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: borderRadiusV2.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inputDialogCancel: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  inputDialogSave: {
+    backgroundColor: colors.primary,
+  },
+  inputDialogCancelText: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  inputDialogSaveText: {
+    fontSize: fontSizeV2.md,
+    fontWeight: "700",
+    color: colors.textInverse,
   },
 });

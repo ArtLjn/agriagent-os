@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, DatePicker, Select, Space, message, Popconfirm } from 'antd';
-import { PlusOutlined, BugOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, BugOutlined, EditOutlined, DeleteOutlined, FormOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { listLogs, createLog, updateLog, deleteLog, type FarmLog } from '../../api/logs';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import ApiDebugger from '../../components/ApiDebugger';
+import { PageShell, Toolbar } from '../../components/PageShell';
 
 export default function Logs() {
   const [data, setData] = useState<FarmLog[]>([]);
@@ -53,7 +55,7 @@ export default function Logs() {
     form.setFieldsValue({
       cycle_id: record.cycle_id,
       operation_type: record.operation_type,
-      operation_date: record.operation_date,
+      operation_date: dayjs(record.operation_date),
       note: record.note,
     });
     setModalOpen(true);
@@ -87,7 +89,7 @@ export default function Logs() {
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     { title: '茬口ID', dataIndex: 'cycle_id', width: 80 },
-    { title: '操作类型', dataIndex: 'operation_type' },
+    { title: '操作类型', dataIndex: 'operation_type', render: (text: string) => <strong>{text}</strong> },
     { title: '日期', dataIndex: 'operation_date' },
     { title: '备注', dataIndex: 'note', ellipsis: true },
     { title: '创建时间', dataIndex: 'created_at' },
@@ -112,24 +114,35 @@ export default function Logs() {
   ];
 
   return (
-    <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新增日志</Button>
-        <Select placeholder="按茬口筛选" allowClear style={{ width: 200 }} value={filterCycleId}
-          onChange={(v) => setFilterCycleId(v)} options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
-        <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
-      </Space>
+    <PageShell
+      title="农事日志"
+      description="记录浇水、施肥、巡检等操作，帮助后续报告和 AI 建议追溯上下文。"
+    >
+      <Toolbar
+        left={(
+          <>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新增日志</Button>
+            <Select placeholder="按茬口筛选" allowClear style={{ width: 220 }} value={filterCycleId}
+              onChange={(v) => setFilterCycleId(v)} options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
+            <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
+          </>
+        )}
+        right={<span style={{ color: '#8b949e', fontSize: 13 }}><FormOutlined /> 共 {pagination.total} 条日志</span>}
+      />
       <Table
         rowKey="id"
         dataSource={data}
         columns={columns}
         loading={loading}
+        size="middle"
+        scroll={{ x: 860 }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
           total: pagination.total,
           showSizeChanger: true,
           pageSizeOptions: [10, 20, 50],
+          showTotal: (count) => `共 ${count} 条`,
         }}
         onChange={(p) => fetchData(p.current, p.pageSize)}
       />
@@ -146,6 +159,6 @@ export default function Logs() {
       </Modal>
 
       <ApiDebugger open={debugOpen} onClose={() => setDebugOpen(false)} defaultMethod="GET" defaultUrl="/logs" />
-    </div>
+    </PageShell>
   );
 }

@@ -89,7 +89,9 @@ class CreateOperationWorkOrderSkill(Skill):
                     status=ResultStatus.NEED_CLARIFY,
                     reply="当前没有活跃种植批次，请先创建批次。",
                 )
-            unit_ids = _resolve_unit_ids(db, farm_id, cycle_id, params.get("unit_names"))
+            unit_ids = _resolve_unit_ids(
+                db, farm_id, cycle_id, params.get("unit_names")
+            )
             worker_names = _split_names(params.get("workers"))
             labor_entries = _build_labor_entries(db, farm_id, worker_names, params)
             scope_type = "unit" if unit_ids else "cycle"
@@ -176,7 +178,9 @@ def _build_labor_entries(db, farm_id: int, worker_names: list[str], params: dict
     entries = []
     for name in worker_names:
         worker = _find_or_create_worker(db, farm_id, name, unit_price)
-        entry_paid = paid_amount if paid_worker and paid_worker == name else Decimal("0")
+        entry_paid = (
+            paid_amount if paid_worker and paid_worker == name else Decimal("0")
+        )
         entries.append(
             LaborEntryCreate(
                 worker_id=worker.id,
@@ -200,9 +204,7 @@ def _to_decimal(value) -> Decimal | None:
 
 def _find_or_create_worker(db, farm_id: int, name: str, unit_price: Decimal) -> Worker:
     worker = (
-        db.query(Worker)
-        .filter(Worker.farm_id == farm_id, Worker.name == name)
-        .first()
+        db.query(Worker).filter(Worker.farm_id == farm_id, Worker.name == name).first()
     )
     if worker:
         return worker

@@ -273,7 +273,7 @@ def _write_error_log(
         lines.append(f"测试失败详情 ({len(result.failure_details)} 个)")
         lines.append("-" * 70)
         for idx, detail in enumerate(result.failure_details, 1):
-            lines.append(f"")
+            lines.append("")
             lines.append(f"【失败 {idx}/{len(result.failure_details)}】")
             lines.append(detail)
             lines.append("")
