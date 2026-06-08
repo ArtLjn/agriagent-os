@@ -33,29 +33,29 @@ class ProfileScreen extends StatelessWidget {
                     rows: [
                       ProfileRowSpec(
                         LucideIcons.building2,
-                        AppColors.blue,
-                        AppColors.blueSoft,
+                        AppColors.muted,
+                        AppColors.surface3,
                         '账号与农场资料',
                         '昵称、手机号、农场信息',
                       ),
                       ProfileRowSpec(
                         LucideIcons.bot,
-                        AppColors.teal,
-                        AppColors.tealSoft,
+                        AppColors.muted,
+                        AppColors.surface3,
                         '芽芽偏好',
                         '提醒频率、语气、默认作物',
                       ),
                       ProfileRowSpec(
                         LucideIcons.bell,
-                        AppColors.cyan,
-                        AppColors.cyanSoft,
+                        AppColors.muted,
+                        AppColors.surface3,
                         '消息提醒',
                         '天气、作业、账单提醒',
                       ),
                       ProfileRowSpec(
                         LucideIcons.shieldCheck,
-                        AppColors.green,
-                        AppColors.greenSoft,
+                        AppColors.muted,
+                        AppColors.surface3,
                         '账号安全',
                         '登录保护、成员权限',
                       ),
@@ -67,15 +67,15 @@ class ProfileScreen extends StatelessWidget {
                     rows: [
                       ProfileRowSpec(
                         LucideIcons.circleHelp,
-                        AppColors.amber,
-                        AppColors.amberSoft,
+                        AppColors.muted,
+                        AppColors.surface3,
                         '帮助中心',
                         '常见问题与操作指南',
                       ),
                       ProfileRowSpec(
                         LucideIcons.download,
-                        AppColors.blue,
-                        AppColors.blueSoft,
+                        AppColors.muted,
+                        AppColors.surface3,
                         '版本信息',
                         '当前版本 1.0.0',
                       ),
@@ -96,18 +96,13 @@ class ProfileTopCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
-      padding: EdgeInsets.all(18),
-      radius: 16,
-      borderColor: Colors.transparent,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppColors.navy, AppColors.navy3],
-      ),
+    return CardPanel(
+      padding: const EdgeInsets.all(20),
+      borderColor: AppColors.lineSoft,
+      background: AppColors.surface,
       child: Column(
         children: [
-          Row(
+          const Row(
             children: [
               ProfileAvatar(),
               SizedBox(width: 14),
@@ -120,7 +115,7 @@ class ProfileTopCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: AppColors.ink,
                         letterSpacing: 0,
                       ),
                     ),
@@ -130,8 +125,8 @@ class ProfileTopCard extends StatelessWidget {
                         Text(
                           '经营者',
                           style: TextStyle(
-                            color: Color(0x99FFFFFF),
-                            fontSize: 10.5,
+                            color: AppColors.muted,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0,
                           ),
@@ -139,8 +134,8 @@ class ProfileTopCard extends StatelessWidget {
                         Text(
                           ' · 2 个农场 · 12 个成员',
                           style: TextStyle(
-                            color: Color(0x99FFFFFF),
-                            fontSize: 10.5,
+                            color: AppColors.muted,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0,
                           ),
@@ -153,12 +148,12 @@ class ProfileTopCard extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.only(left: 8),
                 child: Icon(LucideIcons.chevronRight,
-                    size: 18, color: Color(0x99FFFFFF)),
+                    size: 18, color: AppColors.subtle),
               ),
             ],
           ),
-          SizedBox(height: 18),
-          Row(
+          const SizedBox(height: 20),
+          const Row(
             children: [
               ProfileStat(value: '14 天', label: '芽芽连续运行'),
               SizedBox(width: 8),
@@ -182,14 +177,14 @@ class ProfileAvatar extends StatelessWidget {
       width: 58,
       height: 58,
       decoration: BoxDecoration(
-        color: AppColors.surface2,
+        color: AppColors.blueSoft,
         borderRadius: BorderRadius.circular(29),
       ),
       child: const Center(
         child: Text(
           '刘',
           style: TextStyle(
-            color: AppColors.navy,
+            color: AppColors.blue,
             fontSize: 22,
             fontWeight: FontWeight.w800,
             letterSpacing: 0,
@@ -212,9 +207,8 @@ class ProfileStat extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white10),
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,7 +216,7 @@ class ProfileStat extends StatelessWidget {
             Text(
               value,
               style: AppTextStyles.metric.copyWith(
-                color: Colors.white,
+                color: AppColors.ink,
                 fontSize: 17,
               ),
             ),
@@ -232,7 +226,7 @@ class ProfileStat extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.small.copyWith(
-                color: const Color(0x99FFFFFF),
+                color: AppColors.muted,
                 fontSize: 12,
               ),
             ),
@@ -290,10 +284,10 @@ class ProfileRow extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            color: row.background,
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(row.icon, size: 18, color: AppColors.ink2),
+          child: Icon(row.icon, size: 18, color: row.color),
         ),
         const SizedBox(width: 12),
         Expanded(

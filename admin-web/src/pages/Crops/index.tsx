@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider, Popconfirm, Tag } from 'antd';
-import { PlusOutlined, MinusCircleOutlined, BugOutlined, EditOutlined, DeleteOutlined, ReadOutlined } from '@ant-design/icons';
-import { listTemplates, createTemplate, updateTemplate, deleteTemplate, type CropTemplate } from '../../api/crops';
+import { useCallback, useEffect, useState } from 'react';
+import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider, Popconfirm, Tag, Card, Alert } from 'antd';
+import { PlusOutlined, MinusCircleOutlined, BugOutlined, EditOutlined, DeleteOutlined, ReadOutlined, RobotOutlined } from '@ant-design/icons';
+import { listTemplates, createTemplate, updateTemplate, deleteTemplate, parseTemplate, type CropTemplate, type CropTemplateParseResponse } from '../../api/crops';
 import ApiDebugger from '../../components/ApiDebugger';
 import { PageShell, Toolbar } from '../../components/PageShell';
+import { cardStyle } from '../../styles/theme';
+import { buildTemplateFormValues } from '../Operations/smartCreateModel';
 
 type StageFormValue = {
   name?: string;
@@ -16,11 +18,14 @@ export default function Crops() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [smartText, setSmartText] = useState('');
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [smartResult, setSmartResult] = useState<CropTemplateParseResponse | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form] = Form.useForm();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
-  const fetchData = async (page = pagination.current, pageSize = pagination.pageSize) => {
+  const fetchData = useCallback(async (page: number, pageSize: number) => {
     setLoading(true);
     try {
       const res = await listTemplates({ page, size: pageSize });
@@ -31,9 +36,9 @@ export default function Crops() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(1, pagination.pageSize); }, [fetchData, pagination.pageSize]);
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -50,13 +55,15 @@ export default function Crops() {
       message.success('创建成功');
       setModalOpen(false);
       form.resetFields();
-      fetchData();
+      fetchData(pagination.current, pagination.pageSize);
     } catch {
       message.error('创建失败');
     }
   };
 
   const openEdit = (record: CropTemplate) => {
+    setSmartText('');
+    setSmartResult(null);
     setEditingId(record.id);
     form.setFieldsValue({
       name: record.name,
@@ -68,6 +75,32 @@ export default function Crops() {
       })),
     });
     setModalOpen(true);
+  };
+
+  const openCreate = () => {
+    setEditingId(null);
+    setSmartText('');
+    setSmartResult(null);
+    form.resetFields();
+    setModalOpen(true);
+  };
+
+  const handleSmartParse = async () => {
+    if (!smartText.trim()) {
+      message.warning('请输入作物模板描述');
+      return;
+    }
+    setSmartLoading(true);
+    try {
+      const parsed = await parseTemplate(smartText.trim());
+      setSmartResult(parsed);
+      form.setFieldsValue(buildTemplateFormValues(parsed));
+      message.success('已解析并回填模板');
+    } catch {
+      message.error('智能解析失败，请检查 AI 配置或改用手填');
+    } finally {
+      setSmartLoading(false);
+    }
   };
 
   const handleUpdate = async () => {
@@ -87,7 +120,7 @@ export default function Crops() {
       setModalOpen(false);
       setEditingId(null);
       form.resetFields();
-      fetchData();
+      fetchData(pagination.current, pagination.pageSize);
     } catch {
       message.error('更新失败');
     }
@@ -97,7 +130,7 @@ export default function Crops() {
     try {
       await deleteTemplate(id);
       message.success('删除成功');
-      fetchData();
+      fetchData(pagination.current, pagination.pageSize);
     } catch {
       message.error('删除失败');
     }
@@ -147,7 +180,7 @@ export default function Crops() {
       <Toolbar
         left={(
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingId(null); form.resetFields(); setModalOpen(true); }}>新建模板</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建模板</Button>
             <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
           </>
         )}
@@ -158,7 +191,7 @@ export default function Crops() {
         dataSource={data}
         columns={columns}
         loading={loading}
-        size="middle"
+        size="small"
         scroll={{ x: 760 }}
         pagination={{
           current: pagination.current,
@@ -168,10 +201,32 @@ export default function Crops() {
           pageSizeOptions: [10, 20, 50],
           showTotal: (count) => `共 ${count} 条`,
         }}
-        onChange={(p) => fetchData(p.current, p.pageSize)}
+        onChange={(p) => fetchData(p.current ?? 1, p.pageSize ?? pagination.pageSize)}
       />
 
       <Modal title={editingId !== null ? '编辑作物模板' : '新建作物模板'} open={modalOpen} onOk={editingId !== null ? handleUpdate : handleCreate} onCancel={() => { setModalOpen(false); setEditingId(null); form.resetFields(); }} width={560}>
+        {editingId === null && (
+          <Card size="small" title={<span><RobotOutlined /> 智能作物模板</span>} style={{ ...cardStyle, marginBottom: 16 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                value={smartText}
+                onChange={(event) => setSmartText(event.target.value)}
+                onPressEnter={handleSmartParse}
+                placeholder="例如：我要种 8424 西瓜，给我生成阶段"
+              />
+              <Button type="primary" loading={smartLoading} onClick={handleSmartParse}>解析回填</Button>
+            </Space.Compact>
+            {smartResult && (
+              <Alert
+                style={{ marginTop: 12 }}
+                type="info"
+                showIcon
+                message="解析结果已填入下方表单，确认无误后再创建模板。"
+                description={`${smartResult.name}${smartResult.variety ? ` · ${smartResult.variety}` : ''} · ${smartResult.stages.length} 个阶段`}
+              />
+            )}
+          </Card>
+        )}
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入模板名称' }]}><Input placeholder="如：西瓜" /></Form.Item>
           <Form.Item name="variety" label="品种"><Input placeholder="如：8424" /></Form.Item>

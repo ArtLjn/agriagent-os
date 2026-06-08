@@ -68,6 +68,15 @@ export interface UserDetail extends UserListItem {
   farm_location: string | null;
 }
 
+export interface CurrentUser {
+  id: string;
+  phone: string;
+  nickname: string | null;
+  avatar_url?: string | null;
+  role?: string;
+  status?: string;
+}
+
 export interface ListUsersParams {
   page?: number;
   size?: number;
@@ -82,6 +91,9 @@ export interface ListQuotaOverviewParams {
 }
 
 export const usersApi = {
+  getCurrent: () =>
+    apiClient.get<CurrentUser>("/auth/me"),
+
   list: (params?: ListUsersParams) =>
     apiClient.get<UserListResponse>("/admin/users", { params }),
 

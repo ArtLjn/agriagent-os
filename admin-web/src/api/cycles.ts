@@ -22,6 +22,13 @@ export interface CropCycleListItem {
   current_stage_name?: string;
 }
 
+export interface CycleParseResponse {
+  name: string;
+  crop_template_id?: number | null;
+  start_date: string;
+  field_name?: string | null;
+}
+
 export interface PaginatedList<T> {
   items: T[];
   total: number;
@@ -39,6 +46,11 @@ export async function getCycle(id: number): Promise<CropCycle> {
 
 export async function createCycle(data: { name: string; crop_template_id: number; start_date: string; field_name?: string }): Promise<CropCycle> {
   const res = await apiClient.post<CropCycle>('/cycles', data);
+  return res.data;
+}
+
+export async function parseCycle(description: string): Promise<CycleParseResponse> {
+  const res = await apiClient.post<CycleParseResponse>('/cycles/parse', { description });
   return res.data;
 }
 

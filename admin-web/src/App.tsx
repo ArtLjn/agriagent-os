@@ -7,9 +7,9 @@ import Cycles from './pages/Cycles';
 import CycleDetail from './pages/Cycles/Detail';
 import Logs from './pages/Logs';
 import Costs from './pages/Costs';
+import Dashboard from './pages/Dashboard';
 import Agent from './pages/Agent';
 import Weather from './pages/Weather';
-import ApiTester from './pages/ApiTester';
 import TraceMonitor from './pages/TraceMonitor';
 import TokenDashboard from './pages/TokenDashboard';
 import Playground from './pages/Playground';
@@ -18,6 +18,7 @@ import PromptInspector from './pages/PromptInspector';
 import ConfigKeys from './pages/ConfigKeys';
 import Simulation from './pages/Simulation';
 import Users from './pages/Users';
+import Operations from './pages/Operations';
 import Login from './pages/Login';
 import { authStore } from './stores/authStore';
 import { palette, layout } from './styles/theme';
@@ -73,8 +74,10 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login onLogin={() => window.location.href = '/'} />} />
-          <Route path="/" element={<AuthGuard><Navigate to="/users" replace /></AuthGuard>} />
+          <Route path="/" element={<AuthGuard><Navigate to="/dashboard" replace /></AuthGuard>} />
+          <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
           <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
+          <Route path="/operations" element={<AuthGuard><Operations /></AuthGuard>} />
           <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
           <Route path="/cycles" element={<AuthGuard><Cycles /></AuthGuard>} />
           <Route path="/cycles/:id" element={<AuthGuard><CycleDetail /></AuthGuard>} />
@@ -82,7 +85,6 @@ export default function App() {
           <Route path="/costs" element={<AuthGuard><Costs /></AuthGuard>} />
           <Route path="/agent" element={<AuthGuard><Agent /></AuthGuard>} />
           <Route path="/weather" element={<AuthGuard><Weather /></AuthGuard>} />
-          <Route path="/api-tester" element={<AuthGuard><ApiTester /></AuthGuard>} />
           <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
           <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
           <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />

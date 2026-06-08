@@ -127,7 +127,29 @@ select {
 }
 
 .ant-card-head {
-  min-height: 44px;
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.ant-card-head-title {
+  padding: 10px 0;
+}
+
+.ant-card-body {
+  padding: 16px;
+}
+
+.ant-card-small > .ant-card-head {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.ant-card-small > .ant-card-head .ant-card-head-title {
+  padding: 8px 0;
+}
+
+.ant-card-small > .ant-card-body {
+  padding: 12px;
 }
 
 .ant-table-wrapper .ant-table {
@@ -140,16 +162,28 @@ select {
   background: #161b22;
   color: #8b949e;
   font-weight: 600;
-  padding-block: 12px;
+  padding: 10px 12px;
 }
 
 .ant-table-wrapper .ant-table-tbody > tr > td {
   border-color: rgba(139, 148, 158, 0.16);
-  padding-block: 12px;
+  padding: 9px 12px;
 }
 
 .ant-table-wrapper .ant-table-tbody > tr:hover > td {
   background: rgba(88, 166, 255, 0.06) !important;
+}
+
+.ant-table-wrapper .ant-table-placeholder .ant-table-cell {
+  padding: 18px 12px !important;
+}
+
+.ant-table-wrapper .ant-empty-normal {
+  margin-block: 12px;
+}
+
+.ant-empty {
+  margin-block: 12px;
 }
 
 .ant-empty-description {

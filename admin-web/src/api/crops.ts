@@ -14,6 +14,12 @@ export interface CropTemplate {
   stages: GrowthStage[];
 }
 
+export interface CropTemplateParseResponse {
+  name: string;
+  variety?: string | null;
+  stages: GrowthStage[];
+}
+
 export interface PaginatedList<T> {
   items: T[];
   total: number;
@@ -31,6 +37,11 @@ export async function getTemplate(id: number): Promise<CropTemplate> {
 
 export async function createTemplate(data: { name: string; variety?: string; stages: GrowthStage[] }): Promise<CropTemplate> {
   const res = await apiClient.post<CropTemplate>('/crops/templates', data);
+  return res.data;
+}
+
+export async function parseTemplate(description: string): Promise<CropTemplateParseResponse> {
+  const res = await apiClient.post<CropTemplateParseResponse>('/crops/templates/parse', { description });
   return res.data;
 }
 

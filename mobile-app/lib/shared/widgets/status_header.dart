@@ -25,7 +25,13 @@ class StatusHeader extends StatelessWidget {
       crossAxisAlignment:
           center ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       children: [
-        Text(title, style: AppTextStyles.title),
+        Text(
+          title,
+          style: AppTextStyles.title.copyWith(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 5),
         Text(subtitle, style: AppTextStyles.small.copyWith(fontSize: 12)),
       ],

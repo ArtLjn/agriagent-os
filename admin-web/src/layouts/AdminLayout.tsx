@@ -12,7 +12,6 @@ import {
   TeamOutlined,
   LogoutOutlined,
   ExperimentOutlined,
-  ApiOutlined,
   CloudOutlined,
   DollarOutlined,
   FieldTimeOutlined,
@@ -21,6 +20,7 @@ import {
   ReadOutlined,
   RobotOutlined,
   ToolOutlined,
+  ControlOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authStore } from '../stores/authStore';
@@ -32,16 +32,10 @@ const menuGroups = [
   {
     key: 'user-ops',
     icon: <TeamOutlined />,
-    label: '用户运营',
+    label: '业务运营',
     children: [
+      { key: '/dashboard', icon: <HomeOutlined />, label: '仪表盘' },
       { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
-    ],
-  },
-  {
-    key: 'plant-workbench',
-    icon: <ReadOutlined />,
-    label: '种植工作台',
-    children: [
       { key: '/crops', icon: <ReadOutlined />, label: '作物模板' },
       { key: '/cycles', icon: <FieldTimeOutlined />, label: '种植周期' },
       { key: '/logs', icon: <FormOutlined />, label: '农事日志' },
@@ -51,11 +45,11 @@ const menuGroups = [
   },
   {
     key: 'assistant-workbench',
-    icon: <RobotOutlined />,
-    label: '智能助手',
+    icon: <ControlOutlined />,
+    label: '业务调试',
     children: [
+      { key: '/operations', icon: <ControlOutlined />, label: '业务调试中心' },
       { key: '/agent', icon: <RobotOutlined />, label: 'AI 助手' },
-      { key: '/api-tester', icon: <ApiOutlined />, label: 'API 调试台' },
     ],
   },
   {
@@ -84,14 +78,15 @@ const menuItems = [
 ];
 
 const pageTitles: Record<string, string> = {
+  '/dashboard': '仪表盘',
   '/crops': '作物模板',
   '/cycles': '种植周期',
   '/logs': '农事日志',
   '/costs': '成本记账',
   '/agent': 'AI 助手',
   '/weather': '天气预报',
-  '/api-tester': 'API 调试台',
   '/users': '用户管理',
+  '/operations': '业务调试中心',
   '/dev/traces': '链路追踪',
   '/dev/tokens': 'Token 看板',
   '/dev/playground': 'Playground',
@@ -103,7 +98,7 @@ const pageTitles: Record<string, string> = {
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [openKeys, setOpenKeys] = useState<string[]>(['user-ops', 'plant-workbench', 'assistant-workbench', 'agent-platform']);
+  const [openKeys, setOpenKeys] = useState<string[]>(['user-ops', 'assistant-workbench', 'agent-platform']);
   const navigate = useNavigate();
   const location = useLocation();
 

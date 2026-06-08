@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../shared/widgets/status_header.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -27,27 +26,27 @@ class AppBottomTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 340,
-        height: 58,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        constraints: const BoxConstraints(maxWidth: 360),
+        height: 60,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.lineSoft),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x14092642),
-              blurRadius: 26,
-              offset: Offset(0, 12),
+              color: Color(0x0D092642),
+              blurRadius: 24,
+              offset: Offset(0, 8),
             ),
           ],
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: List.generate(_tabs.length, (index) {
             final spec = _tabs[index];
             final selected = selectedIndex == index;
-            return NormalTab(
+            return _TabItem(
               label: spec.label,
               icon: spec.icon,
               selected: selected,
@@ -61,9 +60,8 @@ class AppBottomTabBar extends StatelessWidget {
   }
 }
 
-class NormalTab extends StatelessWidget {
-  const NormalTab({
-    super.key,
+class _TabItem extends StatelessWidget {
+  const _TabItem({
     required this.label,
     required this.icon,
     required this.selected,
@@ -80,25 +78,30 @@ class NormalTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.blue : AppColors.subtle;
-    return PressableScale(
+    return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        width: 58,
-        height: 48,
-        duration: const Duration(milliseconds: 160),
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: selected ? AppColors.blueSoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: assistant ? 20 : (selected ? 20 : 19),
-              color: color,
-              weight: selected ? 700 : 400,
+            AnimatedScale(
+              scale: selected ? 1.05 : 1,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              child: Icon(
+                icon,
+                size: assistant ? 21 : (selected ? 20 : 19),
+                color: color,
+              ),
             ),
             const SizedBox(height: 3),
             Text(

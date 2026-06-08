@@ -10,6 +10,8 @@ import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
 import { authStore } from '../../stores/authStore';
 import { buildConversationRows } from './conversationRows';
+import { usersApi, type CurrentUser } from '../../api/users';
+import { chooseDefaultUserId } from './currentUser';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -216,6 +218,7 @@ export default function Playground() {
   const [nodeDetail] = useState<TraceNodeDetail | null>(null);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -250,8 +253,18 @@ export default function Playground() {
   /* ── 加载用户列表 ── */
   const loadUsers = useCallback(async () => {
     try {
-      const res = await listUsers({ size: 100 });
+      const [currentRes, res] = await Promise.all([
+        usersApi.getCurrent(),
+        listUsers({ size: 100 }),
+      ]);
       setUsers(res.items);
+      setCurrentUser(currentRes.data);
+      const defaultUserId = chooseDefaultUserId(currentRes.data, res.items);
+      setSelectedUserId((prev) => prev ?? defaultUserId);
+      if (defaultUserId) {
+        const list = await listConversations(50, defaultUserId);
+        setConversations(list);
+      }
     } catch {
       // 静默失败
     }
@@ -259,10 +272,9 @@ export default function Playground() {
 
   useEffect(() => {
     void Promise.resolve().then(() => {
-      loadConversations();
       loadUsers();
     });
-  }, [loadConversations, loadUsers]);
+  }, [loadUsers]);
 
   /* ── 切换会话 ── */
   const switchConversation = useCallback(async (sid: string) => {
@@ -533,12 +545,13 @@ export default function Playground() {
                 });
               }}
               style={{ width: 180 }}
-              dropdownStyle={{ background: CARD }}
+              styles={{ popup: { root: { background: CARD } } }}
               options={[
-                { value: null, label: '匿名用户' },
                 ...users.map((u) => ({
                   value: u.id,
-                  label: u.nickname || u.phone,
+                  label: u.id === currentUser?.id
+                    ? `${u.nickname || u.phone}（当前登录）`
+                    : u.nickname || u.phone,
                 })),
               ]}
             />

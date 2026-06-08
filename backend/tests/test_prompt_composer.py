@@ -71,6 +71,20 @@ class TestComposerCompose:
         assert "get_weather_forecast" in result
         assert "farm_context_summary" not in result
 
+    def test_system_base_contains_current_labor_skill_capabilities(self, _composer):
+        """system_base 能力范围包含当前已接入的用工 Skill。"""
+        result = _composer.compose(
+            "system_base",
+            variables={"display_name": "农友"},
+            current_date=date(2026, 5, 29),
+        )
+
+        assert "get_workers" in result
+        assert "manage_workers" in result
+        assert "manage_wages" in result
+        assert "settle_labor_payment" in result
+        assert "作业单" in result
+
     def test_cost_parse_compose(self, _composer):
         """cost_parse 场景组合：snippet + template。"""
         result = _composer.compose(

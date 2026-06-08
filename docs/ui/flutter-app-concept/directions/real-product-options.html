@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Farm Manager Real Product UI Directions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #667085;
+        --soft: #98a2b3;
+        --line: #e7ecf2;
+        --panel: #ffffff;
+        --blue: #2f6bff;
+        --cyan: #0ea5b8;
+        --green: #15945f;
+        --amber: #c8801a;
+        --red: #d64d4d;
+        --navy: #141b2d;
+      }
+
+      * { box-sizing: border-box; }
+
+      html,
+      body {
+        width: 390px;
+        height: 844px;
+        margin: 0;
+        overflow: hidden;
+        color: var(--ink);
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      body {
+        background: #f7f9fb;
+      }
+
+      .screen {
+        position: relative;
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        padding: 45px 18px 116px;
+      }
+
+      .badge {
+        position: absolute;
+        top: 10px;
+        left: 18px;
+        z-index: 5;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(17, 24, 39, .78);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 24px;
+      }
+
+      .top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .kicker {
+        margin: 0 0 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 900;
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+        border-radius: 15px;
+        color: var(--ink);
+        background: #fff;
+        border: 1px solid rgba(231, 236, 242, .9);
+        box-shadow: 0 12px 28px rgba(17, 24, 39, .06);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: 0 14px 34px rgba(17, 24, 39, .06);
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 13px;
+      }
+
+      .section-title h2 {
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .section-title span {
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 52px;
+      }
+
+      .row + .row {
+        border-top: 1px solid #eef2f6;
+      }
+
+      .icon {
+        display: grid;
+        place-items: center;
+        width: 38px;
+        height: 38px;
+        flex: 0 0 auto;
+        border-radius: 14px;
+        color: var(--blue);
+        background: #eef4ff;
+      }
+
+      .row-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .row-main h3 {
+        overflow: hidden;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 850;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .row-main p {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1.35;
+      }
+
+      .pill {
+        height: 25px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 900;
+        line-height: 25px;
+        white-space: nowrap;
+      }
+
+      .tabbar {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 30px;
+        z-index: 10;
+        display: grid;
+        align-items: stretch;
+        height: 70px;
+      }
+
+      .tabbar .item {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        color: #667085;
+        font-size: 10px;
+        font-weight: 850;
+      }
+
+      .item i {
+        width: 20px;
+        height: 20px;
+      }
+
+      .item span {
+        margin-top: 4px;
+      }
+
+      .tab-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      }
+
+      .item.active {
+        color: var(--blue);
+      }
+
+      /* Direction 1: Linear + Things + Mercury */
+      .d1 {
+        background:
+          radial-gradient(circle at 84% 2%, rgba(47, 107, 255, .12), transparent 29%),
+          linear-gradient(180deg, #f7faff 0%, #f5f7fa 100%);
+      }
+
+      .d1 .summary {
+        padding: 18px;
+        border-radius: 26px;
+      }
+
+      .d1 .summary-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .d1 .summary h2 {
+        max-width: 238px;
+        margin-top: 12px;
+        font-size: 25px;
+        font-weight: 900;
+        line-height: 1.16;
+      }
+
+      .d1 .score {
+        display: grid;
+        place-items: center;
+        width: 68px;
+        height: 68px;
+        flex: 0 0 auto;
+        border-radius: 22px;
+        color: var(--blue);
+        background: #eef4ff;
+        font-size: 22px;
+        font-weight: 900;
+      }
+
+      .d1 .mini-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 9px;
+        margin-top: 16px;
+      }
+
+      .d1 .mini {
+        min-height: 66px;
+        padding: 11px 10px;
+        border-radius: 18px;
+        background: #f7f9fc;
+        border: 1px solid #edf1f6;
+      }
+
+      .d1 .mini strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .d1 .mini span {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .d1 .tasks {
+        margin-top: 13px;
+        padding: 16px;
+        border-radius: 24px;
+      }
+
+      .d1 .finance {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        margin-top: 13px;
+        padding: 16px;
+        border-radius: 24px;
+        background: #121a2c;
+        color: #fff;
+        box-shadow: 0 18px 42px rgba(18, 26, 44, .18);
+      }
+
+      .d1 .finance h2 {
+        margin-bottom: 6px;
+        font-size: 15px;
+      }
+
+      .d1 .finance p {
+        color: rgba(255, 255, 255, .66);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.45;
+      }
+
+      .d1 .amount {
+        font-size: 22px;
+        font-weight: 900;
+      }
+
+      .d1 .tabbar {
+        grid-template-columns: repeat(5, 1fr);
+        padding: 6px;
+        border-radius: 26px;
+        background: rgba(255, 255, 255, .92);
+        border: 1px solid rgba(255, 255, 255, .95);
+        box-shadow: 0 18px 40px rgba(17, 24, 39, .12);
+        backdrop-filter: blur(18px);
+      }
+
+      .d1 .item.active::before {
+        content: "";
+        position: absolute;
+        top: 7px;
+        width: 22px;
+        height: 3px;
+        border-radius: 999px;
+        background: var(--blue);
+      }
+
+      .d1 .assistant {
+        color: #172033;
+      }
+
+      .d1 .assistant .tab-content {
+        width: 52px;
+        height: 52px;
+        border-radius: 18px;
+        background: #f2f6ff;
+        border: 1px solid #e2ebff;
+      }
+
+      /* Direction 2: Ramp + Stripe + Arc Search */
+      .d2 {
+        padding-bottom: 128px;
+        color: #f8fafc;
+        background:
+          radial-gradient(circle at 70% -5%, rgba(14, 165, 184, .34), transparent 30%),
+          linear-gradient(180deg, #151c2f 0%, #0e1524 48%, #f4f7fb 48%, #f4f7fb 100%);
+      }
+
+      .d2 .kicker,
+      .d2 .top p {
+        color: rgba(255, 255, 255, .62);
+      }
+
+      .d2 .avatar {
+        color: #fff;
+        background: rgba(255, 255, 255, .1);
+        border-color: rgba(255, 255, 255, .16);
+        box-shadow: none;
+      }
+
+      .d2 .hero-ledger {
+        padding: 18px;
+        border-radius: 28px;
+        background: rgba(255, 255, 255, .08);
+        border: 1px solid rgba(255, 255, 255, .12);
+        box-shadow: 0 22px 48px rgba(0, 0, 0, .18);
+      }
+
+      .d2 .ledger-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .d2 .ledger-top h2 {
+        max-width: 220px;
+        color: #fff;
+        font-size: 25px;
+        font-weight: 900;
+        line-height: 1.15;
+      }
+
+      .d2 .ledger-card {
+        width: 86px;
+        min-height: 88px;
+        padding: 12px;
+        border-radius: 22px;
+        color: #101828;
+        background: #fff;
+      }
+
+      .d2 .ledger-card strong {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--blue);
+        font-size: 22px;
+        font-weight: 900;
+      }
+
+      .d2 .ledger-card span {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 850;
+        line-height: 1.25;
+      }
+
+      .d2 .ai-strip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 18px;
+        color: #fff;
+        background: rgba(255, 255, 255, .1);
+      }
+
+      .d2 .ai-strip p {
+        color: rgba(255, 255, 255, .78);
+        font-size: 11px;
+        font-weight: 750;
+        line-height: 1.45;
+      }
+
+      .d2 .work-card {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 26px;
+        color: var(--ink);
+        background: #fff;
+        border: 1px solid var(--line);
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .08);
+      }
+
+      .d2 .compact-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .d2 .metric {
+        min-height: 74px;
+        padding: 13px;
+        border-radius: 20px;
+        background: #f7f9fc;
+        border: 1px solid #edf1f6;
+      }
+
+      .d2 .metric strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 22px;
+        font-weight: 900;
+      }
+
+      .d2 .metric span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .d2 .tabbar {
+        grid-template-columns: 1fr 1fr 1.18fr 1fr 1fr;
+        height: 74px;
+        padding: 8px;
+        border-radius: 30px;
+        background: #101828;
+        box-shadow: 0 18px 44px rgba(16, 24, 40, .24);
+      }
+
+      .d2 .item {
+        color: rgba(255, 255, 255, .54);
+      }
+
+      .d2 .item.active {
+        color: #101828;
+      }
+
+      .d2 .item.active .tab-content {
+        width: 56px;
+        height: 56px;
+        border-radius: 20px;
+        background: #fff;
+      }
+
+      .d2 .assistant .tab-content {
+        width: 62px;
+        height: 56px;
+        border-radius: 21px;
+        color: #fff;
+        background: linear-gradient(135deg, var(--blue), var(--cyan));
+        box-shadow: 0 12px 30px rgba(47, 107, 255, .3);
+      }
+
+      .d2 .assistant span {
+        color: #fff;
+      }
+
+      /* Direction 3: Notion + Perplexity + Calm */
+      .d3 {
+        background:
+          radial-gradient(circle at 30% -10%, rgba(216, 77, 77, .12), transparent 28%),
+          radial-gradient(circle at 95% 14%, rgba(47, 107, 255, .13), transparent 24%),
+          #f8faf8;
+      }
+
+      .d3 .today {
+        padding: 18px;
+        border-radius: 28px;
+        background: #fff;
+        border: 1px solid #e9edf1;
+        box-shadow: 0 12px 30px rgba(17, 24, 39, .05);
+      }
+
+      .d3 .today h2 {
+        margin: 10px 0 14px;
+        font-size: 27px;
+        font-weight: 900;
+        line-height: 1.16;
+      }
+
+      .d3 .answer {
+        display: grid;
+        grid-template-columns: 38px 1fr;
+        gap: 11px;
+        padding: 12px;
+        border-radius: 20px;
+        background: #f7f9fc;
+        border: 1px solid #edf1f6;
+      }
+
+      .d3 .answer p {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.5;
+      }
+
+      .d3 .board {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 11px;
+        margin-top: 13px;
+      }
+
+      .d3 .tile {
+        min-height: 106px;
+        padding: 14px;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid #e9edf1;
+      }
+
+      .d3 .tile strong {
+        display: block;
+        margin: 12px 0 4px;
+        font-size: 24px;
+        font-weight: 900;
+      }
+
+      .d3 .tile span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .d3 .next {
+        margin-top: 13px;
+        padding: 16px;
+        border-radius: 25px;
+      }
+
+      .d3 .tabbar {
+        grid-template-columns: repeat(5, 1fr);
+        height: 68px;
+        padding: 5px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, .92);
+        border: 1px solid rgba(231, 236, 242, .95);
+        box-shadow: 0 18px 38px rgba(17, 24, 39, .1);
+        backdrop-filter: blur(18px);
+      }
+
+      .d3 .item.active .tab-content {
+        width: 58px;
+        height: 54px;
+        border-radius: 18px;
+        color: #fff;
+        background: #172033;
+      }
+
+      .d3 .assistant {
+        color: var(--blue);
+      }
+
+      .d3 .assistant::after {
+        content: "";
+        position: absolute;
+        top: 10px;
+        right: 16px;
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--red);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      const option = new URLSearchParams(location.search).get("option") || "1";
+      const labels = ["首页", "工作台", "芽芽", "账单", "我的"];
+      const icons = ["layout-dashboard", "briefcase-business", "sparkles", "receipt", "user"];
+
+      function nav(activeIndex = 0) {
+        return labels.map((label, index) => {
+          const isAssistant = index === 2;
+          const active = index === activeIndex;
+          return `
+            <div class="item ${active ? "active" : ""} ${isAssistant ? "assistant" : ""}">
+              <div class="tab-content">
+                <i data-lucide="${icons[index]}"></i>
+                <span>${label}</span>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      const direction1 = `
+        <main class="screen d1">
+          <div class="badge">方向 1 · Linear / Things / Mercury</div>
+          <header class="top">
+            <div>
+              <p class="kicker">今日经营</p>
+              <h1>把今天的事<br />按优先级做完</h1>
+            </div>
+            <div class="avatar"><i data-lucide="bell"></i></div>
+          </header>
+
+          <section class="panel summary">
+            <div class="summary-head">
+              <div>
+                <span class="pill" style="color:#2457d6;background:#eef4ff;">芽芽建议</span>
+                <h2>上午先复核授粉，收工前确认人工账单。</h2>
+              </div>
+              <div class="score">86</div>
+            </div>
+            <div class="mini-grid">
+              <div class="mini"><strong style="color:var(--blue)">3</strong><span>高优先级</span></div>
+              <div class="mini"><strong style="color:var(--amber)">8℃</strong><span>夜间最低</span></div>
+              <div class="mini"><strong style="color:var(--green)">良好</strong><span>作业窗口</span></div>
+            </div>
+          </section>
+
+          <section class="panel tasks">
+            <div class="section-title"><h2>今日工作台</h2><span>查看全部</span></div>
+            <div class="row">
+              <div class="icon"><i data-lucide="clipboard-check"></i></div>
+              <div class="row-main"><h3>东棚 1-6 号授粉复核</h3><p>10:30 · 3 人 · 预计 45 分钟</p></div>
+              <span class="pill" style="color:#2457d6;background:#eef4ff;">现在</span>
+            </div>
+            <div class="row">
+              <div class="icon" style="color:var(--amber);background:#fff5e8;"><i data-lucide="shield-alert"></i></div>
+              <div class="row-main"><h3>傍晚前完成降温覆盖</h3><p>番茄试种棚优先处理</p></div>
+              <i data-lucide="chevron-right" style="color:#98a2b3;width:18px"></i>
+            </div>
+          </section>
+
+          <section class="finance">
+            <div>
+              <h2>待确认人工账单</h2>
+              <p>昨日 2 笔工资记录需要经营者确认。</p>
+            </div>
+            <div class="amount">¥860</div>
+          </section>
+
+          <nav class="tabbar">${nav(0)}</nav>
+        </main>
+      `;
+
+      const direction2 = `
+        <main class="screen d2">
+          <div class="badge">方向 2 · Ramp / Stripe / Arc Search</div>
+          <header class="top">
+            <div>
+              <p class="kicker">经营驾驶台</p>
+              <h1>现金、任务、风险<br />放在同一张台面</h1>
+            </div>
+            <div class="avatar"><i data-lucide="scan-line"></i></div>
+          </header>
+
+          <section class="hero-ledger">
+            <div class="ledger-top">
+              <h2>今天预算充足，夜间温差是唯一风险。</h2>
+              <div class="ledger-card"><strong>¥860</strong><span>待确认<br />人工支出</span></div>
+            </div>
+            <div class="ai-strip">
+              <div class="icon" style="color:#fff;background:rgba(255,255,255,.14);"><i data-lucide="sparkles"></i></div>
+              <p>芽芽已把授粉、覆盖、账单确认排成三段执行节奏。</p>
+            </div>
+          </section>
+
+          <section class="work-card">
+            <div class="section-title"><h2>经营指标</h2><span>日报</span></div>
+            <div class="compact-metrics">
+              <div class="metric"><strong style="color:var(--green)">94%</strong><span>今日作业可执行</span></div>
+              <div class="metric"><strong style="color:var(--blue)">3 项</strong><span>需要经营者决策</span></div>
+            </div>
+          </section>
+
+          <section class="work-card" style="margin-top:12px;">
+            <div class="row">
+              <div class="icon"><i data-lucide="route"></i></div>
+              <div class="row-main"><h3>09:30 东棚授粉复核</h3><p>3 人已分配 · 等待开始</p></div>
+            </div>
+            <div class="row">
+              <div class="icon" style="color:var(--cyan);background:#e9f9fb;"><i data-lucide="message-square"></i></div>
+              <div class="row-main"><h3>询问芽芽下一步</h3><p>根据天气和人工安排重新排序</p></div>
+            </div>
+          </section>
+
+          <nav class="tabbar">${nav(0)}</nav>
+        </main>
+      `;
+
+      const direction3 = `
+        <main class="screen d3">
+          <div class="badge">方向 3 · Notion / Perplexity / Calm</div>
+          <header class="top">
+            <div>
+              <p class="kicker">今日概览</p>
+              <h1>先看结论，<br />再进入明细</h1>
+            </div>
+            <div class="avatar"><i data-lucide="search"></i></div>
+          </header>
+
+          <section class="today">
+            <span class="pill" style="color:#2457d6;background:#eef4ff;">芽芽回答</span>
+            <h2>今天适合集中完成棚内作业，傍晚留出 30 分钟做防护。</h2>
+            <div class="answer">
+              <div class="icon" style="background:#172033;color:#fff;"><i data-lucide="sparkles"></i></div>
+              <p>原因：白天风力低、人工已到位；夜间最低 8℃，番茄试种棚需要提前覆盖。</p>
+            </div>
+          </section>
+
+          <section class="board">
+            <div class="tile">
+              <i data-lucide="clipboard-check" style="color:var(--blue);width:22px"></i>
+              <strong style="color:var(--blue)">3</strong>
+              <span>今天必须完成的经营动作</span>
+            </div>
+            <div class="tile">
+              <i data-lucide="wallet-cards" style="color:var(--green);width:22px"></i>
+              <strong style="color:var(--green)">¥860</strong>
+              <span>收工前确认人工支出</span>
+            </div>
+          </section>
+
+          <section class="panel next">
+            <div class="section-title"><h2>下一步</h2><span>生成安排</span></div>
+            <div class="row">
+              <div class="icon"><i data-lucide="users"></i></div>
+              <div class="row-main"><h3>给 3 名工人分配授粉复核</h3><p>东棚 1-6 号 · 预计 45 分钟</p></div>
+            </div>
+            <div class="row">
+              <div class="icon" style="color:var(--amber);background:#fff5e8;"><i data-lucide="cloud-sun"></i></div>
+              <div class="row-main"><h3>设置 17:30 降温提醒</h3><p>番茄试种棚优先覆盖</p></div>
+            </div>
+          </section>
+
+          <nav class="tabbar">${nav(0)}</nav>
+        </main>
+      `;
+
+      root.innerHTML = option === "2" ? direction2 : option === "3" ? direction3 : direction1;
+      lucide.createIcons({ strokeWidth: 2.2 });
+    </script>
+  </body>
+</html>

@@ -95,6 +95,28 @@ def test_system_prompt_snapshot_covers_layered_output():
     assert result.count("【语言规则】") == 1
 
 
+def test_system_prompt_defines_truthful_capability_boundaries():
+    result = _composer().compose(
+        "system_base",
+        PromptInput(
+            variables={
+                "display_name": "老李",
+                "farm_location": "苏州",
+                "current_season": "夏季",
+            },
+            current_date=date(2026, 5, 29),
+        ),
+    )
+
+    assert "只能承诺已注册、已启用、并且当前可调用的 Skill 能力" in result
+    assert "不要把路线图、后台 API、前端页面或系统规划说成自己已经能直接办理" in result
+    assert "没有对应 Skill" in result
+    assert "manage_workers" in result
+    assert "manage_wages" in result
+    assert "get_labor_payables" in result
+    assert "create_operation_work_order" in result
+
+
 def test_business_parse_prompt_snapshot_covers_cost_parse():
     result = _composer().compose(
         "cost_parse",
