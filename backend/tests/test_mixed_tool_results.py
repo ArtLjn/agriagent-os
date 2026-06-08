@@ -113,6 +113,32 @@ class TestPureNormalPath:
     """测试纯 normal ToolMessage 路径不变（正常走 LLM）。"""
 
     @pytest.mark.asyncio
+    async def test_direct_workers_tool_result_returns_without_llm(self):
+        """工人列表结果应直达返回，避免最终 LLM 空回复。"""
+        normal_msg = ToolMessage(
+            content=(
+                "当前工人：\n"
+                "- 刘俊男（活跃，daily，默认单价 200.00元）\n"
+                "- 猪八戒（活跃，daily，默认单价 100.00元）"
+            ),
+            tool_call_id="direct_get_workers",
+        )
+        state = {
+            "messages": [normal_msg],
+            "farm_id": 1,
+            "intent": "query",
+        }
+
+        with patch("app.agent.runtime.nodes.get_llm") as mock_get_llm:
+            result = await _llm_node(state)
+
+        ai_msg = result["messages"][0]
+        assert isinstance(ai_msg, AIMessage)
+        assert "刘俊男" in ai_msg.content
+        assert "猪八戒" in ai_msg.content
+        mock_get_llm.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_direct_normal_tool_result_goes_through_llm(self):
         """确定性直达工具结果也必须经过最终 LLM 表达。"""
         from unittest.mock import AsyncMock, patch

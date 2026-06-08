@@ -113,6 +113,55 @@ async def test_cost_summary_query_skips_tool_selection_llm_call():
 
 
 @pytest.mark.asyncio
+async def test_workers_query_skips_initial_llm_call():
+    """工人列表查询应确定性调用 get_workers，避免 LLM 漏查或空工具调用。"""
+    from app.agent.graph import _llm_node
+
+    with (
+        patch(
+            "app.agent.runtime.nodes._get_farm_context",
+            return_value={
+                "farm_location": "睢宁",
+                "display_name": "农友",
+                "farm_coords": "",
+                "active_crops": "",
+            },
+        ),
+        patch(
+            "app.agent.runtime.nodes.get_langchain_tools",
+            return_value=[_make_tool("get_workers")],
+        ),
+        patch(
+            "app.agent.runtime.nodes.select_tools",
+            return_value=["get_workers"],
+        ),
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch("app.agent.runtime.nodes._get_classifier") as mock_classifier,
+        patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+    ):
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我的工人")],
+                "farm_id": 1,
+                "intent": "query",
+            }
+        )
+
+    message = result["messages"][0]
+    assert isinstance(message, AIMessage)
+    assert message.tool_calls == [
+        {
+            "name": "get_workers",
+            "args": {},
+            "id": "direct_get_workers",
+            "type": "tool_call",
+        }
+    ]
+    mock_get_llm.assert_not_called()
+    mock_classifier.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_generic_crop_cycle_query_routes_to_farm_status_without_llm():
     """泛问“我的茬口”时应先查农场状态，避免让 LLM 编造 cycle_id。"""
     from app.agent.graph import _llm_node

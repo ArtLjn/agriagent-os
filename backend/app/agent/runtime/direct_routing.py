@@ -11,9 +11,12 @@ DIRECT_READ_TOOLS: set[str] = {
     "get_weather_forecast",
     "get_cost_summary",
     "get_farm_status",
+    "get_workers",
 }
 
-DIRECT_RETURN_TOOLS: set[str] = set()
+DIRECT_RETURN_TOOLS: set[str] = {
+    "get_workers",
+}
 
 
 def direct_query_tool_names(user_msg: str, selected_names: list[str]) -> list[str]:

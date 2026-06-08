@@ -177,7 +177,8 @@ def test_planting_selectors_summarize_units_work_orders_workers_and_unpaid_labor
 
     assert "1号棚" in PlantingUnitSelector().select(db_session, farm_id=1)[0].content
     assert "打药" in OperationWorkOrderSelector().select(db_session, farm_id=1)[0].content
-    assert "张三" in WorkerSelector().select(db_session, farm_id=1)[0].content
+    worker_content = WorkerSelector().select(db_session, farm_id=1)[0].content
+    assert f"张三(id={worker.id}" in worker_content
     unpaid = UnpaidLaborSummarySelector().select(db_session, farm_id=1)[0]
     assert unpaid.key == "unpaid_labor"
     assert "未付200元" in unpaid.content

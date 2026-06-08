@@ -107,7 +107,7 @@ class WorkerSelector:
             content = "工人：暂无"
         else:
             parts = [
-                f"{worker.name}({worker.status}，{worker.default_pay_type}"
+                f"{worker.name}(id={worker.id}，{worker.status}，{worker.default_pay_type}"
                 f"={_format_amount(worker.default_unit_price)}元)"
                 for worker in workers
             ]

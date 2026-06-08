@@ -1,17 +1,12 @@
-import json
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from langchain_core.messages import HumanMessage
 from sqlalchemy.orm import Session
 
-from app.agent.llm import get_llm
 from app.api.deps import get_current_farm, get_db
 from app.core.json_repair import safe_parse_json
-from app.agent.prompt_composer import get_composer
-from app.core.date_context import get_request_date
 from app.models.farm import Farm
-from app.models.idempotency_key import IdempotencyKey
 from app.schemas.common import PaginatedResponse
 from app.schemas.cost import (
     CostParseRequest,
@@ -22,7 +17,9 @@ from app.schemas.cost import (
     CycleProfit,
     YearlySummary,
 )
+from app.schemas.smart_fill import SmartFillParseRequest
 from app.services import cost_service
+from app.agent.application.smart_fill import parse_smart_fill
 
 router = APIRouter(prefix="/costs", tags=["costs"])
 
@@ -158,73 +155,14 @@ async def parse_cost_record(
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(None, alias="X-Idempotency-Key"),
 ):
-    """AI 解析自然语言记账描述，返回结构化记录。
-
-    支持幂等键去重（24 小时内相同 key 直接返回缓存结果）。
-    """
-    logger = logging.getLogger(__name__)
-
-    # 幂等键检查
-    if idempotency_key:
-        cached = (
-            db.query(IdempotencyKey)
-            .filter(IdempotencyKey.key == idempotency_key)
-            .first()
-        )
-        if cached:
-            logger.info("幂等键命中 | key=%s", idempotency_key)
-            try:
-                data = json.loads(cached.response)
-                return CostParseResponse(**data)
-            except Exception:
-                logger.warning("幂等缓存解析失败，重新执行 | key=%s", idempotency_key)
-
-    current_date = get_request_date()
-    prompt = get_composer().compose(
-        "cost_parse",
-        {"description": req.description},
-        current_date=current_date,
+    """兼容入口：转调统一智能填写，保持旧响应格式。"""
+    response = await parse_smart_fill(
+        SmartFillParseRequest(scene="ledger.record", text=req.description),
+        farm,
+        db,
+        idempotency_key,
     )
-    logger.info("AI 解析记账 | farm=%s | input: %s", farm.id, req.description)
-
-    llm = get_llm()
-    result = await _parse_cost_with_llm(llm, prompt, logger)
-
-    # amount 为 0 说明未识别出有效金额
-    if result.amount in ("0", "0.0", "0.00"):
-        raise HTTPException(
-            status_code=422,
-            detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块",
-        )
-
-    try:
-        response = CostParseResponse(
-            record_type=result.record_type,
-            category=result.category,
-            amount=result.amount,
-            record_date=result.record_date,
-            note=result.note,
-        )
-    except Exception:
-        logger.warning("AI 返回数据无法通过校验 | input=%s", req.description)
-        raise HTTPException(
-            status_code=422,
-            detail="无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块",
-        )
-
-    # 缓存幂等键
-    if idempotency_key:
-        try:
-            cache = IdempotencyKey(
-                key=idempotency_key, response=response.model_dump_json()
-            )
-            db.add(cache)
-            db.commit()
-        except Exception:
-            db.rollback()
-            logger.warning("幂等键缓存写入失败 | key=%s", idempotency_key)
-
-    return response
+    return CostParseResponse.model_validate(response.draft)
 
 
 __all__ = ["router"]

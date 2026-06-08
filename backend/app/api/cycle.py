@@ -1,17 +1,12 @@
-import json
 import logging
-from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.agent.llm import get_llm
 from langchain_core.messages import HumanMessage
-from app.agent.prompt_composer import get_composer
 from app.api.deps import get_db, get_current_farm
 from app.core.json_repair import safe_parse_json
 from app.models.farm import Farm
-from app.models.idempotency_key import IdempotencyKey
 from app.schemas.common import PaginatedResponse
 from app.schemas.cycle import (
     CropCycleCreate,
@@ -20,7 +15,9 @@ from app.schemas.cycle import (
     CycleParseRequest,
     CycleParseResponse,
 )
-from app.services import crop_service, cycle_service
+from app.schemas.smart_fill import SmartFillParseRequest
+from app.services import cycle_service
+from app.agent.application.smart_fill import parse_smart_fill
 
 router = APIRouter(prefix="/cycles", tags=["cycles"])
 
@@ -115,12 +112,12 @@ def list_cycles(
     return {"items": items, "total": total}
 
 
-def _build_cycle_response(
-    db: Session, cycle, farm_id: int
-) -> CropCycleResponse:
+def _build_cycle_response(db: Session, cycle, farm_id: int) -> CropCycleResponse:
     """组装带批次聚合字段的详情响应。"""
     current = next((s for s in cycle.stages if s.is_current), None)
-    stats = cycle_service.get_cycle_unit_stats(db, [cycle.id], farm_id).get(cycle.id, {})
+    stats = cycle_service.get_cycle_unit_stats(db, [cycle.id], farm_id).get(
+        cycle.id, {}
+    )
     return CropCycleResponse(
         id=cycle.id,
         name=cycle.name,
@@ -199,71 +196,14 @@ async def parse_cycle(
     db: Session = Depends(get_db),
     idempotency_key: str | None = Header(None, alias="X-Idempotency-Key"),
 ):
-    """AI 解析自然语言茬口描述，返回结构化种植计划（不入库）。"""
-    logger = logging.getLogger(__name__)
-
-    if idempotency_key:
-        cached = (
-            db.query(IdempotencyKey)
-            .filter(IdempotencyKey.key == idempotency_key)
-            .first()
-        )
-        if cached:
-            logger.info("幂等键命中 | key=%s", idempotency_key)
-            try:
-                data = json.loads(cached.response)
-                return CycleParseResponse(**data)
-            except Exception:
-                logger.warning("幂等缓存解析失败 | key=%s", idempotency_key)
-
-    templates = crop_service.get_crop_templates(db, farm_id=farm.id)
-    template_list = [
-        {"id": t.id, "name": t.name, "variety": t.variety} for t in templates
-    ]
-    today = date.today().isoformat()
-
-    prompt = get_composer().compose(
-        "cycle_parse",
-        {"description": req.description, "templates": template_list, "today": today},
+    """兼容入口：转调统一智能填写，保持旧响应格式。"""
+    response = await parse_smart_fill(
+        SmartFillParseRequest(scene="crop.cycle", text=req.description),
+        farm,
+        db,
+        idempotency_key,
     )
-    logger.info("AI 解析茬口 | farm=%s | input: %s", farm.id, req.description)
-
-    llm = get_llm()
-    try:
-        response = await _parse_cycle_with_llm(llm, prompt, logger)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.warning("AI 返回数据无法通过校验 | input=%s", req.description)
-        raise HTTPException(
-            status_code=422,
-            detail="无法识别茬口信息，请描述种植计划，例如：春季种番茄、秋茬种西瓜",
-        )
-
-    # cross-validate: crop_template_id 必须来自真实模板
-    if response.crop_template_id is not None:
-        found = any(t.id == response.crop_template_id for t in templates)
-        if not found:
-            response.crop_template_id = None
-
-    if not response.name:
-        raise HTTPException(
-            status_code=422,
-            detail="无法识别茬口信息，请描述种植计划，例如：春季种番茄、秋茬种西瓜",
-        )
-
-    if idempotency_key:
-        try:
-            cache = IdempotencyKey(
-                key=idempotency_key, response=response.model_dump_json()
-            )
-            db.add(cache)
-            db.commit()
-        except Exception:
-            db.rollback()
-            logger.warning("幂等键缓存写入失败 | key=%s", idempotency_key)
-
-    return response
+    return CycleParseResponse.model_validate(response.draft)
 
 
 __all__ = ["router"]

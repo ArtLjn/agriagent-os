@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-06-04
+last_updated: 2026-06-08
 status: active
 ---
 
@@ -44,7 +44,7 @@ flowchart TB
 | --- | --- |
 | `app/main.py` | 仅创建 FastAPI app；本地运行时读取 `settings.server` 启动 uvicorn。 |
 | `app/bootstrap/` | 应用工厂、路由注册、中间件、异常处理、lifespan。 |
-| `app/api/` | HTTP 入口、参数校验、FastAPI Depends；Agent 路由已主要调用 application use case。 |
+| `app/api/` | HTTP 入口、参数校验、FastAPI Depends；Agent 路由已主要调用 application use case，智能填写通过 `api/smart_fill.py` 暴露统一场景入口。 |
 | `app/modules/auth`、`app/modules/farm` | 已迁移的模块化认证和农场依赖能力。 |
 | `app/services/` | 迁移期业务服务：作物、周期、日志、成本、债务、天气、会话、报告、配额。 |
 | `app/agent/application/` | Agent 应用用例：聊天、SSE、每日建议、报告、历史、上下文失效。 |
@@ -140,6 +140,24 @@ flowchart TB
 ```
 
 设计边界：Runtime 可以消费 `ContextBundle` 和已构造好的 memory view，但不应直接实现 selector、memory store 或 prompt 版本治理。
+
+## 5.1 智能填写统一入口
+
+```mermaid
+flowchart LR
+    Client["移动端 / Admin Web"]
+    SmartAPI["api/smart_fill.py\n/scenarios + /parse"]
+    Registry["agent.application.smart_fill\n场景注册表"]
+    Prompt["PromptComposer\ncost/crop/cycle parse"]
+    LLM["LLM structured output\nJSON fallback"]
+    Draft["表单草稿\n不直接落库"]
+    Legacy["旧 parse 入口\n/costs /crops /cycles"]
+
+    Client --> SmartAPI --> Registry --> Prompt --> LLM --> Draft
+    Legacy --> Registry
+```
+
+智能填写统一为“自然语言 → 表单草稿”，当前注册 `ledger.record`、`crop.template`、`crop.cycle` 三个场景。场景注册项声明 prompt、输出 schema、上下文构建和业务校验；新增业务不再新增专属 parse 路由，优先扩展 `agent.application.smart_fill`。旧 `/costs/parse`、`/crops/templates/parse`、`/cycles/parse` 保留为兼容入口，内部转调统一服务并返回旧响应格式。
 
 ## 6. Skill 系统
 

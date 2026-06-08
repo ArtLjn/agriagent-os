@@ -402,11 +402,7 @@ def test_parse_cost_record_returns_422_on_invalid_amount():
     from unittest.mock import patch
     from app.schemas.cost import CostParseResult
 
-    with (
-        patch("app.api.cost.get_composer") as mock_get_composer,
-        patch("app.api.cost._parse_cost_with_llm") as mock_parse,
-    ):
-        mock_get_composer.return_value.compose.return_value = "解析提示词"
+    with patch("app.agent.application.smart_fill.parse_with_llm") as mock_parse:
         mock_parse.return_value = CostParseResult(
             record_type="cost",
             category="其他",
