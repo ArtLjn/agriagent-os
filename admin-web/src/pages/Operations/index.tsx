@@ -40,9 +40,9 @@ import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { PageShell, Toolbar, MetricCard } from '../../components/PageShell';
 import { cardStyle, palette } from '../../styles/theme';
-import { createCycle, listCycles, parseCycle, type CropCycleListItem, type CycleParseResponse } from '../../api/cycles';
-import { createTemplate, parseTemplate, type CropTemplateParseResponse } from '../../api/crops';
-import { createRecord, parseCostRecord, type CostParseResponse } from '../../api/costs';
+import { createCycle, listCycles, type CropCycleListItem, type CycleParseResponse } from '../../api/cycles';
+import { createTemplate, type CropTemplateParseResponse } from '../../api/crops';
+import { createRecord, type CostParseResponse } from '../../api/costs';
 import {
   operationsApi,
   type CostCategory,
@@ -55,6 +55,7 @@ import {
   type Worker,
   type WorkerLaborSummary,
 } from '../../api/operations';
+import { listSmartFillScenarios, parseSmartFill, type SmartFillScenario } from '../../api/smartFill';
 import {
   buildRequestBody,
   calculateLaborAmount,
@@ -63,7 +64,14 @@ import {
   normalizeOperationOptions,
 } from './workbenchModel';
 import { buildCostFormValues } from '../Costs/costSmartFill';
-import { buildCycleFormValues, buildTemplateFormValues } from './smartCreateModel';
+import {
+  SMART_FILL_FALLBACK_SCENARIOS,
+  buildCycleFormValues,
+  buildTemplateFormValues,
+  normalizeSmartResult,
+  type SmartCreateMeta,
+  type SmartCreateResult,
+} from './smartCreateModel';
 
 type UnitForm = {
   cycle_id: number;
@@ -153,6 +161,25 @@ const defaultCategoryIcons = [
   { value: 'other', label: '其他' },
 ];
 
+const previewPanelStyle = {
+  minHeight: 286,
+  padding: 16,
+  background: palette.bgPanel,
+  border: `1px solid ${palette.border}`,
+  borderRadius: 8,
+};
+
+const rawPreviewStyle = {
+  margin: 0,
+  maxHeight: 220,
+  overflow: 'auto',
+  color: palette.text,
+  background: palette.bg,
+  border: `1px solid ${palette.border}`,
+  borderRadius: 8,
+  padding: 12,
+};
+
 function statusTag(status: string) {
   const active = status === 'active';
   return <Tag color={active ? 'success' : 'default'}>{active ? '启用' : status}</Tag>;
@@ -215,188 +242,227 @@ export default function Operations() {
 }
 
 function SmartCreatePanel({ cycles }: { cycles: CropCycleListItem[] }) {
-  const [cropText, setCropText] = useState('');
-  const [cycleText, setCycleText] = useState('');
-  const [costText, setCostText] = useState('');
-  const [cropResult, setCropResult] = useState<CropTemplateParseResponse | null>(null);
-  const [cycleResult, setCycleResult] = useState<CycleParseResponse | null>(null);
-  const [costResult, setCostResult] = useState<CostParseResponse | null>(null);
-  const [cropLoading, setCropLoading] = useState(false);
-  const [cycleLoading, setCycleLoading] = useState(false);
-  const [costLoading, setCostLoading] = useState(false);
+  const [scenarios, setScenarios] = useState<SmartFillScenario[]>(SMART_FILL_FALLBACK_SCENARIOS);
+  const [selectedScene, setSelectedScene] = useState('crop.template');
+  const [smartText, setSmartText] = useState('');
+  const [smartResult, setSmartResult] = useState<SmartCreateResult | null>(null);
+  const [smartMeta, setSmartMeta] = useState<SmartCreateMeta | null>(null);
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [creatingScene, setCreatingScene] = useState<string | null>(null);
   const [selectedCostCycle, setSelectedCostCycle] = useState<number | undefined>();
 
-  const runCropParse = async () => {
-    if (!cropText.trim()) {
-      message.warning('请输入作物模板描述');
+  const getScenario = useCallback(
+    (key: string) => scenarios.find((item) => item.key === key),
+    [scenarios],
+  );
+
+  useEffect(() => {
+    listSmartFillScenarios()
+      .then((items) => {
+        const enabledItems = items.filter((item) => item.enabled);
+        setScenarios(enabledItems.length ? enabledItems : SMART_FILL_FALLBACK_SCENARIOS);
+      })
+      .catch(() => {
+        message.warning('智能填写场景加载失败，已使用本地默认配置');
+      });
+  }, []);
+
+  const selectedScenario = getScenario(selectedScene);
+
+  const runSmartParse = async () => {
+    if (!smartText.trim()) {
+      message.warning(`请输入${selectedScenario?.title || '智能填写'}描述`);
       return;
     }
-    setCropLoading(true);
+    setSmartLoading(true);
     try {
-      const parsed = await parseTemplate(cropText.trim());
-      setCropResult(parsed);
-      message.success('智能作物模板解析完成');
+      const context = selectedScene === 'ledger.record' && selectedCostCycle !== undefined
+        ? { cycle_id: selectedCostCycle }
+        : {};
+      const response = await parseSmartFill<unknown>(selectedScene, smartText.trim(), context);
+      setSmartResult(normalizeSmartResult(response.scene, response.draft));
+      setSmartMeta({
+        missingFields: response.missing_fields,
+        warnings: response.warnings,
+      });
+      message.success(`${getScenario(response.scene)?.title || selectedScenario?.title || '智能填写'}解析完成`);
     } catch {
-      message.error('智能作物模板解析失败');
+      message.error(`${selectedScenario?.title || '智能填写'}解析失败`);
     } finally {
-      setCropLoading(false);
+      setSmartLoading(false);
     }
   };
 
-  const runCycleParse = async () => {
-    if (!cycleText.trim()) {
-      message.warning('请输入茬口描述');
-      return;
-    }
-    setCycleLoading(true);
+  const createParsedTemplate = async (draft: CropTemplateParseResponse) => {
+    setCreatingScene('crop.template');
     try {
-      const parsed = await parseCycle(cycleText.trim());
-      setCycleResult(parsed);
-      message.success('智能茬口解析完成');
+      const values = buildTemplateFormValues(draft);
+      await createTemplate({
+        ...values,
+        stages: values.stages.map((stage, index) => ({ ...stage, order_index: index + 1 })),
+      });
+      setSmartResult(null);
+      setSmartMeta(null);
+      message.success('作物模板已创建');
     } catch {
-      message.error('智能茬口解析失败');
+      message.error('作物模板创建失败，请检查解析结果或后端服务');
     } finally {
-      setCycleLoading(false);
+      setCreatingScene(null);
     }
   };
 
-  const runCostParse = async () => {
-    if (!costText.trim()) {
-      message.warning('请输入记账描述');
-      return;
-    }
-    setCostLoading(true);
-    try {
-      const parsed = await parseCostRecord(costText.trim());
-      setCostResult(parsed);
-      message.success('智能记账解析完成');
-    } catch {
-      message.error('智能记账解析失败');
-    } finally {
-      setCostLoading(false);
-    }
-  };
-
-  const createParsedTemplate = async () => {
-    if (!cropResult) return;
-    const values = buildTemplateFormValues(cropResult);
-    await createTemplate({
-      ...values,
-      stages: values.stages.map((stage, index) => ({ ...stage, order_index: index + 1 })),
-    });
-    message.success('作物模板已创建');
-  };
-
-  const createParsedCycle = async () => {
-    if (!cycleResult?.crop_template_id) {
+  const createParsedCycle = async (draft: CycleParseResponse) => {
+    if (!draft.crop_template_id) {
       message.warning('解析结果没有匹配到作物模板，请先到作物模板页创建或手动选择');
       return;
     }
-    const values = buildCycleFormValues(cycleResult);
-    await createCycle({
-      name: values.name,
-      crop_template_id: cycleResult.crop_template_id,
-      start_date: values.start_date.format('YYYY-MM-DD'),
-      field_name: values.field_name,
-    });
-    message.success('茬口已创建');
+    setCreatingScene('crop.cycle');
+    try {
+      const values = buildCycleFormValues(draft);
+      await createCycle({
+        name: values.name,
+        crop_template_id: draft.crop_template_id,
+        start_date: values.start_date.format('YYYY-MM-DD'),
+        field_name: values.field_name,
+      });
+      setSmartResult(null);
+      setSmartMeta(null);
+      message.success('茬口已创建');
+    } catch {
+      message.error('茬口创建失败，请检查解析结果或后端服务');
+    } finally {
+      setCreatingScene(null);
+    }
   };
 
-  const createParsedCost = async () => {
-    if (!costResult) return;
-    const values = buildCostFormValues(costResult);
-    await createRecord({
-      record_type: values.record_type,
-      category: values.category,
-      amount: String(values.amount),
-      record_date: values.record_date.format('YYYY-MM-DD'),
-      note: values.note,
-      cycle_id: selectedCostCycle,
-    });
-    message.success('记账记录已创建');
+  const createParsedCost = async (draft: CostParseResponse) => {
+    setCreatingScene('ledger.record');
+    try {
+      const values = buildCostFormValues(draft);
+      await createRecord({
+        record_type: values.record_type,
+        category: values.category,
+        amount: String(values.amount),
+        record_date: values.record_date.format('YYYY-MM-DD'),
+        note: values.note,
+        cycle_id: selectedCostCycle,
+      });
+      setSmartResult(null);
+      setSmartMeta(null);
+      message.success('记账记录已创建');
+    } catch {
+      message.error('记账记录创建失败，请检查茬口、分类或后端服务');
+    } finally {
+      setCreatingScene(null);
+    }
   };
 
   return (
-    <Row gutter={[16, 16]} align="top">
-      <Col xs={24} xl={8}>
-        <Card title={<span><RobotOutlined /> 智能作物模板</span>} style={cardStyle}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Input.TextArea
-              rows={4}
-              value={cropText}
-              onChange={(event) => setCropText(event.target.value)}
-              placeholder="我要种 8424 西瓜，生成完整生长阶段"
-            />
-            <Button type="primary" block loading={cropLoading} onClick={runCropParse}>解析作物模板</Button>
-            {cropResult && (
-              <Card size="small" style={{ background: palette.bgPanel, borderColor: palette.border }}>
-                <Typography.Text strong>{cropResult.name}{cropResult.variety ? ` · ${cropResult.variety}` : ''}</Typography.Text>
-                <div style={{ marginTop: 10 }}>
-                  <Space wrap>{cropResult.stages.map((stage) => <Tag key={stage.order_index}>{stage.name} · {stage.duration_days}天</Tag>)}</Space>
-                </div>
-                <Button style={{ marginTop: 12 }} onClick={createParsedTemplate}>确认创建模板</Button>
-              </Card>
-            )}
-          </Space>
-        </Card>
-      </Col>
-      <Col xs={24} xl={8}>
-        <Card title={<span><RobotOutlined /> 智能茬口</span>} style={cardStyle}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Input.TextArea
-              rows={4}
-              value={cycleText}
-              onChange={(event) => setCycleText(event.target.value)}
-              placeholder="4 月 1 日在东棚种一茬 8424 西瓜"
-            />
-            <Button type="primary" block loading={cycleLoading} onClick={runCycleParse}>解析茬口</Button>
-            {cycleResult && (
-              <Card size="small" style={{ background: palette.bgPanel, borderColor: palette.border }}>
-                <Descriptions column={1} size="small">
-                  <Descriptions.Item label="名称">{cycleResult.name}</Descriptions.Item>
-                  <Descriptions.Item label="模板 ID">{cycleResult.crop_template_id ?? '未匹配'}</Descriptions.Item>
-                  <Descriptions.Item label="开始日期">{cycleResult.start_date}</Descriptions.Item>
-                  <Descriptions.Item label="地块">{cycleResult.field_name || '-'}</Descriptions.Item>
-                </Descriptions>
-                <Button style={{ marginTop: 12 }} onClick={createParsedCycle}>确认创建茬口</Button>
-              </Card>
-            )}
-          </Space>
-        </Card>
-      </Col>
-      <Col xs={24} xl={8}>
-        <Card title={<span><RobotOutlined /> 智能记账</span>} style={cardStyle}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Input.TextArea
-              rows={4}
-              value={costText}
-              onChange={(event) => setCostText(event.target.value)}
-              placeholder="今天买复合肥 128.5 元，记到春季西瓜"
-            />
+    <Card
+      title={<Space size={8}><RobotOutlined /><span>智能填写</span></Space>}
+      style={cardStyle}
+    >
+      <Row gutter={[20, 20]} align="top">
+        <Col xs={24} xl={12}>
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
             <Select
-              allowClear
-              placeholder="关联茬口（可选）"
-              value={selectedCostCycle}
-              onChange={setSelectedCostCycle}
-              options={cycles.map((cycle) => ({ value: cycle.id, label: cycle.name }))}
+              value={selectedScene}
+              onChange={(value) => {
+                setSelectedScene(value);
+                setSmartResult(null);
+                setSmartMeta(null);
+              }}
+              options={scenarios.map((scenario) => ({
+                value: scenario.key,
+                label: scenario.title,
+              }))}
             />
-            <Button type="primary" block loading={costLoading} onClick={runCostParse}>解析记账</Button>
-            {costResult && (
-              <Card size="small" style={{ background: palette.bgPanel, borderColor: palette.border }}>
-                <Descriptions column={1} size="small">
-                  <Descriptions.Item label="类型">{costResult.record_type === 'income' ? '收入' : '支出'}</Descriptions.Item>
-                  <Descriptions.Item label="分类">{costResult.category}</Descriptions.Item>
-                  <Descriptions.Item label="金额">{formatMoney(costResult.amount)}</Descriptions.Item>
-                  <Descriptions.Item label="日期">{costResult.record_date}</Descriptions.Item>
-                  <Descriptions.Item label="备注">{costResult.note || '-'}</Descriptions.Item>
-                </Descriptions>
-                <Button style={{ marginTop: 12 }} onClick={createParsedCost}>确认创建记账</Button>
-              </Card>
+            {selectedScene === 'ledger.record' && (
+              <Select
+                allowClear
+                placeholder="关联茬口（可选）"
+                value={selectedCostCycle}
+                onChange={setSelectedCostCycle}
+                options={cycles.map((cycle) => ({ value: cycle.id, label: cycle.name }))}
+              />
             )}
+            <Input.TextArea
+              rows={8}
+              value={smartText}
+              onChange={(event) => setSmartText(event.target.value)}
+              placeholder={selectedScenario?.request_example || '输入要创建的数据描述'}
+            />
+            <Button type="primary" block loading={smartLoading} onClick={runSmartParse}>
+              解析{selectedScenario?.title || '智能填写'}
+            </Button>
           </Space>
-        </Card>
-      </Col>
-    </Row>
+        </Col>
+        <Col xs={24} xl={12}>
+          <div style={previewPanelStyle}>
+            {smartMeta && (smartMeta.missingFields.length > 0 || smartMeta.warnings.length > 0) && (
+              <Alert
+                type={smartMeta.missingFields.length > 0 ? 'warning' : 'info'}
+                showIcon
+                style={{ marginBottom: 12 }}
+                message={[
+                  ...smartMeta.missingFields.map((field) => `缺少 ${field}`),
+                  ...smartMeta.warnings,
+                ].join('；')}
+              />
+            )}
+            {!smartResult && <Empty description="暂无解析结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+            {smartResult?.scene === 'crop.template' && (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Typography.Text strong>
+                  {smartResult.draft.name}{smartResult.draft.variety ? ` · ${smartResult.draft.variety}` : ''}
+                </Typography.Text>
+                <Space wrap>
+                  {smartResult.draft.stages.map((stage) => (
+                    <Tag key={stage.order_index}>{stage.name} · {stage.duration_days}天</Tag>
+                  ))}
+                </Space>
+                <Button loading={creatingScene === 'crop.template'} onClick={() => createParsedTemplate(smartResult.draft)}>
+                  确认创建模板
+                </Button>
+              </Space>
+            )}
+            {smartResult?.scene === 'crop.cycle' && (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Descriptions column={1} size="small">
+                  <Descriptions.Item label="名称">{smartResult.draft.name}</Descriptions.Item>
+                  <Descriptions.Item label="模板 ID">{smartResult.draft.crop_template_id ?? '未匹配'}</Descriptions.Item>
+                  <Descriptions.Item label="开始日期">{smartResult.draft.start_date}</Descriptions.Item>
+                  <Descriptions.Item label="地块">{smartResult.draft.field_name || '-'}</Descriptions.Item>
+                </Descriptions>
+                <Button loading={creatingScene === 'crop.cycle'} onClick={() => createParsedCycle(smartResult.draft)}>
+                  确认创建茬口
+                </Button>
+              </Space>
+            )}
+            {smartResult?.scene === 'ledger.record' && (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Descriptions column={1} size="small">
+                  <Descriptions.Item label="类型">{smartResult.draft.record_type === 'income' ? '收入' : '支出'}</Descriptions.Item>
+                  <Descriptions.Item label="分类">{smartResult.draft.category}</Descriptions.Item>
+                  <Descriptions.Item label="金额">{formatMoney(smartResult.draft.amount)}</Descriptions.Item>
+                  <Descriptions.Item label="日期">{smartResult.draft.record_date}</Descriptions.Item>
+                  <Descriptions.Item label="备注">{smartResult.draft.note || '-'}</Descriptions.Item>
+                </Descriptions>
+                <Button loading={creatingScene === 'ledger.record'} onClick={() => createParsedCost(smartResult.draft)}>
+                  确认创建记账
+                </Button>
+              </Space>
+            )}
+            {smartResult?.scene === 'unsupported' && (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Typography.Text strong>{smartResult.sourceScene}</Typography.Text>
+                <pre style={rawPreviewStyle}>{JSON.stringify(smartResult.draft, null, 2)}</pre>
+              </Space>
+            )}
+          </div>
+        </Col>
+      </Row>
+    </Card>
   );
 }
 

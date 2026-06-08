@@ -20,6 +20,7 @@ from app.infra.pending_actions import (
 )
 from app.infra.trace_collector import get_collector
 from app.models.cycle import CropCycle
+from app.models.planting import Worker
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,19 @@ def _build_pending_confirmation_args(name: str, args: dict, farm_id: int) -> dic
     if name == "settle_labor_payment":
         _fill_settle_labor_context_args(context_args, farm_id)
     return context_args
+
+
+def _build_pending_execution_args(
+    name: str,
+    args: dict,
+    farm_id: int,
+    original_input: str,
+) -> dict:
+    """构建待执行参数，只补齐确定性的目标标识。"""
+    execution_args = dict(args or {})
+    if name == "manage_workers":
+        _fill_manage_workers_target_args(execution_args, farm_id, original_input)
+    return execution_args
 
 
 def _fill_update_crop_cycle_context_args(args: dict, farm_id: int) -> None:
@@ -226,6 +240,87 @@ def _fill_settle_labor_context_args(args: dict, farm_id: int) -> None:
         )
     finally:
         db.close()
+
+
+def _fill_manage_workers_target_args(
+    args: dict,
+    farm_id: int,
+    original_input: str,
+) -> None:
+    """为工人档案写操作补齐真实 worker_id 和完整姓名。"""
+    action = _clean_text(args.get("action")) or "create"
+    if action == "create":
+        return
+    db = SessionLocal()
+    try:
+        worker = _resolve_pending_worker(db, args=args, farm_id=farm_id)
+        if worker is None:
+            worker = _resolve_pending_worker_from_input(
+                db,
+                farm_id=farm_id,
+                original_input=original_input,
+                name=_clean_text(args.get("name")),
+            )
+        if worker is None:
+            return
+        args["worker_id"] = worker.id
+        args["name"] = worker.name
+    except Exception as exc:
+        logger.warning(
+            "构建 manage_workers pending args 失败 | farm_id=%s | error=%s",
+            farm_id,
+            exc,
+        )
+    finally:
+        db.close()
+
+
+def _resolve_pending_worker(db, *, args: dict, farm_id: int) -> Worker | None:
+    worker_id = args.get("worker_id")
+    if worker_id not in (None, ""):
+        return (
+            db.query(Worker)
+            .filter(Worker.id == worker_id, Worker.farm_id == farm_id)
+            .first()
+        )
+
+    name = _clean_text(args.get("name"))
+    if not name:
+        return None
+    return (
+        db.query(Worker)
+        .filter(Worker.farm_id == farm_id, Worker.name == name)
+        .order_by(Worker.id)
+        .first()
+    )
+
+
+def _resolve_pending_worker_from_input(
+    db,
+    *,
+    farm_id: int,
+    original_input: str,
+    name: str | None,
+) -> Worker | None:
+    if not original_input:
+        return None
+    workers = (
+        db.query(Worker)
+        .filter(Worker.farm_id == farm_id)
+        .order_by(Worker.id)
+        .limit(50)
+        .all()
+    )
+    matches = [worker for worker in workers if worker.name and worker.name in original_input]
+    if not matches and name:
+        matches = [
+            worker
+            for worker in workers
+            if worker.name and (name in worker.name or worker.name in name)
+        ]
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 def _date_to_iso(value) -> str | None:
@@ -362,7 +457,12 @@ async def _parallel_tool_node(state: AgentState) -> dict:
 
         # 写操作 Skill 拦截：存储 pending action，不直接执行
         if permission_decision.requires_confirmation:
-            confirmation_args = _build_pending_confirmation_args(name, args, farm_id)
+            execution_args = _build_pending_execution_args(
+                name, args, farm_id, original_input
+            )
+            confirmation_args = _build_pending_confirmation_args(
+                name, execution_args, farm_id
+            )
             confirmation_context = build_confirmation_context(
                 name, confirmation_args, original_input=original_input
             )
@@ -370,7 +470,7 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             action_id = store_pending(
                 farm_id,
                 name,
-                args,
+                execution_args,
                 original_input=original_input,
                 confirmation_context=confirmation_context,
                 session_id=session_id,
@@ -384,7 +484,7 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             collector.record(
                 node_type="skill_call",
                 node_name=name,
-                input_data=args,
+                input_data=execution_args,
                 output_data={
                     "status": "pending",
                     "permission_level": permission_decision.permission_level,

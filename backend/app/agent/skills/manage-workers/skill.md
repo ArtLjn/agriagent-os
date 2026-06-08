@@ -65,6 +65,8 @@ parameters:
 - “招了李四，日薪 150” -> `action=create`, `name=李四`, `default_pay_type=daily`, `default_unit_price=150`。
 - “删除李四” -> `action=deactivate`, `name=李四`，确认文案必须说“停用/离职”，不要说数据库删除。
 - “恢复李四” -> `action=restore`, `name=李四`。
+- 修改已有工人时，优先使用上下文工人档案中的 `worker_id`；如果只传姓名，必须传完整姓名。
+- 工人姓名必须按用户原话和工人档案完整保留，不要把“刘俊男”截成“刘俊”，也不要把姓名末尾的“男/女/师傅/姐/哥”等字符当成描述词删除。
 
 ## 缺参策略
 

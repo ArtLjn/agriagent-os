@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_actions import get_pending, remove_pending
+from app.models.planting import Worker
 
 
 @pytest.fixture(autouse=True)
@@ -72,6 +73,120 @@ async def test_write_confirm_metadata_creates_pending_action():
     assert output_data["status"] == "pending"
     assert output_data["permission_level"] == "write_confirm"
     assert output_data["confirmation_context"] == pending.confirmation_context
+
+
+@pytest.mark.asyncio
+async def test_manage_workers_pending_stores_resolved_worker_id(monkeypatch, db_session):
+    """工人更新确认时应把解析出的真实 worker_id 存入 pending。"""
+    worker = Worker(farm_id=1, name="猪八戒", status="active", default_pay_type="daily")
+    db_session.add(worker)
+    db_session.commit()
+    db_session.refresh(worker)
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+    )
+    tool = SimpleNamespace(
+        name="manage_workers",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            context_dependencies=["workers"],
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="猪八戒日薪改为100"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_workers",
+                        "args": {
+                            "action": "update",
+                            "name": "猪八戒",
+                            "default_pay_type": "daily",
+                            "default_unit_price": 100,
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-worker-update",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-worker-update")
+    assert pending is not None
+    assert pending.params["worker_id"] == worker.id
+    assert pending.params["name"] == "猪八戒"
+    assert f"工人#{worker.id}" not in result["messages"][0].content
+    assert "确认更新工人：猪八戒" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_manage_workers_pending_recovers_full_name_from_original_input(
+    monkeypatch, db_session
+):
+    """当模型把完整姓名截短时，pending 参数应按原话中的工人档案纠正。"""
+    worker = Worker(farm_id=1, name="刘俊男", status="active", default_pay_type="daily")
+    db_session.add(worker)
+    db_session.commit()
+    db_session.refresh(worker)
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+    )
+    tool = SimpleNamespace(
+        name="manage_workers",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            context_dependencies=["workers"],
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="工人刘俊男日薪改为100"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_workers",
+                        "args": {
+                            "action": "update",
+                            "name": "刘俊",
+                            "default_pay_type": "daily",
+                            "default_unit_price": 100,
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-worker-full-name",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-worker-full-name")
+    assert pending is not None
+    assert pending.params["worker_id"] == worker.id
+    assert pending.params["name"] == "刘俊男"
+    assert "确认更新工人：刘俊男" in result["messages"][0].content
 
 
 @pytest.mark.asyncio

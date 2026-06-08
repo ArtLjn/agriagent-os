@@ -132,6 +132,20 @@ def test_business_parse_prompt_snapshot_covers_cost_parse():
     assert '用户说的"昨天"对应 2026-05-28' in result
 
 
+def test_cost_parse_prompt_requires_note_for_ledger_item():
+    result = _composer().compose(
+        "cost_parse",
+        PromptInput(
+            variables={"description": "今天买化肥100"},
+            current_date=date(2026, 6, 8),
+        ),
+    )
+
+    assert "商品或事项" in result
+    assert "今天买化肥100" in result
+    assert "note" in result
+
+
 def test_prompt_replay_can_compare_two_versions_manually():
     reg = PromptRegistry()
     reg.register("cost_parse", "1.0", "描述：{{ description }}")

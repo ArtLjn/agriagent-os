@@ -85,6 +85,25 @@ async def test_manage_workers_creates_worker(worker_skill_sessions, ctx):
 
 
 @pytest.mark.asyncio
+async def test_manage_workers_preserves_full_worker_name(worker_skill_sessions, ctx):
+    result = await ManageWorkersSkill().execute(
+        {
+            "action": "create",
+            "name": "刘俊男",
+            "default_pay_type": "daily",
+            "default_unit_price": 200,
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "刘俊男" in result.reply
+    assert "刘俊（" not in result.reply
+    worker = worker_skill_sessions.query(Worker).filter(Worker.name == "刘俊男").one()
+    assert worker.name == "刘俊男"
+
+
+@pytest.mark.asyncio
 async def test_manage_workers_deactivates_without_hard_delete(
     worker_skill_sessions, ctx
 ):
