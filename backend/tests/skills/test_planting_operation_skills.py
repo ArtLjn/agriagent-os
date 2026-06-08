@@ -374,7 +374,9 @@ async def test_settle_labor_payment_skill(skill_sessions, ctx):
 
 
 @pytest.mark.asyncio
-async def test_settle_labor_payment_skill_accepts_worker_name_alias(skill_sessions, ctx):
+async def test_settle_labor_payment_skill_accepts_worker_name_alias(
+    skill_sessions, ctx
+):
     _create_work_order(skill_sessions)
 
     result = await SettleLaborPaymentSkill().execute(
@@ -399,29 +401,34 @@ async def test_create_work_order_pending_context_includes_full_labor_details():
         args_schema=None,
         ainvoke=AsyncMock(return_value="不应直接执行"),
     )
-    _attach_skill_metadata(tool, SimpleNamespace(metadata=lambda: {
-        "permission_level": "write_confirm",
-        "risk_level": "medium",
-        "context_dependencies": ["active_cycles", "planting_units", "workers"],
-        "cache_invalidation": ["farm_logs", "cost_summary", "get_farm_status"],
-        "confirmation_schema": {
-            "target_fields": ["operation_type", "operation_date", "cycle_id"],
-            "changed_fields": ["unit_names", "workers", "payable_amount"],
-            "inferred_fields": ["operation_date", "cycle_id"],
-            "editable_fields": [
-                "operation_type",
-                "operation_date",
-                "cycle_id",
-                "unit_names",
-                "workers",
-                "unit_price",
-                "paid_worker",
-                "paid_amount",
-            ],
-            "risk_notes": ["确认后会创建作业单和人工成本。"],
-        },
-        "evaluation_tags": ["write", "operation_work_order"],
-    }))
+    _attach_skill_metadata(
+        tool,
+        SimpleNamespace(
+            metadata=lambda: {
+                "permission_level": "write_confirm",
+                "risk_level": "medium",
+                "context_dependencies": ["active_cycles", "planting_units", "workers"],
+                "cache_invalidation": ["farm_logs", "cost_summary", "get_farm_status"],
+                "confirmation_schema": {
+                    "target_fields": ["operation_type", "operation_date", "cycle_id"],
+                    "changed_fields": ["unit_names", "workers", "payable_amount"],
+                    "inferred_fields": ["operation_date", "cycle_id"],
+                    "editable_fields": [
+                        "operation_type",
+                        "operation_date",
+                        "cycle_id",
+                        "unit_names",
+                        "workers",
+                        "unit_price",
+                        "paid_worker",
+                        "paid_amount",
+                    ],
+                    "risk_notes": ["确认后会创建作业单和人工成本。"],
+                },
+                "evaluation_tags": ["write", "operation_work_order"],
+            }
+        ),
+    )
     state = {
         "messages": [
             HumanMessage(content="昨天东棚授粉，老王老李各200，付老王200"),
@@ -448,12 +455,15 @@ async def test_create_work_order_pending_context_includes_full_labor_details():
         "farm_id": 1,
     }
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.runtime.tool_executor.get_collector",
-        return_value=MagicMock(),
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=MagicMock(),
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -471,3 +481,66 @@ async def test_create_work_order_pending_context_includes_full_labor_details():
     assert "paid_worker" in context["inferred_fields"]
     assert "workers" in context["editable_fields"]
     assert "人工：老王、老李" in result["messages"][0].content
+
+
+@pytest.mark.asyncio
+async def test_create_work_order_pending_normalizes_llm_aliases():
+    tool = SimpleNamespace(
+        name="create_operation_work_order",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+    )
+    _attach_skill_metadata(
+        tool,
+        SimpleNamespace(
+            metadata=lambda: {
+                "permission_level": "write_confirm",
+                "risk_level": "medium",
+            }
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="水稻茬口1号棚今天"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "create_operation_work_order",
+                        "args": {
+                            "operation_type": "采收",
+                            "work_date": "2026-06-08",
+                            "worker_name": "李丽",
+                            "planting_unit_name": "1号棚",
+                            "payment_method": "daily",
+                            "unit_price": 100,
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=MagicMock(),
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is not None
+    assert pending.params["operation_date"] == "2026-06-08"
+    assert pending.params["workers"] == "李丽"
+    assert pending.params["unit_names"] == "1号棚"
+    message = result["messages"][0].content
+    assert "范围：1号棚" in message
+    assert "人工：李丽" in message
+    assert "应付100.00元" in message

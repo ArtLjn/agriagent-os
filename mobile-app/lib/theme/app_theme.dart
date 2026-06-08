@@ -11,13 +11,17 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.blue,
         primary: AppColors.blue,
-        secondary: AppColors.cyan,
+        secondary: AppColors.green,
         surface: AppColors.surface,
       ),
       scaffoldBackgroundColor: AppColors.background,
       fontFamily: 'System',
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
+      dividerColor: AppColors.lineSoft,
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: AppColors.blue,
+      ),
     );
   }
 }

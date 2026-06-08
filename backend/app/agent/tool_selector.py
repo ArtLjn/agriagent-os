@@ -19,6 +19,36 @@ from app.agent.tool_selection_rules import (
 logger = logging.getLogger(__name__)
 
 
+_DEBT_SUMMARY_QUERY_HINTS = (
+    "还欠",
+    "欠多少",
+    "多少钱",
+    "统计",
+    "汇总",
+    "查询",
+    "查看",
+    "看看",
+    "看一下",
+    "明细",
+    "列表",
+)
+
+_COST_RECORD_DEBT_WRITE_HINTS = (
+    "买",
+    "采购",
+    "购入",
+    "卖",
+    "销售",
+    "花了",
+    "收入",
+    "支出",
+    "记账",
+    "记一笔",
+    "付了",
+    "收了",
+)
+
+
 class LLMIntentClassifier:
     """Layer 3 — LLM 意图分类兜底。"""
 
@@ -133,6 +163,21 @@ def _tool_enabled(tool: BaseTool) -> bool:
     return tool.name not in DISABLED_SKILLS
 
 
+def _debt_summary_should_yield_to_cost_record(
+    user_message: str,
+    *,
+    has_write_intent: bool,
+    has_query_intent: bool,
+) -> bool:
+    if has_query_intent or any(
+        hint in user_message for hint in _DEBT_SUMMARY_QUERY_HINTS
+    ):
+        return False
+    return has_write_intent or any(
+        hint in user_message for hint in _COST_RECORD_DEBT_WRITE_HINTS
+    )
+
+
 def select_tools(
     user_message: str,
     all_tools: list[BaseTool],
@@ -146,6 +191,7 @@ def select_tools(
     is_planting_advice = any(hint in user_message for hint in PLANTING_ADVICE_HINTS)
     has_write_intent = any(hint in user_message for hint in WRITE_INTENT_HINTS)
     has_query_intent = any(hint in user_message for hint in QUERY_INTENT_HINTS)
+    has_labor_hint = any(hint in user_message for hint in ("人工", "工钱", "工资"))
 
     for tool_name, patterns in WRITE_PATTERNS.items():
         if tool_name == "create_crop_cycle" and is_planting_advice:
@@ -209,6 +255,20 @@ def select_tools(
 
     if "get_labor_payables" in candidates:
         candidates.difference_update({"get_cost_summary"})
+        if has_labor_hint:
+            candidates.discard("get_debt_summary")
+
+    if "get_debt_summary" in candidates:
+        candidates.discard("get_cost_summary")
+        if "create_cost_record" in candidates:
+            if _debt_summary_should_yield_to_cost_record(
+                user_message,
+                has_write_intent=has_write_intent,
+                has_query_intent=has_query_intent,
+            ):
+                candidates.discard("get_debt_summary")
+            else:
+                candidates.discard("create_cost_record")
 
     if (
         "get_operation_work_orders" in candidates
@@ -227,7 +287,12 @@ def select_tools(
             candidates.remove("create_operation_work_order")
 
     if "settle_labor_payment" in candidates:
-        candidates.difference_update({"settle_debt", "create_cost_record"})
+        candidates.difference_update(
+            {"settle_debt", "create_cost_record", "get_labor_payables"}
+        )
+
+    if "settle_debt" in candidates:
+        candidates.discard("create_cost_record")
 
     if "create_operation_work_order" in candidates:
         candidates.discard("manage_workers")

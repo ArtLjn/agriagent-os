@@ -28,7 +28,16 @@ class TestClassifyIntent:
 
     @pytest.mark.parametrize(
         "message",
-        ["上个月花了多少钱", "天气预报", "成本分析", "当前茬口状态"],
+        [
+            "上个月花了多少钱",
+            "天气预报",
+            "成本分析",
+            "当前茬口状态",
+            "赊账还欠多少",
+            "我欠别人多少钱",
+            "我还欠多少钱",
+            "欠款统计",
+        ],
     )
     def test_query(self, message: str):
         assert classify_intent(message) == IntentType.QUERY

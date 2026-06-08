@@ -102,7 +102,33 @@ async def test_handle_pending_cancel_removes_pending():
 
 
 @pytest.mark.asyncio
-async def test_handle_pending_modify_leaves_pending_for_llm_replanning():
+async def test_handle_pending_modify_repeats_confirmation_without_replanning():
+    store_pending(
+        1,
+        "create_cost_record",
+        {
+            "amount": 130,
+            "category": "种子",
+            "record_type": "cost",
+            "record_subtype": "赊账",
+            "counterparty": "张三",
+        },
+        original_input="今天买橘子种子130张三赊账",
+    )
+
+    decision = await handle_pending_action(farm_id=1, message="我赊账的")
+
+    assert decision.handled is True
+    assert decision.status == "modified"
+    assert "当前有一条待确认操作" in decision.reply
+    assert "确认记账" in decision.reply
+    assert "赊账" in decision.reply
+    assert "张三" in decision.reply
+    assert get_pending(1) is not None
+
+
+@pytest.mark.asyncio
+async def test_handle_pending_modify_with_clear_correction_keeps_replanning():
     store_pending(1, "create_cost_record", {"amount": 100, "category": "化肥"})
 
     decision = await handle_pending_action(farm_id=1, message="改成200块")
@@ -152,16 +178,20 @@ async def test_handle_pending_clears_cache_groups_from_tool_metadata():
         },
     )()
 
-    with patch(
-        "app.agent.executor.pending_actions._execute_write_skill",
-        new_callable=AsyncMock,
-    ) as mock_execute, patch(
-        "app.agent.executor.pending_actions.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.executor.pending_actions.clear_skill_cache",
-        return_value=2,
-    ) as mock_clear:
+    with (
+        patch(
+            "app.agent.executor.pending_actions._execute_write_skill",
+            new_callable=AsyncMock,
+        ) as mock_execute,
+        patch(
+            "app.agent.executor.pending_actions.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.executor.pending_actions.clear_skill_cache",
+            return_value=2,
+        ) as mock_clear,
+    ):
         mock_execute.return_value = "已记账"
         decision = await handle_pending_action(farm_id=1, message="确认")
 
@@ -183,16 +213,20 @@ async def test_handle_pending_clears_fallback_cache_groups_when_metadata_empty()
         },
     )()
 
-    with patch(
-        "app.agent.executor.pending_actions._execute_write_skill",
-        new_callable=AsyncMock,
-    ) as mock_execute, patch(
-        "app.agent.executor.pending_actions.get_langchain_tools",
-        return_value=[tool],
-    ), patch(
-        "app.agent.executor.pending_actions.clear_skill_cache",
-        return_value=2,
-    ) as mock_clear:
+    with (
+        patch(
+            "app.agent.executor.pending_actions._execute_write_skill",
+            new_callable=AsyncMock,
+        ) as mock_execute,
+        patch(
+            "app.agent.executor.pending_actions.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.executor.pending_actions.clear_skill_cache",
+            return_value=2,
+        ) as mock_clear,
+    ):
         mock_execute.return_value = "已记账"
         decision = await handle_pending_action(farm_id=1, message="确认")
 

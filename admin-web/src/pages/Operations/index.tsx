@@ -63,7 +63,7 @@ import {
   formatMoney,
   normalizeOperationOptions,
 } from './workbenchModel';
-import { buildCostFormValues } from '../Costs/costSmartFill';
+import { buildCostCreatePayload, buildCostFormValues } from '../Costs/costSmartFill';
 import {
   SMART_FILL_FALLBACK_SCENARIOS,
   buildCycleFormValues,
@@ -339,14 +339,7 @@ function SmartCreatePanel({ cycles }: { cycles: CropCycleListItem[] }) {
     setCreatingScene('ledger.record');
     try {
       const values = buildCostFormValues(draft);
-      await createRecord({
-        record_type: values.record_type,
-        category: values.category,
-        amount: String(values.amount),
-        record_date: values.record_date.format('YYYY-MM-DD'),
-        note: values.note,
-        cycle_id: selectedCostCycle,
-      });
+      await createRecord(buildCostCreatePayload(values, selectedCostCycle));
       setSmartResult(null);
       setSmartMeta(null);
       message.success('记账记录已创建');
@@ -446,6 +439,9 @@ function SmartCreatePanel({ cycles }: { cycles: CropCycleListItem[] }) {
                   <Descriptions.Item label="分类">{smartResult.draft.category}</Descriptions.Item>
                   <Descriptions.Item label="金额">{formatMoney(smartResult.draft.amount)}</Descriptions.Item>
                   <Descriptions.Item label="日期">{smartResult.draft.record_date}</Descriptions.Item>
+                  <Descriptions.Item label="赊账">{smartResult.draft.record_subtype === '赊账' ? '是' : '否'}</Descriptions.Item>
+                  <Descriptions.Item label="对象">{smartResult.draft.counterparty || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="到期日">{smartResult.draft.due_date || '-'}</Descriptions.Item>
                   <Descriptions.Item label="备注">{smartResult.draft.note || '-'}</Descriptions.Item>
                 </Descriptions>
                 <Button loading={creatingScene === 'ledger.record'} onClick={() => createParsedCost(smartResult.draft)}>

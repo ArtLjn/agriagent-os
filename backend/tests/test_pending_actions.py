@@ -26,6 +26,26 @@ def test_confirm_message_hides_internal_param_keys():
     assert "理解：" in message
 
 
+def test_confirm_message_includes_debt_fields_for_cost_record():
+    message = build_confirm_message(
+        "create_cost_record",
+        {
+            "category": "种子",
+            "amount": 130,
+            "record_type": "cost",
+            "record_subtype": "赊账",
+            "counterparty": "张三",
+        },
+    )
+
+    first_line = message.splitlines()[0]
+    assert "确认记账" in first_line
+    assert "种子" in message
+    assert "130元" in message
+    assert "赊账" in first_line
+    assert "张三" in first_line
+
+
 def test_write_skill_registry_covers_runtime_write_skills():
     expected = {
         "create_cost_record",

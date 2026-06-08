@@ -13,9 +13,9 @@ void main() {
     );
 
     expect(find.text('首页'), findsOneWidget);
-    expect(find.text('工作台'), findsOneWidget);
+    expect(find.text('记录'), findsOneWidget);
     expect(find.text('芽芽'), findsOneWidget);
-    expect(find.text('账单'), findsOneWidget);
+    expect(find.text('账本'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
     expect(find.text('AI'), findsNothing);
   });

@@ -6,7 +6,7 @@ import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import ApiDebugger from '../../components/ApiDebugger';
 import { MetricCard, PageShell, Toolbar } from '../../components/PageShell';
 import { cardStyle, palette } from '../../styles/theme';
-import { buildCostFormValues } from './costSmartFill';
+import { buildCostCreatePayload, buildCostFormValues } from './costSmartFill';
 
 export default function Costs() {
   const [data, setData] = useState<CostRecord[]>([]);
@@ -54,7 +54,7 @@ export default function Costs() {
   const handleCreate = async () => {
     const values = await form.validateFields();
     try {
-      await createRecord({ ...values, amount: String(values.amount), record_date: values.record_date.format('YYYY-MM-DD') });
+      await createRecord(buildCostCreatePayload(values));
       message.success('创建成功');
       setModalOpen(false);
       form.resetFields();
@@ -206,6 +206,11 @@ export default function Costs() {
           <Form.Item name="cycle_id" label="关联茬口">
             <Select allowClear options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
           </Form.Item>
+          <Form.Item name="record_subtype" label="赊账标记">
+            <Select allowClear options={[{ value: '赊账', label: '赊账 / 未结' }]} />
+          </Form.Item>
+          <Form.Item name="counterparty" label="赊账对象"><Input /></Form.Item>
+          <Form.Item name="due_date" label="到期日"><DatePicker style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="note" label="备注"><Input /></Form.Item>
         </Form>
       </Modal>

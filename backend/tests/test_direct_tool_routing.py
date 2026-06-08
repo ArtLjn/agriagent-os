@@ -113,6 +113,159 @@ async def test_cost_summary_query_skips_tool_selection_llm_call():
 
 
 @pytest.mark.asyncio
+async def test_debt_summary_query_skips_tool_selection_llm_call():
+    """总欠款查询可以确定性调用 Skill，避免 LLM 只回答人工欠款。"""
+    from app.agent.graph import _llm_node
+
+    with (
+        patch(
+            "app.agent.runtime.nodes._get_farm_context",
+            return_value={
+                "farm_location": "睢宁",
+                "display_name": "农友",
+                "farm_coords": "",
+                "active_crops": "",
+            },
+        ),
+        patch("app.agent.runtime.nodes.get_composer"),
+        patch("app.agent.runtime.nodes.get_collector", return_value=MagicMock()),
+        patch(
+            "app.agent.runtime.nodes.get_langchain_tools",
+            return_value=[_make_tool("get_debt_summary")],
+        ),
+        patch(
+            "app.agent.runtime.nodes.select_tools",
+            return_value=["get_debt_summary"],
+        ),
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch("app.agent.runtime.nodes._get_classifier") as mock_classifier,
+        patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+    ):
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我欠别人多少钱")],
+                "farm_id": 1,
+                "intent": "query",
+            }
+        )
+
+    message = result["messages"][0]
+    assert isinstance(message, AIMessage)
+    assert message.tool_calls == [
+        {
+            "name": "get_debt_summary",
+            "args": {"scope": "total_payable"},
+            "id": "direct_get_debt_summary",
+            "type": "tool_call",
+        }
+    ]
+    mock_get_llm.assert_not_called()
+    mock_classifier.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_total_payable_query_passes_scope_to_direct_debt_summary():
+    """问总欠款时直达 get_debt_summary 必须带 total_payable scope。"""
+    from app.agent.graph import _llm_node
+
+    with (
+        patch(
+            "app.agent.runtime.nodes._get_farm_context",
+            return_value={
+                "farm_location": "睢宁",
+                "display_name": "农友",
+                "farm_coords": "",
+                "active_crops": "",
+            },
+        ),
+        patch("app.agent.runtime.nodes.get_composer"),
+        patch("app.agent.runtime.nodes.get_collector", return_value=MagicMock()),
+        patch(
+            "app.agent.runtime.nodes.get_langchain_tools",
+            return_value=[_make_tool("get_debt_summary")],
+        ),
+        patch(
+            "app.agent.runtime.nodes.select_tools",
+            return_value=["get_debt_summary"],
+        ),
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch("app.agent.runtime.nodes._get_classifier") as mock_classifier,
+        patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+    ):
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我还欠多少钱")],
+                "farm_id": 1,
+                "intent": "query",
+            }
+        )
+
+    message = result["messages"][0]
+    assert isinstance(message, AIMessage)
+    assert message.tool_calls == [
+        {
+            "name": "get_debt_summary",
+            "args": {"scope": "total_payable"},
+            "id": "direct_get_debt_summary",
+            "type": "tool_call",
+        }
+    ]
+    mock_get_llm.assert_not_called()
+    mock_classifier.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_explicit_debt_query_keeps_empty_direct_args():
+    """明确说赊账时只查普通赊账，不混入人工欠薪。"""
+    from app.agent.graph import _llm_node
+
+    with (
+        patch(
+            "app.agent.runtime.nodes._get_farm_context",
+            return_value={
+                "farm_location": "睢宁",
+                "display_name": "农友",
+                "farm_coords": "",
+                "active_crops": "",
+            },
+        ),
+        patch("app.agent.runtime.nodes.get_composer"),
+        patch("app.agent.runtime.nodes.get_collector", return_value=MagicMock()),
+        patch(
+            "app.agent.runtime.nodes.get_langchain_tools",
+            return_value=[_make_tool("get_debt_summary")],
+        ),
+        patch(
+            "app.agent.runtime.nodes.select_tools",
+            return_value=["get_debt_summary"],
+        ),
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch("app.agent.runtime.nodes._get_classifier") as mock_classifier,
+        patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+    ):
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="老王那边赊账还欠多少")],
+                "farm_id": 1,
+                "intent": "query",
+            }
+        )
+
+    message = result["messages"][0]
+    assert isinstance(message, AIMessage)
+    assert message.tool_calls == [
+        {
+            "name": "get_debt_summary",
+            "args": {},
+            "id": "direct_get_debt_summary",
+            "type": "tool_call",
+        }
+    ]
+    mock_get_llm.assert_not_called()
+    mock_classifier.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_workers_query_skips_initial_llm_call():
     """工人列表查询应确定性调用 get_workers，避免 LLM 漏查或空工具调用。"""
     from app.agent.graph import _llm_node

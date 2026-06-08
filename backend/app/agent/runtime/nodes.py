@@ -2,9 +2,10 @@
 
 import asyncio
 import logging
+import re
 import time as _time
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END
 
 from app.agent.llm import get_llm
@@ -26,6 +27,7 @@ from app.agent.runtime.direct_routing import (
     can_direct_route,
     can_return_direct_tool_messages,
     can_skip_llm_tool_selection,
+    direct_query_tool_args,
     direct_query_tool_names,
     filter_tool_calls_by_selected,
 )
@@ -51,6 +53,10 @@ from app.infra.trace_context import increment_round
 
 logger = logging.getLogger(__name__)
 
+_WORK_ORDER_CLARIFICATION_RE = re.compile(
+    r"(?:创建|生成|安排|记录).{0,12}(?:农事)?作业单|创建农事作业单"
+)
+
 
 def _should_continue(state: AgentState) -> str:
     """判断是否需要继续调用工具。"""
@@ -58,6 +64,31 @@ def _should_continue(state: AgentState) -> str:
     if isinstance(last, AIMessage) and last.tool_calls:
         return "tools"
     return END
+
+
+def _is_operation_work_order_clarification(messages: list) -> bool:
+    """判断当前输入是否是在补充上一轮作业单追问。"""
+    seen_current_human = False
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            if not seen_current_human:
+                seen_current_human = True
+                continue
+            return False
+        if seen_current_human and isinstance(msg, AIMessage):
+            content = str(msg.content or "")
+            return bool(_WORK_ORDER_CLARIFICATION_RE.search(content))
+    return False
+
+
+def _append_tool_name_once(names: list[str], tool_name: str, tools: list) -> list[str]:
+    """在工具存在时追加候选工具，保持顺序且不重复。"""
+    if tool_name in names:
+        return names
+    available = {tool.name for tool in tools}
+    if tool_name not in available:
+        return names
+    return [*names, tool_name]
 
 
 async def _llm_node(state: AgentState) -> dict:
@@ -138,6 +169,12 @@ async def _llm_node(state: AgentState) -> dict:
         tools,
         intent_classifier=None,
     )
+    if _is_operation_work_order_clarification(messages):
+        selected_names = _append_tool_name_once(
+            selected_names,
+            "create_operation_work_order",
+            tools,
+        )
     if prepared_selected_tool_names is not None:
         selected_names = list(prepared_selected_tool_names)
     direct_names = direct_query_tool_names(user_msg, selected_names)
@@ -156,7 +193,7 @@ async def _llm_node(state: AgentState) -> dict:
         tool_calls = [
             {
                 "name": name,
-                "args": {},
+                "args": direct_query_tool_args(user_msg, name),
                 "id": f"direct_{name}",
                 "type": "tool_call",
             }
@@ -180,6 +217,12 @@ async def _llm_node(state: AgentState) -> dict:
             intent_classifier=_get_classifier(),
             # user_location=farm_location,
         )
+        if _is_operation_work_order_clarification(messages):
+            selected_names = _append_tool_name_once(
+                selected_names,
+                "create_operation_work_order",
+                tools,
+            )
     if prepared_selected_tool_names is not None:
         selected_tools = [t for t in tools if t.name in selected_names]
     elif has_tool_results:
@@ -390,10 +433,10 @@ async def _llm_node(state: AgentState) -> dict:
                     id=response.id,
                 )
 
-    # 检测"应该调用工具但未调用"的情况：用户消息匹配工具关键词，但 LLM 返回了纯文本
-    if not response.tool_calls and response.content:
-        should_retry, _ = _detect_missed_tool_call(
-            user_msg, response.content, selected_tools
+    # 检测"应该调用工具但未调用"的情况：写意图空回复也必须 fail closed。
+    if not response.tool_calls:
+        should_retry, missed_tools = _detect_missed_tool_call(
+            user_msg, response.content or "", selected_tools
         )
         if should_retry and selected_tools:
             logger.warning(
@@ -408,29 +451,50 @@ async def _llm_node(state: AgentState) -> dict:
             retry_messages = [retry_system] + messages
             try:
                 retry_response = await llm.ainvoke(retry_messages)
-                retry_parsed = _extract_tool_calls_from_content(
-                    retry_response.content or ""
+                retry_calls = getattr(retry_response, "tool_calls", None) or []
+                filtered_retry_calls = filter_tool_calls_by_selected(
+                    retry_calls,
+                    selected_tools,
                 )
+                retry_parsed = None
+                if not filtered_retry_calls:
+                    retry_parsed = _extract_tool_calls_from_content(
+                        retry_response.content or ""
+                    )
                 if retry_parsed:
                     filtered_retry_calls = filter_tool_calls_by_selected(
                         retry_parsed,
                         selected_tools,
                     )
-                    if filtered_retry_calls:
-                        logger.info(
-                            "重试成功，LLM 输出了工具调用 | tools=%s",
-                            [tc["name"] for tc in filtered_retry_calls],
-                        )
+
+                if filtered_retry_calls:
+                    logger.info(
+                        "重试成功，LLM 输出了工具调用 | tools=%s",
+                        [tc["name"] for tc in filtered_retry_calls],
+                    )
+                    response = AIMessage(
+                        content="",
+                        tool_calls=filtered_retry_calls,
+                        response_metadata=retry_response.response_metadata,
+                        id=retry_response.id,
+                    )
+                else:
+                    from app.infra.pending_actions import is_write_skill
+
+                    if any(is_write_skill(tool.name) for tool in missed_tools):
+                        logger.warning("写操作重试后仍未输出工具调用，使用安全兜底回复")
                         response = AIMessage(
-                            content="",
-                            tool_calls=filtered_retry_calls,
+                            content=(
+                                "这条操作还没有执行。"
+                                "系统没有生成可确认的待执行动作。"
+                                "请重新描述要新增、修改或结算的对象和关键参数，"
+                                "我会先生成待确认操作，确认后再执行。"
+                            ),
                             response_metadata=retry_response.response_metadata,
                             id=retry_response.id,
                         )
                     else:
-                        logger.warning("重试输出的工具调用均未绑定，使用原回复")
-                else:
-                    logger.warning("重试后 LLM 仍未输出工具调用，使用原回复")
+                        logger.warning("重试后 LLM 仍未输出工具调用，使用原回复")
             except Exception as retry_exc:
                 logger.warning("重试调用失败 | error=%s", retry_exc)
 

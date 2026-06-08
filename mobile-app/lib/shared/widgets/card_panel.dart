@@ -8,10 +8,10 @@ class CardPanel extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.background = AppColors.surface,
-    this.borderColor = AppColors.line,
+    this.borderColor = AppColors.lineSoft,
     this.gradient,
     this.shadow = true,
-    this.radius = 20,
+    this.radius = 16,
   });
 
   final Widget child;
@@ -34,8 +34,8 @@ class CardPanel extends StatelessWidget {
             ? const [
                 BoxShadow(
                   color: Color(0x08000000),
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
+                  blurRadius: 16,
+                  offset: Offset(0, 6),
                 ),
               ]
             : null,

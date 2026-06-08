@@ -203,9 +203,53 @@ def _validate_cost_result(parsed: BaseModel, prompt_vars: dict[str, Any]) -> Bas
         parsed = CostParseResult.model_validate(parsed.model_dump(mode="json"))
     if parsed.amount in ("0", "0.0", "0.00"):
         raise HTTPException(status_code=422, detail=_error_message_for("ledger.record"))
+    original_text = prompt_vars.get("original_text", "")
     if not parsed.note:
-        parsed.note = _infer_cost_note(prompt_vars.get("original_text", ""))
+        parsed.note = _infer_cost_note(original_text)
+    _apply_debt_fields(parsed, original_text)
     return parsed
+
+
+def _apply_debt_fields(parsed: CostParseResult, original_text: str) -> None:
+    debt_sources = [value for value in (original_text, parsed.note or "") if value]
+    debt_source = " ".join(debt_sources)
+    if not _looks_like_debt(debt_source):
+        return
+    parsed.record_subtype = "赊账"
+    if not parsed.counterparty:
+        parsed.counterparty = _infer_counterparty(debt_sources)
+
+
+def _looks_like_debt(text: str) -> bool:
+    return bool(
+        re.search(r"(赊账|赊了|赊|欠账|欠款|欠[^，,。；;]*\d|未付|未收款)", text)
+    )
+
+
+def _infer_counterparty(texts: list[str]) -> str | None:
+    patterns = [
+        r"(?:向|跟|找|在)(?P<name>[\u4e00-\u9fffA-Za-z0-9·]{1,30})(?:那|那里|这边|处)?(?:赊账|赊了|赊|欠账|欠款)",
+        r"欠(?P<name>[\u4e00-\u9fffA-Za-z0-9·]{1,12}?)(?=\d)",
+        r"欠(?P<name>[\u4e00-\u9fffA-Za-z0-9·]{1,12}?)(?=(?:两|一|二|四|五|六|七|八|九|十|百|千|万))",
+        r"(?:赊账|赊了|赊|欠账|欠款)(?:给|向|跟)?(?P<name>[\u4e00-\u9fffA-Za-z0-9·]{1,30})",
+    ]
+    for text in texts:
+        normalized = re.sub(r"\s+", "", text)
+        for pattern in patterns:
+            match = re.search(pattern, normalized)
+            if match:
+                return _clean_counterparty(match.group("name"))
+    return None
+
+
+def _clean_counterparty(value: str) -> str | None:
+    cleaned = re.sub(
+        r"^(今天|昨日|昨天|前天|明天|上午|下午|晚上|早上|中午|买|卖|购入|购买|收入|支出)+",
+        "",
+        value,
+    )
+    cleaned = re.sub(r"(那|那里|这边|处)$", "", cleaned)
+    return cleaned[:100] or None
 
 
 def _infer_cost_note(text: str) -> str | None:
@@ -213,7 +257,9 @@ def _infer_cost_note(text: str) -> str | None:
     if not value:
         return None
     value = re.sub(r"[，,。；;！!？?]+$", "", value)
-    value = re.sub(r"^(今天|昨日|昨天|前天|明天|刚刚|上午|下午|晚上|早上|中午)", "", value)
+    value = re.sub(
+        r"^(今天|昨日|昨天|前天|明天|刚刚|上午|下午|晚上|早上|中午)", "", value
+    )
     value = re.sub(r"\d+(?:\.\d+)?\s*(?:元|块|块钱|￥|¥)?", "", value)
     value = re.sub(r"(?:记到|关联到|关联|算到|归到|录到).*$", "", value)
     value = value.strip(" ，,。；;")

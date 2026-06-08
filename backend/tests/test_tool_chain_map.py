@@ -17,6 +17,7 @@ class TestToolChainMap:
         expected_keys = {
             "get_cost_analytics",
             "get_cost_summary",
+            "get_debt_summary",
             "create_cost_record",
             "delete_cost_record",
             "create_crop_cycle",
@@ -56,6 +57,7 @@ class TestToolChainMap:
         query_tools = [
             "get_weather_forecast",
             "get_cost_summary",
+            "get_debt_summary",
             "get_cost_analytics",
             "get_crop_cycle_info",
             "get_recent_farm_logs",
@@ -109,6 +111,10 @@ class TestExpandByChain:
 
     def test_cost_chain(self):
         result = expand_by_chain({"get_cost_summary"})
+        assert "get_farm_status" in result
+
+    def test_debt_chain(self):
+        result = expand_by_chain({"get_debt_summary"})
         assert "get_farm_status" in result
 
     def test_crop_chain(self):

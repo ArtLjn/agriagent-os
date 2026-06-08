@@ -46,12 +46,13 @@ def build_confirmation_context(
         }
 
     if skill_name == "settle_labor_payment":
+        worker = params.get("worker") or params.get("worker_name")
         return {
             "skill_name": skill_name,
             "original_input": original_input,
             "target": {
                 "type": "labor_payment",
-                "worker": params.get("worker"),
+                "worker": worker,
                 "work_order_id": params.get("work_order_id"),
                 "cycle_id": params.get("cycle_id"),
             },
@@ -64,7 +65,7 @@ def build_confirmation_context(
                 }
             ],
             "inferred_fields": {
-                "worker": params.get("worker"),
+                "worker": worker,
                 "affected_entries": params.get("affected_entries"),
             },
             "risk_notes": ["确认后会增加人工已付金额。"],

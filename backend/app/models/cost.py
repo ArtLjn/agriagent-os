@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy import event
 from sqlalchemy.orm import relationship
 
+from app.core.timezone import beijing_now, ensure_beijing_timezone
 from app.core.database import Base
 
 ACTIVE_SOURCE_KEY = "active"
@@ -59,6 +60,7 @@ class CostRecord(Base):
     settled_amount = Column(Numeric(10, 2), nullable=False, default=0)
     settlement_status = Column(String(20), nullable=False, default="settled")
     record_date = Column(Date, nullable=False)
+    recorded_at = Column(DateTime(timezone=True), nullable=True)
     note = Column(String(500), nullable=True)
     record_subtype = Column(String(50), nullable=True)
     counterparty = Column(String(100), nullable=True)
@@ -88,6 +90,18 @@ class CostRecord(Base):
         if self.source_type == "labor_entry":
             return "来自工资记录"
         return None
+
+
+@event.listens_for(CostRecord, "before_insert")
+def _set_default_recorded_at(_mapper, _connection, record: CostRecord) -> None:
+    """账务业务时间默认使用北京时间。"""
+    record.recorded_at = ensure_beijing_timezone(record.recorded_at) or beijing_now()
+
+
+@event.listens_for(CostRecord, "before_update")
+def _normalize_recorded_at(_mapper, _connection, record: CostRecord) -> None:
+    """更新时保持 recorded_at 为北京时间。"""
+    record.recorded_at = ensure_beijing_timezone(record.recorded_at)
 
 
 @event.listens_for(CostRecord, "before_insert")

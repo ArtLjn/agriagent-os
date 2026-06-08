@@ -2,17 +2,17 @@
 
 ## 目标
 
-以 `output/imagegen/reference-style-pages/` 下 5 张裁图为视觉目标，在 Flutter 中复刻同一套移动端 UI。图片用于审美和布局参考，本文档是实现源，不允许只凭图片自由发挥。
+以 `output/imagegen/current-app-design/main-pages/` 下 5 张标准手机图为视觉目标，在 Flutter 中复刻同一套移动端 UI。图片用于审美和布局参考，本文档是实现源，不允许只凭图片自由发挥。
 
 ## 参考图片
 
-- 首页: `/Users/ljn/Documents/demo/explore/output/imagegen/reference-style-pages/home.png`
-- 记录: `/Users/ljn/Documents/demo/explore/output/imagegen/reference-style-pages/record.png`
-- 芽芽: `/Users/ljn/Documents/demo/explore/output/imagegen/reference-style-pages/yaya.png`
-- 账本: `/Users/ljn/Documents/demo/explore/output/imagegen/reference-style-pages/ledger.png`
-- 我的: `/Users/ljn/Documents/demo/explore/output/imagegen/reference-style-pages/profile.png`
+- 首页: `/Users/ljn/Documents/demo/explore/output/imagegen/current-app-design/main-pages/home.png`
+- 记录: `/Users/ljn/Documents/demo/explore/output/imagegen/current-app-design/main-pages/record.png`
+- 芽芽: `/Users/ljn/Documents/demo/explore/output/imagegen/current-app-design/main-pages/yaya.png`
+- 账本: `/Users/ljn/Documents/demo/explore/output/imagegen/current-app-design/main-pages/ledger.png`
+- 我的: `/Users/ljn/Documents/demo/explore/output/imagegen/current-app-design/main-pages/profile.png`
 
-这些裁图来自总览图，宽高约 `376-397 x 1026`，不是 Flutter 实现画布。Flutter 视觉基准统一按 `390 x 844` 逻辑像素实现。
+这些图是当前讨论确认后的设计归档，尺寸为 `1024 x 2224`，适合作为标准手机 UI 视觉目标。Flutter 视觉基准统一按 `390 x 844` 逻辑像素实现。
 
 ## 全局结构
 
@@ -135,35 +135,40 @@
 
 ### 首页
 
-目标: 快速看到今日待办、风险、待确认和最近记录。
+目标: 首页作为 AI 增强数据驾驶舱，集中展示经营态势、AI 今日建议、资金/成本/茬口/风险洞察。不要依赖 MVP 尚未实现的 `今日待办` 和 `最近记录` 接口。
 
 组件顺序:
 
 1. Header: `农场管家` + bell badge `3`
-2. Date title: `今日 · 5月18日 星期日`
-3. Blue summary card:
-   - 三列: `今日待办 / 3`, `风险提醒 / 1`, `待确认 / 2`
-   - 背景主蓝渐变或纯 `#2F73F6`
-   - 高度约 `114px`
-   - 中间用半透明竖线分割
-4. Weather card:
-   - 左侧天气图标
-   - 主文字 `22~29°C`
-   - 副文字 `午后有雷阵雨`
-   - 右侧 `东南风 2级`, badge `空气优 28`
-5. Task card:
-   - 标题 `今天该做什么`
-   - 右侧 chevron
-   - 三行:
-     - `确认工人出勤` badge `待处理`
-     - `饲料采购单确认` badge `待确认`
-     - `5月第2批次记录` badge `进行中`
-6. Recent card:
-   - 标题 `最近记录`
-   - 三行:
-     - `5月18日 饲料采购单` `10:25`
-     - `5月17日 人工工资发放` `15:40`
-     - `5月17日 牛只销售` `09:18`
+2. Hero cockpit card:
+   - 标题 `今日经营态势`
+   - badge `AI分析`
+   - 大数字评分 `86`
+   - 状态文案 `经营稳定，注意午后天气`
+   - 三列小指标: `收入趋势 +12%`, `成本压力 中`, `风险 1项`
+   - 可包含轻量农场/数据插画，但不能做成土味农业背景，也不能压过数据层级
+3. AI suggestion card:
+   - 标题 `AI 今日建议`
+   - 三条建议:
+     - `午后避开露天作业`
+     - `西瓜批次补充灌溉`
+     - `本月饲料成本偏高`
+   - 每条建议包含图标、主文案、短说明、右侧 chevron
+4. Insight grid:
+   - `资金概览`: `余额 12.8万` + sparkline
+   - `成本分析`: `本月 +8%` + donut/progress
+   - `茬口进度`: `已完成 68%` + progress bar
+   - `风险预警`: `1项待关注` + 状态点
+5. Quick action strip:
+   - `问问芽芽` / `AI 农业助手`
+   - `记一笔` / `快速记账`
+   - `生成报告` / `经营分析报告`
+
+首页禁用项:
+
+- 不出现 `今日待办` 模块。
+- 不出现 `最近记录` 模块。
+- 不做密集列表、表格或旧后台风统计面板。
 
 ### 记录
 

@@ -21,6 +21,9 @@ from app.infra.trace_collector import get_collector
 logger = logging.getLogger(__name__)
 
 _MISSING_TEMPLATE_RE = re.compile(r"系统还没有\s*(?P<crop>.+?)\s*模板")
+_CLEAR_CORRECTION_RE = re.compile(
+    r"(?:改成|改为|改到|更正|纠正|不是|金额|分类|日期|对象|备注|\d+\s*(?:元|块|万|w|W|千|百))"
+)
 
 
 async def _execute_write_skill(
@@ -113,6 +116,11 @@ def _format_follow_up_intro(skill_name: str, params: dict) -> str:
         )
 
     return "下一步需要继续确认。"
+
+
+def _is_clear_pending_correction(message: str) -> bool:
+    """判断用户是否在明确修正待确认参数，需要交给 LLM 重新规划。"""
+    return bool(_CLEAR_CORRECTION_RE.search(message.strip()))
 
 
 def _extract_missing_template_crop(pending: PendingAction, result: str) -> str:
@@ -232,7 +240,16 @@ async def handle_pending_action(
             remove_pending(farm_id, session_id=session_id)
             return PendingActionDecision.canceled()
 
-        return PendingActionDecision.modified()
+        if _is_clear_pending_correction(message):
+            return PendingActionDecision.modified()
+
+        confirm = build_confirm_message(
+            pending.skill_name,
+            pending.params,
+            original_input=pending.original_input,
+        )
+        reply = f"当前有一条待确认操作，还没有执行。\n{confirm}"
+        return PendingActionDecision.modified(reply=reply, handled=True)
     except Exception as exc:
         logger.exception("执行 pending action 失败")
         remove_pending(farm_id, session_id=session_id)

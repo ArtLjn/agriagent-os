@@ -38,13 +38,25 @@ class CreateOperationWorkOrderSkill(Skill):
                     "type": "string",
                     "description": "作业日期 YYYY-MM-DD，默认今天",
                 },
+                "work_date": {
+                    "type": "string",
+                    "description": "作业日期别名，YYYY-MM-DD",
+                },
                 "cycle_id": {
                     "type": "integer",
                     "description": "种植批次 ID，不传则自动选择第一个活跃批次",
                 },
+                "crop_cycle_name": {
+                    "type": "string",
+                    "description": "茬口名称别名，如水稻、夏季水稻",
+                },
                 "unit_names": {
                     "type": "string",
                     "description": "作用棚/地块名称，多个用逗号分隔，如东大棚 1-3 号,东大棚 4-6 号",
+                },
+                "planting_unit_name": {
+                    "type": "string",
+                    "description": "棚/地块名称别名，如1号棚",
                 },
                 "note": {
                     "type": "string",
@@ -54,9 +66,17 @@ class CreateOperationWorkOrderSkill(Skill):
                     "type": "string",
                     "description": "工人姓名，多个用逗号分隔；不存在时自动创建轻量档案",
                 },
+                "worker_name": {
+                    "type": "string",
+                    "description": "工人姓名别名，如李丽",
+                },
                 "unit_price": {
                     "type": "number",
                     "description": "每名工人单价，如 200",
+                },
+                "payment_method": {
+                    "type": "string",
+                    "description": "计薪方式别名，如 daily、hourly、piece",
                 },
                 "paid_worker": {
                     "type": "string",
@@ -71,6 +91,7 @@ class CreateOperationWorkOrderSkill(Skill):
         }
 
     async def execute(self, params: dict, context) -> SkillResult:
+        params = _normalize_params(params)
         farm_id, context_error = require_farm_context(context, "创建农事作业单")
         if context_error:
             return context_error
@@ -83,7 +104,11 @@ class CreateOperationWorkOrderSkill(Skill):
 
         db = SessionLocal()
         try:
-            cycle_id = params.get("cycle_id") or _find_first_active_cycle(db, farm_id)
+            cycle_id = (
+                params.get("cycle_id")
+                or _find_cycle_by_name(db, farm_id, params.get("crop_cycle_name"))
+                or _find_first_active_cycle(db, farm_id)
+            )
             if not cycle_id:
                 return SkillResult(
                     status=ResultStatus.NEED_CLARIFY,
@@ -122,6 +147,21 @@ class CreateOperationWorkOrderSkill(Skill):
             db.close()
 
 
+def _normalize_params(params: dict) -> dict:
+    """规范化模型常见别名参数。"""
+    normalized = dict(params or {})
+    _copy_if_missing(normalized, "operation_date", "work_date")
+    _copy_if_missing(normalized, "unit_names", "planting_unit_name")
+    _copy_if_missing(normalized, "workers", "worker_name")
+    _copy_if_missing(normalized, "pay_type", "payment_method")
+    return normalized
+
+
+def _copy_if_missing(params: dict, target: str, source: str) -> None:
+    if params.get(target) in (None, "") and params.get(source) not in (None, ""):
+        params[target] = params[source]
+
+
 def _parse_date(value: str | None) -> date:
     if not value:
         return date.today()
@@ -139,6 +179,27 @@ def _find_first_active_cycle(db, farm_id: int) -> int | None:
         .first()
     )
     return cycle.id if cycle else None
+
+
+def _find_cycle_by_name(db, farm_id: int, value) -> int | None:
+    name = str(value or "").strip()
+    if not name:
+        return None
+    cycles = (
+        db.query(CropCycle)
+        .filter(CropCycle.farm_id == farm_id, CropCycle.status == "active")
+        .order_by(CropCycle.id)
+        .all()
+    )
+    matches = [
+        cycle
+        for cycle in cycles
+        if name == getattr(cycle, "name", None)
+        or name in str(getattr(cycle, "name", ""))
+    ]
+    if len(matches) == 1:
+        return matches[0].id
+    return None
 
 
 def _split_names(value) -> list[str]:
@@ -173,6 +234,7 @@ def _build_labor_entries(db, farm_id: int, worker_names: list[str], params: dict
     if not worker_names:
         return []
     unit_price = _to_decimal(params.get("unit_price")) or Decimal("0")
+    pay_type = str(params.get("pay_type") or "daily").strip() or "daily"
     paid_worker = str(params.get("paid_worker") or "").strip()
     paid_amount = _to_decimal(params.get("paid_amount")) or Decimal("0")
     entries = []
@@ -184,7 +246,7 @@ def _build_labor_entries(db, farm_id: int, worker_names: list[str], params: dict
         entries.append(
             LaborEntryCreate(
                 worker_id=worker.id,
-                pay_type="daily",
+                pay_type=pay_type,
                 quantity=Decimal("1"),
                 unit_price=unit_price,
                 paid_amount=entry_paid,

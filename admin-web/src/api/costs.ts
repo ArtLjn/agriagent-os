@@ -3,6 +3,8 @@ import apiClient from './client';
 export interface CostRecord {
   id: number; cycle_id?: number; record_type: string;
   category: string; amount: string; record_date: string; note?: string;
+  record_subtype?: string | null; counterparty?: string | null; due_date?: string | null;
+  recorded_at?: string | null; created_at?: string | null;
 }
 
 export interface CycleProfit {
@@ -20,6 +22,9 @@ export interface CostParseResponse {
   amount: string;
   record_date: string;
   note?: string | null;
+  record_subtype?: string | null;
+  counterparty?: string | null;
+  due_date?: string | null;
 }
 
 export interface PaginatedList<T> {
@@ -32,7 +37,7 @@ export async function listRecords(params?: { cycle_id?: number; category?: strin
   return res.data;
 }
 
-export async function createRecord(data: { cycle_id?: number; record_type: string; category: string; amount: string; record_date: string; note?: string }): Promise<CostRecord> {
+export async function createRecord(data: { cycle_id?: number; record_type: string; category: string; amount: string; record_date: string; recorded_at?: string; note?: string; record_subtype?: string; counterparty?: string; due_date?: string }): Promise<CostRecord> {
   const res = await apiClient.post<CostRecord>('/costs', data);
   return res.data;
 }

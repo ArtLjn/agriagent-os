@@ -20,18 +20,16 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late int selectedIndex = widget.initialIndex;
 
-  static const pages = [
-    HomeScreen(),
-    WorkbenchScreen(),
-    YayaScreen(),
-    BillingScreen(),
-    ProfileScreen(),
-  ];
+  void _selectTab(int index) => setState(() => selectedIndex = index);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      bottomNavigationBar: AppBottomTabBar(
+        selectedIndex: selectedIndex,
+        onChanged: _selectTab,
+      ),
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -40,18 +38,18 @@ class _AppShellState extends State<AppShell> {
             colors: [AppColors.backgroundTop, AppColors.background],
           ),
         ),
-        child: Stack(
+        child: IndexedStack(
+          index: selectedIndex,
           children: [
-            IndexedStack(index: selectedIndex, children: pages),
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 26,
-              child: AppBottomTabBar(
-                selectedIndex: selectedIndex,
-                onChanged: (index) => setState(() => selectedIndex = index),
-              ),
+            const HomeScreen(),
+            WorkbenchScreen(
+              onGoHome: () => _selectTab(0),
+              onGoLedger: () => _selectTab(3),
+              onRecordAgain: () => _selectTab(1),
             ),
+            const YayaScreen(),
+            const BillingScreen(),
+            const ProfileScreen(),
           ],
         ),
       ),

@@ -1,13 +1,12 @@
 """应用 middleware 注册。"""
 
-from datetime import date
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.date_context import set_request_date
 from app.core.logger import get_logger
+from app.core.timezone import beijing_today
 
 logger = get_logger(__name__)
 
@@ -27,11 +26,13 @@ def register_middlewares(app: FastAPI) -> None:
     async def date_injection_middleware(request: Request, call_next):
         """读取 X-Current-Date 请求头并注入上下文。"""
         header_date = request.headers.get("X-Current-Date")
-        server_date = date.today()
+        server_date = beijing_today()
         effective_date = server_date
 
         if header_date:
             try:
+                from datetime import date
+
                 client_date = date.fromisoformat(header_date)
                 delta = abs((client_date - server_date).days)
                 if delta <= 7:

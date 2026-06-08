@@ -9,9 +9,9 @@ void main() {
         devices: [const Device(name: 'iphone-375', size: Size(375, 812))],
       )
       ..addScenario(widget: const AppShell(), name: 'home')
-      ..addScenario(widget: const AppShell(initialIndex: 1), name: 'workbench')
+      ..addScenario(widget: const AppShell(initialIndex: 1), name: 'record')
       ..addScenario(widget: const AppShell(initialIndex: 2), name: 'yaya')
-      ..addScenario(widget: const AppShell(initialIndex: 3), name: 'billing')
+      ..addScenario(widget: const AppShell(initialIndex: 3), name: 'ledger')
       ..addScenario(widget: const AppShell(initialIndex: 4), name: 'profile');
 
     await tester.pumpDeviceBuilder(builder);

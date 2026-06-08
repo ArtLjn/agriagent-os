@@ -1,10 +1,10 @@
 from decimal import Decimal
-from datetime import datetime, timezone
 
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
+from app.core.timezone import beijing_now
 from app.models.cost import CostRecord
 from app.models.cost_category import CostCategory
 from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary
@@ -113,6 +113,7 @@ def create_record(db: Session, record: CostRecordCreate, farm_id: int) -> CostRe
         settled_amount=settled_amount,
         settlement_status=settlement_status,
         record_date=record.record_date,
+        recorded_at=record.recorded_at or beijing_now(),
         note=record.note,
         farm_id=farm_id,
         record_subtype=record.record_subtype,
@@ -194,7 +195,16 @@ def get_records(
         query = query.filter(CostRecord.source_type == source_type)
     if source_id is not None:
         query = query.filter(CostRecord.source_id == source_id)
-    return query.order_by(CostRecord.record_date.desc()).offset(skip).limit(limit).all()
+    return (
+        query.order_by(
+            CostRecord.record_date.desc(),
+            CostRecord.recorded_at.desc(),
+            CostRecord.id.desc(),
+        )
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def count_records(
@@ -319,7 +329,7 @@ def delete_record(db: Session, record_id: int, farm_id: int) -> CostRecord | Non
     )
     if not record:
         return None
-    record.deleted_at = datetime.now(timezone.utc)
+    record.deleted_at = beijing_now()
     record.source_active_key = None
     try:
         db.commit()

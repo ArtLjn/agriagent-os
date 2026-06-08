@@ -89,6 +89,90 @@ def test_parse_smart_fill_ledger_record_infers_note_when_llm_omits_it(mock_get_l
     assert data["draft"]["note"] == "买化肥"
 
 
+@patch("app.agent.application.smart_fill.get_llm")
+def test_parse_smart_fill_ledger_record_infers_structured_debt(mock_get_llm):
+    result = CostParseResult(
+        record_type="cost",
+        category="种子",
+        amount="195.30",
+        record_date="2026-06-08",
+        note="买苹果种子，向王秉着赊账",
+    )
+    mock_get_llm.return_value = _build_llm_with_structured_output(result)
+
+    response = client.post(
+        "/smart-fill/parse",
+        json={
+            "scene": "ledger.record",
+            "text": "今天买苹果种子195.3 向 王秉着 赊账",
+        },
+        headers={"X-Idempotency-Key": "smart-fill-ledger-debt-001"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["draft"]["record_subtype"] == "赊账"
+    assert data["draft"]["counterparty"] == "王秉着"
+    assert data["draft"]["note"] == "买苹果种子，向王秉着赊账"
+
+
+@patch("app.agent.application.smart_fill.get_llm")
+def test_parse_smart_fill_ledger_record_handles_owed_counterparty(mock_get_llm):
+    result = CostParseResult(
+        record_type="cost",
+        category="农资",
+        amount="2000",
+        record_date="2026-06-08",
+        note="欠张三2000买农资",
+    )
+    mock_get_llm.return_value = _build_llm_with_structured_output(result)
+
+    response = client.post(
+        "/smart-fill/parse",
+        json={
+            "scene": "ledger.record",
+            "text": "欠张三2000买农资",
+        },
+        headers={"X-Idempotency-Key": "smart-fill-ledger-debt-owed-001"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["draft"]["record_subtype"] == "赊账"
+    assert data["draft"]["counterparty"] == "张三"
+
+
+@patch("app.agent.application.smart_fill.get_llm")
+def test_parsed_debt_draft_can_create_unsettled_cost_record(mock_get_llm):
+    result = CostParseResult(
+        record_type="cost",
+        category="种子",
+        amount="195.30",
+        record_date="2026-06-08",
+        note="买苹果种子，向王秉着赊账",
+    )
+    mock_get_llm.return_value = _build_llm_with_structured_output(result)
+
+    parse_response = client.post(
+        "/smart-fill/parse",
+        json={
+            "scene": "ledger.record",
+            "text": "今天买苹果种子195.3 向王秉着赊账",
+        },
+        headers={"X-Idempotency-Key": "smart-fill-ledger-debt-create-001"},
+    )
+    assert parse_response.status_code == 200
+
+    create_response = client.post("/costs", json=parse_response.json()["draft"])
+
+    assert create_response.status_code == 200
+    data = create_response.json()
+    assert data["record_subtype"] == "赊账"
+    assert data["counterparty"] == "王秉着"
+    assert data["settled_amount"] == "0.00"
+    assert data["settlement_status"] == "unsettled"
+
+
 def test_parse_smart_fill_unknown_scene_returns_404():
     response = client.post(
         "/smart-fill/parse",

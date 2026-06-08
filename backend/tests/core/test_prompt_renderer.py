@@ -1,6 +1,7 @@
 """Tests for PromptRenderer."""
 
-from datetime import date
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -49,3 +50,18 @@ class TestPromptRenderer:
         result = render_prompt("test", {}, registry=reg, current_date=date(2026, 5, 25))
         assert "2026-05-24" in result
         assert "2026-05-23" in result
+
+    def test_render_defaults_to_beijing_clock(self, monkeypatch):
+        fixed_utc = datetime(2026, 6, 8, 16, 30, tzinfo=timezone.utc)
+
+        monkeypatch.setattr(
+            "app.prompt.renderer.beijing_now",
+            lambda: fixed_utc.astimezone(ZoneInfo("Asia/Shanghai")),
+        )
+        reg = PromptRegistry()
+        reg.register("test", "v1", "{{ current_date }} {{ current_time }}")
+
+        result = render_prompt("test", {}, registry=reg)
+
+        assert "2026-06-09" in result
+        assert "00:30" in result

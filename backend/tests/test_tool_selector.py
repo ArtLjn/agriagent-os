@@ -11,6 +11,7 @@ pytestmark = pytest.mark.no_db
 ALL_TOOL_NAMES = [
     "get_cost_analytics",
     "get_cost_summary",
+    "get_debt_summary",
     "create_cost_record",
     "delete_cost_record",
     "create_crop_cycle",
@@ -87,9 +88,17 @@ class TestWritePatternMatching:
         result = select_tools("买了化肥", _make_tools())
         assert "create_cost_record" in result
 
+    def test_purchase_debt_record_wins_over_debt_summary(self):
+        result = select_tools("今天买橘子种子130张三赊账", _make_tools())
+        assert result == ["create_cost_record"]
+
     def test_settle_debt_standard(self):
         result = select_tools("还了老王200", _make_tools())
         assert "settle_debt" in result
+
+    def test_settle_debt_without_le_particle_wins_over_cost_record(self):
+        result = select_tools("还张三500", _make_tools())
+        assert result == ["settle_debt"]
 
     def test_settle_debt_variant(self):
         result = select_tools("把欠老王的账结了", _make_tools())
@@ -153,8 +162,16 @@ class TestWritePatternMatching:
         result = select_tools("新建今天授粉作业，3个工人，每人200", _make_tools())
         assert result == ["create_operation_work_order"]
 
+    def test_arrange_worker_to_harvest_uses_operation_work_order(self):
+        result = select_tools("安排李丽去水稻采收", _make_tools())
+        assert result == ["create_operation_work_order"]
+
     def test_settle_labor_payment_partial_payment(self):
         result = select_tools("给老王补付300人工", _make_tools())
+        assert result == ["settle_labor_payment"]
+
+    def test_settle_labor_payment_full_settle_with_worker_name(self):
+        result = select_tools("哈哈哈工资结清了", _make_tools())
         assert result == ["settle_labor_payment"]
 
     def test_update_operation_work_order_correction(self):
@@ -171,6 +188,10 @@ class TestWritePatternMatching:
 
     def test_update_worker_default_wage_uses_manage_workers(self):
         result = select_tools("猪八戒工资更新150一天", _make_tools())
+        assert result == ["manage_workers"]
+
+    def test_new_worker_with_daily_wage_uses_manage_workers(self):
+        result = select_tools("新来一个工人李丽工资100一天", _make_tools())
         assert result == ["manage_workers"]
 
     def test_delete_cost_record_uses_delete_cost_record(self):
@@ -229,7 +250,17 @@ class TestQueryKeywordMatching:
 
     def test_debt_bill_query(self):
         result = select_tools("老王那边赊账还欠多少", _make_tools())
-        assert "get_cost_summary" in result
+        assert result[0] == "get_debt_summary"
+        assert "get_cost_summary" not in result
+
+    def test_payable_debt_summary_query(self):
+        result = select_tools("我欠别人多少钱", _make_tools())
+        assert result[0] == "get_debt_summary"
+        assert "get_labor_payables" not in result
+
+    def test_total_payable_query_uses_debt_summary(self):
+        result = select_tools("我还欠多少钱", _make_tools())
+        assert result[0] == "get_debt_summary"
 
     def test_trend_analytics(self):
         result = select_tools("比去年赚得多吗", _make_tools())
@@ -288,6 +319,10 @@ class TestQueryKeywordMatching:
 
     def test_deactivate_worker_uses_manage_workers(self):
         result = select_tools("删除工人李四", _make_tools())
+        assert result == ["manage_workers"]
+
+    def test_worker_resignation_uses_manage_workers(self):
+        result = select_tools("哈哈哈离职了", _make_tools())
         assert result == ["manage_workers"]
 
 

@@ -1,9 +1,73 @@
 import '../api/api_client.dart';
+import '../api/api_models.dart';
 
 class DashboardRepository {
   DashboardRepository(this.client);
 
   final ApiClient client;
+
+  Future<DailyAdvice> getDailyAdvice({int? cycleId}) async {
+    final data = await client.getMap('/agent/daily', query: {'cycle_id': cycleId});
+    return DailyAdvice.fromJson(data);
+  }
+
+  Future<DailyAdvice> refreshDailyAdvice({int? cycleId}) async {
+    final data = await client.postMap(
+      '/agent/daily/refresh',
+      query: {'cycle_id': cycleId},
+    );
+    return DailyAdvice.fromJson(data);
+  }
+
+  Future<ApiRecord> createReport({int? cycleId, String reportType = 'weekly'}) async {
+    final data = await client.postMap('/agent/report', data: {
+      'cycle_id': cycleId,
+      'report_type': reportType,
+    }..removeWhere((_, value) => value == null));
+    return ApiRecord.fromJson(data);
+  }
+
+  Future<List<ApiRecord>> listAdviceHistory({int? cycleId, int limit = 20}) async {
+    final data = await client.getList('/agent/advice-history', query: {
+      'cycle_id': cycleId,
+      'limit': limit,
+    });
+    return _records(data);
+  }
+
+  Future<List<ApiRecord>> listReportHistory({int? cycleId, int limit = 20}) async {
+    final data = await client.getList('/agent/report-history', query: {
+      'cycle_id': cycleId,
+      'limit': limit,
+    });
+    return _records(data);
+  }
+
+  Future<PageResult<ApiRecord>> listReports({int page = 1, int size = 10}) async {
+    final data = await client.getMap('/agent/reports', query: {
+      'page': page,
+      'size': size,
+    });
+    return PageResult.fromJson(data, ApiRecord.fromJson);
+  }
+
+  Future<Map<String, dynamic>> getForecast({
+    int days = 7,
+    String location = '当前地块',
+    double? lat,
+    double? lon,
+  }) {
+    return client.getMap('/weather/forecast', query: {
+      'days': days,
+      'location': location,
+      'lat': lat,
+      'lon': lon,
+    });
+  }
+
+  Future<Map<String, dynamic>> getUnsettledLaborSummary() {
+    return client.getMap('/planting/labor/unsettled-summary');
+  }
 
   Future<void> loadOverview() async {
     await Future.wait([
@@ -12,5 +76,11 @@ class DashboardRepository {
       client.get('/planting/work-orders'),
       client.get('/planting/labor/unsettled-summary'),
     ]);
+  }
+
+  List<ApiRecord> _records(List<dynamic> data) {
+    return data
+        .map((item) => ApiRecord.fromJson(Map<String, dynamic>.from(item as Map)))
+        .toList();
   }
 }

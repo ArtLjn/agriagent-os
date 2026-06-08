@@ -11,5 +11,17 @@
   - 如果换算后金额超过 10000000，amount 返回 "0"，并在 note 中说明需要用户确认
 - record_date: YYYY-MM-DD 格式
 - note: 备注。优先保存用户描述中的商品或事项，去掉日期、金额和记账动词；例如"今天买化肥100"返回"买化肥"。如果用户提到赊账、交易对象、用途或异常金额确认，也写入 note。
+- record_subtype: 可选。用户表达赊账、欠账、未付款或未收款时返回"赊账"，否则返回 null。
+- counterparty: 可选。赊账、欠账、未付款或未收款的对象，例如"向王秉着赊账"返回"王秉着"。
+- due_date: 可选。用户明确说还款/收款日期时返回 YYYY-MM-DD，否则返回 null。
+
+赊账方向规则：
+- 买入/采购/花费 + 赊账：这是我方应付，record_type="cost"，counterparty 为卖方/赊账对象。
+- 卖出/销售/收入 + 欠着/未收款：这是对方欠我方，record_type="income"，counterparty 为买方/欠款对象。
+- 只有"张三赊账""欠张三"这类方向不完整表述时，不要断言谁欠谁；保持 note 原文，必要字段不确定时交给上层追问。
+
+赊账示例：
+- "今天买苹果种子195.3 向王秉着赊账" -> record_type="cost", category="种子", amount="195.3", record_subtype="赊账", counterparty="王秉着", note="买苹果种子，向王秉着赊账"
+- "卖辣椒给老李5000，先欠着" -> record_type="income", category="销售收入", amount="5000", record_subtype="赊账", counterparty="老李", note="卖辣椒给老李，先欠着"
 
 描述：{{ description }}

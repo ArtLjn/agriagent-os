@@ -1,8 +1,9 @@
 """记账 Skill (create_cost_record) 单元测试。"""
 
 import importlib
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -134,6 +135,119 @@ class TestCreateCostRecordNormal:
         assert "大棚膜" in result.reply
         assert "3000" in result.reply
         assert "赊账" in result.reply
+        mock_db.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch.object(_create_cost_mod, "SessionLocal")
+    @patch.object(_create_cost_mod, "create_record")
+    async def test_structured_debt_fields_are_written(
+        self, mock_create, mock_session, ctx
+    ):
+        """赊账记账必须写入结构化赊账字段，而不是只放进备注。"""
+        mock_db = MagicMock()
+        mock_session.return_value = mock_db
+        mock_create.return_value = MagicMock(
+            record_type="cost",
+            category="种子",
+            amount=Decimal("195.30"),
+            record_date=date(2026, 6, 8),
+            note="买苹果种子，向王秉着赊账",
+            record_subtype="赊账",
+            counterparty="王秉着",
+        )
+
+        skill = CreateCostRecordSkill()
+        result = await skill.execute(
+            {
+                "amount": 195.30,
+                "category": "种子",
+                "record_date": "2026-06-08",
+                "note": "买苹果种子，向王秉着赊账",
+                "record_subtype": "赊账",
+                "counterparty": "王秉着",
+            },
+            ctx,
+        )
+
+        record_create = mock_create.call_args[0][1]
+        assert result.status.value == "success"
+        assert record_create.record_subtype == "赊账"
+        assert record_create.counterparty == "王秉着"
+        assert "王秉着" in result.reply
+
+    @pytest.mark.asyncio
+    @patch.object(_create_cost_mod, "SessionLocal")
+    @patch.object(_create_cost_mod, "create_record")
+    async def test_reply_includes_recorded_time(self, mock_create, mock_session, ctx):
+        """记账成功回复显示具体记录时间。"""
+        mock_db = MagicMock()
+        mock_session.return_value = mock_db
+        mock_create.return_value = MagicMock(
+            record_type="cost",
+            category="种子",
+            amount=Decimal("130"),
+            record_date=date(2026, 6, 8),
+            recorded_at=datetime(2026, 6, 8, 9, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+            note="买橘子种子",
+        )
+
+        result = await CreateCostRecordSkill().execute(
+            {
+                "amount": 130,
+                "category": "种子",
+                "record_date": "2026-06-08",
+                "note": "买橘子种子",
+            },
+            ctx,
+        )
+
+        assert result.status.value == "success"
+        assert "2026-06-08 09:30" in result.reply
+
+    @pytest.mark.asyncio
+    @patch.object(_create_cost_mod, "SessionLocal")
+    @patch.object(_create_cost_mod, "create_record")
+    async def test_repayment_category_returns_need_clarify(
+        self, mock_create, mock_session, ctx
+    ):
+        """还款不能走普通记账，避免创建 income/还款 旧兼容记录。"""
+        skill = CreateCostRecordSkill()
+        result = await skill.execute(
+            {
+                "amount": 500,
+                "category": "还款",
+                "record_type": "income",
+                "note": "还张三",
+            },
+            ctx,
+        )
+
+        assert result.status.value == "need_clarify"
+        assert "settle_debt" in result.reply
+        mock_session.assert_not_called()
+        mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch.object(_create_cost_mod, "SessionLocal")
+    @patch.object(_create_cost_mod, "create_record")
+    async def test_other_category_returns_need_clarify_when_categories_exist(
+        self, mock_create, mock_session, ctx
+    ):
+        """分类被推成其他时应追问，不能无脑落库。"""
+        mock_db = MagicMock()
+        mock_session.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter_by.return_value.count.return_value = 3
+
+        skill = CreateCostRecordSkill()
+        result = await skill.execute(
+            {"amount": 2000, "category": "其他", "note": "欠张三"},
+            ctx,
+        )
+
+        assert result.status.value == "need_clarify"
+        assert "分类" in result.reply
+        mock_create.assert_not_called()
         mock_db.close.assert_called_once()
 
     @pytest.mark.asyncio

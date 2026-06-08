@@ -13,7 +13,8 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r"\d+\s*(?:元|块|万|w|W|千|百)"),
     ],
     "settle_debt": [
-        re.compile(r"(?:还[了钱账给]|清账|结清|欠款|还款)"),
+        re.compile(r"(?:还[了钱账给]|清账|还款)"),
+        re.compile(r"还(?!欠).{1,20}\d+\s*(?:元|块|万|w|W|千|百)?"),
         re.compile(r"(?:账[结清]|结了.*账|欠.*结)"),
     ],
     "delete_cost_record": [
@@ -71,6 +72,9 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
     ],
     "create_operation_work_order": [
         re.compile(
+            r"(?:安排|派|叫|让).{1,20}(?:去|到).{0,20}(?:授粉|压蔓|留瓜|垫瓜|采收|装车|打杈|绑蔓|整枝)"
+        ),
+        re.compile(
             r"(?:授粉|压蔓|留瓜|垫瓜|采收|装车|打杈|绑蔓|整枝).*(?:工人|每人|人工|作业|干活)"
         ),
         re.compile(r"(?:创建|新建|记录).*(?:作业单|农事作业|用工)"),
@@ -80,6 +84,7 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
     ],
     "settle_labor_payment": [
         re.compile(r"(?:补付|支付|结算|付清|结清).*(?:人工|工钱|工资)"),
+        re.compile(r"(?:人工|工钱|工资).*(?:补付|支付|结算|付清|结清)"),
         re.compile(r"(?:给|付给).{1,12}(?:\d+\s*(?:元|块|百|千)).*(?:人工|工钱|工资)"),
     ],
     "update_operation_work_order": [
@@ -110,6 +115,9 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
     ],
     "manage_workers": [
         re.compile(
+            r"(?:新来|来了|入职|刚来|刚招).*(?:工人|员工|师傅).*(?:工资|日薪|时薪|计件|薪资)?\s*\d+\s*(?:元|块)?(?:一?天|/天|每天)?"
+        ),
+        re.compile(
             r"(?:招(?:了|来)?|招聘|新增|添加|创建|新建).*(?:工人档案|员工档案|工人|员工)"
         ),
         re.compile(
@@ -122,6 +130,7 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(
             r"(?:工人|员工|师傅|李四|王五|赵六|张三|老王|老李).*(?:离职了|不用了|不要了)"
         ),
+        re.compile(r"[\u4e00-\u9fa5]{2,8}(?:离职了|不用了|不要了)"),
         re.compile(
             r"(?:恢复|重新启用|又回来了).*(?:工人|员工|师傅|李四|王五|赵六|张三|老王|老李)"
         ),
@@ -155,11 +164,22 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "去年",
         "流水",
         "明细",
+        "分类汇总",
+        "月额",
+    },
+    "get_debt_summary": {
         "欠款",
         "赊账",
         "还欠",
-        "分类汇总",
-        "月额",
+        "欠谁",
+        "欠别人",
+        "我欠别人",
+        "我还欠",
+        "欠多少钱",
+        "欠款统计",
+        "赊账统计",
+        "欠款汇总",
+        "赊账汇总",
     },
     "get_cost_analytics": {"趋势", "对比", "比去年", "比上月", "收支分析"},
     "get_cost_categories": {
@@ -246,6 +266,7 @@ DISABLED_SKILLS: set[str] = {
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_weather_forecast": ["get_farm_status"],
     "get_cost_summary": ["get_farm_status"],
+    "get_debt_summary": ["get_farm_status"],
     "get_cost_analytics": ["get_farm_status"],
     "get_crop_cycle_info": ["get_farm_status"],
     "get_recent_farm_logs": ["get_farm_status"],

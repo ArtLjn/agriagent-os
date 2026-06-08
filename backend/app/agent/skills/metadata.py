@@ -62,29 +62,7 @@ _DEFAULT_WRITE_CONFIRMATION = ConfirmationSchema(
 _EXTERNAL_NETWORK_SKILLS = frozenset({"web_search", "get_weather_forecast"})
 _WEB_SEARCH_DISABLED_REASON = "SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用"
 
-_WRITE_CONFIRM_SKILLS = frozenset(
-    {
-        "create_cost_record",
-        "create_crop_cycle",
-        "create_crop_template",
-        "create_operation_work_order",
-        "log_farm_activity",
-        "settle_debt",
-        "settle_labor_payment",
-        "update_crop_cycle",
-        "update_crop_stage",
-        "update_operation_work_order",
-        "manage_workers",
-        "manage_wages",
-        "delete_cost_record",
-        "manage_cost_categories",
-        "manage_planting_units",
-        "manage_crop_templates",
-        "manage_farm_logs",
-        "delete_crop_cycle",
-        "manage_user_settings",
-    }
-)
+_WRITE_CONFIRM_SKILLS = WRITE_SKILLS
 
 _READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
     "get_cost_analytics": {
@@ -94,6 +72,10 @@ _READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
     "get_cost_summary": {
         "context_dependencies": ["farm", "cost_records"],
         "evaluation_tags": ["read", "cost", "summary"],
+    },
+    "get_debt_summary": {
+        "context_dependencies": ["farm", "cost_records"],
+        "evaluation_tags": ["read", "debt", "summary"],
     },
     "get_crop_cycle_info": {
         "context_dependencies": ["farm", "active_cycles"],

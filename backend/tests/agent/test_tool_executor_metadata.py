@@ -1,5 +1,6 @@
 """Tool executor metadata 权限测试。"""
 
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,7 +11,7 @@ from pydantic import BaseModel
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_actions import get_pending, remove_pending
-from app.models.planting import Worker
+from app.models.planting import LaborEntry, OperationWorkOrder, Worker
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +77,9 @@ async def test_write_confirm_metadata_creates_pending_action():
 
 
 @pytest.mark.asyncio
-async def test_manage_workers_pending_stores_resolved_worker_id(monkeypatch, db_session):
+async def test_manage_workers_pending_stores_resolved_worker_id(
+    monkeypatch, db_session
+):
     """工人更新确认时应把解析出的真实 worker_id 存入 pending。"""
     worker = Worker(farm_id=1, name="猪八戒", status="active", default_pay_type="daily")
     db_session.add(worker)
@@ -190,6 +193,88 @@ async def test_manage_workers_pending_recovers_full_name_from_original_input(
 
 
 @pytest.mark.asyncio
+async def test_settle_labor_pending_preview_accepts_worker_name_alias(
+    monkeypatch, db_session
+):
+    """工资结清确认预览应同时支持 worker_name 参数别名。"""
+    worker = Worker(farm_id=1, name="哈哈哈", status="active", default_pay_type="daily")
+    db_session.add(worker)
+    db_session.flush()
+    work_order = OperationWorkOrder(
+        farm_id=1,
+        cycle_id=None,
+        operation_type="定植",
+        operation_date=date(2026, 6, 8),
+        scope_type="cycle",
+    )
+    db_session.add(work_order)
+    db_session.flush()
+    work_order_id = work_order.id
+    db_session.add(
+        LaborEntry(
+            farm_id=1,
+            work_order_id=work_order.id,
+            worker_id=worker.id,
+            quantity=1,
+            unit_price=100,
+            payable_amount=100,
+            paid_amount=0,
+            unpaid_amount=100,
+            settlement_status="unsettled",
+        )
+    )
+    db_session.commit()
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+    )
+    tool = SimpleNamespace(
+        name="settle_labor_payment",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            context_dependencies=["workers", "unpaid_labor"],
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="哈哈哈工资结清了"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "settle_labor_payment",
+                        "args": {"worker_name": "哈哈哈"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-labor-alias",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-labor-alias")
+    assert pending is not None
+    assert pending.confirmation_context["inferred_fields"]["affected_entries"] == [
+        {
+            "entry_id": 1,
+            "work_order_id": work_order_id,
+            "worker_name": "哈哈哈",
+            "unpaid_amount": "100.00",
+        }
+    ]
+    assert "确认还款：哈哈哈" not in result["messages"][0].content
+    assert "确认结算人工" in result["messages"][0].content
+
+
+@pytest.mark.asyncio
 async def test_read_metadata_executes_immediately_even_when_name_matches_write_fallback():
     tool = SimpleNamespace(
         name="create_cost_record",
@@ -261,6 +346,96 @@ async def test_unknown_permission_on_legacy_write_skill_creates_pending_action()
     assert pending.params == {"amount": 100, "category": "化肥"}
     assert "[PENDING_ACTION]" in result["messages"][0].content
     tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_debt_direction_clarifies_without_pending_action():
+    """方向不完整的赊账记账不能创建 pending，需先追问谁欠谁。"""
+    tool = SimpleNamespace(
+        name="create_cost_record",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SimpleNamespace(permission_level="write_confirm"),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="张三赊账130"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "create_cost_record",
+                        "args": {
+                            "amount": 130,
+                            "category": "种子",
+                            "record_subtype": "赊账",
+                            "counterparty": "张三",
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1) is None
+    assert "谁欠谁" in result["messages"][0].content
+    assert "你欠张三" in result["messages"][0].content
+    assert "张三欠你" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_purchase_debt_direction_creates_pending_action():
+    """买入赊账方向明确，应创建待确认记账。"""
+    tool = SimpleNamespace(
+        name="create_cost_record",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SimpleNamespace(permission_level="write_confirm"),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="今天买橘子种子130张三赊账"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "create_cost_record",
+                        "args": {
+                            "amount": 130,
+                            "category": "种子",
+                            "record_type": "cost",
+                            "record_subtype": "赊账",
+                            "counterparty": "张三",
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is not None
+    assert pending.skill_name == "create_cost_record"
+    assert pending.params["counterparty"] == "张三"
+    assert "[PENDING_ACTION]" in result["messages"][0].content
+    assert "确认记账" in result["messages"][0].content
 
 
 @pytest.mark.asyncio

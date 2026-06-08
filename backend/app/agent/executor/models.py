@@ -64,8 +64,10 @@ class PendingActionDecision:
         return cls(handled=True, status="canceled", reply=reply)
 
     @classmethod
-    def modified(cls) -> "PendingActionDecision":
-        return cls(handled=False, status="modified")
+    def modified(
+        cls, reply: str = "", handled: bool = False
+    ) -> "PendingActionDecision":
+        return cls(handled=handled, status="modified", reply=reply)
 
     @classmethod
     def failed(cls, reply: str) -> "PendingActionDecision":

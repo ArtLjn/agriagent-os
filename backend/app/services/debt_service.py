@@ -1,12 +1,12 @@
 """债务管理 Service，处理赊账记录的业务逻辑。"""
 
-from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
+from app.core.timezone import beijing_now
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordCreate, DebtSummary
 from app.services.cost_service import (
@@ -66,6 +66,7 @@ def create_debt_record(
         settled_amount=Decimal("0.00"),
         settlement_status=UNSETTLED,
         record_date=record.record_date,
+        recorded_at=record.recorded_at or beijing_now(),
         note=record.note,
         record_subtype=subtype,
         counterparty=record.counterparty,
@@ -128,7 +129,11 @@ def get_debt_records(
     """
     return (
         _build_debt_base_query(db, farm_id, counterparty)
-        .order_by(CostRecord.record_date.desc())
+        .order_by(
+            CostRecord.record_date.desc(),
+            CostRecord.recorded_at.desc(),
+            CostRecord.id.desc(),
+        )
         .offset(skip)
         .limit(limit)
         .all()
@@ -221,7 +226,11 @@ def settle_debt(
     debt = (
         _build_debt_base_query(db, farm_id)
         .filter(CostRecord.counterparty == counterparty)
-        .order_by(CostRecord.record_date.asc())
+        .order_by(
+            CostRecord.record_date.asc(),
+            CostRecord.recorded_at.asc(),
+            CostRecord.id.asc(),
+        )
         .with_for_update()
         .first()
     )
@@ -237,7 +246,7 @@ def settle_debt(
     debt.settled_amount = _quantize_money(current_settled + settlement_amount)
     debt.settlement_status = settlement_status_for(debt.amount, debt.settled_amount)
     if debt.settlement_status == "settled":
-        debt.settled_at = datetime.now(timezone.utc)
+        debt.settled_at = beijing_now()
     else:
         debt.settled_at = None
 

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import time as _time
 from dataclasses import dataclass
 
@@ -39,6 +40,12 @@ class _PermissionDecision:
 
 
 _KNOWN_PERMISSION_LEVELS = {level.value for level in SkillPermissionLevel}
+_DEBT_DIRECTION_HINT_RE = re.compile(
+    r"(?:买|采购|购|花|支出|卖|销售|收入|赚|向|跟|找|在|给|我欠|欠我|未付|未收|先欠着)"
+)
+_AMBIGUOUS_DEBT_RE = re.compile(
+    r"^(?P<name>[\u4e00-\u9fffA-Za-z0-9·]{1,20})(?:赊账|赊了|赊|欠账|欠款|欠)\s*\d*"
+)
 
 
 def _permission_decision(
@@ -103,6 +110,8 @@ def _permission_decision(
 def _build_pending_confirmation_args(name: str, args: dict, farm_id: int) -> dict:
     """构建确认展示用参数，避免修改实际待执行参数。"""
     context_args = dict(args or {})
+    if name == "create_operation_work_order":
+        _normalize_operation_work_order_args(context_args)
     if name == "update_crop_cycle":
         _fill_update_crop_cycle_context_args(context_args, farm_id)
     if name == "settle_labor_payment":
@@ -118,9 +127,55 @@ def _build_pending_execution_args(
 ) -> dict:
     """构建待执行参数，只补齐确定性的目标标识。"""
     execution_args = dict(args or {})
+    if name == "create_operation_work_order":
+        _normalize_operation_work_order_args(execution_args)
     if name == "manage_workers":
         _fill_manage_workers_target_args(execution_args, farm_id, original_input)
     return execution_args
+
+
+def _normalize_operation_work_order_args(args: dict) -> None:
+    """规范化模型常见作业单参数别名。"""
+    _copy_arg_if_missing(args, "operation_date", "work_date")
+    _copy_arg_if_missing(args, "unit_names", "planting_unit_name")
+    _copy_arg_if_missing(args, "workers", "worker_name")
+    _copy_arg_if_missing(args, "pay_type", "payment_method")
+
+
+def _copy_arg_if_missing(args: dict, target: str, source: str) -> None:
+    if args.get(target) in (None, "") and args.get(source) not in (None, ""):
+        args[target] = args[source]
+
+
+def _ambiguous_debt_direction_message(
+    name: str,
+    args: dict,
+) -> str:
+    amount = args.get("amount")
+    amount_text = f"{amount}元" if amount not in (None, "") else "这笔钱"
+    return (
+        f"这笔赊账还没有执行。请先确认谁欠谁："
+        f"是你欠{name}{amount_text}，还是{name}欠你{amount_text}？"
+    )
+
+
+def _needs_debt_direction_clarification(
+    name: str,
+    args: dict,
+    original_input: str,
+) -> str | None:
+    if name != "create_cost_record":
+        return None
+    if args.get("record_subtype") != "赊账":
+        return None
+    text = original_input.strip()
+    if not text or _DEBT_DIRECTION_HINT_RE.search(text):
+        return None
+    counterparty = str(args.get("counterparty") or "").strip()
+    match = _AMBIGUOUS_DEBT_RE.search(text)
+    if match:
+        return counterparty or match.group("name")
+    return None
 
 
 def _fill_update_crop_cycle_context_args(args: dict, farm_id: int) -> None:
@@ -219,7 +274,7 @@ def _fill_settle_labor_context_args(args: dict, farm_id: int) -> None:
         entries = planting_read_service.list_labor_payables(
             db,
             farm_id=farm_id,
-            worker_name=_clean_text(args.get("worker")),
+            worker_name=_clean_text(args.get("worker") or args.get("worker_name")),
             cycle_id=args.get("cycle_id"),
             work_order_id=args.get("work_order_id"),
         )
@@ -311,7 +366,9 @@ def _resolve_pending_worker_from_input(
         .limit(50)
         .all()
     )
-    matches = [worker for worker in workers if worker.name and worker.name in original_input]
+    matches = [
+        worker for worker in workers if worker.name and worker.name in original_input
+    ]
     if not matches and name:
         matches = [
             worker
@@ -460,6 +517,29 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             execution_args = _build_pending_execution_args(
                 name, args, farm_id, original_input
             )
+            ambiguous_debt_name = _needs_debt_direction_clarification(
+                name, execution_args, original_input
+            )
+            if ambiguous_debt_name:
+                content = _ambiguous_debt_direction_message(
+                    ambiguous_debt_name,
+                    execution_args,
+                )
+                collector.record(
+                    node_type="skill_call",
+                    node_name=name,
+                    input_data=execution_args,
+                    output_data={
+                        "status": "need_clarify",
+                        "permission_level": permission_decision.permission_level,
+                        "reason": "ambiguous_debt_direction",
+                    },
+                    duration_ms=0,
+                )
+                return ToolMessage(
+                    content=content,
+                    tool_call_id=tool_call_id,
+                )
             confirmation_args = _build_pending_confirmation_args(
                 name, execution_args, farm_id
             )

@@ -139,6 +139,70 @@ class TestPureNormalPath:
         mock_get_llm.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_direct_debt_summary_returns_without_llm(self):
+        """欠款汇总结果应直达返回，避免最终 LLM 改写成坏表格。"""
+        from unittest.mock import AsyncMock, patch
+
+        normal_msg = ToolMessage(
+            content=(
+                "您目前总欠款为 630.00 元，构成如下：\n"
+                "- 普通赊账：230.00 元\n"
+                "- 未付人工：400.00 元\n"
+                "\n"
+                "普通赊账明细：\n"
+                "- 张三：剩余 230.00 元，2笔\n"
+                "\n"
+                "未付人工明细：\n"
+                "- 刘俊男：未付 300.00 元，2笔\n"
+                "- 哈哈哈：未付 100.00 元，1笔"
+            ),
+            tool_call_id="direct_get_debt_summary",
+        )
+        state = {
+            "messages": [normal_msg],
+            "farm_id": 1,
+            "intent": "query",
+        }
+
+        with (
+            patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+            patch("app.agent.runtime.nodes.get_langchain_tools", return_value=[]),
+            patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+            patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+            patch("app.agent.runtime.nodes.get_collector") as mock_collector,
+            patch("app.agent.runtime.nodes.check_quota", return_value=True),
+            patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+            patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+            patch("app.agent.runtime.llm_support.SessionLocal") as mock_session,
+        ):
+            mock_get_date.return_value = __import__("datetime").date(2026, 6, 8)
+            mock_composer = MagicMock()
+            mock_composer.compose.return_value = "system prompt"
+            mock_get_composer.return_value = mock_composer
+            mock_collector.return_value = MagicMock()
+
+            mock_db = MagicMock()
+            mock_db.query.return_value.filter.return_value.first.return_value = None
+            mock_session.return_value = mock_db
+
+            llm = MagicMock()
+            llm.model_name = "test-model"
+            response = AIMessage(
+                content="| 欠款类型 | 金额 | 详情 | |:---|:---|:---|",
+                response_metadata={"token_usage": {"total_tokens": 10}},
+            )
+            llm.ainvoke = AsyncMock(return_value=response)
+            mock_get_llm.return_value = llm
+
+            result = await _llm_node(state)
+
+        ai_msg = result["messages"][0]
+        assert isinstance(ai_msg, AIMessage)
+        assert ai_msg.content == normal_msg.content
+        assert "| 欠款类型 |" not in ai_msg.content
+        mock_get_llm.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_direct_normal_tool_result_goes_through_llm(self):
         """确定性直达工具结果也必须经过最终 LLM 表达。"""
         from unittest.mock import AsyncMock, patch

@@ -15,46 +15,34 @@ class AppBottomTabBar extends StatelessWidget {
   final ValueChanged<int> onChanged;
 
   static const _tabs = [
-    _TabSpec('首页', LucideIcons.layoutDashboard),
-    _TabSpec('工作台', LucideIcons.briefcaseBusiness),
+    _TabSpec('首页', LucideIcons.house),
+    _TabSpec('记录', LucideIcons.clipboardList),
     _TabSpec('芽芽', LucideIcons.bot),
-    _TabSpec('账单', LucideIcons.receipt),
+    _TabSpec('账本', LucideIcons.receiptJapaneseYen),
     _TabSpec('我的', LucideIcons.user),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 360),
-        height: 60,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.lineSoft),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0D092642),
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(_tabs.length, (index) {
-            final spec = _tabs[index];
-            final selected = selectedIndex == index;
-            return _TabItem(
+    return Container(
+      height: 76,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.lineSoft)),
+      ),
+      child: Row(
+        children: List.generate(_tabs.length, (index) {
+          final spec = _tabs[index];
+          final selected = selectedIndex == index;
+          return Expanded(
+            child: _TabItem(
               label: spec.label,
               icon: spec.icon,
               selected: selected,
-              assistant: index == 2,
               onTap: () => onChanged(index),
-            );
-          }),
-        ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -65,32 +53,23 @@ class _TabItem extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.selected,
-    this.assistant = false,
     required this.onTap,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
-  final bool assistant;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.blue : AppColors.subtle;
+    final color = selected ? AppColors.blue : AppColors.tabMuted;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.blueSoft : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
+      child: SizedBox(
+        height: 76,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedScale(
@@ -99,16 +78,16 @@ class _TabItem extends StatelessWidget {
               curve: Curves.easeOutCubic,
               child: Icon(
                 icon,
-                size: assistant ? 21 : (selected ? 20 : 19),
+                size: 24,
                 color: color,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 5),
             Text(
               label,
               style: AppTextStyles.tab.copyWith(
                 color: color,
-                fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
               ),
             ),
           ],

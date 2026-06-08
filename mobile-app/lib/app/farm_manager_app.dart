@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../features/shell/app_shell.dart';
+import '../features/auth/auth_flow.dart';
 import '../theme/app_theme.dart';
 
 class FarmManagerApp extends StatelessWidget {
@@ -12,7 +12,7 @@ class FarmManagerApp extends StatelessWidget {
       title: 'Farm Manager',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      home: const AppShell(),
+      home: const AuthFlow(),
     );
   }
 }

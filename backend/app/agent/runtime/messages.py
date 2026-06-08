@@ -124,16 +124,9 @@ def _detect_missed_tool_call(
     if not selected_tools:
         return False, []
 
-    # 承诺性词汇 = LLM 说要做某事但实际上没做
-    promise_words = ["帮你", "为你", "查询", "查看", "获取", "调用", "处理"]
-    has_promise = any(w in llm_reply for w in promise_words)
-
-    # 如果 LLM 回复很短（<20字）且没有承诺词，可能是正常闲聊，不重试
-    if len(llm_reply) < 20 and not has_promise:
-        return False, []
-
     # 如果用户消息明显匹配某个工具的关键词，且 LLM 没有调用
     from app.agent.tool_selector import WRITE_PATTERNS, QUERY_TRIGGERS
+    from app.infra.pending_actions import is_write_skill
 
     matched_tools = []
     for tool in selected_tools:
@@ -152,8 +145,63 @@ def _detect_missed_tool_call(
                 matched_tools.append(tool)
                 break
 
+    has_matched_write_tool = any(is_write_skill(tool.name) for tool in matched_tools)
+
+    # 承诺性词汇 = LLM 说要做某事但实际上没做
+    promise_words = [
+        "帮你",
+        "帮您",
+        "为你",
+        "为您",
+        "查询",
+        "查看",
+        "获取",
+        "调用",
+        "处理",
+    ]
+    has_promise = any(w in llm_reply for w in promise_words)
+    write_verbs = (
+        "记录",
+        "记账",
+        "创建",
+        "新增",
+        "添加",
+        "保存",
+        "更新",
+        "修改",
+        "执行",
+        "结算",
+        "还款",
+        "结清",
+        "停用",
+        "恢复",
+        "删除",
+        "移除",
+    )
+    write_verbs_re = "|".join(write_verbs)
+    write_success_patterns = [
+        rf"(?:已|已经)(?:为你|为您|帮你|帮您)?(?:{write_verbs_re})",
+        rf"(?:{write_verbs_re})(?:成功|好了|完成)",
+        rf"成功(?:{write_verbs_re})",
+    ]
+    has_write_success_claim = any(
+        re.search(pattern, llm_reply) for pattern in write_success_patterns
+    )
+
+    # 写操作候选已命中但模型空回复，也必须重试生成 tool_call。
+    if matched_tools and has_matched_write_tool and not str(llm_reply).strip():
+        return True, matched_tools
+
+    # 如果 LLM 回复很短（<20字）且没有承诺词，可能是正常闲聊，不重试
+    if len(llm_reply) < 20 and not has_promise and not has_write_success_claim:
+        return False, []
+
     # 如果用户消息匹配了工具关键词，且 LLM 回复包含承诺词但没有调用工具
     if matched_tools and has_promise:
+        return True, matched_tools
+
+    # 写操作必须通过 tool_call 进入 pending；纯文本宣称“已记录/已执行”一律重试。
+    if matched_tools and has_matched_write_tool and has_write_success_claim:
         return True, matched_tools
 
     return False, []

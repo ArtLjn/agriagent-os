@@ -36,6 +36,18 @@ def test_cost_summary_tool_enables_ledger_selector() -> None:
     assert "LedgerSelector" in _selector_names(result)
 
 
+def test_debt_summary_tool_enables_ledger_selector() -> None:
+    result = ContextPolicy().resolve(
+        ContextBuildRequest(
+            intent="chat",
+            selected_tool_names=["get_debt_summary"],
+        )
+    )
+
+    assert result.max_tokens == 900
+    assert "LedgerSelector" in _selector_names(result)
+
+
 def test_weather_forecast_tool_enables_weather_and_retrieval_layer() -> None:
     result = ContextPolicy().resolve(
         ContextBuildRequest(
@@ -126,9 +138,7 @@ def test_policy_enables_work_order_query_context() -> None:
         "OperationWorkOrderSelector",
         "WorkerSelector",
     }.issubset(selector_names)
-    assert result.dependency_map["operation_work_orders"] == [
-        "operation_work_orders"
-    ]
+    assert result.dependency_map["operation_work_orders"] == ["operation_work_orders"]
 
 
 def test_policy_request_keeps_runtime_identity_and_retrieval_flag() -> None:

@@ -1,7 +1,16 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
+
+from app.core.timezone import beijing_today, ensure_beijing_timezone
 
 
 RECORD_TYPE_ENUM = {"cost", "income"}
@@ -18,6 +27,7 @@ class CostRecordBase(BaseModel):
     settled_amount: Decimal | None = Field(None, ge=0, le=10_000_000)
     settlement_status: str | None = Field(None, max_length=20)
     record_date: date
+    recorded_at: datetime | None = None
     note: str | None = Field(None, max_length=500)
     record_subtype: str | None = Field(None, max_length=50)
     counterparty: str | None = Field(None, max_length=100)
@@ -56,6 +66,11 @@ class CostRecordBase(BaseModel):
             raise ValueError("settled_amount 最多保留两位小数")
         return v
 
+    @field_validator("recorded_at", "settled_at")
+    @classmethod
+    def _normalize_beijing_datetime(cls, v: datetime | None) -> datetime | None:
+        return ensure_beijing_timezone(v)
+
 
 class CostRecordCreate(CostRecordBase):
     """创建成本记账记录请求 Schema。"""
@@ -82,6 +97,11 @@ class CostRecordResponse(CostRecordBase):
     created_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
 
+    @field_serializer("recorded_at", "settled_at", "created_at")
+    def _serialize_beijing_datetime(self, value: datetime | None) -> str | None:
+        normalized = ensure_beijing_timezone(value)
+        return normalized.isoformat() if normalized else None
+
 
 class CostRecordUpdate(BaseModel):
     """更新成本记账记录请求 Schema。"""
@@ -93,6 +113,7 @@ class CostRecordUpdate(BaseModel):
     settled_amount: Decimal | None = Field(None, ge=0, le=10_000_000)
     settlement_status: str | None = Field(None, max_length=20)
     record_date: date | None = None
+    recorded_at: datetime | None = None
     note: str | None = Field(None, max_length=500)
     record_subtype: str | None = Field(None, max_length=50)
     counterparty: str | None = Field(None, max_length=100)
@@ -188,6 +209,9 @@ class CostParseResponse(BaseModel):
     amount: str
     record_date: str
     note: str | None = None
+    record_subtype: str | None = None
+    counterparty: str | None = None
+    due_date: str | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -214,7 +238,7 @@ class CostParseResponse(BaseModel):
     def _validate_record_date(cls, v: str) -> str:
         from datetime import date, timedelta
 
-        today = date.today()
+        today = beijing_today()
         if not v:
             return today.isoformat()
         try:
@@ -256,6 +280,9 @@ class CostParseResult(BaseModel):
     amount: str = "0"
     record_date: str = ""
     note: str | None = None
+    record_subtype: str | None = None
+    counterparty: str | None = None
+    due_date: str | None = None
 
     @field_validator("record_type")
     @classmethod
@@ -289,7 +316,7 @@ class CostParseResult(BaseModel):
     def _validate_record_date(cls, v: str | None) -> str:
         from datetime import date, timedelta
 
-        today = date.today()
+        today = beijing_today()
         if not v:
             return today.isoformat()
         try:
@@ -302,3 +329,30 @@ class CostParseResult(BaseModel):
         if parsed < min_date or parsed > max_date:
             return today.isoformat()
         return parsed.isoformat()
+
+    @field_validator("record_subtype")
+    @classmethod
+    def _validate_record_subtype(cls, v: str | None) -> str | None:
+        if not v or not isinstance(v, str):
+            return None
+        value = v.strip()
+        if value in {"赊账", "欠款", "未结", "未收款", "应付", "应收"}:
+            return "赊账"
+        return value[:50]
+
+    @field_validator("counterparty")
+    @classmethod
+    def _validate_counterparty(cls, v: str | None) -> str | None:
+        if not v or not isinstance(v, str):
+            return None
+        return v.strip()[:100] or None
+
+    @field_validator("due_date")
+    @classmethod
+    def _validate_due_date(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        try:
+            return date.fromisoformat(v).isoformat()
+        except (ValueError, TypeError):
+            return None

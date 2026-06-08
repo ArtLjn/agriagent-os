@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 PRELOAD_MAP: dict[str, list[str]] = {
     "get_weather_forecast": ["weather"],
     "get_cost_summary": ["cost_summary"],
+    "get_debt_summary": ["cost_summary"],
     "get_cost_analytics": ["cost_analytics"],
     "get_farm_status": ["farm_status"],
     "get_crop_cycle_info": ["crop_cycle"],

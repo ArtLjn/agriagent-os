@@ -3,6 +3,8 @@
 from contextvars import ContextVar
 from datetime import date
 
+from app.core.timezone import beijing_today
+
 _current_date_ctx: ContextVar[str | None] = ContextVar("current_date", default=None)
 
 
@@ -19,7 +21,7 @@ def get_request_date() -> date:
             return date.fromisoformat(date_str)
         except ValueError:
             pass
-    return date.today()
+    return beijing_today()
 
 
 __all__ = ["get_request_date", "set_request_date"]

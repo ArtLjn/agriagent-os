@@ -1,16 +1,20 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.main import app
+from app.agent.prompt_registry import get_registry
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordUpdate
 from app.services.report_data_service import _build_report_data
 
 client = TestClient(app)
+get_registry().reload(Path(__file__).parent.parent / "prompts")
 
 
 @pytest.fixture
@@ -57,6 +61,26 @@ def test_create_cost_record(cycle_id):
     assert data["category"] == "肥料"
     assert data["amount"] == "800.00"
     assert data["created_at"]
+    assert data["recorded_at"]
+
+
+def test_create_cost_record_defaults_recorded_at_to_beijing_time(cycle_id, monkeypatch):
+    fixed_time = datetime(2026, 6, 8, 9, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
+    monkeypatch.setattr("app.services.cost_service.beijing_now", lambda: fixed_time)
+    payload = {
+        "cycle_id": cycle_id,
+        "record_type": "cost",
+        "category": "肥料",
+        "amount": "800.00",
+        "record_date": "2025-03-10",
+        "note": "高钾肥20袋",
+    }
+
+    response = client.post("/costs", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["recorded_at"] == fixed_time.isoformat()
 
 
 def test_create_settled_cost_record_defaults_settlement_fields(cycle_id):
@@ -132,7 +156,7 @@ def test_direct_cost_record_normalizes_settlement_fields(db_session):
     assert labor_record.unsettled_amount == Decimal("0.00")
     assert labor_record.settlement_status == "settled"
 
-    debt_record.settled_at = datetime.now(timezone.utc)
+    debt_record.settled_at = datetime.now(ZoneInfo("Asia/Shanghai"))
     db_session.commit()
     db_session.refresh(debt_record)
 

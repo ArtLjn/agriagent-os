@@ -3,18 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('工作台展示平台功能入口', (tester) async {
+  testWidgets('记录页展示 AI 帮填、手动快捷记录和确认卡', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: WorkbenchScreen()));
 
-    expect(find.text('工作台'), findsOneWidget);
-    expect(find.text('平台所有功能的快捷入口'), findsOneWidget);
-    expect(find.text('常用功能'), findsOneWidget);
-    expect(find.text('新建作业'), findsOneWidget);
-    expect(find.text('种植批次'), findsOneWidget);
-    expect(find.text('工人工资'), findsOneWidget);
-    expect(find.text('快速记账'), findsOneWidget);
-    expect(find.text('生产管理'), findsOneWidget);
-    expect(find.text('进行中的批次'), findsOneWidget);
+    expect(find.text('农场管家'), findsOneWidget);
+    expect(find.text('AI帮我填'), findsOneWidget);
+    expect(find.text('自己填'), findsOneWidget);
+    expect(find.text('例如：今天买饲料 3680 元'), findsOneWidget);
+    expect(find.text('手动快捷记录'), findsOneWidget);
+    expect(find.text('记账'), findsOneWidget);
+    expect(find.text('建模板'), findsOneWidget);
+    expect(find.text('AI待确认'), findsOneWidget);
+    expect(find.text('改一下'), findsOneWidget);
+    expect(find.text('保存'), findsOneWidget);
   });
 
   testWidgets('工作台不展示 API 路径', (tester) async {

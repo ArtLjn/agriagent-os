@@ -1,244 +1,369 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../shared/widgets/app_icon_tile.dart';
 import '../../shared/widgets/card_panel.dart';
-import '../../shared/widgets/chip_label.dart';
-import '../../shared/widgets/section_heading.dart';
-import '../../shared/widgets/status_header.dart';
+import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../record_flow/record_ai_confirm_screen.dart';
+import '../record_flow/record_manual_edit_screen.dart';
+import '../record_flow/record_save_success_screen.dart';
+
+part 'workbench_ai_card.dart';
 
 class WorkbenchScreen extends StatelessWidget {
-  const WorkbenchScreen({super.key});
+  const WorkbenchScreen({
+    super.key,
+    this.onGoHome,
+    this.onGoLedger,
+    this.onRecordAgain,
+  });
 
-  static const commonTools = [
-    ToolSpec('新建作业', LucideIcons.filePlus2),
-    ToolSpec('种植批次', LucideIcons.layers),
-    ToolSpec('工人工资', LucideIcons.usersRound),
-    ToolSpec('快速记账', LucideIcons.receipt),
-    ToolSpec('欠款管理', LucideIcons.handCoins),
-    ToolSpec('农事日志', LucideIcons.notebookTabs),
-    ToolSpec('天气预报', LucideIcons.cloudSun),
-    ToolSpec('经营报告', LucideIcons.fileText),
-  ];
+  final VoidCallback? onGoHome;
+  final VoidCallback? onGoLedger;
+  final VoidCallback? onRecordAgain;
 
-  static const productionTools = [
-    ToolSpec('作物模板', LucideIcons.sprout),
-    ToolSpec('种植单元', LucideIcons.map),
-    ToolSpec('作业类型', LucideIcons.listChecks),
-    ToolSpec('近期作业', LucideIcons.calendarDays),
-  ];
+  void _openAiConfirm(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RecordAiConfirmScreen(
+          onGoHome: onGoHome,
+          onGoLedger: onGoLedger,
+          onRecordAgain: onRecordAgain,
+        ),
+      ),
+    );
+  }
+
+  void _openManualEdit(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RecordManualEditScreen(
+          onGoHome: onGoHome,
+          onGoLedger: onGoLedger,
+          onRecordAgain: onRecordAgain,
+        ),
+      ),
+    );
+  }
+
+  void _openSuccess(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RecordSaveSuccessScreen(
+          onGoHome: onGoHome,
+          onGoLedger: onGoLedger,
+          onRecordAgain: onRecordAgain,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        children: [
-          const StatusHeader(
-            title: '工作台',
-            subtitle: '平台所有功能的快捷入口',
-            trailingIcon: LucideIcons.plus,
+    return ReferencePage(
+      headerTrailing: const HeaderIconButton(icon: LucideIcons.clock),
+      children: [
+        const SizedBox(height: 14),
+        _RecordActionGrid(
+          onAiTap: () => _openAiConfirm(context),
+          onManualTap: () => _openManualEdit(context),
+        ),
+        const SizedBox(height: 14),
+        _VoiceInputCard(onTap: () => _openAiConfirm(context)),
+        const SizedBox(height: 14),
+        const _QuickRecordCard(),
+        const SizedBox(height: 14),
+        _AiGeneratedCard(
+          onEdit: () => _openManualEdit(context),
+          onSave: () => _openSuccess(context),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordActionGrid extends StatelessWidget {
+  const _RecordActionGrid({
+    required this.onAiTap,
+    required this.onManualTap,
+  });
+
+  final VoidCallback onAiTap;
+  final VoidCallback onManualTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _RecordActionCard(
+            title: 'AI帮我填',
+            subtitle: '说一句，自动整理成记录',
+            icon: LucideIcons.bot,
+            buttonIcon: LucideIcons.mic,
+            buttonLabel: '开始说话',
+            onTap: onAiTap,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF3685FF), AppColors.blueDark],
+            ),
           ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+        ),
+        SizedBox(width: 14),
+        Expanded(
+          child: _RecordActionCard(
+            title: '自己填',
+            subtitle: '手动记录，快速便捷',
+            icon: LucideIcons.pencil,
+            buttonIcon: LucideIcons.notebookPen,
+            buttonLabel: '立即记录',
+            onTap: onManualTap,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF39D681), Color(0xFF17B664)],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordActionCard extends StatelessWidget {
+  const _RecordActionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.buttonIcon,
+    required this.buttonLabel,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final IconData buttonIcon;
+  final String buttonLabel;
+  final Gradient gradient;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: CardPanel(
+        radius: 12,
+        padding: const EdgeInsets.all(18),
+        gradient: gradient,
+        borderColor: Colors.transparent,
+        child: SizedBox(
+          height: 120,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  ToolsCard(),
-                  SizedBox(height: 12),
-                  ActiveCyclesCard(),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 21,
+                        height: 26 / 21,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  Icon(icon,
+                      color: Colors.white.withValues(alpha: 0.92), size: 28),
                 ],
               ),
-            ),
+              const SizedBox(height: 9),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.body.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.34),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(buttonIcon, color: Colors.white, size: 19),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: Text(
+                        buttonLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.sectionTitle.copyWith(
+                          color: Colors.white,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class ToolsCard extends StatelessWidget {
-  const ToolsCard({super.key});
+class _VoiceInputCard extends StatelessWidget {
+  const _VoiceInputCard({required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return CardPanel(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionHeading(title: '常用功能', action: '编辑'),
-          const SizedBox(height: 14),
-          _ToolGrid(tools: WorkbenchScreen.commonTools),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1, color: AppColors.lineSoft),
-          ),
-          SectionHeading(title: '生产管理'),
-          const SizedBox(height: 12),
-          _ToolGrid(tools: WorkbenchScreen.productionTools),
-        ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: CardPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        child: Row(
+          children: [
+            const Icon(LucideIcons.mic, size: 24, color: AppColors.navy),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Text(
+                '例如：今天买饲料 3680 元',
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.subtle,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const Icon(
+              LucideIcons.audioWaveform,
+              size: 24,
+              color: AppColors.blue,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ToolGrid extends StatelessWidget {
-  const _ToolGrid({required this.tools});
-
-  final List<ToolSpec> tools;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 4,
-      childAspectRatio: 0.88,
-      children: tools
-          .map(
-            (tool) => AppIconTile(
-              icon: tool.icon,
-              label: tool.label,
-              tone: IconTone.blue,
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class ActiveCyclesCard extends StatelessWidget {
-  const ActiveCyclesCard({super.key});
+class _QuickRecordCard extends StatelessWidget {
+  const _QuickRecordCard();
 
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeading(title: '进行中的批次', action: '管理'),
+          Text('手动快捷记录', style: AppTextStyles.sectionTitle),
           SizedBox(height: 12),
-          CycleProgressCard(
-            title: '春茬西瓜 · A 批',
-            stage: '授粉期',
-            meta: '28 亩 · 12 个种植单元',
-            action: '今日复核',
-            progress: 0.76,
-          ),
-          SizedBox(height: 12),
-          CycleProgressCard(
-            title: '番茄试种 · B 批',
-            stage: '缓苗期',
-            meta: '6 亩 · 3 个种植单元',
-            action: '观察温差',
-            progress: 0.38,
-          ),
+          _QuickRecordGrid(),
         ],
       ),
     );
   }
 }
 
-class CycleProgressCard extends StatelessWidget {
-  const CycleProgressCard({
-    super.key,
-    required this.title,
-    required this.stage,
-    required this.meta,
-    required this.action,
-    required this.progress,
-  });
+class _QuickRecordGrid extends StatelessWidget {
+  const _QuickRecordGrid();
 
-  final String title;
-  final String stage;
-  final String meta;
-  final String action;
-  final double progress;
+  static const items = [
+    _QuickRecordItem(
+        '记账', LucideIcons.walletCards, AppColors.blue, AppColors.blueSoft),
+    _QuickRecordItem(
+        '记农事', LucideIcons.leaf, AppColors.greenDark, AppColors.greenSoft),
+    _QuickRecordItem(
+        '记工资', LucideIcons.handCoins, AppColors.amber, AppColors.amberSoft),
+    _QuickRecordItem(
+        '建批次', LucideIcons.layers, AppColors.purple, AppColors.purpleSoft),
+    _QuickRecordItem(
+        '新增工人', LucideIcons.userRoundPlus, AppColors.blue, AppColors.blueSoft),
+    _QuickRecordItem(
+        '建模板', LucideIcons.fileText, AppColors.teal, AppColors.tealSoft),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.28,
+      children: items.map((item) => _QuickRecordTile(item: item)).toList(),
+    );
+  }
+}
+
+class _QuickRecordTile extends StatelessWidget {
+  const _QuickRecordTile({required this.item});
+
+  final _QuickRecordItem item;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface3,
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.lineSoft),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.ink,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(meta, style: AppTextStyles.small),
-                  ],
-                ),
-              ),
-              ChipLabel(
-                text: stage,
-                background: AppColors.greenSoft,
-                foreground: AppColors.green,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 7,
-              backgroundColor: const Color(0xFFE2E9F2),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                AppColors.blue,
-              ),
-            ),
+          IconBadge(
+            icon: item.icon,
+            color: item.color,
+            background: item.background,
+            size: 38,
+            iconSize: 21,
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${(progress * 100).round()}% 已推进',
-                style: AppTextStyles.small.copyWith(color: AppColors.subtle),
-              ),
-              Text(
-                action,
-                style: AppTextStyles.small.copyWith(
-                  color: AppColors.blue,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
+          Text(item.label, style: AppTextStyles.listTitle),
         ],
       ),
     );
   }
 }
 
-class ToolSpec {
-  const ToolSpec(this.label, this.icon);
+class _QuickRecordItem {
+  const _QuickRecordItem(this.label, this.icon, this.color, this.background);
 
   final String label;
   final IconData icon;
+  final Color color;
+  final Color background;
 }

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from app.context.models import ContextBundle
 
 
 def _make_state(messages, farm_id=1):
@@ -42,6 +43,560 @@ def test_filter_tool_calls_by_selected_drops_unbound_tool():
     assert result == [
         {"name": "create_crop_cycle", "args": {"crop_name": "小麦"}, "id": "tc2"}
     ]
+
+
+def test_detect_missed_tool_call_flags_write_success_claim_without_tool_call():
+    """写操作被模型直接说已记录时，应视为漏调工具。"""
+    from app.agent.graph import _detect_missed_tool_call
+
+    selected_tool = MagicMock()
+    selected_tool.name = "create_cost_record"
+
+    should_retry, matched = _detect_missed_tool_call(
+        "今天买橘子种子130张三赊账",
+        "已记录：今天购买橘子种子，花费130元，由张三赊账。",
+        [selected_tool],
+    )
+
+    assert should_retry is True
+    assert matched == [selected_tool]
+
+
+def test_detect_missed_tool_call_flags_polite_write_success_claim():
+    """“已为您记录”这类礼貌成功话术也不能绕过写工具。"""
+    from app.agent.graph import _detect_missed_tool_call
+
+    selected_tool = MagicMock()
+    selected_tool.name = "create_cost_record"
+
+    should_retry, matched = _detect_missed_tool_call(
+        "今天买橘子种子130张三赊账",
+        (
+            "已为您记录：向张三赊购橘子种子，金额 130 元。\n\n"
+            "请问这笔费用应该计入哪个成本分类？"
+        ),
+        [selected_tool],
+    )
+
+    assert should_retry is True
+    assert matched == [selected_tool]
+
+
+def test_detect_missed_tool_call_flags_worker_create_success_claim():
+    """新增工人成功话术没有 tool_call 时，也必须 fail closed。"""
+    from app.agent.graph import _detect_missed_tool_call
+
+    selected_tool = MagicMock()
+    selected_tool.name = "manage_workers"
+
+    should_retry, matched = _detect_missed_tool_call(
+        "新来一个工人李丽工资100一天",
+        "已新增工人李丽，日工资为100元。",
+        [selected_tool],
+    )
+
+    assert should_retry is True
+    assert matched == [selected_tool]
+
+
+@pytest.mark.asyncio
+@pytest.mark.no_db
+@patch("app.agent.runtime.nodes._record_llm_success")
+@patch("app.agent.runtime.nodes._record_llm_failure")
+@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.nodes.get_llm")
+@patch("app.agent.runtime.nodes.get_langchain_tools")
+@patch("app.agent.runtime.nodes._get_classifier", return_value=None)
+@patch("app.agent.runtime.nodes.select_tools", return_value=["get_crop_cycle_info"])
+@patch("app.agent.runtime.nodes.expand_by_chain", return_value={"get_crop_cycle_info"})
+@patch(
+    "app.agent.runtime.nodes._get_farm_context",
+    return_value={
+        "display_name": "农友",
+        "farm_location": "",
+        "farm_coords": "",
+        "active_crops": "",
+    },
+)
+@patch("app.agent.runtime.nodes.check_quota", return_value=True)
+@patch("app.agent.runtime.nodes.increment_round", return_value=1)
+@patch("app.agent.runtime.nodes.get_collector")
+@patch("app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs)
+@patch(
+    "app.agent.runtime.nodes._find_last_human_message",
+    return_value="水稻茬口1号棚今天",
+)
+@patch("app.agent.runtime.nodes.get_request_date")
+@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
+@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.nodes.settings")
+async def test_operation_work_order_clarification_keeps_write_tool_bound(
+    mock_settings,
+    mock_composer,
+    mock_context_bundle,
+    mock_date,
+    mock_find_human,
+    mock_sliding,
+    mock_collector,
+    mock_round,
+    mock_quota,
+    mock_farm_ctx,
+    mock_expand,
+    mock_select,
+    mock_classifier,
+    mock_tools,
+    mock_get_llm,
+    mock_circuit_key,
+    mock_failure,
+    mock_success,
+):
+    """作业单追问后的补充句，不能只绑定读工具导致写工具 JSON 泄漏。"""
+    mock_settings.ai = MagicMock(failover_max_retries=1, parallel_tool_calls=True)
+    mock_composer.return_value.compose.return_value = "system prompt"
+    mock_collector.return_value = MagicMock()
+    mock_context_bundle.return_value = (
+        ContextBundle(blocks=[], token_budget=1000, token_estimate=0),
+        {
+            "display_name": "农友",
+            "farm_location": "",
+            "farm_coords": "",
+            "active_crops": "",
+        },
+    )
+
+    read_tool = MagicMock()
+    read_tool.name = "get_crop_cycle_info"
+    write_tool = MagicMock()
+    write_tool.name = "create_operation_work_order"
+    mock_tools.return_value = [read_tool, write_tool]
+
+    tool_call = {
+        "name": "create_operation_work_order",
+        "args": {
+            "worker_name": "李丽",
+            "crop_cycle_name": "水稻",
+            "planting_unit_name": "1号棚",
+            "work_date": "2026-06-08",
+            "operation_type": "采收",
+            "unit_price": 100,
+        },
+        "id": "tc_work_order",
+    }
+    llm = AsyncMock()
+    llm.model_name = "test-model"
+    llm.bind_tools = MagicMock(return_value=llm)
+    llm.ainvoke = AsyncMock(return_value=AIMessage(content="", tool_calls=[tool_call]))
+    mock_get_llm.return_value = llm
+
+    from app.agent.graph import _llm_node
+
+    result = await _llm_node(
+        {
+            "messages": [
+                HumanMessage(content="安排李丽去水稻采收"),
+                AIMessage(content="确认后我帮您创建农事作业单。"),
+                HumanMessage(content="水稻茬口1号棚今天"),
+            ],
+            "farm_id": 1,
+            "intent": "query",
+        }
+    )
+
+    response = result["messages"][0]
+    assert response.content == ""
+    assert response.tool_calls[0]["name"] == "create_operation_work_order"
+    assert response.tool_calls[0]["args"] == tool_call["args"]
+    bound_tools = llm.bind_tools.call_args.args[0]
+    assert {tool.name for tool in bound_tools} == {
+        "get_crop_cycle_info",
+        "create_operation_work_order",
+    }
+
+
+@pytest.mark.asyncio
+@patch("app.agent.runtime.nodes._record_llm_success")
+@patch("app.agent.runtime.nodes._record_llm_failure")
+@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.nodes.get_llm")
+@patch("app.agent.runtime.nodes.get_langchain_tools")
+@patch("app.agent.runtime.nodes._get_classifier", return_value=None)
+@patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
+@patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
+@patch(
+    "app.agent.runtime.nodes._get_farm_context",
+    return_value={
+        "display_name": "农友",
+        "farm_location": "",
+        "farm_coords": "",
+        "active_crops": "",
+    },
+)
+@patch("app.agent.runtime.nodes.check_quota", return_value=True)
+@patch("app.agent.runtime.nodes.increment_round", return_value=1)
+@patch("app.agent.runtime.nodes.get_collector")
+@patch("app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs)
+@patch(
+    "app.agent.runtime.nodes._find_last_human_message",
+    return_value="今天买橘子种子130张三赊账",
+)
+@patch("app.agent.runtime.nodes.get_request_date")
+@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
+@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.nodes.settings")
+async def test_write_success_claim_retry_accepts_native_tool_calls(
+    mock_settings,
+    mock_composer,
+    mock_context_bundle,
+    mock_date,
+    mock_find_human,
+    mock_sliding,
+    mock_collector,
+    mock_round,
+    mock_quota,
+    mock_farm_ctx,
+    mock_expand,
+    mock_select,
+    mock_classifier,
+    mock_tools,
+    mock_get_llm,
+    mock_circuit_key,
+    mock_failure,
+    mock_success,
+):
+    """模型先说已记录、重试后返回原生 tool_calls 时，应进入工具调用流程。"""
+    mock_settings.ai = MagicMock(failover_max_retries=1, parallel_tool_calls=True)
+    mock_composer.return_value.compose.return_value = "system prompt"
+    mock_collector.return_value = MagicMock()
+    mock_context_bundle.return_value = (
+        ContextBundle(blocks=[], token_budget=1000, token_estimate=0),
+        {
+            "display_name": "农友",
+            "farm_location": "",
+            "farm_coords": "",
+            "active_crops": "",
+        },
+    )
+
+    tool_mock = MagicMock()
+    tool_mock.name = "create_cost_record"
+    mock_tools.return_value = [tool_mock]
+
+    first_response = AIMessage(
+        content="已记录：今天购买橘子种子，花费130元，由张三赊账。",
+        tool_calls=[],
+    )
+    retry_response = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "create_cost_record",
+                "args": {
+                    "amount": 130,
+                    "category": "种子",
+                    "record_type": "cost",
+                    "record_subtype": "赊账",
+                    "counterparty": "张三",
+                },
+                "id": "tc_retry",
+            }
+        ],
+    )
+    llm = AsyncMock()
+    llm.model_name = "test-model"
+    llm.bind_tools = MagicMock(return_value=llm)
+    llm.ainvoke = AsyncMock(side_effect=[first_response, retry_response])
+    mock_get_llm.return_value = llm
+
+    from app.agent.graph import _llm_node
+
+    result = await _llm_node(
+        {"messages": [HumanMessage(content="今天买橘子种子130张三赊账")], "farm_id": 1}
+    )
+
+    response = result["messages"][0]
+    assert response.content == ""
+    assert response.tool_calls == retry_response.tool_calls
+
+
+@pytest.mark.asyncio
+@patch("app.agent.runtime.nodes._record_llm_success")
+@patch("app.agent.runtime.nodes._record_llm_failure")
+@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.nodes.get_llm")
+@patch("app.agent.runtime.nodes.get_langchain_tools")
+@patch("app.agent.runtime.nodes._get_classifier", return_value=None)
+@patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
+@patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
+@patch(
+    "app.agent.runtime.nodes._get_farm_context",
+    return_value={
+        "display_name": "农友",
+        "farm_location": "",
+        "farm_coords": "",
+        "active_crops": "",
+    },
+)
+@patch("app.agent.runtime.nodes.check_quota", return_value=True)
+@patch("app.agent.runtime.nodes.increment_round", return_value=1)
+@patch("app.agent.runtime.nodes.get_collector")
+@patch("app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs)
+@patch(
+    "app.agent.runtime.nodes._find_last_human_message",
+    return_value="今天买橘子种子130张三赊账",
+)
+@patch("app.agent.runtime.nodes.get_request_date")
+@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
+@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.nodes.settings")
+async def test_write_success_claim_retry_fails_closed_without_tool_call(
+    mock_settings,
+    mock_composer,
+    mock_context_bundle,
+    mock_date,
+    mock_find_human,
+    mock_sliding,
+    mock_collector,
+    mock_round,
+    mock_quota,
+    mock_farm_ctx,
+    mock_expand,
+    mock_select,
+    mock_classifier,
+    mock_tools,
+    mock_get_llm,
+    mock_circuit_key,
+    mock_failure,
+    mock_success,
+):
+    """写操作重试仍无 tool_call 时，不能返回模型的已记录幻觉。"""
+    mock_settings.ai = MagicMock(failover_max_retries=1, parallel_tool_calls=True)
+    mock_composer.return_value.compose.return_value = "system prompt"
+    mock_collector.return_value = MagicMock()
+    mock_context_bundle.return_value = (
+        ContextBundle(blocks=[], token_budget=1000, token_estimate=0),
+        {
+            "display_name": "农友",
+            "farm_location": "",
+            "farm_coords": "",
+            "active_crops": "",
+        },
+    )
+
+    tool_mock = MagicMock()
+    tool_mock.name = "create_cost_record"
+    mock_tools.return_value = [tool_mock]
+
+    first_response = AIMessage(
+        content="已记录：今天购买橘子种子，花费130元，由张三赊账。",
+        tool_calls=[],
+    )
+    retry_response = AIMessage(
+        content="已记录：今天购买橘子种子，花费130元，由张三赊账。",
+        tool_calls=[],
+    )
+    llm = AsyncMock()
+    llm.model_name = "test-model"
+    llm.bind_tools = MagicMock(return_value=llm)
+    llm.ainvoke = AsyncMock(side_effect=[first_response, retry_response])
+    mock_get_llm.return_value = llm
+
+    from app.agent.graph import _llm_node
+
+    result = await _llm_node(
+        {"messages": [HumanMessage(content="今天买橘子种子130张三赊账")], "farm_id": 1}
+    )
+
+    response = result["messages"][0]
+    assert "已记录" not in response.content
+    assert "还没有执行" in response.content
+    assert not response.tool_calls
+
+
+@pytest.mark.asyncio
+@patch("app.agent.runtime.nodes._record_llm_success")
+@patch("app.agent.runtime.nodes._record_llm_failure")
+@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.nodes.get_llm")
+@patch("app.agent.runtime.nodes.get_langchain_tools")
+@patch("app.agent.runtime.nodes._get_classifier", return_value=None)
+@patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
+@patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
+@patch(
+    "app.agent.runtime.nodes._get_farm_context",
+    return_value={
+        "display_name": "农友",
+        "farm_location": "",
+        "farm_coords": "",
+        "active_crops": "",
+    },
+)
+@patch("app.agent.runtime.nodes.check_quota", return_value=True)
+@patch("app.agent.runtime.nodes.increment_round", return_value=1)
+@patch("app.agent.runtime.nodes.get_collector")
+@patch("app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs)
+@patch(
+    "app.agent.runtime.nodes._find_last_human_message",
+    return_value="今天买橘子种子130张三赊账",
+)
+@patch("app.agent.runtime.nodes.get_request_date")
+@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
+@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.nodes.settings")
+async def test_polite_write_success_claim_with_clarification_fails_closed(
+    mock_settings,
+    mock_composer,
+    mock_context_bundle,
+    mock_date,
+    mock_find_human,
+    mock_sliding,
+    mock_collector,
+    mock_round,
+    mock_quota,
+    mock_farm_ctx,
+    mock_expand,
+    mock_select,
+    mock_classifier,
+    mock_tools,
+    mock_get_llm,
+    mock_circuit_key,
+    mock_failure,
+    mock_success,
+):
+    """一边说已为您记录一边追问分类，也不能返回未执行成功话术。"""
+    mock_settings.ai = MagicMock(failover_max_retries=1, parallel_tool_calls=True)
+    mock_composer.return_value.compose.return_value = "system prompt"
+    mock_collector.return_value = MagicMock()
+    mock_context_bundle.return_value = (
+        ContextBundle(blocks=[], token_budget=1000, token_estimate=0),
+        {
+            "display_name": "农友",
+            "farm_location": "",
+            "farm_coords": "",
+            "active_crops": "",
+        },
+    )
+
+    tool_mock = MagicMock()
+    tool_mock.name = "create_cost_record"
+    mock_tools.return_value = [tool_mock]
+
+    hallucinated_reply = (
+        "已为您记录：向张三赊购橘子种子，金额 130 元。\n\n"
+        "请问这笔费用应该计入哪个成本分类？（例如：种子费、农资等）"
+    )
+    llm = AsyncMock()
+    llm.model_name = "test-model"
+    llm.bind_tools = MagicMock(return_value=llm)
+    llm.ainvoke = AsyncMock(
+        side_effect=[
+            AIMessage(content=hallucinated_reply, tool_calls=[]),
+            AIMessage(content=hallucinated_reply, tool_calls=[]),
+        ]
+    )
+    mock_get_llm.return_value = llm
+
+    from app.agent.graph import _llm_node
+
+    result = await _llm_node(
+        {"messages": [HumanMessage(content="今天买橘子种子130张三赊账")], "farm_id": 1}
+    )
+
+    response = result["messages"][0]
+    assert "已为您记录" not in response.content
+    assert "还没有执行" in response.content
+    assert "确认" in response.content
+
+
+@pytest.mark.asyncio
+@patch("app.agent.runtime.nodes._record_llm_success")
+@patch("app.agent.runtime.nodes._record_llm_failure")
+@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.nodes.get_llm")
+@patch("app.agent.runtime.nodes.get_langchain_tools")
+@patch("app.agent.runtime.nodes._get_classifier", return_value=None)
+@patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
+@patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
+@patch(
+    "app.agent.runtime.nodes._get_farm_context",
+    return_value={
+        "display_name": "农友",
+        "farm_location": "",
+        "farm_coords": "",
+        "active_crops": "",
+    },
+)
+@patch("app.agent.runtime.nodes.check_quota", return_value=True)
+@patch("app.agent.runtime.nodes.increment_round", return_value=1)
+@patch("app.agent.runtime.nodes.get_collector")
+@patch("app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs)
+@patch(
+    "app.agent.runtime.nodes._find_last_human_message",
+    return_value="买了200块化肥",
+)
+@patch("app.agent.runtime.nodes.get_request_date")
+@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
+@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.nodes.settings")
+async def test_empty_write_response_fails_closed_without_retry_tool_call(
+    mock_settings,
+    mock_composer,
+    mock_context_bundle,
+    mock_date,
+    mock_find_human,
+    mock_sliding,
+    mock_collector,
+    mock_round,
+    mock_quota,
+    mock_farm_ctx,
+    mock_expand,
+    mock_select,
+    mock_classifier,
+    mock_tools,
+    mock_get_llm,
+    mock_circuit_key,
+    mock_failure,
+    mock_success,
+):
+    """写意图下模型空回复不能返回“换个说法”，必须明确未执行。"""
+    mock_settings.ai = MagicMock(failover_max_retries=1, parallel_tool_calls=True)
+    mock_composer.return_value.compose.return_value = "system prompt"
+    mock_collector.return_value = MagicMock()
+    mock_context_bundle.return_value = (
+        ContextBundle(blocks=[], token_budget=1000, token_estimate=0),
+        {
+            "display_name": "农友",
+            "farm_location": "",
+            "farm_coords": "",
+            "active_crops": "",
+        },
+    )
+
+    tool_mock = MagicMock()
+    tool_mock.name = "create_cost_record"
+    mock_tools.return_value = [tool_mock]
+
+    llm = AsyncMock()
+    llm.model_name = "test-model"
+    llm.bind_tools = MagicMock(return_value=llm)
+    llm.ainvoke = AsyncMock(
+        side_effect=[
+            AIMessage(content="", tool_calls=[]),
+            AIMessage(content="", tool_calls=[]),
+        ]
+    )
+    mock_get_llm.return_value = llm
+
+    from app.agent.graph import _llm_node
+
+    result = await _llm_node(
+        {"messages": [HumanMessage(content="买了200块化肥")], "farm_id": 1}
+    )
+
+    response = result["messages"][0]
+    assert "换个说法" not in response.content
+    assert "还没有执行" in response.content
+    assert "待确认" in response.content
+    assert llm.ainvoke.await_count == 2
 
 
 @pytest.fixture(autouse=True)

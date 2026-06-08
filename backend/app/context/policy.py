@@ -62,7 +62,7 @@ class ContextPolicyResult:
 class ContextPolicy:
     """根据意图和工具选择 Context 构建策略。"""
 
-    COST_TOOLS = frozenset({"get_cost_summary"})
+    COST_TOOLS = frozenset({"get_cost_summary", "get_debt_summary"})
     WEATHER_TOOLS = frozenset({"get_weather_forecast"})
     CROP_CYCLE_TOOLS = frozenset(
         {"update_crop_cycle", "create_crop_cycle", "update_crop_stage"}
@@ -138,12 +138,16 @@ class ContextPolicy:
         if selected_tool_names & self.WEATHER_TOOLS:
             if not any(isinstance(selector, WeatherSelector) for selector in selectors):
                 selectors.append(WeatherSelector())
-            if not any(isinstance(selector, RetrievalSelector) for selector in selectors):
+            if not any(
+                isinstance(selector, RetrievalSelector) for selector in selectors
+            ):
                 selectors.append(RetrievalSelector())
             layers.append(ContextLayer.RETRIEVAL)
 
         if request.include_retrieval:
-            if not any(isinstance(selector, RetrievalSelector) for selector in selectors):
+            if not any(
+                isinstance(selector, RetrievalSelector) for selector in selectors
+            ):
                 selectors.append(RetrievalSelector())
             layers.append(ContextLayer.RETRIEVAL)
 

@@ -8,11 +8,14 @@ void main() {
     expect(AppColors.tealSoft.toARGB32(), isNot(equals(0xFFF3EFFF)));
   });
 
-  test('核心色值与 HTML 设计稿一致', () {
-    expect(AppColors.background, const Color(0xFFF6F8FB));
+  test('核心色值与 Flutter 参考规格一致', () {
+    expect(AppColors.background, const Color(0xFFF7F9FC));
     expect(AppColors.surface, Colors.white);
-    expect(AppColors.ink, const Color(0xFF101828));
-    expect(AppColors.blue, const Color(0xFF4078FF));
+    expect(AppColors.ink, const Color(0xFF111827));
+    expect(AppColors.blue, const Color(0xFF2F73F6));
+    expect(AppColors.green, const Color(0xFF35C879));
+    expect(AppColors.amber, const Color(0xFFFF9F1C));
+    expect(AppColors.purple, const Color(0xFF7C5CFF));
     expect(AppColors.cyan, const Color(0xFF0EA5B8));
     expect(AppColors.teal, const Color(0xFF0891B2));
   });

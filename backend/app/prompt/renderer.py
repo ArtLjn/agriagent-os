@@ -1,11 +1,12 @@
 """Prompt 渲染器。"""
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from jinja2 import Template
 
+from app.core.timezone import beijing_now
 from app.prompt.models import PromptInput
 
 if TYPE_CHECKING:
@@ -18,9 +19,9 @@ _WEEKDAY_MAP = ["一", "二", "三", "四", "五", "六", "日"]
 
 def _build_builtin_vars(current_date: date | None = None) -> dict:
     """构建内置模板变量。"""
+    now = beijing_now()
     if current_date is None:
-        current_date = date.today()
-    now = datetime.now()
+        current_date = now.date()
     weekday_cn = f"星期{_WEEKDAY_MAP[current_date.weekday()]}"
     return {
         "current_date": current_date.isoformat(),

@@ -45,7 +45,13 @@ _SKILL_EMOJI: dict[str, str] = {
 }
 
 _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
-    "create_cost_record": ["category", "amount", "record_type"],
+    "create_cost_record": [
+        "category",
+        "amount",
+        "record_type",
+        "record_subtype",
+        "counterparty",
+    ],
     "create_crop_cycle": ["crop_name", "season"],
     "create_crop_template": ["crop_name"],
     "log_farm_activity": ["operation_type"],
@@ -55,7 +61,7 @@ _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
         "operation_type",
         "operation_date",
     ],
-    "settle_labor_payment": ["worker", "amount", "work_order_id"],
+    "settle_labor_payment": ["worker", "worker_name", "amount", "work_order_id"],
     "settle_debt": ["counterparty", "amount"],
     "update_crop_stage": ["stage_name"],
     "manage_workers": ["action", "name", "worker_id", "default_unit_price"],

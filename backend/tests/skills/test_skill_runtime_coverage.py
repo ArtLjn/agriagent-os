@@ -1,5 +1,8 @@
 """Skill 运行时覆盖审计测试。"""
 
+from pathlib import Path
+import re
+
 import pytest
 
 from app.agent.skills import get_skill_manager
@@ -8,6 +11,7 @@ from app.agent.skills.metadata import (
     get_skill_metadata,
 )
 from app.agent.tool_selector import QUERY_TRIGGERS, TOOL_CHAIN_MAP, WRITE_PATTERNS
+from app.infra.pending_actions import WRITE_SKILLS
 
 pytestmark = pytest.mark.no_db
 
@@ -15,6 +19,7 @@ pytestmark = pytest.mark.no_db
 EXPECTED_REGISTERED_SKILLS = {
     "get_cost_analytics",
     "get_cost_summary",
+    "get_debt_summary",
     "create_cost_record",
     "delete_cost_record",
     "create_crop_cycle",
@@ -70,6 +75,8 @@ EXPECTED_WRITE_SKILLS = {
     "manage_user_settings",
 }
 
+SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
+
 
 def _registered_skills() -> dict[str, object]:
     manager = get_skill_manager()
@@ -79,6 +86,22 @@ def _registered_skills() -> dict[str, object]:
         if skill is not None:
             result[skill_def.name] = skill
     return result
+
+
+def _write_skill_docs() -> set[str]:
+    names = set()
+    for path in SKILLS_DIR.glob("*/skill.md"):
+        text = path.read_text(encoding="utf-8")
+        frontmatter = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
+        if frontmatter is None:
+            continue
+        frontmatter_text = frontmatter.group(1)
+        if not re.search(r"^type:\s*write\s*$", frontmatter_text, re.MULTILINE):
+            continue
+        name = re.search(r"^name:\s*(\S+)\s*$", frontmatter_text, re.MULTILINE)
+        if name is not None:
+            names.add(name.group(1).strip("\"'"))
+    return names
 
 
 def test_registered_skill_inventory_is_expected() -> None:
@@ -120,6 +143,10 @@ def test_write_skills_use_write_confirm_permission() -> None:
     }
 
     assert wrong_permission == {}
+
+
+def test_write_skill_docs_are_registered_for_pending_confirmation() -> None:
+    assert _write_skill_docs() == WRITE_SKILLS
 
 
 def test_disabled_skills_have_disabled_reason() -> None:

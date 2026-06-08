@@ -8,7 +8,6 @@ triggers:
   - 还款
   - 清账
   - 结清
-  - 欠款
   - 还了
 parameters:
   type: object
@@ -32,7 +31,7 @@ parameters:
 用户表达已经还钱、准备结清、清账、把欠款还上等写入动作时使用本 Skill。
 
 ## 不要使用
-- 用户只是查询“还欠多少”“欠谁的钱”“赊账账单”时，不要用本 Skill；当前可先用 `get_cost_summary` 或后续新增债务查询 Skill。
+- 用户只是查询“还欠多少”“欠谁的钱”“赊账账单”时，不要用本 Skill；应使用 `get_debt_summary`。
 - 用户是在新增一笔赊账时，应使用 `create_cost_record`。
 - 用户没有确认实际还款动作时，不要执行。
 
