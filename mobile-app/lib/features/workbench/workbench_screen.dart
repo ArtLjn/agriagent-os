@@ -13,21 +13,21 @@ class WorkbenchScreen extends StatelessWidget {
   const WorkbenchScreen({super.key});
 
   static const commonTools = [
-    ToolSpec('新建作业', LucideIcons.filePlus2, IconTone.blue),
-    ToolSpec('种植批次', LucideIcons.layers, IconTone.cyan),
-    ToolSpec('工人工资', LucideIcons.usersRound, IconTone.teal),
-    ToolSpec('快速记账', LucideIcons.receipt, IconTone.green),
-    ToolSpec('欠款管理', LucideIcons.handCoins, IconTone.amber),
-    ToolSpec('农事日志', LucideIcons.notebookTabs, IconTone.blue),
-    ToolSpec('天气预报', LucideIcons.cloudSun, IconTone.cyan),
-    ToolSpec('经营报告', LucideIcons.fileText, IconTone.teal),
+    ToolSpec('新建作业', LucideIcons.filePlus2),
+    ToolSpec('种植批次', LucideIcons.layers),
+    ToolSpec('工人工资', LucideIcons.usersRound),
+    ToolSpec('快速记账', LucideIcons.receipt),
+    ToolSpec('欠款管理', LucideIcons.handCoins),
+    ToolSpec('农事日志', LucideIcons.notebookTabs),
+    ToolSpec('天气预报', LucideIcons.cloudSun),
+    ToolSpec('经营报告', LucideIcons.fileText),
   ];
 
   static const productionTools = [
-    ToolSpec('作物模板', LucideIcons.sprout, IconTone.blue),
-    ToolSpec('种植单元', LucideIcons.map, IconTone.cyan),
-    ToolSpec('作业类型', LucideIcons.listChecks, IconTone.green),
-    ToolSpec('近期作业', LucideIcons.calendarDays, IconTone.amber),
+    ToolSpec('作物模板', LucideIcons.sprout),
+    ToolSpec('种植单元', LucideIcons.map),
+    ToolSpec('作业类型', LucideIcons.listChecks),
+    ToolSpec('近期作业', LucideIcons.calendarDays),
   ];
 
   @override
@@ -46,11 +46,8 @@ class WorkbenchScreen extends StatelessWidget {
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ToolGridCard(title: '常用功能', action: '编辑', tools: commonTools),
-                  SizedBox(height: 16),
-                  ToolGridCard(
-                      title: '生产管理', compact: true, tools: productionTools),
-                  SizedBox(height: 16),
+                  ToolsCard(),
+                  SizedBox(height: 12),
                   ActiveCyclesCard(),
                 ],
               ),
@@ -62,52 +59,55 @@ class WorkbenchScreen extends StatelessWidget {
   }
 }
 
-class ToolGridCard extends StatelessWidget {
-  const ToolGridCard({
-    super.key,
-    required this.title,
-    required this.tools,
-    this.action,
-    this.compact = false,
-  });
-
-  final String title;
-  final String? action;
-  final List<ToolSpec> tools;
-  final bool compact;
+class ToolsCard extends StatelessWidget {
+  const ToolsCard({super.key});
 
   @override
   Widget build(BuildContext context) {
     return CardPanel(
-      padding: EdgeInsets.all(compact ? 16 : 18),
-      radius: 16,
-      shadow: false,
-      borderColor: Colors.transparent,
-      background: Colors.transparent,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeading(title: title, action: action),
-          SizedBox(height: compact ? 12 : 16),
-          GridView.count(
-            crossAxisCount: 4,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: compact ? 12 : 16,
-            crossAxisSpacing: 8,
-            childAspectRatio: compact ? 0.9 : 0.84,
-            children: tools
-                .map(
-                  (tool) => AppIconTile(
-                    icon: tool.icon,
-                    label: tool.label,
-                    tone: tool.tone,
-                  ),
-                )
-                .toList(),
+          SectionHeading(title: '常用功能', action: '编辑'),
+          const SizedBox(height: 14),
+          _ToolGrid(tools: WorkbenchScreen.commonTools),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1, color: AppColors.lineSoft),
           ),
+          SectionHeading(title: '生产管理'),
+          const SizedBox(height: 12),
+          _ToolGrid(tools: WorkbenchScreen.productionTools),
         ],
       ),
+    );
+  }
+}
+
+class _ToolGrid extends StatelessWidget {
+  const _ToolGrid({required this.tools});
+
+  final List<ToolSpec> tools;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 4,
+      childAspectRatio: 0.88,
+      children: tools
+          .map(
+            (tool) => AppIconTile(
+              icon: tool.icon,
+              label: tool.label,
+              tone: IconTone.blue,
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -118,12 +118,11 @@ class ActiveCyclesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CardPanel(
-      radius: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeading(title: '进行中的批次', action: '管理'),
-          SizedBox(height: 14),
+          SizedBox(height: 12),
           CycleProgressCard(
             title: '春茬西瓜 · A 批',
             stage: '授粉期',
@@ -131,7 +130,7 @@ class ActiveCyclesCard extends StatelessWidget {
             action: '今日复核',
             progress: 0.76,
           ),
-          SizedBox(height: 16),
+          SizedBox(height: 12),
           CycleProgressCard(
             title: '番茄试种 · B 批',
             stage: '缓苗期',
@@ -167,7 +166,7 @@ class CycleProgressCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface3,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.lineSoft),
       ),
       child: Column(
@@ -238,9 +237,8 @@ class CycleProgressCard extends StatelessWidget {
 }
 
 class ToolSpec {
-  const ToolSpec(this.label, this.icon, this.tone);
+  const ToolSpec(this.label, this.icon);
 
   final String label;
   final IconData icon;
-  final IconTone tone;
 }

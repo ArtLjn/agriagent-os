@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Card, Row, Col, Statistic, message, Tag } from 'antd';
-import { PlusOutlined, BugOutlined, DollarOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
-import { listRecords, createRecord, getCycleProfit, getYearlySummary, type CostRecord, type CycleProfit, type YearlySummary } from '../../api/costs';
+import { useCallback, useEffect, useState } from 'react';
+import { Table, Button, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Card, Row, Col, Statistic, message, Tag, Alert } from 'antd';
+import { PlusOutlined, BugOutlined, DollarOutlined, RiseOutlined, FallOutlined, RobotOutlined } from '@ant-design/icons';
+import { listRecords, createRecord, parseCostRecord, getCycleProfit, getYearlySummary, type CostRecord, type CostParseResponse, type CycleProfit, type YearlySummary } from '../../api/costs';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import ApiDebugger from '../../components/ApiDebugger';
 import { MetricCard, PageShell, Toolbar } from '../../components/PageShell';
 import { cardStyle, palette } from '../../styles/theme';
+import { buildCostFormValues } from './costSmartFill';
 
 export default function Costs() {
   const [data, setData] = useState<CostRecord[]>([]);
@@ -13,13 +14,16 @@ export default function Costs() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [smartText, setSmartText] = useState('');
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [smartResult, setSmartResult] = useState<CostParseResponse | null>(null);
   const [form] = Form.useForm();
   const [profit, setProfit] = useState<CycleProfit | null>(null);
   const [yearly, setYearly] = useState<YearlySummary | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
-  const fetchData = async (page = pagination.current, pageSize = pagination.pageSize) => {
+  const fetchData = useCallback(async (page: number, pageSize: number) => {
     setLoading(true);
     try {
       const [recordsRes, cyclesRes] = await Promise.all([
@@ -32,6 +36,8 @@ export default function Costs() {
       if (selectedCycle) {
         const profitRes = await getCycleProfit(selectedCycle);
         setProfit(profitRes);
+      } else {
+        setProfit(null);
       }
       const year = new Date().getFullYear();
       const yearlyRes = await getYearlySummary(year);
@@ -41,9 +47,9 @@ export default function Costs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCycle]);
 
-  useEffect(() => { fetchData(); }, [selectedCycle]);
+  useEffect(() => { fetchData(1, pagination.pageSize); }, [fetchData, pagination.pageSize]);
 
   const handleCreate = async () => {
     const values = await form.validateFields();
@@ -52,9 +58,36 @@ export default function Costs() {
       message.success('创建成功');
       setModalOpen(false);
       form.resetFields();
-      fetchData();
+      fetchData(pagination.current, pagination.pageSize);
     } catch {
       message.error('创建失败');
+    }
+  };
+
+  const openCreateModal = () => {
+    setSmartText('');
+    setSmartResult(null);
+    form.resetFields();
+    if (selectedCycle) form.setFieldsValue({ cycle_id: selectedCycle });
+    setModalOpen(true);
+  };
+
+  const handleSmartParse = async () => {
+    if (!smartText.trim()) {
+      message.warning('请输入一段记账描述');
+      return;
+    }
+    setSmartLoading(true);
+    try {
+      const parsed = await parseCostRecord(smartText.trim());
+      setSmartResult(parsed);
+      form.setFieldsValue(buildCostFormValues(parsed));
+      if (selectedCycle) form.setFieldsValue({ cycle_id: selectedCycle });
+      message.success('已解析并回填表单');
+    } catch {
+      message.error('智能解析失败，请检查 AI 配置或改用手填');
+    } finally {
+      setSmartLoading(false);
     }
   };
 
@@ -93,7 +126,7 @@ export default function Costs() {
       <Toolbar
         left={(
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新增记录</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>新增记录</Button>
             <Select placeholder="按茬口筛选" allowClear style={{ width: 220 }} value={selectedCycle}
               onChange={(v) => setSelectedCycle(v)} options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
             <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
@@ -117,7 +150,7 @@ export default function Costs() {
         dataSource={data}
         columns={columns}
         loading={loading}
-        size="middle"
+        size="small"
         scroll={{ x: 760 }}
         pagination={{
           current: pagination.current,
@@ -127,10 +160,40 @@ export default function Costs() {
           pageSizeOptions: [10, 20, 50],
           showTotal: (count) => `共 ${count} 条`,
         }}
-        onChange={(p) => fetchData(p.current, p.pageSize)}
+        onChange={(p) => fetchData(p.current ?? 1, p.pageSize ?? pagination.pageSize)}
       />
 
-      <Modal title="新增记录" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)}>
+      <Modal
+        title="新增记录"
+        open={modalOpen}
+        onOk={handleCreate}
+        onCancel={() => setModalOpen(false)}
+        width={640}
+      >
+        <Card
+          size="small"
+          title={<span><RobotOutlined /> 智能记账</span>}
+          style={{ ...cardStyle, marginBottom: 16 }}
+        >
+          <Space.Compact style={{ width: '100%' }}>
+            <Input
+              value={smartText}
+              onChange={(event) => setSmartText(event.target.value)}
+              onPressEnter={handleSmartParse}
+              placeholder="例如：今天买复合肥 128.5 元，记到春季西瓜"
+            />
+            <Button type="primary" loading={smartLoading} onClick={handleSmartParse}>解析回填</Button>
+          </Space.Compact>
+          {smartResult && (
+            <Alert
+              style={{ marginTop: 12 }}
+              type="info"
+              showIcon
+              message="解析结果已填入下方表单，确认无误后再创建记录。"
+              description={`${smartResult.record_type === 'income' ? '收入' : '支出'} · ${smartResult.category} · ¥ ${smartResult.amount} · ${smartResult.record_date}`}
+            />
+          )}
+        </Card>
         <Form form={form} layout="vertical">
           <Form.Item name="record_type" label="类型" rules={[{ required: true }]}>
             <Select options={[{ value: 'cost', label: '支出' }, { value: 'income', label: '收入' }]} />

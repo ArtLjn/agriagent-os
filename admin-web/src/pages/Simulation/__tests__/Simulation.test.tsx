@@ -3,7 +3,20 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import axios from 'axios';
 import Simulation from '../index';
 
-vi.mock('axios');
+vi.mock('axios', () => {
+  const mockedAxios = {
+    create: vi.fn(),
+    get: vi.fn(),
+    post: vi.fn(),
+    request: vi.fn(),
+    interceptors: {
+      request: { use: vi.fn() },
+      response: { use: vi.fn() },
+    },
+  };
+  mockedAxios.create.mockReturnValue(mockedAxios);
+  return { default: mockedAxios };
+});
 const mockedAxios = vi.mocked(axios, true);
 
 describe('Simulation Page', () => {
@@ -20,7 +33,7 @@ describe('Simulation Page', () => {
       await waitFor(() => {
         expect(screen.getByText('Agent 仿真测试平台')).toBeInTheDocument();
       });
-      expect(screen.getByPlaceholderText('Agent 地址')).toHaveValue('http://localhost:8000');
+      expect(screen.getByPlaceholderText('留空使用当前服务地址')).toHaveValue('');
     });
 
     it('应渲染用例列表区域和操作区域', async () => {
@@ -143,7 +156,7 @@ describe('Simulation Page', () => {
       await waitFor(() => {
         expect(mockedAxios.post).toHaveBeenCalledWith('/simulation/run', {
           case_ids: ['TC-001'],
-          agent_url: 'http://localhost:8000',
+          agent_url: '',
         });
       });
     });
@@ -173,7 +186,7 @@ describe('Simulation Page', () => {
       await waitFor(() => {
         expect(mockedAxios.post).toHaveBeenCalledWith('/simulation/run', {
           case_ids: null,
-          agent_url: 'http://localhost:8000',
+          agent_url: '',
         });
       });
     });

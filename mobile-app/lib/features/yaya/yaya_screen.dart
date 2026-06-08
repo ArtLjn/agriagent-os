@@ -18,27 +18,22 @@ class YayaScreen extends StatelessWidget {
             children: [
               const StatusHeader(
                 title: '芽芽',
-                subtitle: '上下文：批次、作业、账单、天气',
+                subtitle: '你的农场智能助手',
                 leadingIcon: LucideIcons.menu,
                 trailingIcon: LucideIcons.plus,
                 center: true,
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
-                  child: const Column(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ContextPromptCard(),
-                      SizedBox(height: 12),
-                      Center(
-                        child: Text(
-                          '今天 07:30',
-                          style: AppTextStyles.small,
-                        ),
-                      ),
-                      SizedBox(height: 12),
-                      ChatList(),
+                      const ContextPromptCard(),
+                      const SizedBox(height: 20),
+                      _TimeDivider('今天 07:30'),
+                      const SizedBox(height: 20),
+                      const ChatList(),
                     ],
                   ),
                 ),
@@ -48,7 +43,7 @@ class YayaScreen extends StatelessWidget {
           const Positioned(
             left: 16,
             right: 16,
-            bottom: 88,
+            bottom: 24,
             child: ChatComposer(),
           ),
         ],
@@ -62,32 +57,46 @@ class ContextPromptCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
-      padding: EdgeInsets.all(16),
-      radius: 16,
-      borderColor: Colors.transparent,
-      background: Color(0xFFF0F7FF),
+    return CardPanel(
+      padding: const EdgeInsets.all(18),
+      background: AppColors.blueSoft,
+      borderColor: const Color(0x1A4078FF),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              SuggestionIcon(),
-              SizedBox(width: 12),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child:
+                    const Icon(LucideIcons.sparkles, size: 18, color: AppColors.blue),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('今天可以这样问', style: AppTextStyles.sectionTitle),
-                    SizedBox(height: 4),
-                    Text('芽芽会读取你的经营上下文，提供更精准的建议。', style: AppTextStyles.small),
+                    Text(
+                      '今天可以这样问',
+                      style: AppTextStyles.sectionTitle.copyWith(fontSize: 15),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '芽芽会读取你的经营上下文',
+                      style: AppTextStyles.small.copyWith(color: AppColors.muted),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          SizedBox(height: 16),
-          ContextPills(),
+          const SizedBox(height: 14),
+          const ContextPills(),
         ],
       ),
     );
@@ -118,18 +127,23 @@ class PromptPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8F0FF),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Center(
-        child: Text(
-          text,
-          style: AppTextStyles.small.copyWith(
-            color: AppColors.blue,
-            fontWeight: FontWeight.w800,
+    return PressableScale(
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.blue.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.blue,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
@@ -137,19 +151,25 @@ class PromptPill extends StatelessWidget {
   }
 }
 
-class SuggestionIcon extends StatelessWidget {
-  const SuggestionIcon({super.key});
+class _TimeDivider extends StatelessWidget {
+  const _TimeDivider(this.label);
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: AppColors.blueSoft,
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: const Icon(LucideIcons.sparkles, size: 18, color: AppColors.blue),
+    return Row(
+      children: [
+        const Expanded(child: Divider(height: 1, color: AppColors.lineSoft)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: AppTextStyles.small.copyWith(color: AppColors.subtle),
+          ),
+        ),
+        const Expanded(child: Divider(height: 1, color: AppColors.lineSoft)),
+      ],
     );
   }
 }
@@ -167,13 +187,13 @@ class ChatList extends StatelessWidget {
           fromUser: false,
           time: '07:30',
         ),
-        SizedBox(height: 12),
+        SizedBox(height: 16),
         ChatBubble(
           text: '如果晚上降温，哪些棚要先处理？',
           fromUser: true,
           time: '07:31',
         ),
-        SizedBox(height: 12),
+        SizedBox(height: 16),
         ChatBubble(
           text: '优先处理东棚 1-6 号，其次是番茄试种棚。建议傍晚前完成覆盖，并把人工结算一起确认。',
           fromUser: false,
@@ -200,10 +220,22 @@ class ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 270),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: fromUser ? const Color(0xFFDCEEFF) : AppColors.surface3,
-        borderRadius: BorderRadius.circular(16),
+        color: fromUser ? const Color(0xFFDCEEFF) : AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: fromUser
+            ? null
+            : Border.all(color: AppColors.lineSoft),
+        boxShadow: fromUser
+            ? null
+            : const [
+                BoxShadow(
+                  color: Color(0x08000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,12 +243,31 @@ class ChatBubble extends StatelessWidget {
           if (!fromUser)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                '芽芽',
-                style: AppTextStyles.small.copyWith(
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w900,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: AppColors.blueSoft,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(
+                      LucideIcons.sparkles,
+                      size: 10,
+                      color: AppColors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '芽芽',
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
               ),
             ),
           Text(
@@ -229,10 +280,16 @@ class ChatBubble extends StatelessWidget {
               letterSpacing: 0,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerRight,
-            child: Text(time, style: AppTextStyles.small),
+            child: Text(
+              time,
+              style: AppTextStyles.small.copyWith(
+                color: AppColors.subtle,
+                fontSize: 11,
+              ),
+            ),
           ),
         ],
       ),
@@ -246,15 +303,24 @@ class ChatBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 30,
-          height: 30,
-          margin: const EdgeInsets.only(top: 2, right: 9),
+          width: 32,
+          height: 32,
+          margin: const EdgeInsets.only(top: 2, right: 10),
           decoration: BoxDecoration(
-            color: AppColors.blueSoft,
-            borderRadius: BorderRadius.circular(15),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.blue, Color(0xFF6B9FFF)],
+            ),
+            borderRadius: BorderRadius.circular(16),
           ),
-          child:
-              const Icon(LucideIcons.sparkles, size: 16, color: AppColors.blue),
+          child: const Center(
+            child: Icon(
+              LucideIcons.sparkles,
+              size: 16,
+              color: Colors.white,
+            ),
+          ),
         ),
         bubble,
       ],
@@ -268,19 +334,39 @@ class ChatComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 56),
-      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: AppColors.lineSoft),
-        ),
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lineSoft),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14092642),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              LucideIcons.mic,
+              size: 18,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '输入问题或直接说“帮我安排今天”',
+              '输入问题或说"帮我安排今天"',
               style: AppTextStyles.body.copyWith(
                 fontWeight: FontWeight.w500,
                 color: AppColors.subtle,
@@ -291,12 +377,52 @@ class ChatComposer extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.surface2,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.blue,
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(LucideIcons.mic, size: 18, color: AppColors.ink),
+            child: const Icon(
+              LucideIcons.arrowUp,
+              size: 18,
+              color: Colors.white,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class PressableScale extends StatefulWidget {
+  const PressableScale({super.key, required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<PressableScale> createState() => _PressableScaleState();
+}
+
+class _PressableScaleState extends State<PressableScale> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
       ),
     );
   }

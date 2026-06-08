@@ -32,9 +32,14 @@ dist/
 FarmManagerMobile/android/.gradle/
 FarmManagerMobile/android/app/build/
 FarmManagerMobile/android/android/
+archive/**/.gradle/
+archive/**/android/android/
+**/android/local.properties
+**/android/app/debug.keystore
 
 # Claude
 .claude/
+.superpowers/
 
 # Database
 *.db

@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Farm Manager Mobile Direction Options</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --surface: #ffffff;
+        --ink: #101828;
+        --muted: #667085;
+        --subtle: #98a2b3;
+        --line: #e6edf5;
+        --blue: #4078ff;
+        --cyan: #0ea5b8;
+        --teal: #0891b2;
+        --green: #16a36a;
+        --amber: #ef9b2d;
+        --navy: #172033;
+      }
+
+      * { box-sizing: border-box; }
+      html, body {
+        width: 390px;
+        height: 844px;
+        margin: 0;
+        overflow: hidden;
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      body {
+        position: relative;
+      }
+
+      .screen {
+        position: relative;
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        padding: 44px 18px 0;
+      }
+
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 16px;
+      }
+
+      h1 {
+        margin: 0 0 5px;
+        font-size: 27px;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .sub {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .round {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 15px;
+        color: var(--blue);
+        background: rgba(255,255,255,.72);
+        border: 1px solid rgba(255,255,255,.85);
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 11px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        color: var(--blue);
+        background: #edf4ff;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        background: rgba(255,255,255,.9);
+        box-shadow: 0 18px 40px rgba(36,64,95,.08);
+      }
+
+      .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+
+      .title-row h2 {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.2;
+      }
+
+      .link {
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .option-name {
+        position: absolute;
+        top: 12px;
+        left: 18px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(16,24,40,.72);
+        color: white;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .nav-label {
+        margin-top: 4px;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #667085;
+      }
+
+      .nav-item i { width: 20px; height: 20px; }
+
+      .nav-item.active {
+        color: var(--blue);
+      }
+
+      /* Option 1 */
+      .o1 {
+        background:
+          radial-gradient(circle at 78% 0%, rgba(64,120,255,.18), transparent 33%),
+          linear-gradient(180deg,#f7fbff 0%,#eef4fb 100%);
+      }
+
+      .o1 .hero {
+        position: relative;
+        min-height: 245px;
+        padding: 20px;
+        overflow: hidden;
+        border-radius: 30px;
+        color: white;
+        background:
+          radial-gradient(circle at 82% 22%, rgba(14,165,184,.55), transparent 30%),
+          linear-gradient(135deg,#172033 0%,#244777 100%);
+        box-shadow: 0 24px 48px rgba(23,32,51,.22);
+      }
+
+      .o1 .hero h2 {
+        max-width: 258px;
+        margin: 18px 0 8px;
+        font-size: 28px;
+        line-height: 1.16;
+      }
+
+      .o1 .hero p {
+        max-width: 282px;
+        margin: 0;
+        color: rgba(255,255,255,.74);
+        font-size: 13px;
+        line-height: 1.55;
+        font-weight: 600;
+      }
+
+      .o1 .orb {
+        position: absolute;
+        right: 18px;
+        top: 82px;
+        display: grid;
+        place-items: center;
+        width: 68px;
+        height: 68px;
+        border-radius: 25px;
+        color: white;
+        background: linear-gradient(135deg,var(--blue),var(--cyan));
+        box-shadow: 0 18px 36px rgba(14,165,184,.28);
+      }
+
+      .o1 .metrics {
+        display: grid;
+        grid-template-columns: repeat(3,1fr);
+        gap: 9px;
+        margin: 13px 0;
+      }
+
+      .o1 .metric {
+        min-height: 72px;
+        padding: 12px;
+        border-radius: 22px;
+        background: rgba(255,255,255,.84);
+      }
+
+      .o1 .metric strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 21px;
+      }
+
+      .o1 .metric span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .o1 .tasks {
+        padding: 17px;
+      }
+
+      .task {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-height: 48px;
+      }
+
+      .task + .task {
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid #eef2f7;
+      }
+
+      .ico {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        width: 39px;
+        height: 39px;
+        border-radius: 15px;
+        background: #edf4ff;
+        color: var(--blue);
+      }
+
+      .task h3 {
+        margin: 0;
+        font-size: 13px;
+      }
+
+      .task p {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .o1 .dock {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 30px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 74px 1fr 1fr;
+        align-items: center;
+        height: 70px;
+        padding: 8px 12px;
+        border-radius: 28px;
+        background: rgba(255,255,255,.9);
+        border: 1px solid rgba(255,255,255,.92);
+        box-shadow: 0 18px 40px rgba(36,64,95,.16);
+        backdrop-filter: blur(18px);
+      }
+
+      .o1 .yaya {
+        display: grid;
+        place-items: center;
+        justify-self: center;
+        width: 58px;
+        height: 58px;
+        border-radius: 22px;
+        color: white;
+        background: linear-gradient(135deg,var(--blue),var(--cyan));
+        box-shadow: 0 15px 30px rgba(64,120,255,.26);
+      }
+
+      /* Option 2 */
+      .o2 {
+        padding-left: 0;
+        padding-right: 0;
+        background:
+          radial-gradient(circle at 50% -5%, rgba(14,165,184,.18), transparent 30%),
+          #f7f9fc;
+      }
+
+      .o2 .top,
+      .o2 .content {
+        margin-left: 18px;
+        margin-right: 18px;
+      }
+
+      .o2 .content {
+        display: grid;
+        gap: 12px;
+      }
+
+      .o2 .status-card {
+        padding: 18px;
+        border-radius: 30px;
+        background: white;
+        border: 1px solid #ebf0f6;
+      }
+
+      .o2 .status-main {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 14px;
+      }
+
+      .o2 .status-main h2 {
+        margin: 12px 0 0;
+        font-size: 30px;
+        line-height: 1.08;
+      }
+
+      .o2 .score {
+        display: grid;
+        place-items: center;
+        width: 82px;
+        height: 82px;
+        border-radius: 50%;
+        background: conic-gradient(from 160deg,var(--blue),var(--cyan),#eaf2ff 72%);
+      }
+
+      .o2 .score span {
+        display: grid;
+        place-items: center;
+        width: 66px;
+        height: 66px;
+        border-radius: 50%;
+        background: white;
+        color: var(--blue);
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .o2 .timeline {
+        padding: 17px;
+      }
+
+      .o2 .timeline-row {
+        display: grid;
+        grid-template-columns: 44px 1fr auto;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .o2 .timeline-row + .timeline-row {
+        margin-top: 14px;
+      }
+
+      .o2 .time {
+        color: var(--blue);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .o2 .rail {
+        position: relative;
+        width: 2px;
+        height: 34px;
+        background: #dde6f1;
+        justify-self: center;
+      }
+
+      .o2 .rail::before {
+        content: "";
+        position: absolute;
+        top: -2px;
+        left: -5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--cyan);
+      }
+
+      .o2 .nav-rail {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 30px;
+        display: grid;
+        grid-template-columns: repeat(5,1fr);
+        height: 64px;
+        padding: 6px;
+        border-radius: 999px;
+        background: #172033;
+        color: rgba(255,255,255,.62);
+        box-shadow: 0 22px 46px rgba(23,32,51,.28);
+      }
+
+      .o2 .nav-rail .nav-item {
+        color: rgba(255,255,255,.62);
+        border-radius: 999px;
+      }
+
+      .o2 .nav-rail .active {
+        color: white;
+        background: rgba(64,120,255,.95);
+      }
+
+      /* Option 3 */
+      .o3 {
+        background:
+          linear-gradient(180deg,#eef7f7 0%,#f8fafc 48%,#f4f7fb 100%);
+      }
+
+      .o3 .hero {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 32px;
+        background: rgba(255,255,255,.76);
+        border: 1px solid rgba(255,255,255,.85);
+        box-shadow: 0 22px 46px rgba(8,145,178,.12);
+        backdrop-filter: blur(16px);
+      }
+
+      .o3 .hero h2 {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1.12;
+      }
+
+      .o3 .pulse-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .o3 .pulse {
+        min-height: 86px;
+        padding: 13px;
+        border-radius: 24px;
+        background: white;
+        border: 1px solid #e9f0f5;
+      }
+
+      .o3 .pulse strong {
+        display: block;
+        font-size: 22px;
+      }
+
+      .o3 .pulse span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .o3 .command {
+        margin-top: 12px;
+        padding: 16px;
+        border-radius: 28px;
+        color: white;
+        background: linear-gradient(135deg,#0f172a,#0e7490);
+      }
+
+      .o3 .command h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+
+      .o3 .command p {
+        margin: 0;
+        color: rgba(255,255,255,.75);
+        font-size: 12px;
+        line-height: 1.5;
+        font-weight: 600;
+      }
+
+      .o3 .dock {
+        position: absolute;
+        left: 22px;
+        right: 22px;
+        bottom: 32px;
+        display: grid;
+        grid-template-columns: repeat(5,1fr);
+        height: 64px;
+        padding: 6px;
+        border-radius: 22px;
+        background: rgba(255,255,255,.88);
+        border: 1px solid rgba(255,255,255,.94);
+        box-shadow: 0 18px 42px rgba(8,145,178,.16);
+        backdrop-filter: blur(20px);
+      }
+
+      .o3 .dock .active {
+        color: white;
+        border-radius: 18px;
+        background: linear-gradient(135deg,var(--blue),var(--cyan));
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      const option = new URLSearchParams(location.search).get("option") || "1";
+      const labels = ["首页", "工作台", "芽芽", "账单", "我的"];
+      const icons = ["layout-dashboard", "briefcase-business", "bot", "receipt", "user"];
+      const nav = (kind) => labels.map((label, index) => {
+        const active = index === (kind === "home" ? 0 : 2);
+        return `<div class="nav-item ${active ? "active" : ""}"><i data-lucide="${icons[index]}"></i><div class="nav-label">${label}</div></div>`;
+      }).join("");
+
+      const option1 = `
+        <main class="screen o1">
+          <div class="option-name">Option 1 · 指挥舱 Dock</div>
+          <header class="top">
+            <div><h1>今日概览</h1><p class="sub">芽芽给出今天的经营顺序</p></div>
+            <div class="round"><i data-lucide="scan-line"></i></div>
+          </header>
+          <section class="hero">
+            <span class="chip">芽芽今日汇总</span>
+            <div class="orb"><i data-lucide="sparkles"></i></div>
+            <h2>上午复核授粉，傍晚前处理降温。</h2>
+            <p>作业、天气和人工结算已经排好优先级。今天只盯三件事。</p>
+          </section>
+          <section class="metrics">
+            <div class="metric"><strong style="color:var(--blue)">24℃</strong><span>当前温度</span></div>
+            <div class="metric"><strong style="color:var(--amber)">8℃</strong><span>夜间最低</span></div>
+            <div class="metric"><strong style="color:var(--green)">良好</strong><span>作业窗口</span></div>
+          </section>
+          <section class="panel tasks">
+            <div class="title-row"><h2>今天要处理</h2><span class="link">全部</span></div>
+            <div class="task"><div class="ico"><i data-lucide="clipboard-check"></i></div><div><h3>东棚 1-6 号授粉复核</h3><p>10:30 · 3 人 · 作业单</p></div></div>
+            <div class="task"><div class="ico" style="color:var(--amber);background:#fff4e5"><i data-lucide="triangle-alert"></i></div><div><h3>夜间降温防护</h3><p>最低 8℃ · 傍晚前覆盖</p></div></div>
+            <div class="task"><div class="ico" style="color:var(--teal);background:#e7f8fb"><i data-lucide="wallet-cards"></i></div><div><h3>昨日人工工资待确认</h3><p>2 笔 · ¥860 · 可结算</p></div></div>
+          </section>
+          <nav class="dock">
+            ${nav("home").replace('<div class="nav-item "><i data-lucide="bot"></i><div class="nav-label">芽芽</div></div>', '<div class="yaya"><i data-lucide="bot"></i></div>')}
+          </nav>
+        </main>`;
+
+      const option2 = `
+        <main class="screen o2">
+          <div class="option-name">Option 2 · 暗色控制条</div>
+          <header class="top">
+            <div><h1>今日概览</h1><p class="sub">经营状态一眼读懂</p></div>
+            <div class="round"><i data-lucide="bell"></i></div>
+          </header>
+          <div class="content">
+            <section class="status-card">
+              <span class="chip">今日状态</span>
+              <div class="status-main">
+                <h2>适合上午集中作业，夜间注意温差。</h2>
+                <div class="score"><span>86</span></div>
+              </div>
+            </section>
+            <section class="panel timeline">
+              <div class="title-row"><h2>执行节奏</h2><span class="link">调整</span></div>
+              <div class="timeline-row"><div class="time">09:30</div><div class="rail"></div><div><b>授粉复核</b><p class="sub">东棚 1-6 号</p></div></div>
+              <div class="timeline-row"><div class="time">16:40</div><div class="rail"></div><div><b>降温覆盖</b><p class="sub">番茄试种棚优先</p></div></div>
+              <div class="timeline-row"><div class="time">18:00</div><div class="rail"></div><div><b>人工确认</b><p class="sub">2 笔待结算</p></div></div>
+            </section>
+          </div>
+          <nav class="nav-rail">${nav("home")}</nav>
+        </main>`;
+
+      const option3 = `
+        <main class="screen o3">
+          <div class="option-name">Option 3 · 芽芽气泡舱</div>
+          <header class="top">
+            <div><h1>今日概览</h1><p class="sub">智能助手驱动的经营首页</p></div>
+            <div class="round"><i data-lucide="sparkles"></i></div>
+          </header>
+          <section class="hero">
+            <span class="chip">芽芽建议</span>
+            <h2>今天的关键是把作业窗口用满。</h2>
+            <div class="pulse-row">
+              <div class="pulse"><strong style="color:var(--blue)">3 件</strong><span>高优先级任务</span></div>
+              <div class="pulse"><strong style="color:var(--teal)">2 笔</strong><span>人工待确认</span></div>
+            </div>
+          </section>
+          <section class="command">
+            <h2>芽芽已经排好顺序</h2>
+            <p>先完成东棚授粉复核，再处理夜间降温覆盖。账单确认可以放在收工前。</p>
+          </section>
+          <section class="panel tasks" style="margin-top:12px;padding:17px">
+            <div class="task"><div class="ico"><i data-lucide="cloud-sun"></i></div><div><h3>作业窗口良好</h3><p>上午到下午风力较弱</p></div></div>
+            <div class="task"><div class="ico" style="color:var(--green);background:#eaf8f0"><i data-lucide="check-circle"></i></div><div><h3>可以直接生成今日安排</h3><p>给工人分配任务并同步账单</p></div></div>
+          </section>
+          <nav class="dock">${nav("home")}</nav>
+        </main>`;
+
+      root.innerHTML = option === "2" ? option2 : option === "3" ? option3 : option1;
+      lucide.createIcons({ strokeWidth: 2.2 });
+    </script>
+  </body>
+</html>

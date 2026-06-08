@@ -1,0 +1,1035 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Farm Manager Flutter App Concept</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --surface: #ffffff;
+        --surface-2: #eef3f8;
+        --surface-3: #f8fafc;
+        --ink: #101828;
+        --muted: #667085;
+        --subtle: #98a2b3;
+        --line: #e4eaf2;
+        --blue: #4078ff;
+        --blue-soft: #edf4ff;
+        --cyan: #0ea5b8;
+        --cyan-soft: #e8fbff;
+        --teal: #0891b2;
+        --teal-soft: #e7f8fb;
+        --green: #16a36a;
+        --green-soft: #eaf8f0;
+        --amber: #ef9b2d;
+        --amber-soft: #fff4e5;
+        --red: #e24b55;
+        --red-soft: #fff0f1;
+        --navy: #172033;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 15% 0%, rgba(64, 120, 255, 0.08), transparent 28%),
+          linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+        color: var(--ink);
+        font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+        letter-spacing: 0;
+      }
+
+      .board {
+        width: 2240px;
+        padding: 48px 64px 64px;
+      }
+
+      .cover {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 2136px;
+        margin-bottom: 34px;
+        padding: 24px 28px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 18px 60px rgba(16, 24, 40, 0.08);
+      }
+
+      .cover h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+      }
+
+      .cover p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .tokens {
+        display: flex;
+        gap: 10px;
+      }
+
+      .token {
+        width: 46px;
+        height: 46px;
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        border-radius: 16px;
+      }
+
+      .screens {
+        display: grid;
+        grid-template-columns: repeat(5, 375px);
+        gap: 52px;
+      }
+
+      .phone {
+        position: relative;
+        width: 375px;
+        height: 812px;
+        overflow: hidden;
+        border: 1px solid rgba(16, 24, 40, 0.06);
+        border-radius: 30px;
+        background: var(--bg);
+        box-shadow: 0 30px 80px rgba(16, 24, 40, 0.14);
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 34px;
+        padding: 12px 22px 6px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .sys {
+        display: flex;
+        gap: 5px;
+      }
+
+      .sys span {
+        display: block;
+        height: 9px;
+        border-radius: 2px;
+        background: var(--ink);
+      }
+
+      .sys span:nth-child(1) {
+        width: 15px;
+      }
+
+      .sys span:nth-child(2) {
+        width: 13px;
+      }
+
+      .sys span:nth-child(3) {
+        width: 20px;
+        border-radius: 4px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 20px 10px;
+      }
+
+      .header h2 {
+        margin: 0 0 5px;
+        font-size: 23px;
+        line-height: 1.05;
+      }
+
+      .header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .header-action,
+      .icon,
+      .avatar,
+      .send,
+      .ai-orb {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+      }
+
+      .header-action {
+        width: 38px;
+        height: 38px;
+        border-radius: 13px;
+        background: var(--surface-2);
+        color: var(--blue);
+      }
+
+      .header-action svg,
+      .icon svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .content {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        height: 626px;
+        padding: 0 16px 102px;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: 0 10px 24px rgba(16, 24, 40, 0.05);
+      }
+
+      .pad {
+        padding: 16px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+      }
+
+      .between {
+        justify-content: space-between;
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .gap-6 {
+        gap: 6px;
+      }
+
+      .gap-8 {
+        gap: 8px;
+      }
+
+      .gap-10 {
+        gap: 10px;
+      }
+
+      .gap-12 {
+        gap: 12px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--surface-2);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .chip.blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .chip.teal {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .chip.dark {
+        background: var(--navy);
+        color: white;
+      }
+
+      .section-title {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.2;
+      }
+
+      .link {
+        color: var(--blue);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .small,
+      .muted {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 16px;
+      }
+
+      .body {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 20px;
+      }
+
+      .icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        background: var(--surface-2);
+      }
+
+      .icon.blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .icon.teal {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .icon.cyan {
+        background: var(--cyan-soft);
+        color: var(--cyan);
+      }
+
+      .icon.green {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .icon.amber {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .home-hero {
+        position: relative;
+        min-height: 250px;
+        padding: 18px;
+        overflow: hidden;
+        border-color: rgba(64, 120, 255, 0.16);
+        background:
+          radial-gradient(circle at 80% 8%, rgba(64, 120, 255, 0.16), transparent 32%),
+          radial-gradient(circle at 18% 95%, rgba(16, 165, 184, 0.12), transparent 28%),
+          linear-gradient(135deg, #ffffff 0%, #f5f9ff 100%);
+      }
+
+      .home-hero > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      .ai-orb {
+        position: absolute;
+        right: 18px;
+        top: 70px;
+        width: 62px;
+        height: 62px;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        border-radius: 24px;
+        background: linear-gradient(135deg, #ffffff 0%, #e9f2ff 100%);
+        color: var(--blue);
+        box-shadow: 0 18px 38px rgba(64, 120, 255, 0.22);
+      }
+
+      .home-hero h3 {
+        max-width: 248px;
+        margin: 18px 0 8px;
+        font-size: 23px;
+        line-height: 31px;
+      }
+
+      .weather-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .weather-item {
+        min-height: 62px;
+        padding: 10px;
+        border: 1px solid rgba(64, 120, 255, 0.08);
+        border-radius: 15px;
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .weather-item strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .action-pill {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 92px;
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 14px;
+        background: var(--navy);
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .btn.secondary {
+        background: white;
+        color: var(--blue);
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .list-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 42px;
+      }
+
+      .list-row h4 {
+        margin: 0;
+        font-size: 13px;
+        line-height: 18px;
+      }
+
+      .list-row p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 16px;
+      }
+
+      .workspace-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px 8px;
+      }
+
+      .tool {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+
+      .tool .icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 16px;
+      }
+
+      .tool span {
+        max-width: 64px;
+        overflow: hidden;
+        color: var(--ink);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 15px;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mini-card {
+        padding: 12px;
+        border-radius: 16px;
+        background: var(--surface-2);
+      }
+
+      .mini-card h4 {
+        margin: 0 0 8px;
+        font-size: 13px;
+      }
+
+      .progress {
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #dbe3ee;
+      }
+
+      .progress span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--blue);
+      }
+
+      .chat-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .bubble {
+        max-width: 292px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        font-size: 13px;
+        line-height: 20px;
+      }
+
+      .bubble.ai {
+        border-top-left-radius: 8px;
+        background: white;
+        color: var(--ink);
+        box-shadow: 0 8px 22px rgba(16, 24, 40, 0.06);
+      }
+
+      .bubble.user {
+        align-self: flex-end;
+        border-top-right-radius: 8px;
+        background: var(--blue);
+        color: white;
+      }
+
+      .suggestions {
+        display: flex;
+        gap: 8px;
+        overflow: hidden;
+      }
+
+      .suggestions .chip {
+        flex: 0 0 auto;
+      }
+
+      .composer {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 96px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 54px;
+        padding: 8px 8px 8px 14px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: white;
+        box-shadow: 0 12px 28px rgba(16, 24, 40, 0.08);
+      }
+
+      .composer span {
+        flex: 1;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .send {
+        width: 40px;
+        height: 40px;
+        border-radius: 15px;
+        background: var(--navy);
+        color: white;
+      }
+
+      .finance-hero {
+        padding: 16px 18px;
+        color: white;
+        background: linear-gradient(135deg, #182033 0%, #29436f 100%);
+      }
+
+      .finance-hero p {
+        margin: 0 0 6px;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .finance-hero h3 {
+        margin: 0 0 12px;
+        font-size: 29px;
+        line-height: 1;
+      }
+
+      .finance-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+      }
+
+      .finance-grid strong {
+        display: block;
+        font-size: 14px;
+      }
+
+      .finance-grid span {
+        color: rgba(255, 255, 255, 0.68);
+        font-size: 11px;
+      }
+
+      .quick-ledger {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .ledger-action {
+        min-height: 68px;
+        padding: 10px 8px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: white;
+      }
+
+      .ledger-action h4 {
+        margin: 6px 0 0;
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .bar-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .bar-row p,
+      .bar-row strong {
+        margin: 0;
+        font-size: 12px;
+      }
+
+      .bar-track {
+        grid-column: 1 / -1;
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--surface-2);
+      }
+
+      .bar-track span {
+        display: block;
+        height: 100%;
+      }
+
+      .amount-pos {
+        color: var(--green);
+      }
+
+      .profile-top {
+        padding: 18px;
+      }
+
+      .avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        background: var(--navy);
+        color: white;
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .profile-top h3 {
+        margin: 0 0 5px;
+        font-size: 17px;
+      }
+
+      .profile-top p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .profile-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .profile-stats div {
+        padding: 10px;
+        border-radius: 14px;
+        background: var(--surface-2);
+      }
+
+      .profile-stats strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .profile-stats span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .tabbar {
+        position: absolute;
+        left: 20px;
+        bottom: 26px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        align-items: center;
+        width: 335px;
+        height: 66px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 16px 40px rgba(16, 24, 40, 0.12);
+      }
+
+      .tab {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        border-radius: 16px;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 12px;
+        font-weight: 700;
+      }
+
+      .tab svg {
+        width: 18px;
+        height: 18px;
+        color: var(--subtle);
+      }
+
+      .tab.active {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .tab.active svg {
+        color: var(--blue);
+      }
+
+      .tab.ai-tab {
+        transform: translateY(-11px);
+        gap: 4px;
+        height: 60px;
+        color: var(--blue);
+      }
+
+      .ai-button {
+        display: grid;
+        place-items: center;
+        width: 52px;
+        height: 52px;
+        border: 4px solid white;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #ffffff 0%, #eaf2ff 52%, #dfe9ff 100%);
+        box-shadow: 0 12px 28px rgba(64, 120, 255, 0.24);
+      }
+
+      .ai-tab.active {
+        background: transparent;
+      }
+
+      .ai-tab.active .ai-button {
+        color: white;
+        background: linear-gradient(135deg, #4078ff 0%, #0ea5b8 100%);
+        box-shadow: 0 18px 38px rgba(14, 165, 184, 0.28);
+      }
+
+      .ai-tab svg {
+        width: 22px;
+        height: 22px;
+        color: inherit;
+      }
+
+      .caption {
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <section class="cover">
+        <div>
+          <h1>Farm Manager Flutter App</h1>
+          <p>首页是芽芽信息聚合，工作台是全功能快捷导航，芽芽是可交互聊天，账单是核心经营页面。</p>
+        </div>
+        <div class="tokens" aria-label="设计 token 色板">
+          <span class="token" style="background: #101828"></span>
+          <span class="token" style="background: #eef3f8"></span>
+          <span class="token" style="background: #4078ff"></span>
+          <span class="token" style="background: #10a5b8"></span>
+          <span class="token" style="background: #0891b2"></span>
+          <span class="token" style="background: #16a36a"></span>
+        </div>
+      </section>
+
+      <section class="screens">
+        <article>
+          <div class="phone">
+            <div class="status"><span>9:41</span><div class="sys"><span></span><span></span><span></span></div></div>
+            <header class="header">
+              <div><h2>今日概览</h2><p>芽芽汇总了天气、建议、作业和账单</p></div>
+              <div class="header-action"><i data-lucide="scan-line"></i></div>
+            </header>
+            <div class="content">
+              <section class="panel home-hero">
+                <div class="row between">
+                  <span class="chip blue">芽芽今日汇总</span>
+                  <span class="small">07:30 更新</span>
+                </div>
+                <div class="ai-orb"><i data-lucide="sparkles"></i></div>
+                <h3>今天先做东棚授粉复核，傍晚前处理降温风险。</h3>
+                <p class="body">已结合今日建议、天气预报、最近作业单和未结人工，给出今天的执行顺序。</p>
+                <div class="weather-strip">
+                  <div class="weather-item"><strong style="color: var(--blue)">24℃</strong><p class="small">当前温度</p></div>
+                  <div class="weather-item"><strong style="color: var(--amber)">8℃</strong><p class="small">夜间最低</p></div>
+                  <div class="weather-item"><strong style="color: var(--green)">良好</strong><p class="small">作业窗口</p></div>
+                </div>
+                <div class="action-pill">
+                  <span class="btn">查看建议</span>
+                  <span class="btn secondary">查看天气</span>
+                </div>
+              </section>
+
+              <section class="panel pad">
+                <div class="row between"><h3 class="section-title">今天要处理</h3><span class="link">全部</span></div>
+                <div class="list">
+                  <div class="list-row"><div class="icon blue"><i data-lucide="clipboard-check"></i></div><div><h4>东棚 1-6 号授粉复核</h4><p>10:30 · 3 人 · 来自作业单</p></div></div>
+                  <div class="list-row"><div class="icon amber"><i data-lucide="triangle-alert"></i></div><div><h4>夜间降温防护</h4><p>最低 8℃ · 建议提前覆盖保温</p></div></div>
+                  <div class="list-row"><div class="icon teal"><i data-lucide="wallet-cards"></i></div><div><h4>昨日人工工资待确认</h4><p>2 笔 · ¥860 · 可直接结算</p></div></div>
+                </div>
+              </section>
+            </div>
+            <nav class="tabbar">
+              <div class="tab active"><i data-lucide="layout-dashboard"></i><span>首页</span></div>
+              <div class="tab"><i data-lucide="briefcase-business"></i><span>工作台</span></div>
+              <div class="tab ai-tab"><span class="ai-button"><i data-lucide="bot"></i></span><span>芽芽</span></div>
+              <div class="tab"><i data-lucide="receipt"></i><span>账单</span></div>
+              <div class="tab"><i data-lucide="user"></i><span>我的</span></div>
+            </nav>
+          </div>
+          <p class="caption">首页：芽芽大而全信息聚合</p>
+        </article>
+
+        <article>
+          <div class="phone">
+            <div class="status"><span>9:41</span><div class="sys"><span></span><span></span><span></span></div></div>
+            <header class="header">
+              <div><h2>工作台</h2><p>平台所有功能的快捷入口</p></div>
+              <div class="header-action"><i data-lucide="plus"></i></div>
+            </header>
+            <div class="content">
+              <section class="panel pad">
+                <div class="row between"><h3 class="section-title">常用功能</h3><span class="link">编辑</span></div>
+                <div class="workspace-grid" style="margin-top: 14px">
+                  <div class="tool"><div class="icon blue"><i data-lucide="file-plus-2"></i></div><span>新建作业</span></div>
+                  <div class="tool"><div class="icon cyan"><i data-lucide="layers-3"></i></div><span>种植批次</span></div>
+                  <div class="tool"><div class="icon teal"><i data-lucide="users-round"></i></div><span>工人工资</span></div>
+                  <div class="tool"><div class="icon green"><i data-lucide="receipt"></i></div><span>快速记账</span></div>
+                  <div class="tool"><div class="icon amber"><i data-lucide="hand-coins"></i></div><span>欠款管理</span></div>
+                  <div class="tool"><div class="icon blue"><i data-lucide="notebook-tabs"></i></div><span>农事日志</span></div>
+                  <div class="tool"><div class="icon cyan"><i data-lucide="cloud-sun"></i></div><span>天气预报</span></div>
+                  <div class="tool"><div class="icon teal"><i data-lucide="file-text"></i></div><span>经营报告</span></div>
+                </div>
+              </section>
+
+              <section class="panel pad">
+                <h3 class="section-title">生产管理</h3>
+                <div class="workspace-grid" style="margin-top: 14px">
+                  <div class="tool"><div class="icon blue"><i data-lucide="sprout"></i></div><span>作物模板</span></div>
+                  <div class="tool"><div class="icon cyan"><i data-lucide="map"></i></div><span>种植单元</span></div>
+                  <div class="tool"><div class="icon green"><i data-lucide="list-checks"></i></div><span>作业类型</span></div>
+                  <div class="tool"><div class="icon amber"><i data-lucide="calendar-days"></i></div><span>近期作业</span></div>
+                </div>
+              </section>
+
+              <section class="panel pad">
+                <div class="row between"><h3 class="section-title">进行中的批次</h3><span class="link">管理</span></div>
+                <div class="list">
+                  <div class="mini-card"><div class="row between"><h4>春茬西瓜 · A 批</h4><span class="chip blue">授粉期</span></div><p class="muted">28 亩 · 12 个种植单元</p><div class="progress"><span style="width: 76%"></span></div></div>
+                  <div class="mini-card"><div class="row between"><h4>番茄试种 · B 批</h4><span class="chip blue">缓苗期</span></div><p class="muted">6 亩 · 3 个种植单元</p><div class="progress"><span style="width: 38%"></span></div></div>
+                </div>
+              </section>
+            </div>
+            <nav class="tabbar">
+              <div class="tab"><i data-lucide="layout-dashboard"></i><span>首页</span></div>
+              <div class="tab active"><i data-lucide="briefcase-business"></i><span>工作台</span></div>
+              <div class="tab ai-tab"><span class="ai-button"><i data-lucide="bot"></i></span><span>芽芽</span></div>
+              <div class="tab"><i data-lucide="receipt"></i><span>账单</span></div>
+              <div class="tab"><i data-lucide="user"></i><span>我的</span></div>
+            </nav>
+          </div>
+          <p class="caption">工作台：像钉钉/支付宝的功能宫格</p>
+        </article>
+
+        <article>
+          <div class="phone">
+            <div class="status"><span>9:41</span><div class="sys"><span></span><span></span><span></span></div></div>
+            <header class="header">
+              <div class="header-action"><i data-lucide="menu"></i></div>
+              <div style="text-align: center"><h2>芽芽</h2><p>上下文：批次、作业、账单、天气</p></div>
+              <div class="header-action"><i data-lucide="plus"></i></div>
+            </header>
+            <div class="content" style="padding-bottom: 160px">
+              <section class="panel pad">
+                <div class="row gap-10"><div class="icon teal"><i data-lucide="sparkles"></i></div><div><h3 class="section-title">今天可以这样问</h3><p class="small">芽芽会读取你的经营上下文</p></div></div>
+                <div class="suggestions" style="margin-top: 12px">
+                  <span class="chip blue">安排今天作业</span>
+                  <span class="chip teal">分析成本</span>
+                  <span class="chip">生成周报</span>
+                </div>
+              </section>
+              <section class="chat-list">
+                <div class="bubble ai">早上好。我看了今天的天气和作业单，东棚授粉复核适合放在上午完成。</div>
+                <div class="bubble user">如果晚上降温，哪些棚要先处理？</div>
+                <div class="bubble ai">优先处理东棚 1-6 号，其次是番茄试种棚。建议傍晚前完成覆盖，并把人工结算一起确认。</div>
+              </section>
+            </div>
+            <div class="composer"><span>输入问题或直接说“帮我安排今天”</span><div class="send"><i data-lucide="arrow-up"></i></div></div>
+            <nav class="tabbar">
+              <div class="tab"><i data-lucide="layout-dashboard"></i><span>首页</span></div>
+              <div class="tab"><i data-lucide="briefcase-business"></i><span>工作台</span></div>
+              <div class="tab ai-tab active"><span class="ai-button"><i data-lucide="bot"></i></span><span>芽芽</span></div>
+              <div class="tab"><i data-lucide="receipt"></i><span>账单</span></div>
+              <div class="tab"><i data-lucide="user"></i><span>我的</span></div>
+            </nav>
+          </div>
+          <p class="caption">芽芽：可交互聊天，菜单打开历史会话</p>
+        </article>
+
+        <article>
+          <div class="phone">
+            <div class="status"><span>9:41</span><div class="sys"><span></span><span></span><span></span></div></div>
+            <header class="header">
+              <div><h2>账单</h2><p>经营收支、人工、欠款的核心入口</p></div>
+              <div class="header-action"><i data-lucide="search"></i></div>
+            </header>
+            <div class="content">
+              <section class="panel finance-hero">
+                <p>本月净支出</p>
+                <h3>¥18,426</h3>
+                <div class="finance-grid">
+                  <div><strong>¥12,800</strong><span>收入</span></div>
+                  <div><strong>¥31,226</strong><span>支出</span></div>
+                  <div><strong>¥2,160</strong><span>欠款</span></div>
+                </div>
+              </section>
+
+              <section class="quick-ledger">
+                <div class="ledger-action"><div class="icon green" style="margin: 0 auto"><i data-lucide="arrow-down-left"></i></div><h4>记收入</h4></div>
+                <div class="ledger-action"><div class="icon blue" style="margin: 0 auto"><i data-lucide="scan-text"></i></div><h4>智能记账</h4></div>
+                <div class="ledger-action"><div class="icon teal" style="margin: 0 auto"><i data-lucide="users-round"></i></div><h4>结人工</h4></div>
+              </section>
+
+              <section class="panel pad">
+                <div class="row between"><h3 class="section-title">成本构成</h3><span class="link">详情</span></div>
+                <div class="bar-row"><p>人工</p><strong>¥8,620</strong><div class="bar-track"><span style="width: 68%; background: var(--teal)"></span></div></div>
+                <div class="bar-row"><p>农资</p><strong>¥6,910</strong><div class="bar-track"><span style="width: 54%; background: var(--blue)"></span></div></div>
+                <div class="bar-row"><p>水肥</p><strong>¥2,430</strong><div class="bar-track"><span style="width: 30%; background: var(--cyan)"></span></div></div>
+              </section>
+
+              <section class="panel pad">
+                <div class="row between"><h3 class="section-title">最近流水</h3><span class="link">筛选</span></div>
+                <div class="list">
+                  <div class="list-row between"><div class="row gap-10"><div class="icon teal"><i data-lucide="users-round"></i></div><div><h4>授粉人工</h4><p>来自作业单 · 今日</p></div></div><strong>-¥860</strong></div>
+                  <div class="list-row between"><div class="row gap-10"><div class="icon green"><i data-lucide="arrow-down-left"></i></div><div><h4>西瓜预售定金</h4><p>客户：王姐</p></div></div><strong class="amount-pos">+¥3,000</strong></div>
+                </div>
+              </section>
+            </div>
+            <nav class="tabbar">
+              <div class="tab"><i data-lucide="layout-dashboard"></i><span>首页</span></div>
+              <div class="tab"><i data-lucide="briefcase-business"></i><span>工作台</span></div>
+              <div class="tab ai-tab"><span class="ai-button"><i data-lucide="bot"></i></span><span>芽芽</span></div>
+              <div class="tab active"><i data-lucide="receipt"></i><span>账单</span></div>
+              <div class="tab"><i data-lucide="user"></i><span>我的</span></div>
+            </nav>
+          </div>
+          <p class="caption">账单：核心页面，突出经营收支</p>
+        </article>
+
+        <article>
+          <div class="phone">
+            <div class="status"><span>9:41</span><div class="sys"><span></span><span></span><span></span></div></div>
+            <header class="header">
+              <div><h2>我的</h2><p>账号、农场、偏好与服务</p></div>
+              <div class="header-action"><i data-lucide="settings"></i></div>
+            </header>
+            <div class="content">
+              <section class="panel profile-top">
+                <div class="row gap-12"><div class="avatar">L</div><div><h3>刘文洁的农场</h3><p>经营者 · 2 个农场 · 12 个成员</p></div></div>
+                <div class="profile-stats">
+                  <div><strong>14 天</strong><span>芽芽连续运行</span></div>
+                  <div><strong>12</strong><span>成员</span></div>
+                  <div><strong>2</strong><span>农场</span></div>
+                </div>
+              </section>
+
+              <section class="panel pad">
+                <h3 class="section-title">常用设置</h3>
+                <div class="list">
+                  <div class="list-row"><div class="icon blue"><i data-lucide="building-2"></i></div><div><h4>账号与农场资料</h4><p>昵称、手机号、农场信息</p></div></div>
+                  <div class="list-row"><div class="icon teal"><i data-lucide="bot"></i></div><div><h4>芽芽偏好</h4><p>提醒频率、语气、默认作物</p></div></div>
+                  <div class="list-row"><div class="icon cyan"><i data-lucide="bell"></i></div><div><h4>消息通知</h4><p>天气、作业、账单提醒</p></div></div>
+                  <div class="list-row"><div class="icon green"><i data-lucide="shield-check"></i></div><div><h4>数据与权限</h4><p>导出数据、成员权限</p></div></div>
+                </div>
+              </section>
+
+              <section class="panel pad">
+                <h3 class="section-title">帮助与系统</h3>
+                <div class="list">
+                  <div class="list-row"><div class="icon amber"><i data-lucide="circle-help"></i></div><div><h4>使用帮助</h4><p>常见问题与操作指南</p></div></div>
+                  <div class="list-row"><div class="icon blue"><i data-lucide="download"></i></div><div><h4>版本更新</h4><p>当前版本 1.0.0</p></div></div>
+                </div>
+              </section>
+            </div>
+            <nav class="tabbar">
+              <div class="tab"><i data-lucide="layout-dashboard"></i><span>首页</span></div>
+              <div class="tab"><i data-lucide="briefcase-business"></i><span>工作台</span></div>
+              <div class="tab ai-tab"><span class="ai-button"><i data-lucide="bot"></i></span><span>芽芽</span></div>
+              <div class="tab"><i data-lucide="receipt"></i><span>账单</span></div>
+              <div class="tab active"><i data-lucide="user"></i><span>我的</span></div>
+            </nav>
+          </div>
+          <p class="caption">我的：成熟产品常规设置风格</p>
+        </article>
+      </section>
+    </main>
+    <script>
+      lucide.createIcons({ strokeWidth: 2 });
+    </script>
+  </body>
+</html>

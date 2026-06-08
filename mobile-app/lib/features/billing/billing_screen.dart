@@ -48,15 +48,10 @@ class FinanceHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
-      padding: EdgeInsets.all(18),
-      radius: 16,
-      borderColor: Colors.transparent,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppColors.navy, AppColors.navy3],
-      ),
+    return CardPanel(
+      padding: const EdgeInsets.all(20),
+      borderColor: AppColors.lineSoft,
+      background: AppColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -66,41 +61,47 @@ class FinanceHeroCard extends StatelessWidget {
               Text(
                 '本月净支出',
                 style: TextStyle(
-                  color: Color(0xB8FFFFFF),
-                  fontSize: 12,
+                  color: AppColors.muted,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0,
                 ),
               ),
-              Text(
-                '较上月 -8%',
-                style: TextStyle(
-                  color: Color(0xFF9FE5CE),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.greenSoft,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '较上月 -8%',
+                  style: TextStyle(
+                    color: AppColors.green,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
                 ),
               ),
             ],
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             '¥18,426',
             style: TextStyle(
-              color: Colors.white,
+              color: AppColors.ink,
               fontSize: 32,
-              height: 1,
               fontWeight: FontWeight.w800,
-              letterSpacing: 0,
+              letterSpacing: -0.5,
             ),
           ),
-          SizedBox(height: 18),
-          Row(
+          const SizedBox(height: 20),
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              FinanceMetric(value: '¥12,800', label: '收入'),
-              FinanceMetric(value: '¥31,226', label: '支出'),
-              FinanceMetric(value: '¥2,160', label: '欠款'),
+              FinanceMetric(value: '¥12,800', label: '收入', color: AppColors.green),
+              FinanceMetric(value: '¥31,226', label: '支出', color: AppColors.ink),
+              FinanceMetric(value: '¥2,160', label: '欠款', color: AppColors.amber),
             ],
           ),
         ],
@@ -110,10 +111,16 @@ class FinanceHeroCard extends StatelessWidget {
 }
 
 class FinanceMetric extends StatelessWidget {
-  const FinanceMetric({super.key, required this.value, required this.label});
+  const FinanceMetric({
+    super.key,
+    required this.value,
+    required this.label,
+    this.color = AppColors.ink,
+  });
 
   final String value;
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -122,9 +129,9 @@ class FinanceMetric extends StatelessWidget {
       children: [
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
+          style: TextStyle(
+            color: color,
+            fontSize: 15,
             fontWeight: FontWeight.w800,
             letterSpacing: 0,
           ),
@@ -132,9 +139,9 @@ class FinanceMetric extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           label,
-          style: const TextStyle(
-            color: Color(0xADFFFFFF),
-            fontSize: 11,
+          style: TextStyle(
+            color: AppColors.muted,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
             letterSpacing: 0,
           ),
