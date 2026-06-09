@@ -57,14 +57,14 @@ class _AppShellState extends State<AppShell> {
         child: IndexedStack(
           index: selectedIndex,
           children: [
-            const HomeScreen(),
+            HomeScreen(repository: widget.dependencies.dashboard),
             WorkbenchScreen(
               onGoHome: () => _selectTab(0),
               onGoLedger: () => _selectTab(3),
               onRecordAgain: () => _selectTab(1),
             ),
             YayaScreen(repository: widget.dependencies.yaya),
-            const BillingScreen(),
+            BillingScreen(repository: widget.dependencies.billing),
             ProfileScreen(
               repository: widget.dependencies.profile,
               onLogout: widget.onLogout,

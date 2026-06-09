@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:farm_manager_app/app/app_dependencies.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/repositories/billing_repository.dart';
+import 'package:farm_manager_app/data/repositories/dashboard_repository.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
 
@@ -8,10 +10,17 @@ import 'api_test_fixtures.dart'
     show
         RecordingAdapter,
         conversationResponse,
+        dailyAdviceResponse,
+        debtsResponse,
         messageResponse,
+        paginatedCostsResponse,
+        paginatedWorkOrdersResponse,
         settingsResponse,
+        unsettledLaborSummaryResponse,
         userResponse,
-        versionResponse;
+        versionResponse,
+        weatherResponse,
+        yearlySummaryResponse;
 
 class FakeAppDependencies implements AppDependencies {
   FakeAppDependencies({
@@ -19,12 +28,20 @@ class FakeAppDependencies implements AppDependencies {
     this.loginError,
     this.registerError,
     ProfileRepository? profile,
+    DashboardRepository? dashboard,
+    BillingRepository? billing,
     YayaRepository? yaya,
   })  : profile = profile ?? _fakeProfileRepository(),
+        dashboard = dashboard ?? _fakeDashboardRepository(),
+        billing = billing ?? _fakeBillingRepository(),
         yaya = yaya ?? _fakeYayaRepository();
 
   @override
   final ProfileRepository profile;
+  @override
+  final DashboardRepository dashboard;
+  @override
+  final BillingRepository billing;
   @override
   final YayaRepository yaya;
   final bool restoreResult;
@@ -96,4 +113,27 @@ YayaRepository _fakeYayaRepository() {
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
   dio.httpClientAdapter = adapter;
   return YayaRepository(ApiClient(dio: dio));
+}
+
+DashboardRepository _fakeDashboardRepository() {
+  final adapter = RecordingAdapter({
+    '/agent/daily': dailyAdviceResponse,
+    '/weather/forecast': weatherResponse,
+    '/planting/work-orders': paginatedWorkOrdersResponse,
+    '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return DashboardRepository(ApiClient(dio: dio));
+}
+
+BillingRepository _fakeBillingRepository() {
+  final adapter = RecordingAdapter({
+    '/costs': paginatedCostsResponse,
+    '/costs/summary/2026': yearlySummaryResponse,
+    '/debts': debtsResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return BillingRepository(ApiClient(dio: dio));
 }

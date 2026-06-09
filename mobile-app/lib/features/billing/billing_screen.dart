@@ -1,104 +1,122 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/repositories/billing_repository.dart';
 import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'billing_controller.dart';
 
 part 'billing_summary_widgets.dart';
 
 class BillingScreen extends StatelessWidget {
-  const BillingScreen({super.key});
+  const BillingScreen({super.key, required this.repository});
+
+  final BillingRepository repository;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 118),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ReferenceHeader(
-                  showLogo: false,
-                  trailing: HeaderIconButton(icon: LucideIcons.calendarDays),
+    return FutureBuilder<BillingViewModel>(
+      future: BillingController(repository: repository).load(),
+      builder: (context, snapshot) {
+        final model = snapshot.data;
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 118),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const ReferenceHeader(
+                      showLogo: false,
+                      trailing:
+                          HeaderIconButton(icon: LucideIcons.calendarDays),
+                    ),
+                    const SizedBox(height: 20),
+                    if (snapshot.connectionState != ConnectionState.done &&
+                        model == null)
+                      const _BillingStateCard(text: '加载中...')
+                    else if (snapshot.hasError && model == null)
+                      const _BillingStateCard(text: '数据加载失败，请稍后重试')
+                    else ...[
+                      LedgerSummaryCard(model: model!),
+                      const SizedBox(height: 12),
+                      AiFinanceInsightCard(model: model),
+                      const SizedBox(height: 12),
+                      TransactionListCard(transactions: model.transactions),
+                      const SizedBox(height: 12),
+                      ReceivableReminderCard(receivables: model.receivables),
+                      const SizedBox(height: 14),
+                      const _ManualLedgerButton(),
+                    ],
+                  ],
                 ),
-                SizedBox(height: 20),
-                LedgerSummaryCard(),
-                SizedBox(height: 12),
-                AiFinanceInsightCard(),
-                SizedBox(height: 12),
-                TransactionListCard(),
-                SizedBox(height: 12),
-                ReceivableReminderCard(),
-                SizedBox(height: 14),
-                _ManualLedgerButton(),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
+    );
+  }
+}
+
+class _BillingStateCard extends StatelessWidget {
+  const _BillingStateCard({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return CardPanel(
+      padding: const EdgeInsets.all(18),
+      child: Text(text, style: AppTextStyles.body),
     );
   }
 }
 
 class TransactionListCard extends StatelessWidget {
-  const TransactionListCard({super.key});
+  const TransactionListCard({super.key, required this.transactions});
+
+  final List<BillingTransactionViewModel> transactions;
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
+    return CardPanel(
       radius: 18,
       borderColor: AppColors.line,
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('最近交易', style: AppTextStyles.dateTitle),
-          SizedBox(height: 10),
-          TransactionRow(
-            icon: LucideIcons.shoppingCart,
-            iconColor: Color(0xFFF97316),
-            iconBackground: Color(0xFFFFF3E8),
-            title: '饲料采购',
-            subtitle: '今天 08:30 · 现金',
-            amount: '-1,200',
-            amountColor: Color(0xFFF04438),
-          ),
-          _IndentedDivider(),
-          TransactionRow(
-            icon: LucideIcons.badgeDollarSign,
-            iconColor: Color(0xFF08A66A),
-            iconBackground: Color(0xFFE9F8F0),
-            title: '牛只销售',
-            subtitle: '昨天 14:20 · 银行卡',
-            amount: '+8,000',
-            amountColor: Color(0xFF08A66A),
-          ),
-          _IndentedDivider(),
-          TransactionRow(
-            icon: LucideIcons.userRound,
-            iconColor: Color(0xFF1473FF),
-            iconBackground: Color(0xFFEAF3FF),
-            title: '人工工资',
-            subtitle: '5月16日 · 现金',
-            amount: '-1,500',
-            amountColor: Color(0xFFF04438),
-          ),
-          _IndentedDivider(),
-          TransactionRow(
-            icon: LucideIcons.zap,
-            iconColor: AppColors.purple,
-            iconBackground: AppColors.purpleSoft,
-            title: '水电费',
-            subtitle: '5月15日 · 微信',
-            amount: '-320',
-            amountColor: Color(0xFFF04438),
-          ),
+          const Text('最近交易', style: AppTextStyles.dateTitle),
+          const SizedBox(height: 10),
+          if (transactions.isEmpty)
+            const _EmptyLine(text: '暂无交易')
+          else
+            for (var index = 0; index < transactions.length; index++) ...[
+              TransactionRow(
+                icon: transactions[index].isIncome
+                    ? LucideIcons.badgeDollarSign
+                    : LucideIcons.shoppingCart,
+                iconColor: transactions[index].isIncome
+                    ? const Color(0xFF08A66A)
+                    : const Color(0xFFF97316),
+                iconBackground: transactions[index].isIncome
+                    ? const Color(0xFFE9F8F0)
+                    : const Color(0xFFFFF3E8),
+                title: transactions[index].title,
+                subtitle: transactions[index].subtitle,
+                amount: transactions[index].amountText,
+                amountColor: transactions[index].isIncome
+                    ? const Color(0xFF08A66A)
+                    : const Color(0xFFF04438),
+              ),
+              if (index != transactions.length - 1) const _IndentedDivider(),
+            ],
         ],
       ),
     );
@@ -181,10 +199,13 @@ class TransactionRow extends StatelessWidget {
 }
 
 class ReceivableReminderCard extends StatelessWidget {
-  const ReceivableReminderCard({super.key});
+  const ReceivableReminderCard({super.key, required this.receivables});
+
+  final List<BillingReceivableViewModel> receivables;
 
   @override
   Widget build(BuildContext context) {
+    final receivable = receivables.isEmpty ? null : receivables.first;
     return CardPanel(
       radius: 18,
       borderColor: AppColors.line,
@@ -206,7 +227,9 @@ class ReceivableReminderCard extends StatelessWidget {
                 const Text('待收款提醒', style: AppTextStyles.sectionTitle),
                 const SizedBox(height: 5),
                 Text(
-                  '刘老板',
+                  receivable?.counterparty ?? '暂无待收款',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.body.copyWith(
                     color: AppColors.ink2,
                     fontWeight: FontWeight.w600,
@@ -214,7 +237,7 @@ class ReceivableReminderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  '¥2,800',
+                  receivable?.amountText ?? '¥0',
                   style: AppTextStyles.sectionTitle.copyWith(
                     color: const Color(0xFFF05A24),
                     fontSize: 20,
@@ -224,30 +247,49 @@ class ReceivableReminderCard extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 17),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFD8E2EC)),
-            ),
-            child: Row(
-              children: [
-                const Icon(LucideIcons.phone,
-                    size: 18, color: Color(0xFF08A66A)),
-                const SizedBox(width: 6),
-                Text(
-                  '拨打',
-                  style: AppTextStyles.body.copyWith(
-                    color: const Color(0xFF08A66A),
-                    fontWeight: FontWeight.w800,
+          if (receivable != null)
+            Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 17),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: const Color(0xFFD8E2EC)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.phone,
+                      size: 18, color: Color(0xFF08A66A)),
+                  const SizedBox(width: 6),
+                  Text(
+                    '拨打',
+                    style: AppTextStyles.body.copyWith(
+                      color: const Color(0xFF08A66A),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyLine extends StatelessWidget {
+  const _EmptyLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text,
+            style: AppTextStyles.body.copyWith(color: AppColors.subtle)),
       ),
     );
   }

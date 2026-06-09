@@ -1,7 +1,9 @@
 part of 'home_screen.dart';
 
 class _CockpitCard extends StatelessWidget {
-  const _CockpitCard();
+  const _CockpitCard({required this.model});
+
+  final HomeViewModel model;
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +88,7 @@ class _CockpitCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '86',
+                          model.scoreText,
                           style: AppTextStyles.metric.copyWith(
                             color: AppColors.blue,
                             fontSize: 62,
@@ -95,7 +97,9 @@ class _CockpitCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          '经营稳定，注意午后天气',
+                          model.scoreCaption,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.listTitle.copyWith(
                             color: AppColors.muted,
                             fontSize: 17,
@@ -107,7 +111,7 @@ class _CockpitCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              const _CockpitMetrics(),
+              _CockpitMetrics(model: model),
             ],
           ),
         ],
@@ -117,7 +121,9 @@ class _CockpitCard extends StatelessWidget {
 }
 
 class _CockpitMetrics extends StatelessWidget {
-  const _CockpitMetrics();
+  const _CockpitMetrics({required this.model});
+
+  final HomeViewModel model;
 
   @override
   Widget build(BuildContext context) {
@@ -129,36 +135,36 @@ class _CockpitMetrics extends StatelessWidget {
         border: Border.all(color: AppColors.lineSoft),
       ),
       child: Row(
-        children: const [
+        children: [
           Expanded(
             child: _CockpitMetric(
               icon: LucideIcons.chartSpline,
               iconColor: AppColors.blue,
               iconBackground: AppColors.blueSoft,
-              label: '收入趋势',
-              value: '+12%',
+              label: '天气',
+              value: model.weatherText,
               valueColor: AppColors.blue,
             ),
           ),
-          _VerticalSoftDivider(),
+          const _VerticalSoftDivider(),
           Expanded(
             child: _CockpitMetric(
               icon: LucideIcons.shield,
               iconColor: AppColors.greenDark,
               iconBackground: AppColors.greenSoft,
-              label: '成本压力',
-              value: '中',
+              label: '作业',
+              value: model.workOrderCountText,
               valueColor: AppColors.greenDark,
             ),
           ),
-          _VerticalSoftDivider(),
+          const _VerticalSoftDivider(),
           Expanded(
             child: _CockpitMetric(
               icon: LucideIcons.triangleAlert,
               iconColor: Color(0xFFFF6500),
               iconBackground: AppColors.amberSoft,
-              label: '风险',
-              value: '1项',
+              label: '未结人工',
+              value: model.unsettledLaborText,
               valueColor: Color(0xFFFF6500),
             ),
           ),

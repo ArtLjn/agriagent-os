@@ -1,49 +1,65 @@
 part of 'home_screen.dart';
 
 class _AiSuggestionsCard extends StatelessWidget {
-  const _AiSuggestionsCard();
+  const _AiSuggestionsCard({required this.suggestions});
+
+  final List<HomeSuggestionViewModel> suggestions;
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+    final visible = suggestions.isEmpty
+        ? const [HomeSuggestionViewModel(title: '暂无建议', subtitle: '稍后再来看看')]
+        : suggestions;
+    return CardPanel(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               Icon(LucideIcons.sparkles, size: 24, color: AppColors.blue),
               SizedBox(width: 10),
               Text('AI 今日建议', style: AppTextStyles.dateTitle),
             ],
           ),
-          SizedBox(height: 12),
-          _SuggestionRow(
-            icon: LucideIcons.cloudRain,
-            color: AppColors.blue,
-            background: AppColors.blueSoft,
-            title: '午后避开露天作业',
-            subtitle: '预计午后有雷阵雨，注意防范。',
-          ),
-          _SoftDivider(),
-          _SuggestionRow(
-            icon: LucideIcons.droplets,
-            color: AppColors.greenDark,
-            background: AppColors.greenSoft,
-            title: '西瓜批次补充灌溉',
-            subtitle: '当前土壤墒情一般，建议及时补水。',
-          ),
-          _SoftDivider(),
-          _SuggestionRow(
-            icon: LucideIcons.circleDollarSign,
-            color: AppColors.amber,
-            background: AppColors.amberSoft,
-            title: '本月饲料成本偏高',
-            subtitle: '饲料成本环比上升，建议优化采购计划。',
-          ),
+          const SizedBox(height: 12),
+          for (var index = 0; index < visible.length; index++) ...[
+            _SuggestionRow(
+              icon: _suggestionIcon(index),
+              color: _suggestionColor(index),
+              background: _suggestionBackground(index),
+              title: visible[index].title,
+              subtitle: visible[index].subtitle,
+            ),
+            if (index != visible.length - 1) const _SoftDivider(),
+          ],
         ],
       ),
     );
+  }
+
+  IconData _suggestionIcon(int index) {
+    return const [
+      LucideIcons.cloudRain,
+      LucideIcons.droplets,
+      LucideIcons.circleDollarSign,
+    ][index % 3];
+  }
+
+  Color _suggestionColor(int index) {
+    return const [
+      AppColors.blue,
+      AppColors.greenDark,
+      AppColors.amber
+    ][index % 3];
+  }
+
+  Color _suggestionBackground(int index) {
+    return const [
+      AppColors.blueSoft,
+      AppColors.greenSoft,
+      AppColors.amberSoft,
+    ][index % 3];
   }
 }
 
@@ -81,7 +97,12 @@ class _SuggestionRow extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTextStyles.listTitle),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.listTitle,
+                ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,

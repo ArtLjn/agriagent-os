@@ -1,20 +1,28 @@
+import 'package:dio/dio.dart';
+import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/repositories/dashboard_repository.dart';
 import 'package:farm_manager_app/features/home/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/api_test_fixtures.dart';
+
 void main() {
-  testWidgets('首页展示 AI 数据驾驶舱、建议、洞察和行动入口', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
+  testWidgets('首页展示真实建议、天气、作业和人工摘要，同时保留模块入口', (tester) async {
+    await tester
+        .pumpWidget(MaterialApp(home: HomeScreen(repository: _repository())));
+    await tester.pumpAndSettle();
 
     expect(find.text('农场管家'), findsOneWidget);
     expect(find.text('今日经营态势'), findsOneWidget);
     expect(find.text('AI分析'), findsOneWidget);
-    expect(find.text('86'), findsOneWidget);
-    expect(find.text('经营稳定，注意午后天气'), findsOneWidget);
     expect(find.text('AI 今日建议'), findsOneWidget);
-    expect(find.text('午后避开露天作业'), findsOneWidget);
-    expect(find.text('西瓜批次补充灌溉'), findsOneWidget);
-    expect(find.text('本月饲料成本偏高'), findsOneWidget);
+    expect(find.text('注意控水'), findsOneWidget);
+    expect(find.text('浇水'), findsOneWidget);
+    expect(find.text('傍晚少量浇水'), findsOneWidget);
+    expect(find.textContaining('寿光'), findsWidgets);
+    expect(find.text('1项'), findsWidgets);
+    expect(find.text('¥200'), findsWidgets);
     expect(find.text('资金概览'), findsOneWidget);
     expect(find.text('成本分析'), findsOneWidget);
     expect(find.text('茬口进度'), findsOneWidget);
@@ -27,7 +35,21 @@ void main() {
   });
 
   testWidgets('首页不展示 API 路径', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
+    await tester
+        .pumpWidget(MaterialApp(home: HomeScreen(repository: _repository())));
+    await tester.pumpAndSettle();
     expect(find.textContaining('/'), findsNothing);
   });
+}
+
+DashboardRepository _repository() {
+  final adapter = RecordingAdapter({
+    '/agent/daily': dailyAdviceResponse,
+    '/weather/forecast': weatherResponse,
+    '/planting/work-orders': paginatedWorkOrdersResponse,
+    '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return DashboardRepository(ApiClient(dio: dio));
 }

@@ -10,6 +10,10 @@ import '../data/session/session_store.dart';
 abstract class AppDependencies {
   ProfileRepository get profile;
 
+  DashboardRepository get dashboard;
+
+  BillingRepository get billing;
+
   YayaRepository get yaya;
 
   Future<bool> restoreSession();
@@ -45,7 +49,9 @@ class BackendAppDependencies implements AppDependencies {
   final AppSession session;
   @override
   final ProfileRepository profile;
+  @override
   final DashboardRepository dashboard;
+  @override
   final BillingRepository billing;
   final WorkbenchRepository workbench;
   @override

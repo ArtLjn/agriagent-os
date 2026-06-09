@@ -1,7 +1,9 @@
 part of 'billing_screen.dart';
 
 class LedgerSummaryCard extends StatelessWidget {
-  const LedgerSummaryCard({super.key});
+  const LedgerSummaryCard({super.key, required this.model});
+
+  final BillingViewModel model;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +78,7 @@ class LedgerSummaryCard extends StatelessWidget {
                     children: [
                       Text('资金概览', style: AppTextStyles.dateTitle),
                       SizedBox(width: 10),
-                      _LedgerPill(text: '本月'),
+                      _LedgerPill(text: '本年'),
                       SizedBox(width: 8),
                       _LedgerPill(
                         text: 'AI分析',
@@ -99,7 +101,9 @@ class LedgerSummaryCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              '12.8万',
+                              model.netProfitText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.metric.copyWith(
                                 color: AppColors.blue,
                                 fontSize: 46,
@@ -111,7 +115,7 @@ class LedgerSummaryCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 7),
                             Text(
-                              '资金稳定，支出略高',
+                              '年度净收益',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.listTitle.copyWith(
@@ -125,7 +129,7 @@ class LedgerSummaryCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const _LedgerMetricsPanel(),
+                  _LedgerMetricsPanel(model: model),
                 ],
               ),
             ],
@@ -137,7 +141,9 @@ class LedgerSummaryCard extends StatelessWidget {
 }
 
 class _LedgerMetricsPanel extends StatelessWidget {
-  const _LedgerMetricsPanel();
+  const _LedgerMetricsPanel({required this.model});
+
+  final BillingViewModel model;
 
   @override
   Widget build(BuildContext context) {
@@ -150,32 +156,32 @@ class _LedgerMetricsPanel extends StatelessWidget {
         border: Border.all(color: AppColors.lineSoft),
       ),
       child: Row(
-        children: const [
+        children: [
           Expanded(
             child: LedgerMetricColumn(
               icon: LucideIcons.trendingUp,
               label: '收入',
-              value: '2.9万',
+              value: model.incomeText,
               color: Color(0xFF08A66A),
               background: Color(0xFFE9F8F0),
             ),
           ),
-          _MetricDivider(),
+          const _MetricDivider(),
           Expanded(
             child: LedgerMetricColumn(
               icon: LucideIcons.arrowDownToLine,
               label: '支出',
-              value: '1.8万',
+              value: model.expenseText,
               color: Color(0xFFF05A24),
               background: Color(0xFFFFF3E8),
             ),
           ),
-          _MetricDivider(),
+          const _MetricDivider(),
           Expanded(
             child: LedgerMetricColumn(
               icon: LucideIcons.badgeAlert,
               label: '欠款',
-              value: '6410',
+              value: model.debtText,
               color: AppColors.purple,
               background: AppColors.purpleSoft,
             ),
@@ -249,7 +255,9 @@ class LedgerMetricColumn extends StatelessWidget {
 }
 
 class AiFinanceInsightCard extends StatelessWidget {
-  const AiFinanceInsightCard({super.key});
+  const AiFinanceInsightCard({super.key, required this.model});
+
+  final BillingViewModel model;
 
   @override
   Widget build(BuildContext context) {
@@ -290,16 +298,16 @@ class AiFinanceInsightCard extends StatelessWidget {
                   const SizedBox(height: 5),
                   Text.rich(
                     TextSpan(
-                      text: '饲料成本较上月上升 ',
+                      text: '本年收入 ',
                       children: [
                         TextSpan(
-                          text: '8%',
+                          text: model.incomeText,
                           style: AppTextStyles.body.copyWith(
                             color: const Color(0xFFF05A24),
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const TextSpan(text: '，建议复查采购单价。'),
+                        TextSpan(text: '，支出 ${model.expenseText}。'),
                       ],
                     ),
                     maxLines: 2,

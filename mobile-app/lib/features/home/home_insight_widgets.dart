@@ -1,7 +1,9 @@
 part of 'home_screen.dart';
 
 class _InsightGrid extends StatelessWidget {
-  const _InsightGrid();
+  const _InsightGrid({required this.model});
+
+  final HomeViewModel model;
 
   @override
   Widget build(BuildContext context) {
@@ -12,18 +14,20 @@ class _InsightGrid extends StatelessWidget {
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
       childAspectRatio: 1.18,
-      children: const [
-        _MoneyInsightCard(),
-        _CostInsightCard(),
-        _ProgressInsightCard(),
-        _RiskInsightCard(),
+      children: [
+        _MoneyInsightCard(value: model.unsettledLaborText),
+        _CostInsightCard(value: model.workOrderCountText),
+        _ProgressInsightCard(value: model.headline),
+        _RiskInsightCard(value: '${model.riskText}待关注'),
       ],
     );
   }
 }
 
 class _MoneyInsightCard extends StatelessWidget {
-  const _MoneyInsightCard();
+  const _MoneyInsightCard({required this.value});
+
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -49,11 +53,11 @@ class _MoneyInsightCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '余额',
+                      '未结人工',
                       style: AppTextStyles.small.copyWith(fontSize: 13),
                     ),
                     Text(
-                      '12.8万',
+                      value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.dateTitle.copyWith(
@@ -75,7 +79,9 @@ class _MoneyInsightCard extends StatelessWidget {
 }
 
 class _CostInsightCard extends StatelessWidget {
-  const _CostInsightCard();
+  const _CostInsightCard({required this.value});
+
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -89,15 +95,17 @@ class _CostInsightCard extends StatelessWidget {
               children: [
                 const Text('成本分析', style: AppTextStyles.sectionTitle),
                 const Spacer(),
-                Text('本月', style: AppTextStyles.small.copyWith(fontSize: 13)),
+                Text('作业', style: AppTextStyles.small.copyWith(fontSize: 13)),
                 Text(
-                  '+8%',
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.dateTitle.copyWith(
                     color: AppColors.greenDark,
                     fontSize: 26,
                   ),
                 ),
-                Text('较上月', style: AppTextStyles.small.copyWith(fontSize: 13)),
+                Text('待跟进', style: AppTextStyles.small.copyWith(fontSize: 13)),
               ],
             ),
           ),
@@ -110,7 +118,9 @@ class _CostInsightCard extends StatelessWidget {
 }
 
 class _ProgressInsightCard extends StatelessWidget {
-  const _ProgressInsightCard();
+  const _ProgressInsightCard({required this.value});
+
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -121,9 +131,11 @@ class _ProgressInsightCard extends StatelessWidget {
         children: [
           const Text('茬口进度', style: AppTextStyles.sectionTitle),
           const Spacer(),
-          Text('已完成', style: AppTextStyles.small.copyWith(fontSize: 13)),
+          Text('今日建议', style: AppTextStyles.small.copyWith(fontSize: 13)),
           Text(
-            '68%',
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: AppTextStyles.dateTitle.copyWith(
               color: AppColors.greenDark,
               fontSize: 26,
@@ -146,7 +158,9 @@ class _ProgressInsightCard extends StatelessWidget {
 }
 
 class _RiskInsightCard extends StatelessWidget {
-  const _RiskInsightCard();
+  const _RiskInsightCard({required this.value});
+
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +181,9 @@ class _RiskInsightCard extends StatelessWidget {
           ),
           const Spacer(),
           Text(
-            '1项待关注',
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: AppTextStyles.dateTitle.copyWith(
               color: const Color(0xFFFF6500),
               fontSize: 23,

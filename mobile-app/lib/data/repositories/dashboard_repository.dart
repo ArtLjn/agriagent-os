@@ -7,7 +7,8 @@ class DashboardRepository {
   final ApiClient client;
 
   Future<DailyAdvice> getDailyAdvice({int? cycleId}) async {
-    final data = await client.getMap('/agent/daily', query: {'cycle_id': cycleId});
+    final data =
+        await client.getMap('/agent/daily', query: {'cycle_id': cycleId});
     return DailyAdvice.fromJson(data);
   }
 
@@ -19,15 +20,18 @@ class DashboardRepository {
     return DailyAdvice.fromJson(data);
   }
 
-  Future<ApiRecord> createReport({int? cycleId, String reportType = 'weekly'}) async {
-    final data = await client.postMap('/agent/report', data: {
-      'cycle_id': cycleId,
-      'report_type': reportType,
-    }..removeWhere((_, value) => value == null));
+  Future<ApiRecord> createReport(
+      {int? cycleId, String reportType = 'weekly'}) async {
+    final data = await client.postMap('/agent/report',
+        data: {
+          'cycle_id': cycleId,
+          'report_type': reportType,
+        }..removeWhere((_, value) => value == null));
     return ApiRecord.fromJson(data);
   }
 
-  Future<List<ApiRecord>> listAdviceHistory({int? cycleId, int limit = 20}) async {
+  Future<List<ApiRecord>> listAdviceHistory(
+      {int? cycleId, int limit = 20}) async {
     final data = await client.getList('/agent/advice-history', query: {
       'cycle_id': cycleId,
       'limit': limit,
@@ -35,7 +39,8 @@ class DashboardRepository {
     return _records(data);
   }
 
-  Future<List<ApiRecord>> listReportHistory({int? cycleId, int limit = 20}) async {
+  Future<List<ApiRecord>> listReportHistory(
+      {int? cycleId, int limit = 20}) async {
     final data = await client.getList('/agent/report-history', query: {
       'cycle_id': cycleId,
       'limit': limit,
@@ -43,7 +48,8 @@ class DashboardRepository {
     return _records(data);
   }
 
-  Future<PageResult<ApiRecord>> listReports({int page = 1, int size = 10}) async {
+  Future<PageResult<ApiRecord>> listReports(
+      {int page = 1, int size = 10}) async {
     final data = await client.getMap('/agent/reports', query: {
       'page': page,
       'size': size,
@@ -69,6 +75,15 @@ class DashboardRepository {
     return client.getMap('/planting/labor/unsettled-summary');
   }
 
+  Future<PageResult<ApiRecord>> getWorkOrders(
+      {int page = 1, int size = 10}) async {
+    final data = await client.getMap('/planting/work-orders', query: {
+      'page': page,
+      'size': size,
+    });
+    return PageResult.fromJson(data, ApiRecord.fromJson);
+  }
+
   Future<void> loadOverview() async {
     await Future.wait([
       client.get('/agent/daily'),
@@ -80,7 +95,8 @@ class DashboardRepository {
 
   List<ApiRecord> _records(List<dynamic> data) {
     return data
-        .map((item) => ApiRecord.fromJson(Map<String, dynamic>.from(item as Map)))
+        .map((item) =>
+            ApiRecord.fromJson(Map<String, dynamic>.from(item as Map)))
         .toList();
   }
 }
