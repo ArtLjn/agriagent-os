@@ -9,23 +9,25 @@ import '../../theme/app_text_styles.dart';
 part 'profile_header_widgets.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.onLogout});
+
+  final Future<void> Function()? onLogout;
 
   @override
   Widget build(BuildContext context) {
-    return const ReferencePage(
-      headerTrailing: HeaderIconButton(icon: LucideIcons.settings),
+    return ReferencePage(
+      headerTrailing: const HeaderIconButton(icon: LucideIcons.settings),
       children: [
-        SizedBox(height: 14),
-        _ProfileCard(),
-        SizedBox(height: 14),
-        _LocationWeatherCard(),
-        SizedBox(height: 14),
-        _AiPreferenceCard(),
-        SizedBox(height: 14),
-        _SystemSettingsCard(),
-        SizedBox(height: 28),
-        _CompleteProfileButton(),
+        const SizedBox(height: 14),
+        const _ProfileCard(),
+        const SizedBox(height: 14),
+        const _LocationWeatherCard(),
+        const SizedBox(height: 14),
+        const _AiPreferenceCard(),
+        const SizedBox(height: 14),
+        _SystemSettingsCard(onLogout: onLogout),
+        const SizedBox(height: 28),
+        const _CompleteProfileButton(),
       ],
     );
   }
@@ -118,35 +120,48 @@ class _AiPreferenceCard extends StatelessWidget {
 }
 
 class _SystemSettingsCard extends StatelessWidget {
-  const _SystemSettingsCard();
+  const _SystemSettingsCard({this.onLogout});
+
+  final Future<void> Function()? onLogout;
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
-      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+    return CardPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       child: Column(
         children: [
-          _ProfileOptionRow(
+          const _ProfileOptionRow(
             icon: LucideIcons.cloudUpload,
             color: AppColors.greenDark,
             background: AppColors.greenSoft,
             title: '数据备份与恢复',
           ),
-          Divider(height: 1, color: AppColors.lineSoft),
-          _ProfileOptionRow(
+          const Divider(height: 1, color: AppColors.lineSoft),
+          const _ProfileOptionRow(
             icon: LucideIcons.bell,
             color: AppColors.amber,
             background: AppColors.amberSoft,
             title: '消息通知',
           ),
-          Divider(height: 1, color: AppColors.lineSoft),
-          _ProfileOptionRow(
+          const Divider(height: 1, color: AppColors.lineSoft),
+          const _ProfileOptionRow(
             icon: LucideIcons.info,
             color: AppColors.blue,
             background: AppColors.blueSoft,
             title: '关于农场管家',
             value: '版本 1.0.0',
           ),
+          if (onLogout != null) ...[
+            const Divider(height: 1, color: AppColors.lineSoft),
+            _ProfileOptionRow(
+              icon: LucideIcons.logOut,
+              color: AppColors.red,
+              background: AppColors.redSoft,
+              title: '退出登录',
+              valueColor: AppColors.red,
+              onTap: onLogout,
+            ),
+          ],
         ],
       ),
     );
@@ -162,6 +177,7 @@ class _ProfileOptionRow extends StatelessWidget {
     this.value,
     this.valueColor = AppColors.muted,
     this.trailing,
+    this.onTap,
   });
 
   final IconData icon;
@@ -171,16 +187,24 @@ class _ProfileOptionRow extends StatelessWidget {
   final String? value;
   final Color valueColor;
   final Widget? trailing;
+  final Future<void> Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final content = SizedBox(
       height: 64,
       child: Row(
         children: [
           IconBadge(icon: icon, color: color, background: background, size: 36),
           const SizedBox(width: 16),
-          Expanded(child: Text(title, style: AppTextStyles.listTitle)),
+          Expanded(
+            child: Text(
+              title,
+              style: AppTextStyles.listTitle.copyWith(
+                color: onTap == null ? null : valueColor,
+              ),
+            ),
+          ),
           if (trailing != null)
             trailing!
           else if (value != null)
@@ -194,14 +218,16 @@ class _ProfileOptionRow extends StatelessWidget {
               ),
             ),
           const SizedBox(width: 8),
-          const Icon(
+          Icon(
             LucideIcons.chevronRight,
             size: 20,
-            color: AppColors.subtle,
+            color: onTap == null ? AppColors.subtle : valueColor,
           ),
         ],
       ),
     );
+    if (onTap == null) return content;
+    return InkWell(onTap: onTap, child: content);
   }
 }
 

@@ -16,10 +16,12 @@ class AppShell extends StatefulWidget {
     super.key,
     required this.dependencies,
     this.initialIndex = 0,
+    this.onLogout,
   });
 
   final AppDependencies dependencies;
   final int initialIndex;
+  final Future<void> Function()? onLogout;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -63,7 +65,7 @@ class _AppShellState extends State<AppShell> {
             ),
             const YayaScreen(),
             const BillingScreen(),
-            const ProfileScreen(),
+            ProfileScreen(onLogout: widget.onLogout),
           ],
         ),
       ),

@@ -19,6 +19,7 @@ void main() {
         home: AuthFlow(dependencies: dependencies ?? FakeAppDependencies()),
       ),
     );
+    await tester.pumpAndSettle();
   }
 
   testWidgets('认证流程可从登录进入注册、首次设置和主应用', (tester) async {
@@ -102,7 +103,7 @@ void main() {
     expect(find.text('完善农场信息'), findsOneWidget);
   });
 
-  testWidgets('登录接口失败时仍放行进入主应用方便调试页面', (tester) async {
+  testWidgets('登录接口失败时停留登录页并展示错误', (tester) async {
     final dependencies = FakeAppDependencies(loginError: Exception('401'));
     await pumpAuthFlow(tester, dependencies: dependencies);
 
@@ -110,8 +111,36 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(dependencies.loginCalls, 1);
+    expect(dependencies.overviewLoads, 0);
+    expect(find.text('登录失败，请检查账号或稍后重试'), findsOneWidget);
+    expect(find.text('首页'), findsNothing);
+    expect(find.text('账本'), findsNothing);
+  });
+
+  testWidgets('启动恢复 session 成功时直接进入主应用', (tester) async {
+    final dependencies = FakeAppDependencies(restoreResult: true);
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    expect(dependencies.restoreCalls, 1);
     expect(dependencies.overviewLoads, 1);
     expect(find.text('首页'), findsWidgets);
+    expect(find.text('记录'), findsWidgets);
     expect(find.text('账本'), findsWidgets);
+  });
+
+  testWidgets('退出登录后清理 session 并回到登录页', (tester) async {
+    final dependencies = FakeAppDependencies(restoreResult: true);
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    await tester.tap(find.text('我的').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('退出登录'));
+    await tester.tap(find.text('退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(dependencies.logoutCalls, 1);
+    expect(find.text('农场管家'), findsOneWidget);
+    expect(find.text('手机号'), findsOneWidget);
+    expect(find.text('首页'), findsNothing);
   });
 }

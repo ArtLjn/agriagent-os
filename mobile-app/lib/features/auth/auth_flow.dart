@@ -6,7 +6,7 @@ import 'login_screen.dart';
 import 'onboarding_setup_screen.dart';
 import 'register_screen.dart';
 
-enum AuthStep { login, register, setup, app }
+enum AuthStep { restoring, login, register, setup, app }
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({
@@ -26,16 +26,38 @@ class _AuthFlowState extends State<AuthFlow> {
   late AuthStep step = widget.initialStep;
 
   @override
+  void initState() {
+    super.initState();
+    if (step == AuthStep.login) {
+      step = AuthStep.restoring;
+      _restoreSession();
+    }
+  }
+
+  Future<void> _restoreSession() async {
+    final restored = await widget.dependencies.restoreSession();
+    if (!mounted) return;
+    setState(() => step = restored ? AuthStep.app : AuthStep.login);
+  }
+
+  Future<void> _logout() async {
+    await widget.dependencies.logout();
+    if (!mounted) return;
+    setState(() => step = AuthStep.login);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return switch (step) {
+      AuthStep.restoring => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
       AuthStep.login => LoginScreen(
           onLogin: ({
             required String phone,
             required String password,
           }) async {
-            try {
-              await widget.dependencies.login(phone: phone, password: password);
-            } catch (_) {}
+            await widget.dependencies.login(phone: phone, password: password);
             if (mounted) setState(() => step = AuthStep.app);
           },
           onRegister: () => setState(() => step = AuthStep.register),
@@ -59,7 +81,10 @@ class _AuthFlowState extends State<AuthFlow> {
           onStart: () => setState(() => step = AuthStep.app),
           onSkip: () => setState(() => step = AuthStep.app),
         ),
-      AuthStep.app => AppShell(dependencies: widget.dependencies),
+      AuthStep.app => AppShell(
+          dependencies: widget.dependencies,
+          onLogout: _logout,
+        ),
     };
   }
 }

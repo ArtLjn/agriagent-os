@@ -8,6 +8,8 @@ import '../data/session/app_session.dart';
 import '../data/session/session_store.dart';
 
 abstract class AppDependencies {
+  Future<bool> restoreSession();
+
   Future<void> login({required String phone, required String password});
 
   Future<void> register({
@@ -17,6 +19,8 @@ abstract class AppDependencies {
   });
 
   Future<void> loadAppOverview();
+
+  Future<void> logout();
 }
 
 class BackendAppDependencies implements AppDependencies {
@@ -40,6 +44,11 @@ class BackendAppDependencies implements AppDependencies {
   final BillingRepository billing;
   final WorkbenchRepository workbench;
   final YayaRepository yaya;
+
+  @override
+  Future<bool> restoreSession() {
+    return session.restore();
+  }
 
   @override
   Future<void> login({required String phone, required String password}) async {
@@ -68,5 +77,10 @@ class BackendAppDependencies implements AppDependencies {
       workbench.warmUp(),
       yaya.loadConversations(),
     ]);
+  }
+
+  @override
+  Future<void> logout() {
+    return session.logout();
   }
 }

@@ -2,18 +2,28 @@ import 'package:farm_manager_app/app/app_dependencies.dart';
 
 class FakeAppDependencies implements AppDependencies {
   FakeAppDependencies({
+    this.restoreResult = false,
     this.loginError,
     this.registerError,
   });
 
+  final bool restoreResult;
   final Object? loginError;
   final Object? registerError;
+  int restoreCalls = 0;
   int loginCalls = 0;
   int registerCalls = 0;
+  int logoutCalls = 0;
   int overviewLoads = 0;
   String? lastPhone;
   String? lastPassword;
   String? lastNickname;
+
+  @override
+  Future<bool> restoreSession() async {
+    restoreCalls += 1;
+    return restoreResult;
+  }
 
   @override
   Future<void> login({required String phone, required String password}) async {
@@ -39,5 +49,10 @@ class FakeAppDependencies implements AppDependencies {
   @override
   Future<void> loadAppOverview() async {
     overviewLoads += 1;
+  }
+
+  @override
+  Future<void> logout() async {
+    logoutCalls += 1;
   }
 }
