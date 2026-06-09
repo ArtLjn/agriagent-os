@@ -9,7 +9,7 @@ class HomeController {
   Future<HomeViewModel> load() async {
     final results = await Future.wait<Object>([
       repository.getDailyAdvice(),
-      repository.getForecast(),
+      _loadForecast(),
       repository.getWorkOrders(size: 10),
       repository.getUnsettledLaborSummary(),
     ]);
@@ -29,6 +29,14 @@ class HomeController {
       riskText: unpaid > 0 ? '1项' : '0项',
       suggestions: _suggestions(advice),
     );
+  }
+
+  Future<Map<String, dynamic>> _loadForecast() async {
+    try {
+      return await repository.getForecast();
+    } catch (_) {
+      return const {};
+    }
   }
 
   List<HomeSuggestionViewModel> _suggestions(DailyAdvice advice) {

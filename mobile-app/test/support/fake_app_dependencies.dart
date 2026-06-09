@@ -130,6 +130,7 @@ YayaRepository _fakeYayaRepository() {
 DashboardRepository _fakeDashboardRepository() {
   final adapter = RecordingAdapter({
     '/agent/daily': dailyAdviceResponse,
+    '/settings': settingsResponse,
     '/weather/forecast': weatherResponse,
     '/planting/work-orders': paginatedWorkOrdersResponse,
     '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,

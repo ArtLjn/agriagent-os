@@ -59,15 +59,25 @@ class DashboardRepository {
 
   Future<Map<String, dynamic>> getForecast({
     int days = 7,
-    String location = '当前地块',
+    String? location,
     double? lat,
     double? lon,
-  }) {
+  }) async {
+    var forecastLocation = location;
+    var forecastLat = lat;
+    var forecastLon = lon;
+    if ((forecastLocation == null || forecastLocation.trim().isEmpty) &&
+        (forecastLat == null || forecastLon == null)) {
+      final settings = await client.getMap('/settings');
+      forecastLocation = settings['default_city'] as String?;
+      forecastLat = (settings['default_lat'] as num?)?.toDouble();
+      forecastLon = (settings['default_lon'] as num?)?.toDouble();
+    }
     return client.getMap('/weather/forecast', query: {
       'days': days,
-      'location': location,
-      'lat': lat,
-      'lon': lon,
+      'location': forecastLocation,
+      'lat': forecastLat,
+      'lon': forecastLon,
     });
   }
 
@@ -87,7 +97,7 @@ class DashboardRepository {
   Future<void> loadOverview() async {
     await Future.wait([
       client.get('/agent/daily'),
-      client.get('/weather/forecast'),
+      getForecast(),
       client.get('/planting/work-orders'),
       client.get('/planting/labor/unsettled-summary'),
     ]);

@@ -5,9 +5,10 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 class RecordingAdapter implements HttpClientAdapter {
-  RecordingAdapter(this.responses);
+  RecordingAdapter(this.responses, {this.statusCodes = const {}});
 
   final Map<String, Object?> responses;
+  final Map<String, int> statusCodes;
   final List<RecordedRequest> requests = [];
 
   RecordedRequest find(String method, String path) {
@@ -36,8 +37,8 @@ class RecordingAdapter implements HttpClientAdapter {
         headers: Map<String, dynamic>.from(options.headers),
       ),
     );
-    final response = responses['${options.method} ${options.path}'] ??
-        responses[options.path];
+    final key = '${options.method} ${options.path}';
+    final response = responses[key] ?? responses[options.path];
     if (response == null && options.method != 'GET') {
       return ResponseBody.fromString(
         jsonEncode({'message': '未配置测试接口 ${options.method} ${options.path}'}),
@@ -49,7 +50,7 @@ class RecordingAdapter implements HttpClientAdapter {
     }
     return ResponseBody.fromString(
       jsonEncode(response ?? {'message': 'ok'}),
-      200,
+      statusCodes[key] ?? statusCodes[options.path] ?? 200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },

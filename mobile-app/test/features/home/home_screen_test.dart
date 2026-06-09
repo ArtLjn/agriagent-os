@@ -64,12 +64,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(fake.adapter.requests, hasLength(4));
+    expect(fake.adapter.requests, hasLength(5));
 
     await tester.tap(find.text('刷新0'));
     await tester.pumpAndSettle();
 
-    expect(fake.adapter.requests, hasLength(4));
+    expect(fake.adapter.requests, hasLength(5));
   });
 }
 
@@ -81,6 +81,7 @@ class _FakeHomeApi {
   _FakeHomeApi()
       : adapter = RecordingAdapter({
           '/agent/daily': dailyAdviceResponse,
+          '/settings': settingsResponse,
           '/weather/forecast': weatherResponse,
           '/planting/work-orders': paginatedWorkOrdersResponse,
           '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
