@@ -34,4 +34,28 @@ void main() {
     expect(adapter.find('GET', '/costs').query['size'], 10);
     expect(adapter.find('GET', '/debts').query['size'], 10);
   });
+
+  test('成本记录即使返回负金额也按支出显示', () async {
+    final adapter = RecordingAdapter({
+      '/costs': {
+        'items': [
+          {...costRecordResponse, 'record_type': 'cost', 'amount': '-200'}
+        ],
+        'total': 1,
+      },
+      '/costs/summary/2026': yearlySummaryResponse,
+      '/debts': debtsResponse,
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final controller = BillingController(
+      repository: BillingRepository(ApiClient(dio: dio)),
+      year: 2026,
+    );
+
+    final model = await controller.load();
+
+    expect(model.transactions.single.isIncome, false);
+    expect(model.transactions.single.amountText, '-¥200');
+  });
 }

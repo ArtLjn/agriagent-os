@@ -33,7 +33,7 @@ class BillingController {
     final json = record.json;
     final amount = _number(json['amount']);
     final type = '${json['record_type'] ?? ''}';
-    final isIncome = type == 'income' || amount < 0;
+    final isIncome = type == 'income';
     final title = _firstNonEmpty([
       json['category'],
       json['record_subtype'],

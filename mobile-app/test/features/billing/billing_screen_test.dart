@@ -38,15 +38,70 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('/api'), findsNothing);
   });
+
+  testWidgets('父级 rebuild 后账本不重复请求数据', (tester) async {
+    final fake = _FakeBillingApi();
+    var version = 0;
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          return MaterialApp(
+            home: Column(
+              children: [
+                TextButton(
+                  onPressed: () => setState(() => version += 1),
+                  child: Text('刷新$version'),
+                ),
+                Expanded(child: BillingScreen(repository: fake.repository)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(fake.adapter.requests, hasLength(3));
+
+    await tester.tap(find.text('刷新0'));
+    await tester.pumpAndSettle();
+
+    expect(fake.adapter.requests, hasLength(3));
+  });
+
+  testWidgets('账本大金额交易可以渲染', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+          home: BillingScreen(repository: _repository(amount: '1234567890'))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('-¥1234567890'), findsOneWidget);
+  });
 }
 
-BillingRepository _repository() {
-  final adapter = RecordingAdapter({
-    '/costs': paginatedCostsResponse,
-    '/costs/summary/2026': yearlySummaryResponse,
-    '/debts': debtsResponse,
-  });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
-  dio.httpClientAdapter = adapter;
-  return BillingRepository(ApiClient(dio: dio));
+BillingRepository _repository({String amount = '200'}) {
+  return _FakeBillingApi(amount: amount).repository;
+}
+
+class _FakeBillingApi {
+  _FakeBillingApi({String amount = '200'})
+      : adapter = RecordingAdapter({
+          '/costs': {
+            'items': [
+              {...costRecordResponse, 'amount': amount}
+            ],
+            'total': 1,
+          },
+          '/costs/summary/2026': yearlySummaryResponse,
+          '/debts': debtsResponse,
+        }) {
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    repository = BillingRepository(ApiClient(dio: dio));
+  }
+
+  final RecordingAdapter adapter;
+  late final BillingRepository repository;
 }

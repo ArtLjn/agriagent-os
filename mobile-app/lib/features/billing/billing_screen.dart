@@ -11,15 +11,23 @@ import 'billing_controller.dart';
 
 part 'billing_summary_widgets.dart';
 
-class BillingScreen extends StatelessWidget {
+class BillingScreen extends StatefulWidget {
   const BillingScreen({super.key, required this.repository});
 
   final BillingRepository repository;
 
   @override
+  State<BillingScreen> createState() => _BillingScreenState();
+}
+
+class _BillingScreenState extends State<BillingScreen> {
+  late final Future<BillingViewModel> _future =
+      BillingController(repository: widget.repository).load();
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<BillingViewModel>(
-      future: BillingController(repository: repository).load(),
+      future: _future,
       builder: (context, snapshot) {
         final model = snapshot.data;
         return SafeArea(
@@ -183,13 +191,21 @@ class TransactionRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            amount,
-            style: AppTextStyles.listTitle.copyWith(
-              color: amountColor,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              fontFeatures: const [FontFeature.tabularFigures()],
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                amount,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.listTitle.copyWith(
+                  color: amountColor,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
             ),
           ),
         ],

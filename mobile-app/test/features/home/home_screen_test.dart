@@ -40,16 +40,56 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('/'), findsNothing);
   });
+
+  testWidgets('父级 rebuild 后首页不重复请求数据', (tester) async {
+    final fake = _FakeHomeApi();
+    var version = 0;
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          return MaterialApp(
+            home: Column(
+              children: [
+                TextButton(
+                  onPressed: () => setState(() => version += 1),
+                  child: Text('刷新$version'),
+                ),
+                Expanded(child: HomeScreen(repository: fake.repository)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(fake.adapter.requests, hasLength(4));
+
+    await tester.tap(find.text('刷新0'));
+    await tester.pumpAndSettle();
+
+    expect(fake.adapter.requests, hasLength(4));
+  });
 }
 
 DashboardRepository _repository() {
-  final adapter = RecordingAdapter({
-    '/agent/daily': dailyAdviceResponse,
-    '/weather/forecast': weatherResponse,
-    '/planting/work-orders': paginatedWorkOrdersResponse,
-    '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
-  });
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
-  dio.httpClientAdapter = adapter;
-  return DashboardRepository(ApiClient(dio: dio));
+  return _FakeHomeApi().repository;
+}
+
+class _FakeHomeApi {
+  _FakeHomeApi()
+      : adapter = RecordingAdapter({
+          '/agent/daily': dailyAdviceResponse,
+          '/weather/forecast': weatherResponse,
+          '/planting/work-orders': paginatedWorkOrdersResponse,
+          '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
+        }) {
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    repository = DashboardRepository(ApiClient(dio: dio));
+  }
+
+  final RecordingAdapter adapter;
+  late final DashboardRepository repository;
 }

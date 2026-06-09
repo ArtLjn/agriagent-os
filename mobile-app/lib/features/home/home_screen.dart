@@ -14,15 +14,23 @@ part 'home_cockpit_widgets.dart';
 part 'home_insight_widgets.dart';
 part 'home_suggestions_widgets.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.repository});
 
   final DashboardRepository repository;
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final Future<HomeViewModel> _future =
+      HomeController(repository: widget.repository).load();
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<HomeViewModel>(
-      future: HomeController(repository: repository).load(),
+      future: _future,
       builder: (context, snapshot) {
         final model = snapshot.data;
         return ReferencePage(
