@@ -79,8 +79,14 @@ void main() {
     final billing = BillingRepository(client);
     final workbench = WorkbenchRepository(client);
 
+    client.setAccessToken(null);
     expect((await auth.login(phone: '13800138000', password: 'password')).token,
         'token-1');
+    expect(
+      client.dio.options.headers.containsKey('Authorization'),
+      false,
+    );
+    client.setAccessToken('token-1');
     await auth.register(
       phone: '13800138000',
       password: 'password',
@@ -143,7 +149,10 @@ void main() {
       idempotencyKey: 'req-1',
     );
 
-    expect(adapter.requests.first.headers['Authorization'], 'Bearer token-1');
+    expect(
+      adapter.find('GET', '/auth/me').headers['Authorization'],
+      'Bearer token-1',
+    );
     expect(adapter.find('POST', '/agent/chat').data, {
       'cycle_id': 7,
       'message': '今天浇水吗',

@@ -5,6 +5,8 @@ import '../data/repositories/dashboard_repository.dart';
 import '../data/repositories/profile_repository.dart';
 import '../data/repositories/workbench_repository.dart';
 import '../data/repositories/yaya_repository.dart';
+import '../data/session/app_session.dart';
+import '../data/session/session_store.dart';
 
 abstract class AppDependencies {
   Future<void> login({required String phone, required String password});
@@ -23,6 +25,10 @@ class BackendAppDependencies implements AppDependencies {
 
   BackendAppDependencies._(this.client)
       : auth = AuthRepository(client),
+        session = AppSession(
+          client: client,
+          store: const SecureSessionStore(),
+        ),
         profile = ProfileRepository(client),
         dashboard = DashboardRepository(client),
         billing = BillingRepository(client),
@@ -31,6 +37,7 @@ class BackendAppDependencies implements AppDependencies {
 
   final ApiClient client;
   final AuthRepository auth;
+  final AppSession session;
   final ProfileRepository profile;
   final DashboardRepository dashboard;
   final BillingRepository billing;
@@ -39,7 +46,7 @@ class BackendAppDependencies implements AppDependencies {
 
   @override
   Future<void> login({required String phone, required String password}) async {
-    await auth.login(phone: phone, password: password);
+    await session.login(phone: phone, password: password);
   }
 
   @override
@@ -48,7 +55,11 @@ class BackendAppDependencies implements AppDependencies {
     required String password,
     required String nickname,
   }) async {
-    await auth.register(phone: phone, password: password, nickname: nickname);
+    await session.register(
+      phone: phone,
+      password: password,
+      nickname: nickname,
+    );
   }
 
   @override
