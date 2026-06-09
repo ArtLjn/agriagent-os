@@ -14,21 +14,30 @@ class YayaController extends ChangeNotifier {
   String? activeSessionId;
   List<String> lastSkills = const [];
   Map<String, dynamic>? pendingAction;
+  bool _disposed = false;
 
   Future<void> loadConversations() async {
+    final loaded = await repository.loadConversations();
+    if (_disposed) return;
     conversations
       ..clear()
-      ..addAll(await repository.loadConversations());
-    notifyListeners();
+      ..addAll(loaded);
+    _safeNotify();
   }
 
   Future<void> openConversation(String sessionId) async {
+    if (sending) {
+      errorMessage = '请等待芽芽回复完成后再切换会话';
+      _safeNotify();
+      return;
+    }
     activeSessionId = sessionId;
     final loaded = await repository.loadMessages(sessionId);
+    if (_disposed) return;
     messages
       ..clear()
       ..addAll(loaded.map(YayaMessageViewModel.fromConversation));
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> send(String text) async {
@@ -40,17 +49,18 @@ class YayaController extends ChangeNotifier {
     messages.add(YayaMessageViewModel.user(trimmed));
     final assistantIndex = messages.length;
     messages.add(const YayaMessageViewModel(role: 'assistant', content: ''));
-    notifyListeners();
+    _safeNotify();
     try {
       await for (final event in repository.streamMessage(
         trimmed,
         sessionId: activeSessionId,
       )) {
+        if (_disposed) break;
         if (event.done) break;
         if (event.error != null && event.error!.isNotEmpty) {
           errorMessage = event.error;
           _removeEmptyAssistant(assistantIndex);
-          notifyListeners();
+          _safeNotify();
           break;
         }
         final content = event.content;
@@ -62,14 +72,17 @@ class YayaController extends ChangeNotifier {
         }
         if (event.skills.isNotEmpty) lastSkills = event.skills;
         if (event.pendingAction != null) pendingAction = event.pendingAction;
-        notifyListeners();
+        _safeNotify();
       }
     } catch (_) {
+      if (_disposed) return;
       errorMessage = '芽芽暂时没有回应，请稍后再试';
       _removeEmptyAssistant(assistantIndex);
     } finally {
-      sending = false;
-      notifyListeners();
+      if (!_disposed) {
+        sending = false;
+        _safeNotify();
+      }
     }
   }
 
@@ -78,6 +91,16 @@ class YayaController extends ChangeNotifier {
         messages[assistantIndex].content.isEmpty) {
       messages.removeAt(assistantIndex);
     }
+  }
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
 

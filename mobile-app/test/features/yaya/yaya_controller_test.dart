@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/api/api_models.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
 import 'package:farm_manager_app/features/yaya/yaya_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,6 +64,47 @@ void main() {
     expect(controller.activeSessionId, 's1');
     expect(controller.messages.single.content, '建议傍晚浇水');
   });
+
+  test('dispose 后延迟流完成不会抛 disposed notifier 异常', () async {
+    final repository = DelayedStreamingYayaRepository();
+    final controller = YayaController(repository: repository);
+
+    final sendFuture = controller.send('今天浇水吗');
+    await Future<void>.delayed(Duration.zero);
+    controller.dispose();
+    repository.complete([
+      const YayaStreamEvent(content: '建议'),
+      const YayaStreamEvent(done: true),
+    ]);
+
+    await sendFuture;
+  });
+
+  test('发送中切换历史会话不清空当前消息并提示等待', () async {
+    final repository = DelayedStreamingYayaRepository();
+    final controller = YayaController(repository: repository);
+
+    final sendFuture = controller.send('今天浇水吗');
+    await Future<void>.delayed(Duration.zero);
+    await controller.openConversation('s1');
+
+    expect(controller.messages.map((item) => item.content), [
+      '今天浇水吗',
+      '',
+    ]);
+    expect(controller.errorMessage, '请等待芽芽回复完成后再切换会话');
+
+    repository.complete([
+      const YayaStreamEvent(content: '建议'),
+      const YayaStreamEvent(done: true),
+    ]);
+    await sendFuture;
+
+    expect(controller.messages.map((item) => item.content), [
+      '今天浇水吗',
+      '建议',
+    ]);
+  });
 }
 
 class FakeStreamingYayaRepository extends YayaRepository {
@@ -77,5 +121,38 @@ class FakeStreamingYayaRepository extends YayaRepository {
     for (final event in events) {
       yield event;
     }
+  }
+}
+
+class DelayedStreamingYayaRepository extends YayaRepository {
+  DelayedStreamingYayaRepository() : super(ApiClient());
+
+  final _controller = StreamController<YayaStreamEvent>();
+
+  void complete(List<YayaStreamEvent> events) {
+    for (final event in events) {
+      _controller.add(event);
+    }
+    _controller.close();
+  }
+
+  @override
+  Stream<YayaStreamEvent> streamMessage(
+    String message, {
+    int? cycleId,
+    String? sessionId,
+  }) {
+    return _controller.stream;
+  }
+
+  @override
+  Future<List<ConversationMessage>> loadMessages(String sessionId) async {
+    return const [
+      ConversationMessage(
+        id: 1,
+        role: 'assistant',
+        content: '历史消息',
+      ),
+    ];
   }
 }

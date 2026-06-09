@@ -26,16 +26,14 @@ class YayaRepository {
       headers: {'Accept': 'text/event-stream'},
       responseType: ResponseType.stream,
     );
-    final lines = _eventLines(response.data);
-    await for (final line in lines) {
-      if (!line.startsWith('data:')) continue;
-      final data = line.substring(5).trim();
-      if (data.isEmpty) continue;
-      if (data == '[DONE]') {
+    await for (final data in _eventData(response.data)) {
+      final trimmed = data.trim();
+      if (trimmed.isEmpty) continue;
+      if (trimmed == '[DONE]') {
         yield const YayaStreamEvent(done: true);
-        continue;
+      } else {
+        yield _parseEvent(trimmed);
       }
-      yield YayaStreamEvent.fromJson(jsonDecode(data) as Map<String, dynamic>);
     }
   }
 
@@ -90,6 +88,33 @@ class YayaRepository {
     return Stream<String>.fromIterable(
       const LineSplitter().convert(data?.toString() ?? ''),
     );
+  }
+
+  Stream<String> _eventData(Object? data) async* {
+    final dataLines = <String>[];
+    await for (final line in _eventLines(data)) {
+      if (line.isEmpty) {
+        if (dataLines.isNotEmpty) {
+          yield dataLines.join('\n');
+          dataLines.clear();
+        }
+        continue;
+      }
+      if (line.startsWith('data:')) {
+        dataLines.add(line.substring(5).trimLeft());
+      }
+    }
+    if (dataLines.isNotEmpty) {
+      yield dataLines.join('\n');
+    }
+  }
+
+  YayaStreamEvent _parseEvent(String data) {
+    try {
+      return YayaStreamEvent.fromJson(jsonDecode(data) as Map<String, dynamic>);
+    } on FormatException {
+      return const YayaStreamEvent(error: '芽芽回复解析失败，请稍后重试');
+    }
   }
 }
 

@@ -197,4 +197,40 @@ void main() {
     });
     expect(adapter.requests.single.headers['Accept'], 'text/event-stream');
   });
+
+  test('芽芽流式接口按 SSE 空行聚合同一事件的多行 data', () async {
+    final adapter = StreamingAdapter(
+      [
+        'data: {"content":"建议",\n',
+        'data: "skills":["weather"]}\n\n',
+        'data: [DONE]\n\n',
+      ].join(),
+    );
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final yaya = YayaRepository(ApiClient(dio: dio));
+
+    final events = await yaya.streamMessage('今天浇水吗').toList();
+
+    expect(events.first.content, '建议');
+    expect(events.first.skills, ['weather']);
+    expect(events.last.done, true);
+  });
+
+  test('芽芽流式接口遇到 malformed JSON 会产出解析错误事件', () async {
+    final adapter = StreamingAdapter(
+      [
+        'data: {"content":\n\n',
+        'data: [DONE]\n\n',
+      ].join(),
+    );
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final yaya = YayaRepository(ApiClient(dio: dio));
+
+    final events = await yaya.streamMessage('今天浇水吗').toList();
+
+    expect(events.first.error, '芽芽回复解析失败，请稍后重试');
+    expect(events.last.done, true);
+  });
 }
