@@ -3,7 +3,7 @@ import 'package:farm_manager_app/app/app_dependencies.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 
-import '../data/repositories/app_api_integration_test.dart'
+import 'api_test_fixtures.dart'
     show RecordingAdapter, settingsResponse, userResponse, versionResponse;
 
 class FakeAppDependencies implements AppDependencies {

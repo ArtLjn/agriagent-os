@@ -4,7 +4,7 @@ import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/features/profile/profile_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../data/repositories/app_api_integration_test.dart'
+import '../../support/api_test_fixtures.dart'
     show RecordingAdapter, settingsResponse, userResponse, versionResponse;
 
 void main() {

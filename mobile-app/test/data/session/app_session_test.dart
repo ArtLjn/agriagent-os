@@ -4,7 +4,7 @@ import 'package:farm_manager_app/data/session/app_session.dart';
 import 'package:farm_manager_app/data/session/session_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../repositories/app_api_integration_test.dart'
+import '../../support/api_test_fixtures.dart'
     show RecordingAdapter, tokenResponse;
 
 void main() {
