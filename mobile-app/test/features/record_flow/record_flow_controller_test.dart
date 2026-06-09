@@ -30,7 +30,7 @@ void main() {
     expect(draft.scene, 'ledger.record');
     expect(draft.fields, {'amount': '200'});
     expect(adapter.find('POST', '/smart-fill/parse').data, {
-      'scene': 'auto.record',
+      'scene': 'ledger.record',
       'text': '今天买肥料 200',
       'context': {},
     });

@@ -12,7 +12,7 @@ class RecordFlowController {
 
   Future<RecordDraft> parse(String text) async {
     final result = await workbench.parseSmartFill(
-      scene: 'auto.record',
+      scene: 'ledger.record',
       text: text,
       idempotencyKey: DateTime.now().microsecondsSinceEpoch.toString(),
     );
