@@ -9,7 +9,9 @@ void main() {
     expect(find.text('农场管家'), findsOneWidget);
     expect(find.text('资金概览'), findsOneWidget);
     expect(find.text('AI财务洞察'), findsOneWidget);
-    expect(find.text('收入(元)'), findsOneWidget);
+    expect(find.text('收入'), findsOneWidget);
+    expect(find.text('支出'), findsOneWidget);
+    expect(find.text('欠款'), findsOneWidget);
     expect(find.text('最近交易'), findsOneWidget);
     expect(find.text('饲料采购'), findsOneWidget);
     expect(find.text('待收款提醒'), findsOneWidget);

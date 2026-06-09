@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../app/app_dependencies.dart';
 import '../../theme/app_colors.dart';
 import '../billing/billing_screen.dart';
 import '../home/home_screen.dart';
@@ -9,8 +12,13 @@ import '../yaya/yaya_screen.dart';
 import 'bottom_tab_bar.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, this.initialIndex = 0});
+  const AppShell({
+    super.key,
+    required this.dependencies,
+    this.initialIndex = 0,
+  });
 
+  final AppDependencies dependencies;
   final int initialIndex;
 
   @override
@@ -19,6 +27,12 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late int selectedIndex = widget.initialIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.dependencies.loadAppOverview().catchError((Object _) {}));
+  }
 
   void _selectTab(int index) => setState(() => selectedIndex = index);
 

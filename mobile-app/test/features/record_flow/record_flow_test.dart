@@ -5,6 +5,8 @@ import 'package:farm_manager_app/features/shell/app_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/fake_app_dependencies.dart';
+
 void main() {
   Future<void> pumpFlow(WidgetTester tester, Widget child) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -64,7 +66,10 @@ void main() {
   });
 
   testWidgets('记录页入口可打开三页闭环并能从成功页切到账本', (tester) async {
-    await pumpFlow(tester, const AppShell(initialIndex: 1));
+    await pumpFlow(
+      tester,
+      AppShell(dependencies: FakeAppDependencies(), initialIndex: 1),
+    );
 
     await tester.tap(find.text('AI帮我填'));
     await tester.pumpAndSettle();

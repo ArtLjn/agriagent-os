@@ -18,5 +18,5 @@ void main() {
       systemStatusBarContrastEnforced: false,
     ),
   );
-  runApp(const FarmManagerApp());
+  runApp(FarmManagerApp());
 }

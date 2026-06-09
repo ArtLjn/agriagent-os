@@ -2,14 +2,23 @@ import 'package:farm_manager_app/features/auth/auth_flow.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/fake_app_dependencies.dart';
+
 void main() {
-  Future<void> pumpAuthFlow(WidgetTester tester) async {
+  Future<void> pumpAuthFlow(
+    WidgetTester tester, {
+    FakeAppDependencies? dependencies,
+  }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const MaterialApp(home: AuthFlow()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AuthFlow(dependencies: dependencies ?? FakeAppDependencies()),
+      ),
+    );
   }
 
   testWidgets('认证流程可从登录进入注册、首次设置和主应用', (tester) async {
@@ -56,13 +65,53 @@ void main() {
   });
 
   testWidgets('登录页可以直接进入主应用', (tester) async {
-    await pumpAuthFlow(tester);
+    final dependencies = FakeAppDependencies();
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    await tester.enterText(find.byType(TextField).at(0), '13800138000');
+    await tester.enterText(find.byType(TextField).at(1), 'password');
 
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
 
+    expect(dependencies.loginCalls, 1);
+    expect(dependencies.lastPhone, '13800138000');
+    expect(dependencies.lastPassword, 'password');
+    expect(dependencies.overviewLoads, 1);
     expect(find.text('首页'), findsWidgets);
     expect(find.text('记录'), findsWidgets);
+    expect(find.text('账本'), findsWidgets);
+  });
+
+  testWidgets('注册页调用后端注册后进入首次设置', (tester) async {
+    final dependencies = FakeAppDependencies();
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    await tester.tap(find.text('去注册'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).at(0), '13900139000');
+    await tester.enterText(find.byType(TextField).at(1), 'secret1');
+    await tester.enterText(find.byType(TextField).at(2), '小李');
+    await tester.tap(find.text('注册并进入'));
+    await tester.pumpAndSettle();
+
+    expect(dependencies.registerCalls, 1);
+    expect(dependencies.lastPhone, '13900139000');
+    expect(dependencies.lastPassword, 'secret1');
+    expect(dependencies.lastNickname, '小李');
+    expect(find.text('完善农场信息'), findsOneWidget);
+  });
+
+  testWidgets('登录接口失败时仍放行进入主应用方便调试页面', (tester) async {
+    final dependencies = FakeAppDependencies(loginError: Exception('401'));
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(dependencies.loginCalls, 1);
+    expect(dependencies.overviewLoads, 1);
+    expect(find.text('首页'), findsWidgets);
     expect(find.text('账本'), findsWidgets);
   });
 }

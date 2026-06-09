@@ -5,15 +5,54 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'auth_widgets.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
     required this.onLogin,
     required this.onRegister,
   });
 
-  final VoidCallback onLogin;
+  final Future<void> Function({
+    required String phone,
+    required String password,
+  }) onLogin;
   final VoidCallback onRegister;
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final phoneController = TextEditingController();
+  final passwordController = TextEditingController();
+  var isSubmitting = false;
+  String? errorMessage;
+
+  @override
+  void dispose() {
+    phoneController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (isSubmitting) return;
+    setState(() {
+      isSubmitting = true;
+      errorMessage = null;
+    });
+    try {
+      await widget.onLogin(
+        phone: phoneController.text.trim(),
+        password: passwordController.text,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => errorMessage = '登录失败，请检查账号或稍后重试');
+    } finally {
+      if (mounted) setState(() => isSubmitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,16 +65,19 @@ class LoginScreen extends StatelessWidget {
         const SizedBox(height: 14),
         AuthSurfaceCard(
           children: [
-            const AuthInputField(
+            AuthInputField(
               label: '手机号',
               placeholder: '请输入手机号',
               icon: LucideIcons.smartphone,
+              controller: phoneController,
             ),
             const SizedBox(height: 24),
-            const AuthInputField(
+            AuthInputField(
               label: '密码',
               placeholder: '请输入密码',
               icon: LucideIcons.lockKeyhole,
+              controller: passwordController,
+              obscureText: true,
               trailing: Icon(
                 LucideIcons.eyeOff,
                 size: 20,
@@ -54,12 +96,23 @@ class LoginScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
-            AuthPrimaryButton(label: '登录', onTap: onLogin),
+            if (errorMessage != null) ...[
+              Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.body.copyWith(color: AppColors.red),
+              ),
+              const SizedBox(height: 12),
+            ],
+            AuthPrimaryButton(
+              label: isSubmitting ? '登录中' : '登录',
+              onTap: _submit,
+            ),
             const SizedBox(height: 22),
             AuthTextLink(
               prefix: '还没有账号？',
               action: '去注册',
-              onTap: onRegister,
+              onTap: widget.onRegister,
             ),
           ],
         ),

@@ -6,141 +6,181 @@ class LedgerSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CardPanel(
-      radius: 20,
-      padding: const EdgeInsets.all(20),
-      borderColor: const Color(0xFFD7E9FF),
-      background: const Color(0xFFEEF7FF),
-      child: SizedBox(
-        height: 224,
-        child: Stack(
-          children: [
-            Positioned(
-              left: 50,
-              right: -38,
-              top: 20,
-              height: 154,
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: 0.76,
-                  child: ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (bounds) {
-                      return const LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: [0, 0.48, 0.76],
-                        colors: [
-                          Colors.white,
-                          Colors.white,
-                          Colors.transparent,
-                        ],
-                      ).createShader(bounds);
-                    },
-                    child: Image.asset(
-                      AppAssets.homeHeroFarm,
-                      fit: BoxFit.cover,
-                      alignment: Alignment.centerRight,
+      radius: 18,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+      borderColor: const Color(0xFFDDEBFF),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFF4FAFF), Color(0xFFEAF4FF)],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 236,
+          child: Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned(
+                left: 86,
+                right: 0,
+                top: 34,
+                height: 168,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.78,
+                    child: ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (bounds) {
+                        return const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: [0, 0.72, 1],
+                          colors: [
+                            Colors.white,
+                            Colors.white,
+                            Colors.transparent
+                          ],
+                        ).createShader(bounds);
+                      },
+                      child: Image.asset(
+                        AppAssets.homeHeroFarm,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.centerRight,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 112,
-              bottom: 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      const Color(0xFFEEF7FF).withValues(alpha: 0),
-                      const Color(0xFFEEF7FF).withValues(alpha: 0.94),
-                      const Color(0xFFEEF7FF),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 112,
-              top: 38,
-              bottom: 112,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  gradient: const LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Color(0xF2EEF7FF),
-                      Color(0xCDEEF7FF),
-                      Color(0x00EEF7FF),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Text('资金概览', style: AppTextStyles.dateTitle),
-                    SizedBox(width: 10),
-                    _LedgerPill(text: '本月'),
-                    SizedBox(width: 8),
-                    _LedgerPill(
-                      text: 'AI分析',
-                      icon: LucideIcons.sparkles,
-                      foreground: Color(0xFF1473FF),
-                      background: Color(0xF2FFFFFF),
-                      borderColor: Color(0x662F73F6),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      stops: [0, 0.46, 1],
+                      colors: [
+                        Color(0xF7F4FAFF),
+                        Color(0xDDF4FAFF),
+                        Color(0x00F4FAFF),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 72),
-                SizedBox(
-                  height: 116,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: const [
-                      Expanded(
-                        child: LedgerMetricColumn(
-                          label: '收入(元)',
-                          value: '28,650',
-                          trendValue: '+12%',
-                          color: Color(0xFF08A66A),
-                        ),
-                      ),
-                      _MetricDivider(),
-                      Expanded(
-                        child: LedgerMetricColumn(
-                          label: '支出(元)',
-                          value: '18,240',
-                          trendValue: '+8%',
-                          color: Color(0xFFF05A24),
-                        ),
-                      ),
-                      _MetricDivider(),
-                      Expanded(
-                        child: LedgerMetricColumn(
-                          label: '欠款(元)',
-                          value: '6,410',
-                          trendValue: '-5%',
-                          color: AppColors.purple,
-                        ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Text('资金概览', style: AppTextStyles.dateTitle),
+                      SizedBox(width: 10),
+                      _LedgerPill(text: '本月'),
+                      SizedBox(width: 8),
+                      _LedgerPill(
+                        text: 'AI分析',
+                        icon: LucideIcons.sparkles,
+                        foreground: Color(0xFF1473FF),
+                        background: Color(0xF2FFFFFF),
+                        borderColor: Color(0x662F73F6),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 122,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 176),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '12.8万',
+                              style: AppTextStyles.metric.copyWith(
+                                color: AppColors.blue,
+                                fontSize: 46,
+                                height: 0.98,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 7),
+                            Text(
+                              '资金稳定，支出略高',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.listTitle.copyWith(
+                                color: AppColors.muted,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const _LedgerMetricsPanel(),
+                ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _LedgerMetricsPanel extends StatelessWidget {
+  const _LedgerMetricsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.lineSoft),
+      ),
+      child: Row(
+        children: const [
+          Expanded(
+            child: LedgerMetricColumn(
+              icon: LucideIcons.trendingUp,
+              label: '收入',
+              value: '2.9万',
+              color: Color(0xFF08A66A),
+              background: Color(0xFFE9F8F0),
+            ),
+          ),
+          _MetricDivider(),
+          Expanded(
+            child: LedgerMetricColumn(
+              icon: LucideIcons.arrowDownToLine,
+              label: '支出',
+              value: '1.8万',
+              color: Color(0xFFF05A24),
+              background: Color(0xFFFFF3E8),
+            ),
+          ),
+          _MetricDivider(),
+          Expanded(
+            child: LedgerMetricColumn(
+              icon: LucideIcons.badgeAlert,
+              label: '欠款',
+              value: '6410',
+              color: AppColors.purple,
+              background: AppColors.purpleSoft,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -149,81 +189,59 @@ class LedgerSummaryCard extends StatelessWidget {
 class LedgerMetricColumn extends StatelessWidget {
   const LedgerMetricColumn({
     super.key,
+    required this.icon,
     required this.label,
     required this.value,
-    required this.trendValue,
     required this.color,
+    required this.background,
   });
 
+  final IconData icon;
   final String label;
   final String value;
-  final String trendValue;
   final Color color;
+  final Color background;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.small.copyWith(
-            color: const Color(0xFF667085),
-            fontSize: 13,
-            height: 18 / 13,
-          ),
+        IconBadge(
+          icon: icon,
+          color: color,
+          background: background,
+          size: 32,
+          iconSize: 18,
         ),
-        const SizedBox(height: 6),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            maxLines: 1,
-            style: AppTextStyles.metric.copyWith(
-              color: color,
-              fontSize: 30,
-              height: 36 / 30,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-        ),
-        const SizedBox(height: 5),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text.rich(
-            TextSpan(
-              text: '较上月 ',
-              children: [
-                TextSpan(
-                  text: trendValue,
-                  style: AppTextStyles.small.copyWith(
+        const SizedBox(width: 7),
+        Flexible(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.small.copyWith(fontSize: 12),
+              ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: AppTextStyles.dateTitle.copyWith(
                     color: color,
-                    fontSize: 13,
-                    height: 18 / 13,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
-              ],
-            ),
-            maxLines: 1,
-            style: AppTextStyles.small.copyWith(
-              color: const Color(0xFF667085),
-              fontSize: 13,
-              height: 18 / 13,
-              fontWeight: FontWeight.w700,
-            ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 9),
-        SizedBox(
-          width: 70,
-          height: 20,
-          child: _SmallTrendLine(color: color),
         ),
       ],
     );
@@ -360,74 +378,8 @@ class _MetricDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 1,
-      height: 88,
-      margin: const EdgeInsets.symmetric(horizontal: 10),
-      color: const Color(0xFFDDE7F3),
+      height: 36,
+      color: AppColors.lineSoft,
     );
   }
-}
-
-class _SmallTrendLine extends StatelessWidget {
-  const _SmallTrendLine({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(painter: _SmallTrendLinePainter(color));
-  }
-}
-
-class _SmallTrendLinePainter extends CustomPainter {
-  const _SmallTrendLinePainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final glowPaint = Paint()
-      ..color = color.withValues(alpha: 0.10)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final linePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.1
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final path = Path()
-      ..moveTo(0, size.height * 0.72)
-      ..cubicTo(
-        size.width * 0.15,
-        size.height * 0.82,
-        size.width * 0.22,
-        size.height * 0.35,
-        size.width * 0.36,
-        size.height * 0.48,
-      )
-      ..cubicTo(
-        size.width * 0.48,
-        size.height * 0.58,
-        size.width * 0.56,
-        size.height * 0.24,
-        size.width * 0.70,
-        size.height * 0.36,
-      )
-      ..cubicTo(
-        size.width * 0.84,
-        size.height * 0.46,
-        size.width * 0.88,
-        size.height * 0.22,
-        size.width,
-        size.height * 0.16,
-      );
-    canvas.drawPath(path, glowPaint);
-    canvas.drawPath(path, linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SmallTrendLinePainter oldDelegate) =>
-      color != oldDelegate.color;
 }

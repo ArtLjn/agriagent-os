@@ -38,8 +38,9 @@
 
 - `yaya/home-compact.png`：当前推荐的助手首页，和 `main-pages/yaya.png` 是同一版设计，来源为 `archive/2026-06-08-current-app-design-candidates/main-pages-v5/yaya-minimal-chat.png`
 - `yaya/yaya-mascot-logo.png`：芽芽灵宠视觉
-- `yaya/history-drawer.png`：左侧历史聊天抽屉，已按极简聊天首页风格打磨
+- `yaya/history-drawer.png`：左侧历史聊天抽屉，已按更强设计感的 AI 侧边栏风格打磨
 - `yaya/skills.png`：全部技能页，已按极简聊天首页风格打磨
+- `yaya/skills-banner.png`：全部技能页顶部 banner 独立资产，供 Flutter 直接作为图片使用
 
 对应规格文档：`docs/ui/yaya-assistant-flutter-spec.md`
 

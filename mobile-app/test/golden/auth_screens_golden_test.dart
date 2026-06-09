@@ -11,11 +11,21 @@ void main() {
         devices: [const Device(name: 'mobile-390', size: Size(390, 844))],
       )
       ..addScenario(
-        widget: LoginScreen(onLogin: () {}, onRegister: () {}),
+        widget: LoginScreen(
+          onLogin: ({required phone, required password}) async {},
+          onRegister: () {},
+        ),
         name: 'login',
       )
       ..addScenario(
-        widget: RegisterScreen(onRegister: () {}, onLogin: () {}),
+        widget: RegisterScreen(
+          onRegister: ({
+            required phone,
+            required password,
+            required nickname,
+          }) async {},
+          onLogin: () {},
+        ),
         name: 'register',
       )
       ..addScenario(

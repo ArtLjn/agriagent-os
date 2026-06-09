@@ -283,19 +283,23 @@ class AuthInputField extends StatelessWidget {
     required this.label,
     required this.placeholder,
     required this.icon,
+    this.controller,
     this.trailing,
     this.height = 52,
     this.labelGap = 10,
     this.labelFontSize = 15,
+    this.obscureText = false,
   });
 
   final String label;
   final String placeholder;
   final IconData icon;
+  final TextEditingController? controller;
   final Widget? trailing;
   final double height;
   final double labelGap;
   final double labelFontSize;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
@@ -320,13 +324,26 @@ class AuthInputField extends StatelessWidget {
               Icon(icon, size: 20, color: AppColors.subtle),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  placeholder,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.subtle,
-                    fontSize: 15,
+                child: Semantics(
+                  label: label,
+                  child: TextField(
+                    controller: controller,
+                    obscureText: obscureText,
+                    maxLines: 1,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.ink,
+                      fontSize: 15,
+                    ),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: placeholder,
+                      hintStyle: AppTextStyles.body.copyWith(
+                        color: AppColors.subtle,
+                        fontSize: 15,
+                      ),
+                    ),
                   ),
                 ),
               ),
