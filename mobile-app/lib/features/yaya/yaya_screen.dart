@@ -3,22 +3,29 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_models.dart';
+import '../../data/repositories/yaya_repository.dart';
 import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'yaya_controller.dart';
 
 part 'yaya_panel_widgets.dart';
 part 'yaya_robot_widgets.dart';
 
 class YayaScreen extends StatefulWidget {
-  const YayaScreen({super.key});
+  const YayaScreen({super.key, required this.repository});
+
+  final YayaRepository repository;
 
   @override
   State<YayaScreen> createState() => _YayaScreenState();
 }
 
 class _YayaScreenState extends State<YayaScreen> {
+  late final YayaController controller =
+      YayaController(repository: widget.repository);
   bool drawerOpen = false;
 
   void _openDrawer() => setState(() => drawerOpen = true);
@@ -35,55 +42,79 @@ class _YayaScreenState extends State<YayaScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    controller.loadConversations().catchError((Object _) {});
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final drawerWidth = constraints.maxWidth * 0.8;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            SafeArea(
-              child: _YayaHomePage(
-                onMenuPressed: _openDrawer,
-                onSkillsPressed: _openSkills,
-              ),
-            ),
-            if (drawerOpen) ...[
-              Positioned.fill(
-                child: Row(
-                  children: [
-                    SizedBox(width: drawerWidth),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: _closeDrawer,
-                        behavior: HitTestBehavior.opaque,
-                        child: ClipRect(
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: Container(
-                              color: AppColors.ink.withValues(alpha: 0.18),
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final drawerWidth = constraints.maxWidth * 0.8;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                SafeArea(
+                  child: _YayaHomePage(
+                    controller: controller,
+                    onMenuPressed: _openDrawer,
+                    onSkillsPressed: _openSkills,
+                  ),
+                ),
+                if (drawerOpen) ...[
+                  Positioned.fill(
+                    child: Row(
+                      children: [
+                        SizedBox(width: drawerWidth),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: _closeDrawer,
+                            behavior: HitTestBehavior.opaque,
+                            child: ClipRect(
+                              child: BackdropFilter(
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                child: Container(
+                                  color: AppColors.ink.withValues(alpha: 0.18),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: drawerWidth,
-                child: YayaHistoryDrawer(
-                  onClose: _closeDrawer,
-                  onSkillsPressed: _openSkills,
-                ),
-              ),
-            ],
-          ],
+                  ),
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: drawerWidth,
+                    child: YayaHistoryDrawer(
+                      onClose: _closeDrawer,
+                      onSkillsPressed: _openSkills,
+                      conversations: controller.conversations,
+                      onConversationTap: (sessionId) {
+                        _closeDrawer();
+                        controller.openConversation(sessionId);
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         );
       },
     );
@@ -92,15 +123,18 @@ class _YayaScreenState extends State<YayaScreen> {
 
 class _YayaHomePage extends StatelessWidget {
   const _YayaHomePage({
+    required this.controller,
     required this.onMenuPressed,
     required this.onSkillsPressed,
   });
 
+  final YayaController controller;
   final VoidCallback onMenuPressed;
   final VoidCallback onSkillsPressed;
 
   @override
   Widget build(BuildContext context) {
+    final hasMessages = controller.messages.isNotEmpty;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -114,10 +148,18 @@ class _YayaHomePage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _YayaHeader(onMenuPressed: onMenuPressed),
-                    const SizedBox(height: 64),
-                    const _YayaHero(),
-                    const SizedBox(height: 28),
-                    const _SuggestionPills(),
+                    if (hasMessages) ...[
+                      const SizedBox(height: 18),
+                      _MessageList(
+                        messages: controller.messages,
+                        errorMessage: controller.errorMessage,
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 64),
+                      const _YayaHero(),
+                      const SizedBox(height: 28),
+                      const _SuggestionPills(),
+                    ],
                   ],
                 ),
               ),
@@ -137,13 +179,103 @@ class _YayaHomePage extends StatelessWidget {
                 children: [
                   _ModeChips(onSkillsPressed: onSkillsPressed),
                   const SizedBox(height: 10),
-                  const AssistantInputBar(),
+                  AssistantInputBar(
+                    sending: controller.sending,
+                    onSubmit: controller.send,
+                  ),
                 ],
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MessageList extends StatelessWidget {
+  const _MessageList({
+    required this.messages,
+    required this.errorMessage,
+  });
+
+  final List<YayaMessageViewModel> messages;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final message in messages) ...[
+          _MessageBubble(message: message),
+          const SizedBox(height: 12),
+        ],
+        if (errorMessage != null) _ErrorBanner(message: errorMessage!),
+      ],
+    );
+  }
+}
+
+class _MessageBubble extends StatelessWidget {
+  const _MessageBubble({required this.message});
+
+  final YayaMessageViewModel message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.role == 'user';
+    final content = message.content.isEmpty ? '芽芽正在思考...' : message.content;
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 320),
+        padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+        decoration: BoxDecoration(
+          color: isUser ? AppColors.blue : AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: isUser ? null : Border.all(color: AppColors.line),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 16,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Text(
+          content,
+          style: AppTextStyles.body.copyWith(
+            color: isUser ? Colors.white : AppColors.ink,
+            height: 1.45,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        color: AppColors.redSoft,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        message,
+        style: AppTextStyles.body.copyWith(
+          color: AppColors.red,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -525,10 +657,14 @@ class YayaHistoryDrawer extends StatelessWidget {
     super.key,
     required this.onClose,
     required this.onSkillsPressed,
+    required this.conversations,
+    required this.onConversationTap,
   });
 
   final VoidCallback onClose;
   final VoidCallback onSkillsPressed;
+  final List<ConversationSummary> conversations;
+  final ValueChanged<String> onConversationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -569,29 +705,23 @@ class YayaHistoryDrawer extends StatelessWidget {
                       const SizedBox(height: 22),
                       const _RecentChatHeader(),
                       const SizedBox(height: 14),
-                      const _ChatSection(
-                        title: '今天',
-                        items: [
-                          _ChatItemSpec('今天适合干什么', '09:42', '天气建议', true),
-                          _ChatItemSpec('本月成本怎么看', '08:16', '经营分析', false),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      const _ChatSection(
-                        title: '7天内',
-                        items: [
-                          _ChatItemSpec('春茬西瓜授粉安排', '周五', '生产', false),
-                          _ChatItemSpec('人工工资怎么结', '周三', '工资', false),
-                          _ChatItemSpec('欠款风险提醒', '周二', '风险', false),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      const _ChatSection(
-                        title: '30天内',
-                        items: [
-                          _ChatItemSpec('生成5月周报', '5月28日', '报告', false),
-                        ],
-                      ),
+                      if (conversations.isEmpty)
+                        const _EmptyHistory()
+                      else
+                        _ChatSection(
+                          title: '7天内',
+                          items: [
+                            for (final item in conversations)
+                              _ChatItemSpec(
+                                item.title.isEmpty ? '芽芽对话' : item.title,
+                                item.preview,
+                                item.category,
+                                false,
+                                item.sessionId,
+                              ),
+                          ],
+                          onTap: onConversationTap,
+                        ),
                     ],
                   ),
                 ),

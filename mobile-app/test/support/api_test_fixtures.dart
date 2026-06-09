@@ -50,6 +50,48 @@ class RecordingAdapter implements HttpClientAdapter {
   }
 }
 
+class StreamingAdapter implements HttpClientAdapter {
+  StreamingAdapter([String? body])
+      : body = body ??
+            [
+              'data: {"content":"建议"}\n\n',
+              'data: {"content":"傍晚浇水"}\n\n',
+              'data: {"skills":["weather"]}\n\n',
+              'data: [DONE]\n\n',
+            ].join();
+
+  final String body;
+  final List<RecordedRequest> requests = [];
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    final data = options.data;
+    requests.add(
+      RecordedRequest(
+        method: options.method,
+        path: options.path,
+        query: Map<String, dynamic>.from(options.queryParameters),
+        data: data is Map ? Map<String, dynamic>.from(data) : data,
+        headers: Map<String, dynamic>.from(options.headers),
+      ),
+    );
+    return ResponseBody.fromString(
+      body,
+      200,
+      headers: {
+        Headers.contentTypeHeader: ['text/event-stream'],
+      },
+    );
+  }
+}
+
 class RecordedRequest {
   RecordedRequest({
     required this.method,

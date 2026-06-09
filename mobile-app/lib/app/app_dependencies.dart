@@ -10,6 +10,8 @@ import '../data/session/session_store.dart';
 abstract class AppDependencies {
   ProfileRepository get profile;
 
+  YayaRepository get yaya;
+
   Future<bool> restoreSession();
 
   Future<void> login({required String phone, required String password});
@@ -46,6 +48,7 @@ class BackendAppDependencies implements AppDependencies {
   final DashboardRepository dashboard;
   final BillingRepository billing;
   final WorkbenchRepository workbench;
+  @override
   final YayaRepository yaya;
 
   @override

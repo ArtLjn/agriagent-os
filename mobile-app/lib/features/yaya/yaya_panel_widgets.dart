@@ -231,8 +231,35 @@ class ModeChip extends StatelessWidget {
   }
 }
 
-class AssistantInputBar extends StatelessWidget {
-  const AssistantInputBar({super.key});
+class AssistantInputBar extends StatefulWidget {
+  const AssistantInputBar({
+    super.key,
+    required this.onSubmit,
+    this.sending = false,
+  });
+
+  final Future<void> Function(String text) onSubmit;
+  final bool sending;
+
+  @override
+  State<AssistantInputBar> createState() => _AssistantInputBarState();
+}
+
+class _AssistantInputBarState extends State<AssistantInputBar> {
+  final textController = TextEditingController();
+
+  @override
+  void dispose() {
+    textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = textController.text.trim();
+    if (text.isEmpty || widget.sending) return;
+    await widget.onSubmit(text);
+    if (mounted) textController.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -256,23 +283,43 @@ class AssistantInputBar extends StatelessWidget {
           const YayaMascot(size: 42),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              '发消息或按住说话...',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.subtle,
-                fontSize: 15,
+            child: Material(
+              color: Colors.transparent,
+              child: TextField(
+                controller: textController,
+                enabled: !widget.sending,
+                minLines: 1,
+                maxLines: 1,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  hintText: '发消息或按住说话...',
+                  hintStyle: AppTextStyles.body.copyWith(
+                    color: AppColors.subtle,
+                    fontSize: 15,
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.ink,
+                  fontSize: 15,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          const _RoundActionButton(
-            icon: LucideIcons.mic,
+          _RoundActionButton(
+            icon: widget.sending ? LucideIcons.loaderCircle : LucideIcons.send,
             filled: true,
+            onTap: widget.sending ? null : _submit,
           ),
           const SizedBox(width: 8),
-          const _RoundActionButton(icon: LucideIcons.plus),
+          _RoundActionButton(
+            icon: LucideIcons.plus,
+            onTap: widget.sending ? null : () {},
+          ),
         ],
       ),
     );
@@ -283,34 +330,45 @@ class _RoundActionButton extends StatelessWidget {
   const _RoundActionButton({
     required this.icon,
     this.filled = false,
+    this.onTap,
   });
 
   final IconData icon;
   final bool filled;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: filled ? AppColors.blue : AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: filled ? null : Border.all(color: AppColors.blue, width: 1.4),
-        boxShadow: filled
-            ? const [
-                BoxShadow(
-                  color: Color(0x222F73F6),
-                  blurRadius: 14,
-                  offset: Offset(0, 6),
-                ),
-              ]
-            : null,
-      ),
-      child: Icon(
-        icon,
-        color: filled ? Colors.white : AppColors.blue,
-        size: 22,
+    final active = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Opacity(
+        opacity: active ? 1 : 0.58,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: filled ? AppColors.blue : AppColors.surface,
+            borderRadius: BorderRadius.circular(22),
+            border:
+                filled ? null : Border.all(color: AppColors.blue, width: 1.4),
+            boxShadow: filled
+                ? const [
+                    BoxShadow(
+                      color: Color(0x222F73F6),
+                      blurRadius: 14,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(
+            icon,
+            color: filled ? Colors.white : AppColors.blue,
+            size: 22,
+          ),
+        ),
       ),
     );
   }
@@ -400,10 +458,12 @@ class _ChatSection extends StatelessWidget {
   const _ChatSection({
     required this.title,
     required this.items,
+    required this.onTap,
   });
 
   final String title;
   final List<_ChatItemSpec> items;
+  final ValueChanged<String> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -422,7 +482,10 @@ class _ChatSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         for (var index = 0; index < items.length; index++) ...[
-          _ChatItem(spec: items[index]),
+          _ChatItem(
+            spec: items[index],
+            onTap: () => onTap(items[index].sessionId),
+          ),
           if (index != items.length - 1) const SizedBox(height: 2),
         ],
       ],
@@ -431,84 +494,117 @@ class _ChatSection extends StatelessWidget {
 }
 
 class _ChatItem extends StatelessWidget {
-  const _ChatItem({required this.spec});
+  const _ChatItem({required this.spec, required this.onTap});
 
   final _ChatItemSpec spec;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 50),
-      padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
-      decoration: BoxDecoration(
-        color: spec.selected ? AppColors.blueSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            LucideIcons.messageCircle,
-            size: 17,
-            color: spec.selected ? AppColors.blue : AppColors.subtle,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        spec.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.listTitle.copyWith(
-                          color: spec.selected
-                              ? AppColors.blueDark
-                              : AppColors.ink,
-                          fontWeight: FontWeight.w800,
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 50),
+        padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+        decoration: BoxDecoration(
+          color: spec.selected ? AppColors.blueSoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              LucideIcons.messageCircle,
+              size: 17,
+              color: spec.selected ? AppColors.blue : AppColors.subtle,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          spec.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.listTitle.copyWith(
+                            color: spec.selected
+                                ? AppColors.blueDark
+                                : AppColors.ink,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      spec.time,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.small.copyWith(
-                        color: AppColors.subtle,
+                      const SizedBox(width: 8),
+                      Text(
+                        spec.time,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.small.copyWith(
+                          color: AppColors.subtle,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  spec.tag,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(
-                    color: spec.selected ? AppColors.blue : AppColors.subtle,
-                    fontSize: 11,
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    spec.tag,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.small.copyWith(
+                      color: spec.selected ? AppColors.blue : AppColors.subtle,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 class _ChatItemSpec {
-  const _ChatItemSpec(this.title, this.time, this.tag, this.selected);
+  const _ChatItemSpec(
+    this.title,
+    this.time,
+    this.tag,
+    this.selected,
+    this.sessionId,
+  );
 
   final String title;
   final String time;
   final String tag;
   final bool selected;
+  final String sessionId;
+}
+
+class _EmptyHistory extends StatelessWidget {
+  const _EmptyHistory();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 86,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lineSoft),
+      ),
+      child: Text(
+        '暂无历史会话',
+        style: AppTextStyles.body.copyWith(color: AppColors.subtle),
+      ),
+    );
+  }
 }
 
 class _DrawerUserBar extends StatelessWidget {

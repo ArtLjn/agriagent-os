@@ -175,4 +175,26 @@ void main() {
       'context': {'cycle_id': 7},
     });
   });
+
+  test('芽芽流式接口解析 SSE content、skills 和 done', () async {
+    final adapter = StreamingAdapter();
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final yaya = YayaRepository(ApiClient(dio: dio));
+
+    final events = await yaya.streamMessage('今天浇水吗', sessionId: 's1').toList();
+
+    expect(events.map((event) => event.content).whereType<String>(), [
+      '建议',
+      '傍晚浇水',
+    ]);
+    expect(events.any((event) => event.done), true);
+    expect(events.any((event) => event.skills.contains('weather')), true);
+    expect(adapter.requests.single.path, '/agent/chat/stream');
+    expect(adapter.requests.single.data, {
+      'message': '今天浇水吗',
+      'session_id': 's1',
+    });
+    expect(adapter.requests.single.headers['Accept'], 'text/event-stream');
+  });
 }

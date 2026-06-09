@@ -2,9 +2,16 @@ import 'package:dio/dio.dart';
 import 'package:farm_manager_app/app/app_dependencies.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
+import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
 
 import 'api_test_fixtures.dart'
-    show RecordingAdapter, settingsResponse, userResponse, versionResponse;
+    show
+        RecordingAdapter,
+        conversationResponse,
+        messageResponse,
+        settingsResponse,
+        userResponse,
+        versionResponse;
 
 class FakeAppDependencies implements AppDependencies {
   FakeAppDependencies({
@@ -12,10 +19,14 @@ class FakeAppDependencies implements AppDependencies {
     this.loginError,
     this.registerError,
     ProfileRepository? profile,
-  }) : profile = profile ?? _fakeProfileRepository();
+    YayaRepository? yaya,
+  })  : profile = profile ?? _fakeProfileRepository(),
+        yaya = yaya ?? _fakeYayaRepository();
 
   @override
   final ProfileRepository profile;
+  @override
+  final YayaRepository yaya;
   final bool restoreResult;
   final Object? loginError;
   final Object? registerError;
@@ -75,4 +86,14 @@ ProfileRepository _fakeProfileRepository() {
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
   dio.httpClientAdapter = adapter;
   return ProfileRepository(ApiClient(dio: dio));
+}
+
+YayaRepository _fakeYayaRepository() {
+  final adapter = RecordingAdapter({
+    '/agent/conversations': [conversationResponse],
+    '/agent/conversations/s1/messages': [messageResponse],
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return YayaRepository(ApiClient(dio: dio));
 }

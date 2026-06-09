@@ -31,12 +31,15 @@ class ApiClient {
     Object? data,
     Map<String, dynamic>? query,
     Map<String, dynamic>? headers,
+    ResponseType? responseType,
   }) {
     return dio.post(
       path,
       data: data,
       queryParameters: _compact(query),
-      options: headers == null ? null : Options(headers: headers),
+      options: headers == null && responseType == null
+          ? null
+          : Options(headers: headers, responseType: responseType),
     );
   }
 

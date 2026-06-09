@@ -63,7 +63,7 @@ class _AppShellState extends State<AppShell> {
               onGoLedger: () => _selectTab(3),
               onRecordAgain: () => _selectTab(1),
             ),
-            const YayaScreen(),
+            YayaScreen(repository: widget.dependencies.yaya),
             const BillingScreen(),
             ProfileScreen(
               repository: widget.dependencies.profile,
