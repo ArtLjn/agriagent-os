@@ -1,5 +1,4 @@
 import '../data/api/api_client.dart';
-import '../data/repositories/auth_repository.dart';
 import '../data/repositories/billing_repository.dart';
 import '../data/repositories/dashboard_repository.dart';
 import '../data/repositories/profile_repository.dart';
@@ -24,8 +23,7 @@ class BackendAppDependencies implements AppDependencies {
   BackendAppDependencies({ApiClient? client}) : this._(client ?? ApiClient());
 
   BackendAppDependencies._(this.client)
-      : auth = AuthRepository(client),
-        session = AppSession(
+      : session = AppSession(
           client: client,
           store: const SecureSessionStore(),
         ),
@@ -36,7 +34,6 @@ class BackendAppDependencies implements AppDependencies {
         yaya = YayaRepository(client);
 
   final ApiClient client;
-  final AuthRepository auth;
   final AppSession session;
   final ProfileRepository profile;
   final DashboardRepository dashboard;
