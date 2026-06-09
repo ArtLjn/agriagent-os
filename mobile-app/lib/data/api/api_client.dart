@@ -4,9 +4,15 @@ class ApiClient {
   ApiClient({Dio? dio})
       : dio = dio ??
             Dio(BaseOptions(
-                baseUrl: const String.fromEnvironment('API_BASE_URL')));
+              baseUrl: const String.fromEnvironment(
+                'API_BASE_URL',
+                defaultValue: 'http://localhost:8099',
+              ),
+            ));
 
   final Dio dio;
+
+  String get baseUrl => dio.options.baseUrl;
 
   void setAccessToken(String? token) {
     if (token == null || token.isEmpty) {
@@ -44,6 +50,12 @@ class ApiClient {
 
   Future<Response<dynamic>> delete(String path) {
     return dio.delete(path);
+  }
+
+  Future<bool> health() async {
+    final response = await dio.get('/health');
+    final statusCode = response.statusCode;
+    return statusCode != null && statusCode >= 200 && statusCode < 300;
   }
 
   Future<Map<String, dynamic>> getMap(
@@ -91,8 +103,20 @@ class ApiClient {
     throw StateError('接口响应不是列表: ${data.runtimeType}');
   }
 
+  static String userMessageFor(Object error) {
+    if (error is DioException && error.response?.statusCode == 401) {
+      return '登录已过期，请重新登录';
+    }
+    if (error is DioException &&
+        error.type == DioExceptionType.connectionError) {
+      return '无法连接服务器，请确认后端已启动';
+    }
+    return '请求失败，请稍后重试';
+  }
+
   static Map<String, dynamic>? _compact(Map<String, dynamic>? data) {
     if (data == null) return null;
-    return Map<String, dynamic>.from(data)..removeWhere((_, value) => value == null);
+    return Map<String, dynamic>.from(data)
+      ..removeWhere((_, value) => value == null);
   }
 }
