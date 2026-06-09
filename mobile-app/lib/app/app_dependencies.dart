@@ -14,6 +14,8 @@ abstract class AppDependencies {
 
   BillingRepository get billing;
 
+  WorkbenchRepository get workbench;
+
   YayaRepository get yaya;
 
   Future<bool> restoreSession();
@@ -53,6 +55,7 @@ class BackendAppDependencies implements AppDependencies {
   final DashboardRepository dashboard;
   @override
   final BillingRepository billing;
+  @override
   final WorkbenchRepository workbench;
   @override
   final YayaRepository yaya;

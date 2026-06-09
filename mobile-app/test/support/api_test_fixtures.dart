@@ -36,12 +36,19 @@ class RecordingAdapter implements HttpClientAdapter {
         headers: Map<String, dynamic>.from(options.headers),
       ),
     );
+    final response = responses['${options.method} ${options.path}'] ??
+        responses[options.path];
+    if (response == null && options.method != 'GET') {
+      return ResponseBody.fromString(
+        jsonEncode({'message': '未配置测试接口 ${options.method} ${options.path}'}),
+        500,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType],
+        },
+      );
+    }
     return ResponseBody.fromString(
-      jsonEncode(
-        responses['${options.method} ${options.path}'] ??
-            responses[options.path] ??
-            {'message': 'ok'},
-      ),
+      jsonEncode(response ?? {'message': 'ok'}),
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],

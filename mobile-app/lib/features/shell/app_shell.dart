@@ -6,6 +6,7 @@ import '../../app/app_dependencies.dart';
 import '../../theme/app_colors.dart';
 import '../billing/billing_screen.dart';
 import '../home/home_screen.dart';
+import '../record_flow/record_flow_controller.dart';
 import '../profile/profile_screen.dart';
 import '../workbench/workbench_screen.dart';
 import '../yaya/yaya_screen.dart';
@@ -29,6 +30,10 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late int selectedIndex = widget.initialIndex;
+  late final recordFlowController = RecordFlowController(
+    workbench: widget.dependencies.workbench,
+    billing: widget.dependencies.billing,
+  );
 
   @override
   void initState() {
@@ -59,6 +64,7 @@ class _AppShellState extends State<AppShell> {
           children: [
             HomeScreen(repository: widget.dependencies.dashboard),
             WorkbenchScreen(
+              recordFlowController: recordFlowController,
               onGoHome: () => _selectTab(0),
               onGoLedger: () => _selectTab(3),
               onRecordAgain: () => _selectTab(1),

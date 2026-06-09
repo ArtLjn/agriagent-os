@@ -5,55 +5,77 @@ import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../record_flow/record_flow_controller.dart';
 import '../record_flow/record_ai_confirm_screen.dart';
 import '../record_flow/record_manual_edit_screen.dart';
-import '../record_flow/record_save_success_screen.dart';
 
 part 'workbench_ai_card.dart';
 
-class WorkbenchScreen extends StatelessWidget {
+class WorkbenchScreen extends StatefulWidget {
   const WorkbenchScreen({
     super.key,
+    required this.recordFlowController,
     this.onGoHome,
     this.onGoLedger,
     this.onRecordAgain,
   });
 
+  final RecordFlowController recordFlowController;
   final VoidCallback? onGoHome;
   final VoidCallback? onGoLedger;
   final VoidCallback? onRecordAgain;
 
-  void _openAiConfirm(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RecordAiConfirmScreen(
-          onGoHome: onGoHome,
-          onGoLedger: onGoLedger,
-          onRecordAgain: onRecordAgain,
+  @override
+  State<WorkbenchScreen> createState() => _WorkbenchScreenState();
+}
+
+class _WorkbenchScreenState extends State<WorkbenchScreen> {
+  static const _exampleText = '今天买饲料 3680 元';
+
+  bool _parsing = false;
+
+  Future<void> _openAiConfirm(BuildContext context) async {
+    if (_parsing) return;
+    setState(() => _parsing = true);
+    try {
+      final draft = await widget.recordFlowController.parse(_exampleText);
+      if (!context.mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => RecordAiConfirmScreen(
+            controller: widget.recordFlowController,
+            draft: draft,
+            onGoHome: widget.onGoHome,
+            onGoLedger: widget.onGoLedger,
+            onRecordAgain: widget.onRecordAgain,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('暂时无法识别记录，请稍后再试')),
+      );
+    } finally {
+      if (mounted) setState(() => _parsing = false);
+    }
   }
 
   void _openManualEdit(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => RecordManualEditScreen(
-          onGoHome: onGoHome,
-          onGoLedger: onGoLedger,
-          onRecordAgain: onRecordAgain,
-        ),
-      ),
-    );
-  }
-
-  void _openSuccess(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RecordSaveSuccessScreen(
-          onGoHome: onGoHome,
-          onGoLedger: onGoLedger,
-          onRecordAgain: onRecordAgain,
+          controller: widget.recordFlowController,
+          draft: const RecordDraft(
+            scene: 'manual.record',
+            originalText: '',
+            fields: {},
+            missingFields: [],
+            warnings: [],
+          ),
+          onGoHome: widget.onGoHome,
+          onGoLedger: widget.onGoLedger,
+          onRecordAgain: widget.onRecordAgain,
         ),
       ),
     );
@@ -70,13 +92,16 @@ class WorkbenchScreen extends StatelessWidget {
           onManualTap: () => _openManualEdit(context),
         ),
         const SizedBox(height: 14),
-        _VoiceInputCard(onTap: () => _openAiConfirm(context)),
+        _VoiceInputCard(
+          parsing: _parsing,
+          onTap: () => _openAiConfirm(context),
+        ),
         const SizedBox(height: 14),
         const _QuickRecordCard(),
         const SizedBox(height: 14),
         _AiGeneratedCard(
           onEdit: () => _openManualEdit(context),
-          onSave: () => _openSuccess(context),
+          onSave: () => _openAiConfirm(context),
         ),
       ],
     );
@@ -234,8 +259,12 @@ class _RecordActionCard extends StatelessWidget {
 }
 
 class _VoiceInputCard extends StatelessWidget {
-  const _VoiceInputCard({required this.onTap});
+  const _VoiceInputCard({
+    required this.parsing,
+    required this.onTap,
+  });
 
+  final bool parsing;
   final VoidCallback onTap;
 
   @override
@@ -251,18 +280,24 @@ class _VoiceInputCard extends StatelessWidget {
             const SizedBox(width: 18),
             Expanded(
               child: Text(
-                '例如：今天买饲料 3680 元',
+                parsing ? '正在识别记录...' : '例如：今天买饲料 3680 元',
                 style: AppTextStyles.body.copyWith(
                   color: AppColors.subtle,
                   fontSize: 16,
                 ),
               ),
             ),
-            const Icon(
-              LucideIcons.audioWaveform,
-              size: 24,
-              color: AppColors.blue,
-            ),
+            parsing
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  )
+                : const Icon(
+                    LucideIcons.audioWaveform,
+                    size: 24,
+                    color: AppColors.blue,
+                  ),
           ],
         ),
       ),

@@ -4,22 +4,30 @@ import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/repositories/billing_repository.dart';
 import 'package:farm_manager_app/data/repositories/dashboard_repository.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
+import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
 
 import 'api_test_fixtures.dart'
     show
         RecordingAdapter,
         conversationResponse,
+        costRecordResponse,
         dailyAdviceResponse,
         debtsResponse,
+        logResponse,
         messageResponse,
         paginatedCostsResponse,
+        paginatedLogsResponse,
         paginatedWorkOrdersResponse,
         settingsResponse,
+        smartFillParseResponse,
+        smartFillScenariosResponse,
         unsettledLaborSummaryResponse,
         userResponse,
         versionResponse,
+        wageResponse,
         weatherResponse,
+        workOrderResponse,
         yearlySummaryResponse;
 
 class FakeAppDependencies implements AppDependencies {
@@ -30,10 +38,12 @@ class FakeAppDependencies implements AppDependencies {
     ProfileRepository? profile,
     DashboardRepository? dashboard,
     BillingRepository? billing,
+    WorkbenchRepository? workbench,
     YayaRepository? yaya,
   })  : profile = profile ?? _fakeProfileRepository(),
         dashboard = dashboard ?? _fakeDashboardRepository(),
         billing = billing ?? _fakeBillingRepository(),
+        workbench = workbench ?? _fakeWorkbenchRepository(),
         yaya = yaya ?? _fakeYayaRepository();
 
   @override
@@ -42,6 +52,8 @@ class FakeAppDependencies implements AppDependencies {
   final DashboardRepository dashboard;
   @override
   final BillingRepository billing;
+  @override
+  final WorkbenchRepository workbench;
   @override
   final YayaRepository yaya;
   final bool restoreResult;
@@ -130,10 +142,31 @@ DashboardRepository _fakeDashboardRepository() {
 BillingRepository _fakeBillingRepository() {
   final adapter = RecordingAdapter({
     '/costs': paginatedCostsResponse,
+    'POST /costs': costRecordResponse,
     '/costs/summary/2026': yearlySummaryResponse,
     '/debts': debtsResponse,
+    'POST /debts': costRecordResponse,
   });
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
   dio.httpClientAdapter = adapter;
   return BillingRepository(ApiClient(dio: dio));
+}
+
+WorkbenchRepository _fakeWorkbenchRepository() {
+  final adapter = RecordingAdapter({
+    '/cycles': {'items': [], 'total': 0},
+    '/planting/units': [],
+    '/planting/workers': [],
+    '/planting/operation-types': [],
+    '/planting/work-orders': paginatedWorkOrdersResponse,
+    'POST /planting/work-orders': workOrderResponse,
+    '/logs': paginatedLogsResponse,
+    'POST /logs': logResponse,
+    'POST /planting/labor/wages': wageResponse,
+    '/smart-fill/scenarios': smartFillScenariosResponse,
+    '/smart-fill/parse': smartFillParseResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return WorkbenchRepository(ApiClient(dio: dio));
 }
