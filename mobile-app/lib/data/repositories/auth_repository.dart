@@ -14,9 +14,7 @@ class AuthRepository {
       'phone': phone,
       'password': password,
     });
-    final session = AuthSession.fromJson(data);
-    client.setAccessToken(session.token);
-    return session;
+    return AuthSession.fromJson(data);
   }
 
   Future<AuthSession> register({
@@ -29,8 +27,6 @@ class AuthRepository {
       'password': password,
       'nickname': nickname,
     });
-    final session = AuthSession.fromJson(data);
-    client.setAccessToken(session.token);
-    return session;
+    return AuthSession.fromJson(data);
   }
 }

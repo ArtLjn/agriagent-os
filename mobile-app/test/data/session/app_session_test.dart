@@ -22,6 +22,22 @@ void main() {
     expect(client.dio.options.headers['Authorization'], 'Bearer token-1');
   });
 
+  test('登录保存 token 失败时不会写入 Authorization header', () async {
+    final store = FailingSessionStore();
+    final adapter = RecordingAdapter({'/auth/login': tokenResponse});
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final client = ApiClient(dio: dio);
+    final session = AppSession(client: client, store: store);
+
+    await expectLater(
+      session.login(phone: '13800138000', password: 'password'),
+      throwsStateError,
+    );
+
+    expect(client.dio.options.headers.containsKey('Authorization'), false);
+  });
+
   test('启动恢复 token 后可直接带鉴权请求', () async {
     final store = MemorySessionStore(initialToken: 'restored-token');
     final client = ApiClient(
@@ -48,4 +64,17 @@ void main() {
     expect(await store.readToken(), isNull);
     expect(client.dio.options.headers.containsKey('Authorization'), false);
   });
+}
+
+class FailingSessionStore implements SessionStore {
+  @override
+  Future<String?> readToken() async => null;
+
+  @override
+  Future<void> writeToken(String token) async {
+    throw StateError('token 写入失败');
+  }
+
+  @override
+  Future<void> clearToken() async {}
 }
