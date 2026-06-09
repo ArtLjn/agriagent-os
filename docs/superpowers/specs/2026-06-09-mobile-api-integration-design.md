@@ -9,7 +9,7 @@ respecting the backend as the source of truth for business data.
 This design covers four areas:
 
 - Authentication session foundation.
-- Yaya non-streaming chat and conversation history.
+- Yaya streaming chat and conversation history.
 - Home, billing, and profile read-only data binding.
 - Record flow parsing and save flow adapted to backend scenes.
 
@@ -92,18 +92,23 @@ management remain separate flows because they modify business state.
 
 ### Yaya Chat
 
-First version uses non-streaming chat:
+First version uses streaming chat:
 
-- `POST /agent/chat` sends a message and appends the assistant reply.
+- `POST /agent/chat/stream` sends a message and consumes SSE chunks.
 - `GET /agent/conversations` fills the history drawer.
 - `GET /agent/conversations/{session_id}/messages` loads selected history.
 
+The stream emits `data: {"content": "..."}` chunks, optional `skills`,
+optional `pending_action`, optional `error`, and ends with `data: [DONE]`.
 The UI should keep the current Yaya visual style. During sending, disable the
-input action and show an in-thread pending state. If the API returns
-`pending_action`, render a compact confirmation prompt only when its meaning can
-be safely displayed from backend fields.
+input action, append a user message, create one assistant placeholder, and
+incrementally append streamed `content` to that assistant message. If the API
+returns `pending_action`, render a compact confirmation prompt only when its
+meaning can be safely displayed from backend fields. If the stream returns
+`error`, keep the user message and show a retryable inline error.
 
-`POST /agent/chat/stream` is deferred until the non-streaming flow is stable.
+`POST /agent/chat` remains a fallback repository method only. The user-facing
+Yaya chat flow should use the streaming endpoint.
 
 ### Record Flow
 
@@ -164,13 +169,13 @@ In scope:
 
 - Session persistence and auth routing.
 - Read-only profile, home, billing data binding.
-- Non-streaming Yaya chat and history.
+- Streaming Yaya chat and history.
 - Smart-fill record parsing and conservative save mapping.
 - Loading, empty, error, and submitting states.
 
 Out of scope for this design:
 
-- SSE streaming chat.
+- Non-streaming Yaya chat as the primary user-facing path.
 - Billing deletion.
 - Debt settlement.
 - Crop cycle deletion.
@@ -182,7 +187,7 @@ Out of scope for this design:
 
 1. Session persistence and backend connectivity verification.
 2. Profile page real data binding.
-3. Yaya non-streaming chat and history.
+3. Yaya streaming chat and history.
 4. Home and billing read-only data binding.
 5. Record flow parse, confirm, edit, and conservative save mapping.
 6. Full mobile test and local backend smoke verification.

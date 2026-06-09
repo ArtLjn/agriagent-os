@@ -31,7 +31,8 @@
 - Modify: `mobile-app/lib/features/profile/profile_screen.dart`
   - 展示真实个人资料、设置、版本、退出登录。
 - Create: `mobile-app/lib/features/yaya/yaya_controller.dart`
-  - 非流式聊天、历史会话、消息加载。
+- Modify: `mobile-app/lib/data/repositories/yaya_repository.dart`
+  - 流式聊天、历史会话、消息加载。
 - Modify: `mobile-app/lib/features/yaya/yaya_screen.dart`
   - 接入真实发送、历史抽屉和会话消息。
 - Create: `mobile-app/lib/features/home/home_controller.dart`
@@ -855,16 +856,194 @@ Expected: commit 成功。
 
 ---
 
-### Task 4: 芽芽非流式聊天和历史会话
+### Task 4: 芽芽流式聊天和历史会话
 
 **Files:**
+- Modify: `mobile-app/lib/data/repositories/yaya_repository.dart`
 - Create: `mobile-app/lib/features/yaya/yaya_controller.dart`
 - Modify: `mobile-app/lib/features/yaya/yaya_screen.dart`
 - Modify: `mobile-app/lib/features/shell/app_shell.dart`
+- Modify: `mobile-app/lib/app/app_dependencies.dart`
+- Modify: `mobile-app/test/data/repositories/app_api_integration_test.dart`
 - Test: `mobile-app/test/features/yaya/yaya_controller_test.dart`
 - Modify: `mobile-app/test/features/yaya/yaya_copy_test.dart`
+- Modify: `mobile-app/test/support/fake_app_dependencies.dart`
 
-- [ ] **Step 1: 编写 YayaController 测试**
+- [ ] **Step 1: 编写 YayaRepository 流式接口测试**
+
+Modify `mobile-app/test/data/repositories/app_api_integration_test.dart` by adding a streaming response to `RecordingAdapter` or creating a small local adapter in the same test file:
+
+```dart
+class StreamingAdapter implements HttpClientAdapter {
+  final List<RecordedRequest> requests = [];
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    requests.add(RecordedRequest(
+      method: options.method,
+      path: options.path,
+      query: Map<String, dynamic>.from(options.queryParameters),
+      data: options.data is Map
+          ? Map<String, dynamic>.from(options.data as Map)
+          : options.data,
+      headers: Map<String, dynamic>.from(options.headers),
+    ));
+    final body = [
+      'data: {"content":"建议"}\n\n',
+      'data: {"content":"傍晚浇水"}\n\n',
+      'data: {"skills":["weather"]}\n\n',
+      'data: [DONE]\n\n',
+    ].join();
+    return ResponseBody.fromString(
+      body,
+      200,
+      headers: {
+        Headers.contentTypeHeader: ['text/event-stream'],
+      },
+    );
+  }
+}
+```
+
+Add a test:
+
+```dart
+test('芽芽流式接口解析 SSE content、skills 和 done', () async {
+  final adapter = StreamingAdapter();
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  final yaya = YayaRepository(ApiClient(dio: dio));
+
+  final events = await yaya.streamMessage('今天浇水吗', sessionId: 's1').toList();
+
+  expect(events.map((event) => event.content).whereType<String>(), [
+    '建议',
+    '傍晚浇水',
+  ]);
+  expect(events.any((event) => event.done), true);
+  expect(events.any((event) => event.skills.contains('weather')), true);
+  expect(adapter.requests.single.path, '/agent/chat/stream');
+  expect(adapter.requests.single.data, {
+    'message': '今天浇水吗',
+    'session_id': 's1',
+  });
+});
+```
+
+- [ ] **Step 2: 运行 repository 测试确认失败**
+
+Run:
+
+```bash
+cd mobile-app && flutter test test/data/repositories/app_api_integration_test.dart
+```
+
+Expected: FAIL，提示 `streamMessage` 或 `YayaStreamEvent` 不存在。
+
+- [ ] **Step 3: 实现 YayaRepository.streamMessage 和 SSE 解析**
+
+Modify `mobile-app/lib/data/repositories/yaya_repository.dart`:
+
+```dart
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+
+import '../api/api_client.dart';
+import '../api/api_models.dart';
+
+class YayaRepository {
+  YayaRepository(this.client);
+
+  final ApiClient client;
+
+  Stream<YayaStreamEvent> streamMessage(
+    String message, {
+    int? cycleId,
+    String? sessionId,
+  }) async* {
+    final response = await client.post(
+      '/agent/chat/stream',
+      data: {
+        'cycle_id': cycleId,
+        'message': message,
+        'session_id': sessionId,
+      }..removeWhere((_, value) => value == null),
+      headers: {'Accept': 'text/event-stream'},
+    );
+    final raw = response.data;
+    final stream = raw is ResponseBody
+        ? raw.stream
+        : response.data is Stream<List<int>>
+            ? response.data as Stream<List<int>>
+            : Stream<List<int>>.fromIterable([utf8.encode('$raw')]);
+    final lines = stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+    await for (final line in lines) {
+      if (!line.startsWith('data:')) continue;
+      final data = line.substring(5).trim();
+      if (data.isEmpty) continue;
+      if (data == '[DONE]') {
+        yield const YayaStreamEvent(done: true);
+        continue;
+      }
+      final json = jsonDecode(data) as Map<String, dynamic>;
+      yield YayaStreamEvent.fromJson(json);
+    }
+  }
+
+  Future<ChatReply> sendMessage(
+    String message, {
+    int? cycleId,
+    String? sessionId,
+  }) async {
+    final data = await client.postMap('/agent/chat', data: {
+      'cycle_id': cycleId,
+      'message': message,
+      'session_id': sessionId,
+    }..removeWhere((_, value) => value == null));
+    return ChatReply.fromJson(data);
+  }
+}
+
+class YayaStreamEvent {
+  const YayaStreamEvent({
+    this.content,
+    this.skills = const [],
+    this.pendingAction,
+    this.error,
+    this.done = false,
+  });
+
+  factory YayaStreamEvent.fromJson(Map<String, dynamic> json) {
+    return YayaStreamEvent(
+      content: json['content'] as String?,
+      skills: (json['skills'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
+      pendingAction: json['pending_action'] as Map<String, dynamic>?,
+      error: json['error'] as String?,
+    );
+  }
+
+  final String? content;
+  final List<String> skills;
+  final Map<String, dynamic>? pendingAction;
+  final String? error;
+  final bool done;
+}
+```
+
+Keep existing `loadConversations` and `loadMessages` methods unchanged.
+
+- [ ] **Step 4: 编写 YayaController 流式测试**
 
 Create `mobile-app/test/features/yaya/yaya_controller_test.dart`:
 
@@ -876,18 +1055,16 @@ import 'package:farm_manager_app/features/yaya/yaya_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../data/repositories/app_api_integration_test.dart'
-    show RecordingAdapter, conversationResponse, messageResponse;
+    show ConversationSummary, RecordingAdapter, conversationResponse, messageResponse;
 
 void main() {
-  test('发送消息会追加用户消息和芽芽回复', () async {
-    final adapter = RecordingAdapter({
-      '/agent/chat': {'reply': '建议傍晚浇水'},
-    });
-    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
-    dio.httpClientAdapter = adapter;
-    final controller = YayaController(
-      repository: YayaRepository(ApiClient(dio: dio)),
-    );
+  test('流式发送会追加用户消息并增量拼接芽芽回复', () async {
+    final repository = FakeStreamingYayaRepository([
+      const YayaStreamEvent(content: '建议'),
+      const YayaStreamEvent(content: '傍晚浇水'),
+      const YayaStreamEvent(done: true),
+    ]);
+    final controller = YayaController(repository: repository);
 
     await controller.send('今天浇水吗');
 
@@ -895,9 +1072,19 @@ void main() {
       '今天浇水吗',
       '建议傍晚浇水',
     ]);
-    expect(adapter.find('POST', '/agent/chat').data, {
-      'message': '今天浇水吗',
-    });
+    expect(controller.sending, false);
+  });
+
+  test('流式错误会保留用户消息并展示错误', () async {
+    final repository = FakeStreamingYayaRepository([
+      const YayaStreamEvent(error: '模型未配置'),
+    ]);
+    final controller = YayaController(repository: repository);
+
+    await controller.send('今天浇水吗');
+
+    expect(controller.messages.single.content, '今天浇水吗');
+    expect(controller.errorMessage, '模型未配置');
   });
 
   test('加载历史会话和消息', () async {
@@ -918,9 +1105,28 @@ void main() {
     expect(controller.messages.single.content, '建议傍晚浇水');
   });
 }
+
+class FakeStreamingYayaRepository extends YayaRepository {
+  FakeStreamingYayaRepository(this.events) : super(ApiClient());
+
+  final List<YayaStreamEvent> events;
+
+  @override
+  Stream<YayaStreamEvent> streamMessage(
+    String message, {
+    int? cycleId,
+    String? sessionId,
+  }) async* {
+    for (final event in events) {
+      yield event;
+    }
+  }
+}
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+If importing `ConversationSummary` from the integration test is invalid, remove it from the import list; only `RecordingAdapter`, `conversationResponse`, and `messageResponse` are needed.
+
+- [ ] **Step 5: 运行 controller 测试确认失败**
 
 Run:
 
@@ -930,7 +1136,7 @@ cd mobile-app && flutter test test/features/yaya/yaya_controller_test.dart
 
 Expected: FAIL，提示找不到 `YayaController`。
 
-- [ ] **Step 3: 实现 YayaController**
+- [ ] **Step 6: 实现 YayaController 增量消息**
 
 Create `mobile-app/lib/features/yaya/yaya_controller.dart`:
 
@@ -949,6 +1155,8 @@ class YayaController extends ChangeNotifier {
   bool sending = false;
   String? errorMessage;
   String? activeSessionId;
+  List<String> lastSkills = const [];
+  Map<String, dynamic>? pendingAction;
 
   Future<void> loadConversations() async {
     conversations
@@ -971,16 +1179,41 @@ class YayaController extends ChangeNotifier {
     if (trimmed.isEmpty || sending) return;
     sending = true;
     errorMessage = null;
+    pendingAction = null;
     messages.add(YayaMessageViewModel.user(trimmed));
+    final assistantIndex = messages.length;
+    messages.add(const YayaMessageViewModel(role: 'assistant', content: ''));
     notifyListeners();
     try {
-      final reply = await repository.sendMessage(
+      await for (final event in repository.streamMessage(
         trimmed,
         sessionId: activeSessionId,
-      );
-      messages.add(YayaMessageViewModel.assistant(reply.reply));
+      )) {
+        if (event.done) break;
+        if (event.error != null && event.error!.isNotEmpty) {
+          errorMessage = event.error;
+          if (messages[assistantIndex].content.isEmpty) {
+            messages.removeAt(assistantIndex);
+          }
+          notifyListeners();
+          break;
+        }
+        if (event.content != null && event.content!.isNotEmpty) {
+          final current = messages[assistantIndex];
+          messages[assistantIndex] = current.copyWith(
+            content: current.content + event.content!,
+          );
+        }
+        if (event.skills.isNotEmpty) lastSkills = event.skills;
+        if (event.pendingAction != null) pendingAction = event.pendingAction;
+        notifyListeners();
+      }
     } catch (_) {
       errorMessage = '芽芽暂时没有回应，请稍后再试';
+      if (assistantIndex < messages.length &&
+          messages[assistantIndex].content.isEmpty) {
+        messages.removeAt(assistantIndex);
+      }
     } finally {
       sending = false;
       notifyListeners();
@@ -998,20 +1231,20 @@ class YayaMessageViewModel {
     return YayaMessageViewModel(role: 'user', content: content);
   }
 
-  factory YayaMessageViewModel.assistant(String content) {
-    return YayaMessageViewModel(role: 'assistant', content: content);
-  }
-
   factory YayaMessageViewModel.fromConversation(ConversationMessage message) {
     return YayaMessageViewModel(role: message.role, content: message.content);
   }
 
   final String role;
   final String content;
+
+  YayaMessageViewModel copyWith({String? content}) {
+    return YayaMessageViewModel(role: role, content: content ?? this.content);
+  }
 }
 ```
 
-- [ ] **Step 4: 修改 YayaScreen 接收 repository**
+- [ ] **Step 7: 修改 YayaScreen 接收 repository 并绑定 controller**
 
 Modify constructor:
 
@@ -1042,9 +1275,9 @@ void dispose() {
 }
 ```
 
-Pass `controller` to `_YayaHomePage` and `YayaHistoryDrawer`.
+Wrap the screen with `AnimatedBuilder(animation: controller, builder: ...)`, pass `controller` to `_YayaHomePage` and `YayaHistoryDrawer`, and render streamed messages when `controller.messages` is not empty. Keep the existing hero and suggestion pills for the empty state.
 
-- [ ] **Step 5: 将输入框接入发送**
+- [ ] **Step 8: 将输入框接入流式发送**
 
 Change `AssistantInputBar` to accept:
 
@@ -1059,10 +1292,9 @@ final Future<void> Function(String text) onSubmit;
 final bool sending;
 ```
 
-Use a `TextEditingController`, call `await onSubmit(controller.text)`, then
-clear text when submit completes without error.
+Use a `TextEditingController`, call `await onSubmit(controller.text)`, then clear the field only when the text was submitted. Disable the send action when `sending` is true.
 
-- [ ] **Step 6: 历史抽屉使用真实会话**
+- [ ] **Step 9: 历史抽屉使用真实会话**
 
 Change `YayaHistoryDrawer` constructor:
 
@@ -1079,10 +1311,9 @@ final List<ConversationSummary> conversations;
 final ValueChanged<String> onConversationTap;
 ```
 
-Render empty state text `暂无历史会话` when list is empty. Render each item with
-`title`, `preview`, `category`, and call `onConversationTap(item.sessionId)`.
+Render empty state text `暂无历史会话` when list is empty. Render each item with `title`, `preview`, `category`, and call `onConversationTap(item.sessionId)`.
 
-- [ ] **Step 7: AppShell 传入 YayaRepository**
+- [ ] **Step 10: AppShell 传入 YayaRepository**
 
 Modify `mobile-app/lib/features/shell/app_shell.dart`:
 
@@ -1090,29 +1321,28 @@ Modify `mobile-app/lib/features/shell/app_shell.dart`:
 YayaScreen(repository: widget.dependencies.yaya),
 ```
 
-Expose `YayaRepository get yaya;` from `AppDependencies` and implement in fake.
+Expose `YayaRepository get yaya;` from `AppDependencies` and implement in fake dependencies if not already available.
 
-- [ ] **Step 8: 运行芽芽测试**
+- [ ] **Step 11: 运行芽芽测试**
 
 Run:
 
 ```bash
-cd mobile-app && flutter test test/features/yaya/yaya_controller_test.dart test/features/yaya/yaya_copy_test.dart
+cd mobile-app && flutter test test/data/repositories/app_api_integration_test.dart test/features/yaya/yaya_controller_test.dart test/features/yaya/yaya_copy_test.dart
 ```
 
 Expected: PASS。
 
-- [ ] **Step 9: 提交 Task 4**
+- [ ] **Step 12: 提交 Task 4**
 
 Run:
 
 ```bash
-git add mobile-app/lib/features/yaya mobile-app/lib/features/shell/app_shell.dart mobile-app/lib/app/app_dependencies.dart mobile-app/test/features/yaya mobile-app/test/support/fake_app_dependencies.dart
-git commit -m "feat: connect yaya chat to backend"
+git add mobile-app/lib/data/repositories/yaya_repository.dart mobile-app/lib/features/yaya mobile-app/lib/features/shell/app_shell.dart mobile-app/lib/app/app_dependencies.dart mobile-app/test/data/repositories/app_api_integration_test.dart mobile-app/test/features/yaya mobile-app/test/support/fake_app_dependencies.dart
+git commit -m "feat: stream yaya chat from backend"
 ```
 
 Expected: commit 成功。
-
 ---
 
 ### Task 5: 首页和账本只读数据绑定
@@ -1860,6 +2090,6 @@ Expected: commit 成功。
 ## 自审结果
 
 - Spec 覆盖：认证、个人页、芽芽、首页/账本、记录流、错误状态、`localhost:8099` 验收均有对应任务。
-- 范围控制：SSE、删除、结算、分类删除、模板管理、管理端接口均未纳入执行任务。
+- 范围控制：Yaya 已改为 SSE 流式主路径；删除、结算、分类删除、模板管理、管理端接口仍未纳入执行任务。
 - 类型一致性：`AppSession`、`SessionStore`、`ProfileController`、`YayaController`、`HomeController`、`BillingController`、`RecordFlowController` 在任务中先定义后使用。
 - 接口适配：记录流保存遇到未知 scene 或缺字段会停止，不伪造核心数据。
