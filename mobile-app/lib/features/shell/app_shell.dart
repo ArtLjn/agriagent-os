@@ -65,7 +65,10 @@ class _AppShellState extends State<AppShell> {
             ),
             const YayaScreen(),
             const BillingScreen(),
-            ProfileScreen(onLogout: widget.onLogout),
+            ProfileScreen(
+              repository: widget.dependencies.profile,
+              onLogout: widget.onLogout,
+            ),
           ],
         ),
       ),

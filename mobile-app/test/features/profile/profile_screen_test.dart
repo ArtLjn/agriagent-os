@@ -1,16 +1,30 @@
+import 'package:dio/dio.dart';
+import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/features/profile/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../data/repositories/app_api_integration_test.dart'
+    show RecordingAdapter, settingsResponse, userResponse, versionResponse;
+
 void main() {
-  testWidgets('我的页面展示资料、MVP 免费状态、AI 偏好和设置', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+  testWidgets('我的页面展示接口资料、AI 偏好和设置', (tester) async {
+    final repository = _profileRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ProfileScreen(repository: repository)),
+      ),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('农场管家'), findsOneWidget);
-    expect(find.text('张三'), findsOneWidget);
-    expect(find.text('农场负责人'), findsOneWidget);
-    expect(find.text('春季西瓜基地'), findsOneWidget);
-    expect(find.text('MVP免费版'), findsOneWidget);
+    expect(find.text('农友'), findsOneWidget);
+    expect(find.text('13800138000 · user'), findsOneWidget);
+    expect(find.text('寿光'), findsNWidgets(3));
+    expect(find.text('active'), findsOneWidget);
+    expect(find.text('版本 0.1.0'), findsOneWidget);
     expect(find.text('所在城市'), findsOneWidget);
     expect(find.text('默认天气'), findsOneWidget);
     expect(find.text('数据同步'), findsOneWidget);
@@ -22,5 +36,42 @@ void main() {
     expect(find.text('消息通知'), findsOneWidget);
     expect(find.text('关于农场管家'), findsOneWidget);
     expect(find.text('完善农场资料'), findsOneWidget);
+    expect(find.text('退出登录'), findsNothing);
   });
+
+  testWidgets('我的页面传入退出回调后展示退出登录入口', (tester) async {
+    var logoutCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            repository: _profileRepository(),
+            onLogout: () async {
+              logoutCalls += 1;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('退出登录'));
+    await tester.tap(find.text('退出登录'));
+    await tester.pump();
+
+    expect(find.text('退出登录'), findsOneWidget);
+    expect(logoutCalls, 1);
+  });
+}
+
+ProfileRepository _profileRepository() {
+  final adapter = RecordingAdapter({
+    '/auth/me': userResponse,
+    '/settings': settingsResponse,
+    '/api/app/version': versionResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return ProfileRepository(ApiClient(dio: dio));
 }

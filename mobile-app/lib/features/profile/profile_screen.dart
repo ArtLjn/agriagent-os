@@ -1,45 +1,76 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/repositories/profile_repository.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'profile_controller.dart';
 
 part 'profile_header_widgets.dart';
 
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key, this.onLogout});
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({
+    super.key,
+    required this.repository,
+    this.onLogout,
+  });
 
+  final ProfileRepository repository;
   final Future<void> Function()? onLogout;
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late final ProfileController _controller = ProfileController(
+    repository: widget.repository,
+  );
+  late final Future<ProfileViewModel> _profileFuture = _controller.load();
+
+  @override
   Widget build(BuildContext context) {
-    return ReferencePage(
-      headerTrailing: const HeaderIconButton(icon: LucideIcons.settings),
-      children: [
-        const SizedBox(height: 14),
-        const _ProfileCard(),
-        const SizedBox(height: 14),
-        const _LocationWeatherCard(),
-        const SizedBox(height: 14),
-        const _AiPreferenceCard(),
-        const SizedBox(height: 14),
-        _SystemSettingsCard(onLogout: onLogout),
-        const SizedBox(height: 28),
-        const _CompleteProfileButton(),
-      ],
+    return FutureBuilder<ProfileViewModel>(
+      future: _profileFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const Center(child: Text('个人资料加载失败，请稍后重试'));
+        }
+        final model = snapshot.data!;
+        return ReferencePage(
+          headerTrailing: const HeaderIconButton(icon: LucideIcons.settings),
+          children: [
+            const SizedBox(height: 14),
+            _ProfileCard(model: model),
+            const SizedBox(height: 14),
+            _LocationWeatherCard(model: model),
+            const SizedBox(height: 14),
+            const _AiPreferenceCard(),
+            const SizedBox(height: 14),
+            _SystemSettingsCard(model: model, onLogout: widget.onLogout),
+            const SizedBox(height: 28),
+            const _CompleteProfileButton(),
+          ],
+        );
+      },
     );
   }
 }
 
 class _LocationWeatherCard extends StatelessWidget {
-  const _LocationWeatherCard();
+  const _LocationWeatherCard({required this.model});
+
+  final ProfileViewModel model;
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
-      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+    return CardPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       child: Column(
         children: [
           _ProfileOptionRow(
@@ -47,18 +78,18 @@ class _LocationWeatherCard extends StatelessWidget {
             color: AppColors.blue,
             background: AppColors.blueSoft,
             title: '所在城市',
-            value: '合肥市',
+            value: model.city,
           ),
-          Divider(height: 1, color: AppColors.lineSoft),
+          const Divider(height: 1, color: AppColors.lineSoft),
           _ProfileOptionRow(
             icon: LucideIcons.cloudSun,
             color: AppColors.blue,
             background: AppColors.blueSoft,
             title: '默认天气',
-            value: '合肥市',
+            value: model.weatherCity,
           ),
-          Divider(height: 1, color: AppColors.lineSoft),
-          _ProfileOptionRow(
+          const Divider(height: 1, color: AppColors.lineSoft),
+          const _ProfileOptionRow(
             icon: LucideIcons.refreshCw,
             color: AppColors.greenDark,
             background: AppColors.greenSoft,
@@ -120,8 +151,9 @@ class _AiPreferenceCard extends StatelessWidget {
 }
 
 class _SystemSettingsCard extends StatelessWidget {
-  const _SystemSettingsCard({this.onLogout});
+  const _SystemSettingsCard({required this.model, this.onLogout});
 
+  final ProfileViewModel model;
   final Future<void> Function()? onLogout;
 
   @override
@@ -144,12 +176,12 @@ class _SystemSettingsCard extends StatelessWidget {
             title: '消息通知',
           ),
           const Divider(height: 1, color: AppColors.lineSoft),
-          const _ProfileOptionRow(
+          _ProfileOptionRow(
             icon: LucideIcons.info,
             color: AppColors.blue,
             background: AppColors.blueSoft,
             title: '关于农场管家',
-            value: '版本 1.0.0',
+            value: model.versionLabel,
           ),
           if (onLogout != null) ...[
             const Divider(height: 1, color: AppColors.lineSoft),

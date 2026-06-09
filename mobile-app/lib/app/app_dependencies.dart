@@ -8,6 +8,8 @@ import '../data/session/app_session.dart';
 import '../data/session/session_store.dart';
 
 abstract class AppDependencies {
+  ProfileRepository get profile;
+
   Future<bool> restoreSession();
 
   Future<void> login({required String phone, required String password});
@@ -39,6 +41,7 @@ class BackendAppDependencies implements AppDependencies {
 
   final ApiClient client;
   final AppSession session;
+  @override
   final ProfileRepository profile;
   final DashboardRepository dashboard;
   final BillingRepository billing;

@@ -1,7 +1,9 @@
 part of 'profile_screen.dart';
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard();
+  const _ProfileCard({required this.model});
+
+  final ProfileViewModel model;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +32,7 @@ class _ProfileCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '张三',
+                      model.nickname,
                       style: AppTextStyles.metric.copyWith(
                         fontSize: 28,
                         height: 34 / 28,
@@ -38,7 +40,7 @@ class _ProfileCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '农场负责人',
+                      '${model.phone} · ${model.role}',
                       style:
                           AppTextStyles.body.copyWith(color: AppColors.muted),
                     ),
@@ -53,7 +55,7 @@ class _ProfileCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            '春季西瓜基地',
+                            model.city,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.body.copyWith(
@@ -65,8 +67,8 @@ class _ProfileCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    const StatusPill(
-                      text: 'MVP免费版',
+                    StatusPill(
+                      text: model.status,
                       color: AppColors.greenDark,
                       background: AppColors.greenSoft,
                     ),

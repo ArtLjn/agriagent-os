@@ -1,12 +1,21 @@
+import 'package:dio/dio.dart';
 import 'package:farm_manager_app/app/app_dependencies.dart';
+import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/repositories/profile_repository.dart';
+
+import '../data/repositories/app_api_integration_test.dart'
+    show RecordingAdapter, settingsResponse, userResponse, versionResponse;
 
 class FakeAppDependencies implements AppDependencies {
   FakeAppDependencies({
     this.restoreResult = false,
     this.loginError,
     this.registerError,
-  });
+    ProfileRepository? profile,
+  }) : profile = profile ?? _fakeProfileRepository();
 
+  @override
+  final ProfileRepository profile;
   final bool restoreResult;
   final Object? loginError;
   final Object? registerError;
@@ -55,4 +64,15 @@ class FakeAppDependencies implements AppDependencies {
   Future<void> logout() async {
     logoutCalls += 1;
   }
+}
+
+ProfileRepository _fakeProfileRepository() {
+  final adapter = RecordingAdapter({
+    '/auth/me': userResponse,
+    '/settings': settingsResponse,
+    '/api/app/version': versionResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return ProfileRepository(ApiClient(dio: dio));
 }
