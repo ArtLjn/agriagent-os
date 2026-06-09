@@ -65,23 +65,33 @@ void main() {
     expect(find.text('我的'), findsWidgets);
   });
 
-  testWidgets('登录页可以直接进入主应用', (tester) async {
+  testWidgets('登录页预填开发账号密码并可直接进入主应用', (tester) async {
     final dependencies = FakeAppDependencies();
     await pumpAuthFlow(tester, dependencies: dependencies);
-
-    await tester.enterText(find.byType(TextField).at(0), '13800138000');
-    await tester.enterText(find.byType(TextField).at(1), 'password');
 
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
 
     expect(dependencies.loginCalls, 1);
-    expect(dependencies.lastPhone, '13800138000');
-    expect(dependencies.lastPassword, 'password');
+    expect(dependencies.lastPhone, '19083106293');
+    expect(dependencies.lastPassword, 'admin123');
     expect(dependencies.overviewLoads, 1);
     expect(find.text('首页'), findsWidgets);
     expect(find.text('记录'), findsWidgets);
     expect(find.text('账本'), findsWidgets);
+  });
+
+  testWidgets('登录页允许覆盖开发默认账号密码', (tester) async {
+    final dependencies = FakeAppDependencies();
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    await tester.enterText(find.byType(TextField).at(0), '13800138000');
+    await tester.enterText(find.byType(TextField).at(1), 'password');
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(dependencies.lastPhone, '13800138000');
+    expect(dependencies.lastPassword, 'password');
   });
 
   testWidgets('注册页调用后端注册后进入首次设置', (tester) async {

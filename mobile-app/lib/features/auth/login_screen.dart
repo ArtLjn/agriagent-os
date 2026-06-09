@@ -23,8 +23,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final phoneController = TextEditingController();
-  final passwordController = TextEditingController();
+  final phoneController = TextEditingController(text: '19083106293');
+  final passwordController = TextEditingController(text: 'admin123');
   var isSubmitting = false;
   String? errorMessage;
 
