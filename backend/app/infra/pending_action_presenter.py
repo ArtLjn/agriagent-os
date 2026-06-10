@@ -293,7 +293,7 @@ def build_confirm_message(
 
 def build_plan_confirm_message(steps) -> str:
     """构建多步骤 pending plan 的批量确认文案。"""
-    lines = [f"将执行 {len(steps)} 个步骤："]
+    lines = [f"请确认将执行 {len(steps)} 步（共 {len(steps)} 个步骤）："]
     for index, step in enumerate(steps, start=1):
         tool_name = getattr(step, "tool_name", "")
         params = getattr(step, "params", {}) or {}

@@ -195,23 +195,12 @@ def store_pending_plan(
     session_id: str | None,
     raw_user_input: str,
     router_decision: dict,
-    steps: list[dict],
+    steps: list[dict | PendingPlanStep],
 ) -> str:
     """存储 pending plan，返回 plan_id。"""
     plan_id = uuid.uuid4().hex
     pending_steps = [
-        PendingPlanStep(
-            step_id=str(step.get("step_id") or f"step-{index + 1}"),
-            step_index=index,
-            tool_name=str(step["tool_name"]),
-            params=deepcopy(step.get("params") or {}),
-            depends_on=deepcopy(step.get("depends_on") or []),
-            confirmation_state=str(step.get("confirmation_state") or "pending"),
-            execution_status=str(step.get("execution_status") or "pending"),
-            result_payload=deepcopy(step.get("result_payload")),
-            error_payload=deepcopy(step.get("error_payload")),
-        )
-        for index, step in enumerate(steps)
+        _coerce_pending_plan_step(step, index) for index, step in enumerate(steps)
     ]
     _pending_plans[_pending_key(farm_id, session_id)] = PendingPlan(
         plan_id=plan_id,
@@ -232,6 +221,37 @@ def store_pending_plan(
         len(pending_steps),
     )
     return plan_id
+
+
+def _coerce_pending_plan_step(
+    step: dict | PendingPlanStep,
+    index: int,
+) -> PendingPlanStep:
+    """兼容 dict 和 PendingPlanStep 两种 pending plan step 输入。"""
+    if isinstance(step, PendingPlanStep):
+        return PendingPlanStep(
+            step_id=step.step_id,
+            step_index=index,
+            tool_name=step.tool_name,
+            params=deepcopy(step.params),
+            depends_on=deepcopy(step.depends_on),
+            confirmation_state=step.confirmation_state,
+            execution_status=step.execution_status,
+            result_payload=deepcopy(step.result_payload),
+            error_payload=deepcopy(step.error_payload),
+        )
+
+    return PendingPlanStep(
+        step_id=str(step.get("step_id") or f"step-{index + 1}"),
+        step_index=index,
+        tool_name=str(step["tool_name"]),
+        params=deepcopy(step.get("params") or {}),
+        depends_on=deepcopy(step.get("depends_on") or []),
+        confirmation_state=str(step.get("confirmation_state") or "pending"),
+        execution_status=str(step.get("execution_status") or "pending"),
+        result_payload=deepcopy(step.get("result_payload")),
+        error_payload=deepcopy(step.get("error_payload")),
+    )
 
 
 def get_pending(farm_id: int, session_id: str | None = None) -> PendingAction | None:

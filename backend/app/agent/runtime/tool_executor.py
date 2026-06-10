@@ -8,16 +8,20 @@ from dataclasses import dataclass
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from app.agent.router import SkillRouter
 from app.agent.skills import get_langchain_tools
 from app.agent.skills.metadata import SkillPermissionLevel
 from app.agent.state import AgentState
 from app.core.database import SessionLocal
 from app.infra.pending_actions import (
     PENDING_MARKER,
+    PendingPlanStep,
     build_confirm_message,
     build_confirmation_context,
+    build_plan_confirm_message,
     is_write_skill,
     store_pending,
+    store_pending_plan,
 )
 from app.infra.trace_collector import get_collector
 from app.models.cycle import CropCycle
@@ -402,6 +406,47 @@ def _normalize_text(value: str) -> str:
     return "".join(str(value).split()).lower()
 
 
+def _pending_plan_tool_message(
+    *,
+    state: AgentState,
+    farm_id: int,
+    original_input: str,
+    tool_call_id: str,
+) -> ToolMessage | None:
+    """如果 router 已生成多步骤写计划，则存储 pending plan 并返回确认消息。"""
+    router_decision = state.get("router_decision")
+    if router_decision is None:
+        return None
+
+    steps = SkillRouter().build_pending_plan_steps(router_decision)
+    if len(steps) < 2:
+        return None
+
+    pending_steps = [
+        PendingPlanStep(
+            step_id=str(step["step_id"]),
+            step_index=index,
+            tool_name=str(step["tool_name"]),
+            params=dict(step.get("params") or {}),
+            depends_on=list(step.get("depends_on") or []),
+        )
+        for index, step in enumerate(steps)
+    ]
+    session_id = state.get("session_id")
+    store_pending_plan(
+        farm_id=farm_id,
+        session_id=session_id,
+        raw_user_input=original_input,
+        router_decision=router_decision.to_trace_payload(),
+        steps=pending_steps,
+    )
+    confirm_text = build_plan_confirm_message(pending_steps)
+    return ToolMessage(
+        content=f"{PENDING_MARKER} {confirm_text}",
+        tool_call_id=tool_call_id,
+    )
+
+
 async def _parallel_tool_node(state: AgentState) -> dict:
     """并行执行多个 tool_calls 的节点。写操作 Skill 拦截为 pending action。"""
     last = state["messages"][-1]
@@ -431,6 +476,23 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         if isinstance(msg, HumanMessage):
             original_input = msg.content[:200]
             break
+
+    first_tool_call = last.tool_calls[0]
+    plan_message = _pending_plan_tool_message(
+        state=state,
+        farm_id=farm_id,
+        original_input=original_input,
+        tool_call_id=first_tool_call["id"],
+    )
+    if plan_message is not None:
+        collector.record(
+            node_type="skill_call",
+            node_name="pending_plan",
+            input_data={"message": original_input},
+            output_data={"status": "pending_plan"},
+            duration_ms=0,
+        )
+        return {"messages": [plan_message]}
 
     async def _call_one(tc: dict) -> ToolMessage:
         name = tc["name"]
