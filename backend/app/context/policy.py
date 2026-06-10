@@ -42,6 +42,7 @@ class ContextBuildRequest:
 
     intent: str = "chat"
     selected_tool_names: list[str] = field(default_factory=list)
+    context_dependencies: list[str] = field(default_factory=list)
     selected_skill_metadata: dict[str, dict] = field(default_factory=dict)
     farm_id: int = 0
     user_id: str | None = None
@@ -82,6 +83,8 @@ class ContextPolicy:
     DEPENDENCY_SELECTORS = {
         "crop_cycle": (CycleSelector, "cycle"),
         "crop_cycles": (CycleSelector, "cycle"),
+        "active_cycles": (CycleSelector, "cycle"),
+        "farm": (FarmSelector, "farm"),
         "planting_unit": (PlantingUnitSelector, "planting_units"),
         "planting_units": (PlantingUnitSelector, "planting_units"),
         "operation_work_order": (
@@ -89,6 +92,10 @@ class ContextPolicy:
             "operation_work_orders",
         ),
         "operation_work_orders": (
+            OperationWorkOrderSelector,
+            "operation_work_orders",
+        ),
+        "recent_operations": (
             OperationWorkOrderSelector,
             "operation_work_orders",
         ),
@@ -117,7 +124,7 @@ class ContextPolicy:
         dependency_map: dict[str, list[str]] = {}
 
         dependencies = self._dependencies_from_request(request)
-        for dependency in sorted(dependencies):
+        for dependency in dependencies:
             selector_spec = self.DEPENDENCY_SELECTORS.get(dependency)
             if selector_spec is None:
                 continue
@@ -162,26 +169,32 @@ class ContextPolicy:
             dependency_map=dependency_map,
         )
 
-    def _dependencies_from_request(self, request: ContextBuildRequest) -> set[str]:
+    def _dependencies_from_request(self, request: ContextBuildRequest) -> list[str]:
         selected_tool_names = set(request.selected_tool_names)
-        dependencies: set[str] = set()
+        dependencies: list[str] = []
+
+        def add(raw_dependencies: list[str] | set[str] | tuple[str, ...]) -> None:
+            for item in raw_dependencies:
+                dependency = str(item)
+                if dependency not in dependencies:
+                    dependencies.append(dependency)
+
+        add(request.context_dependencies)
 
         for metadata in request.selected_skill_metadata.values():
             raw_dependencies = metadata.get("context_dependencies", [])
-            dependencies.update(str(item) for item in raw_dependencies)
+            add(raw_dependencies)
 
         if selected_tool_names & self.CROP_CYCLE_TOOLS:
-            dependencies.add("crop_cycle")
+            add(["crop_cycle"])
         if selected_tool_names & self.WORK_ORDER_TOOLS:
-            dependencies.update(
-                {"crop_cycle", "planting_units", "operation_work_orders", "workers"}
-            )
+            add(["crop_cycle", "planting_units", "operation_work_orders", "workers"])
         if selected_tool_names & self.LABOR_TOOLS:
-            dependencies.update({"workers", "unpaid_labor", "ledger"})
+            add(["workers", "unpaid_labor", "ledger"])
         if selected_tool_names & self.COST_CATEGORY_TOOLS:
-            dependencies.update({"ledger", "cost_categories"})
+            add(["ledger", "cost_categories"])
         if selected_tool_names & self.WEATHER_TOOLS:
-            dependencies.add("weather")
+            add(["weather"])
         return dependencies
 
 

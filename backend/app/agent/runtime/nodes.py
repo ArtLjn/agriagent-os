@@ -254,6 +254,7 @@ async def _llm_node(state: AgentState) -> dict:
             farm_id=farm_id,
             intent=intent,
             selected_tool_names=selected_tool_names,
+            context_dependencies=router_decision.context_dependencies,
             user_id=state.get("user_id"),
             session_id=state.get("session_id"),
         )
@@ -334,7 +335,12 @@ async def _llm_node(state: AgentState) -> dict:
 
     # 并行缓存预热（与 LLM 调用并行执行）
     preload_task = asyncio.create_task(
-        _warm_tool_caches(selected_tool_names, farm_id, farm_ctx)
+        _warm_tool_caches(
+            selected_tool_names,
+            farm_id,
+            farm_ctx,
+            context_dependencies=router_decision.context_dependencies,
+        )
     )
 
     # LLM 调用 + 计时 + 请求内重试
