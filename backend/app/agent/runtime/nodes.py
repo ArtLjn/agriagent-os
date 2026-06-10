@@ -191,6 +191,20 @@ async def _llm_node(state: AgentState) -> dict:
         )
     else:
         router_decision = _route_tools(user_msg, tools)
+
+    increment_round()
+    collector = get_collector()
+    collector.record(
+        node_type="skill_router",
+        node_name="skill_router",
+        input_data={"message": user_msg[:500]},
+        output_data=router_decision.to_trace_payload(),
+        token_usage={
+            "schema_token_estimate": router_decision.schema_token_estimate,
+            "usage_source": "router_estimate",
+        },
+    )
+
     selected_names = list(router_decision.selected_tools)
     if _is_operation_work_order_clarification(messages):
         selected_names = _append_tool_name_once(
@@ -262,9 +276,6 @@ async def _llm_node(state: AgentState) -> dict:
         farm_ctx = await _get_farm_context(farm_id)
     display_name = farm_ctx["display_name"]
     farm_location = farm_ctx["farm_location"]
-
-    _round_idx = increment_round()
-    collector = get_collector()
 
     if prepared_system_prompt:
         system_text = prepared_system_prompt
