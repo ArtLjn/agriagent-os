@@ -139,3 +139,13 @@ def test_unknown_write_asks_clarification_without_write_tool() -> None:
     assert decision.selected_tools == []
     assert decision.clarification is not None
     assert "请补充" in decision.clarification
+
+
+@pytest.mark.parametrize("message", ["我的作业单有哪些", "采收作业有哪些"])
+def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
+    tools = [_tool("get_operation_work_orders"), _tool("create_operation_work_order")]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == ["get_operation_work_orders"]
+    assert "create_operation_work_order" not in decision.selected_tools

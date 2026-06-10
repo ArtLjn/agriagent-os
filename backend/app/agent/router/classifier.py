@@ -14,7 +14,8 @@ class RuleIntentClassifier:
     _worker_create_hints = ("新来", "招了", "新增", "创建")
     _worker_pay_hints = ("工资", "日薪", "每天")
     _work_order_hints = ("作业", "采收", "授粉", "安排")
-    _read_prefixes = ("最近", "查询", "看看", "有哪些")
+    _work_order_read_hints = ("作业单", "作业", "采收", "授粉")
+    _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
 
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
@@ -53,6 +54,18 @@ class RuleIntentClassifier:
                     entities=["farm"],
                     candidate_tools=[],
                     confidence=0.6,
+                )
+            )
+
+        if self._looks_like_query_work_orders(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="operation",
+                    intent="query_work_orders",
+                    risk="read",
+                    entities=["operation_work_order"],
+                    candidate_tools=["get_operation_work_orders"],
+                    confidence=0.82,
                 )
             )
 
@@ -101,8 +114,13 @@ class RuleIntentClassifier:
         has_pay_hint = self._has_any(message, self._worker_pay_hints)
         return has_create_action or has_pay_hint
 
+    def _looks_like_query_work_orders(self, message: str) -> bool:
+        return self._has_any(message, self._read_blockers) and self._has_any(
+            message, self._work_order_read_hints
+        )
+
     def _looks_like_create_work_order(self, message: str) -> bool:
-        if message.startswith(self._read_prefixes):
+        if self._has_any(message, self._read_blockers):
             return False
         return self._has_any(message, self._work_order_hints)
 

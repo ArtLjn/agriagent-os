@@ -23,7 +23,9 @@ class RouterPolicy:
         frames: list[IntentFrame],
         candidates: list[ToolCandidate],
     ) -> RouterDecision:
-        candidate_by_name = {candidate.name: candidate for candidate in candidates}
+        candidate_by_name = {
+            candidate.name: candidate for candidate in candidates if candidate.enabled
+        }
 
         if self._has_ambiguous_write(frames):
             return RouterDecision(
@@ -70,7 +72,6 @@ class RouterPolicy:
                         policy_violations, "write_tool_budget_exceeded"
                     )
                     continue
-                write_count += 1
 
             next_tokens = schema_token_estimate + candidate.schema_token_estimate
             if next_tokens > self._budget.max_schema_tokens:
@@ -82,6 +83,8 @@ class RouterPolicy:
 
             selected.append(candidate)
             schema_token_estimate = next_tokens
+            if candidate.risk.startswith("write"):
+                write_count += 1
 
         context_dependencies = self._dedupe_context_dependencies(selected, frames)
 

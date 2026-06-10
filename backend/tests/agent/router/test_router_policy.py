@@ -62,3 +62,54 @@ def test_policy_trims_schema_token_budget() -> None:
     assert decision.selected_tools == ["a"]
     assert decision.schema_token_estimate == 300
     assert "schema_token_budget_exceeded" in decision.policy_violations
+
+
+def test_policy_counts_write_tool_only_after_selection() -> None:
+    decision = RouterPolicy(
+        DisclosureBudget(max_tools_default=3, max_schema_tokens=500)
+    ).apply(
+        message="新增工人并创建作业单",
+        frames=[
+            IntentFrame(
+                domain="operation",
+                intent="multi_write",
+                risk="write_confirm",
+                candidate_tools=["large_write", "small_write"],
+            )
+        ],
+        candidates=[
+            _candidate("large_write", "write_confirm", tokens=600),
+            _candidate("small_write", "write_confirm", tokens=200),
+        ],
+    )
+
+    assert decision.selected_tools == ["small_write"]
+    assert decision.rejected_tools == ["large_write"]
+    assert decision.policy_violations == ["schema_token_budget_exceeded"]
+
+
+def test_policy_skips_disabled_candidates() -> None:
+    decision = RouterPolicy().apply(
+        message="查询禁用工具",
+        frames=[
+            IntentFrame(
+                domain="test",
+                intent="query_disabled",
+                risk="read",
+                candidate_tools=["disabled_read"],
+            )
+        ],
+        candidates=[
+            ToolCandidate(
+                name="disabled_read",
+                domain="test",
+                intents=["query_disabled"],
+                risk="read",
+                schema_token_estimate=100,
+                enabled=False,
+            )
+        ],
+    )
+
+    assert decision.selected_tools == []
+    assert decision.rejected_tools == ["disabled_read"]
