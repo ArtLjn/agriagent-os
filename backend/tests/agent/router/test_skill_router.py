@@ -154,13 +154,22 @@ def test_unknown_farm_read_uses_safe_default() -> None:
     assert decision.fallback == "safe_read_default"
 
 
-def test_weather_query_selects_weather_tool() -> None:
+@pytest.mark.parametrize("message", ["明天苏州什么天气", "今天天气", "明天会下雨吗"])
+def test_weather_query_selects_weather_tool(message: str) -> None:
     tools = [_tool("get_weather_forecast"), _tool("get_farm_status")]
 
-    decision = SkillRouter().route("明天苏州什么天气", tools)
+    decision = SkillRouter().route(message, tools)
 
     assert decision.selected_tools == ["get_weather_forecast"]
     assert decision.frames[0].intent == "query_weather"
+
+
+def test_temperature_sensor_question_does_not_select_weather_tool() -> None:
+    tools = [_tool("get_weather_forecast"), _tool("get_farm_status")]
+
+    decision = SkillRouter().route("温度传感器怎么安装", tools)
+
+    assert decision.selected_tools == []
 
 
 @pytest.mark.parametrize("message", ["西瓜怎么种", "怎么种小麦", "种小麦要注意什么"])

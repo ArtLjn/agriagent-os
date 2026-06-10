@@ -18,7 +18,16 @@ class RuleIntentClassifier:
     _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
     _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
     _web_search_hints = ("搜索", "网上查", "新闻")
-    _weather_hints = ("天气", "预报", "降雨", "下雨", "温度", "极端天气")
+    _weather_hints = (
+        "天气",
+        "预报",
+        "降雨",
+        "下雨",
+        "气温",
+        "风力",
+        "湿度",
+        "极端天气",
+    )
 
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
