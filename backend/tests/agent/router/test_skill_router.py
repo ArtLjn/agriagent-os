@@ -6,6 +6,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from app.agent.router.catalog import SkillCatalog
+from app.agent.router.service import SkillRouter
 
 pytestmark = pytest.mark.no_db
 
@@ -93,3 +94,48 @@ def test_catalog_estimates_schema_tokens_from_pydantic_fields() -> None:
 
     assert with_schema.schema_token_estimate > 300
     assert with_schema.schema_token_estimate > without_schema.schema_token_estimate
+
+
+def test_session5_active_crop_query_selects_at_most_two_tools() -> None:
+    tools = [
+        _tool("get_farm_status"),
+        _tool("get_crop_cycle_info"),
+        _tool("create_crop_cycle"),
+        _tool("manage_workers"),
+        _tool("create_operation_work_order"),
+    ]
+
+    decision = SkillRouter().route("我家有哪些作物栽种", tools)
+
+    assert len(decision.selected_tools) <= 2
+    assert set(decision.selected_tools) <= {"get_farm_status", "get_crop_cycle_info"}
+    assert decision.fallback != "fallback_all"
+    assert "create_operation_work_order" not in decision.selected_tools
+
+
+def test_greeting_binds_no_tools() -> None:
+    tools = [_tool("get_farm_status"), _tool("create_cost_record")]
+
+    decision = SkillRouter().route("你好", tools)
+
+    assert decision.selected_tools == []
+    assert decision.fallback == "no_tools"
+
+
+def test_unknown_farm_read_uses_safe_default() -> None:
+    tools = [_tool("get_farm_status"), _tool("create_crop_cycle")]
+
+    decision = SkillRouter().route("农场最近怎么样", tools)
+
+    assert decision.selected_tools == ["get_farm_status"]
+    assert decision.fallback == "safe_read_default"
+
+
+def test_unknown_write_asks_clarification_without_write_tool() -> None:
+    tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
+
+    decision = SkillRouter().route("帮我处理一下这个工人的事情", tools)
+
+    assert decision.selected_tools == []
+    assert decision.clarification is not None
+    assert "请补充" in decision.clarification

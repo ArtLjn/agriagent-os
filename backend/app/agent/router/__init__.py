@@ -6,10 +6,12 @@ from app.agent.router.models import (
     RouterDecision,
     ToolCandidate,
 )
+from app.agent.router.service import SkillRouter
 
 __all__ = [
     "DisclosureBudget",
     "IntentFrame",
     "RouterDecision",
+    "SkillRouter",
     "ToolCandidate",
 ]
