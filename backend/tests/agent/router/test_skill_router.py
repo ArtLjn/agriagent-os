@@ -107,6 +107,18 @@ def test_catalog_estimates_schema_tokens_from_pydantic_fields() -> None:
     assert with_schema.schema_token_estimate > without_schema.schema_token_estimate
 
 
+def test_catalog_handles_magicmock_tool_metadata() -> None:
+    """MagicMock 工具的非标准 metadata 不应让 catalog 构建崩溃。"""
+    tool = MagicMock()
+    tool.name = "get_weather_forecast"
+
+    catalog = SkillCatalog.from_tools([tool])
+
+    candidate = catalog.get("get_weather_forecast")
+    assert candidate is not None
+    assert candidate.schema_token_estimate >= 80
+
+
 def test_session5_active_crop_query_selects_at_most_two_tools() -> None:
     tools = [
         _tool("get_farm_status"),
@@ -140,6 +152,15 @@ def test_unknown_farm_read_uses_safe_default() -> None:
 
     assert decision.selected_tools == ["get_farm_status"]
     assert decision.fallback == "safe_read_default"
+
+
+def test_weather_query_selects_weather_tool() -> None:
+    tools = [_tool("get_weather_forecast"), _tool("get_farm_status")]
+
+    decision = SkillRouter().route("明天苏州什么天气", tools)
+
+    assert decision.selected_tools == ["get_weather_forecast"]
+    assert decision.frames[0].intent == "query_weather"
 
 
 @pytest.mark.parametrize("message", ["西瓜怎么种", "怎么种小麦", "种小麦要注意什么"])

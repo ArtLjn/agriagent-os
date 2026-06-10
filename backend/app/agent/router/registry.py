@@ -13,6 +13,16 @@ CATALOG_REGISTRY: dict[str, dict] = {
         "context_dependencies": ["farm", "crop_cycles", "recent_operations"],
         "candidate_group": "planting_read",
     },
+    "get_weather_forecast": {
+        "domain": "weather",
+        "intents": ["query_weather"],
+        "risk": "read",
+        "entities": ["weather"],
+        "trigger_examples": ["明天苏州什么天气", "最近会不会下雨"],
+        "anti_examples": ["搜索一下天气新闻"],
+        "context_dependencies": ["weather", "user_settings"],
+        "candidate_group": "weather_read",
+    },
     "get_crop_cycle_info": {
         "domain": "planting",
         "intents": ["query_crop_cycle"],

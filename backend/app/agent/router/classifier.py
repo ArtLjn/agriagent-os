@@ -18,6 +18,7 @@ class RuleIntentClassifier:
     _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
     _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
     _web_search_hints = ("搜索", "网上查", "新闻")
+    _weather_hints = ("天气", "预报", "降雨", "下雨", "温度", "极端天气")
 
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
@@ -93,6 +94,17 @@ class RuleIntentClassifier:
                     confidence=0.8,
                 )
             )
+        elif self._looks_like_weather_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="weather",
+                    intent="query_weather",
+                    risk="read",
+                    entities=["weather"],
+                    candidate_tools=["get_weather_forecast"],
+                    confidence=0.82,
+                )
+            )
 
         if self._looks_like_create_worker(normalized):
             frames.append(
@@ -137,6 +149,9 @@ class RuleIntentClassifier:
 
     def _looks_like_web_search(self, message: str) -> bool:
         return self._has_any(message, self._web_search_hints)
+
+    def _looks_like_weather_query(self, message: str) -> bool:
+        return self._has_any(message, self._weather_hints)
 
     def _looks_like_create_worker(self, message: str) -> bool:
         if "工人" not in message:

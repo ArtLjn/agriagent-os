@@ -9,6 +9,26 @@ from app.agent.router.registry import CATALOG_REGISTRY, default_risk_for_tool
 from app.agent.tool_selection_rules import DISABLED_SKILLS
 
 
+def _safe_text(value) -> str:
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    try:
+        json.dumps(value, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return ""
+    return str(value)
+
+
+def _json_safe_payload(value):
+    try:
+        json.dumps(value, ensure_ascii=False)
+        return value
+    except (TypeError, ValueError):
+        return ""
+
+
 def _args_schema_payload(tool: BaseTool) -> dict | str:
     args_schema = getattr(tool, "args_schema", None)
     if args_schema is None:
@@ -19,17 +39,16 @@ def _args_schema_payload(tool: BaseTool) -> dict | str:
             continue
         try:
             schema_payload = schema_method()
-            json.dumps(schema_payload, ensure_ascii=False)
-            return schema_payload
-        except (TypeError, ValueError):
+            return _json_safe_payload(schema_payload)
+        except (TypeError, ValueError, AttributeError):
             continue
-    return str(args_schema)
+    return ""
 
 
 def _schema_token_estimate(tool: BaseTool) -> int:
     payload = {
-        "name": getattr(tool, "name", ""),
-        "description": getattr(tool, "description", ""),
+        "name": _safe_text(getattr(tool, "name", "")),
+        "description": _safe_text(getattr(tool, "description", "")),
         "args_schema": _args_schema_payload(tool),
     }
     return max(80, len(json.dumps(payload, ensure_ascii=False)) // 2)
@@ -53,7 +72,7 @@ class SkillCatalog:
     def from_tools(cls, tools: list[BaseTool]) -> "SkillCatalog":
         candidates = []
         for tool in tools:
-            name = tool.name
+            name = _safe_text(getattr(tool, "name", ""))
             override = CATALOG_REGISTRY.get(name, {})
             candidates.append(
                 ToolCandidate(
