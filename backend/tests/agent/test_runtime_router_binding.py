@@ -13,6 +13,13 @@ from app.context.models import ContextBundle
 pytestmark = pytest.mark.no_db
 
 
+def test_runtime_nodes_keeps_expand_by_chain_patch_hook() -> None:
+    """runtime.nodes 保留 expand_by_chain patch 兼容入口。"""
+    import app.agent.runtime.nodes as nodes
+
+    assert hasattr(nodes, "expand_by_chain")
+
+
 class _FakeTool:
     def __init__(self, name: str) -> None:
         self.name = name

@@ -44,6 +44,7 @@ from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.router import RouterDecision, SkillRouter
 from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
+from app.agent.tool_selector import expand_by_chain as _expand_by_chain
 from app.agent.tool_selector import select_tools as _select_tools
 from app.core.config import settings
 from app.core.date_context import get_request_date
@@ -53,6 +54,7 @@ from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round
 
 logger = logging.getLogger(__name__)
+expand_by_chain = _expand_by_chain
 select_tools = _select_tools
 
 _WORK_ORDER_CLARIFICATION_RE = re.compile(
