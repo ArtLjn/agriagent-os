@@ -75,7 +75,7 @@ def upgrade() -> None:
         op.create_table(
             "agent_pending_plan_steps",
             sa.Column("id", sa.Integer(), nullable=False),
-            sa.Column("plan_id", sa.Integer(), nullable=False),
+            sa.Column("plan_id", sa.String(length=64), nullable=False),
             sa.Column("step_id", sa.String(length=64), nullable=False),
             sa.Column("step_index", sa.Integer(), nullable=False),
             sa.Column("tool_name", sa.String(length=100), nullable=False),
@@ -98,7 +98,7 @@ def upgrade() -> None:
                 nullable=True,
             ),
             sa.ForeignKeyConstraint(
-                ["plan_id"], ["agent_pending_plans.id"], ondelete="CASCADE"
+                ["plan_id"], ["agent_pending_plans.plan_id"], ondelete="CASCADE"
             ),
             sa.PrimaryKeyConstraint("id"),
         )

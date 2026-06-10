@@ -4,6 +4,7 @@ import logging
 import re
 import time
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 
 from langchain_core.messages import ToolMessage
@@ -202,12 +203,12 @@ def store_pending_plan(
             step_id=str(step.get("step_id") or f"step-{index + 1}"),
             step_index=index,
             tool_name=str(step["tool_name"]),
-            params=dict(step.get("params") or {}),
-            depends_on=list(step.get("depends_on") or []),
+            params=deepcopy(step.get("params") or {}),
+            depends_on=deepcopy(step.get("depends_on") or []),
             confirmation_state=str(step.get("confirmation_state") or "pending"),
             execution_status=str(step.get("execution_status") or "pending"),
-            result_payload=step.get("result_payload"),
-            error_payload=step.get("error_payload"),
+            result_payload=deepcopy(step.get("result_payload")),
+            error_payload=deepcopy(step.get("error_payload")),
         )
         for index, step in enumerate(steps)
     ]
@@ -218,7 +219,7 @@ def store_pending_plan(
         status="pending",
         current_step_index=0,
         raw_user_input=raw_user_input,
-        router_decision=router_decision,
+        router_decision=deepcopy(router_decision),
         steps=pending_steps,
         created_at=time.time(),
         expires_at=time.time() + _TIMEOUT_SECONDS,

@@ -40,8 +40,8 @@ class AgentPendingPlanStep(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     plan_id = Column(
-        Integer,
-        ForeignKey("agent_pending_plans.id", ondelete="CASCADE"),
+        String(64),
+        ForeignKey("agent_pending_plans.plan_id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
