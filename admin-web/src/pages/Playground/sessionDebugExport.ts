@@ -19,11 +19,22 @@ export interface SessionDebugPendingPlan {
   output_data: TracePayload;
 }
 
+export interface SessionDebugSkillCall {
+  round_index: number;
+  skill_name: string;
+  status: string;
+  duration_ms: number | null;
+  input_data: TracePayload;
+  output_data: TracePayload;
+  error_message: string | null;
+}
+
 export interface SessionDebugExport {
   session_id: string;
   messages: SessionDebugMessage[];
   used_skills: string[];
   pending_actions: PendingAction[];
+  skill_calls: SessionDebugSkillCall[];
   router_diagnostics: SessionDebugRouterDiagnostic[];
   pending_plans: SessionDebugPendingPlan[];
 }
@@ -57,6 +68,7 @@ export function buildSessionDebugExport({
     pending_actions: messages
       .map((message) => message.pendingAction)
       .filter((action): action is PendingAction => Boolean(action)),
+    skill_calls: extractSkillCalls(timeline),
     router_diagnostics: extractNodes(timeline, 'skill_router'),
     pending_plans: extractNodes(timeline, 'pending_plan'),
   };
@@ -83,6 +95,26 @@ function extractNodes(
         round_index: round.round_index,
         input_data: node.input_data,
         output_data: node.output_data,
+      })),
+  );
+}
+
+function extractSkillCalls(timeline: TraceTimeline | null): SessionDebugSkillCall[] {
+  if (!timeline?.rounds) {
+    return [];
+  }
+
+  return timeline.rounds.flatMap((round) =>
+    round.nodes
+      .filter((node) => node.node_type === 'skill_call')
+      .map((node) => ({
+        round_index: round.round_index,
+        skill_name: node.node_name,
+        status: node.status,
+        duration_ms: node.duration_ms,
+        input_data: node.input_data,
+        output_data: node.output_data,
+        error_message: node.error_message,
       })),
   );
 }

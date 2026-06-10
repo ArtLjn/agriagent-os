@@ -35,7 +35,7 @@ describe('buildSessionDebugExport', () => {
     expect(exported.pending_actions).toEqual([pendingAction]);
   });
 
-  it('从 timeline 导出 router diagnostics 和 pending plans', () => {
+  it('从 timeline 导出 skill calls、router diagnostics 和 pending plans', () => {
     const timeline: TraceTimeline = {
       request_id: 'request-1',
       rounds: [
@@ -52,6 +52,17 @@ describe('buildSessionDebugExport', () => {
               error_message: null,
               input_data: { message: '农场状态' },
               output_data: { selected_tools: ['get_farm_status'] },
+            },
+            {
+              node_type: 'skill_call',
+              node_name: 'get_farm_status',
+              duration_ms: 12,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: { farm_id: 1 },
+              output_data: { active_crops: ['水稻'] },
             },
             {
               node_type: 'pending_plan',
@@ -75,6 +86,17 @@ describe('buildSessionDebugExport', () => {
       timeline,
     });
 
+    expect(exported.skill_calls).toEqual([
+      {
+        round_index: 1,
+        skill_name: 'get_farm_status',
+        status: 'success',
+        duration_ms: 12,
+        input_data: { farm_id: 1 },
+        output_data: { active_crops: ['水稻'] },
+        error_message: null,
+      },
+    ]);
     expect(exported.router_diagnostics).toEqual([
       {
         round_index: 1,
