@@ -2,6 +2,7 @@
 
 from typing import Annotated
 
+from app.agent.router import RouterDecision
 from app.context.models import ContextBundle
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -21,3 +22,4 @@ class AgentState(TypedDict):
     system_prompt: NotRequired[str | None]
     context_bundle: NotRequired[ContextBundle | None]
     selected_tool_names: NotRequired[list[str] | None]
+    router_decision: NotRequired[RouterDecision | None]

@@ -14,10 +14,10 @@ from app.agent.prompt_composer import get_composer
 from app.agent.runtime.llm_support import (
     _LLM_SEMAPHORE,
     _build_circuit_key,
-    _get_classifier,
     _get_farm_context,
     _get_runtime_context_bundle,
     _get_season,
+    _get_classifier as _runtime_get_classifier,
     _record_llm_failure,
     _record_llm_success,
     _warm_tool_caches,
@@ -41,9 +41,10 @@ from app.agent.runtime.messages import (
 )
 from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES, check_quota
 from app.agent.runtime.tool_executor import _parallel_tool_node
+from app.agent.router import RouterDecision, SkillRouter
 from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
-from app.agent.tool_selector import expand_by_chain, select_tools
+from app.agent.tool_selector import select_tools as _select_tools
 from app.core.config import settings
 from app.core.date_context import get_request_date
 from app.context.models import ContextBundle
@@ -52,6 +53,7 @@ from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round
 
 logger = logging.getLogger(__name__)
+select_tools = _select_tools
 
 _WORK_ORDER_CLARIFICATION_RE = re.compile(
     r"(?:创建|生成|安排|记录).{0,12}(?:农事)?作业单|创建农事作业单"
@@ -89,6 +91,18 @@ def _append_tool_name_once(names: list[str], tool_name: str, tools: list) -> lis
     if tool_name not in available:
         return names
     return [*names, tool_name]
+
+
+def _get_classifier():
+    """兼容旧 graph 入口导出的 classifier 工厂。"""
+    return _runtime_get_classifier()
+
+
+def _route_tools(user_msg: str, tools: list) -> RouterDecision:
+    """使用 SkillRouter，兼容测试/旧入口 patch select_tools 的场景。"""
+    if select_tools is not _select_tools:
+        return RouterDecision(selected_tools=list(select_tools(user_msg, tools)))
+    return SkillRouter().route(user_msg, tools)
 
 
 async def _llm_node(state: AgentState) -> dict:
@@ -133,6 +147,7 @@ async def _llm_node(state: AgentState) -> dict:
     prepared_system_prompt = state.get("system_prompt")
     prepared_context_bundle = state.get("context_bundle")
     prepared_selected_tool_names = state.get("selected_tool_names")
+    prepared_router_decision = state.get("router_decision")
 
     farm_id = state.get("farm_id", 1)
     if not isinstance(farm_id, int) or farm_id <= 0:
@@ -164,11 +179,17 @@ async def _llm_node(state: AgentState) -> dict:
     has_tool_results = bool(tool_msgs)
     intent = state.get("intent", "agent")
     user_msg = _find_last_human_message(messages)
-    selected_names = select_tools(
-        user_msg,
-        tools,
-        intent_classifier=None,
-    )
+    if prepared_router_decision is not None:
+        router_decision = prepared_router_decision
+    elif normal_msgs:
+        router_decision = RouterDecision(
+            selected_tools=[],
+            fallback="final_answer_no_tools",
+            reason="已有工具结果，final answer 默认不重新绑定工具",
+        )
+    else:
+        router_decision = _route_tools(user_msg, tools)
+    selected_names = list(router_decision.selected_tools)
     if _is_operation_work_order_clarification(messages):
         selected_names = _append_tool_name_once(
             selected_names,
@@ -210,26 +231,7 @@ async def _llm_node(state: AgentState) -> dict:
     raw_llm = get_llm(role=model_role)
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     _circuit_key = _build_circuit_key(raw_llm)
-    if prepared_selected_tool_names is None and len(selected_names) >= len(tools):
-        selected_names = select_tools(
-            user_msg,
-            tools,
-            intent_classifier=_get_classifier(),
-            # user_location=farm_location,
-        )
-        if _is_operation_work_order_clarification(messages):
-            selected_names = _append_tool_name_once(
-                selected_names,
-                "create_operation_work_order",
-                tools,
-            )
-    if prepared_selected_tool_names is not None:
-        selected_tools = [t for t in tools if t.name in selected_names]
-    elif has_tool_results:
-        selected_names_set = expand_by_chain(set(selected_names))
-        selected_tools = [t for t in tools if t.name in selected_names_set]
-    else:
-        selected_tools = [t for t in tools if t.name in selected_names]
+    selected_tools = [t for t in tools if t.name in selected_names]
     if selected_tools:
         parallel = (
             {"parallel_tool_calls": True} if settings.ai.parallel_tool_calls else {}
