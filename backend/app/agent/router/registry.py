@@ -63,6 +63,15 @@ CATALOG_REGISTRY: dict[str, dict] = {
         "context_dependencies": ["workers"],
         "candidate_group": "labor_read",
     },
+    "web_search": {
+        "domain": "external_search",
+        "intents": ["query_web_search"],
+        "risk": "read",
+        "entities": ["web"],
+        "trigger_examples": ["搜索一下天气新闻", "网上查一下行情"],
+        "anti_examples": ["随便聊聊"],
+        "candidate_group": "external_read",
+    },
 }
 
 

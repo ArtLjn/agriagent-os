@@ -17,6 +17,7 @@ class RuleIntentClassifier:
     _work_order_read_hints = ("作业单", "作业", "采收", "授粉")
     _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
     _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
+    _web_search_hints = ("搜索", "网上查", "新闻")
 
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
@@ -81,6 +82,18 @@ class RuleIntentClassifier:
                 )
             )
 
+        if self._looks_like_web_search(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="external_search",
+                    intent="query_web_search",
+                    risk="read",
+                    entities=["web"],
+                    candidate_tools=["web_search"],
+                    confidence=0.8,
+                )
+            )
+
         if self._looks_like_create_worker(normalized):
             frames.append(
                 IntentFrame(
@@ -121,6 +134,9 @@ class RuleIntentClassifier:
 
     def _looks_like_planting_advice(self, message: str) -> bool:
         return "种" in message and self._has_any(message, self._planting_advice_hints)
+
+    def _looks_like_web_search(self, message: str) -> bool:
+        return self._has_any(message, self._web_search_hints)
 
     def _looks_like_create_worker(self, message: str) -> bool:
         if "工人" not in message:

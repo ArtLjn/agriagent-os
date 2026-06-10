@@ -62,6 +62,17 @@ def test_catalog_metadata_enabled_overrides_disabled_skills() -> None:
     assert catalog.get("web_search").enabled is True
 
 
+def test_explicit_web_search_selects_enabled_search_tool() -> None:
+    tool = _tool("web_search")
+    tool.skill_metadata = type("SkillMetadataStub", (), {"enabled": True})()
+
+    decision = SkillRouter().route("搜索一下天气新闻", [tool, _tool("get_farm_status")])
+
+    assert decision.selected_tools == ["web_search"]
+    assert decision.frames[0].intent == "query_web_search"
+    assert decision.frames[0].risk == "read"
+
+
 def test_catalog_defaults_write_skill_risk() -> None:
     catalog = SkillCatalog.from_tools([_tool("create_cost_record")])
 

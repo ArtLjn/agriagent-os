@@ -355,6 +355,7 @@ class TestFallback:
             "搜索一下天气新闻",
             _make_tools_with_enabled({"web_search": True}),
         )
+        assert "web_search" in result
         assert len(result) <= 3
 
     def test_empty_message_returns_empty(self):
