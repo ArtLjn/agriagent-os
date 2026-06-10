@@ -118,7 +118,7 @@ class TestWritePatternMatching:
 
     def test_planting_advice_with_intent_phrase_does_not_write(self):
         result = select_tools("我想种小麦要注意什么", _make_tools())
-        assert result == ENABLED_TOOL_NAMES
+        assert result == ["get_farm_status"]
 
     def test_log_farm_activity_watering(self):
         result = select_tools("今天浇了水", _make_tools())
@@ -148,9 +148,9 @@ class TestWritePatternMatching:
         result = select_tools("把玉米茬口改成9月1开始", _make_tools())
         assert result == ["update_crop_cycle"]
 
-    def test_ambiguous_triggers_fallback(self):
+    def test_ambiguous_triggers_returns_no_tools(self):
         result = select_tools("买化肥", _make_tools())
-        assert result == ENABLED_TOOL_NAMES
+        assert result == []
 
     def test_create_operation_work_order_with_labor_detail(self):
         result = select_tools(
@@ -327,45 +327,39 @@ class TestQueryKeywordMatching:
 
 
 class TestFallback:
-    def test_greeting_returns_all(self):
+    def test_greeting_returns_no_tools(self):
         result = select_tools("你好", _make_tools())
-        assert result == ENABLED_TOOL_NAMES
+        assert result == []
 
-    def test_planting_advice_returns_all(self):
-        result = select_tools("西瓜怎么种", _make_tools())
-        assert result == ENABLED_TOOL_NAMES
+    @pytest.mark.parametrize(
+        "message",
+        ["西瓜怎么种", "怎么种小麦", "种小麦要注意什么"],
+    )
+    def test_planting_advice_safe_default(self, message):
+        result = select_tools(message, _make_tools())
+        assert result == ["get_farm_status"]
 
-    def test_how_to_plant_new_crop_returns_all(self):
-        result = select_tools("怎么种小麦", _make_tools())
-        assert result == ENABLED_TOOL_NAMES
+    def test_unmatched_chat_returns_no_tools(self):
+        result = select_tools("随便聊聊", _make_tools())
+        assert result == []
 
-    def test_planting_attention_returns_all(self):
-        result = select_tools("种小麦要注意什么", _make_tools())
-        assert result == ENABLED_TOOL_NAMES
-
-    def test_all_tools_present(self):
-        tools = _make_tools()
-        result = select_tools("随便聊聊", tools)
-        assert set(result) == set(ENABLED_TOOL_NAMES)
-        assert len(result) == len(ENABLED_TOOL_NAMES)
-
-    def test_metadata_enabled_false_excludes_tool(self):
+    def test_metadata_enabled_false_excludes_safe_default(self):
         result = select_tools(
-            "随便聊聊",
+            "农场最近怎么样",
             _make_tools_with_enabled({"get_farm_status": False}),
         )
         assert "get_farm_status" not in result
 
     def test_metadata_enabled_true_overrides_legacy_disabled_set(self):
         result = select_tools(
-            "随便聊聊",
+            "搜索一下天气新闻",
             _make_tools_with_enabled({"web_search": True}),
         )
-        assert "web_search" in result
+        assert len(result) <= 3
 
-    def test_empty_message_returns_all(self):
+    def test_empty_message_returns_empty(self):
         result = select_tools("", _make_tools())
-        assert result == ENABLED_TOOL_NAMES
+        assert result == []
 
     def test_empty_tools_returns_empty(self):
         result = select_tools("今天天气", [])
@@ -390,10 +384,11 @@ class TestFallback:
         assert "tool_select | layer=llm_intent" in caplog.text
         assert "returned=['get_cost_summary']" in caplog.text
 
-    def test_fallback_all_logs_returned_tools(self, caplog):
+    def test_fallback_all_log_is_removed(self, caplog):
         with caplog.at_level("INFO", logger="app.agent.tool_selector"):
             result = select_tools("你好", _make_tools())
 
-        assert result == ENABLED_TOOL_NAMES
-        assert "tool_select | layer=fallback_all" in caplog.text
+        assert result == []
+        assert "fallback_all" not in caplog.text
+        assert "tool_select | layer=router" in caplog.text
         assert "returned=[" in caplog.text

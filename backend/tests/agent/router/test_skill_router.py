@@ -131,6 +131,17 @@ def test_unknown_farm_read_uses_safe_default() -> None:
     assert decision.fallback == "safe_read_default"
 
 
+@pytest.mark.parametrize("message", ["西瓜怎么种", "怎么种小麦", "种小麦要注意什么"])
+def test_planting_advice_uses_read_frame(message: str) -> None:
+    tools = [_tool("get_farm_status"), _tool("create_crop_cycle")]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == ["get_farm_status"]
+    assert decision.frames[0].intent == "query_planting_advice"
+    assert decision.frames[0].risk == "read"
+
+
 def test_unknown_write_asks_clarification_without_write_tool() -> None:
     tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
 

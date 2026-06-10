@@ -16,6 +16,7 @@ class RuleIntentClassifier:
     _work_order_hints = ("作业", "采收", "授粉", "安排")
     _work_order_read_hints = ("作业单", "作业", "采收", "授粉")
     _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
+    _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
 
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
@@ -43,6 +44,17 @@ class RuleIntentClassifier:
                     entities=["farm", "crop_cycle"],
                     candidate_tools=["get_farm_status", "get_crop_cycle_info"],
                     confidence=0.85,
+                )
+            )
+        elif self._looks_like_planting_advice(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="planting",
+                    intent="query_planting_advice",
+                    risk="read",
+                    entities=["farm", "crop_cycle"],
+                    candidate_tools=["get_farm_status"],
+                    confidence=0.72,
                 )
             )
         elif self._looks_like_farm_read(normalized):
@@ -106,6 +118,9 @@ class RuleIntentClassifier:
         return self._has_any(message, self._query_hints) and self._has_any(
             message, self._farm_hints
         )
+
+    def _looks_like_planting_advice(self, message: str) -> bool:
+        return "种" in message and self._has_any(message, self._planting_advice_hints)
 
     def _looks_like_create_worker(self, message: str) -> bool:
         if "工人" not in message:
