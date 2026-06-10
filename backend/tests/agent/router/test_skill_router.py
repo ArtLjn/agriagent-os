@@ -193,6 +193,59 @@ def test_unknown_write_asks_clarification_without_write_tool() -> None:
     assert "请补充" in decision.clarification
 
 
+def test_session4_create_worker_and_work_order_keeps_single_write_tool() -> None:
+    tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
+
+    router = SkillRouter()
+    decision = router.route(
+        "我招了一个工人王大妈工资100一天，早上来了让他去5号棚收水稻了",
+        tools,
+    )
+
+    assert [frame.intent for frame in decision.frames] == [
+        "create_worker",
+        "create_work_order",
+    ]
+    assert decision.selected_tools == ["manage_workers"]
+    worker_frame = decision.frames[0]
+    assert worker_frame.params_hint is not None
+    assert worker_frame.params_hint["name"] == "王大妈"
+    assert worker_frame.params_hint["default_unit_price"] == 100
+    assert worker_frame.params_hint["default_pay_type"] == "daily"
+    work_order_frame = decision.frames[1]
+    assert work_order_frame.depends_on == ["create_worker"]
+    assert work_order_frame.params_hint is not None
+    assert work_order_frame.params_hint["unit_price"] == 100
+    assert work_order_frame.params_hint["workers"] == ["王大妈"]
+    assert work_order_frame.params_hint["unit_names"] == ["5号棚"]
+    assert work_order_frame.params_hint["operation_type"] == "采收"
+
+    assert router.build_pending_plan_steps(decision) == [
+        {
+            "step_id": "create_worker",
+            "tool_name": "manage_workers",
+            "params": {
+                "action": "create",
+                "name": "王大妈",
+                "default_pay_type": "daily",
+                "default_unit_price": 100,
+            },
+            "depends_on": [],
+        },
+        {
+            "step_id": "create_work_order",
+            "tool_name": "create_operation_work_order",
+            "params": {
+                "workers": ["王大妈"],
+                "unit_names": ["5号棚"],
+                "operation_type": "采收",
+                "unit_price": 100,
+            },
+            "depends_on": ["create_worker"],
+        },
+    ]
+
+
 @pytest.mark.parametrize("message", ["我的作业单有哪些", "采收作业有哪些"])
 def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
     tools = [_tool("get_operation_work_orders"), _tool("create_operation_work_order")]

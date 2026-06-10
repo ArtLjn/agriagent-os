@@ -4,7 +4,7 @@ from langchain_core.tools import BaseTool
 
 from app.agent.router.catalog import SkillCatalog
 from app.agent.router.classifier import RuleIntentClassifier
-from app.agent.router.models import DisclosureBudget, RouterDecision
+from app.agent.router.models import DisclosureBudget, IntentFrame, RouterDecision
 from app.agent.router.policy import RouterPolicy
 
 
@@ -29,3 +29,38 @@ class SkillRouter:
             frames=frames,
             candidates=catalog.enabled(),
         )
+
+    def build_pending_plan_steps(self, decision: RouterDecision) -> list[dict]:
+        """把多写入意图帧转换为 pending plan 存储步骤。"""
+        write_frames = [
+            frame
+            for frame in decision.frames
+            if frame.requires_confirmation and frame.params_hint
+        ]
+        if len(write_frames) < 2:
+            return []
+
+        return [
+            {
+                "step_id": frame.intent,
+                "tool_name": self._tool_name_for_frame(frame),
+                "params": self._params_for_frame(frame),
+                "depends_on": list(frame.depends_on),
+            }
+            for frame in write_frames
+        ]
+
+    @staticmethod
+    def _tool_name_for_frame(frame: IntentFrame) -> str:
+        if frame.intent == "create_worker":
+            return "manage_workers"
+        if frame.intent == "create_work_order":
+            return "create_operation_work_order"
+        return frame.candidate_tools[0] if frame.candidate_tools else frame.intent
+
+    @staticmethod
+    def _params_for_frame(frame: IntentFrame) -> dict:
+        params = dict(frame.params_hint or {})
+        if frame.intent == "create_worker":
+            params.setdefault("action", "create")
+        return params

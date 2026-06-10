@@ -1,5 +1,7 @@
 """Skill Router 规则意图分类器。"""
 
+import re
+
 from app.agent.router.models import IntentFrame
 
 
@@ -13,7 +15,7 @@ class RuleIntentClassifier:
     _write_entity_hints = ("工人", "作业", "账")
     _worker_create_hints = ("新来", "招了", "新增", "创建")
     _worker_pay_hints = ("工资", "日薪", "每天")
-    _work_order_hints = ("作业", "采收", "授粉", "安排")
+    _work_order_hints = ("作业", "采收", "授粉", "安排", "收")
     _work_order_read_hints = ("作业单", "作业", "采收", "授粉")
     _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
     _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
@@ -116,6 +118,7 @@ class RuleIntentClassifier:
             )
 
         if self._looks_like_create_worker(normalized):
+            worker_params = self._extract_worker_params(normalized)
             frames.append(
                 IntentFrame(
                     domain="labor",
@@ -124,11 +127,18 @@ class RuleIntentClassifier:
                     entities=["worker"],
                     candidate_tools=["manage_workers"],
                     confidence=0.78,
+                    params_hint=worker_params or None,
                     requires_confirmation=True,
                 )
             )
 
         if self._looks_like_create_work_order(normalized):
+            work_order_params = self._extract_work_order_params(normalized)
+            depends_on = (
+                ["create_worker"]
+                if any(frame.intent == "create_worker" for frame in frames)
+                else []
+            )
             frames.append(
                 IntentFrame(
                     domain="operation",
@@ -137,6 +147,8 @@ class RuleIntentClassifier:
                     entities=["operation_work_order"],
                     candidate_tools=["create_operation_work_order"],
                     confidence=0.76,
+                    params_hint=work_order_params or None,
+                    depends_on=depends_on,
                     requires_confirmation=True,
                 )
             )
@@ -187,3 +199,68 @@ class RuleIntentClassifier:
     @staticmethod
     def _has_any(message: str, hints: tuple[str, ...]) -> bool:
         return any(hint in message for hint in hints)
+
+    def _extract_worker_params(self, message: str) -> dict:
+        params: dict = {"default_pay_type": "daily"}
+        name = self._extract_worker_name(message)
+        price = self._extract_unit_price(message)
+        if name:
+            params["name"] = name
+        if price is not None:
+            params["default_unit_price"] = price
+        return params
+
+    def _extract_work_order_params(self, message: str) -> dict:
+        params: dict = {}
+        name = self._extract_worker_name(message)
+        unit_name = self._extract_unit_name(message)
+        unit_price = self._extract_unit_price(message)
+        operation_type = self._extract_operation_type(message)
+        if name:
+            params["workers"] = [name]
+        if unit_name:
+            params["unit_names"] = [unit_name]
+        if operation_type:
+            params["operation_type"] = operation_type
+        if unit_price is not None:
+            params["unit_price"] = unit_price
+        return params
+
+    @staticmethod
+    def _extract_worker_name(message: str) -> str | None:
+        match = re.search(
+            r"(?:工人|员工|师傅)?(?P<name>[\u4e00-\u9fa5]{2,4})(?:工资|日薪|每天)",
+            message,
+        )
+        if match:
+            return match.group("name")
+        match = re.search(
+            r"(?:工人|员工|师傅)(?P<name>[\u4e00-\u9fa5]{2,4})",
+            message,
+        )
+        return match.group("name") if match else None
+
+    @staticmethod
+    def _extract_unit_price(message: str) -> int | None:
+        match = re.search(
+            r"(?:工资|日薪|每天)?\s*"
+            r"(?P<price>\d+)\s*(?:元|块)?\s*(?:一?天|/天|每天)?",
+            message,
+        )
+        return int(match.group("price")) if match else None
+
+    @staticmethod
+    def _extract_unit_name(message: str) -> str | None:
+        match = re.search(r"(?P<unit>\d+\s*号棚)", message)
+        if not match:
+            return None
+        return match.group("unit").replace(" ", "")
+
+    @staticmethod
+    def _extract_operation_type(message: str) -> str | None:
+        if "采收" in message or re.search(r"收(?:水稻|麦|菜|瓜|果|玉米)", message):
+            return "采收"
+        for operation_type in ("授粉", "装车", "整枝", "打杈", "压蔓", "留瓜", "垫瓜"):
+            if operation_type in message:
+                return operation_type
+        return None

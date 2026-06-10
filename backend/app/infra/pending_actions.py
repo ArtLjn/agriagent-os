@@ -12,6 +12,7 @@ from langchain_core.messages import ToolMessage
 from app.infra.pending_action_presenter import (
     build_confirm_message,
     build_confirmation_context,
+    build_plan_confirm_message,
 )
 
 _CONFIRM_PATTERNS = re.compile(r"(确认|好的|是的|没问题|对)")
@@ -356,6 +357,7 @@ __all__ = [
     "detect_user_intent",
     "build_confirm_message",
     "build_confirmation_context",
+    "build_plan_confirm_message",
     "is_pending_tool_message",
     "PENDING_MARKER",
     "_pending",

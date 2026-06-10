@@ -291,6 +291,35 @@ def build_confirm_message(
     return "\n".join(lines)
 
 
+def build_plan_confirm_message(steps) -> str:
+    """构建多步骤 pending plan 的批量确认文案。"""
+    lines = [f"将执行 {len(steps)} 个步骤："]
+    for index, step in enumerate(steps, start=1):
+        tool_name = getattr(step, "tool_name", "")
+        params = getattr(step, "params", {}) or {}
+        lines.append(f"{index}. {_format_plan_step(tool_name, params)}")
+    lines.append("确认执行吗？")
+    return "\n".join(lines)
+
+
+def _format_plan_step(tool_name: str, params: dict) -> str:
+    if tool_name == "manage_workers":
+        action = params.get("action") or "create"
+        name = params.get("name") or "工人"
+        if action == "create":
+            return f"创建工人：{name}"
+        return f"管理工人：{name}"
+
+    if tool_name == "create_operation_work_order":
+        operation_type = params.get("operation_type") or "农事"
+        units = _split_names(params.get("unit_names"))
+        scope = f"（{'、'.join(units)}）" if units else ""
+        return f"创建{operation_type}作业单{scope}"
+
+    action = _SKILL_DISPLAY.get(tool_name, tool_name)
+    return str(action)
+
+
 def _build_create_work_order_context(
     skill_name: str,
     params: dict,
@@ -446,4 +475,8 @@ def _money_text(value: Decimal) -> str:
     return str(value.quantize(Decimal("0.01")))
 
 
-__all__ = ["build_confirmation_context", "build_confirm_message"]
+__all__ = [
+    "build_confirmation_context",
+    "build_confirm_message",
+    "build_plan_confirm_message",
+]
