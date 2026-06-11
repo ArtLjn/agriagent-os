@@ -25,6 +25,7 @@ from app.models.planting import (
     PlantingUnit,
     Worker,
 )
+from app.models.pending_plan import AgentPendingPlan, AgentPendingPlanStep
 
 __all__ = [
     "Farm",
@@ -53,4 +54,6 @@ __all__ = [
     "OperationWorkOrderUnit",
     "Worker",
     "LaborEntry",
+    "AgentPendingPlan",
+    "AgentPendingPlanStep",
 ]

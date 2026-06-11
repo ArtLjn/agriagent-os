@@ -105,6 +105,21 @@ def test_policy_uses_skill_metadata_context_dependencies() -> None:
     assert result.dependency_map["workers"] == ["workers"]
 
 
+def test_router_context_dependencies_drive_selectors() -> None:
+    result = ContextPolicy().resolve(
+        ContextBuildRequest(
+            intent="query",
+            selected_tool_names=[],
+            context_dependencies=["workers", "planting_units"],
+        )
+    )
+
+    selector_names = _selector_names(result)
+    assert {"WorkerSelector", "PlantingUnitSelector"}.issubset(selector_names)
+    assert result.dependency_map["workers"] == ["workers"]
+    assert result.dependency_map["planting_units"] == ["planting_units"]
+
+
 def test_policy_enables_labor_context_for_settle_labor_payment() -> None:
     result = ContextPolicy().resolve(
         ContextBuildRequest(

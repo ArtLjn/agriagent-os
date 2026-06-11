@@ -176,6 +176,7 @@ async def _get_runtime_context_bundle(
     farm_id: int,
     intent: str,
     selected_tool_names: list[str],
+    context_dependencies: list[str] | None = None,
     user_id: str | None = None,
     session_id: str | None = None,
     memory_context_loader=None,
@@ -207,6 +208,7 @@ async def _get_runtime_context_bundle(
             request = ContextBuildRequest(
                 intent=intent,
                 selected_tool_names=list(selected_tool_names),
+                context_dependencies=list(context_dependencies or []),
                 farm_id=farm_id,
                 user_id=user_id,
                 session_id=session_id,
@@ -244,11 +246,17 @@ async def _warm_tool_caches(
     selected_names: list[str],
     farm_id: int,
     farm_ctx: dict,
+    context_dependencies: list[str] | None = None,
 ) -> None:
     """并行预热已选 tool 的底层缓存，2s 超时，失败不影响主流程。"""
     preload_module = importlib.import_module(".".join(["app", "context", "preload"]))
 
-    await preload_module.warm_tool_caches(selected_names, farm_id, farm_ctx)
+    await preload_module.warm_tool_caches(
+        selected_names,
+        farm_id,
+        farm_ctx,
+        context_dependencies=context_dependencies,
+    )
 
 
 __all__ = [

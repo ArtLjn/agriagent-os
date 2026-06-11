@@ -4,6 +4,7 @@ import logging
 import re
 import time
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 
 from langchain_core.messages import ToolMessage
@@ -11,6 +12,7 @@ from langchain_core.messages import ToolMessage
 from app.infra.pending_action_presenter import (
     build_confirm_message,
     build_confirmation_context,
+    build_plan_confirm_message,
 )
 
 _CONFIRM_PATTERNS = re.compile(r"(确认|好的|是的|没问题|对)")
@@ -113,8 +115,40 @@ class PendingAction:
     session_id: str | None = None
 
 
+@dataclass
+class PendingPlanStep:
+    """Pending Plan 中等待确认或执行的步骤。"""
+
+    step_id: str
+    step_index: int
+    tool_name: str
+    params: dict
+    depends_on: list[str]
+    confirmation_state: str = "pending"
+    execution_status: str = "pending"
+    result_payload: dict | None = None
+    error_payload: dict | None = None
+
+
+@dataclass
+class PendingPlan:
+    """待确认的多步骤计划。"""
+
+    plan_id: str
+    farm_id: int
+    session_id: str | None
+    status: str
+    current_step_index: int
+    raw_user_input: str
+    router_decision: dict
+    steps: list[PendingPlanStep]
+    created_at: float
+    expires_at: float | None = None
+
+
 # 内存字典：(farm_id, session_id) -> PendingAction
 _pending: dict[tuple[int, str | None], PendingAction] = {}
+_pending_plans: dict[tuple[int, str | None], PendingPlan] = {}
 
 
 def _pending_key(farm_id: int, session_id: str | None = None) -> tuple[int, str | None]:
@@ -156,6 +190,70 @@ def store_pending(
     return action_id
 
 
+def store_pending_plan(
+    farm_id: int,
+    session_id: str | None,
+    raw_user_input: str,
+    router_decision: dict,
+    steps: list[dict | PendingPlanStep],
+) -> str:
+    """存储 pending plan，返回 plan_id。"""
+    plan_id = uuid.uuid4().hex
+    pending_steps = [
+        _coerce_pending_plan_step(step, index) for index, step in enumerate(steps)
+    ]
+    _pending_plans[_pending_key(farm_id, session_id)] = PendingPlan(
+        plan_id=plan_id,
+        farm_id=farm_id,
+        session_id=session_id,
+        status="pending",
+        current_step_index=0,
+        raw_user_input=raw_user_input,
+        router_decision=deepcopy(router_decision),
+        steps=pending_steps,
+        created_at=time.time(),
+        expires_at=time.time() + _TIMEOUT_SECONDS,
+    )
+    logger.info(
+        "Pending plan 已存储 | farm_id=%d | plan_id=%s | steps=%d",
+        farm_id,
+        plan_id,
+        len(pending_steps),
+    )
+    return plan_id
+
+
+def _coerce_pending_plan_step(
+    step: dict | PendingPlanStep,
+    index: int,
+) -> PendingPlanStep:
+    """兼容 dict 和 PendingPlanStep 两种 pending plan step 输入。"""
+    if isinstance(step, PendingPlanStep):
+        return PendingPlanStep(
+            step_id=step.step_id,
+            step_index=index,
+            tool_name=step.tool_name,
+            params=deepcopy(step.params),
+            depends_on=deepcopy(step.depends_on),
+            confirmation_state=step.confirmation_state,
+            execution_status=step.execution_status,
+            result_payload=deepcopy(step.result_payload),
+            error_payload=deepcopy(step.error_payload),
+        )
+
+    return PendingPlanStep(
+        step_id=str(step.get("step_id") or f"step-{index + 1}"),
+        step_index=index,
+        tool_name=str(step["tool_name"]),
+        params=deepcopy(step.get("params") or {}),
+        depends_on=deepcopy(step.get("depends_on") or []),
+        confirmation_state=str(step.get("confirmation_state") or "pending"),
+        execution_status=str(step.get("execution_status") or "pending"),
+        result_payload=deepcopy(step.get("result_payload")),
+        error_payload=deepcopy(step.get("error_payload")),
+    )
+
+
 def get_pending(farm_id: int, session_id: str | None = None) -> PendingAction | None:
     """获取 pending action，超时则删除返回 None。"""
     key = _pending_key(farm_id, session_id)
@@ -178,13 +276,38 @@ def get_pending(farm_id: int, session_id: str | None = None) -> PendingAction | 
     return action
 
 
+def get_pending_plan(farm_id: int, session_id: str | None = None) -> PendingPlan | None:
+    """获取 pending plan，超时则删除返回 None。"""
+    key = _pending_key(farm_id, session_id)
+    plan = _pending_plans.get(key)
+    if plan is None:
+        return None
+    if plan.expires_at is not None and time.time() > plan.expires_at:
+        logger.warning(
+            "Pending plan 已超时 | farm_id=%d | plan_id=%s",
+            farm_id,
+            plan.plan_id,
+        )
+        del _pending_plans[key]
+        return None
+    logger.debug(
+        "Pending plan 获取 | farm_id=%d | plan_id=%s",
+        farm_id,
+        plan.plan_id,
+    )
+    return plan
+
+
 def remove_pending(farm_id: int, session_id: str | None = None) -> None:
     """删除 pending action。"""
     if session_id is None:
         for key in [key for key in _pending if key[0] == farm_id]:
             _pending.pop(key, None)
+        for key in [key for key in _pending_plans if key[0] == farm_id]:
+            _pending_plans.pop(key, None)
     else:
         _pending.pop(_pending_key(farm_id, session_id), None)
+        _pending_plans.pop(_pending_key(farm_id, session_id), None)
     logger.debug("Pending action 已删除 | farm_id=%d", farm_id)
 
 
@@ -243,16 +366,22 @@ def detect_user_intent(message: str) -> str:
 
 __all__ = [
     "PendingAction",
+    "PendingPlan",
+    "PendingPlanStep",
     "store_pending",
+    "store_pending_plan",
     "get_pending",
+    "get_pending_plan",
     "remove_pending",
     "is_write_skill",
     "detect_user_intent",
     "build_confirm_message",
     "build_confirmation_context",
+    "build_plan_confirm_message",
     "is_pending_tool_message",
     "PENDING_MARKER",
     "_pending",
+    "_pending_plans",
     "WRITE_SKILLS",
     "get_cache_groups_for_skill",
 ]

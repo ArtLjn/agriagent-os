@@ -160,7 +160,7 @@ class TestFunctionCallingE2E:
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.llm_support.SessionLocal")
     @pytest.mark.asyncio
-    async def test_multi_turn_bypasses_pre_filter(
+    async def test_multi_turn_final_answer_binds_no_tools(
         self,
         mock_session,
         mock_get_llm,
@@ -168,25 +168,25 @@ class TestFunctionCallingE2E:
         mock_get_tools,
         mock_executor_tools,
     ):
-        """多轮 tool call 场景下，第二轮应绑定全量工具。"""
+        """多轮 tool call 场景下，final answer 轮不再绑定工具。"""
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
             display_name="老李"
         )
         mock_session.return_value = mock_db
 
-        weather_tool = MagicMock()
-        weather_tool.name = "get_weather_forecast"
+        status_tool = MagicMock()
+        status_tool.name = "get_farm_status"
         cost_tool = MagicMock()
         cost_tool.name = "get_cost_summary"
-        mock_get_tools.return_value = [weather_tool, cost_tool]
-        mock_executor_tools.return_value = [weather_tool, cost_tool]
+        mock_get_tools.return_value = [status_tool, cost_tool]
+        mock_executor_tools.return_value = [status_tool, cost_tool]
 
         tool_call_msg = AIMessage(
             content="",
-            tool_calls=[{"name": "get_weather_forecast", "args": {}, "id": "tc1"}],
+            tool_calls=[{"name": "get_farm_status", "args": {}, "id": "tc1"}],
         )
-        final_msg = AIMessage(content="天气晴，成本方面还不错")
+        final_msg = AIMessage(content="农场状态正常")
 
         mock_llm = MagicMock()
         mock_llm.bind_tools.return_value = mock_llm
@@ -194,11 +194,10 @@ class TestFunctionCallingE2E:
         mock_get_llm.return_value = mock_llm
 
         graph = compile_advisor_graph()
-        await graph.ainvoke({"messages": [HumanMessage(content="看看天气")]})
+        await graph.ainvoke({"messages": [HumanMessage(content="农场最近怎么样")]})
 
         bind_calls = mock_llm.bind_tools.call_args_list
-        assert len(bind_calls) == 2
+        assert len(bind_calls) == 1
         first_bound = [t.name for t in bind_calls[0][0][0]]
-        second_bound = [t.name for t in bind_calls[1][0][0]]
-        assert "get_weather_forecast" in first_bound
-        assert len(second_bound) >= 1
+        assert first_bound == ["get_farm_status"]
+        assert mock_llm.ainvoke.await_count == 2

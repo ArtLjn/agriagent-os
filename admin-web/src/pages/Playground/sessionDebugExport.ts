@@ -1,6 +1,6 @@
+import type { TraceTimeline } from '../../api/admin';
 import type { PendingAction } from '../../api/agent';
 import type { TracePayload } from '../../utils/tracePayload';
-import type { TraceTimeline } from '../../api/admin';
 
 export interface DebugExportMessage {
   role: 'user' | 'assistant' | string;
@@ -27,6 +27,18 @@ export interface SessionDebugSkillCall {
   error_message: string | null;
 }
 
+export interface SessionDebugRouterDiagnostic {
+  round_index: number;
+  input_data: TracePayload;
+  output_data: TracePayload;
+}
+
+export interface SessionDebugPendingPlan {
+  round_index: number;
+  input_data: TracePayload;
+  output_data: TracePayload;
+}
+
 export interface SessionDebugPendingAction {
   message_index: number;
   action_id: string;
@@ -50,6 +62,8 @@ export interface SessionDebugExport {
   pending_actions: SessionDebugPendingAction[];
   trace_request_id: string | null;
   skill_calls: SessionDebugSkillCall[];
+  router_diagnostics: SessionDebugRouterDiagnostic[];
+  pending_plans: SessionDebugPendingPlan[];
 }
 
 export function buildSessionDebugExport({
@@ -81,19 +95,6 @@ export function buildSessionDebugExport({
       },
     ];
   });
-  const skillCalls = (timeline?.rounds ?? []).flatMap((round) => (
-    round.nodes
-      .filter((node) => node.node_type === 'skill_call')
-      .map((node) => ({
-        round_index: round.round_index,
-        skill_name: node.node_name,
-        status: node.status,
-        duration_ms: node.duration_ms,
-        input_data: node.input_data,
-        output_data: node.output_data,
-        error_message: node.error_message,
-      }))
-  ));
 
   return {
     format: 'farm-manager.chat-session-debug.v1',
@@ -104,6 +105,73 @@ export function buildSessionDebugExport({
     used_skills: usedSkills,
     pending_actions: pendingActions,
     trace_request_id: timeline?.request_id ?? null,
-    skill_calls: skillCalls,
+    skill_calls: extractSkillCalls(timeline),
+    router_diagnostics: extractRouterDiagnostics(timeline),
+    pending_plans: extractPendingPlans(timeline),
   };
+}
+
+function extractRouterDiagnostics(
+  timeline: TraceTimeline | null | undefined,
+): SessionDebugRouterDiagnostic[] {
+  if (!timeline?.rounds) {
+    return [];
+  }
+
+  return timeline.rounds.flatMap((round) =>
+    round.nodes
+      .filter((node) => node.node_type === 'skill_router')
+      .map((node) => ({
+        round_index: round.round_index,
+        input_data: node.input_data,
+        output_data: node.output_data,
+      })),
+  );
+}
+
+function extractPendingPlans(
+  timeline: TraceTimeline | null | undefined,
+): SessionDebugPendingPlan[] {
+  if (!timeline?.rounds) {
+    return [];
+  }
+
+  return timeline.rounds.flatMap((round) =>
+    round.nodes
+      .filter(
+        (node) =>
+          node.node_type === 'pending_plan' ||
+          (node.node_type === 'skill_call' && node.node_name === 'pending_plan'),
+      )
+      .map((node) => ({
+        round_index: round.round_index,
+        input_data: node.input_data,
+        output_data: node.output_data,
+      })),
+  );
+}
+
+function extractSkillCalls(
+  timeline: TraceTimeline | null | undefined,
+): SessionDebugSkillCall[] {
+  if (!timeline?.rounds) {
+    return [];
+  }
+
+  return timeline.rounds.flatMap((round) =>
+    round.nodes
+      .filter(
+        (node) =>
+          node.node_type === 'skill_call' && node.node_name !== 'pending_plan',
+      )
+      .map((node) => ({
+        round_index: round.round_index,
+        skill_name: node.node_name,
+        status: node.status,
+        duration_ms: node.duration_ms,
+        input_data: node.input_data,
+        output_data: node.output_data,
+        error_message: node.error_message,
+      })),
+  );
 }

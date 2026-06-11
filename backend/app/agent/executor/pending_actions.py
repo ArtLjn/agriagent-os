@@ -8,10 +8,13 @@ from app.agent.executor.models import PendingActionDecision
 from app.agent.skills import get_langchain_tools
 from app.infra.pending_actions import (
     PendingAction,
+    PendingPlan,
     build_confirm_message,
+    build_plan_confirm_message,
     detect_user_intent,
     get_cache_groups_for_skill,
     get_pending,
+    get_pending_plan,
     remove_pending,
     store_pending,
 )
@@ -208,6 +211,47 @@ async def _confirm_pending(
     )
 
 
+async def _confirm_pending_plan(
+    farm_id: int,
+    plan: PendingPlan,
+    farm_uid: str | None = None,
+    session_id: str | None = None,
+) -> PendingActionDecision:
+    """按顺序执行 pending plan 中的所有写操作步骤。"""
+    results: list[str] = []
+    cleared_groups_by_step: list[dict] = []
+
+    for step in sorted(plan.steps, key=lambda item: item.step_index):
+        result = await _execute_write_skill(
+            farm_id=farm_id,
+            skill_name=step.tool_name,
+            params=step.params,
+            farm_uid=farm_uid,
+        )
+        results.append(result)
+        cache_groups = _get_metadata_cache_groups(
+            step.tool_name,
+            farm_id=farm_id,
+            farm_uid=farm_uid,
+        )
+        cleared_groups = _clear_cache_groups(step.tool_name, cache_groups)
+        cleared_groups_by_step.append(
+            {
+                "step_id": step.step_id,
+                "tool_name": step.tool_name,
+                "cache_groups_cleared": cleared_groups,
+            }
+        )
+
+    remove_pending(farm_id, session_id=session_id)
+    reply_lines = ["已执行："]
+    reply_lines.extend(f"{index}. {result}" for index, result in enumerate(results, 1))
+    return PendingActionDecision.confirmed(
+        "\n".join(reply_lines),
+        metadata={"steps": cleared_groups_by_step},
+    )
+
+
 async def handle_pending_action(
     *,
     farm_id: int,
@@ -216,6 +260,36 @@ async def handle_pending_action(
     session_id: str | None = None,
 ) -> PendingActionDecision:
     """根据用户消息处理当前农场的 pending action。"""
+    pending_plan = get_pending_plan(farm_id, session_id=session_id)
+    if pending_plan is not None:
+        try:
+            intent = detect_user_intent(message)
+            if intent == "confirm":
+                logger.info(
+                    "用户确认执行 pending plan | farm=%s plan=%s steps=%d",
+                    farm_id,
+                    pending_plan.plan_id,
+                    len(pending_plan.steps),
+                )
+                return await _confirm_pending_plan(
+                    farm_id,
+                    pending_plan,
+                    farm_uid=farm_uid,
+                    session_id=session_id,
+                )
+
+            if intent == "cancel":
+                remove_pending(farm_id, session_id=session_id)
+                return PendingActionDecision.canceled()
+
+            confirm = build_plan_confirm_message(pending_plan.steps)
+            reply = f"当前有一条待确认计划，还没有执行。\n{confirm}"
+            return PendingActionDecision.modified(reply=reply, handled=True)
+        except Exception as exc:
+            logger.exception("执行 pending plan 失败")
+            remove_pending(farm_id, session_id=session_id)
+            return PendingActionDecision.failed(f"执行失败：{exc}")
+
     pending = get_pending(farm_id, session_id=session_id)
     if pending is None:
         return PendingActionDecision.unhandled()

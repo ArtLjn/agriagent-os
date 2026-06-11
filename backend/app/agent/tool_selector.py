@@ -6,6 +6,7 @@ import time
 from langchain_core.tools import BaseTool
 from openai import OpenAI
 
+from app.agent.router.service import SkillRouter
 from app.agent.tool_selection_rules import (
     DISABLED_SKILLS,
     PLANTING_ADVICE_HINTS,
@@ -345,14 +346,20 @@ def select_tools(
                 )
                 return result
 
-        tool_names = [t.name for t in all_tools]
+        decision = SkillRouter().route(user_message, all_tools)
+        result = decision.selected_tools[:top_k]
         logger.info(
-            "tool_select | layer=fallback_all | input=%r | returned=%s | total=%d",
+            (
+                "tool_select | layer=router | input=%r | fallback=%s | reason=%s | "
+                "returned=%s | total=%d"
+            ),
             user_message[:80],
-            tool_names,
-            len(tool_names),
+            decision.fallback,
+            decision.reason,
+            result,
+            len(all_tools),
         )
-        return tool_names
+        return result
 
     ordered = [t.name for t in all_tools if t.name in candidates]
     result = ordered[:top_k]
