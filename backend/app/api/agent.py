@@ -40,6 +40,7 @@ from app.services.agent_service import (
     get_advice_history,
 )
 from app.services.conversation_service import ConversationAccessError
+from app.services.session_debug_export_service import build_session_debug_export
 
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -124,6 +125,23 @@ def get_messages_by_session(
         return list_message_items(db, farm=farm, session_id=session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/conversations/{session_id}/debug-export")
+@limiter.limit("10/minute")
+def get_session_debug_export(
+    request: Request,
+    response: Response,
+    session_id: str,
+    simulate_user_id: str | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    farm: Farm = Depends(get_current_farm),
+) -> dict:
+    """导出会话调试 JSON v2。"""
+    if simulate_user_id:
+        _, farm = resolve_stream_user_and_farm(db, current_user, simulate_user_id)
+    return build_session_debug_export(db, farm_id=farm.id, session_id=session_id)
 
 
 @router.get("/daily", response_model=DailyAdviceResponse)
