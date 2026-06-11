@@ -239,16 +239,11 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
     turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
     events = _events_for_turn(turn)
     labels = _labels_by_sample(db, [sample_id]).get(sample_id, [])
-    user_message = _message_by_id(db, turn.user_message_id)
-    assistant_message = _message_by_id(db, turn.assistant_message_id)
     return {
         "sample": _sample_row(turn, labels, events),
-        "quality_labels": _quality_labels(labels),
+        "quality_labels": [row.label for row in labels],
         "labels": [_label_to_dict(row) for row in labels],
-        "messages": {
-            "user": _message_to_dict(user_message),
-            "assistant": _message_to_dict(assistant_message),
-        },
+        "messages": _messages_for_turn(db, turn),
         "turn": _turn_to_dict(turn),
         "router_decision": _router_decision(events),
         "tool_events": _tool_events(events),
@@ -264,8 +259,6 @@ def export_sample_jsonl(db: Session, *, farm_id: int, sample_id: str) -> dict[st
     """导出单条可序列化 JSONL 样本。"""
     detail = get_sample_detail(db, farm_id=farm_id, sample_id=sample_id)
     sample = detail["sample"]
-    user_message = detail["messages"]["user"] or {}
-    assistant_message = detail["messages"]["assistant"] or {}
     payload = {
         "sample_id": sample_id,
         "sample_type": SAMPLE_TYPE_SESSION_TURN,
@@ -273,8 +266,9 @@ def export_sample_jsonl(db: Session, *, farm_id: int, sample_id: str) -> dict[st
         "session_id": sample["session_id"],
         "turn_id": sample["turn_id"],
         "request_id": sample["request_id"],
-        "user_input": user_message.get("content") or sample.get("user_input_preview"),
-        "assistant_reply": assistant_message.get("content")
+        "user_input": _message_content(detail, "user")
+        or sample.get("user_input_preview"),
+        "assistant_reply": _message_content(detail, "assistant")
         or sample.get("assistant_reply_preview"),
         "selected_tools": sample["selected_tools"],
         "actual_tools": sample["actual_tools"],
@@ -307,14 +301,12 @@ def build_case_draft(
 
     detail = get_sample_detail(db, farm_id=farm_id, sample_id=sample_id)
     sample = detail["sample"]
-    user_message = detail["messages"]["user"] or {}
-    assistant_message = detail["messages"]["assistant"] or {}
     quality_labels = detail["quality_labels"]
     label_text = ", ".join(quality_labels) if quality_labels else "unlabeled"
     case_json = {
         "case_id": f"regression-{sample['session_id']}-{sample['turn_id']}",
         "description": f"Data flywheel regression sample {sample_id} ({label_text})",
-        "user_input": user_message.get("content")
+        "user_input": _message_content(detail, "user")
         or sample.get("user_input_preview")
         or "",
         "category": quality_labels[0] if quality_labels else "data_flywheel",
@@ -324,7 +316,7 @@ def build_case_draft(
         "expected_pending_action": None,
         "confirmation_flow": [],
         "expected_database_diff": [],
-        "reply_assertions": _reply_assertions(assistant_message, sample),
+        "reply_assertions": _reply_assertions(detail, sample),
         "metadata": {
             "source": "data_flywheel",
             "source_sample_id": sample_id,
@@ -376,7 +368,7 @@ def _sample_row(
     events: list[dict[str, Any]],
 ) -> dict[str, Any]:
     router_decision = _router_decision(events)
-    quality_labels = _quality_labels(labels)
+    quality_labels = [row.label for row in labels]
     return {
         "sample_id": _sample_id(turn),
         "sample_type": SAMPLE_TYPE_SESSION_TURN,
@@ -396,22 +388,22 @@ def _sample_row(
     }
 
 
-def _quality_labels(labels: list[AgentDataFlywheelLabel]) -> list[str]:
-    return [row.label for row in labels]
+def _messages_for_turn(db: Session, turn: AgentTurn) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in (
+            _message_dict(db, turn.user_message_id),
+            _message_dict(db, turn.assistant_message_id),
+        )
+        if item is not None
+    ]
 
 
-def _message_by_id(db: Session, message_id: int | None) -> ConversationMessage | None:
+def _message_dict(db: Session, message_id: int | None) -> dict[str, Any] | None:
     if message_id is None:
         return None
-    return (
-        db.query(ConversationMessage)
-        .filter(ConversationMessage.id == message_id)
-        .first()
-    )
-
-
-def _message_to_dict(message: ConversationMessage | None) -> dict[str, Any] | None:
-    if message is None:
+    message = db.query(ConversationMessage).filter_by(id=message_id).first()
+    if not message:
         return None
     return {
         "id": message.id,
@@ -460,11 +452,17 @@ def _draft_to_dict(draft: AgentCaseDraft) -> dict[str, Any]:
     }
 
 
+def _message_content(detail: dict[str, Any], role: str) -> str | None:
+    for message in detail["messages"]:
+        if message.get("role") == role:
+            return message.get("content")
+    return None
+
+
 def _reply_assertions(
-    assistant_message: dict[str, Any] | None,
-    sample: dict[str, Any],
+    detail: dict[str, Any], sample: dict[str, Any]
 ) -> list[dict[str, str]]:
-    reply = (assistant_message or {}).get("content") or sample.get(
+    reply = _message_content(detail, "assistant") or sample.get(
         "assistant_reply_preview"
     )
     return [{"contains": reply}] if reply else []

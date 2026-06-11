@@ -221,6 +221,11 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
         "manage_workers",
         "create_operation_work_order",
     ]
+    assert isinstance(detail["messages"], list)
+    assert detail["messages"][0]["role"] == "user"
+    assert detail["messages"][0]["content"] == "王大妈工资100一天，去5号棚收水稻"
+    assert detail["messages"][1]["role"] == "assistant"
+    assert detail["messages"][1]["content"] == "已安排王大妈去5号棚收水稻"
     assert detail["tool_events"][0]["payload"]["tool_name"] == "manage_workers"
     assert detail["pending_lifecycle"][0]["event_type"] == "pending.plan.created"
     assert detail["source"]["event_seq_start"] == 1
@@ -242,6 +247,8 @@ def test_export_sample_jsonl_returns_one_serializable_line(tmp_path):
     assert len(rows) == 1
     assert payload["sample_id"] == sample_id
     assert payload["quality_labels"] == ["missing_wage"]
+    assert payload["user_input"] == "王大妈工资100一天，去5号棚收水稻"
+    assert payload["assistant_reply"] == "已安排王大妈去5号棚收水稻"
     db.close()
 
 
@@ -262,6 +269,9 @@ def test_build_case_draft_from_sample(tmp_path):
     assert draft["status"] == "draft"
     assert draft["target_type"] == "evaluation_replay"
     assert draft["case_json"]["user_input"] == "王大妈工资100一天，去5号棚收水稻"
+    assert draft["case_json"]["reply_assertions"] == [
+        {"contains": "已安排王大妈去5号棚收水稻"}
+    ]
     assert draft["case_json"]["expected_skills"][0]["name"] == "manage_workers"
     assert draft["case_json"]["expected_pending_action"] == {
         "skill_name": "manage_workers",
