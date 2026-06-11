@@ -44,8 +44,8 @@ def _store_session4_plan() -> None:
                 "step_id": "create_work_order",
                 "tool_name": "create_operation_work_order",
                 "params": {
-                    "workers": ["王大妈"],
-                    "unit_names": ["5号棚"],
+                    "workers": "王大妈",
+                    "unit_names": "5号棚",
                     "operation_type": "采收",
                     "unit_price": 100,
                 },
@@ -136,8 +136,8 @@ async def test_runtime_tool_flow_stores_pending_plan_without_invoking_write_tool
         "default_unit_price": 100,
     }
     assert pending_plan.steps[1].params == {
-        "workers": ["王大妈"],
-        "unit_names": ["5号棚"],
+        "workers": "王大妈",
+        "unit_names": "5号棚",
         "operation_type": "采收",
         "unit_price": 100,
     }
@@ -263,14 +263,71 @@ async def test_handle_pending_plan_confirm_executes_steps_in_order():
             farm_id=1,
             skill_name="create_operation_work_order",
             params={
-                "workers": ["王大妈"],
-                "unit_names": ["5号棚"],
+                "workers": "王大妈",
+                "unit_names": "5号棚",
                 "operation_type": "采收",
                 "unit_price": 100,
             },
             farm_uid="farm-uid-1",
         ),
     ]
+
+
+@pytest.mark.asyncio
+async def test_handle_pending_plan_confirm_normalizes_legacy_list_args():
+    store_pending_plan(
+        farm_id=1,
+        session_id="session4",
+        raw_user_input="今天来了一个工人李1工资100一天他收水稻厉害今天让他去大豆地采收",
+        router_decision={"selected_tools": ["manage_workers"]},
+        steps=[
+            {
+                "step_id": "create_worker",
+                "tool_name": "manage_workers",
+                "params": {
+                    "action": "create",
+                    "name": "李1",
+                    "default_unit_price": 100,
+                },
+            },
+            {
+                "step_id": "create_work_order",
+                "tool_name": "create_operation_work_order",
+                "params": {
+                    "workers": ["李1"],
+                    "unit_names": ["大豆地"],
+                    "operation_type": "采收",
+                    "unit_price": 100,
+                },
+                "depends_on": ["create_worker"],
+            },
+        ],
+    )
+
+    with patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        mock_execute.side_effect = ["已创建工人", "已创建农事作业单"]
+        decision = await handle_pending_action(
+            farm_id=1,
+            session_id="session4",
+            message="确认",
+            farm_uid="farm-uid-1",
+        )
+
+    assert decision.status == "confirmed"
+    assert mock_execute.await_args_list[1] == call(
+        farm_id=1,
+        skill_name="create_operation_work_order",
+        params={
+            "workers": "李1",
+            "unit_names": "大豆地",
+            "operation_type": "采收",
+            "unit_price": 100,
+        },
+        farm_uid="farm-uid-1",
+    )
 
 
 def test_build_plan_confirm_message_summarizes_multi_step_plan():

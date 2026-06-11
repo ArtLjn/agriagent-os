@@ -65,4 +65,8 @@ class SkillRouter:
         params = deepcopy(frame.params_hint or {})
         if frame.intent == "create_worker":
             params.setdefault("action", "create")
+        if frame.intent == "create_work_order":
+            for key in ("workers", "unit_names"):
+                if isinstance(params.get(key), list):
+                    params[key] = ",".join(str(item) for item in params[key])
         return params

@@ -252,8 +252,8 @@ def test_session4_create_worker_and_work_order_keeps_single_write_tool() -> None
             "step_id": "create_work_order",
             "tool_name": "create_operation_work_order",
             "params": {
-                "workers": ["王大妈"],
-                "unit_names": ["5号棚"],
+                "workers": "王大妈",
+                "unit_names": "5号棚",
                 "operation_type": "采收",
                 "unit_price": 100,
             },
@@ -322,8 +322,8 @@ def test_multi_intent_worker_name_with_digit_and_field_name_are_extracted() -> N
             "step_id": "create_work_order",
             "tool_name": "create_operation_work_order",
             "params": {
-                "workers": ["李1"],
-                "unit_names": ["大豆地"],
+                "workers": "李1",
+                "unit_names": "大豆地",
                 "operation_type": "采收",
                 "unit_price": 100,
             },
@@ -343,7 +343,7 @@ def test_build_pending_plan_steps_deep_copies_params_hint() -> None:
     )
 
     steps = router.build_pending_plan_steps(decision)
-    steps[1]["params"]["workers"].append("李师傅")
+    steps[1]["params"]["workers"] = "王大妈,李师傅"
 
     assert work_order_frame.params_hint is not None
     assert work_order_frame.params_hint["workers"] == ["王大妈"]

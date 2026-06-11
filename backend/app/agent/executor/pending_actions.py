@@ -222,10 +222,11 @@ async def _confirm_pending_plan(
     cleared_groups_by_step: list[dict] = []
 
     for step in sorted(plan.steps, key=lambda item: item.step_index):
+        params = _normalize_pending_plan_step_params(step.tool_name, step.params)
         result = await _execute_write_skill(
             farm_id=farm_id,
             skill_name=step.tool_name,
-            params=step.params,
+            params=params,
             farm_uid=farm_uid,
         )
         results.append(result)
@@ -250,6 +251,16 @@ async def _confirm_pending_plan(
         "\n".join(reply_lines),
         metadata={"steps": cleared_groups_by_step},
     )
+
+
+def _normalize_pending_plan_step_params(tool_name: str, params: dict) -> dict:
+    """把历史 pending plan 参数转换为对应 skill schema 可接受的形态。"""
+    normalized = dict(params or {})
+    if tool_name == "create_operation_work_order":
+        for key in ("workers", "unit_names"):
+            if isinstance(normalized.get(key), list):
+                normalized[key] = ",".join(str(item) for item in normalized[key])
+    return normalized
 
 
 async def handle_pending_action(
