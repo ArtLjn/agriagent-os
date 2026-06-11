@@ -15,6 +15,7 @@ from app.models.conversation import (
     ConversationMessage,
     ConversationStatus,
 )
+from app.models.agent_turn import AgentTurn
 from app.models.feedback import FeedbackRecord
 from app.models.user_setting import UserSetting
 from app.models.simulation import SimulationRun, SimulationResultRecord
@@ -45,6 +46,7 @@ __all__ = [
     "Conversation",
     "ConversationMessage",
     "ConversationStatus",
+    "AgentTurn",
     "FeedbackRecord",
     "UserSetting",
     "SimulationRun",

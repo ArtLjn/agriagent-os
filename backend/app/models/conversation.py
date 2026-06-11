@@ -2,7 +2,7 @@
 
 import enum
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -29,6 +29,11 @@ class Conversation(Base):
     last_active_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    summary = Column(Text, nullable=True)
+    summary_updated_at = Column(DateTime(timezone=True), nullable=True)
+    last_turn_id = Column(Integer, nullable=True)
+    last_event_seq = Column(Integer, nullable=True)
+    meta_json = Column(JSON, nullable=True)
 
     messages = relationship(
         "ConversationMessage",
@@ -49,6 +54,9 @@ class ConversationMessage(Base):
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     meta = Column(Text, nullable=True)
+    turn_id = Column(Integer, nullable=True, index=True)
+    content_hash = Column(String(64), nullable=True)
+    meta_json = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     conversation = relationship("Conversation", back_populates="messages")
