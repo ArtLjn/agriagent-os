@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,6 +37,17 @@ const sample: DataFlywheelSample = {
   latency_ms: 920,
   source_type: 'debug_event',
   created_at: '2026-06-11T08:00:00Z',
+};
+
+const anotherSample: DataFlywheelSample = {
+  ...sample,
+  sample_id: 'turn:session-b:4',
+  session_id: 'session-b',
+  turn_id: 4,
+  request_id: 'req:def',
+  user_input_preview: '给李四补一条今天的浇水记录',
+  assistant_reply_preview: '我来记录今天的浇水作业。',
+  token_total: 420,
 };
 
 const detail: DataFlywheelDetail = {
@@ -85,6 +96,32 @@ const detail: DataFlywheelDetail = {
     event_file: 'events/debug.jsonl',
     event_seq_start: 11,
     event_seq_end: 18,
+  },
+};
+
+const anotherDetail: DataFlywheelDetail = {
+  ...detail,
+  sample: anotherSample,
+  labels: [
+    {
+      id: 4,
+      sample_id: anotherSample.sample_id,
+      label: 'bad_reply',
+      comment: '第二条样本备注',
+      annotator_id: 'admin',
+      sample_type: 'turn',
+      session_id: 'session-b',
+      turn_id: 4,
+      request_id: 'req:def',
+    },
+  ],
+  messages: [
+    { role: 'user', content: '给李四补一条今天的浇水记录' },
+    { role: 'assistant', content: '已为李四记录今天的浇水作业。' },
+  ],
+  debug_export: {
+    sample_id: anotherSample.sample_id,
+    request_id: 'req:def',
   },
 };
 
@@ -149,6 +186,61 @@ describe('DataFlywheel 页面', () => {
     expect(await screen.findByText('样本详情')).toBeInTheDocument();
     expect(screen.getByText('selected_tools')).toBeInTheDocument();
     expect(screen.getByText('pending.plan.created')).toBeInTheDocument();
+  });
+
+  it('输入搜索框不会立刻重新请求，点击查询后才使用新 request_id', async () => {
+    const user = userEvent.setup();
+    render(<DataFlywheel />);
+
+    await screen.findByText('帮我查一下张三这个月工资有没有漏记');
+    expect(mockedList).toHaveBeenCalledTimes(1);
+
+    await user.type(screen.getByPlaceholderText('Session / Request ID'), 'req:new');
+    expect(mockedList).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: /查询/ }));
+
+    await waitFor(() => {
+      expect(mockedList).toHaveBeenCalledTimes(2);
+    });
+    expect(mockedList).toHaveBeenLastCalledWith({
+      limit: 50,
+      offset: 0,
+      label: undefined,
+      unannotated_only: undefined,
+      request_id: 'req:new',
+    });
+  });
+
+  it('快速切换样本时旧详情响应不会覆盖新详情', async () => {
+    let resolveFirstDetail: (value: DataFlywheelDetail) => void = () => undefined;
+    let resolveSecondDetail: (value: DataFlywheelDetail) => void = () => undefined;
+    mockedList.mockResolvedValue({ items: [sample, anotherSample], total: 2 });
+    mockedDetail
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveFirstDetail = resolve;
+      }))
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveSecondDetail = resolve;
+      }));
+
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-b:4'));
+
+    await act(async () => {
+      resolveSecondDetail(anotherDetail);
+    });
+    expect(await screen.findByText('已为李四记录今天的浇水作业。')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveFirstDetail(detail);
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('张三本月工资记录里缺少 6 月 8 日。')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('已为李四记录今天的浇水作业。')).toBeInTheDocument();
   });
 
   it('可以选择工资缺失、填写备注并保存标注', async () => {

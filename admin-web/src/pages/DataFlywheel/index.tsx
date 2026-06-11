@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Card, Checkbox, Col, Input, Row, Select, Space, Typography, message } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
@@ -22,6 +22,12 @@ import SampleQueueTable from './components/SampleQueueTable';
 
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
 
+interface SampleQuery {
+  searchText: string;
+  qualityLabel?: DataFlywheelLabel;
+  unannotatedOnly: boolean;
+}
+
 const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '好回复', value: 'good_reply' },
   { label: '坏回复', value: 'bad_reply' },
@@ -44,24 +50,34 @@ export default function DataFlywheel() {
   const [searchText, setSearchText] = useState('');
   const [qualityLabel, setQualityLabel] = useState<DataFlywheelLabel | undefined>();
   const [unannotatedOnly, setUnannotatedOnly] = useState(false);
+  const [query, setQuery] = useState<SampleQuery>({
+    searchText: '',
+    qualityLabel: undefined,
+    unannotatedOnly: false,
+  });
   const [selectedSample, setSelectedSample] = useState<DataFlywheelSample | null>(null);
   const [detail, setDetail] = useState<DataFlywheelDetail | null>(null);
   const [currentLabel, setCurrentLabel] = useState<DataFlywheelLabel>(DEFAULT_LABEL);
   const [comment, setComment] = useState('');
   const [draft, setDraft] = useState<CaseDraft | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
+  const listRequestSeq = useRef(0);
+  const detailRequestSeq = useRef(0);
 
-  const fetchSamples = useCallback(async () => {
+  const fetchSamples = useCallback(async (nextQuery: SampleQuery) => {
+    const requestSeq = listRequestSeq.current + 1;
+    listRequestSeq.current = requestSeq;
     setLoadingList(true);
     try {
-      const trimmed = searchText.trim();
+      const trimmed = nextQuery.searchText.trim();
       const result = await listDataFlywheelSamples({
         limit: 50,
         offset: 0,
-        label: qualityLabel,
-        unannotated_only: unannotatedOnly || undefined,
+        label: nextQuery.qualityLabel,
+        unannotated_only: nextQuery.unannotatedOnly || undefined,
         request_id: trimmed || undefined,
       });
+      if (requestSeq !== listRequestSeq.current) return;
       setSamples(result.items);
       setTotal(result.total);
       setSelectedSample((current) => {
@@ -72,29 +88,52 @@ export default function DataFlywheel() {
         return null;
       });
     } catch {
-      message.error('加载数据飞轮样本失败');
+      if (requestSeq === listRequestSeq.current) {
+        message.error('加载数据飞轮样本失败');
+      }
     } finally {
-      setLoadingList(false);
+      if (requestSeq === listRequestSeq.current) {
+        setLoadingList(false);
+      }
     }
-  }, [qualityLabel, searchText, unannotatedOnly]);
+  }, []);
 
   useEffect(() => {
-    fetchSamples();
-  }, [fetchSamples]);
+    fetchSamples(query);
+  }, [fetchSamples, query]);
+
+  const submitQuery = () => {
+    setQuery({
+      searchText,
+      qualityLabel,
+      unannotatedOnly,
+    });
+  };
+
+  const refreshSamples = () => {
+    fetchSamples(query);
+  };
 
   const loadDetail = async (sample: DataFlywheelSample) => {
+    const requestSeq = detailRequestSeq.current + 1;
+    detailRequestSeq.current = requestSeq;
     setSelectedSample(sample);
     setLoadingDetail(true);
     try {
       const result = await getSampleDetail(sample.sample_id);
+      if (requestSeq !== detailRequestSeq.current) return;
       setDetail(result);
       const firstLabel = result.labels[0];
       setCurrentLabel(firstLabel?.label ?? DEFAULT_LABEL);
       setComment(firstLabel?.comment ?? '');
     } catch {
-      message.error('加载样本详情失败');
+      if (requestSeq === detailRequestSeq.current) {
+        message.error('加载样本详情失败');
+      }
     } finally {
-      setLoadingDetail(false);
+      if (requestSeq === detailRequestSeq.current) {
+        setLoadingDetail(false);
+      }
     }
   };
 
@@ -119,7 +158,7 @@ export default function DataFlywheel() {
       await addSampleLabel(selectedSample.sample_id, body);
       message.success('标注已保存');
       await loadDetail(selectedSample);
-      await fetchSamples();
+      await fetchSamples(query);
     } catch {
       message.error('保存标注失败');
     } finally {
@@ -163,7 +202,7 @@ export default function DataFlywheel() {
       await markBadCase(selectedSample.sample_id, body);
       message.success('已标记 bad case');
       await loadDetail(selectedSample);
-      await fetchSamples();
+      await fetchSamples(query);
     } catch {
       message.error('标记 bad case 失败');
     } finally {
@@ -204,7 +243,7 @@ export default function DataFlywheel() {
             placeholder="Session / Request ID"
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
-            onPressEnter={fetchSamples}
+            onPressEnter={submitQuery}
             style={{ width: 260 }}
           />
           <Select
@@ -218,10 +257,10 @@ export default function DataFlywheel() {
           <Checkbox checked={unannotatedOnly} onChange={(event) => setUnannotatedOnly(event.target.checked)}>
             只看未标注
           </Checkbox>
-          <Button type="primary" icon={<SearchOutlined />} loading={loadingList} onClick={fetchSamples}>
+          <Button type="primary" icon={<SearchOutlined />} loading={loadingList} onClick={submitQuery}>
             查询
           </Button>
-          <Button icon={<ReloadOutlined />} loading={loadingList} onClick={fetchSamples}>
+          <Button icon={<ReloadOutlined />} loading={loadingList} onClick={refreshSamples}>
             刷新
           </Button>
           <Typography.Text style={{ color: palette.textMuted }}>共 {total} 条</Typography.Text>
