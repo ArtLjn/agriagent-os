@@ -185,6 +185,7 @@ describe('DataFlywheel 页面', () => {
     });
     expect(await screen.findByText('样本详情')).toBeInTheDocument();
     expect(screen.getByText('selected_tools')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /pending lifecycle/ }));
     expect(screen.getByText('pending.plan.created')).toBeInTheDocument();
   });
 
@@ -241,6 +242,20 @@ describe('DataFlywheel 页面', () => {
       expect(screen.queryByText('张三本月工资记录里缺少 6 月 8 日。')).not.toBeInTheDocument();
     });
     expect(screen.getByText('已为李四记录今天的浇水作业。')).toBeInTheDocument();
+  });
+
+  it('可以按会话归档筛选 turn 样本', async () => {
+    mockedList.mockResolvedValue({ items: [sample, anotherSample], total: 2 });
+    render(<DataFlywheel />);
+
+    expect(await screen.findByText('session-a')).toBeInTheDocument();
+    expect(screen.getByText('session-b')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('archive-session-session-b'));
+
+    expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sample-row-turn:session-b:4')).toBeInTheDocument();
+    expect(screen.getByText('会话 turn：1 条')).toBeInTheDocument();
   });
 
   it('可以选择工资缺失、填写备注并保存标注', async () => {

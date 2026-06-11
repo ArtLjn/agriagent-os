@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Checkbox, Col, Input, Row, Select, Space, Typography, message } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
@@ -19,8 +19,10 @@ import AnnotationPanel from './components/AnnotationPanel';
 import CaseDraftPreview from './components/CaseDraftPreview';
 import SampleDetailPanel from './components/SampleDetailPanel';
 import SampleQueueTable from './components/SampleQueueTable';
+import SessionArchivePanel, { type SessionArchiveItem } from './components/SessionArchivePanel';
 
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
+const ALL_ARCHIVE_KEY = '__all__';
 
 interface SampleQuery {
   searchText: string;
@@ -61,8 +63,21 @@ export default function DataFlywheel() {
   const [comment, setComment] = useState('');
   const [draft, setDraft] = useState<CaseDraft | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
+  const [activeArchiveKey, setActiveArchiveKey] = useState(ALL_ARCHIVE_KEY);
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
+
+  const archiveGroups = useMemo(() => buildArchiveGroups(samples), [samples]);
+  const visibleSamples = useMemo(() => {
+    if (activeArchiveKey === ALL_ARCHIVE_KEY) return samples;
+    return samples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
+  }, [activeArchiveKey, samples]);
+
+  useEffect(() => {
+    if (activeArchiveKey === ALL_ARCHIVE_KEY) return;
+    if (archiveGroups.some((group) => group.key === activeArchiveKey)) return;
+    setActiveArchiveKey(ALL_ARCHIVE_KEY);
+  }, [activeArchiveKey, archiveGroups]);
 
   const fetchSamples = useCallback(async (nextQuery: SampleQuery) => {
     const requestSeq = listRequestSeq.current + 1;
@@ -103,6 +118,7 @@ export default function DataFlywheel() {
   }, [fetchSamples, query]);
 
   const submitQuery = () => {
+    setActiveArchiveKey(ALL_ARCHIVE_KEY);
     setQuery({
       searchText,
       qualityLabel,
@@ -268,10 +284,25 @@ export default function DataFlywheel() {
       </Card>
 
       <Row gutter={[14, 14]} align="top">
-        <Col xs={24} xl={14}>
-          <Card title="样本队列" style={cardStyle} styles={{ body: { padding: 0 } }}>
+        <Col xs={24} xl={5}>
+          <SessionArchivePanel
+            groups={archiveGroups}
+            total={samples.length}
+            activeKey={activeArchiveKey}
+            allKey={ALL_ARCHIVE_KEY}
+            onSelect={setActiveArchiveKey}
+          />
+        </Col>
+
+        <Col xs={24} xl={8}>
+          <Card
+            title="会话 turn"
+            extra={<Typography.Text style={{ color: palette.textMuted }}>会话 turn：{visibleSamples.length} 条</Typography.Text>}
+            style={cardStyle}
+            styles={{ body: { padding: 0 } }}
+          >
             <SampleQueueTable
-              samples={samples}
+              samples={visibleSamples}
               loading={loadingList}
               selectedSampleId={selectedSample?.sample_id}
               onSelect={loadDetail}
@@ -279,11 +310,8 @@ export default function DataFlywheel() {
           </Card>
         </Col>
 
-        <Col xs={24} xl={6}>
+        <Col xs={24} xl={11}>
           <SampleDetailPanel detail={detail} loading={loadingDetail} />
-        </Col>
-
-        <Col xs={24} xl={4}>
           <AnnotationPanel
             selectedSample={selectedSample}
             label={currentLabel}
@@ -304,4 +332,45 @@ export default function DataFlywheel() {
       <CaseDraftPreview draft={draft} open={draftOpen} onClose={() => setDraftOpen(false)} />
     </div>
   );
+}
+
+function sessionArchiveKey(sample: DataFlywheelSample) {
+  return sample.session_id ?? 'unknown-session';
+}
+
+function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[] {
+  const groups = new Map<string, SessionArchiveItem>();
+
+  samples.forEach((sample) => {
+    const key = sessionArchiveKey(sample);
+    const current = groups.get(key);
+    const isBadCase =
+      sample.quality_labels.includes('bad_reply') ||
+      sample.quality_labels.includes('wrong_tool_selection') ||
+      sample.quality_labels.includes('pending_missed') ||
+      sample.quality_labels.includes('hallucinated_execution');
+
+    if (!current) {
+      groups.set(key, {
+        key,
+        sessionId: sample.session_id,
+        total: 1,
+        unannotated: sample.annotation_status === 'unlabeled' ? 1 : 0,
+        badCases: isBadCase ? 1 : 0,
+        latestTurnId: sample.turn_id,
+        latestInputPreview: sample.user_input_preview,
+      });
+      return;
+    }
+
+    current.total += 1;
+    current.unannotated += sample.annotation_status === 'unlabeled' ? 1 : 0;
+    current.badCases += isBadCase ? 1 : 0;
+    if (sample.turn_id >= current.latestTurnId) {
+      current.latestTurnId = sample.turn_id;
+      current.latestInputPreview = sample.user_input_preview;
+    }
+  });
+
+  return Array.from(groups.values()).sort((left, right) => right.latestTurnId - left.latestTurnId);
 }

@@ -1,4 +1,4 @@
-import { Card, Col, Descriptions, Empty, Row, Space, Spin, Typography } from 'antd';
+import { Card, Col, Descriptions, Empty, Row, Space, Spin, Tabs, Typography } from 'antd';
 import type { CSSProperties } from 'react';
 
 import type { DataFlywheelDetail } from '../../../api/dataFlywheel';
@@ -56,20 +56,36 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
         </Row>
       </Card>
 
-      <Card title="工具对比" style={cardStyle} styles={{ body: { padding: 14 } }}>
-        <ToolComparison selectedTools={detail.sample.selected_tools} actualTools={detail.sample.actual_tools} />
-      </Card>
-
-      <Card title="router decision JSON" style={cardStyle} styles={{ body: { padding: 0 } }}>
-        <JsonBlock value={detail.router_decision} />
-      </Card>
-
-      <Card title="tool events JSON" style={cardStyle} styles={{ body: { padding: 0 } }}>
-        <JsonBlock value={detail.tool_events} />
-      </Card>
-
-      <Card title="pending lifecycle timeline" style={cardStyle} styles={{ body: { padding: 14 } }}>
-        <PendingLifecycleView items={detail.pending_lifecycle} />
+      <Card title="调试上下文" style={cardStyle} styles={{ body: { padding: '4px 14px 14px' } }}>
+        <Tabs
+          items={[
+            {
+              key: 'tools',
+              label: '工具对比',
+              children: <ToolComparison selectedTools={detail.sample.selected_tools} actualTools={detail.sample.actual_tools} />,
+            },
+            {
+              key: 'pending',
+              label: 'pending lifecycle',
+              children: <PendingLifecycleView items={detail.pending_lifecycle} />,
+            },
+            {
+              key: 'router',
+              label: 'router JSON',
+              children: <JsonBlock value={detail.router_decision} />,
+            },
+            {
+              key: 'tool-events',
+              label: 'tool events',
+              children: <JsonBlock value={detail.tool_events} />,
+            },
+            {
+              key: 'debug',
+              label: 'debug export',
+              children: <JsonBlock value={detail.debug_export} />,
+            },
+          ]}
+        />
       </Card>
 
       <Card title="样本元信息" style={cardStyle} styles={{ body: { padding: 14 } }}>
@@ -89,10 +105,6 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
           </Descriptions.Item>
         </Descriptions>
       </Card>
-
-      <Card title="debug_export" style={cardStyle} styles={{ body: { padding: 0 } }}>
-        <JsonBlock value={detail.debug_export} />
-      </Card>
     </Space>
   );
 }
@@ -107,7 +119,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const sectionStyle: CSSProperties = {
-  minHeight: 150,
+  minHeight: 168,
   background: palette.bg,
   border: `1px solid ${palette.borderSoft}`,
   borderRadius: 6,

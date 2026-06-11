@@ -67,18 +67,18 @@ export default function AnnotationPanel({
   };
 
   return (
-    <Card title="标注与动作" style={cardStyle} styles={{ body: { padding: 14 } }}>
-      <Space direction="vertical" size={14} style={{ width: '100%' }}>
+    <Card title="标注与动作" style={{ ...cardStyle, marginTop: 14 }} styles={{ body: { padding: 14 } }}>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <div>
           <Typography.Text style={{ color: palette.textMuted }}>质量标签</Typography.Text>
           <Radio.Group
             value={label}
             onChange={(event) => onLabelChange(event.target.value)}
             disabled={disabled}
-            style={{ display: 'grid', gap: 8, marginTop: 10 }}
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}
           >
             {labelOptions.map((option) => (
-              <Radio key={option.value} value={option.value} style={{ color: palette.text }}>
+              <Radio key={option.value} value={option.value} style={{ color: palette.text, marginInlineEnd: 0 }}>
                 {option.label}
               </Radio>
             ))}
@@ -93,24 +93,26 @@ export default function AnnotationPanel({
           placeholder="记录判断依据、复现条件或后续处理建议"
         />
 
-        <Button type="primary" icon={<SaveOutlined />} block disabled={disabled} loading={saving} onClick={onSave}>
-          保存标注
-        </Button>
-        <Button icon={<CopyOutlined />} block disabled={disabled} onClick={onCopyDebug}>
-          复制 debug JSON
-        </Button>
-        <Button icon={<DownloadOutlined />} block disabled={disabled} loading={acting} onClick={onExportJsonl}>
-          导出 JSONL
-        </Button>
-        <Button danger icon={<BugOutlined />} block disabled={disabled} loading={acting} onClick={onMarkBadCase}>
-          标记 bad case
-        </Button>
-        <Button icon={<ExperimentOutlined />} block disabled={disabled} loading={acting} onClick={onCreateRegressionCase}>
-          生成 regression case
-        </Button>
-        <Button icon={<BranchesOutlined />} block disabled={disabled} onClick={handleTraceJump}>
-          跳转 TraceMonitor
-        </Button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 8 }}>
+          <Button type="primary" icon={<SaveOutlined />} disabled={disabled} loading={saving} onClick={onSave}>
+            保存标注
+          </Button>
+          <Button icon={<CopyOutlined />} disabled={disabled} onClick={onCopyDebug}>
+            复制 debug JSON
+          </Button>
+          <Button icon={<DownloadOutlined />} disabled={disabled} loading={acting} onClick={onExportJsonl}>
+            导出 JSONL
+          </Button>
+          <Button danger icon={<BugOutlined />} disabled={disabled} loading={acting} onClick={onMarkBadCase}>
+            标记 bad case
+          </Button>
+          <Button icon={<ExperimentOutlined />} disabled={disabled} loading={acting} onClick={onCreateRegressionCase}>
+            生成 regression case
+          </Button>
+          <Button icon={<BranchesOutlined />} disabled={disabled} onClick={handleTraceJump}>
+            跳转 TraceMonitor
+          </Button>
+        </div>
       </Space>
     </Card>
   );
