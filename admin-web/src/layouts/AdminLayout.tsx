@@ -21,6 +21,7 @@ import {
   RobotOutlined,
   ToolOutlined,
   ControlOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authStore } from '../stores/authStore';
@@ -60,6 +61,7 @@ const menuGroups = [
       { key: '/dev/traces', icon: <BranchesOutlined />, label: '链路追踪' },
       { key: '/dev/tokens', icon: <BarChartOutlined />, label: 'Token 看板' },
       { key: '/dev/playground', icon: <MessageOutlined />, label: 'Playground' },
+      { key: '/dev/data-flywheel', icon: <DatabaseOutlined />, label: '数据飞轮' },
       { key: '/dev/skills', icon: <AppstoreOutlined />, label: 'Skill 注册表' },
       { key: '/dev/prompts', icon: <FileSearchOutlined />, label: 'Prompt 检查器' },
       { key: '/dev/simulation', icon: <ExperimentOutlined />, label: '仿真测试' },
@@ -90,6 +92,7 @@ const pageTitles: Record<string, string> = {
   '/dev/traces': '链路追踪',
   '/dev/tokens': 'Token 看板',
   '/dev/playground': 'Playground',
+  '/dev/data-flywheel': '数据飞轮',
   '/dev/skills': 'Skill 注册表',
   '/dev/prompts': 'Prompt 检查器',
   '/dev/simulation': '仿真测试',
