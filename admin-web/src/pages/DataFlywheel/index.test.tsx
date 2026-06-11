@@ -72,7 +72,7 @@ const detail: DataFlywheelDetail = {
   ],
   pending_lifecycle: [
     {
-      stage: 'pending.plan.created',
+      event_type: 'pending.plan.created',
       at: '2026-06-11T08:00:01Z',
       payload: { skill: 'wage.list' },
     },

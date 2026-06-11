@@ -8,7 +8,7 @@ interface PendingLifecycleViewProps {
 }
 
 function getStage(item: Record<string, unknown>) {
-  return String(item.stage ?? item.event ?? item.type ?? 'pending.event');
+  return String(item.event_type ?? item.stage ?? item.event ?? item.type ?? 'pending.event');
 }
 
 function getTime(item: Record<string, unknown>) {
