@@ -100,7 +100,9 @@ def list_conversation_items(
     conversations = list_conversations(db, farm_id=farm.id, limit=limit)
     items: list[ConversationListItem] = []
     for c in conversations:
-        title, preview, category = _build_conversation_summary(db, c.session_id, farm.id)
+        title, preview, category = _build_conversation_summary(
+            db, c.session_id, farm.id
+        )
         items.append(
             ConversationListItem(
                 id=c.id,

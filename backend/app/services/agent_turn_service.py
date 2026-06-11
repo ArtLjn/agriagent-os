@@ -114,7 +114,9 @@ def mark_event_range(
     return turn
 
 
-def get_turns_for_session(db: Session, *, farm_id: int, session_id: str) -> list[AgentTurn]:
+def get_turns_for_session(
+    db: Session, *, farm_id: int, session_id: str
+) -> list[AgentTurn]:
     """按创建顺序返回会话 turn。"""
     return (
         db.query(AgentTurn)

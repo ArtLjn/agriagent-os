@@ -25,7 +25,10 @@ def build_session_debug_export(
     turns = get_turns_for_session(db, farm_id=farm_id, session_id=session_id)
     pending_plans = (
         db.query(AgentPendingPlan)
-        .filter(AgentPendingPlan.farm_id == farm_id, AgentPendingPlan.session_id == session_id)
+        .filter(
+            AgentPendingPlan.farm_id == farm_id,
+            AgentPendingPlan.session_id == session_id,
+        )
         .order_by(AgentPendingPlan.id.asc())
         .all()
     )
@@ -34,7 +37,9 @@ def build_session_debug_export(
     for turn in turns:
         if not turn.event_file:
             continue
-        rows = read_event_segment(turn.event_file, turn.event_seq_start, turn.event_seq_end)
+        rows = read_event_segment(
+            turn.event_file, turn.event_seq_start, turn.event_seq_end
+        )
         if rows:
             events.extend(rows)
         else:
@@ -72,7 +77,9 @@ def build_session_debug_export(
                 "role": message.role,
                 "content": message.content,
                 "meta": message.meta_json,
-                "created_at": message.created_at.isoformat() if message.created_at else None,
+                "created_at": message.created_at.isoformat()
+                if message.created_at
+                else None,
             }
             for message in messages
         ],

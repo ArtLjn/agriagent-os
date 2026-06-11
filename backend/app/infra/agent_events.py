@@ -92,9 +92,13 @@ class AgentEventWriter:
                 payload=payload,
             )
             with path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(event.to_dict(), ensure_ascii=False, default=str))
+                handle.write(
+                    json.dumps(event.to_dict(), ensure_ascii=False, default=str)
+                )
                 handle.write("\n")
-            return AgentEventWriteResult(status="success", event_file=str(path), seq=seq)
+            return AgentEventWriteResult(
+                status="success", event_file=str(path), seq=seq
+            )
         except Exception as exc:
             logger.warning(
                 "Agent event 写入失败 | farm_id=%s session_id=%s event_type=%s error=%s",

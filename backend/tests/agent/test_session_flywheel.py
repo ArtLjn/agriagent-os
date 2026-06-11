@@ -55,7 +55,9 @@ def test_build_message_meta_keeps_only_light_fields():
 
 def test_recorder_records_user_and_assistant_messages_turn_and_events(tmp_path):
     db = Session()
-    conv = get_or_create_conversation(db, farm_id=1, session_id="sess-flow", user_id="user-1")
+    conv = get_or_create_conversation(
+        db, farm_id=1, session_id="sess-flow", user_id="user-1"
+    )
     recorder = SessionFlywheelRecorder(event_base_dir=tmp_path)
 
     started = recorder.start_turn(

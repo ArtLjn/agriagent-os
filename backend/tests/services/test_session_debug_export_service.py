@@ -35,9 +35,13 @@ def setup_function():
     db.close()
 
 
-def test_build_session_debug_export_includes_messages_turns_pending_and_events(tmp_path):
+def test_build_session_debug_export_includes_messages_turns_pending_and_events(
+    tmp_path,
+):
     db = Session()
-    conv = get_or_create_conversation(db, farm_id=1, session_id="sess-debug", user_id="user-1")
+    conv = get_or_create_conversation(
+        db, farm_id=1, session_id="sess-debug", user_id="user-1"
+    )
     user_msg = save_message(db, conv.id, "user", "停用李一凡")
     save_message(db, conv.id, "assistant", "确认停用吗？")
     turn = create_turn(

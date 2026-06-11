@@ -70,7 +70,9 @@ def test_read_event_segment_filters_by_seq(tmp_path):
             payload={"index": index},
         )
 
-    rows = read_event_segment(writer.event_file_for(farm_id=1, session_id="sess-read"), 2, 3)
+    rows = read_event_segment(
+        writer.event_file_for(farm_id=1, session_id="sess-read"), 2, 3
+    )
 
     assert [row["seq"] for row in rows] == [2, 3]
     assert rows[0]["payload"] == {"index": 1}

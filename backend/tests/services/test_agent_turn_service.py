@@ -38,7 +38,9 @@ def test_create_finish_and_mark_event_range():
     conv = Conversation(farm_id=1, user_id="user-1", session_id="sess-turn")
     db.add(conv)
     db.commit()
-    msg = ConversationMessage(conversation_id=conv.id, role="user", content="查一下作物")
+    msg = ConversationMessage(
+        conversation_id=conv.id, role="user", content="查一下作物"
+    )
     db.add(msg)
     db.commit()
 

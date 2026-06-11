@@ -74,8 +74,12 @@ def test_agent_turn_links_messages_and_event_range():
     conv = Conversation(farm_id=1, user_id="user-1", session_id="sess-turn")
     db.add(conv)
     db.commit()
-    user_msg = ConversationMessage(conversation_id=conv.id, role="user", content="查一下作物")
-    assistant_msg = ConversationMessage(conversation_id=conv.id, role="assistant", content="有水稻")
+    user_msg = ConversationMessage(
+        conversation_id=conv.id, role="user", content="查一下作物"
+    )
+    assistant_msg = ConversationMessage(
+        conversation_id=conv.id, role="assistant", content="有水稻"
+    )
     db.add_all([user_msg, assistant_msg])
     db.commit()
 
@@ -117,7 +121,9 @@ def test_pending_plan_and_steps_are_recoverable():
         status="pending",
         current_step_index=0,
         raw_user_input="王大妈工资100一天，去5号棚收水稻",
-        router_decision_json={"selected_tools": ["manage_workers", "create_operation_work_order"]},
+        router_decision_json={
+            "selected_tools": ["manage_workers", "create_operation_work_order"]
+        },
         expires_at=expires_at,
     )
     step1 = AgentPendingPlanStep(

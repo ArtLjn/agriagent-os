@@ -42,7 +42,9 @@ def setup_function():
         )
     )
     db.add(Farm(id=1, name="默认农场", user_id="test-user-001"))
-    conv = get_or_create_conversation(db, farm_id=1, session_id="sess-debug", user_id="test-user-001")
+    conv = get_or_create_conversation(
+        db, farm_id=1, session_id="sess-debug", user_id="test-user-001"
+    )
     save_message(db, conv.id, "user", "查一下作物")
     db.close()
 

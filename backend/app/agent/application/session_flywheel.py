@@ -98,7 +98,10 @@ class SessionFlywheelRecorder:
             session_id=session_id,
             turn_id=turn.id,
             request_id=request_id,
-            payload={"content": user_message, "message_id": user_row.id if user_row else None},
+            payload={
+                "content": user_message,
+                "message_id": user_row.id if user_row else None,
+            },
         )
         return StartedTurn(
             turn_id=turn.id,
@@ -180,7 +183,9 @@ class SessionFlywheelRecorder:
             assistant_row.turn_id = turn.id
             if assistant_row.meta_json is None:
                 assistant_row.meta_json = {}
-            assistant_row.meta_json["event_file"] = event.event_file or started.event_file
+            assistant_row.meta_json["event_file"] = (
+                event.event_file or started.event_file
+            )
             assistant_row.meta_json["event_seq_range"] = [seq_start, seq_end]
             db.commit()
         finish_turn(

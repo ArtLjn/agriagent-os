@@ -186,7 +186,9 @@ async def chat(
             started_turn,
             assistant_reply=reply,
             skills=[],
-            pending_action=pending_action.model_dump(mode="json") if pending_action else None,
+            pending_action=pending_action.model_dump(mode="json")
+            if pending_action
+            else None,
             selected_tools_count=None,
             tool_calls_count=None,
             token_total=None,
@@ -309,7 +311,9 @@ async def stream_chat_events(
                 started_turn,
                 assistant_reply=full_reply,
                 skills=skill_names,
-                pending_action=pending_action.model_dump(mode="json") if pending_action else None,
+                pending_action=pending_action.model_dump(mode="json")
+                if pending_action
+                else None,
                 selected_tools_count=None,
                 tool_calls_count=None,
                 token_total=None,

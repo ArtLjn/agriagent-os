@@ -17,7 +17,9 @@ def build_sft_samples(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """构建回复调优 SFT 样本。"""
     samples: list[dict[str, Any]] = []
     for turn_id, rows in sorted(_events_by_turn(events).items()):
-        user = next((row for row in rows if row.get("event_type") == "message.user"), None)
+        user = next(
+            (row for row in rows if row.get("event_type") == "message.user"), None
+        )
         assistant = next(
             (row for row in rows if row.get("event_type") == "message.assistant"),
             None,
@@ -48,7 +50,9 @@ def build_tool_selection_samples(events: list[dict[str, Any]]) -> list[dict[str,
     """构建工具选择训练/评测样本。"""
     samples: list[dict[str, Any]] = []
     for turn_id, rows in sorted(_events_by_turn(events).items()):
-        user = next((row for row in rows if row.get("event_type") == "message.user"), None)
+        user = next(
+            (row for row in rows if row.get("event_type") == "message.user"), None
+        )
         router = next(
             (row for row in rows if row.get("event_type") == "router.decision"),
             None,

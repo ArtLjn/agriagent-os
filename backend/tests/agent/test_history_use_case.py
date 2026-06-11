@@ -3,7 +3,10 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.agent.application.history_use_case import list_conversation_items, list_message_items
+from app.agent.application.history_use_case import (
+    list_conversation_items,
+    list_message_items,
+)
 from app.core.database import Base
 from app.models.farm import Farm
 from app.services.conversation_service import get_or_create_conversation, save_message
@@ -35,7 +38,9 @@ def setup_function():
 def test_list_conversation_items_uses_summary_without_full_scan():
     db = Session()
     farm = db.query(Farm).filter_by(id=1).one()
-    conv = get_or_create_conversation(db, farm_id=1, session_id="sess-summary", user_id="user-1")
+    conv = get_or_create_conversation(
+        db, farm_id=1, session_id="sess-summary", user_id="user-1"
+    )
     conv.summary = "用户询问水稻种植情况，助手查询了农场状态。"
     conv.meta_json = {"title": "水稻种植", "preview": "当前有水稻", "category": "种植"}
     db.commit()
@@ -51,7 +56,9 @@ def test_list_conversation_items_uses_summary_without_full_scan():
 def test_list_message_items_prefers_meta_json_over_text_meta():
     db = Session()
     farm = db.query(Farm).filter_by(id=1).one()
-    conv = get_or_create_conversation(db, farm_id=1, session_id="sess-meta", user_id="user-1")
+    conv = get_or_create_conversation(
+        db, farm_id=1, session_id="sess-meta", user_id="user-1"
+    )
     msg = save_message(db, conv.id, "assistant", "确认吗？")
     msg.meta_json = {
         "skills": ["manage_workers"],
@@ -59,7 +66,11 @@ def test_list_message_items_prefers_meta_json_over_text_meta():
             "action_id": "a1",
             "skill_name": "manage_workers",
             "params": {"姓名": "李一凡"},
-            "context": {"original_input": "停用李一凡", "extracted_params": {}, "notes": []},
+            "context": {
+                "original_input": "停用李一凡",
+                "extracted_params": {},
+                "notes": [],
+            },
         },
     }
     db.commit()

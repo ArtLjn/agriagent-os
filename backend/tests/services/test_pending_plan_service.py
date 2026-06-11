@@ -46,7 +46,9 @@ def test_create_and_get_active_plan_with_steps():
         farm_id=1,
         session_id="sess-plan",
         raw_user_input="王大妈工资100一天，去5号棚收水稻",
-        router_decision={"selected_tools": ["manage_workers", "create_operation_work_order"]},
+        router_decision={
+            "selected_tools": ["manage_workers", "create_operation_work_order"]
+        },
         steps=[
             {
                 "skill_name": "manage_workers",

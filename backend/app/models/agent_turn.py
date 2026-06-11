@@ -16,14 +16,21 @@ class AgentTurn(Base):
     farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
     session_id = Column(String(64), nullable=False, index=True)
     conversation_id = Column(
-        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True
+        Integer,
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
     request_id = Column(String(16), nullable=False, index=True)
     user_message_id = Column(
-        Integer, ForeignKey("conversation_messages.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("conversation_messages.id", ondelete="SET NULL"),
+        nullable=True,
     )
     assistant_message_id = Column(
-        Integer, ForeignKey("conversation_messages.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("conversation_messages.id", ondelete="SET NULL"),
+        nullable=True,
     )
     input_preview = Column(Text, nullable=True)
     reply_preview = Column(Text, nullable=True)
