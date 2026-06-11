@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../shared/app_identity.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'auth_widgets.dart';
@@ -59,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return AuthPage(
       children: [
         const AuthBrandHeader(
-          title: '农场管家',
+          title: AppIdentity.displayName,
           subtitle: '把农场记录得更轻松',
         ),
         const SizedBox(height: 14),

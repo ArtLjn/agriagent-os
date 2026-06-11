@@ -81,8 +81,10 @@ export default function Costs() {
     try {
       const parsed = await parseCostRecord(smartText.trim());
       setSmartResult(parsed);
-      form.setFieldsValue(buildCostFormValues(parsed));
-      if (selectedCycle) form.setFieldsValue({ cycle_id: selectedCycle });
+      form.setFieldsValue({
+        ...buildCostFormValues(parsed),
+        cycle_id: undefined,
+      });
       message.success('已解析并回填表单');
     } catch {
       message.error('智能解析失败，请检查 AI 配置或改用手填');

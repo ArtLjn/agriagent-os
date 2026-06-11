@@ -125,6 +125,26 @@ class ReportListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AppSkillItem(BaseModel):
+    """App 技能展示项。"""
+
+    key: str
+    title: str
+    description: str
+    category: str
+    icon: str
+    icon_color: str
+    recommended: bool = False
+    enabled: bool = True
+
+
+class AppSkillListResponse(BaseModel):
+    """App 技能列表响应。"""
+
+    items: list[AppSkillItem]
+    total: int
+
+
 class ConversationListItem(BaseModel):
     """会话列表项。"""
 

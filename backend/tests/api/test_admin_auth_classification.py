@@ -35,6 +35,10 @@ ADMIN_GUARDRAILS_REQUESTS: list[AdminRequest] = [
     ("GET", "/admin/guardrails-logs", lambda _method: {}),
 ]
 
+APP_SKILL_REQUESTS: list[AdminRequest] = [
+    ("GET", "/agent/skills", lambda _method: {}),
+]
+
 
 @pytest.mark.parametrize(("method", "path", "kwargs_factory"), ADMIN_CONFIG_REQUESTS)
 def test_admin_config_endpoints_reject_anonymous(
@@ -184,6 +188,41 @@ def test_admin_guardrails_endpoints_allow_admin(
             method,
             path,
             headers=admin_headers(),
+            **kwargs_factory(method),
+        )
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.parametrize(("method", "path", "kwargs_factory"), APP_SKILL_REQUESTS)
+def test_app_skill_endpoints_reject_anonymous(
+    db_session,
+    method: str,
+    path: str,
+    kwargs_factory: Callable[[str], dict],
+):
+    """匿名访问 App 技能接口返回 401。"""
+    with auth_override_scope(app):
+        resp = TestClient(app).request(method, path, **kwargs_factory(method))
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["code"] == "AUTH_MISSING_TOKEN"
+
+
+@pytest.mark.parametrize(("method", "path", "kwargs_factory"), APP_SKILL_REQUESTS)
+def test_app_skill_endpoints_allow_regular_user(
+    db_session,
+    method: str,
+    path: str,
+    kwargs_factory: Callable[[str], dict],
+):
+    """普通用户可以访问 App 技能接口。"""
+    ensure_regular_user(db_session)
+    with auth_override_scope(app):
+        resp = TestClient(app).request(
+            method,
+            path,
+            headers=regular_headers(),
             **kwargs_factory(method),
         )
 

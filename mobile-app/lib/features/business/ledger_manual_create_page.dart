@@ -23,12 +23,12 @@ class LedgerManualCreatePage extends StatefulWidget {
 }
 
 class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
-  final _category = TextEditingController(text: '饲料');
-  final _amount = TextEditingController(text: '¥3,680');
-  final _date = TextEditingController(text: '今天 2026-06-09');
-  final _cycle = TextEditingController(text: '西瓜春茬');
-  final _counterparty = TextEditingController(text: 'XX饲料厂');
-  final _note = TextEditingController(text: '买饲料');
+  final _category = TextEditingController();
+  final _amount = TextEditingController();
+  final _date = TextEditingController(text: _todayText());
+  final _cycle = TextEditingController();
+  final _counterparty = TextEditingController();
+  final _note = TextEditingController();
   String _recordType = 'cost';
   String _settlement = 'paid';
   bool _saving = false;
@@ -70,7 +70,8 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -82,17 +83,18 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
         secondaryLabel: '取消',
         primaryLabel: _saving ? '保存中' : '保存记录',
         onPrimary: _save,
+        onSecondary: () => Navigator.of(context).maybePop(),
         showTabs: true,
         onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
-        const BusinessHeroBanner(
+        BusinessHeroBanner(
           title: '手动记账',
           subtitle: '记录收支明细，保存后同步到账本',
           asset: AppAssets.businessLedgerBlueBanner,
           accent: businessBlue,
-          tags: ['今日', '可追溯', '按茬口归集'],
-          metric: '¥3,680',
+          tags: const ['今日', '可追溯', '按茬口归集'],
+          metric: _amount.text.trim().isEmpty ? null : _amount.text.trim(),
         ),
         FormRowsCard(
           title: '记录类型',
@@ -106,33 +108,38 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
             ),
             BusinessFormRow(
               label: '分类',
-              value: '饲料',
+              value: '',
               controller: _category,
+              hintText: '选择或输入分类',
               chevron: true,
             ),
             BusinessFormRow(
               label: '金额',
-              value: '¥3,680',
+              value: '',
               controller: _amount,
+              hintText: '输入金额',
               large: true,
               keyboardType: TextInputType.number,
             ),
             BusinessFormRow(
               label: '日期',
-              value: '今天 2026-06-09',
+              value: '',
               controller: _date,
+              hintText: '选择日期',
               chevron: true,
             ),
             BusinessFormRow(
               label: '关联茬口',
-              value: '西瓜春茬',
+              value: '',
               controller: _cycle,
+              hintText: '可选',
               chevron: true,
             ),
             BusinessFormRow(
               label: '供应商',
-              value: 'XX饲料厂',
+              value: '',
               controller: _counterparty,
+              hintText: '可选',
               chevron: true,
             ),
             SegmentedFormRow(
@@ -143,8 +150,9 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
             ),
             BusinessFormRow(
               label: '备注',
-              value: '买饲料',
+              value: '',
               controller: _note,
+              hintText: '补充说明',
               chevron: true,
             ),
           ],
@@ -155,6 +163,13 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
       ],
     );
   }
+}
+
+String _todayText() {
+  final now = DateTime.now();
+  final month = now.month.toString().padLeft(2, '0');
+  final day = now.day.toString().padLeft(2, '0');
+  return '${now.year}-$month-$day';
 }
 
 class _LedgerHintCard extends StatelessWidget {
@@ -176,7 +191,7 @@ class _LedgerHintCard extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              '手动保存直接调用 /costs，不会假装走未支持的 AI 落库。',
+              '保存后会同步到账本，并保留茬口、供应商和结算状态。',
               style: TextStyle(
                 color: AppColors.greenDark,
                 fontSize: 13,

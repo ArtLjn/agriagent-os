@@ -23,6 +23,7 @@ void main() {
       '/agent/chat': {'reply': '收到'},
       '/agent/conversations': [conversationResponse],
       '/agent/conversations/s1/messages': [messageResponse],
+      '/agent/skills': yayaSkillsResponse,
       '/agent/daily': dailyAdviceResponse,
       '/agent/daily/refresh': dailyAdviceResponse,
       '/agent/report': reportResponse,
@@ -98,6 +99,7 @@ void main() {
     await yaya.sendMessage('今天浇水吗', cycleId: 7, sessionId: 's1');
     await yaya.loadConversations(limit: 10);
     await yaya.loadMessages('s1');
+    final skills = await yaya.loadSkills();
     await dashboard.getDailyAdvice(cycleId: 7);
     await dashboard.refreshDailyAdvice(cycleId: 7);
     await dashboard.createReport(cycleId: 7, reportType: 'weekly');
@@ -157,6 +159,8 @@ void main() {
       'message': '今天浇水吗',
       'session_id': 's1',
     });
+    expect(skills.single.title, '智能记账');
+    expect(adapter.find('GET', '/agent/skills').query, {});
     expect(adapter.find('GET', '/weather/forecast').query, {
       'days': 3,
       'location': '寿光',

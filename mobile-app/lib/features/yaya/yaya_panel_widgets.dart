@@ -643,7 +643,7 @@ class _DrawerUserBar extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(
-              '张',
+              '农',
               style: AppTextStyles.sectionTitle.copyWith(
                 color: AppColors.blue,
               ),
@@ -654,7 +654,7 @@ class _DrawerUserBar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('张三', style: AppTextStyles.listTitle),
+                Text('农友', style: AppTextStyles.listTitle),
                 const SizedBox(height: 2),
                 Text(
                   '农场负责人',
@@ -919,4 +919,40 @@ class _SkillSpec {
   final String subtitle;
   final Color color;
   final Color background;
+}
+
+_SkillSpec _skillSpecFromApi(YayaSkill skill) {
+  final colors = _skillColors(skill.iconColor);
+  return _SkillSpec(
+    icon: _skillIcon(skill.icon),
+    title: skill.title,
+    subtitle: skill.description,
+    color: colors.$1,
+    background: colors.$2,
+  );
+}
+
+IconData _skillIcon(String icon) {
+  return switch (icon) {
+    'clipboard-list' => LucideIcons.notebookText,
+    'receipt-yuan' => LucideIcons.walletCards,
+    'file-pen' => LucideIcons.clipboardPenLine,
+    'user-round' => LucideIcons.handCoins,
+    'layout-grid' => LucideIcons.layers3,
+    'pie-chart' => LucideIcons.chartPie,
+    'cloud-sun' => LucideIcons.cloudSun,
+    'settings' => LucideIcons.settings,
+    _ => LucideIcons.sparkles,
+  };
+}
+
+(Color, Color) _skillColors(String color) {
+  return switch (color) {
+    'green' => (AppColors.greenDark, AppColors.greenSoft),
+    'amber' || 'orange' => (AppColors.amber, AppColors.amberSoft),
+    'purple' => (AppColors.purple, AppColors.purpleSoft),
+    'teal' => (AppColors.teal, AppColors.tealSoft),
+    'gray' => (AppColors.muted, AppColors.surface2),
+    _ => (AppColors.blue, AppColors.blueSoft),
+  };
 }

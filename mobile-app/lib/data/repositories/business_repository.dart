@@ -75,6 +75,10 @@ class BusinessRepository {
     );
   }
 
+  Future<ApiRecord> createFarmLog(Map<String, Object?> data) async {
+    return ApiRecord.fromJson(await client.postMap('/logs', data: data));
+  }
+
   Future<ApiRecord> createWorkOrder(Map<String, Object?> data) async {
     return ApiRecord.fromJson(
       await client.postMap('/planting/work-orders', data: data),

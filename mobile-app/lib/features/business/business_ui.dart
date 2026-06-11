@@ -395,9 +395,24 @@ class _SoftSprout extends StatelessWidget {
 }
 
 class CycleSummaryBanner extends StatelessWidget {
-  const CycleSummaryBanner({super.key, required this.asset});
+  const CycleSummaryBanner({
+    super.key,
+    required this.asset,
+    required this.cycleCount,
+    required this.totalAreaText,
+    required this.currentStageText,
+    required this.activeCount,
+    required this.plannedCount,
+    required this.endedCount,
+  });
 
   final String asset;
+  final int cycleCount;
+  final String totalAreaText;
+  final String currentStageText;
+  final int activeCount;
+  final int plannedCount;
+  final int endedCount;
 
   @override
   Widget build(BuildContext context) {
@@ -453,29 +468,33 @@ class CycleSummaryBanner extends StatelessWidget {
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             left: 18,
             right: 18,
             top: 18,
             child: Row(
               children: [
                 Expanded(
-                  child: _CycleMetric(label: '在种茬口', value: '3'),
+                  child: _CycleMetric(label: '茬口数', value: '$cycleCount'),
                 ),
                 Expanded(
-                  child: _CycleMetric(label: '总面积', value: '18.6亩'),
+                  child: _CycleMetric(label: '总面积', value: totalAreaText),
                 ),
                 Expanded(
-                  child: _CycleMetric(label: '今日阶段', value: '苗期管理'),
+                  child: _CycleMetric(label: '当前阶段', value: currentStageText),
                 ),
               ],
             ),
           ),
-          const Positioned(
+          Positioned(
             left: 18,
             right: 18,
             bottom: 14,
-            child: _CycleStatusBar(),
+            child: _CycleStatusBar(
+              activeCount: activeCount,
+              plannedCount: plannedCount,
+              endedCount: endedCount,
+            ),
           ),
         ],
       ),
@@ -484,7 +503,15 @@ class CycleSummaryBanner extends StatelessWidget {
 }
 
 class _CycleStatusBar extends StatelessWidget {
-  const _CycleStatusBar();
+  const _CycleStatusBar({
+    required this.activeCount,
+    required this.plannedCount,
+    required this.endedCount,
+  });
+
+  final int activeCount;
+  final int plannedCount;
+  final int endedCount;
 
   @override
   Widget build(BuildContext context) {
@@ -496,28 +523,28 @@ class _CycleStatusBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
       ),
-      child: const Row(
+      child: Row(
         children: [
           Expanded(
             child: _CycleChip(
               icon: LucideIcons.sprout,
-              label: '在种 3',
+              label: '在种 $activeCount',
               color: businessGreen,
             ),
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(
             child: _CycleChip(
               icon: LucideIcons.calendarDays,
-              label: '计划 1',
+              label: '计划 $plannedCount',
               color: businessBlue,
             ),
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           Expanded(
             child: _CycleChip(
               icon: LucideIcons.circleCheck,
-              label: '已结束 2',
+              label: '已结束 $endedCount',
               color: AppColors.subtle,
             ),
           ),
@@ -531,9 +558,11 @@ class TemplateLibraryBanner extends StatelessWidget {
   const TemplateLibraryBanner({
     super.key,
     required this.asset,
+    required this.templateCount,
   });
 
   final String asset;
+  final int templateCount;
 
   @override
   Widget build(BuildContext context) {
@@ -596,7 +625,9 @@ class TemplateLibraryBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '已创建 6 个作物模板，生成茬口更快',
+                  templateCount == 0
+                      ? '还没有作物模板，可新建模板后复用'
+                      : '已创建 $templateCount 个作物模板，生成茬口更快',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.body.copyWith(
@@ -618,9 +649,17 @@ class WorkerSummaryBanner extends StatelessWidget {
   const WorkerSummaryBanner({
     super.key,
     required this.asset,
+    required this.unpaidText,
+    required this.workerCount,
+    required this.monthlyWorkCount,
+    required this.relatedCycleCount,
   });
 
   final String asset;
+  final String unpaidText;
+  final int workerCount;
+  final int monthlyWorkCount;
+  final int relatedCycleCount;
 
   @override
   Widget build(BuildContext context) {
@@ -680,7 +719,7 @@ class WorkerSummaryBanner extends StatelessWidget {
               ),
             ),
           ),
-          const Positioned(
+          Positioned(
             left: 0,
             right: 0,
             bottom: 4,
@@ -689,34 +728,34 @@ class WorkerSummaryBanner extends StatelessWidget {
                 Expanded(
                   child: _WorkerMetric(
                     label: '未结',
-                    value: '1,260',
+                    value: unpaidText,
                     unit: '元',
                     color: AppColors.red,
                   ),
                 ),
-                _VerticalSoftDivider(),
+                const _VerticalSoftDivider(),
                 Expanded(
                   child: _WorkerMetric(
                     label: '工人',
-                    value: '8',
+                    value: '$workerCount',
                     unit: '',
                     color: AppColors.ink,
                   ),
                 ),
-                _VerticalSoftDivider(),
+                const _VerticalSoftDivider(),
                 Expanded(
                   child: _WorkerMetric(
                     label: '本月用工',
-                    value: '12',
+                    value: '$monthlyWorkCount',
                     unit: '',
                     color: AppColors.ink,
                   ),
                 ),
-                _VerticalSoftDivider(),
+                const _VerticalSoftDivider(),
                 Expanded(
                   child: _WorkerMetric(
                     label: '相关茬口',
-                    value: '3',
+                    value: '$relatedCycleCount',
                     unit: '',
                     color: AppColors.ink,
                   ),
@@ -900,9 +939,6 @@ class _CycleChip extends StatelessWidget {
 }
 
 String _compactBannerTag(String tag) {
-  if (tag.contains('在种')) return '在种 3';
-  if (tag.contains('计划')) return '计划 1';
-  if (tag.contains('已结束')) return '已结束 2';
   return tag;
 }
 
@@ -1063,6 +1099,7 @@ class BusinessFormRow extends StatelessWidget {
     this.chevron = false,
     this.keyboardType,
     this.onTap,
+    this.hintText,
   });
 
   final String label;
@@ -1072,6 +1109,7 @@ class BusinessFormRow extends StatelessWidget {
   final bool chevron;
   final TextInputType? keyboardType;
   final VoidCallback? onTap;
+  final String? hintText;
 
   @override
   Widget build(BuildContext context) {
@@ -1100,7 +1138,12 @@ class BusinessFormRow extends StatelessWidget {
               fontWeight: large ? FontWeight.w900 : FontWeight.w600,
               letterSpacing: 0,
             ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
+              hintText: hintText ?? (value.isEmpty ? null : value),
+              hintStyle: AppTextStyles.body.copyWith(
+                color: AppColors.subtle,
+                fontWeight: FontWeight.w500,
+              ),
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
@@ -1298,6 +1341,7 @@ class BottomActions extends StatelessWidget {
     required this.secondaryLabel,
     required this.primaryLabel,
     required this.onPrimary,
+    this.onSecondary,
     this.showTabs = false,
     this.onBottomTabChanged,
   });
@@ -1305,6 +1349,7 @@ class BottomActions extends StatelessWidget {
   final String secondaryLabel;
   final String primaryLabel;
   final VoidCallback onPrimary;
+  final VoidCallback? onSecondary;
   final bool showTabs;
   final ValueChanged<int>? onBottomTabChanged;
 
@@ -1324,6 +1369,7 @@ class BottomActions extends StatelessWidget {
               foreground: businessBlue,
               background: Colors.white,
               borderColor: businessBlue,
+              onTap: onSecondary,
             ),
           ),
           const SizedBox(width: 14),
@@ -2050,37 +2096,42 @@ class StageEditRow extends StatelessWidget {
 }
 
 class AddDashedRow extends StatelessWidget {
-  const AddDashedRow({super.key, required this.label});
+  const AddDashedRow({super.key, required this.label, this.onTap});
 
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      margin: const EdgeInsets.fromLTRB(62, 2, 62, 16),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: businessGreen.withValues(alpha: 0.52),
-          style: BorderStyle.solid,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(LucideIcons.circlePlus, color: businessGreen, size: 24),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: AppTextStyles.sectionTitle.copyWith(
-              color: businessGreen,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        margin: const EdgeInsets.fromLTRB(62, 2, 62, 16),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: businessGreen.withValues(alpha: 0.52),
+            style: BorderStyle.solid,
           ),
-        ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(LucideIcons.circlePlus, color: businessGreen, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTextStyles.sectionTitle.copyWith(
+                color: businessGreen,
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

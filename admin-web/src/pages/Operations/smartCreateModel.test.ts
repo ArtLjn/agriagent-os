@@ -1,7 +1,12 @@
 import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
 
-import { buildCycleFormValues, buildTemplateFormValues, normalizeSmartResult } from './smartCreateModel';
+import {
+  buildCycleFormValues,
+  buildTemplateFormValues,
+  inferSmartFillScene,
+  normalizeSmartResult,
+} from './smartCreateModel';
 
 describe('smartCreateModel', () => {
   it('把智能作物模板解析结果转换为表单值', () => {
@@ -61,5 +66,20 @@ describe('smartCreateModel', () => {
       sourceScene: 'inventory.item',
       draft,
     });
+  });
+
+  it('根据语义判断作物模板解析场景', () => {
+    expect(inferSmartFillScene('我要种8424西瓜，生成完整生长阶段')).toBe('crop.template');
+    expect(inferSmartFillScene('帮我新建一个番茄模板')).toBe('crop.template');
+  });
+
+  it('根据语义判断茬口解析场景', () => {
+    expect(inferSmartFillScene('4月1日在东棚种一茬8424西瓜')).toBe('crop.cycle');
+    expect(inferSmartFillScene('春茬辣椒种植在2号棚')).toBe('crop.cycle');
+  });
+
+  it('根据语义判断记账解析场景', () => {
+    expect(inferSmartFillScene('今天买复合肥128.5元，记到春季西瓜')).toBe('ledger.record');
+    expect(inferSmartFillScene('欠老王农药钱两百块')).toBe('ledger.record');
   });
 });

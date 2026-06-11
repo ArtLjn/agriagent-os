@@ -11,7 +11,10 @@
 ### 主 App 五个底部 Tab 页面
 
 - `main-pages/home.png`：首页，当前确认为 AI 数据驾驶舱版本
-- `main-pages/record.png`：记录/工作台，AI 帮填与手动免费路径并存
+- `main-pages/record-current-page-polish-colored-actions.png`：记录/工作台当前打磨稿，保留现有 header 与底部 Tab，只调整内容区；六个工作台入口改为彩色工具按钮
+- `main-pages/record-current-page-polish-colored-actions.spec.md`：记录页当前打磨稿 Flutter 复刻规格，明确 header logo 和底部 Tab 不改；顶部两张主卡使用独立背景资产
+- `main-pages/assets/record-ai-card-bg.png`、`main-pages/assets/record-manual-card-bg.png`：记录页顶部两张主卡背景图，Flutter 叠加真实文字和按钮
+- `main-pages/record.png`：记录/工作台旧基线稿，保留作对照
 - `main-pages/yaya.png`：芽芽助手 Tab，极简聊天首页，留白更大，聚焦输入与少量快捷提示
 - `main-pages/ledger.png`：账本，财务洞察仪表盘，不放智能填写
 - `main-pages/profile.png`：我的，个人资料、农场资料与 AI 偏好设置

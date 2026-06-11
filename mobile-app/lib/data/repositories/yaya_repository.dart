@@ -72,6 +72,11 @@ class YayaRepository {
         .toList();
   }
 
+  Future<List<YayaSkill>> loadSkills() async {
+    final data = await client.getMap('/agent/skills');
+    return PageResult.fromJson(data, YayaSkill.fromJson).items;
+  }
+
   Stream<String> _eventLines(Object? data) {
     if (data is ResponseBody) {
       return data.stream

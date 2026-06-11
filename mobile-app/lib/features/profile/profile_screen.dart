@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/repositories/profile_repository.dart';
+import '../../shared/app_identity.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
@@ -52,7 +53,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 14),
             const _AiPreferenceCard(),
             const SizedBox(height: 14),
-            _SystemSettingsCard(model: model, onLogout: widget.onLogout),
+            _SystemSettingsCard(
+              model: model,
+              repository: widget.repository,
+              onLogout: widget.onLogout,
+            ),
             const SizedBox(height: 28),
             const _CompleteProfileButton(),
           ],
@@ -151,9 +156,14 @@ class _AiPreferenceCard extends StatelessWidget {
 }
 
 class _SystemSettingsCard extends StatelessWidget {
-  const _SystemSettingsCard({required this.model, this.onLogout});
+  const _SystemSettingsCard({
+    required this.model,
+    required this.repository,
+    this.onLogout,
+  });
 
   final ProfileViewModel model;
+  final ProfileRepository repository;
   final Future<void> Function()? onLogout;
 
   @override
@@ -180,8 +190,18 @@ class _SystemSettingsCard extends StatelessWidget {
             icon: LucideIcons.info,
             color: AppColors.blue,
             background: AppColors.blueSoft,
-            title: '关于农场管家',
-            value: model.versionLabel,
+            title: '关于${AppIdentity.displayName}',
+            value: model.safeVersionLabel,
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => AboutAppPage(
+                    repository: repository,
+                    initialModel: model,
+                  ),
+                ),
+              );
+            },
           ),
           if (onLogout != null) ...[
             const Divider(height: 1, color: AppColors.lineSoft),
@@ -190,6 +210,7 @@ class _SystemSettingsCard extends StatelessWidget {
               color: AppColors.red,
               background: AppColors.redSoft,
               title: '退出登录',
+              titleColor: AppColors.red,
               valueColor: AppColors.red,
               onTap: onLogout,
             ),
@@ -207,6 +228,7 @@ class _ProfileOptionRow extends StatelessWidget {
     required this.background,
     required this.title,
     this.value,
+    this.titleColor,
     this.valueColor = AppColors.muted,
     this.trailing,
     this.onTap,
@@ -217,6 +239,7 @@ class _ProfileOptionRow extends StatelessWidget {
   final Color background;
   final String title;
   final String? value;
+  final Color? titleColor;
   final Color valueColor;
   final Widget? trailing;
   final Future<void> Function()? onTap;
@@ -232,9 +255,7 @@ class _ProfileOptionRow extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: AppTextStyles.listTitle.copyWith(
-                color: onTap == null ? null : valueColor,
-              ),
+              style: AppTextStyles.listTitle.copyWith(color: titleColor),
             ),
           ),
           if (trailing != null)
@@ -260,6 +281,301 @@ class _ProfileOptionRow extends StatelessWidget {
     );
     if (onTap == null) return content;
     return InkWell(onTap: onTap, child: content);
+  }
+}
+
+class AboutAppPage extends StatefulWidget {
+  const AboutAppPage({
+    super.key,
+    required this.repository,
+    this.initialModel,
+  });
+
+  final ProfileRepository repository;
+  final ProfileViewModel? initialModel;
+
+  @override
+  State<AboutAppPage> createState() => _AboutAppPageState();
+}
+
+class _AboutAppPageState extends State<AboutAppPage> {
+  late final ProfileController _controller = ProfileController(
+    repository: widget.repository,
+  );
+  late Future<ProfileViewModel> _future = widget.initialModel == null
+      ? _controller.load()
+      : Future.value(widget.initialModel);
+  bool _dialogShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialModel != null) {
+      _future = _refreshVersion();
+    }
+  }
+
+  Future<ProfileViewModel> _refreshVersion() {
+    return _controller.load();
+  }
+
+  Future<void> _checkAgain() async {
+    setState(() {
+      _dialogShown = false;
+      _future = _refreshVersion();
+    });
+  }
+
+  void _showUpdateDialog(ProfileViewModel model) {
+    if (_dialogShown || !model.hasVersionUpdate) return;
+    _dialogShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => _VersionUpdateDialog(model: model),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: FutureBuilder<ProfileViewModel>(
+          future: _future,
+          builder: (context, snapshot) {
+            final model = snapshot.data ?? widget.initialModel;
+            if (snapshot.connectionState != ConnectionState.done &&
+                model == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError || model == null) {
+              return _AboutErrorState(onRetry: _checkAgain);
+            }
+            _showUpdateDialog(model);
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _AboutHeader(
+                          onBack: () => Navigator.of(context).maybePop()),
+                      const SizedBox(height: 18),
+                      _AboutHeroCard(model: model),
+                      const SizedBox(height: 14),
+                      _AboutVersionCard(
+                          model: model, onCheckAgain: _checkAgain),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutHeader extends StatelessWidget {
+  const _AboutHeader({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(LucideIcons.arrowLeft),
+            color: AppColors.ink,
+          ),
+          Expanded(
+            child: Text(
+              '关于${AppIdentity.displayName}',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.title.copyWith(fontSize: 20),
+            ),
+          ),
+          const SizedBox(width: 48),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutHeroCard extends StatelessWidget {
+  const _AboutHeroCard({required this.model});
+
+  final ProfileViewModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    return CardPanel(
+      radius: 20,
+      padding: const EdgeInsets.all(20),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Colors.white, Color(0xFFEFF6FF)],
+      ),
+      borderColor: const Color(0xFFDDEBFF),
+      child: Row(
+        children: [
+          const FarmBrandMark(size: 58),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(AppIdentity.displayName,
+                    style: AppTextStyles.metric.copyWith(fontSize: 24)),
+                const SizedBox(height: 4),
+                Text(
+                  AppIdentity.tagline,
+                  style: AppTextStyles.body.copyWith(color: AppColors.muted),
+                ),
+                const SizedBox(height: 8),
+                StatusPill(
+                  text: model.safeVersionLabel,
+                  color: AppColors.blue,
+                  background: AppColors.blueSoft,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutVersionCard extends StatelessWidget {
+  const _AboutVersionCard({required this.model, required this.onCheckAgain});
+
+  final ProfileViewModel model;
+  final Future<void> Function() onCheckAgain;
+
+  @override
+  Widget build(BuildContext context) {
+    return CardPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      child: Column(
+        children: [
+          _ProfileOptionRow(
+            icon: LucideIcons.cloudDownload,
+            color: AppColors.greenDark,
+            background: AppColors.greenSoft,
+            title: '版本更新检测',
+            value: model.safeVersionStatus,
+            valueColor: AppColors.greenDark,
+            onTap: onCheckAgain,
+          ),
+          const Divider(height: 1, color: AppColors.lineSoft),
+          _ProfileOptionRow(
+            icon: LucideIcons.fileText,
+            color: AppColors.amber,
+            background: AppColors.amberSoft,
+            title: '更新说明',
+            value: model.updateSummary,
+          ),
+          const Divider(height: 1, color: AppColors.lineSoft),
+          const _ProfileOptionRow(
+            icon: LucideIcons.shieldCheck,
+            color: AppColors.blue,
+            background: AppColors.blueSoft,
+            title: '隐私与协议',
+            value: '查看',
+          ),
+          const Divider(height: 1, color: AppColors.lineSoft),
+          const _ProfileOptionRow(
+            icon: LucideIcons.headphones,
+            color: AppColors.purple,
+            background: AppColors.purpleSoft,
+            title: '服务支持',
+            value: '在线帮助',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VersionUpdateDialog extends StatelessWidget {
+  const _VersionUpdateDialog({required this.model});
+
+  final ProfileViewModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      title: Row(
+        children: [
+          Icon(
+            LucideIcons.sparkles,
+            color: AppColors.blue,
+          ),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('发现新版本')),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            model.updateSummary,
+            style:
+                AppTextStyles.listTitle.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            model.safeVersionChangelog,
+            style: AppTextStyles.body.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('稍后'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('立即更新'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AboutErrorState extends StatelessWidget {
+  const _AboutErrorState({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('版本信息加载失败', style: AppTextStyles.listTitle),
+          const SizedBox(height: 12),
+          FilledButton(onPressed: onRetry, child: const Text('重试')),
+        ],
+      ),
+    );
   }
 }
 

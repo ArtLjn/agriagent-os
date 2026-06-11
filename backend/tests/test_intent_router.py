@@ -37,6 +37,8 @@ class TestClassifyIntent:
             "我欠别人多少钱",
             "我还欠多少钱",
             "欠款统计",
+            "我的余额",
+            "我的工人",
         ],
     )
     def test_query(self, message: str):

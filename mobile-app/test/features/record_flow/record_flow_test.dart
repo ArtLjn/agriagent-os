@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/repositories/business_repository.dart';
 import 'package:farm_manager_app/data/repositories/billing_repository.dart';
 import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
+import 'package:farm_manager_app/features/business/business_pages.dart';
 import 'package:farm_manager_app/features/record_flow/record_ai_confirm_screen.dart';
 import 'package:farm_manager_app/features/record_flow/record_flow_controller.dart';
 import 'package:farm_manager_app/features/record_flow/record_manual_edit_screen.dart';
@@ -148,7 +150,8 @@ void main() {
       AppShell(dependencies: FakeAppDependencies(), initialIndex: 1),
     );
 
-    await tester.tap(find.text('AI帮我填'));
+    await tester.enterText(find.byType(TextField).first, '今天买肥料 200');
+    await tester.tap(find.text('立即识别'));
     await tester.pumpAndSettle();
     expect(find.text('智能确认'), findsOneWidget);
     expect(find.text('首页'), findsNothing);
@@ -163,20 +166,27 @@ void main() {
     expect(find.text('账本'), findsWidgets);
   });
 
-  testWidgets('自己填入口不会默认伪造成账本保存', (tester) async {
+  testWidgets('自己填手动记账可保存', (tester) async {
+    final adapter = RecordingAdapter({'POST /costs': costRecordResponse});
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
     await pumpFlow(
       tester,
-      AppShell(dependencies: FakeAppDependencies(), initialIndex: 1),
+      LedgerManualCreatePage(
+          repository: BusinessRepository(ApiClient(dio: dio))),
     );
 
-    await tester.tap(find.text('自己填'));
-    await tester.pumpAndSettle();
-    expect(find.text('改一下'), findsOneWidget);
+    expect(find.text('记账'), findsWidgets);
+    expect(find.text('保存记录'), findsOneWidget);
+    expect(find.text('关联茬口'), findsOneWidget);
+    expect(find.textContaining('/'), findsNothing);
 
-    await tester.tap(find.text('保存修改'));
+    await tester.enterText(find.byType(TextField).at(1), '200');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存记录'));
     await tester.pumpAndSettle();
 
-    expect(find.text('记录已保存'), findsNothing);
-    expect(find.textContaining('暂不支持保存该记录类型：manual.record'), findsOneWidget);
+    expect(find.text('保存记录成功'), findsOneWidget);
   });
 }

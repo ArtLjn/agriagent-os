@@ -40,6 +40,36 @@ class RuleIntentClassifier:
         "湿度",
         "极端天气",
     )
+    _cost_summary_hints = (
+        "余额",
+        "收支",
+        "成本",
+        "利润",
+        "账单",
+        "流水",
+        "花了多少",
+        "赚了多少",
+        "收入多少",
+        "支出多少",
+    )
+    _debt_summary_hints = (
+        "还欠",
+        "欠款",
+        "欠多少钱",
+        "欠别人多少钱",
+        "赊账统计",
+        "赊账还欠",
+        "总欠款",
+    )
+    _worker_query_hints = (
+        "我的工人",
+        "工人列表",
+        "有哪些工人",
+        "看看工人",
+        "查询工人",
+        "查一下工人",
+        "工人有哪些",
+    )
 
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
@@ -101,6 +131,42 @@ class RuleIntentClassifier:
                     entities=["operation_work_order"],
                     candidate_tools=["get_operation_work_orders"],
                     confidence=0.82,
+                )
+            )
+
+        if self._looks_like_cost_summary_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="finance",
+                    intent="query_cost_summary",
+                    risk="read",
+                    entities=["cost", "income", "balance"],
+                    candidate_tools=["get_cost_summary"],
+                    confidence=0.84,
+                )
+            )
+
+        if self._looks_like_debt_summary_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="finance",
+                    intent="query_debt_summary",
+                    risk="read",
+                    entities=["debt"],
+                    candidate_tools=["get_debt_summary"],
+                    confidence=0.84,
+                )
+            )
+
+        if self._looks_like_worker_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="labor",
+                    intent="query_workers",
+                    risk="read",
+                    entities=["worker"],
+                    candidate_tools=["get_workers"],
+                    confidence=0.84,
                 )
             )
 
@@ -202,6 +268,17 @@ class RuleIntentClassifier:
         return self._has_any(message, self._work_order_hints) or (
             self._extract_operation_type(message) is not None
         )
+
+    def _looks_like_cost_summary_query(self, message: str) -> bool:
+        return self._has_any(message, self._cost_summary_hints)
+
+    def _looks_like_debt_summary_query(self, message: str) -> bool:
+        return self._has_any(message, self._debt_summary_hints)
+
+    def _looks_like_worker_query(self, message: str) -> bool:
+        if self._looks_like_create_worker(message):
+            return False
+        return self._has_any(message, self._worker_query_hints)
 
     def _looks_like_ambiguous_write(self, message: str) -> bool:
         return self._has_any(message, self._write_action_hints) and self._has_any(

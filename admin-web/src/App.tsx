@@ -13,6 +13,7 @@ import Weather from './pages/Weather';
 import TraceMonitor from './pages/TraceMonitor';
 import TokenDashboard from './pages/TokenDashboard';
 import Playground from './pages/Playground';
+import DataFlywheel from './pages/DataFlywheel';
 import SkillRegistry from './pages/SkillRegistry';
 import PromptInspector from './pages/PromptInspector';
 import ConfigKeys from './pages/ConfigKeys';
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
           <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
           <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />
+          <Route path="/dev/data-flywheel" element={<AuthGuard><DataFlywheel /></AuthGuard>} />
           <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
           <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
           <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />

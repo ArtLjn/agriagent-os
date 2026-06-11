@@ -7,6 +7,7 @@ import 'package:farm_manager_app/data/repositories/dashboard_repository.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'api_test_fixtures.dart'
     show
@@ -37,6 +38,19 @@ import 'api_test_fixtures.dart'
         workOrderResponse,
         yearlySummaryResponse;
 
+void setMockAppPackageInfo({
+  String version = '1.2.7',
+  String buildNumber = '13',
+}) {
+  PackageInfo.setMockInitialValues(
+    appName: '田掌柜',
+    packageName: 'com.farmmanager.farm_manager_app',
+    version: version,
+    buildNumber: buildNumber,
+    buildSignature: '',
+  );
+}
+
 class FakeAppDependencies implements AppDependencies {
   FakeAppDependencies({
     this.restoreResult = false,
@@ -53,7 +67,9 @@ class FakeAppDependencies implements AppDependencies {
         billing = billing ?? _fakeBillingRepository(),
         business = business ?? _fakeBusinessRepository(),
         workbench = workbench ?? _fakeWorkbenchRepository(),
-        yaya = yaya ?? _fakeYayaRepository();
+        yaya = yaya ?? _fakeYayaRepository() {
+    setMockAppPackageInfo();
+  }
 
   @override
   final ProfileRepository profile;

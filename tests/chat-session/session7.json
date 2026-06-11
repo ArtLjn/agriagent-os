@@ -1,0 +1,169 @@
+{
+  "format": "farm-manager.chat-session-debug.v1",
+  "session_id": "playground-1781143689462-gf7jd4",
+  "simulate_user_id": "708acc47-00f1-40e5-892d-4e081cac7d96",
+  "copied_at": "2026-06-11T02:09:48.613Z",
+  "messages": [
+    {
+      "role": "user",
+      "content": "我家有哪些作物栽种"
+    },
+    {
+      "role": "assistant",
+      "content": "你家目前栽种了以下作物：\n\n*   **夏季水稻**：处于成熟期，预计 2026-12-16 采收。\n*   **夏季大豆**：有两茬处于播种期，预计 2026-06-15 采收。"
+    },
+    {
+      "role": "user",
+      "content": "今天来了一个工人李海工资100一天他收水稻厉害今天让他去大豆地采收"
+    },
+    {
+      "role": "assistant",
+      "content": "🧑‍🌾 确认创建农事作业单：采收\n日期：今天\n人工：李海\n付款：应付100.00元，已付0.00元，未付100.00元\n理解：您说的是「今天来了一个工人李海工资100一天他收水稻厉害今天让他去大豆地采收」\n确认吗？",
+      "pending_action": {
+        "action_id": "ba360e84786549649788aa0d219f9bd0",
+        "skill_name": "create_operation_work_order",
+        "params": {
+          "操作": "采收",
+          "内容": "daily"
+        },
+        "context": {
+          "original_input": "今天来了一个工人李海工资100一天他收水稻厉害今天让他去大豆地采收",
+          "extracted_params": {
+            "操作": "采收",
+            "内容": "daily"
+          },
+          "notes": [
+            "理解：您说的是「今天来了一个工人李海工资100一天他收水稻厉害今天让他去大豆地采收」"
+          ]
+        }
+      }
+    },
+    {
+      "role": "user",
+      "content": "确认"
+    },
+    {
+      "role": "assistant",
+      "content": "已执行：已创建农事作业单：采收\n日期：2026-06-11\n人工：应付100.00元，已付0.00元，未付100.00元"
+    }
+  ],
+  "used_skills": [],
+  "pending_actions": [
+    {
+      "message_index": 3,
+      "action_id": "ba360e84786549649788aa0d219f9bd0",
+      "skill_name": "create_operation_work_order",
+      "params": {
+        "操作": "采收",
+        "内容": "daily"
+      },
+      "context": {
+        "original_input": "今天来了一个工人李海工资100一天他收水稻厉害今天让他去大豆地采收",
+        "extracted_params": {
+          "操作": "采收",
+          "内容": "daily"
+        },
+        "notes": [
+          "理解：您说的是「今天来了一个工人李海工资100一天他收水稻厉害今天让他去大豆地采收」"
+        ]
+      }
+    }
+  ],
+  "trace_request_id": "a6facd8e",
+  "skill_calls": [
+    {
+      "round_index": 0,
+      "skill_name": "create_operation_work_order",
+      "status": "success",
+      "duration_ms": 0,
+      "input_data": {
+        "workers": "李海",
+        "pay_type": "daily",
+        "unit_price": "100",
+        "operation_type": "采收",
+        "payment_method": "daily",
+        "crop_cycle_name": "夏季大豆(播种期)"
+      },
+      "output_data": {
+        "status": "pending",
+        "permission_level": "write_confirm",
+        "confirmation_context": {
+          "labor": {
+            "workers": [
+              "李海"
+            ],
+            "paid_amount": "0.00",
+            "paid_worker": null,
+            "unpaid_amount": "100.00",
+            "payable_amount": "100.00"
+          },
+          "scope": {
+            "units": [],
+            "scope_type": "cycle"
+          },
+          "target": {
+            "type": "operation_work_order",
+            "cycle_id": null,
+            "operation_date": null,
+            "operation_type": "采收"
+          },
+          "changes": [
+            {
+              "new": "采收",
+              "old": null,
+              "field": "operation_type"
+            },
+            {
+              "new": "李海",
+              "old": null,
+              "field": "workers"
+            },
+            {
+              "new": "100",
+              "old": null,
+              "field": "unit_price"
+            },
+            {
+              "new": "daily",
+              "old": null,
+              "field": "payment_method"
+            },
+            {
+              "new": "夏季大豆(播种期)",
+              "old": null,
+              "field": "crop_cycle_name"
+            },
+            {
+              "new": "daily",
+              "old": null,
+              "field": "pay_type"
+            }
+          ],
+          "risk_notes": [
+            "确认后会创建作业单和人工成本。"
+          ],
+          "skill_name": "create_operation_work_order",
+          "original_input": "今天来了一个工人李海工资100一天他收水稻厉害今天让他去大豆地采收",
+          "editable_fields": [
+            "operation_type",
+            "operation_date",
+            "cycle_id",
+            "unit_names",
+            "workers",
+            "unit_price",
+            "payable_amount",
+            "paid_worker",
+            "paid_amount",
+            "note"
+          ],
+          "inferred_fields": {
+            "cycle_id": null,
+            "paid_worker": null,
+            "operation_date": null
+          }
+        }
+      },
+      "error_message": null
+    }
+  ]
+}

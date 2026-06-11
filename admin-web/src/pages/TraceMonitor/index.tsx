@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Input,
   Button,
@@ -21,6 +21,7 @@ import {
   type TraceTimeline,
   type TraceNodeDetail,
 } from '../../api/admin';
+import { useLocation } from 'react-router-dom';
 import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
@@ -65,21 +66,48 @@ const aggregateTraces = (records: TraceRecord[]): TraceItem[] => {
 };
 
 export default function TraceMonitor() {
+  const location = useLocation();
+  const initialFilters = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return {
+      request_id: params.get('request_id') ?? '',
+      session_id: params.get('session_id') ?? '',
+      farm_id: params.get('farm_id') ?? '',
+    };
+  }, [location.search]);
   const [items, setItems] = useState<TraceItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
-  const [filters, setFilters] = useState({
-    request_id: '',
-    session_id: '',
-    farm_id: '',
-  });
+  const [filters, setFilters] = useState(initialFilters);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [nodeDetail, setNodeDetail] = useState<TraceNodeDetail | null>(null);
   const [cleanupDate, setCleanupDate] = useState<Dayjs | null>(null);
   const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const didInitialFetch = useRef(false);
+
+  const loadTimeline = useCallback(async (requestId: string) => {
+    try {
+      const res = await getTimeline(requestId);
+      setItems((prev) =>
+        prev.map((item) =>
+          item.request_id === requestId
+            ? { ...item, timeline: res, timelineLoading: false }
+            : item
+        )
+      );
+    } catch {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.request_id === requestId
+            ? { ...item, timeline: null, timelineLoading: false }
+            : item
+        )
+      );
+    }
+  }, []);
 
   const fetchData = useCallback(
     async (p = page, ps = pageSize) => {
@@ -99,40 +127,26 @@ export default function TraceMonitor() {
         setTotal(res.total);
         setPage(p);
         setPageSize(ps);
-        setExpandedCards(new Set());
+        if (filters.request_id.trim() && aggregated.some((item) => item.request_id === filters.request_id.trim())) {
+          setExpandedCards(new Set([filters.request_id.trim()]));
+          loadTimeline(filters.request_id.trim());
+        } else {
+          setExpandedCards(new Set());
+        }
       } catch {
         message.error('加载 Trace 列表失败');
       } finally {
         setLoading(false);
       }
     },
-    [filters, page, pageSize]
+    [filters, page, pageSize, loadTimeline]
   );
 
   useEffect(() => {
+    if (didInitialFetch.current) return;
+    didInitialFetch.current = true;
     fetchData();
-  }, []);
-
-  const loadTimeline = async (requestId: string) => {
-    try {
-      const res = await getTimeline(requestId);
-      setItems((prev) =>
-        prev.map((item) =>
-          item.request_id === requestId
-            ? { ...item, timeline: res, timelineLoading: false }
-            : item
-        )
-      );
-    } catch {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.request_id === requestId
-            ? { ...item, timeline: null, timelineLoading: false }
-            : item
-        )
-      );
-    }
-  };
+  }, [fetchData]);
 
   const handleNodeClick = (
     requestId: string,
