@@ -251,9 +251,9 @@ def _build_labor_entries(
     if not worker_names:
         return [], None
     explicit_unit_price = _to_decimal(params.get("unit_price"))
-    explicit_no_wage = bool(params.get("no_wage")) or str(
-        params.get("wage_policy") or ""
-    ).strip() in {"none", "no_wage", "free"}
+    explicit_no_wage = _is_explicit_no_wage(
+        params.get("no_wage"), params.get("wage_policy")
+    )
     pay_type_param = str(params.get("pay_type") or "").strip()
     paid_worker = str(params.get("paid_worker") or "").strip()
     paid_amount = _to_decimal(params.get("paid_amount")) or Decimal("0")
@@ -295,9 +295,25 @@ def _to_decimal(value) -> Decimal | None:
     if value in (None, ""):
         return None
     try:
-        return Decimal(str(value))
+        decimal_value = Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
+    if not decimal_value.is_finite():
+        return None
+    return decimal_value
+
+
+def _is_explicit_no_wage(no_wage, wage_policy) -> bool:
+    if no_wage is True:
+        return True
+    if isinstance(no_wage, str) and no_wage.strip().lower() in {
+        "true",
+        "yes",
+        "y",
+        "1",
+    }:
+        return True
+    return str(wage_policy or "").strip().lower() in {"none", "no_wage", "free"}
 
 
 def _resolve_labor_unit_price(

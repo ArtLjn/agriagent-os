@@ -37,6 +37,12 @@ parameters:
     paid_amount:
       type: number
       description: 已付金额。
+    no_wage:
+      type: boolean
+      description: 用户明确表示本次作业不计工资时传 true。
+    wage_policy:
+      type: string
+      description: 工资策略；用户明确表示不计工资时可传 none、no_wage 或 free。
   required:
     - operation_type
 ---
@@ -64,12 +70,15 @@ parameters:
 - “今天东大棚 4 个工人给西瓜授粉，每人 200” -> `operation_type=授粉`, `unit_names=东大棚`, `workers=待确认4人`, `unit_price=200`。
 - “记录东大棚 1-3 号压蔓” -> `operation_type=压蔓`, `unit_names=东大棚1-3号`。
 - “先付老王 200” -> 在 workers 中记录老王已付金额。
+- “本次不计工资” -> `no_wage=true`。
 
 ## 缺参策略
 
 - 缺少作业类型时必须追问。
 - 缺少日期时默认今天。
 - 缺少茬口或种植单元时可结合当前活跃茬口推断；无法唯一确定时追问。
+- 涉及工人但缺少本次工资时，优先使用工人默认工资；若工人也没有默认工资，必须追问，不要默认记为 0。
+- 只有用户明确说明本次不计工资时，才允许传 `no_wage=true` 或 `wage_policy=none`。
 - 涉及多个工人、金额或付款状态不明确时，先生成待确认信息，不要直接写入。
 
 ## Runtime 策略
