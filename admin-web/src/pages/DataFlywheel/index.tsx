@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Checkbox, Col, Input, Row, Select, Space, Typography, message } from 'antd';
+import { Button, Card, Checkbox, Input, Select, Space, Typography, message } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
@@ -19,6 +19,7 @@ import {
 import { cardStyle, palette } from '../../styles/theme';
 import AnnotationPanel from './components/AnnotationPanel';
 import CaseDraftPreview from './components/CaseDraftPreview';
+import CollapsibleWorkspace from './components/CollapsibleWorkspace';
 import SampleDetailPanel from './components/SampleDetailPanel';
 import SampleQueueTable from './components/SampleQueueTable';
 import SessionConversationView from './components/SessionConversationView';
@@ -72,6 +73,8 @@ export default function DataFlywheel() {
   const [activeArchiveKey, setActiveArchiveKey] = useState(ALL_ARCHIVE_KEY);
   const [sessionReview, setSessionReview] = useState<DataFlywheelSessionReview | null>(null);
   const [loadingSessionReview, setLoadingSessionReview] = useState(false);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(true);
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const sessionReviewRequestSeq = useRef(0);
@@ -157,6 +160,7 @@ export default function DataFlywheel() {
     const requestSeq = detailRequestSeq.current + 1;
     detailRequestSeq.current = requestSeq;
     setSelectedSample(sample);
+    setRightCollapsed(false);
     setLoadingDetail(true);
     try {
       const result = await getSampleDetail(sample.sample_id);
@@ -312,6 +316,63 @@ export default function DataFlywheel() {
     loadSessionReview(key);
   };
 
+  const archiveContent = (
+    <SessionArchivePanel
+      groups={archiveGroups}
+      total={samples.length}
+      issueCount={issueCount}
+      activeKey={activeArchiveKey}
+      allKey={ALL_ARCHIVE_KEY}
+      issueKey={ISSUE_ARCHIVE_KEY}
+      onSelect={handleSelectArchive}
+    />
+  );
+  const mainContent = isSessionArchiveActive ? (
+    <SessionConversationView
+      review={sessionReview}
+      loading={loadingSessionReview}
+      selectedSampleId={selectedSample?.sample_id}
+      onSelectTurn={loadDetail}
+    />
+  ) : (
+    <Card
+      title="会话 turn"
+      extra={
+        <Typography.Text style={{ color: palette.textMuted }}>
+          会话 turn：{visibleSamples.length} 条
+        </Typography.Text>
+      }
+      style={cardStyle}
+      styles={{ body: { padding: 0 } }}
+    >
+      <SampleQueueTable
+        samples={visibleSamples}
+        loading={loadingList}
+        selectedSampleId={selectedSample?.sample_id}
+        onSelect={loadDetail}
+      />
+    </Card>
+  );
+  const detailContent = (
+    <>
+      <SampleDetailPanel detail={detail} loading={loadingDetail} />
+      <AnnotationPanel
+        selectedSample={selectedSample}
+        label={currentLabel}
+        comment={comment}
+        saving={saving}
+        acting={acting}
+        onLabelChange={setCurrentLabel}
+        onCommentChange={setComment}
+        onSave={handleSave}
+        onCopyDebug={handleCopyDebug}
+        onExportJsonl={handleExportJsonl}
+        onMarkBadCase={handleMarkBadCase}
+        onCreateRegressionCase={handleCreateRegressionCase}
+      />
+    </>
+  );
+
   return (
     <div style={{ color: palette.text }}>
       <Space direction="vertical" size={4} style={{ marginBottom: 16 }}>
@@ -354,66 +415,15 @@ export default function DataFlywheel() {
         </Space>
       </Card>
 
-      <Row gutter={[14, 14]} align="top">
-        <Col xs={24} xl={5}>
-          <SessionArchivePanel
-            groups={archiveGroups}
-            total={samples.length}
-            issueCount={issueCount}
-            activeKey={activeArchiveKey}
-            allKey={ALL_ARCHIVE_KEY}
-            issueKey={ISSUE_ARCHIVE_KEY}
-            onSelect={handleSelectArchive}
-          />
-        </Col>
-
-        <Col xs={24} xl={8}>
-          {isSessionArchiveActive ? (
-            <SessionConversationView
-              review={sessionReview}
-              loading={loadingSessionReview}
-              selectedSampleId={selectedSample?.sample_id}
-              onSelectTurn={loadDetail}
-            />
-          ) : (
-            <Card
-              title="会话 turn"
-              extra={
-                <Typography.Text style={{ color: palette.textMuted }}>
-                  会话 turn：{visibleSamples.length} 条
-                </Typography.Text>
-              }
-              style={cardStyle}
-              styles={{ body: { padding: 0 } }}
-            >
-              <SampleQueueTable
-                samples={visibleSamples}
-                loading={loadingList}
-                selectedSampleId={selectedSample?.sample_id}
-                onSelect={loadDetail}
-              />
-            </Card>
-          )}
-        </Col>
-
-        <Col xs={24} xl={11}>
-          <SampleDetailPanel detail={detail} loading={loadingDetail} />
-          <AnnotationPanel
-            selectedSample={selectedSample}
-            label={currentLabel}
-            comment={comment}
-            saving={saving}
-            acting={acting}
-            onLabelChange={setCurrentLabel}
-            onCommentChange={setComment}
-            onSave={handleSave}
-            onCopyDebug={handleCopyDebug}
-            onExportJsonl={handleExportJsonl}
-            onMarkBadCase={handleMarkBadCase}
-            onCreateRegressionCase={handleCreateRegressionCase}
-          />
-        </Col>
-      </Row>
+      <CollapsibleWorkspace
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed}
+        onLeftCollapsedChange={setLeftCollapsed}
+        onRightCollapsedChange={setRightCollapsed}
+        left={archiveContent}
+        main={mainContent}
+        right={detailContent}
+      />
 
       <CaseDraftPreview draft={draft} open={draftOpen} onClose={() => setDraftOpen(false)} />
     </div>
