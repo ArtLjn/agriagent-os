@@ -199,6 +199,34 @@ def test_get_sample_detail_returns_labels_router_decision_and_messages(
     assert data["issue_candidates"][0]["suggested_label"] == "pending_missed"
 
 
+def test_get_session_review_returns_session_turns_for_admin(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            "/admin/data-flywheel/sessions/sess-admin-flywheel/review",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["session_id"] == "sess-admin-flywheel"
+    assert data["turns"][0]["sample"]["sample_id"] == _sample_id(turn)
+    assert data["turns"][0]["messages"][0]["content"] == (
+        "王大妈工资100一天，去5号棚收水稻"
+    )
+    assert data["turns"][0]["router_decision"]["selected_tools"] == [
+        "manage_workers",
+        "create_operation_work_order",
+    ]
+    assert data["turns"][0]["pending_lifecycle"][0]["event_type"] == (
+        "pending.plan.created"
+    )
+
+
 def test_export_jsonl_returns_content_ending_with_newline(db_session, tmp_path) -> None:
     turn = _seed_turn(db_session, tmp_path)
     sample_id = _sample_id(turn)

@@ -97,6 +97,20 @@ export interface DataFlywheelDetail {
   source: DataFlywheelSource;
 }
 
+export interface DataFlywheelSessionTurnReview {
+  sample: DataFlywheelSample;
+  messages: DataFlywheelMessage[];
+  router_decision: Record<string, unknown> | null;
+  tool_events: Array<Record<string, unknown>>;
+  pending_lifecycle: Array<Record<string, unknown>>;
+  source: DataFlywheelSource;
+}
+
+export interface DataFlywheelSessionReview {
+  session_id: string;
+  turns: DataFlywheelSessionTurnReview[];
+}
+
 export interface AddSampleLabelRequest {
   label: DataFlywheelLabel;
   sample_type?: string;
@@ -136,6 +150,13 @@ export async function listDataFlywheelSamples(
 
 export async function getSampleDetail(sampleId: string): Promise<DataFlywheelDetail> {
   const response = await apiClient.get<DataFlywheelDetail>(samplePath(sampleId));
+  return response.data;
+}
+
+export async function getSessionReview(sessionId: string): Promise<DataFlywheelSessionReview> {
+  const response = await apiClient.get<DataFlywheelSessionReview>(
+    `/admin/data-flywheel/sessions/${encodeURIComponent(sessionId)}/review`
+  );
   return response.data;
 }
 

@@ -6,6 +6,7 @@ import {
   createCaseDraft,
   exportSampleJsonl,
   getSampleDetail,
+  getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
 } from './dataFlywheel';
@@ -86,6 +87,22 @@ describe('dataFlywheel api', () => {
 
     expect(mockedApiClient.get).toHaveBeenCalledWith('/admin/data-flywheel/samples/turn%3A1%3As%3A1');
     expect(result.messages[0].content).toBe('你好');
+  });
+
+  it('编码 session_id 后读取完整会话审阅', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        session_id: 'playground:s:1',
+        turns: [],
+      },
+    });
+
+    const result = await getSessionReview('playground:s:1');
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith(
+      '/admin/data-flywheel/sessions/playground%3As%3A1/review'
+    );
+    expect(result.session_id).toBe('playground:s:1');
   });
 
   it('向 labels 路径提交样本标签和备注', async () => {

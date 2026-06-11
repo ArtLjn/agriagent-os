@@ -17,6 +17,7 @@ from app.services.data_flywheel_service import (
     get_sample_detail,
     list_samples,
 )
+from app.services.data_flywheel_session_review_service import get_session_review
 
 router = APIRouter(
     prefix="/admin/data-flywheel",
@@ -89,6 +90,16 @@ def get_admin_data_flywheel_sample(
         return get_sample_detail(db, farm_id=farm.id, sample_id=sample_id)
     except ValueError as exc:
         raise _http_error(exc) from exc
+
+
+@router.get("/sessions/{session_id}/review")
+def get_admin_data_flywheel_session_review(
+    session_id: str,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """获取单个会话的完整 turn 审阅时间线。"""
+    return get_session_review(db, farm_id=farm.id, session_id=session_id)
 
 
 @router.post("/samples/{sample_id}/labels")

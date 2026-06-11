@@ -7,18 +7,21 @@ import {
   createCaseDraft,
   exportSampleJsonl,
   getSampleDetail,
+  getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
   type CaseDraft,
   type DataFlywheelDetail,
   type DataFlywheelLabel,
   type DataFlywheelSample,
+  type DataFlywheelSessionReview,
 } from '../../api/dataFlywheel';
 import { cardStyle, palette } from '../../styles/theme';
 import AnnotationPanel from './components/AnnotationPanel';
 import CaseDraftPreview from './components/CaseDraftPreview';
 import SampleDetailPanel from './components/SampleDetailPanel';
 import SampleQueueTable from './components/SampleQueueTable';
+import SessionConversationView from './components/SessionConversationView';
 import SessionArchivePanel, { type SessionArchiveItem } from './components/SessionArchivePanel';
 
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
@@ -67,8 +70,11 @@ export default function DataFlywheel() {
   const [draft, setDraft] = useState<CaseDraft | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
   const [activeArchiveKey, setActiveArchiveKey] = useState(ALL_ARCHIVE_KEY);
+  const [sessionReview, setSessionReview] = useState<DataFlywheelSessionReview | null>(null);
+  const [loadingSessionReview, setLoadingSessionReview] = useState(false);
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
+  const sessionReviewRequestSeq = useRef(0);
 
   const archiveGroups = useMemo(() => buildArchiveGroups(samples), [samples]);
   const issueCount = useMemo(
@@ -82,6 +88,8 @@ export default function DataFlywheel() {
     }
     return samples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
   }, [activeArchiveKey, samples]);
+  const isSessionArchiveActive =
+    activeArchiveKey !== ALL_ARCHIVE_KEY && activeArchiveKey !== ISSUE_ARCHIVE_KEY;
 
   useEffect(() => {
     if (activeArchiveKey === ALL_ARCHIVE_KEY || activeArchiveKey === ISSUE_ARCHIVE_KEY) return;
@@ -129,6 +137,8 @@ export default function DataFlywheel() {
 
   const submitQuery = () => {
     setActiveArchiveKey(ALL_ARCHIVE_KEY);
+    setSessionReview(null);
+    clearSelection();
     setQuery({
       searchText,
       qualityLabel,
@@ -138,6 +148,9 @@ export default function DataFlywheel() {
 
   const refreshSamples = () => {
     fetchSamples(query);
+    if (isSessionArchiveActive) {
+      loadSessionReview(activeArchiveKey);
+    }
   };
 
   const loadDetail = async (sample: DataFlywheelSample) => {
@@ -185,6 +198,7 @@ export default function DataFlywheel() {
       message.success('标注已保存');
       await loadDetail(selectedSample);
       await fetchSamples(query);
+      await refreshSessionReviewIfActive();
     } catch {
       message.error('保存标注失败');
     } finally {
@@ -229,6 +243,7 @@ export default function DataFlywheel() {
       message.success('已标记 bad case');
       await loadDetail(selectedSample);
       await fetchSamples(query);
+      await refreshSessionReviewIfActive();
     } catch {
       message.error('标记 bad case 失败');
     } finally {
@@ -249,6 +264,52 @@ export default function DataFlywheel() {
     } finally {
       setActing(false);
     }
+  };
+
+  const clearSelection = () => {
+    detailRequestSeq.current += 1;
+    setSelectedSample(null);
+    setDetail(null);
+    setCurrentLabel(DEFAULT_LABEL);
+    setComment('');
+    setLoadingDetail(false);
+  };
+
+  const refreshSessionReviewIfActive = async () => {
+    if (isSessionArchiveActive) {
+      await loadSessionReview(activeArchiveKey);
+    }
+  };
+
+  const loadSessionReview = useCallback(async (sessionId: string) => {
+    const requestSeq = sessionReviewRequestSeq.current + 1;
+    sessionReviewRequestSeq.current = requestSeq;
+    setLoadingSessionReview(true);
+    try {
+      const result = await getSessionReview(sessionId);
+      if (requestSeq !== sessionReviewRequestSeq.current) return;
+      setSessionReview(result);
+    } catch {
+      if (requestSeq === sessionReviewRequestSeq.current) {
+        message.error('加载完整会话记录失败');
+      }
+    } finally {
+      if (requestSeq === sessionReviewRequestSeq.current) {
+        setLoadingSessionReview(false);
+      }
+    }
+  }, []);
+
+  const handleSelectArchive = (key: string) => {
+    setActiveArchiveKey(key);
+    clearSelection();
+    if (key === ALL_ARCHIVE_KEY || key === ISSUE_ARCHIVE_KEY) {
+      sessionReviewRequestSeq.current += 1;
+      setSessionReview(null);
+      setLoadingSessionReview(false);
+      return;
+    }
+    loadSessionReview(key);
   };
 
   return (
@@ -302,24 +363,37 @@ export default function DataFlywheel() {
             activeKey={activeArchiveKey}
             allKey={ALL_ARCHIVE_KEY}
             issueKey={ISSUE_ARCHIVE_KEY}
-            onSelect={setActiveArchiveKey}
+            onSelect={handleSelectArchive}
           />
         </Col>
 
         <Col xs={24} xl={8}>
-          <Card
-            title="会话 turn"
-            extra={<Typography.Text style={{ color: palette.textMuted }}>会话 turn：{visibleSamples.length} 条</Typography.Text>}
-            style={cardStyle}
-            styles={{ body: { padding: 0 } }}
-          >
-            <SampleQueueTable
-              samples={visibleSamples}
-              loading={loadingList}
+          {isSessionArchiveActive ? (
+            <SessionConversationView
+              review={sessionReview}
+              loading={loadingSessionReview}
               selectedSampleId={selectedSample?.sample_id}
-              onSelect={loadDetail}
+              onSelectTurn={loadDetail}
             />
-          </Card>
+          ) : (
+            <Card
+              title="会话 turn"
+              extra={
+                <Typography.Text style={{ color: palette.textMuted }}>
+                  会话 turn：{visibleSamples.length} 条
+                </Typography.Text>
+              }
+              style={cardStyle}
+              styles={{ body: { padding: 0 } }}
+            >
+              <SampleQueueTable
+                samples={visibleSamples}
+                loading={loadingList}
+                selectedSampleId={selectedSample?.sample_id}
+                onSelect={loadDetail}
+              />
+            </Card>
+          )}
         </Col>
 
         <Col xs={24} xl={11}>

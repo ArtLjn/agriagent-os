@@ -18,6 +18,7 @@ from app.services.data_flywheel_service import (
     get_sample_detail,
     list_samples,
 )
+from app.services.data_flywheel_session_review_service import get_session_review
 
 pytestmark = pytest.mark.no_db
 
@@ -246,6 +247,78 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     assert detail["source"]["event_seq_start"] == 1
     assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.v2"
     assert detail["issue_candidates"][0]["type"] == "pending_missed"
+    db.close()
+
+
+def test_get_session_review_returns_full_turn_timeline_with_evidence(tmp_path):
+    db = Session()
+    first_turn = _seed_turn(
+        db,
+        tmp_path,
+        session_id="sess-review",
+        user_input="李四去收水稻",
+        assistant_reply="我需要确认工资后再创建作业。",
+        request_id="review001",
+        router_tools=["create_operation_work_order"],
+        tool_events=[],
+    )
+    second_turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=False,
+        session_id="sess-review",
+        user_input="确认",
+        assistant_reply="已创建作业。",
+        request_id="review002",
+        router_tools=["create_operation_work_order"],
+        tool_events=[
+            (
+                "tool.call.finished",
+                {"tool_name": "create_operation_work_order", "result": {"id": 9}},
+            )
+        ],
+    )
+    add_sample_label(
+        db,
+        farm_id=1,
+        sample_id=f"turn:1:sess-review:{second_turn.id}",
+        label="hallucinated_execution",
+    )
+
+    review = get_session_review(db, farm_id=1, session_id="sess-review")
+
+    assert review["session_id"] == "sess-review"
+    assert [item["sample"]["turn_id"] for item in review["turns"]] == [
+        first_turn.id,
+        second_turn.id,
+    ]
+    assert review["turns"][0]["messages"] == [
+        {
+            "id": review["turns"][0]["messages"][0]["id"],
+            "role": "user",
+            "content": "李四去收水稻",
+        },
+        {
+            "id": review["turns"][0]["messages"][1]["id"],
+            "role": "assistant",
+            "content": "我需要确认工资后再创建作业。",
+        },
+    ]
+    assert review["turns"][0]["router_decision"]["selected_tools"] == [
+        "create_operation_work_order"
+    ]
+    assert review["turns"][0]["pending_lifecycle"][0]["event_type"] == (
+        "pending.plan.created"
+    )
+    assert review["turns"][1]["tool_events"][0]["payload"]["tool_name"] == (
+        "create_operation_work_order"
+    )
+    assert review["turns"][1]["sample"]["quality_labels"] == [
+        "hallucinated_execution"
+    ]
+    assert review["turns"][1]["sample"]["issue_candidates"][0]["type"] == (
+        "pending_missed"
+    )
     db.close()
 
 

@@ -7,16 +7,18 @@ import {
   addSampleLabel,
   createCaseDraft,
   getSampleDetail,
+  getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
 } from '../../api/dataFlywheel';
-import type { DataFlywheelDetail, DataFlywheelSample } from '../../api/dataFlywheel';
+import type { DataFlywheelDetail, DataFlywheelSample, DataFlywheelSessionReview } from '../../api/dataFlywheel';
 
 vi.mock('../../api/dataFlywheel', () => ({
   addSampleLabel: vi.fn(),
   createCaseDraft: vi.fn(),
   exportSampleJsonl: vi.fn(),
   getSampleDetail: vi.fn(),
+  getSessionReview: vi.fn(),
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
 }));
@@ -60,6 +62,39 @@ const anotherSample: DataFlywheelSample = {
   token_total: 420,
 };
 
+const sessionSecondSample: DataFlywheelSample = {
+  ...sample,
+  sample_id: 'turn:session-a:4',
+  turn_id: 4,
+  request_id: 'req:confirm',
+  user_input_preview: '确认',
+  assistant_reply_preview: '已创建作业。',
+  selected_tools: ['create_operation_work_order'],
+  actual_tools: ['create_operation_work_order'],
+  issue_candidates: [
+    {
+      type: 'hallucinated_execution',
+      severity: 'high',
+      reason: '回复声称已执行写入，但没有对应工具成功事件',
+      evidence: '已创建作业',
+      suggested_label: 'hallucinated_execution',
+    },
+  ],
+};
+
+const sessionMessages = [
+  { role: 'user', content: '帮我查一下张三这个月工资有没有漏记' },
+  { role: 'assistant', content: '张三本月工资记录里缺少 6 月 8 日。' },
+];
+const confirmMessages = [
+  { role: 'user', content: '确认' },
+  { role: 'assistant', content: '已创建作业。' },
+];
+const anotherMessages = [
+  { role: 'user', content: '给李四补一条今天的浇水记录' },
+  { role: 'assistant', content: '已为李四记录今天的浇水作业。' },
+];
+
 const detail: DataFlywheelDetail = {
   sample,
   quality_labels: [],
@@ -76,10 +111,7 @@ const detail: DataFlywheelDetail = {
       request_id: 'req:abc',
     },
   ],
-  messages: [
-    { role: 'user', content: '帮我查一下张三这个月工资有没有漏记' },
-    { role: 'assistant', content: '张三本月工资记录里缺少 6 月 8 日。' },
-  ],
+  messages: sessionMessages,
   turn: null,
   router_decision: {
     selected_tools: ['worker.search', 'wage.list'],
@@ -126,10 +158,7 @@ const anotherDetail: DataFlywheelDetail = {
       request_id: 'req:def',
     },
   ],
-  messages: [
-    { role: 'user', content: '给李四补一条今天的浇水记录' },
-    { role: 'assistant', content: '已为李四记录今天的浇水作业。' },
-  ],
+  messages: anotherMessages,
   issue_candidates: [],
   debug_export: {
     sample_id: anotherSample.sample_id,
@@ -137,8 +166,80 @@ const anotherDetail: DataFlywheelDetail = {
   },
 };
 
+const sessionReview: DataFlywheelSessionReview = {
+  session_id: 'session-a',
+  turns: [
+    {
+      sample,
+      messages: sessionMessages,
+      router_decision: {
+        selected_tools: ['worker.search', 'wage.list'],
+        reason: '需要核对工资流水',
+      },
+      tool_events: [
+        {
+          event_type: 'tool.call.finished',
+          payload: { tool_name: 'worker.search', result: { id: 1 } },
+        },
+      ],
+      pending_lifecycle: [
+        {
+          event_type: 'pending.plan.created',
+          at: '2026-06-11T08:00:01Z',
+          payload: { skill: 'wage.list' },
+        },
+      ],
+      source: {
+        event_file: 'events/debug.jsonl',
+        event_seq_start: 11,
+        event_seq_end: 18,
+      },
+    },
+    {
+      sample: sessionSecondSample,
+      messages: confirmMessages,
+      router_decision: {
+        selected_tools: ['create_operation_work_order'],
+      },
+      tool_events: [
+        {
+          event_type: 'tool.call.finished',
+          payload: { tool_name: 'create_operation_work_order', result: { id: 8 } },
+        },
+      ],
+      pending_lifecycle: [],
+      source: {
+        event_file: 'events/debug.jsonl',
+        event_seq_start: 19,
+        event_seq_end: 24,
+      },
+    },
+  ],
+};
+
+const anotherSessionReview: DataFlywheelSessionReview = {
+  session_id: 'session-b',
+  turns: [
+    {
+      sample: anotherSample,
+      messages: anotherMessages,
+      router_decision: {
+        selected_tools: ['create_operation_work_order'],
+      },
+      tool_events: [],
+      pending_lifecycle: [],
+      source: {
+        event_file: 'events/debug.jsonl',
+        event_seq_start: 25,
+        event_seq_end: 28,
+      },
+    },
+  ],
+};
+
 const mockedList = vi.mocked(listDataFlywheelSamples);
 const mockedDetail = vi.mocked(getSampleDetail);
+const mockedSessionReview = vi.mocked(getSessionReview);
 const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateDraft = vi.mocked(createCaseDraft);
 const mockedMarkBadCase = vi.mocked(markBadCase);
@@ -152,6 +253,9 @@ describe('DataFlywheel 页面', () => {
     });
     mockedList.mockResolvedValue({ items: [sample], total: 1 });
     mockedDetail.mockResolvedValue(detail);
+    mockedSessionReview.mockImplementation((sessionId) =>
+      Promise.resolve(sessionId === 'session-b' ? anotherSessionReview : sessionReview)
+    );
     mockedAddLabel.mockResolvedValue({
       id: 2,
       sample_id: sample.sample_id,
@@ -274,7 +378,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('已为李四记录今天的浇水作业。')).toBeInTheDocument();
   });
 
-  it('可以按会话归档筛选 turn 样本', async () => {
+  it('点击会话归档会进入完整对话审阅视图', async () => {
     mockedList.mockResolvedValue({ items: [sample, anotherSample], total: 2 });
     render(<DataFlywheel />);
 
@@ -283,9 +387,36 @@ describe('DataFlywheel 页面', () => {
 
     fireEvent.click(screen.getByTestId('archive-session-session-b'));
 
-    expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
-    expect(screen.getByTestId('sample-row-turn:session-b:4')).toBeInTheDocument();
-    expect(screen.getByText('会话 turn：1 条')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedSessionReview).toHaveBeenCalledWith('session-b');
+    });
+    expect(screen.getByText('完整对话记录')).toBeInTheDocument();
+  });
+
+  it('点击会话归档后显示完整对话和 skill、pending、tool 证据', async () => {
+    mockedList.mockResolvedValue({ items: [sample, sessionSecondSample, anotherSample], total: 3 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-a');
+    fireEvent.click(screen.getByTestId('archive-session-session-a'));
+
+    await waitFor(() => {
+      expect(mockedSessionReview).toHaveBeenCalledWith('session-a');
+    });
+    expect(await screen.findByText('完整对话记录')).toBeInTheDocument();
+    expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
+    expect(screen.getByText('张三本月工资记录里缺少 6 月 8 日。')).toBeInTheDocument();
+    expect(screen.getByText('selected: worker.search, wage.list')).toBeInTheDocument();
+    expect(screen.getByText('actual: worker.search')).toBeInTheDocument();
+    expect(screen.getByText('pending: 已创建')).toBeInTheDocument();
+    expect(screen.getAllByText('tool: 1 success / 0 failed').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('幻觉执行').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTestId('review-select-turn:session-a:4'));
+
+    await waitFor(() => {
+      expect(mockedDetail).toHaveBeenCalledWith(sessionSecondSample.sample_id);
+    });
   });
 
   it('可以选择工资缺失、填写备注并保存标注', async () => {
@@ -311,6 +442,26 @@ describe('DataFlywheel 页面', () => {
         request_id: 'req:abc',
       });
     });
+  });
+
+  it('在完整会话中保存标注后刷新 session 审阅流', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-a');
+    fireEvent.click(screen.getByTestId('archive-session-session-a'));
+    await screen.findByText('完整对话记录');
+    fireEvent.click(screen.getByTestId('review-select-turn:session-a:4'));
+    await screen.findByText('样本详情');
+
+    await user.click(screen.getByLabelText('坏回复'));
+    await user.click(screen.getByRole('button', { name: /保存标注/ }));
+
+    await waitFor(() => {
+      expect(mockedSessionReview).toHaveBeenCalledTimes(2);
+    });
+    expect(mockedSessionReview).toHaveBeenLastCalledWith('session-a');
   });
 
   it('点击生成 regression case 后创建草稿并显示 Case Draft', async () => {
