@@ -86,6 +86,14 @@ class CreateOperationWorkOrderSkill(Skill):
                     "type": "number",
                     "description": "已付金额，如 200",
                 },
+                "no_wage": {
+                    "type": "boolean",
+                    "description": "明确表示本次作业不计工资时传 true",
+                },
+                "wage_policy": {
+                    "type": "string",
+                    "description": "工资策略；不计工资时可传 none、no_wage 或 free",
+                },
             },
             "required": ["operation_type"],
         }
@@ -118,7 +126,14 @@ class CreateOperationWorkOrderSkill(Skill):
                 db, farm_id, cycle_id, params.get("unit_names")
             )
             worker_names = _split_names(params.get("workers"))
-            labor_entries = _build_labor_entries(db, farm_id, worker_names, params)
+            labor_entries, labor_error = _build_labor_entries(
+                db, farm_id, worker_names, params
+            )
+            if labor_error:
+                return SkillResult(
+                    status=ResultStatus.NEED_CLARIFY,
+                    reply=labor_error,
+                )
             scope_type = "unit" if unit_ids else "cycle"
             work_order = planting_service.create_work_order(
                 db,
@@ -230,16 +245,37 @@ def _resolve_unit_ids(db, farm_id: int, cycle_id: int, value) -> list[int]:
     return [unit.id for unit in units]
 
 
-def _build_labor_entries(db, farm_id: int, worker_names: list[str], params: dict):
+def _build_labor_entries(
+    db, farm_id: int, worker_names: list[str], params: dict
+) -> tuple[list[LaborEntryCreate], str | None]:
     if not worker_names:
-        return []
-    unit_price = _to_decimal(params.get("unit_price")) or Decimal("0")
-    pay_type = str(params.get("pay_type") or "daily").strip() or "daily"
+        return [], None
+    explicit_unit_price = _to_decimal(params.get("unit_price"))
+    explicit_no_wage = bool(params.get("no_wage")) or str(
+        params.get("wage_policy") or ""
+    ).strip() in {"none", "no_wage", "free"}
+    pay_type_param = str(params.get("pay_type") or "").strip()
     paid_worker = str(params.get("paid_worker") or "").strip()
     paid_amount = _to_decimal(params.get("paid_amount")) or Decimal("0")
     entries = []
     for name in worker_names:
-        worker = _find_or_create_worker(db, farm_id, name, unit_price)
+        worker = _find_or_create_worker(
+            db,
+            farm_id,
+            name,
+            explicit_unit_price or Decimal("0"),
+        )
+        unit_price = _resolve_labor_unit_price(
+            worker=worker,
+            explicit_unit_price=explicit_unit_price,
+            explicit_no_wage=explicit_no_wage,
+        )
+        if unit_price is None:
+            return [], (
+                f"请补充{name}本次作业的工资。"
+                "系统不会默认记为0；如果本次不计工资，请明确说明不计工资。"
+            )
+        pay_type = _resolve_labor_pay_type(worker, pay_type_param)
         entry_paid = (
             paid_amount if paid_worker and paid_worker == name else Decimal("0")
         )
@@ -252,7 +288,7 @@ def _build_labor_entries(db, farm_id: int, worker_names: list[str], params: dict
                 paid_amount=entry_paid,
             )
         )
-    return entries
+    return entries, None
 
 
 def _to_decimal(value) -> Decimal | None:
@@ -262,6 +298,31 @@ def _to_decimal(value) -> Decimal | None:
         return Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
+
+
+def _resolve_labor_unit_price(
+    *,
+    worker: Worker,
+    explicit_unit_price: Decimal | None,
+    explicit_no_wage: bool,
+) -> Decimal | None:
+    if explicit_unit_price is not None:
+        return explicit_unit_price
+    if explicit_no_wage:
+        return Decimal("0")
+    default_unit_price = _to_decimal(getattr(worker, "default_unit_price", None))
+    if default_unit_price is not None:
+        return default_unit_price
+    return None
+
+
+def _resolve_labor_pay_type(worker: Worker, explicit_pay_type: str) -> str:
+    if explicit_pay_type:
+        return explicit_pay_type
+    default_pay_type = getattr(worker, "default_pay_type", None)
+    if isinstance(default_pay_type, str) and default_pay_type.strip():
+        return default_pay_type.strip()
+    return "daily"
 
 
 def _find_or_create_worker(db, farm_id: int, name: str, unit_price: Decimal) -> Worker:

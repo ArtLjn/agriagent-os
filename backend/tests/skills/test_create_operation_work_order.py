@@ -133,6 +133,125 @@ async def test_create_work_order_normalizes_common_llm_aliases(
 
 
 @pytest.mark.asyncio
+@patch.object(_mod, "SessionLocal")
+@patch.object(_mod.planting_service, "create_work_order")
+@patch.object(_mod.planting_read_service, "to_work_order_response")
+async def test_create_work_order_uses_worker_default_wage_when_unit_price_missing(
+    mock_to_response, mock_create, mock_session, ctx
+):
+    db = MagicMock()
+    mock_session.return_value = db
+    cycle = MagicMock(id=8, name="水稻")
+    worker = MagicMock(
+        id=6,
+        name="李丽",
+        default_unit_price=Decimal("100"),
+        default_pay_type="daily",
+    )
+    db.query.return_value.filter.return_value.order_by.return_value.first.return_value = cycle
+    db.query.return_value.filter.return_value.all.return_value = []
+    db.query.return_value.filter.return_value.first.return_value = worker
+
+    response = MagicMock(
+        operation_type="采收",
+        operation_date=date(2026, 6, 8),
+        unit_names=[],
+        labor_entries=[MagicMock()],
+        total_payable_amount=Decimal("100"),
+        total_paid_amount=Decimal("0"),
+        total_unpaid_amount=Decimal("100"),
+    )
+    mock_create.return_value = MagicMock()
+    mock_to_response.return_value = response
+
+    result = await CreateOperationWorkOrderSkill().execute(
+        {
+            "operation_type": "采收",
+            "worker_name": "李丽",
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    work_order_create = mock_create.call_args.args[1]
+    assert work_order_create.labor_entries[0].unit_price == Decimal("100")
+    assert work_order_create.labor_entries[0].pay_type == "daily"
+
+
+@pytest.mark.asyncio
+@patch.object(_mod, "SessionLocal")
+async def test_create_work_order_asks_wage_when_missing_everywhere(mock_session, ctx):
+    db = MagicMock()
+    mock_session.return_value = db
+    cycle = MagicMock(id=8, name="水稻")
+    worker = MagicMock(
+        id=6,
+        name="李丽",
+        default_unit_price=None,
+        default_pay_type="daily",
+    )
+    db.query.return_value.filter.return_value.order_by.return_value.first.return_value = cycle
+    db.query.return_value.filter.return_value.all.return_value = []
+    db.query.return_value.filter.return_value.first.return_value = worker
+
+    result = await CreateOperationWorkOrderSkill().execute(
+        {
+            "operation_type": "采收",
+            "worker_name": "李丽",
+        },
+        ctx,
+    )
+
+    assert result.status.value == "need_clarify"
+    assert "工资" in result.reply
+    assert "不会默认记为0" in result.reply
+
+
+@pytest.mark.asyncio
+@patch.object(_mod, "SessionLocal")
+@patch.object(_mod.planting_service, "create_work_order")
+@patch.object(_mod.planting_read_service, "to_work_order_response")
+async def test_create_work_order_allows_explicit_no_wage(
+    mock_to_response, mock_create, mock_session, ctx
+):
+    db = MagicMock()
+    mock_session.return_value = db
+    cycle = MagicMock(id=8, name="水稻")
+    worker = MagicMock(
+        id=6,
+        name="李丽",
+        default_unit_price=None,
+        default_pay_type="daily",
+    )
+    db.query.return_value.filter.return_value.order_by.return_value.first.return_value = cycle
+    db.query.return_value.filter.return_value.all.return_value = []
+    db.query.return_value.filter.return_value.first.return_value = worker
+    mock_create.return_value = MagicMock()
+    mock_to_response.return_value = MagicMock(
+        operation_type="采收",
+        operation_date=date(2026, 6, 8),
+        unit_names=[],
+        labor_entries=[MagicMock()],
+        total_payable_amount=Decimal("0"),
+        total_paid_amount=Decimal("0"),
+        total_unpaid_amount=Decimal("0"),
+    )
+
+    result = await CreateOperationWorkOrderSkill().execute(
+        {
+            "operation_type": "采收",
+            "worker_name": "李丽",
+            "no_wage": True,
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    work_order_create = mock_create.call_args.args[1]
+    assert work_order_create.labor_entries[0].unit_price == Decimal("0")
+
+
+@pytest.mark.asyncio
 async def test_missing_operation_type(ctx):
     result = await CreateOperationWorkOrderSkill().execute({}, ctx)
 
