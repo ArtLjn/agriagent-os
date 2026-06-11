@@ -62,6 +62,20 @@ def _build_conversation_summary(
     db: Session, session_id: str, farm_id: int
 ) -> tuple[str, str, str]:
     """从会话消息生成列表标题、预览和分类。"""
+    conversation = get_conversation_by_session(db, session_id, farm_id=farm_id)
+    meta = conversation.meta_json if conversation else None
+    if isinstance(meta, dict):
+        title = meta.get("title")
+        preview = meta.get("preview")
+        category = meta.get("category")
+        if title and preview and category:
+            return str(title), str(preview), str(category)
+    if conversation and conversation.summary:
+        return (
+            _truncate_text(conversation.summary, 18),
+            _truncate_text(conversation.summary, 24),
+            "对话",
+        )
     messages = get_conversation_messages(db, session_id, farm_id=farm_id)
     if not messages:
         return (
@@ -114,15 +128,19 @@ def list_message_items(
     for message in messages:
         skills = None
         pending_action = None
-        if message.meta:
+        meta_obj = message.meta_json if isinstance(message.meta_json, dict) else None
+        if meta_obj is None and message.meta:
             try:
-                meta_obj = json.loads(message.meta)
-                skills = meta_obj.get("skills")
-                pending_raw = meta_obj.get("pending_action")
-                if pending_raw:
-                    pending_action = PendingActionResponse.model_validate(pending_raw)
+                parsed = json.loads(message.meta)
+                if isinstance(parsed, dict):
+                    meta_obj = parsed
             except (json.JSONDecodeError, AttributeError):
-                pass
+                meta_obj = None
+        if meta_obj:
+            skills = meta_obj.get("skills")
+            pending_raw = meta_obj.get("pending_action")
+            if pending_raw:
+                pending_action = PendingActionResponse.model_validate(pending_raw)
         result.append(
             ConversationMessageItem(
                 id=message.id,
