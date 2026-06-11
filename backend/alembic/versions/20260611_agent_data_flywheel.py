@@ -141,7 +141,7 @@ def _create_agent_case_drafts(inspector) -> None:
             sa.Column(
                 "farm_id", sa.Integer(), sa.ForeignKey("farms.id"), nullable=False
             ),
-            sa.Column("draft_id", sa.String(length=64), nullable=False, unique=True),
+            sa.Column("draft_id", sa.String(length=64), nullable=False),
             sa.Column("source_sample_id", sa.String(length=160), nullable=False),
             sa.Column("target_type", sa.String(length=32), nullable=False),
             sa.Column(
