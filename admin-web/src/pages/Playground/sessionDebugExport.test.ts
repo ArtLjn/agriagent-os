@@ -65,8 +65,8 @@ describe('buildSessionDebugExport', () => {
               output_data: { active_crops: ['水稻'] },
             },
             {
-              node_type: 'pending_plan',
-              node_name: 'create_cost_record',
+              node_type: 'skill_call',
+              node_name: 'pending_plan',
               duration_ms: 1,
               status: 'success',
               token_usage: null,

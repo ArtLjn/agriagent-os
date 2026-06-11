@@ -124,6 +124,40 @@ async def test_llm_node_uses_prepared_router_selected_tools() -> None:
 
 
 @pytest.mark.asyncio
+async def test_llm_node_returns_router_decision_for_tool_node_state() -> None:
+    """LLM 节点应把本轮 RouterDecision 写回 state，供工具节点生成 pending plan。"""
+    fake_llm = _FakeLLM()
+    tools = [
+        _FakeTool("manage_workers"),
+        _FakeTool("create_operation_work_order"),
+    ]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        result = await _llm_node(
+            {
+                "messages": [
+                    HumanMessage(
+                        content="我招了一个工人王大妈工资100一天，早上来了让他去5号棚收水稻了"
+                    )
+                ],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-1",
+            }
+        )
+
+    router_decision = result["router_decision"]
+    assert isinstance(router_decision, RouterDecision)
+    assert [frame.intent for frame in router_decision.frames] == [
+        "create_worker",
+        "create_work_order",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_final_answer_with_tool_result_binds_no_tools_by_default() -> None:
     """已有普通 ToolMessage 的 final answer 轮默认不重新绑定工具。"""
     fake_llm = _FakeLLM()

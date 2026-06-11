@@ -193,6 +193,22 @@ def test_unknown_write_asks_clarification_without_write_tool() -> None:
     assert "请补充" in decision.clarification
 
 
+@pytest.mark.parametrize(
+    "message",
+    ["帮我删一下这个工人", "帮我改一下这个作业", "帮我停用一下这个工人"],
+)
+def test_unknown_mutating_intent_asks_clarification_without_write_tool(
+    message: str,
+) -> None:
+    tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == []
+    assert decision.clarification is not None
+    assert "请补充" in decision.clarification
+
+
 def test_session4_create_worker_and_work_order_keeps_single_write_tool() -> None:
     tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
 

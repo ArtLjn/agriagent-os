@@ -568,7 +568,7 @@ async def _llm_node(state: AgentState) -> dict:
         token_usage=token_usage,
     )
 
-    return {"messages": [response]}
+    return {"messages": [response], "router_decision": router_decision}
 
 
 __all__ = [

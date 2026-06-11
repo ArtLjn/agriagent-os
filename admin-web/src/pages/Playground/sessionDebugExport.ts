@@ -70,7 +70,7 @@ export function buildSessionDebugExport({
       .filter((action): action is PendingAction => Boolean(action)),
     skill_calls: extractSkillCalls(timeline),
     router_diagnostics: extractNodes(timeline, 'skill_router'),
-    pending_plans: extractNodes(timeline, 'pending_plan'),
+    pending_plans: extractPendingPlans(timeline),
   };
 }
 
@@ -82,8 +82,8 @@ function uniqueSkills(messages: SessionDebugExportMessage[]): string[] {
 
 function extractNodes(
   timeline: TraceTimeline | null,
-  nodeType: 'skill_router' | 'pending_plan',
-): Array<SessionDebugRouterDiagnostic | SessionDebugPendingPlan> {
+  nodeType: 'skill_router',
+): SessionDebugRouterDiagnostic[] {
   if (!timeline?.rounds) {
     return [];
   }
@@ -99,6 +99,28 @@ function extractNodes(
   );
 }
 
+function extractPendingPlans(
+  timeline: TraceTimeline | null,
+): SessionDebugPendingPlan[] {
+  if (!timeline?.rounds) {
+    return [];
+  }
+
+  return timeline.rounds.flatMap((round) =>
+    round.nodes
+      .filter(
+        (node) =>
+          node.node_type === 'pending_plan' ||
+          (node.node_type === 'skill_call' && node.node_name === 'pending_plan'),
+      )
+      .map((node) => ({
+        round_index: round.round_index,
+        input_data: node.input_data,
+        output_data: node.output_data,
+      })),
+  );
+}
+
 function extractSkillCalls(timeline: TraceTimeline | null): SessionDebugSkillCall[] {
   if (!timeline?.rounds) {
     return [];
@@ -106,7 +128,10 @@ function extractSkillCalls(timeline: TraceTimeline | null): SessionDebugSkillCal
 
   return timeline.rounds.flatMap((round) =>
     round.nodes
-      .filter((node) => node.node_type === 'skill_call')
+      .filter(
+        (node) =>
+          node.node_type === 'skill_call' && node.node_name !== 'pending_plan',
+      )
       .map((node) => ({
         round_index: round.round_index,
         skill_name: node.node_name,

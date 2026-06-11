@@ -11,7 +11,17 @@ class RuleIntentClassifier:
     _query_hints = ("哪些", "有哪些", "看看", "查询", "查一下", "最近", "怎么样")
     _farm_hints = ("作物", "栽种", "农场", "茬口", "种植")
     _crop_hints = ("作物", "栽种", "茬口", "种植")
-    _write_action_hints = ("处理", "弄一下", "搞一下")
+    _write_action_hints = (
+        "处理",
+        "弄一下",
+        "搞一下",
+        "删",
+        "删除",
+        "改",
+        "修改",
+        "停用",
+        "禁用",
+    )
     _write_entity_hints = ("工人", "作业", "账")
     _worker_create_hints = ("新来", "招了", "新增", "创建")
     _worker_pay_hints = ("工资", "日薪", "每天")
