@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.orm import Session
 
 from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.application.session_flywheel import SessionFlywheelRecorder
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.llm import LlmNotConfiguredError
 from app.core.logger import request_id_var
@@ -25,7 +26,7 @@ from app.schemas.agent import (
     PendingActionContext,
     PendingActionResponse,
 )
-from app.services.conversation_service import get_or_create_conversation, save_message
+from app.services.conversation_service import get_or_create_conversation
 from app.services.conversation_service import ConversationAccessError
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,8 @@ async def chat(
     )
     start = time.perf_counter()
 
+    recorder = SessionFlywheelRecorder()
+    started_turn = None
     conversation = None
     if chat_request.session_id:
         conversation = get_or_create_conversation(
@@ -122,7 +125,15 @@ async def chat(
             chat_request.session_id,
             user_id=farm.user_id,
         )
-        save_message(db, conversation.id, "user", chat_request.message)
+        started_turn = recorder.start_turn(
+            db,
+            farm_id=farm.id,
+            user_id=farm.user_id,
+            session_id=chat_request.session_id,
+            conversation_id=conversation.id,
+            request_id=request_id,
+            user_message=chat_request.message,
+        )
 
     decision = await handle_pending_action(
         farm_id=farm.id,
@@ -163,15 +174,25 @@ async def chat(
         raise
     logger.info("[%s] 对话记录已保存 | record_id=%s", request_id, record.id)
 
-    if conversation:
-        save_message(db, conversation.id, "assistant", reply)
-
     result = ChatResponse(reply=reply)
     pending_action = build_pending_action_response(
         farm.id, session_id=chat_request.session_id
     )
     if pending_action:
         result.pending_action = pending_action
+    if conversation and started_turn:
+        recorder.finish_turn(
+            db,
+            started_turn,
+            assistant_reply=reply,
+            skills=[],
+            pending_action=pending_action.model_dump(mode="json") if pending_action else None,
+            selected_tools_count=None,
+            tool_calls_count=None,
+            token_total=None,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+            status="success",
+        )
     await _observe_chat_completion(
         user_id=farm.user_id or "",
         farm_id=farm.id,
@@ -226,6 +247,8 @@ async def stream_chat_events(
     """生成聊天 SSE 事件。"""
     full_reply = ""
     conversation = None
+    recorder = SessionFlywheelRecorder()
+    started_turn = None
     start = time.perf_counter()
     try:
         if chat_request.session_id:
@@ -235,7 +258,15 @@ async def stream_chat_events(
                 chat_request.session_id,
                 user_id=user.id,
             )
-            save_message(db, conversation.id, "user", chat_request.message)
+            started_turn = recorder.start_turn(
+                db,
+                farm_id=farm.id,
+                user_id=user.id,
+                session_id=chat_request.session_id,
+                conversation_id=conversation.id,
+                request_id=request_id,
+                user_message=chat_request.message,
+            )
 
         decision = await handle_pending_action(
             farm_id=farm.id,
@@ -272,6 +303,19 @@ async def stream_chat_events(
         pending_action = build_pending_action_response(
             farm.id, session_id=chat_request.session_id
         )
+        if conversation and started_turn and full_reply:
+            recorder.finish_turn(
+                db,
+                started_turn,
+                assistant_reply=full_reply,
+                skills=skill_names,
+                pending_action=pending_action.model_dump(mode="json") if pending_action else None,
+                selected_tools_count=None,
+                tool_calls_count=None,
+                token_total=None,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                status="success",
+            )
         conversation = _save_stream_reply(
             db,
             chat_request=chat_request,
@@ -387,14 +431,6 @@ def _save_stream_reply(
             )
             .first()
         )
-        if conversation:
-            meta_obj = {}
-            if skill_names:
-                meta_obj["skills"] = skill_names
-            if pending_action:
-                meta_obj["pending_action"] = pending_action.model_dump(mode="json")
-            meta = json.dumps(meta_obj, ensure_ascii=False) if meta_obj else None
-            save_message(db, conversation.id, "assistant", full_reply, meta=meta)
 
     record = AgentRecord(
         cycle_id=chat_request.cycle_id,

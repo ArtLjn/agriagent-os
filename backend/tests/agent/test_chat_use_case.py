@@ -126,13 +126,19 @@ async def test_chat_with_session_id_saves_user_and_assistant_messages():
     farm = _mock_farm()
     conversation = MagicMock()
     conversation.id = 42
+    recorder = MagicMock()
+    started_turn = MagicMock()
+    recorder.start_turn.return_value = started_turn
 
     with (
         patch(
             "app.agent.application.chat_use_case.get_or_create_conversation",
             return_value=conversation,
         ) as mock_get_conversation,
-        patch("app.agent.application.chat_use_case.save_message") as mock_save_message,
+        patch(
+            "app.agent.application.chat_use_case.SessionFlywheelRecorder",
+            return_value=recorder,
+        ),
         patch(
             "app.agent.application.chat_use_case.invoke_advisor",
             new_callable=AsyncMock,
@@ -165,9 +171,16 @@ async def test_chat_with_session_id_saves_user_and_assistant_messages():
         "sess-123",
         user_id=farm.user_id,
     )
-    assert mock_save_message.call_count == 2
-    mock_save_message.assert_any_call(db, 42, "user", "你好")
-    mock_save_message.assert_any_call(db, 42, "assistant", "回复内容")
+    recorder.start_turn.assert_called_once_with(
+        db,
+        farm_id=farm.id,
+        user_id=farm.user_id,
+        session_id="sess-123",
+        conversation_id=42,
+        request_id="req-1",
+        user_message="你好",
+    )
+    recorder.finish_turn.assert_called_once()
     mock_advisor.assert_awaited_once()
 
 
@@ -183,7 +196,7 @@ async def test_chat_with_session_id_passes_conversation_context_to_advisor():
             "app.agent.application.chat_use_case.get_or_create_conversation",
             return_value=conversation,
         ),
-        patch("app.agent.application.chat_use_case.save_message"),
+        patch("app.agent.application.chat_use_case.SessionFlywheelRecorder"),
         patch(
             "app.agent.application.chat_use_case.invoke_advisor",
             new_callable=AsyncMock,
@@ -224,9 +237,13 @@ async def test_chat_without_session_id_does_not_save_conversation_messages():
     """无 session_id 时不写会话消息。"""
     db = MagicMock()
     farm = _mock_farm()
+    recorder = MagicMock()
 
     with (
-        patch("app.agent.application.chat_use_case.save_message") as mock_save_message,
+        patch(
+            "app.agent.application.chat_use_case.SessionFlywheelRecorder",
+            return_value=recorder,
+        ),
         patch(
             "app.agent.application.chat_use_case.invoke_advisor",
             new_callable=AsyncMock,
@@ -253,7 +270,8 @@ async def test_chat_without_session_id_does_not_save_conversation_messages():
         )
 
     assert result.reply == "回复"
-    mock_save_message.assert_not_called()
+    recorder.start_turn.assert_not_called()
+    recorder.finish_turn.assert_not_called()
 
 
 async def test_chat_pending_confirm_saves_to_conversation():
@@ -262,13 +280,19 @@ async def test_chat_pending_confirm_saves_to_conversation():
     farm = _mock_farm()
     conversation = MagicMock()
     conversation.id = 10
+    recorder = MagicMock()
+    started_turn = MagicMock()
+    recorder.start_turn.return_value = started_turn
 
     with (
         patch(
             "app.agent.application.chat_use_case.get_or_create_conversation",
             return_value=conversation,
         ),
-        patch("app.agent.application.chat_use_case.save_message") as mock_save_message,
+        patch(
+            "app.agent.application.chat_use_case.SessionFlywheelRecorder",
+            return_value=recorder,
+        ),
         patch(
             "app.agent.application.chat_use_case.invoke_advisor",
             new_callable=AsyncMock,
@@ -295,9 +319,8 @@ async def test_chat_pending_confirm_saves_to_conversation():
 
     assert result.reply == "已执行：已记账"
     mock_advisor.assert_not_awaited()
-    assert mock_save_message.call_count == 2
-    mock_save_message.assert_any_call(db, 10, "user", "确认")
-    mock_save_message.assert_any_call(db, 10, "assistant", "已执行：已记账")
+    recorder.start_turn.assert_called_once()
+    recorder.finish_turn.assert_called_once()
 
 
 async def test_stream_chat_handles_pending_without_legacy_service_or_advisor():
@@ -389,7 +412,7 @@ async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():
             "app.agent.application.chat_use_case.get_or_create_conversation",
             return_value=conversation,
         ),
-        patch("app.agent.application.chat_use_case.save_message"),
+        patch("app.agent.application.chat_use_case.SessionFlywheelRecorder"),
         patch(
             "app.agent.application.chat_use_case.handle_pending_action",
             new_callable=AsyncMock,
@@ -475,3 +498,85 @@ async def test_save_stream_reply_filters_conversation_by_farm_id():
     assert "conversations.farm_id" in filter_sql[1]
     added_record = db.add.call_args.args[0]
     assert added_record.conversation_id is None
+
+
+async def test_chat_records_turn_and_event_metadata(db_session, monkeypatch):
+    from app.agent.application import chat_use_case
+    from app.models.agent_turn import AgentTurn
+    from app.models.conversation import ConversationMessage
+    from app.models.farm import Farm
+    from app.schemas.agent import ChatRequest
+
+    farm = db_session.query(Farm).filter_by(id=1).one()
+    farm.user_id = "user-1"
+    db_session.commit()
+
+    async def fake_invoke_advisor(*_args, **_kwargs):
+        return "当前有水稻"
+
+    monkeypatch.setattr(chat_use_case, "invoke_advisor", fake_invoke_advisor)
+
+    response = await chat_use_case.chat(
+        db_session,
+        ChatRequest(message="我家有哪些作物栽种", session_id="sess-chat"),
+        farm,
+        request_id="abcd1234",
+    )
+
+    assert response.reply == "当前有水稻"
+    turn = db_session.query(AgentTurn).filter_by(session_id="sess-chat").one()
+    messages = (
+        db_session.query(ConversationMessage)
+        .filter(ConversationMessage.turn_id == turn.id)
+        .order_by(ConversationMessage.id.asc())
+        .all()
+    )
+    assert [message.role for message in messages] == ["user", "assistant"]
+    assert turn.input_preview == "我家有哪些作物栽种"
+    assert turn.reply_preview == "当前有水稻"
+
+
+async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch):
+    from app.agent.application import chat_use_case
+    from app.models.agent_turn import AgentTurn
+    from app.models.farm import Farm
+    from app.models.user import User
+    from app.schemas.agent import ChatRequest
+
+    user = User(
+        id="stream-user-1",
+        phone="18800000001",
+        password_hash="h",
+        nickname="流式用户",
+        role="user",
+        status="active",
+    )
+    farm = db_session.query(Farm).filter_by(id=1).one()
+    farm.user_id = "stream-user-1"
+    db_session.add(user)
+    db_session.commit()
+
+    async def fake_stream_advisor(*_args, **_kwargs):
+        yield "当前"
+        yield "有水稻"
+
+    async def fake_flush_trace_queue():
+        return None
+
+    monkeypatch.setattr(chat_use_case, "stream_advisor", fake_stream_advisor)
+    monkeypatch.setattr(chat_use_case, "_flush_trace_queue", fake_flush_trace_queue)
+    monkeypatch.setattr(chat_use_case, "_get_skill_names", lambda *_args, **_kwargs: [])
+
+    chunks = []
+    async for chunk in chat_use_case.stream_chat_events(
+        db_session,
+        ChatRequest(message="我家有哪些作物栽种", session_id="sess-stream"),
+        user,
+        farm,
+        request_id="abcd1234",
+    ):
+        chunks.append(chunk)
+
+    assert any("当前" in chunk for chunk in chunks)
+    turn = db_session.query(AgentTurn).filter_by(session_id="sess-stream").one()
+    assert turn.reply_preview == "当前有水稻"
