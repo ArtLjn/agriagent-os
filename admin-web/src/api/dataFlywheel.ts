@@ -139,6 +139,21 @@ export interface CaseDraft {
 
 export type CaseDraftTargetType = 'simulation' | 'evaluation_replay';
 
+export interface DataFlywheelSyncRequest {
+  session_id?: string;
+  only_missing?: boolean;
+  limit?: number;
+}
+
+export interface DataFlywheelSyncJob {
+  job_id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | string;
+  mode: 'background' | 'inline' | string;
+  session_id?: string | null;
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+}
+
 const samplePath = (sampleId: string) => `/admin/data-flywheel/samples/${encodeURIComponent(sampleId)}`;
 
 export async function listDataFlywheelSamples(
@@ -187,5 +202,17 @@ export async function createCaseDraft(sampleId: string, targetType: CaseDraftTar
   const response = await apiClient.post<CaseDraft>(`${samplePath(sampleId)}/case-draft`, {
     target_type: targetType,
   });
+  return response.data;
+}
+
+export async function syncDataFlywheelSessions(body: DataFlywheelSyncRequest): Promise<DataFlywheelSyncJob> {
+  const response = await apiClient.post<DataFlywheelSyncJob>('/admin/data-flywheel/sync-sessions', body);
+  return response.data;
+}
+
+export async function getDataFlywheelSyncJob(jobId: string): Promise<DataFlywheelSyncJob> {
+  const response = await apiClient.get<DataFlywheelSyncJob>(
+    `/admin/data-flywheel/sync-sessions/${encodeURIComponent(jobId)}`
+  );
   return response.data;
 }

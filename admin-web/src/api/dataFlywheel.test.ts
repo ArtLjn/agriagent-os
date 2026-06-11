@@ -7,8 +7,10 @@ import {
   exportSampleJsonl,
   getSampleDetail,
   getSessionReview,
+  getDataFlywheelSyncJob,
   listDataFlywheelSamples,
   markBadCase,
+  syncDataFlywheelSessions,
 } from './dataFlywheel';
 
 vi.mock('./client', () => ({
@@ -184,5 +186,46 @@ describe('dataFlywheel api', () => {
       target_type: 'evaluation_replay',
     });
     expect(result.draft_id).toBe('draft:1');
+  });
+
+  it('提交后台同步会话任务', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        job_id: 'session-sync-1',
+        status: 'queued',
+        mode: 'background',
+        session_id: 'session-a',
+      },
+    });
+
+    const result = await syncDataFlywheelSessions({
+      session_id: 'session-a',
+      only_missing: true,
+      limit: 100,
+    });
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith('/admin/data-flywheel/sync-sessions', {
+      session_id: 'session-a',
+      only_missing: true,
+      limit: 100,
+    });
+    expect(result.job_id).toBe('session-sync-1');
+  });
+
+  it('查询会话同步任务状态', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        job_id: 'session-sync-1',
+        status: 'completed',
+        result: { synced_turns: 2 },
+      },
+    });
+
+    const result = await getDataFlywheelSyncJob('session-sync-1');
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith(
+      '/admin/data-flywheel/sync-sessions/session-sync-1'
+    );
+    expect(result.status).toBe('completed');
   });
 });

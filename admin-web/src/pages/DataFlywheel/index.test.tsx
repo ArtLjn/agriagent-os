@@ -6,21 +6,30 @@ import DataFlywheel from './index';
 import {
   addSampleLabel,
   createCaseDraft,
+  getDataFlywheelSyncJob,
   getSampleDetail,
   getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
+  syncDataFlywheelSessions,
 } from '../../api/dataFlywheel';
-import type { DataFlywheelDetail, DataFlywheelSample, DataFlywheelSessionReview } from '../../api/dataFlywheel';
+import type {
+  DataFlywheelDetail,
+  DataFlywheelSample,
+  DataFlywheelSessionReview,
+  DataFlywheelSyncJob,
+} from '../../api/dataFlywheel';
 
 vi.mock('../../api/dataFlywheel', () => ({
   addSampleLabel: vi.fn(),
   createCaseDraft: vi.fn(),
   exportSampleJsonl: vi.fn(),
+  getDataFlywheelSyncJob: vi.fn(),
   getSampleDetail: vi.fn(),
   getSessionReview: vi.fn(),
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
+  syncDataFlywheelSessions: vi.fn(),
 }));
 
 const sample: DataFlywheelSample = {
@@ -240,6 +249,8 @@ const anotherSessionReview: DataFlywheelSessionReview = {
 const mockedList = vi.mocked(listDataFlywheelSamples);
 const mockedDetail = vi.mocked(getSampleDetail);
 const mockedSessionReview = vi.mocked(getSessionReview);
+const mockedSyncSessions = vi.mocked(syncDataFlywheelSessions);
+const mockedSyncJob = vi.mocked(getDataFlywheelSyncJob);
 const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateDraft = vi.mocked(createCaseDraft);
 const mockedMarkBadCase = vi.mocked(markBadCase);
@@ -256,6 +267,22 @@ describe('DataFlywheel 页面', () => {
     mockedSessionReview.mockImplementation((sessionId) =>
       Promise.resolve(sessionId === 'session-b' ? anotherSessionReview : sessionReview)
     );
+    mockedSyncSessions.mockResolvedValue({
+      job_id: 'session-sync-1',
+      status: 'queued',
+      mode: 'background',
+      session_id: 'session-a',
+      result: null,
+      error: null,
+    });
+    mockedSyncJob.mockResolvedValue({
+      job_id: 'session-sync-1',
+      status: 'completed',
+      mode: 'background',
+      session_id: 'session-a',
+      result: { synced_turns: 2 },
+      error: null,
+    } as DataFlywheelSyncJob);
     mockedAddLabel.mockResolvedValue({
       id: 2,
       sample_id: sample.sample_id,
@@ -527,5 +554,28 @@ describe('DataFlywheel 页面', () => {
         request_id: 'req:abc',
       });
     });
+  });
+
+  it('在会话归档视图点击同步会话后同步当前 session 并刷新列表与会话审阅', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-a');
+    fireEvent.click(screen.getByTestId('archive-session-session-a'));
+    await screen.findByText('完整对话记录');
+
+    await user.click(screen.getByRole('button', { name: /同步会话/ }));
+
+    await waitFor(() => {
+      expect(mockedSyncSessions).toHaveBeenCalledWith({
+        session_id: 'session-a',
+        only_missing: true,
+        limit: 100,
+      });
+    });
+    expect(mockedSyncJob).toHaveBeenCalledWith('session-sync-1');
+    expect(mockedList).toHaveBeenCalledTimes(2);
+    expect(mockedSessionReview).toHaveBeenCalledTimes(2);
   });
 });

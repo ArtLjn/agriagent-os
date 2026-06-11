@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Checkbox, Input, Select, Space, Typography, message } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
   addSampleLabel,
   createCaseDraft,
   exportSampleJsonl,
+  getDataFlywheelSyncJob,
   getSampleDetail,
   getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
+  syncDataFlywheelSessions,
   type CaseDraft,
   type DataFlywheelDetail,
   type DataFlywheelLabel,
@@ -74,6 +76,7 @@ export default function DataFlywheel() {
   const [activeArchiveKey, setActiveArchiveKey] = useState(ALL_ARCHIVE_KEY);
   const [sessionReview, setSessionReview] = useState<DataFlywheelSessionReview | null>(null);
   const [loadingSessionReview, setLoadingSessionReview] = useState(false);
+  const [syncingSessions, setSyncingSessions] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(true);
   const listRequestSeq = useRef(0);
@@ -286,6 +289,40 @@ export default function DataFlywheel() {
     }
   };
 
+  const handleSyncSessions = async () => {
+    setSyncingSessions(true);
+    const sessionId = isSessionArchiveActive ? activeArchiveKey : undefined;
+    try {
+      const job = await syncDataFlywheelSessions({
+        session_id: sessionId,
+        only_missing: true,
+        limit: 100,
+      });
+      message.success(sessionId ? '当前会话同步任务已提交' : '最近会话同步任务已提交');
+      await waitForSyncJob(job.job_id);
+      await fetchSamples(query);
+      if (sessionId) {
+        await loadSessionReview(sessionId);
+      }
+      message.success('会话同步已完成');
+    } catch {
+      message.error('同步会话失败');
+    } finally {
+      setSyncingSessions(false);
+    }
+  };
+
+  const waitForSyncJob = async (jobId: string) => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const job = await getDataFlywheelSyncJob(jobId);
+      if (job.status === 'completed') return;
+      if (job.status === 'failed') {
+        throw new Error(job.error || 'SYNC_JOB_FAILED');
+      }
+      await sleep(1000);
+    }
+  };
+
   const clearSelection = () => {
     detailRequestSeq.current += 1;
     setSelectedSample(null);
@@ -429,6 +466,9 @@ export default function DataFlywheel() {
           <Button icon={<ReloadOutlined />} loading={loadingList} onClick={refreshSamples}>
             刷新
           </Button>
+          <Button icon={<CloudSyncOutlined />} loading={syncingSessions} onClick={handleSyncSessions}>
+            同步会话
+          </Button>
           <Typography.Text style={{ color: palette.textMuted }}>共 {total} 条</Typography.Text>
         </Space>
       </Card>
@@ -446,6 +486,12 @@ export default function DataFlywheel() {
       <CaseDraftPreview draft={draft} open={draftOpen} onClose={() => setDraftOpen(false)} />
     </div>
   );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function sessionArchiveKey(sample: DataFlywheelSample) {
