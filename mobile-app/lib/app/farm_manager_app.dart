@@ -13,7 +13,7 @@ class FarmManagerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Farm Manager',
+      title: '田掌柜',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: AuthFlow(dependencies: dependencies),

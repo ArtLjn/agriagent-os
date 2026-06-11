@@ -46,6 +46,20 @@ void main() {
     expect(find.text('发消息或按住说话...'), findsOneWidget);
   });
 
+  testWidgets('点击快捷提示词会直接发送问题', (tester) async {
+    final repository = _TrackingYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaScreen(repository: repository)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('今天适合干什么'));
+    await tester.pumpAndSettle();
+
+    expect(repository.sentMessages, ['今天适合干什么']);
+    expect(find.text('收到'), findsOneWidget);
+  });
+
   testWidgets('点击菜单打开历史聊天抽屉', (tester) async {
     await tester.pumpWidget(yayaScreen());
     await tester.pump();
@@ -57,7 +71,69 @@ void main() {
     expect(find.text('最近对话'), findsOneWidget);
     expect(find.text('7天内'), findsOneWidget);
     expect(find.text('张三'), findsOneWidget);
-    expect(find.text('问答'), findsOneWidget);
+    expect(find.textContaining('检测到工具调用格式异常'), findsOneWidget);
+    expect(find.text('对话'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('点击新对话入口会清空当前聊天内容', (tester) async {
+    await tester.pumpWidget(yayaScreen());
+    await tester.pump();
+
+    await tester.tap(find.byIcon(LucideIcons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('检测到工具调用格式异常'));
+    await tester.pumpAndSettle();
+    expect(find.text('建议傍晚浇水'), findsOneWidget);
+
+    await tester.tap(find.byIcon(LucideIcons.plus).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议傍晚浇水'), findsNothing);
+    expect(find.textContaining('我是芽芽'), findsOneWidget);
+  });
+
+  testWidgets('芽芽回复支持 Markdown 渲染', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: YayaScreen(repository: _MarkdownYayaRepository()),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), '我的欠款');
+    await tester.tap(find.byIcon(LucideIcons.send));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('普通赊账'), findsOneWidget);
+    expect(find.textContaining('**普通赊账**'), findsNothing);
+  });
+
+  testWidgets('芽芽 pending 回复展示确认卡并可点击确认', (tester) async {
+    final repository = _PendingYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: YayaScreen(repository: repository),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), '我想种大豆');
+    await tester.tap(find.byIcon(LucideIcons.send));
+    await tester.pumpAndSettle();
+
+    expect(find.text('待确认执行'), findsOneWidget);
+    expect(find.text('理解：您说的是「我想种大豆」'), findsOneWidget);
+    expect(find.text('作物'), findsOneWidget);
+    expect(find.text('大豆'), findsOneWidget);
+    expect(find.text('确认'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+
+    await tester.tap(find.text('确认'));
+    await tester.pumpAndSettle();
+
+    expect(repository.sentMessages, ['我想种大豆', '确认']);
+    expect(find.text('已执行'), findsOneWidget);
   });
 
   testWidgets('全部技能页使用独立 banner 图片资产', (tester) async {
@@ -94,8 +170,8 @@ class _YayaCopyRepository extends YayaRepository {
       ConversationSummary(
         id: 1,
         sessionId: 's1',
-        title: '问答',
-        preview: '今天浇水吗',
+        title: '检测到工具调用格式异常，正在重新处理，请稍等',
+        preview: '睢宁县未来3天天气如下：6月8日多云转阴，建议避开午后高温安排作业。',
         status: 'active',
         category: '对话',
       ),
@@ -120,6 +196,85 @@ class _YayaCopyRepository extends YayaRepository {
     String? sessionId,
   }) async* {
     yield const YayaStreamEvent(content: '收到');
+    yield const YayaStreamEvent(done: true);
+  }
+}
+
+class _MarkdownYayaRepository extends YayaRepository {
+  _MarkdownYayaRepository() : super(ApiClient());
+
+  @override
+  Future<List<ConversationSummary>> loadConversations({int limit = 20}) async {
+    return const [];
+  }
+
+  @override
+  Stream<YayaStreamEvent> streamMessage(
+    String message, {
+    int? cycleId,
+    String? sessionId,
+  }) async* {
+    yield const YayaStreamEvent(content: '**普通赊账**：130.00 元');
+    yield const YayaStreamEvent(done: true);
+  }
+}
+
+class _TrackingYayaRepository extends YayaRepository {
+  _TrackingYayaRepository() : super(ApiClient());
+
+  final List<String> sentMessages = [];
+
+  @override
+  Future<List<ConversationSummary>> loadConversations({int limit = 20}) async {
+    return const [];
+  }
+
+  @override
+  Stream<YayaStreamEvent> streamMessage(
+    String message, {
+    int? cycleId,
+    String? sessionId,
+  }) async* {
+    sentMessages.add(message);
+    yield const YayaStreamEvent(content: '收到');
+    yield const YayaStreamEvent(done: true);
+  }
+}
+
+class _PendingYayaRepository extends YayaRepository {
+  _PendingYayaRepository() : super(ApiClient());
+
+  final List<String> sentMessages = [];
+
+  @override
+  Future<List<ConversationSummary>> loadConversations({int limit = 20}) async {
+    return const [];
+  }
+
+  @override
+  Stream<YayaStreamEvent> streamMessage(
+    String message, {
+    int? cycleId,
+    String? sessionId,
+  }) async* {
+    sentMessages.add(message);
+    if (message == '确认') {
+      yield const YayaStreamEvent(content: '已执行');
+      yield const YayaStreamEvent(done: true);
+      return;
+    }
+    yield const YayaStreamEvent(
+      content: '🌱 确认创建茬口：大豆 理解：您说的是「我想种大豆」 确认吗？',
+      pendingAction: {
+        'action_id': 'a1',
+        'skill_name': 'create_crop_cycle',
+        'params': {'作物': '大豆'},
+        'context': {
+          'original_input': '我想种大豆',
+          'notes': ['理解：您说的是「我想种大豆」'],
+        },
+      },
+    );
     yield const YayaStreamEvent(done: true);
   }
 }

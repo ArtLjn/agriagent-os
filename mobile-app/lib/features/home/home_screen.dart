@@ -7,6 +7,7 @@ import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'advice_detail_screen.dart';
 import 'home_controller.dart';
 
 part 'home_action_widgets.dart';

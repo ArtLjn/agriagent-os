@@ -1,5 +1,6 @@
 import '../data/api/api_client.dart';
 import '../data/repositories/billing_repository.dart';
+import '../data/repositories/business_repository.dart';
 import '../data/repositories/dashboard_repository.dart';
 import '../data/repositories/profile_repository.dart';
 import '../data/repositories/workbench_repository.dart';
@@ -15,6 +16,8 @@ abstract class AppDependencies {
   BillingRepository get billing;
 
   WorkbenchRepository get workbench;
+
+  BusinessRepository get business;
 
   YayaRepository get yaya;
 
@@ -44,6 +47,7 @@ class BackendAppDependencies implements AppDependencies {
         profile = ProfileRepository(client),
         dashboard = DashboardRepository(client),
         billing = BillingRepository(client),
+        business = BusinessRepository(client),
         workbench = WorkbenchRepository(client),
         yaya = YayaRepository(client);
 
@@ -55,6 +59,8 @@ class BackendAppDependencies implements AppDependencies {
   final DashboardRepository dashboard;
   @override
   final BillingRepository billing;
+  @override
+  final BusinessRepository business;
   @override
   final WorkbenchRepository workbench;
   @override

@@ -1,26 +1,7 @@
 {
   "default_provider": "local",
   "providers": [
-    
-    {
-      "name": "dashscope",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "api_keys": [
-        "sk-test-placeholder"
-      ],
-      "priority": 1,
-      "weight": 8,
-      "enabled": true,
-      "models": [
-        {"id": "qwen3.6-35b-a3b", "priority": 1, "enabled": true, "roles": ["all", "lightweight"]},
-        {"id": "qwen3.6-plus", "priority": 1, "enabled": true, "roles": ["all"]},
-        {"id": "qwen3.6-plus-2026-04-02", "priority": 2, "enabled": true, "roles": ["all"]},
-        {"id": "qwen3.7-max-2026-05-17", "priority": 3, "enabled": true, "roles": ["all"]},
-        {"id": "qwen3.7-max-preview", "priority": 3, "enabled": true, "roles": ["all"]},
-        {"id": "glm-5.1", "priority": 4, "enabled": true, "roles": ["all"]}
-      ]
-    },
-    {
+     {
       "name": "local",
       "base_url": "http://47.98.253.236:9000/v1",
       "api_keys": [
@@ -34,13 +15,32 @@
       ]
     },
     {
+      "name": "dashscope",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_keys": [
+        "sk-test-placeholder"
+      ],
+      "priority": 1,
+      "weight": 1,
+      "enabled": true,
+      "models": [
+        {"id": "qwen3.6-35b-a3b", "priority": 1, "enabled": true, "roles": ["all", "lightweight"]},
+        {"id": "qwen3.6-plus", "priority": 1, "enabled": true, "roles": ["all"]},
+        {"id": "qwen3.6-plus-2026-04-02", "priority": 2, "enabled": true, "roles": ["all"]},
+        {"id": "qwen3.7-max-2026-05-17", "priority": 3, "enabled": true, "roles": ["all"]},
+        {"id": "qwen3.7-max-preview", "priority": 3, "enabled": true, "roles": ["all"]},
+        {"id": "glm-5.1", "priority": 4, "enabled": true, "roles": ["all"]}
+      ]
+    },
+
+    {
       "name": "modelscope",
       "base_url": "https://api-inference.modelscope.cn/v1/",
       "api_keys": [
         "ms-2e89ffe5-fa4c-4435-835a-b4f072ae237c"
       ],
       "priority": 5,
-      "weight": 5,
+      "weight": 1,
       "enabled": true,
       "models": [
         {"id": "Qwen/Qwen3-235B-A22B", "priority": 1, "enabled": true, "roles": ["all"]},
@@ -56,7 +56,7 @@
         "sk-test-placeholder"
       ],
       "priority": 6,
-      "weight": 7,
+      "weight": 1,
       "enabled": true,
       "models": [
         {"id": "Qwen/Qwen3.5-35B-A3B", "priority": 1, "enabled": true, "roles": ["all"]},

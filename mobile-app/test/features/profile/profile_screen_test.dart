@@ -21,9 +21,10 @@ void main() {
 
     expect(find.text('农场管家'), findsOneWidget);
     expect(find.text('农友'), findsOneWidget);
-    expect(find.text('13800138000 · user'), findsOneWidget);
+    expect(find.text('13800138000 · 用户'), findsOneWidget);
     expect(find.text('寿光'), findsNWidgets(3));
-    expect(find.text('active'), findsOneWidget);
+    expect(find.text('正常'), findsWidgets);
+    expect(find.text('active'), findsNothing);
     expect(find.text('版本 0.1.0'), findsOneWidget);
     expect(find.text('所在城市'), findsOneWidget);
     expect(find.text('默认天气'), findsOneWidget);

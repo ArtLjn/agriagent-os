@@ -18,12 +18,13 @@ class HomeController {
     final workOrders = results[2] as PageResult<ApiRecord>;
     final labor = Map<String, dynamic>.from(results[3] as Map);
     final unpaid = _number(labor['total_unpaid'] ?? labor['unpaid_amount']);
+    final weatherText = _weatherText(forecast);
 
     return HomeViewModel(
       headline: _nonEmpty(advice.preview, fallback: '暂无建议'),
       scoreText: workOrders.total.toString(),
-      scoreCaption: '${_weatherText(forecast)} · ${workOrders.total}项作业',
-      weatherText: _weatherText(forecast),
+      scoreCaption: '$weatherText · ${workOrders.total}项作业',
+      weatherText: weatherText,
       workOrderCountText: '${workOrders.total}项',
       unsettledLaborText: _money(unpaid),
       riskText: unpaid > 0 ? '1项' : '0项',
@@ -59,7 +60,6 @@ class HomeController {
   }
 
   String _weatherText(Map<String, dynamic> data) {
-    final location = _firstText(data, const ['location', 'city', 'name']);
     final summary = _firstText(data, const ['summary', 'text', 'weather']);
     final forecast = data['forecast'];
     String daily = '';
@@ -69,8 +69,38 @@ class HomeController {
         const ['summary', 'text', 'weather'],
       );
     }
-    final parts = [location, summary, daily].where((part) => part.isNotEmpty);
+    final backendDaily = _legacyDailyWeatherText(data['daily']);
+    final parts =
+        [summary, daily, backendDaily].where((part) => part.isNotEmpty);
     return parts.isEmpty ? '暂无天气' : parts.join(' ');
+  }
+
+  String _legacyDailyWeatherText(Object? dailyData) {
+    if (dailyData is! Map) return '';
+    final daily = Map<String, dynamic>.from(dailyData);
+    final maxTemps = _listValue(daily['temperature_2m_max']);
+    final precipitations = _listValue(daily['precipitation_sum']);
+    final maxTemp = maxTemps.isNotEmpty ? _number(maxTemps.first) : 0;
+    final precipitation =
+        precipitations.isNotEmpty ? _number(precipitations.first) : 0;
+    if (maxTemp == 0 && precipitation == 0) return '';
+
+    final weather =
+        _weatherLabel(maxTemp: maxTemp, precipitation: precipitation);
+    return '$weather ${maxTemp.round()}℃';
+  }
+
+  List<dynamic> _listValue(Object? value) {
+    if (value is List<dynamic>) return value;
+    if (value is List) return List<dynamic>.from(value);
+    return const [];
+  }
+
+  String _weatherLabel({required num maxTemp, required num precipitation}) {
+    if (maxTemp >= 32) return '高温';
+    if (precipitation >= 10) return '大雨';
+    if (precipitation >= 1) return '小雨';
+    return '晴';
   }
 
   String _firstText(Map<String, dynamic> data, List<String> keys) {

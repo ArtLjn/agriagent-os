@@ -40,6 +40,20 @@ class YayaController extends ChangeNotifier {
     _safeNotify();
   }
 
+  void startNewConversation() {
+    if (sending) {
+      errorMessage = '请等待芽芽回复完成后再新建对话';
+      _safeNotify();
+      return;
+    }
+    activeSessionId = null;
+    errorMessage = null;
+    pendingAction = null;
+    lastSkills = const [];
+    messages.clear();
+    _safeNotify();
+  }
+
   Future<void> send(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || sending) return;
@@ -71,7 +85,13 @@ class YayaController extends ChangeNotifier {
           );
         }
         if (event.skills.isNotEmpty) lastSkills = event.skills;
-        if (event.pendingAction != null) pendingAction = event.pendingAction;
+        if (event.pendingAction != null) {
+          pendingAction = event.pendingAction;
+          final current = messages[assistantIndex];
+          messages[assistantIndex] = current.copyWith(
+            pendingAction: event.pendingAction,
+          );
+        }
         _safeNotify();
       }
     } catch (_) {
@@ -84,6 +104,19 @@ class YayaController extends ChangeNotifier {
         _safeNotify();
       }
     }
+  }
+
+  Future<void> respondToPendingAction(String text) async {
+    if (pendingAction == null) return;
+    pendingAction = null;
+    for (var index = 0; index < messages.length; index++) {
+      final message = messages[index];
+      if (message.pendingAction != null) {
+        messages[index] = message.copyWith(clearPendingAction: true);
+      }
+    }
+    _safeNotify();
+    await send(text);
   }
 
   void _removeEmptyAssistant(int assistantIndex) {
@@ -108,6 +141,7 @@ class YayaMessageViewModel {
   const YayaMessageViewModel({
     required this.role,
     required this.content,
+    this.pendingAction,
   });
 
   factory YayaMessageViewModel.user(String content) {
@@ -115,13 +149,27 @@ class YayaMessageViewModel {
   }
 
   factory YayaMessageViewModel.fromConversation(ConversationMessage message) {
-    return YayaMessageViewModel(role: message.role, content: message.content);
+    return YayaMessageViewModel(
+      role: message.role,
+      content: message.content,
+      pendingAction: message.pendingAction,
+    );
   }
 
   final String role;
   final String content;
+  final Map<String, dynamic>? pendingAction;
 
-  YayaMessageViewModel copyWith({String? content}) {
-    return YayaMessageViewModel(role: role, content: content ?? this.content);
+  YayaMessageViewModel copyWith({
+    String? content,
+    Map<String, dynamic>? pendingAction,
+    bool clearPendingAction = false,
+  }) {
+    return YayaMessageViewModel(
+      role: role,
+      content: content ?? this.content,
+      pendingAction:
+          clearPendingAction ? null : pendingAction ?? this.pendingAction,
+    );
   }
 }

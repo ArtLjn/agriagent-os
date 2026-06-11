@@ -30,6 +30,15 @@ class _AiSuggestionsCard extends StatelessWidget {
               background: _suggestionBackground(index),
               title: visible[index].title,
               subtitle: visible[index].subtitle,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => AdviceDetailScreen(
+                      suggestion: visible[index],
+                    ),
+                  ),
+                );
+              },
             ),
             if (index != visible.length - 1) const _SoftDivider(),
           ],
@@ -70,6 +79,7 @@ class _SuggestionRow extends StatelessWidget {
     required this.background,
     required this.title,
     required this.subtitle,
+    required this.onTap,
   });
 
   final IconData icon;
@@ -77,48 +87,56 @@ class _SuggestionRow extends StatelessWidget {
   final Color background;
   final String title;
   final String subtitle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 72,
-      child: Row(
-        children: [
-          IconBadge(
-            icon: icon,
-            color: color,
-            background: background,
-            size: 48,
-            iconSize: 25,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.listTitle,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: 72,
+          child: Row(
+            children: [
+              IconBadge(
+                icon: icon,
+                color: color,
+                background: background,
+                size: 48,
+                iconSize: 25,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.listTitle,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.small.copyWith(fontSize: 13),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(fontSize: 13),
-                ),
-              ],
-            ),
+              ),
+              const Icon(
+                LucideIcons.chevronRight,
+                size: 22,
+                color: AppColors.subtle,
+              ),
+            ],
           ),
-          const Icon(
-            LucideIcons.chevronRight,
-            size: 22,
-            color: AppColors.subtle,
-          ),
-        ],
+        ),
       ),
     );
   }

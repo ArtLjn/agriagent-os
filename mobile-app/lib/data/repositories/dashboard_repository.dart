@@ -73,6 +73,12 @@ class DashboardRepository {
       forecastLat = (settings['default_lat'] as num?)?.toDouble();
       forecastLon = (settings['default_lon'] as num?)?.toDouble();
     }
+    forecastLocation =
+        forecastLocation == null || forecastLocation.trim().isEmpty
+            ? '睢宁县'
+            : forecastLocation;
+    forecastLat ??= 34.20442;
+    forecastLon ??= 117.28386;
     return client.getMap('/weather/forecast', query: {
       'days': days,
       'location': forecastLocation,

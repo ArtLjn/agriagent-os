@@ -144,6 +144,7 @@ export interface ConversationMessage {
   role: string;
   content: string;
   skills?: string[];
+  pending_action?: PendingAction | null;
   created_at: string;
 }
 

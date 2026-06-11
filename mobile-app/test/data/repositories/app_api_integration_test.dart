@@ -160,6 +160,8 @@ void main() {
     expect(adapter.find('GET', '/weather/forecast').query, {
       'days': 3,
       'location': '寿光',
+      'lat': 34.20442,
+      'lon': 117.28386,
     });
     expect(adapter.find('GET', '/costs').query, {
       'cycle_id': 7,
@@ -215,6 +217,23 @@ void main() {
     expect(events.first.content, '建议');
     expect(events.first.skills, ['weather']);
     expect(events.last.done, true);
+  });
+
+  test('芽芽流式接口兼容 type/data pending_action 事件', () async {
+    final adapter = StreamingAdapter(
+      [
+        'data: {"type":"pending_action","data":{"action_id":"a1","skill_name":"create_crop_cycle","params":{"作物":"大豆"}}}\n\n',
+        'data: [DONE]\n\n',
+      ].join(),
+    );
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final yaya = YayaRepository(ApiClient(dio: dio));
+
+    final events = await yaya.streamMessage('我想种大豆').toList();
+
+    expect(events.first.pendingAction?['action_id'], 'a1');
+    expect(events.first.pendingAction?['params'], {'作物': '大豆'});
   });
 
   test('芽芽流式接口遇到 malformed JSON 会产出解析错误事件', () async {

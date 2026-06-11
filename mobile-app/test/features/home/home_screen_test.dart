@@ -13,16 +13,19 @@ void main() {
         .pumpWidget(MaterialApp(home: HomeScreen(repository: _repository())));
     await tester.pumpAndSettle();
 
-    expect(find.text('农场管家'), findsOneWidget);
+    expect(find.bySemanticsLabel('田掌柜'), findsOneWidget);
     expect(find.text('今日经营态势'), findsOneWidget);
     expect(find.text('AI分析'), findsOneWidget);
     expect(find.text('AI 今日建议'), findsOneWidget);
     expect(find.text('注意控水'), findsOneWidget);
     expect(find.text('浇水'), findsOneWidget);
     expect(find.text('傍晚少量浇水'), findsOneWidget);
-    expect(find.textContaining('寿光'), findsWidgets);
+    expect(find.text('天气'), findsOneWidget);
+    expect(find.text('晴'), findsOneWidget);
+    expect(find.text('作业'), findsWidgets);
+    expect(find.text('待处理'), findsOneWidget);
+    expect(find.textContaining('寿光'), findsNothing);
     expect(find.text('1项'), findsWidgets);
-    expect(find.text('¥200'), findsWidgets);
     expect(find.text('资金概览'), findsOneWidget);
     expect(find.text('成本分析'), findsOneWidget);
     expect(find.text('茬口进度'), findsOneWidget);
@@ -39,6 +42,23 @@ void main() {
         .pumpWidget(MaterialApp(home: HomeScreen(repository: _repository())));
     await tester.pumpAndSettle();
     expect(find.textContaining('/'), findsNothing);
+  });
+
+  testWidgets('点击今日建议进入详情页', (tester) async {
+    await tester
+        .pumpWidget(MaterialApp(home: HomeScreen(repository: _repository())));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('浇水'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议详情'), findsOneWidget);
+    expect(find.text('浇水'), findsWidgets);
+    expect(find.text('AI 判断依据'), findsOneWidget);
+    expect(find.text('执行步骤'), findsOneWidget);
+    expect(find.text('关联事项'), findsOneWidget);
+    expect(find.text('生成作业单'), findsOneWidget);
+    expect(find.text('问问芽芽'), findsOneWidget);
   });
 
   testWidgets('父级 rebuild 后首页不重复请求数据', (tester) async {

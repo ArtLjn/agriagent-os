@@ -24,6 +24,8 @@ void main() {
 
     expect(model.nickname, '农友');
     expect(model.phone, '13800138000');
+    expect(model.role, '用户');
+    expect(model.status, '正常');
     expect(model.city, '寿光');
     expect(model.weatherCity, '寿光');
     expect(model.versionLabel, '版本 0.1.0');

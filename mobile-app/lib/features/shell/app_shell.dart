@@ -64,9 +64,12 @@ class _AppShellState extends State<AppShell> {
           children: [
             HomeScreen(repository: widget.dependencies.dashboard),
             WorkbenchScreen(
+              businessRepository: widget.dependencies.business,
               recordFlowController: recordFlowController,
               onGoHome: () => _selectTab(0),
               onGoLedger: () => _selectTab(3),
+              onGoYaya: () => _selectTab(2),
+              onGoProfile: () => _selectTab(4),
               onRecordAgain: () => _selectTab(1),
             ),
             YayaScreen(repository: widget.dependencies.yaya),

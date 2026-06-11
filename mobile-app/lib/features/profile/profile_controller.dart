@@ -15,8 +15,8 @@ class ProfileController {
     return ProfileViewModel(
       nickname: _fallback(user.nickname, '农友'),
       phone: _fallback(user.phone, '未绑定手机号'),
-      role: _fallback(user.role, '用户'),
-      status: _fallback(user.status, '未知'),
+      role: _roleLabel(user.role),
+      status: _statusLabel(user.status),
       city: city,
       weatherCity: city,
       versionLabel: version.latestVersion.isEmpty
@@ -28,6 +28,28 @@ class ProfileController {
   String _fallback(String? value, String fallback) {
     final text = value?.trim() ?? '';
     return text.isEmpty ? fallback : text;
+  }
+
+  String _roleLabel(String? value) {
+    return switch ((value ?? '').trim().toLowerCase()) {
+      'admin' => '管理员',
+      'owner' => '负责人',
+      'manager' => '管理员',
+      'user' => '用户',
+      '' => '用户',
+      _ => value!.trim(),
+    };
+  }
+
+  String _statusLabel(String? value) {
+    return switch ((value ?? '').trim().toLowerCase()) {
+      'active' => '正常',
+      'inactive' => '未启用',
+      'disabled' => '已停用',
+      'pending' => '待确认',
+      '' => '未知',
+      _ => value!.trim(),
+    };
   }
 }
 

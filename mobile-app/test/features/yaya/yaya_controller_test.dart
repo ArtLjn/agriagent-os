@@ -30,7 +30,28 @@ void main() {
     ]);
     expect(controller.lastSkills, ['weather']);
     expect(controller.pendingAction, {'type': 'confirm'});
+    expect(controller.messages.last.pendingAction, {'type': 'confirm'});
     expect(controller.sending, false);
+  });
+
+  test('确认待执行操作会清除旧卡片并发送确认消息', () async {
+    final repository = FakeStreamingYayaRepository([
+      const YayaStreamEvent(
+        content: '确认创建茬口：大豆 确认吗？',
+        pendingAction: {
+          'action_id': 'a1',
+          'params': {'作物': '大豆'},
+        },
+      ),
+      const YayaStreamEvent(done: true),
+    ]);
+    final controller = YayaController(repository: repository);
+
+    await controller.send('我想种大豆');
+    await controller.respondToPendingAction('确认');
+
+    expect(repository.sentMessages, ['我想种大豆', '确认']);
+    expect(controller.messages[1].pendingAction, isNull);
   });
 
   test('流式错误会保留用户消息并展示错误', () async {
@@ -105,12 +126,32 @@ void main() {
       '建议',
     ]);
   });
+
+  test('新建对话会清空当前会话状态', () async {
+    final controller = YayaController(
+      repository: DelayedStreamingYayaRepository(),
+    );
+
+    await controller.openConversation('s1');
+    controller.lastSkills = const ['weather'];
+    controller.pendingAction = {'type': 'confirm'};
+    controller.errorMessage = '旧错误';
+
+    controller.startNewConversation();
+
+    expect(controller.activeSessionId, isNull);
+    expect(controller.messages, isEmpty);
+    expect(controller.errorMessage, isNull);
+    expect(controller.pendingAction, isNull);
+    expect(controller.lastSkills, isEmpty);
+  });
 }
 
 class FakeStreamingYayaRepository extends YayaRepository {
   FakeStreamingYayaRepository(this.events) : super(ApiClient());
 
   final List<YayaStreamEvent> events;
+  final List<String> sentMessages = [];
 
   @override
   Stream<YayaStreamEvent> streamMessage(
@@ -118,6 +159,7 @@ class FakeStreamingYayaRepository extends YayaRepository {
     int? cycleId,
     String? sessionId,
   }) async* {
+    sentMessages.add(message);
     for (final event in events) {
       yield event;
     }

@@ -25,6 +25,7 @@ void main() {
     expect(model.incomeText, '¥0');
     expect(model.expenseText, '¥200');
     expect(model.netProfitText, '-¥200');
+    expect(model.insightText, contains('支出高于收入'));
     expect(model.transactions, hasLength(1));
     expect(model.transactions.single.title, '肥料');
     expect(model.transactions.single.amountText, '-¥200');
@@ -57,5 +58,56 @@ void main() {
 
     expect(model.transactions.single.isIncome, false);
     expect(model.transactions.single.amountText, '-¥200');
+  });
+
+  test('账本年度净收益大金额使用紧凑显示', () async {
+    final adapter = RecordingAdapter({
+      '/costs': paginatedCostsResponse,
+      '/costs/summary/2026': {
+        ...yearlySummaryResponse,
+        'net_profit': '-110970.16',
+      },
+      '/debts': debtsResponse,
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final controller = BillingController(
+      repository: BillingRepository(ApiClient(dio: dio)),
+      year: 2026,
+    );
+
+    final model = await controller.load();
+
+    expect(model.netProfitText, '-¥11.1万');
+  });
+
+  test('账本概览指标大金额使用万和亿', () async {
+    final adapter = RecordingAdapter({
+      '/costs': paginatedCostsResponse,
+      '/costs/summary/2026': {
+        ...yearlySummaryResponse,
+        'total_income': '123456789',
+        'total_cost': '116470.16',
+        'net_profit': '123340318.84',
+      },
+      '/debts': {
+        'summary': [
+          {'counterparty': '老王', 'remaining': '120000000'}
+        ],
+      },
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final controller = BillingController(
+      repository: BillingRepository(ApiClient(dio: dio)),
+      year: 2026,
+    );
+
+    final model = await controller.load();
+
+    expect(model.incomeText, '¥1.2亿');
+    expect(model.expenseText, '¥11.6万');
+    expect(model.netProfitText, '¥1.2亿');
+    expect(model.debtText, '¥1.2亿');
   });
 }

@@ -1,7 +1,9 @@
 part of 'yaya_screen.dart';
 
 class _SuggestionPills extends StatelessWidget {
-  const _SuggestionPills();
+  const _SuggestionPills({required this.onSelected});
+
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -26,28 +28,27 @@ class _SuggestionPills extends StatelessWidget {
       ),
     ];
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            for (final suggestion in suggestions)
-              _SuggestionPill(spec: suggestion),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () {},
-            icon: const Icon(LucideIcons.refreshCw, size: 16),
-            label: const Text('换一换'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.muted,
-              textStyle: AppTextStyles.body.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+        for (final suggestion in suggestions) ...[
+          _SuggestionPill(
+            spec: suggestion,
+            onTap: () => onSelected(suggestion.label),
+          ),
+          const SizedBox(height: 10),
+        ],
+        TextButton.icon(
+          onPressed: () {},
+          icon: const Icon(LucideIcons.refreshCw, size: 16),
+          label: const Text('换一换'),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.subtle,
+            minimumSize: const Size(0, 34),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: AppTextStyles.body.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -57,50 +58,60 @@ class _SuggestionPills extends StatelessWidget {
 }
 
 class _SuggestionPill extends StatelessWidget {
-  const _SuggestionPill({required this.spec});
+  const _SuggestionPill({
+    required this.spec,
+    required this.onTap,
+  });
 
   final _SuggestionSpec spec;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 16,
-            offset: Offset(0, 8),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          height: 42,
+          padding: const EdgeInsets.fromLTRB(12, 7, 16, 7),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.lineSoft),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 12,
+                offset: Offset(0, 5),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _SoftIcon(
-            icon: spec.icon,
-            color: spec.color,
-            background: spec.background,
-            size: 28,
-            iconSize: 15,
-            shape: _SoftIconShape.rounded,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SoftIcon(
+                icon: spec.icon,
+                color: spec.color,
+                background: spec.background,
+                size: 26,
+                iconSize: 14,
+                shape: _SoftIconShape.rounded,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                spec.label,
+                maxLines: 1,
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.ink2,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            spec.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.ink2,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -127,42 +138,38 @@ class _ModeChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(
-          child: ModeChip(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        children: [
+          const ModeChip(
             icon: LucideIcons.brain,
             label: '深度思考',
             selected: true,
             compact: true,
           ),
-        ),
-        const SizedBox(width: 8),
-        const Expanded(
-          child: ModeChip(
+          const SizedBox(width: 8),
+          const ModeChip(
             icon: LucideIcons.chartSpline,
             label: '经营分析',
             compact: true,
           ),
-        ),
-        const SizedBox(width: 8),
-        const Expanded(
-          child: ModeChip(
+          const SizedBox(width: 8),
+          const ModeChip(
             icon: LucideIcons.fileChartColumn,
             label: '生成报告',
             compact: true,
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: ModeChip(
+          const SizedBox(width: 8),
+          ModeChip(
             icon: LucideIcons.layoutGrid,
             label: '全部技能',
             compact: true,
             onTap: onSkillsPressed,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -264,24 +271,24 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 72,
-      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      height: 56,
+      padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: AppColors.lineSoft),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x121473FF),
-            blurRadius: 24,
-            offset: Offset(0, 10),
+            color: Color(0x080B2447),
+            blurRadius: 12,
+            offset: Offset(0, 5),
           ),
         ],
       ),
       child: Row(
         children: [
-          const YayaMascot(size: 42),
-          const SizedBox(width: 12),
+          const YayaMascot(size: 30),
+          const SizedBox(width: 10),
           Expanded(
             child: Material(
               color: Colors.transparent,
@@ -309,7 +316,7 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           _RoundActionButton(
             icon: widget.sending ? LucideIcons.loaderCircle : LucideIcons.send,
             filled: true,
@@ -346,19 +353,19 @@ class _RoundActionButton extends StatelessWidget {
       child: Opacity(
         opacity: active ? 1 : 0.58,
         child: Container(
-          width: 44,
-          height: 44,
+          width: 42,
+          height: 42,
           decoration: BoxDecoration(
             color: filled ? AppColors.blue : AppColors.surface,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(21),
             border:
-                filled ? null : Border.all(color: AppColors.blue, width: 1.4),
+                filled ? null : Border.all(color: AppColors.blue, width: 1.5),
             boxShadow: filled
                 ? const [
                     BoxShadow(
-                      color: Color(0x222F73F6),
-                      blurRadius: 14,
-                      offset: Offset(0, 6),
+                      color: Color(0x1A2F73F6),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
                     ),
                   ]
                 : null,
@@ -366,7 +373,7 @@ class _RoundActionButton extends StatelessWidget {
           child: Icon(
             icon,
             color: filled ? Colors.white : AppColors.blue,
-            size: 22,
+            size: 21,
           ),
         ),
       ),
@@ -540,23 +547,30 @@ class _ChatItem extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        spec.time,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.small.copyWith(
-                          color: AppColors.subtle,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 56),
+                        child: Text(
+                          spec.tag,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: AppTextStyles.small.copyWith(
+                            color: spec.selected
+                                ? AppColors.blue
+                                : AppColors.subtle,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    spec.tag,
+                    spec.preview,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.small.copyWith(
-                      color: spec.selected ? AppColors.blue : AppColors.subtle,
+                      color: AppColors.subtle,
                       fontSize: 11,
                     ),
                   ),
@@ -573,14 +587,14 @@ class _ChatItem extends StatelessWidget {
 class _ChatItemSpec {
   const _ChatItemSpec(
     this.title,
-    this.time,
+    this.preview,
     this.tag,
     this.selected,
     this.sessionId,
   );
 
   final String title;
-  final String time;
+  final String preview;
   final String tag;
   final bool selected;
   final String sessionId;

@@ -100,17 +100,24 @@ class LedgerSummaryCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              model.netProfitText,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.metric.copyWith(
-                                color: AppColors.blue,
-                                fontSize: 46,
-                                height: 0.98,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
+                            SizedBox(
+                              width: 176,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  model.netProfitText,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: AppTextStyles.metric.copyWith(
+                                    color: AppColors.blue,
+                                    fontSize: 46,
+                                    height: 0.98,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 7),
@@ -298,17 +305,7 @@ class AiFinanceInsightCard extends StatelessWidget {
                   const SizedBox(height: 5),
                   Text.rich(
                     TextSpan(
-                      text: '本年收入 ',
-                      children: [
-                        TextSpan(
-                          text: model.incomeText,
-                          style: AppTextStyles.body.copyWith(
-                            color: const Color(0xFFF05A24),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        TextSpan(text: '，支出 ${model.expenseText}。'),
-                      ],
+                      text: model.insightText ?? '已读取本年收支数据，建议持续关注大额支出。',
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

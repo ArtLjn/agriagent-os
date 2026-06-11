@@ -49,11 +49,12 @@ void main() {
     );
 
     expect(find.text('智能确认'), findsOneWidget);
-    expect(find.text('ledger.record'), findsOneWidget);
+    expect(find.text('记账记录'), findsOneWidget);
     expect(find.text('用户原话  今天买肥料 200'), findsOneWidget);
     expect(find.text('识别字段'), findsOneWidget);
-    expect(find.text('amount'), findsOneWidget);
+    expect(find.text('金额'), findsOneWidget);
     expect(find.text('200'), findsWidgets);
+    expect(find.text('ledger.record'), findsNothing);
     expect(find.textContaining('/smart-fill'), findsNothing);
 
     await tester.tap(find.text('确认保存').last);
@@ -131,8 +132,10 @@ void main() {
     expect(find.text('记录已保存'), findsOneWidget);
     expect(find.text('已同步到账本'), findsOneWidget);
     expect(find.text('保存结果'), findsOneWidget);
-    expect(find.text('category'), findsOneWidget);
+    expect(find.text('分类'), findsOneWidget);
     expect(find.text('肥料'), findsOneWidget);
+    expect(find.text('id'), findsNothing);
+    expect(find.text('category'), findsNothing);
     expect(find.text('再记一笔'), findsOneWidget);
     expect(find.text('查看账本'), findsOneWidget);
     expect(find.text('回到首页'), findsOneWidget);

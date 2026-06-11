@@ -12,6 +12,7 @@ import { authStore } from '../../stores/authStore';
 import { buildConversationRows } from './conversationRows';
 import { usersApi, type CurrentUser } from '../../api/users';
 import { chooseDefaultUserId } from './currentUser';
+import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -208,6 +209,18 @@ async function fetchLatestTimeline(): Promise<TraceTimeline | null> {
   }
 }
 
+async function fetchSessionTimeline(sid: string): Promise<TraceTimeline | null> {
+  try {
+    const listRes = await listTraces({ session_id: sid, limit: 1 });
+    if (!listRes.items || listRes.items.length === 0) return null;
+    const requestId = listRes.items[0].request_id;
+    const timelineRes = await getTimeline(requestId);
+    return timelineRes;
+  } catch {
+    return null;
+  }
+}
+
 export default function Playground() {
   const [sessionId, setSessionId] = useState<string>(generateSessionId);
   const [sessions, setSessions] = useState<Record<string, ChatSessionState>>(() => ({
@@ -290,6 +303,7 @@ export default function Playground() {
           role: m.role as 'user' | 'assistant',
           content: m.content,
           skills: m.skills,
+          pendingAction: m.pending_action,
         })),
         timeline: null,
       }));
@@ -309,17 +323,39 @@ export default function Playground() {
   const copySessionJson = useCallback(async (sid: string) => {
     try {
       const state = sessions[sid] ?? emptySessionState();
-      const msgs = state.messages.map((m) => ({
+      let sourceMessages: DebugExportMessage[] = state.messages.map((m) => ({
         role: m.role,
         content: m.content,
         skills: m.skills,
+        pendingAction: m.pendingAction,
       }));
-      await navigator.clipboard.writeText(JSON.stringify(msgs, null, 2));
-      message.success('已复制到剪贴板');
+      try {
+        const persistedMessages = await getConversationMessages(sid, selectedUserId);
+        if (persistedMessages.length > 0) {
+          sourceMessages = persistedMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            skills: m.skills,
+            pendingAction: m.pending_action,
+          }));
+        }
+      } catch {
+        // 历史消息读取失败时，使用当前本地状态继续导出。
+      }
+      const timeline = state.timeline ?? await fetchSessionTimeline(sid);
+      const debugExport = buildSessionDebugExport({
+        sessionId: sid,
+        simulateUserId: selectedUserId,
+        copiedAt: new Date().toISOString(),
+        messages: sourceMessages,
+        timeline,
+      });
+      await navigator.clipboard.writeText(JSON.stringify(debugExport, null, 2));
+      message.success('已复制调试 JSON 到剪贴板');
     } catch {
       message.error('复制失败');
     }
-  }, [sessions]);
+  }, [selectedUserId, sessions]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -498,7 +534,7 @@ export default function Playground() {
                       {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
-                  <Tooltip title="复制 JSON">
+                  <Tooltip title="复制调试 JSON">
                     <Button
                       type="text"
                       size="small"

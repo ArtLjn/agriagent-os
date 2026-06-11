@@ -16,6 +16,11 @@
 - `main-pages/ledger.png`：账本，财务洞察仪表盘，不放智能填写
 - `main-pages/profile.png`：我的，个人资料、农场资料与 AI 偏好设置
 
+### 首页详情页
+
+- `ai-daily-advice-detail.png`：AI 今日建议详情页，从首页建议列表点击进入，展示判断依据、执行步骤、关联事项和底部操作
+- `ai-daily-advice-detail.spec.md`：详情页 Flutter 复刻规格，文字和组件结构以此为准
+
 对应规格文档：`docs/ui/reference-style-flutter-spec.md`
 
 ### 登录注册与首次设置

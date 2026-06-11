@@ -16,7 +16,7 @@ VERSION="${2:-}"
 
 if [ -z "$APK_PATH" ]; then
   # 自动查找最新的 APK
-  APK_PATH=$(find . -maxdepth 2 -name "FarmManager-*-release.apk" -type f 2>/dev/null | sort -t'v' -k2 -n -r | head -1)
+  APK_PATH=$(find . -maxdepth 2 -name "FarmManager-*-release*.apk" -type f 2>/dev/null | sort -r | head -1)
   if [ -z "$APK_PATH" ]; then
     echo "错误: 找不到 APK 文件"
     echo "用法: $0 [APK路径] [版本号]"

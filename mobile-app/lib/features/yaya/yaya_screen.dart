@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/api/api_models.dart';
@@ -41,6 +42,11 @@ class _YayaScreenState extends State<YayaScreen> {
     );
   }
 
+  void _startNewConversation() {
+    _closeDrawer();
+    controller.startNewConversation();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +75,7 @@ class _YayaScreenState extends State<YayaScreen> {
                     controller: controller,
                     onMenuPressed: _openDrawer,
                     onSkillsPressed: _openSkills,
+                    onNewConversationPressed: _startNewConversation,
                   ),
                 ),
                 if (drawerOpen) ...[
@@ -109,6 +116,7 @@ class _YayaScreenState extends State<YayaScreen> {
                         _closeDrawer();
                         controller.openConversation(sessionId);
                       },
+                      onNewConversationTap: _startNewConversation,
                     ),
                   ),
                 ],
@@ -126,11 +134,13 @@ class _YayaHomePage extends StatelessWidget {
     required this.controller,
     required this.onMenuPressed,
     required this.onSkillsPressed,
+    required this.onNewConversationPressed,
   });
 
   final YayaController controller;
   final VoidCallback onMenuPressed;
   final VoidCallback onSkillsPressed;
+  final VoidCallback onNewConversationPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -140,25 +150,29 @@ class _YayaHomePage extends StatelessWidget {
       children: [
         Positioned.fill(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 164),
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 156),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 430),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _YayaHeader(onMenuPressed: onMenuPressed),
+                    _YayaHeader(
+                      onMenuPressed: onMenuPressed,
+                      onNewConversationPressed: onNewConversationPressed,
+                    ),
                     if (hasMessages) ...[
                       const SizedBox(height: 18),
                       _MessageList(
                         messages: controller.messages,
                         errorMessage: controller.errorMessage,
+                        onPendingAction: controller.respondToPendingAction,
                       ),
                     ] else ...[
-                      const SizedBox(height: 64),
+                      const SizedBox(height: 54),
                       const _YayaHero(),
-                      const SizedBox(height: 28),
-                      const _SuggestionPills(),
+                      const SizedBox(height: 26),
+                      _SuggestionPills(onSelected: controller.send),
                     ],
                   ],
                 ),
@@ -167,24 +181,23 @@ class _YayaHomePage extends StatelessWidget {
           ),
         ),
         Positioned(
-          left: 20,
-          right: 20,
-          bottom: 14,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ModeChips(onSkillsPressed: onSkillsPressed),
-                  const SizedBox(height: 10),
-                  AssistantInputBar(
-                    sending: controller.sending,
-                    onSubmit: controller.send,
-                  ),
-                ],
-              ),
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            color: AppColors.background,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ModeChips(onSkillsPressed: onSkillsPressed),
+                const SizedBox(height: 8),
+                AssistantInputBar(
+                  sending: controller.sending,
+                  onSubmit: controller.send,
+                ),
+              ],
             ),
           ),
         ),
@@ -197,10 +210,12 @@ class _MessageList extends StatelessWidget {
   const _MessageList({
     required this.messages,
     required this.errorMessage,
+    required this.onPendingAction,
   });
 
   final List<YayaMessageViewModel> messages;
   final String? errorMessage;
+  final ValueChanged<String> onPendingAction;
 
   @override
   Widget build(BuildContext context) {
@@ -208,7 +223,10 @@ class _MessageList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final message in messages) ...[
-          _MessageBubble(message: message),
+          _MessageBubble(
+            message: message,
+            onPendingAction: onPendingAction,
+          ),
           const SizedBox(height: 12),
         ],
         if (errorMessage != null) _ErrorBanner(message: errorMessage!),
@@ -218,9 +236,13 @@ class _MessageList extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message});
+  const _MessageBubble({
+    required this.message,
+    required this.onPendingAction,
+  });
 
   final YayaMessageViewModel message;
+  final ValueChanged<String> onPendingAction;
 
   @override
   Widget build(BuildContext context) {
@@ -243,11 +265,282 @@ class _MessageBubble extends StatelessWidget {
             ),
           ],
         ),
+        child: isUser
+            ? Text(
+                content,
+                style: AppTextStyles.body.copyWith(
+                  color: Colors.white,
+                  height: 1.45,
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  MarkdownBody(
+                    data: content,
+                    selectable: false,
+                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context))
+                        .copyWith(
+                      p: AppTextStyles.body.copyWith(
+                        color: AppColors.ink,
+                        height: 1.45,
+                      ),
+                      strong: AppTextStyles.body.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w800,
+                        height: 1.45,
+                      ),
+                      listBullet: AppTextStyles.body.copyWith(
+                        color: AppColors.ink,
+                        height: 1.45,
+                      ),
+                      blockSpacing: 6,
+                      listIndent: 16,
+                    ),
+                  ),
+                  if (message.pendingAction != null) ...[
+                    const SizedBox(height: 12),
+                    _PendingActionCard(
+                      pendingAction: message.pendingAction!,
+                      onConfirm: () => onPendingAction('确认'),
+                      onCancel: () => onPendingAction('取消'),
+                    ),
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _PendingActionCard extends StatelessWidget {
+  const _PendingActionCard({
+    required this.pendingAction,
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  final Map<String, dynamic> pendingAction;
+  final VoidCallback onConfirm;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final contextData = _mapValue(pendingAction['context']);
+    final originalInput = '${contextData?['original_input'] ?? ''}'.trim();
+    final notes = _stringList(contextData?['notes'])
+        .where((note) => originalInput.isEmpty || !note.contains(originalInput))
+        .toList();
+    final params = _mapValue(pendingAction['params']) ??
+        _mapValue(contextData?['extracted_params']);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.lineSoft),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: AppColors.amberSoft,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  LucideIcons.hourglass,
+                  size: 15,
+                  color: AppColors.amber,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '待确认执行',
+                  style: AppTextStyles.body.copyWith(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (originalInput.isNotEmpty || notes.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _PendingContextBox(
+              originalInput: originalInput,
+              notes: notes,
+            ),
+          ],
+          if (params != null && params.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _PendingParamList(params: params),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _PendingActionButton(
+                label: '取消',
+                color: AppColors.muted,
+                background: AppColors.lineSoft,
+                onTap: onCancel,
+              ),
+              const SizedBox(width: 8),
+              _PendingActionButton(
+                label: '确认',
+                color: Colors.white,
+                background: AppColors.greenDark,
+                onTap: onConfirm,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Map<String, dynamic>? _mapValue(Object? value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return null;
+  }
+
+  static List<String> _stringList(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .map((item) => '$item')
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+}
+
+class _PendingContextBox extends StatelessWidget {
+  const _PendingContextBox({
+    required this.originalInput,
+    required this.notes,
+  });
+
+  final String originalInput;
+  final List<String> notes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (originalInput.isNotEmpty)
+            Text(
+              '理解：您说的是「$originalInput」',
+              style: AppTextStyles.small.copyWith(
+                color: AppColors.muted,
+                height: 1.4,
+              ),
+            ),
+          for (final note in notes)
+            Padding(
+              padding: EdgeInsets.only(top: originalInput.isEmpty ? 0 : 4),
+              child: Text(
+                note,
+                style: AppTextStyles.small.copyWith(
+                  color: AppColors.muted,
+                  height: 1.4,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingParamList extends StatelessWidget {
+  const _PendingParamList({required this.params});
+
+  final Map<String, dynamic> params;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = params.entries
+        .where((entry) => '${entry.value}'.trim().isNotEmpty)
+        .take(4)
+        .toList();
+    return Column(
+      children: [
+        for (final entry in entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Row(
+              children: [
+                Text(
+                  entry.key,
+                  style: AppTextStyles.small.copyWith(color: AppColors.subtle),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${entry.value}',
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _PendingActionButton extends StatelessWidget {
+  const _PendingActionButton({
+    required this.label,
+    required this.color,
+    required this.background,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final Color background;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 34,
+        constraints: const BoxConstraints(minWidth: 68),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: Text(
-          content,
+          label,
           style: AppTextStyles.body.copyWith(
-            color: isUser ? Colors.white : AppColors.ink,
-            height: 1.45,
+            color: color,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
@@ -281,9 +574,13 @@ class _ErrorBanner extends StatelessWidget {
 }
 
 class _YayaHeader extends StatelessWidget {
-  const _YayaHeader({required this.onMenuPressed});
+  const _YayaHeader({
+    required this.onMenuPressed,
+    required this.onNewConversationPressed,
+  });
 
   final VoidCallback onMenuPressed;
+  final VoidCallback onNewConversationPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -301,23 +598,19 @@ class _YayaHeader extends StatelessWidget {
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              const FarmBrandMark(size: 30),
-              const SizedBox(width: 8),
-              Text(
-                '农场管家',
-                style: AppTextStyles.title.copyWith(fontSize: 18),
-              ),
-            ],
+            children: const [FarmBrandLockup(height: 34)],
           ),
-          const Align(
+          Align(
             alignment: Alignment.centerRight,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _HeaderIconButton(icon: LucideIcons.volume2),
-                SizedBox(width: 2),
-                _HeaderIconButton(icon: LucideIcons.plus),
+                const _HeaderIconButton(icon: LucideIcons.volume2),
+                const SizedBox(width: 2),
+                _HeaderIconButton(
+                  icon: LucideIcons.plus,
+                  onPressed: onNewConversationPressed,
+                ),
               ],
             ),
           ),
@@ -332,44 +625,40 @@ class _YayaHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(width: 8),
-        const YayaMascot(size: 118),
-        const SizedBox(width: 20),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        const Padding(
+          padding: EdgeInsets.only(left: 2),
+          child: YayaMascot(size: 76),
+        ),
+        const SizedBox(height: 22),
+        Text.rich(
+          TextSpan(
+            text: '周末愉快，我是',
             children: [
-              Text.rich(
-                TextSpan(
-                  text: '周末愉快，我是',
-                  children: [
-                    TextSpan(
-                      text: '芽芽',
-                      style: AppTextStyles.title.copyWith(
-                        color: AppColors.blue,
-                        fontSize: 24,
-                      ),
-                    ),
-                  ],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.title.copyWith(fontSize: 24),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '有问题，直接问我',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.muted,
-                  fontSize: 15,
+              TextSpan(
+                text: '芽芽',
+                style: AppTextStyles.title.copyWith(
+                  color: AppColors.blue,
+                  fontSize: 30,
                 ),
               ),
             ],
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.title.copyWith(fontSize: 30),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '有问题，直接问我',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.body.copyWith(
+            color: AppColors.muted,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -659,12 +948,14 @@ class YayaHistoryDrawer extends StatelessWidget {
     required this.onSkillsPressed,
     required this.conversations,
     required this.onConversationTap,
+    required this.onNewConversationTap,
   });
 
   final VoidCallback onClose;
   final VoidCallback onSkillsPressed;
   final List<ConversationSummary> conversations;
   final ValueChanged<String> onConversationTap;
+  final VoidCallback onNewConversationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -692,14 +983,17 @@ class YayaHistoryDrawer extends StatelessWidget {
           ),
           child: Column(
             children: [
-              _DrawerHeader(onClose: onClose),
+              _DrawerHeader(
+                onClose: onClose,
+                onNewConversationTap: onNewConversationTap,
+              ),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const _NewChatCard(),
+                      _NewChatCard(onTap: onNewConversationTap),
                       const SizedBox(height: 12),
                       _DrawerSkillEntry(onTap: onSkillsPressed),
                       const SizedBox(height: 22),
@@ -736,9 +1030,13 @@ class YayaHistoryDrawer extends StatelessWidget {
 }
 
 class _DrawerHeader extends StatelessWidget {
-  const _DrawerHeader({required this.onClose});
+  const _DrawerHeader({
+    required this.onClose,
+    required this.onNewConversationTap,
+  });
 
   final VoidCallback onClose;
+  final VoidCallback onNewConversationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -786,7 +1084,10 @@ class _DrawerHeader extends StatelessWidget {
               ),
             ),
             const _HeaderIconButton(icon: LucideIcons.search),
-            const _HeaderIconButton(icon: LucideIcons.squarePen),
+            _HeaderIconButton(
+              icon: LucideIcons.squarePen,
+              onPressed: onNewConversationTap,
+            ),
           ],
         ),
       ),
@@ -795,66 +1096,73 @@ class _DrawerHeader extends StatelessWidget {
 }
 
 class _NewChatCard extends StatelessWidget {
-  const _NewChatCard();
+  const _NewChatCard({required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 92,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1473FF), Color(0xFF35C879)],
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 92,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1473FF), Color(0xFF35C879)],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A1473FF),
+              blurRadius: 22,
+              offset: Offset(0, 10),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A1473FF),
-            blurRadius: 22,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(16),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child:
+                  const Icon(LucideIcons.plus, color: Colors.white, size: 24),
             ),
-            child: const Icon(LucideIcons.plus, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '新对话',
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: Colors.white,
-                    fontSize: 17,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '新对话',
+                    style: AppTextStyles.sectionTitle.copyWith(
+                      color: Colors.white,
+                      fontSize: 17,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '让芽芽帮你分析农场问题',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(
-                    color: Colors.white.withValues(alpha: 0.84),
-                    fontSize: 12,
+                  const SizedBox(height: 4),
+                  Text(
+                    '让芽芽帮你分析农场问题',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.small.copyWith(
+                      color: Colors.white.withValues(alpha: 0.84),
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

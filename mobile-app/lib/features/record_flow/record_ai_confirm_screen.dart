@@ -122,8 +122,8 @@ class _RecordAiConfirmScreenState extends State<RecordAiConfirmScreen> {
               : fields
                   .map(
                     (entry) => FieldValueRow(
-                      label: entry.key,
-                      value: _formatValue(entry.value),
+                      label: _fieldLabel(entry.key),
+                      value: _formatFieldValue(entry.key, entry.value),
                     ),
                   )
                   .toList(),
@@ -194,7 +194,7 @@ class _RecordUnderstandingCard extends StatelessWidget {
                 ),
               ),
               Text(
-                draft.scene.isEmpty ? '待确认记录' : draft.scene,
+                _sceneLabel(draft.scene),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -318,4 +318,63 @@ String _formatValue(Object? value) {
     return value.entries.map((e) => '${e.key}:${e.value}').join('、');
   }
   return '$value';
+}
+
+String _formatFieldValue(String key, Object? value) {
+  if (key == 'record_type') return _recordTypeLabel(value);
+  if (key.endsWith('_date') || key.endsWith('_at')) {
+    return _formatDate(value);
+  }
+  return _formatValue(value);
+}
+
+String _sceneLabel(String scene) {
+  return switch (scene.trim().toLowerCase()) {
+    'ledger.record' || 'cost.record' => '记账记录',
+    'debt.record' => '赊账记录',
+    'farm.log' || 'log.record' => '农事记录',
+    'work_order.create' => '作业单',
+    'wage.record' || 'labor.wage' => '工资记录',
+    '' => '待确认记录',
+    _ => '待确认记录',
+  };
+}
+
+String _fieldLabel(String key) {
+  return switch (key) {
+    'record_type' => '类型',
+    'category' => '分类',
+    'amount' => '金额',
+    'record_date' => '日期',
+    'note' => '备注',
+    'record_subtype' => '子类',
+    'counterparty' => '对象',
+    'due_date' => '到期日',
+    'created_at' => '创建时间',
+    'operation_type' => '作业类型',
+    'work_date' => '作业日期',
+    'name' => '名称',
+    _ => key,
+  };
+}
+
+String _recordTypeLabel(Object? value) {
+  return switch ('${value ?? ''}'.trim().toLowerCase()) {
+    'cost' => '支出',
+    'income' => '收入',
+    'debt' => '欠款',
+    'daily' => '日常',
+    '' => '-',
+    _ => _formatValue(value),
+  };
+}
+
+String _formatDate(Object? value) {
+  final text = '${value ?? ''}'.trim();
+  if (text.isEmpty) return '-';
+  final date = DateTime.tryParse(text);
+  if (date == null) return text;
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:farm_manager_app/app/app_dependencies.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/repositories/billing_repository.dart';
+import 'package:farm_manager_app/data/repositories/business_repository.dart';
 import 'package:farm_manager_app/data/repositories/dashboard_repository.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
@@ -17,8 +18,11 @@ import 'api_test_fixtures.dart'
         logResponse,
         messageResponse,
         paginatedCostsResponse,
+        paginatedCropTemplatesResponse,
+        paginatedCyclesResponse,
         paginatedLogsResponse,
         paginatedWorkOrdersResponse,
+        paginatedWorkerSummariesResponse,
         settingsResponse,
         smartFillParseResponse,
         smartFillScenariosResponse,
@@ -27,6 +31,9 @@ import 'api_test_fixtures.dart'
         versionResponse,
         wageResponse,
         weatherResponse,
+        cropTemplateResponse,
+        cycleResponse,
+        workerResponse,
         workOrderResponse,
         yearlySummaryResponse;
 
@@ -38,11 +45,13 @@ class FakeAppDependencies implements AppDependencies {
     ProfileRepository? profile,
     DashboardRepository? dashboard,
     BillingRepository? billing,
+    BusinessRepository? business,
     WorkbenchRepository? workbench,
     YayaRepository? yaya,
   })  : profile = profile ?? _fakeProfileRepository(),
         dashboard = dashboard ?? _fakeDashboardRepository(),
         billing = billing ?? _fakeBillingRepository(),
+        business = business ?? _fakeBusinessRepository(),
         workbench = workbench ?? _fakeWorkbenchRepository(),
         yaya = yaya ?? _fakeYayaRepository();
 
@@ -52,6 +61,8 @@ class FakeAppDependencies implements AppDependencies {
   final DashboardRepository dashboard;
   @override
   final BillingRepository billing;
+  @override
+  final BusinessRepository business;
   @override
   final WorkbenchRepository workbench;
   @override
@@ -104,6 +115,24 @@ class FakeAppDependencies implements AppDependencies {
   Future<void> logout() async {
     logoutCalls += 1;
   }
+}
+
+BusinessRepository _fakeBusinessRepository() {
+  final adapter = RecordingAdapter({
+    '/cycles': paginatedCyclesResponse,
+    'POST /cycles': cycleResponse,
+    '/crops/templates': paginatedCropTemplatesResponse,
+    'POST /crops/templates': cropTemplateResponse,
+    '/planting/workers/summary': paginatedWorkerSummariesResponse,
+    'POST /planting/workers': workerResponse,
+    'POST /planting/labor/wages': wageResponse,
+    'POST /planting/work-orders': workOrderResponse,
+    'POST /costs': costRecordResponse,
+    '/smart-fill/parse': smartFillParseResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return BusinessRepository(ApiClient(dio: dio));
 }
 
 ProfileRepository _fakeProfileRepository() {

@@ -128,11 +128,17 @@ class YayaStreamEvent {
   });
 
   factory YayaStreamEvent.fromJson(Map<String, dynamic> json) {
+    final eventType = json['type'] as String?;
+    final data = json['data'];
+    final pendingAction = eventType == 'pending_action' && data is Map
+        ? Map<String, dynamic>.from(data)
+        : json['pending_action'] as Map<String, dynamic>?;
     return YayaStreamEvent(
-      content: json['content'] as String?,
+      content:
+          eventType == 'content' ? data as String? : json['content'] as String?,
       skills:
           (json['skills'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
-      pendingAction: json['pending_action'] as Map<String, dynamic>?,
+      pendingAction: pendingAction,
       error: json['error'] as String?,
     );
   }

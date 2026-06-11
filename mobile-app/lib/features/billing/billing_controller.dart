@@ -20,10 +20,15 @@ class BillingController {
     final receivables = _receivables(debts);
 
     return BillingViewModel(
-      incomeText: _money(_number(summary['total_income'])),
-      expenseText: _money(_number(summary['total_cost'])),
-      netProfitText: _signedMoney(_number(summary['net_profit'])),
-      debtText: _money(_receivableTotal(debts, receivables)),
+      incomeText: _compactMoney(_number(summary['total_income'])),
+      expenseText: _compactMoney(_number(summary['total_cost'])),
+      netProfitText: _signedCompactMoney(_number(summary['net_profit'])),
+      debtText: _compactMoney(_receivableTotal(debts, receivables)),
+      insightText: _insightText(
+        income: _number(summary['total_income']),
+        expense: _number(summary['total_cost']),
+        netProfit: _number(summary['net_profit']),
+      ),
       transactions: costs.items.map(_transaction).toList(),
       receivables: receivables,
     );
@@ -41,14 +46,22 @@ class BillingController {
       json['note'],
     ], fallback: '未分类交易');
     final date = _firstNonEmpty([json['record_date'], json['created_at']]);
-    final counterparty =
-        _firstNonEmpty([json['counterparty']], fallback: '未填写对象');
+    final counterparty = _firstNonEmpty([json['counterparty']], fallback: '');
+    final subtitle = isIncome
+        ? [date, if (counterparty.isNotEmpty) counterparty]
+            .where((item) => item.isNotEmpty)
+            .join(' · ')
+        : [date, if (counterparty.isNotEmpty) counterparty else '日常支出']
+            .where((item) => item.isNotEmpty)
+            .join(' · ');
     return BillingTransactionViewModel(
       title: title,
-      subtitle:
-          [date, counterparty].where((item) => item.isNotEmpty).join(' · '),
+      subtitle: subtitle,
       amountText: isIncome ? _money(amount.abs()) : '-${_money(amount.abs())}',
       isIncome: isIncome,
+      recordType: type,
+      recordDate: _parseDate(date),
+      amount: amount.abs(),
     );
   }
 
@@ -100,12 +113,14 @@ class BillingViewModel {
     required this.debtText,
     required this.transactions,
     required this.receivables,
+    this.insightText,
   });
 
   final String incomeText;
   final String expenseText;
   final String netProfitText;
   final String debtText;
+  final String? insightText;
   final List<BillingTransactionViewModel> transactions;
   final List<BillingReceivableViewModel> receivables;
 }
@@ -116,12 +131,20 @@ class BillingTransactionViewModel {
     required this.subtitle,
     required this.amountText,
     required this.isIncome,
+    required this.recordType,
+    required this.recordDate,
+    required this.amount,
   });
 
   final String title;
   final String subtitle;
   final String amountText;
   final bool isIncome;
+  final String recordType;
+  final DateTime? recordDate;
+  final num amount;
+
+  bool get isDebt => recordType == 'debt' || recordType == 'receivable';
 }
 
 class BillingReceivableViewModel {
@@ -148,6 +171,20 @@ num _number(Object? value) {
   return num.tryParse(text) ?? 0;
 }
 
+DateTime? _parseDate(String value) {
+  if (value.isEmpty) return null;
+  final normalized = value.length >= 10 ? value.substring(0, 10) : value;
+  final parsed = DateTime.tryParse(normalized);
+  if (parsed != null) return parsed;
+  final parts = normalized.split('-');
+  if (parts.length != 3) return null;
+  final year = int.tryParse(parts[0]);
+  final month = int.tryParse(parts[1]);
+  final day = int.tryParse(parts[2]);
+  if (year == null || month == null || day == null) return null;
+  return DateTime(year, month, day);
+}
+
 String _money(num value) {
   final prefix = value < 0 ? '-¥' : '¥';
   final abs = value.abs();
@@ -155,7 +192,39 @@ String _money(num value) {
   return '$prefix${abs.toStringAsFixed(2)}';
 }
 
-String _signedMoney(num value) {
-  if (value < 0) return '-${_money(value.abs())}';
-  return _money(value);
+String _signedCompactMoney(num value) {
+  if (value < 0) return '-${_compactMoney(value.abs())}';
+  return _compactMoney(value);
+}
+
+String _compactMoney(num value) {
+  final abs = value.abs();
+  if (abs < 100000) return _money(value);
+  final unit = abs >= 100000000 ? '亿' : '万';
+  final divisor = unit == '亿' ? 100000000 : 10000;
+  final text = _trimDecimal(abs / divisor);
+  final prefix = value < 0 ? '-¥' : '¥';
+  return '$prefix$text$unit';
+}
+
+String _trimDecimal(num value) {
+  final fixed = value.toStringAsFixed(1);
+  return fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
+}
+
+String _insightText({
+  required num income,
+  required num expense,
+  required num netProfit,
+}) {
+  if (netProfit < 0) {
+    return '本年支出高于收入，优先复盘大额支出和未结人工。';
+  }
+  if (expense == 0 && income == 0) {
+    return '暂无收支数据，建议先补齐近期记账记录。';
+  }
+  if (expense > income * 0.8) {
+    return '支出接近收入，建议关注成本占比和欠款回收。';
+  }
+  return '收支结构较稳，建议持续跟进欠款和季节性成本。';
 }

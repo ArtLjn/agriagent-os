@@ -235,6 +235,33 @@ final paginatedCostsResponse = {
   'total': 1
 };
 
+final cropTemplateResponse = {
+  'id': 3,
+  'name': '番茄',
+  'variety': '粉果 306',
+  'usage_count': 4,
+  'total_cycle_days': 110,
+  'stages': [
+    {
+      'name': '育苗期',
+      'duration_days': 18,
+      'order_index': 1,
+      'key_tasks': '控温、补光',
+    },
+    {
+      'name': '结果期',
+      'duration_days': 45,
+      'order_index': 2,
+      'key_tasks': '疏花、追肥',
+    },
+  ],
+};
+
+final paginatedCropTemplatesResponse = {
+  'items': [cropTemplateResponse],
+  'total': 1,
+};
+
 final yearlySummaryResponse = {
   'year': 2026,
   'total_cost': '200',
@@ -301,6 +328,20 @@ final weatherResponse = {
   'warnings': [],
 };
 
+final backendWeatherResponse = {
+  'location': '睢宁县',
+  'provider': 'open-meteo',
+  'daily': {
+    'time': ['2026-06-09'],
+    'temperature_2m_max': [32.1],
+    'temperature_2m_min': [17.2],
+    'precipitation_sum': [0.0],
+    'windspeed_10m_max': [11.2],
+  },
+  'current_weather': {'temperature': 19.8},
+  'warnings': [],
+};
+
 final cycleResponse = {
   'id': 7,
   'name': '春茬',
@@ -354,6 +395,11 @@ final workerResponse = {
 };
 
 final paginatedWorkersResponse = {
+  'items': [workerResponse],
+  'total': 1
+};
+
+final paginatedWorkerSummariesResponse = {
   'items': [workerResponse],
   'total': 1
 };

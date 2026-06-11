@@ -128,7 +128,8 @@ class _CockpitMetrics extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 76,
+      height: 82,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(16),
@@ -163,8 +164,8 @@ class _CockpitMetrics extends StatelessWidget {
               icon: LucideIcons.triangleAlert,
               iconColor: Color(0xFFFF6500),
               iconBackground: AppColors.amberSoft,
-              label: '未结人工',
-              value: model.unsettledLaborText,
+              label: '待处理',
+              value: model.riskText,
               valueColor: Color(0xFFFF6500),
             ),
           ),
@@ -193,39 +194,47 @@ class _CockpitMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        IconBadge(
-          icon: icon,
-          color: iconColor,
-          background: iconBackground,
-          size: 38,
-          iconSize: 21,
-        ),
-        const SizedBox(width: 9),
-        Flexible(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconBadge(
+              icon: icon,
+              color: iconColor,
+              background: iconBackground,
+              size: 28,
+              iconSize: 16,
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.small.copyWith(fontSize: 13),
+                style: AppTextStyles.small.copyWith(fontSize: 12),
               ),
-              const SizedBox(height: 2),
-              Text(
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 28,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.center,
+              child: Text(
                 value,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.dateTitle.copyWith(
                   color: valueColor,
                   fontSize: 23,
+                  height: 1.1,
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ],

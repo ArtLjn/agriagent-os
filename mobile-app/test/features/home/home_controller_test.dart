@@ -24,11 +24,12 @@ void main() {
     final model = await controller.load();
 
     expect(model.headline, '注意控水');
-    expect(model.weatherText, contains('寿光'));
+    expect(model.weatherText, '晴');
     expect(model.suggestions, isNotEmpty);
     expect(model.suggestions.first.title, '浇水');
     expect(model.workOrderCountText, '1项');
     expect(model.unsettledLaborText, '¥200');
+    expect(model.riskText, '1项');
     expect(adapter.find('GET', '/planting/work-orders').query['size'], 10);
     expect(adapter.find('GET', '/weather/forecast').query['location'], '寿光');
   });
@@ -54,5 +55,25 @@ void main() {
     expect(model.headline, '注意控水');
     expect(model.weatherText, '暂无天气');
     expect(model.workOrderCountText, '1项');
+  });
+
+  test('首页天气兼容后端真实 daily 结构', () async {
+    final adapter = RecordingAdapter({
+      '/agent/daily': dailyAdviceResponse,
+      '/settings': settingsResponse,
+      '/weather/forecast': backendWeatherResponse,
+      '/planting/work-orders': paginatedWorkOrdersResponse,
+      '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final controller = HomeController(
+      repository: DashboardRepository(ApiClient(dio: dio)),
+    );
+
+    final model = await controller.load();
+
+    expect(model.weatherText, '高温 32℃');
+    expect(model.scoreCaption, '高温 32℃ · 1项作业');
   });
 }
