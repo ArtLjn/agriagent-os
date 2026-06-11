@@ -59,7 +59,11 @@ export default function AnnotationPanel({
       message.warning('当前样本没有 request_id');
       return;
     }
-    window.location.href = `/dev/traces?request_id=${encodeURIComponent(selectedSample.request_id)}`;
+    const params = new URLSearchParams({ request_id: selectedSample.request_id });
+    if (selectedSample.session_id) {
+      params.set('session_id', selectedSample.session_id);
+    }
+    window.location.href = `/dev/traces?${params.toString()}`;
   };
 
   return (

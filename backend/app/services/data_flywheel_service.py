@@ -35,12 +35,15 @@ def _sample_id(turn: AgentTurn) -> str:
 
 
 def _parse_sample_id(sample_id: str) -> dict[str, int | str]:
-    parts = sample_id.split(":")
-    if len(parts) != 4 or parts[0] != "turn" or not parts[2]:
+    prefix, separator, tail = sample_id.rpartition(":")
+    if not separator:
+        raise ValueError("INVALID_SAMPLE_ID")
+    parts = prefix.split(":", 2)
+    if len(parts) != 3 or parts[0] != "turn" or not parts[2]:
         raise ValueError("INVALID_SAMPLE_ID")
     try:
         farm_id = int(parts[1])
-        turn_id = int(parts[3])
+        turn_id = int(tail)
     except ValueError as exc:
         raise ValueError("INVALID_SAMPLE_ID") from exc
     return {"farm_id": farm_id, "session_id": parts[2], "turn_id": turn_id}

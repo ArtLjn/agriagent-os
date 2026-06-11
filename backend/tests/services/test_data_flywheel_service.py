@@ -45,8 +45,7 @@ def setup_function():
     db.close()
 
 
-def _seed_turn(db, tmp_path, *, include_pending=True):
-    session_id = "sess-flywheel"
+def _seed_turn(db, tmp_path, *, include_pending=True, session_id="sess-flywheel"):
     user_input = "王大妈工资100一天，去5号棚收水稻"
     assistant_reply = "已安排王大妈去5号棚收水稻"
     conv = get_or_create_conversation(
@@ -230,6 +229,29 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     assert detail["pending_lifecycle"][0]["event_type"] == "pending.plan.created"
     assert detail["source"]["event_seq_start"] == 1
     assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.v2"
+    db.close()
+
+
+def test_sample_id_supports_session_id_with_colon(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, session_id="playground:user:001")
+    sample_id = f"turn:1:playground:user:001:{turn.id}"
+
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+    add_sample_label(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        label="needs_regression",
+        session_id="playground:user:001",
+        turn_id=turn.id,
+        request_id="abcd1234",
+    )
+    exported = export_sample_jsonl(db, farm_id=1, sample_id=sample_id)
+
+    assert detail["sample"]["sample_id"] == sample_id
+    assert detail["sample"]["session_id"] == "playground:user:001"
+    assert json.loads(exported["content"])["sample_id"] == sample_id
     db.close()
 
 
