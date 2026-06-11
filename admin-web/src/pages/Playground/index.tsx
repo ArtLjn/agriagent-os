@@ -13,6 +13,7 @@ import { buildConversationRows } from './conversationRows';
 import { usersApi, type CurrentUser } from '../../api/users';
 import { chooseDefaultUserId } from './currentUser';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
+import { canConfirmAssistantMessage } from './pendingPlanControls';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -69,8 +70,8 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 /* ── 执行状态标签 ── */
-function ExecutionStatus({ skills, pendingAction }: { skills?: string[]; pendingAction?: PendingAction | null }) {
-  if (pendingAction) {
+function ExecutionStatus({ skills, pendingAction, pendingPlan }: { skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: boolean }) {
+  if (pendingAction || pendingPlan) {
     return (
       <span style={{
         fontSize: 11, color: '#faad14', background: 'rgba(250,173,20,0.12)',
@@ -103,6 +104,7 @@ function ExecutionStatus({ skills, pendingAction }: { skills?: string[]; pending
 /* ── 聊天气泡组件 ── */
 function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
+  const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction });
   return (
     <div style={{ marginBottom: 16, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
       {!isUser && (
@@ -123,7 +125,11 @@ function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 
         {isUser ? content : <MarkdownContent content={content} />}
         {!isUser && (
           <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <ExecutionStatus skills={skills} pendingAction={pendingAction} />
+            <ExecutionStatus
+              skills={skills}
+              pendingAction={pendingAction}
+              pendingPlan={canConfirm && !pendingAction}
+            />
             {skills && skills.length > 0 && skills.map((s) => (
               <span key={s} style={{
                 fontSize: 11, color: ACCENT, background: 'rgba(88,166,255,0.12)',
@@ -144,7 +150,7 @@ function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 
             ))}
           </div>
         )}
-        {!isUser && pendingAction && onAction && (
+        {!isUser && canConfirm && onAction && (
           <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
             <button onClick={() => onAction('确认')} style={{ background: '#238636', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13 }}>确认</button>
             <button onClick={() => onAction('取消')} style={{ background: '#30363d', color: '#8b949e', border: 'none', borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13 }}>取消</button>

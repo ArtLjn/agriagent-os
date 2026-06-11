@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildConversationRows } from './conversationRows';
+import { canConfirmAssistantMessage, isPendingPlanContent } from './pendingPlanControls';
 
 describe('buildConversationRows', () => {
   it('不显示没有消息和请求状态的本地 session', () => {
@@ -34,5 +35,30 @@ describe('buildConversationRows', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ session_id: 'persisted', local: false });
+  });
+});
+
+describe('pending plan confirmation controls', () => {
+  it('识别 pending plan 文本并允许显示确认取消按钮', () => {
+    const content = '请确认将执行 2 步（共 2 个步骤）：\n1. 创建工人：李1\n确认执行吗？';
+
+    expect(isPendingPlanContent(content)).toBe(true);
+    expect(
+      canConfirmAssistantMessage({
+        role: 'assistant',
+        content,
+        pendingAction: null,
+      }),
+    ).toBe(true);
+  });
+
+  it('普通助手消息不显示确认取消按钮', () => {
+    expect(
+      canConfirmAssistantMessage({
+        role: 'assistant',
+        content: '今天天气不错',
+        pendingAction: null,
+      }),
+    ).toBe(false);
   });
 });

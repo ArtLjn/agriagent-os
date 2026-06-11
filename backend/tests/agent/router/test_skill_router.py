@@ -285,6 +285,53 @@ def test_session4_extracts_wage_after_greenhouse_number() -> None:
     assert "create_operation_work_order" in work_order_frame.candidate_tools
 
 
+def test_multi_intent_worker_name_with_digit_and_field_name_are_extracted() -> None:
+    tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
+
+    decision = SkillRouter().route(
+        "今天来了一个工人李1工资100一天他收水稻厉害今天让他去大豆地采收",
+        tools,
+    )
+
+    worker_frame = next(
+        frame for frame in decision.frames if frame.intent == "create_worker"
+    )
+    work_order_frame = next(
+        frame for frame in decision.frames if frame.intent == "create_work_order"
+    )
+    assert worker_frame.params_hint is not None
+    assert worker_frame.params_hint["name"] == "李1"
+    assert worker_frame.params_hint["default_unit_price"] == 100
+    assert work_order_frame.params_hint is not None
+    assert work_order_frame.params_hint["workers"] == ["李1"]
+    assert work_order_frame.params_hint["unit_names"] == ["大豆地"]
+    assert work_order_frame.params_hint["operation_type"] == "采收"
+    assert SkillRouter().build_pending_plan_steps(decision) == [
+        {
+            "step_id": "create_worker",
+            "tool_name": "manage_workers",
+            "params": {
+                "action": "create",
+                "name": "李1",
+                "default_pay_type": "daily",
+                "default_unit_price": 100,
+            },
+            "depends_on": [],
+        },
+        {
+            "step_id": "create_work_order",
+            "tool_name": "create_operation_work_order",
+            "params": {
+                "workers": ["李1"],
+                "unit_names": ["大豆地"],
+                "operation_type": "采收",
+                "unit_price": 100,
+            },
+            "depends_on": ["create_worker"],
+        },
+    ]
+
+
 def test_build_pending_plan_steps_deep_copies_params_hint() -> None:
     router = SkillRouter()
     decision = router.route(

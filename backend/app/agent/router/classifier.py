@@ -240,17 +240,19 @@ class RuleIntentClassifier:
 
     @staticmethod
     def _extract_worker_name(message: str) -> str | None:
-        match = re.search(
-            r"(?:工人|员工|师傅)?(?P<name>[\u4e00-\u9fa5]{2,4})(?:工资|日薪|每天)",
-            message,
+        name_chars = r"[\u4e00-\u9fa5A-Za-z0-9]{1,8}"
+        patterns = (
+            rf"(?:工人|员工|师傅)(?P<name>{name_chars})(?:工资|日薪|每天)",
+            r"(?P<name>[\u4e00-\u9fa5]{2,4})(?:工资|日薪|每天)",
+            rf"(?:工人|员工|师傅)(?P<name>{name_chars})",
         )
-        if match:
-            return match.group("name")
-        match = re.search(
-            r"(?:工人|员工|师傅)(?P<name>[\u4e00-\u9fa5]{2,4})",
-            message,
-        )
-        return match.group("name") if match else None
+        for pattern in patterns:
+            match = re.search(pattern, message)
+            if match:
+                name = match.group("name")
+                if name not in {"工人", "员工", "师傅"}:
+                    return name
+        return None
 
     @staticmethod
     def _extract_unit_price(message: str) -> int | None:
@@ -267,6 +269,13 @@ class RuleIntentClassifier:
 
     @staticmethod
     def _extract_unit_name(message: str) -> str | None:
+        field_match = re.search(
+            r"(?:去|到|在)(?P<unit>[\u4e00-\u9fa5A-Za-z0-9]{1,12}?"
+            r"(?:大棚|田块|地块|棚|田|地))(?=采收|授粉|作业|$)",
+            message,
+        )
+        if field_match:
+            return field_match.group("unit")
         match = re.search(r"(?P<unit>\d+\s*号棚)", message)
         if not match:
             return None
