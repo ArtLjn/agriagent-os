@@ -9,6 +9,7 @@ void main() {
     WidgetTester tester, {
     FakeAppDependencies? dependencies,
   }) async {
+    setMockAppPackageInfo();
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -25,7 +26,7 @@ void main() {
   testWidgets('认证流程可从登录进入注册、首次设置和主应用', (tester) async {
     await pumpAuthFlow(tester);
 
-    expect(find.text('农场管家'), findsOneWidget);
+    expect(find.text('田掌柜'), findsOneWidget);
     expect(find.text('把农场记录得更轻松'), findsOneWidget);
     expect(find.text('手机号'), findsOneWidget);
     expect(find.text('密码'), findsOneWidget);
@@ -149,7 +150,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(dependencies.logoutCalls, 1);
-    expect(find.text('农场管家'), findsOneWidget);
+    expect(find.text('田掌柜'), findsOneWidget);
     expect(find.text('手机号'), findsOneWidget);
     expect(find.text('首页'), findsNothing);
   });

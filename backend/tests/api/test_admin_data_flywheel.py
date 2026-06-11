@@ -4,6 +4,7 @@ import json
 
 from fastapi.testclient import TestClient
 
+import app.api.admin_data_flywheel as admin_data_flywheel_api
 from app.infra.agent_events import AgentEventWriter
 from app.main import app
 from app.models.data_flywheel import AgentDataFlywheelLabel
@@ -294,3 +295,40 @@ def test_missing_sample_returns_code_detail(db_session, tmp_path) -> None:
 
     assert resp.status_code == 404
     assert resp.json()["detail"]["code"] == "SAMPLE_NOT_FOUND"
+
+
+def test_sync_sessions_schedules_background_job_by_default(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    ensure_admin_user(db_session)
+    farm = db_session.query(Farm).filter(Farm.user_id == ADMIN_USER_ID).one()
+    calls = []
+
+    def fake_run_job(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(admin_data_flywheel_api, "AGENT_EVENT_BASE_DIR", tmp_path)
+    monkeypatch.setattr(admin_data_flywheel_api, "run_session_events_sync_job", fake_run_job)
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            "/admin/data-flywheel/sync-sessions",
+            json={"session_id": "sess-admin-db-only"},
+            headers=admin_headers(),
+        )
+        status_resp = client.get(
+            f"/admin/data-flywheel/sync-sessions/{resp.json()['job_id']}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "queued"
+    assert resp.json()["mode"] == "background"
+    assert resp.json()["session_id"] == "sess-admin-db-only"
+    assert status_resp.status_code == 200
+    assert status_resp.json()["job_id"] == resp.json()["job_id"]
+    assert status_resp.json()["status"] == "queued"
+    assert calls[0]["farm_id"] == farm.id
+    assert calls[0]["session_id"] == "sess-admin-db-only"
+    assert calls[0]["event_base_dir"] == tmp_path

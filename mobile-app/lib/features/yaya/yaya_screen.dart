@@ -37,7 +37,7 @@ class _YayaScreenState extends State<YayaScreen> {
     _closeDrawer();
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const YayaSkillsPage(),
+        builder: (_) => YayaSkillsPage(repository: widget.repository),
       ),
     );
   }
@@ -666,10 +666,17 @@ class _YayaHero extends StatelessWidget {
   }
 }
 
-class YayaSkillsPage extends StatelessWidget {
-  const YayaSkillsPage({super.key});
+class YayaSkillsPage extends StatefulWidget {
+  const YayaSkillsPage({super.key, required this.repository});
 
-  static const _recommendedCards = [
+  final YayaRepository repository;
+
+  @override
+  State<YayaSkillsPage> createState() => _YayaSkillsPageState();
+}
+
+class _YayaSkillsPageState extends State<YayaSkillsPage> {
+  static const _fallbackRecommendedCards = [
     _SkillSpec(
       icon: LucideIcons.notebookText,
       title: '今日简报',
@@ -700,7 +707,7 @@ class YayaSkillsPage extends StatelessWidget {
     ),
   ];
 
-  static const _listSkills = [
+  static const _fallbackListSkills = [
     _SkillSpec(
       icon: LucideIcons.layers3,
       title: '批次管理',
@@ -731,6 +738,38 @@ class YayaSkillsPage extends StatelessWidget {
     ),
   ];
 
+  List<_SkillSpec> _recommendedCards = _fallbackRecommendedCards;
+  List<_SkillSpec> _listSkills = _fallbackListSkills;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSkills();
+  }
+
+  Future<void> _loadSkills() async {
+    try {
+      final skills = await widget.repository.loadSkills();
+      if (!mounted || skills.isEmpty) return;
+      setState(() {
+        _recommendedCards = skills
+            .where((skill) => skill.recommended && skill.enabled)
+            .map(_skillSpecFromApi)
+            .toList();
+        _listSkills = skills
+            .where((skill) => !skill.recommended && skill.enabled)
+            .map(_skillSpecFromApi)
+            .toList();
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _recommendedCards = _fallbackRecommendedCards;
+        _listSkills = _fallbackListSkills;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -758,12 +797,15 @@ class YayaSkillsPage extends StatelessWidget {
                   sliver: SliverToBoxAdapter(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      child: Image.asset(
-                        AppAssets.yayaSkillsBanner,
-                        key: const ValueKey('yaya-skills-banner'),
-                        height: 160,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
+                      child: AspectRatio(
+                        aspectRatio: 2.4,
+                        child: Image.asset(
+                          AppAssets.yayaSkillsBanner,
+                          key: const ValueKey('yaya-skills-banner'),
+                          width: double.infinity,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.center,
+                        ),
                       ),
                     ),
                   ),

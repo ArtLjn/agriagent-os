@@ -56,7 +56,7 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
           ))}
           {record.issue_candidates.slice(0, 1).map((issue) => (
             <Tag key={issue.type} color={issue.severity === 'critical' ? 'red' : 'orange'} style={{ marginTop: 4 }}>
-              {issueText[issue.type] ?? issue.type}
+              规则：{issueText[issue.type] ?? issue.type}
             </Tag>
           ))}
         </div>
@@ -81,7 +81,7 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
           </Typography.Text>
           {record.issue_candidates[0] && (
             <Typography.Text ellipsis style={{ color: palette.warning, fontSize: 12, maxWidth: 330 }}>
-              {record.issue_candidates[0].reason}
+              规则候选：{record.issue_candidates[0].reason}
             </Typography.Text>
           )}
         </Space>

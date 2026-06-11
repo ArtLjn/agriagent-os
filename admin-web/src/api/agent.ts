@@ -49,6 +49,22 @@ export interface ReportListResponse {
   total: number;
 }
 
+export interface AppSkillItem {
+  key: string;
+  title: string;
+  description: string;
+  category: string;
+  icon: string;
+  icon_color: string;
+  recommended: boolean;
+  enabled: boolean;
+}
+
+export interface AppSkillListResponse {
+  items: AppSkillItem[];
+  total: number;
+}
+
 export async function chat(data: ChatRequest): Promise<ChatResponse> {
   const res = await apiClient.post<ChatResponse>("/agent/chat", data);
   return res.data;
@@ -135,6 +151,11 @@ export async function getAdviceHistory(params?: { cycle_id?: number; limit?: num
 
 export async function getReportHistory(params?: { cycle_id?: number; limit?: number }): Promise<ReportListResponse> {
   const res = await apiClient.get<ReportListResponse>("/agent/report-history", { params });
+  return res.data;
+}
+
+export async function listAppSkills(): Promise<AppSkillListResponse> {
+  const res = await apiClient.get<AppSkillListResponse>('/agent/skills');
   return res.data;
 }
 

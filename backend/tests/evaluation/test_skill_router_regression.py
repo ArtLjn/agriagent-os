@@ -21,6 +21,8 @@ TOOLS = [
     _Tool("create_operation_work_order"),
     _Tool("get_operation_work_orders"),
     _Tool("get_workers"),
+    _Tool("get_cost_summary"),
+    _Tool("get_debt_summary"),
     _Tool("settle_labor_payment"),
     _Tool("delete_crop_cycle"),
 ]
@@ -57,6 +59,20 @@ def test_read_intent_does_not_expose_write_tools() -> None:
             "delete_crop_cycle",
         ]
     )
+
+
+def test_balance_query_selects_cost_summary_tool() -> None:
+    decision = SkillRouter().route("我的余额", TOOLS)
+
+    assert decision.selected_tools == ["get_cost_summary"]
+    assert decision.frames[0].intent == "query_cost_summary"
+
+
+def test_worker_query_selects_worker_read_tool() -> None:
+    decision = SkillRouter().route("我的工人", TOOLS)
+
+    assert decision.selected_tools == ["get_workers"]
+    assert decision.frames[0].intent == "query_workers"
 
 
 def test_high_risk_delete_not_exposed_for_unknown_text() -> None:

@@ -288,8 +288,9 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
     expect(screen.getByText('req:abc')).toBeInTheDocument();
     expect(screen.getByText('680 tokens')).toBeInTheDocument();
-    expect(screen.getAllByText('参数/提示泄露').length).toBeGreaterThan(0);
-    expect(screen.getByText('问题候选')).toBeInTheDocument();
+    expect(screen.getAllByText('规则：参数/提示泄露').length).toBeGreaterThan(0);
+    expect(screen.getByText('规则候选')).toBeInTheDocument();
+    expect(screen.getByText('已标注问题')).toBeInTheDocument();
   });
 
   it('点击样本行后加载详情并显示工具与 pending 生命周期', async () => {
@@ -344,7 +345,37 @@ describe('DataFlywheel 页面', () => {
 
     expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
     expect(screen.queryByTestId('sample-row-turn:session-b:4')).not.toBeInTheDocument();
-    expect(screen.getByText('回复疑似暴露模型参数或系统提示')).toBeInTheDocument();
+    expect(screen.getByText('规则候选：回复疑似暴露模型参数或系统提示')).toBeInTheDocument();
+  });
+
+  it('点击已标注问题后只显示人工确认的问题样本', async () => {
+    const confirmedBadSample: DataFlywheelSample = {
+      ...anotherSample,
+      quality_labels: ['bad_reply'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    const cleanSample: DataFlywheelSample = {
+      ...sample,
+      sample_id: 'turn:session-c:5',
+      session_id: 'session-c',
+      turn_id: 5,
+      request_id: 'req:clean',
+      user_input_preview: '查询今日天气',
+      quality_labels: ['good_reply'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [sample, confirmedBadSample, cleanSample], total: 3 });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
+
+    expect(screen.getByTestId('sample-row-turn:session-b:4')).toBeInTheDocument();
+    expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sample-row-turn:session-c:5')).not.toBeInTheDocument();
+    expect(screen.getByText('坏回复')).toBeInTheDocument();
   });
 
   it('快速切换样本时旧详情响应不会覆盖新详情', async () => {
@@ -410,7 +441,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('actual: worker.search')).toBeInTheDocument();
     expect(screen.getByText('pending: 已创建')).toBeInTheDocument();
     expect(screen.getAllByText('tool: 1 success / 0 failed').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('幻觉执行').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('规则：幻觉执行').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId('review-select-turn:session-a:4'));
 

@@ -37,37 +37,58 @@ class CropTemplateListPage extends StatelessWidget {
       showBottomTabs: true,
       onBottomTabChanged: onBottomTabChanged,
       children: [
-        const TemplateLibraryBanner(
-          asset: AppAssets.businessTemplateOpenBookBanner,
-        ),
-        const SearchFieldCard(text: '搜索作物或品种'),
-        const ChipRail(items: ['全部', '瓜果', '蔬菜', '粮食']),
         FutureBuilder<PageResult<ApiRecord>>(
           future: repository.listCropTemplates(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingCard();
-            }
-            final items = snapshot.data?.items ?? const <ApiRecord>[];
-            if (items.isEmpty && snapshot.hasError) {
-              return const BusinessCard(
-                padding: EdgeInsets.all(18),
-                child: Text('还没有作物模板。'),
+              return const Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TemplateLibraryBanner(
+                    asset: AppAssets.businessTemplateOpenBookBanner,
+                    templateCount: 0,
+                  ),
+                  SizedBox(height: 13),
+                  LoadingCard(),
+                ],
               );
             }
+            final items = snapshot.data?.items ?? const <ApiRecord>[];
             return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var index = 0;
-                    index < _templateFallbacks.length;
-                    index++) ...[
-                  TemplateListCard(
-                    record: index < items.length ? items[index] : null,
-                    repository: repository,
-                    index: index,
-                    onBottomTabChanged: onBottomTabChanged,
+                TemplateLibraryBanner(
+                  asset: AppAssets.businessTemplateOpenBookBanner,
+                  templateCount: items.length,
+                ),
+                const SizedBox(height: 13),
+                const SearchFieldCard(text: '搜索作物或品种'),
+                const SizedBox(height: 13),
+                const ChipRail(items: ['全部', '瓜果', '蔬菜', '粮食']),
+                const SizedBox(height: 13),
+                if (items.isEmpty && snapshot.hasError)
+                  const BusinessCard(
+                    padding: EdgeInsets.all(18),
+                    child: Text('作物模板加载失败，请稍后重试。'),
+                  )
+                else if (items.isEmpty)
+                  const BusinessCard(
+                    padding: EdgeInsets.all(18),
+                    child: Text('还没有作物模板。'),
+                  )
+                else
+                  Column(
+                    children: [
+                      for (final item in items) ...[
+                        TemplateListCard(
+                          record: item,
+                          repository: repository,
+                          onBottomTabChanged: onBottomTabChanged,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                ],
               ],
             );
           },
@@ -95,11 +116,11 @@ class CropTemplateFormPage extends StatefulWidget {
 }
 
 class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
-  final _name = TextEditingController(text: '西瓜');
-  final _variety = TextEditingController(text: '8424');
-  final _stageName = TextEditingController(text: '育苗期');
-  final _stageDays = TextEditingController(text: '18');
-  final _stageTask = TextEditingController(text: '控温、补光');
+  final _name = TextEditingController();
+  final _variety = TextEditingController();
+  final _stageName = TextEditingController();
+  final _stageDays = TextEditingController();
+  final _stageTask = TextEditingController();
   bool _saving = false;
 
   @override
@@ -139,7 +160,8 @@ class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -151,13 +173,14 @@ class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
         secondaryLabel: '预览',
         primaryLabel: _saving ? '保存中' : '保存模板',
         onPrimary: _save,
+        onSecondary: () => _showMessage('已生成阶段预览'),
         showTabs: true,
         onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
         const AiLandscapeBanner(
           title: '输入作物名称，AI生成阶段',
-          subtitle: '例如：我要种8424西瓜',
+          subtitle: '填写模板信息后保存到后端',
           asset: AppAssets.businessTemplateBanner,
           accent: businessGreen,
         ),
@@ -166,52 +189,48 @@ class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
           icon: LucideIcons.sprout,
           children: [
             BusinessFormRow(
-                label: '作物名称', value: '西瓜', controller: _name, chevron: true),
+              label: '作物名称',
+              value: '',
+              controller: _name,
+              hintText: '输入作物名称',
+              chevron: true,
+            ),
             BusinessFormRow(
-                label: '品种',
-                value: '8424',
-                controller: _variety,
-                chevron: true),
-            const BusinessFormRow(label: '适用季节', value: '春季', chevron: true),
+              label: '品种',
+              value: '',
+              controller: _variety,
+              hintText: '输入品种',
+              chevron: true,
+            ),
           ],
         ),
-        const BusinessCard(
+        BusinessCard(
           child: Column(
             children: [
-              BusinessCardHeader(
+              const BusinessCardHeader(
                 title: '生长阶段',
                 icon: LucideIcons.sprout,
               ),
-              StageEditRow(
-                  index: 1, title: '播种期', days: '7天', color: businessBlue),
-              StageEditRow(
-                  index: 2, title: '苗期', days: '18天', color: businessGreen),
-              StageEditRow(
-                  index: 3, title: '伸蔓期', days: '22天', color: AppColors.amber),
-              StageEditRow(
-                  index: 4, title: '开花坐果期', days: '25天', color: businessGreen),
-              StageEditRow(
-                  index: 5, title: '采收期', days: '20天', color: businessBlue),
-              AddDashedRow(label: '添加阶段'),
-            ],
-          ),
-        ),
-        Offstage(
-          offstage: true,
-          child: FormRowsCard(
-            title: '阶段设置',
-            icon: LucideIcons.listChecks,
-            children: [
               BusinessFormRow(
-                  label: '阶段名称', value: '育苗期', controller: _stageName),
+                label: '阶段名称',
+                value: '',
+                controller: _stageName,
+                hintText: '输入阶段名称',
+              ),
               BusinessFormRow(
                 label: '持续天数',
-                value: '18',
+                value: '',
                 controller: _stageDays,
+                hintText: '输入天数',
                 keyboardType: TextInputType.number,
               ),
               BusinessFormRow(
-                  label: '关键任务', value: '控温、补光', controller: _stageTask),
+                label: '关键任务',
+                value: '',
+                controller: _stageTask,
+                hintText: '输入关键任务',
+              ),
+              AddDashedRow(label: '添加阶段', onTap: () => _showMessage('已添加新阶段')),
             ],
           ),
         ),
@@ -221,28 +240,26 @@ class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
 }
 
 class TemplateListCard extends StatelessWidget {
-  const TemplateListCard(
-      {super.key,
-      this.record,
-      required this.repository,
-      this.index = 0,
-      this.onBottomTabChanged});
+  const TemplateListCard({
+    super.key,
+    required this.record,
+    required this.repository,
+    this.onBottomTabChanged,
+  });
 
-  final ApiRecord? record;
+  final ApiRecord record;
   final BusinessRepository repository;
-  final int index;
   final ValueChanged<int>? onBottomTabChanged;
 
   @override
   Widget build(BuildContext context) {
-    final json = record?.json ?? const <String, Object?>{};
-    final fallback = _templateFallbacks[index % _templateFallbacks.length];
-    final stageNames = fallback.stages;
-    final name = fallback.name;
-    final variety = fallback.variety;
+    final json = record.json;
+    final stageNames = _stageNames(json['stages']);
+    final name = _firstNonEmpty([json['name']], fallback: '未命名模板');
+    final variety = _firstNonEmpty([json['variety']], fallback: '未填写品种');
     final stageCount = stageNames.length;
-    final days = fallback.days;
-    final used = json['usage_count'] ?? fallback.used;
+    final days = _firstNonEmpty([json['total_cycle_days']], fallback: '未设置');
+    final used = json['usage_count'] ?? 0;
     return BusinessCard(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       child: Column(
@@ -254,7 +271,7 @@ class TemplateListCard extends StatelessWidget {
               SizedBox(
                 width: 104,
                 child: Image.asset(
-                  fallback.asset,
+                  AppAssets.businessTemplateBanner,
                   height: 112,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
@@ -302,7 +319,7 @@ class TemplateListCard extends StatelessWidget {
           const SizedBox(height: 10),
           MiniStageTimeline(
             stages: stageNames.take(6).toList(),
-            activeIndex: stageNames.length - 1,
+            activeIndex: stageNames.isEmpty ? 0 : stageNames.length - 1,
           ),
           const SizedBox(height: 10),
           Row(
@@ -352,47 +369,17 @@ class TemplateListCard extends StatelessWidget {
   }
 }
 
-const _templateFallbacks = [
-  _TemplateFallback(
-    name: '8424西瓜',
-    variety: '西瓜',
-    days: 92,
-    used: 3,
-    asset: AppAssets.businessCropWatermelon,
-    stages: ['播种育苗', '定植缓苗', '伸蔓期', '膨果期', '成熟采收'],
-  ),
-  _TemplateFallback(
-    name: '普罗旺斯番茄',
-    variety: '番茄',
-    days: 120,
-    used: 2,
-    asset: AppAssets.businessCropTomato,
-    stages: ['播种育苗', '定植缓苗', '开花坐果', '果实膨大', '转色期', '成熟采收'],
-  ),
-  _TemplateFallback(
-    name: '甜玉米',
-    variety: '玉米',
-    days: 85,
-    used: 1,
-    asset: AppAssets.businessCropCorn,
-    stages: ['播种育苗', '拔节期', '抽雄吐丝', '成熟采收'],
-  ),
-];
+List<String> _stageNames(Object? value) {
+  if (value is! List) return const [];
+  return value.whereType<Map>().map((stage) {
+    return _firstNonEmpty([stage['name']], fallback: '未命名阶段');
+  }).toList();
+}
 
-class _TemplateFallback {
-  const _TemplateFallback({
-    required this.name,
-    required this.variety,
-    required this.days,
-    required this.used,
-    required this.asset,
-    required this.stages,
-  });
-
-  final String name;
-  final String variety;
-  final int days;
-  final int used;
-  final String asset;
-  final List<String> stages;
+String _firstNonEmpty(List<Object?> values, {String fallback = ''}) {
+  for (final value in values) {
+    final text = '$value'.trim();
+    if (value != null && text.isNotEmpty && text != 'null') return text;
+  }
+  return fallback;
 }

@@ -21,6 +21,7 @@ void main() {
       'POST /planting/workers': workerResponse,
       'PUT /planting/workers/5': workerResponse,
       'POST /planting/labor/wages': wageResponse,
+      'POST /logs': logResponse,
       'POST /planting/work-orders': workOrderResponse,
       'POST /costs': costRecordResponse,
     });
@@ -83,5 +84,17 @@ void main() {
         containsPair('worker_name', '老王'));
     expect(adapter.find('POST', '/planting/work-orders').data,
         containsPair('operation_type', '浇水'));
+  });
+
+  test('农事记录接口映射到 POST /logs', () async {
+    await repository.createFarmLog({
+      'cycle_id': 7,
+      'operation_type': '浇水',
+      'operation_date': '2026-06-10',
+    });
+
+    final request = adapter.find('POST', '/logs');
+    expect(request.data, containsPair('cycle_id', 7));
+    expect(request.data, containsPair('operation_type', '浇水'));
   });
 }

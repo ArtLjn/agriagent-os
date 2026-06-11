@@ -18,6 +18,7 @@ from app.services.data_flywheel_service import (
     get_sample_detail,
     list_samples,
 )
+from app.services.data_flywheel_session_sync_service import sync_session_events
 from app.services.data_flywheel_session_review_service import get_session_review
 
 pytestmark = pytest.mark.no_db
@@ -457,4 +458,84 @@ def test_build_case_draft_without_pending_sets_expected_pending_action_none(tmp_
     )
 
     assert draft["case_json"]["expected_pending_action"] is None
+    db.close()
+
+
+def test_sync_session_events_backfills_db_messages_to_jsonl(tmp_path):
+    db = Session()
+    conv = get_or_create_conversation(
+        db,
+        farm_id=1,
+        session_id="sess-db-only",
+        user_id="user-1",
+    )
+    save_message(db, conv.id, "user", "我的工人")
+    save_message(db, conv.id, "assistant", "当前工人有张三和李四")
+
+    result = sync_session_events(
+        db,
+        farm_id=1,
+        session_id="sess-db-only",
+        event_base_dir=tmp_path,
+    )
+    samples = list_samples(db, farm_id=1, session_id="sess-db-only")
+    detail = get_sample_detail(
+        db,
+        farm_id=1,
+        sample_id=samples["items"][0]["sample_id"],
+    )
+
+    assert result == {
+        "scanned_sessions": 1,
+        "created_turns": 1,
+        "synced_turns": 1,
+        "skipped_turns": 0,
+        "failed_turns": 0,
+        "failures": [],
+    }
+    assert samples["total"] == 1
+    assert samples["items"][0]["source_type"] == "agent_event_log"
+    assert detail["messages"][0]["content"] == "我的工人"
+    assert detail["messages"][1]["content"] == "当前工人有张三和李四"
+    assert detail["source"]["event_file"].startswith(str(tmp_path))
+    assert detail["source"]["event_seq_start"] == 1
+    assert detail["source"]["event_seq_end"] == 2
+    exported = export_sample_jsonl(
+        db,
+        farm_id=1,
+        sample_id=samples["items"][0]["sample_id"],
+    )
+    payload = json.loads(exported["content"])
+    assert payload["user_input"] == "我的工人"
+    assert payload["assistant_reply"] == "当前工人有张三和李四"
+    db.close()
+
+
+def test_sync_session_events_skips_existing_readable_event_range(tmp_path):
+    db = Session()
+    turn = _seed_turn(
+        db,
+        tmp_path,
+        session_id="sess-existing-events",
+        user_input="天气如何",
+        assistant_reply="今天晴。",
+    )
+
+    result = sync_session_events(
+        db,
+        farm_id=1,
+        session_id="sess-existing-events",
+        event_base_dir=tmp_path,
+    )
+    detail = get_sample_detail(
+        db,
+        farm_id=1,
+        sample_id=f"turn:1:sess-existing-events:{turn.id}",
+    )
+
+    assert result["created_turns"] == 0
+    assert result["synced_turns"] == 0
+    assert result["skipped_turns"] == 1
+    assert detail["source"]["event_seq_start"] == 1
+    assert detail["source"]["event_seq_end"] == 5
     db.close()

@@ -17,9 +17,11 @@ interface SessionArchivePanelProps {
   groups: SessionArchiveItem[];
   total: number;
   issueCount: number;
+  confirmedIssueCount: number;
   activeKey: string;
   allKey: string;
   issueKey: string;
+  confirmedIssueKey: string;
   onSelect: (key: string) => void;
 }
 
@@ -27,9 +29,11 @@ export default function SessionArchivePanel({
   groups,
   total,
   issueCount,
+  confirmedIssueCount,
   activeKey,
   allKey,
   issueKey,
+  confirmedIssueKey,
   onSelect,
 }: SessionArchivePanelProps) {
   return (
@@ -44,7 +48,7 @@ export default function SessionArchivePanel({
           <span>
             <Typography.Text style={{ color: palette.text }}>全部用户会话</Typography.Text>
             <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
-              当前筛选结果内的全部样本
+              当前筛选结果内的会话样本
             </Typography.Text>
           </span>
           <Badge count={total} color={palette.accentStrong} />
@@ -57,12 +61,27 @@ export default function SessionArchivePanel({
           style={archiveButtonStyle(activeKey === issueKey)}
         >
           <span>
-            <Typography.Text style={{ color: palette.text }}>问题候选</Typography.Text>
+            <Typography.Text style={{ color: palette.text }}>规则候选</Typography.Text>
             <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
-              规则命中的幻觉、泄露或写入风险
+              规则命中，仍需人工确认
             </Typography.Text>
           </span>
           <Badge count={issueCount} color={palette.danger} />
+        </button>
+
+        <button
+          type="button"
+          data-testid="archive-confirmed-issues"
+          onClick={() => onSelect(confirmedIssueKey)}
+          style={archiveButtonStyle(activeKey === confirmedIssueKey)}
+        >
+          <span>
+            <Typography.Text style={{ color: palette.text }}>已标注问题</Typography.Text>
+            <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
+              人工确认并保存的问题样本
+            </Typography.Text>
+          </span>
+          <Badge count={confirmedIssueCount} color={palette.danger} />
         </button>
 
         {groups.length === 0 ? (

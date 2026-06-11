@@ -24,6 +24,20 @@ const issueText: Record<string, string> = {
   off_topic: '答非所问',
 };
 
+const labelText: Record<string, string> = {
+  good_reply: '好回复',
+  bad_reply: '坏回复',
+  wrong_tool_selection: '工具选错',
+  pending_missed: 'pending 漏拦截',
+  hallucinated_execution: '幻觉执行',
+  off_topic: '答非所问',
+  sensitive_info_leak: '参数/提示泄露',
+  missing_wage: '工资缺失',
+  disabled_worker_used: '禁用工人',
+  needs_regression: '需要回归',
+  not_actionable: '暂不处理',
+};
+
 export default function SessionConversationView({
   review,
   loading,
@@ -94,6 +108,11 @@ function TurnReviewCard({
           <Tag color={turn.sample.annotation_status === 'labeled' ? 'success' : 'warning'}>
             {turn.sample.annotation_status}
           </Tag>
+          {turn.sample.quality_labels.map((label) => (
+            <Tag key={label} color="blue">
+              已标注：{labelText[label] ?? label}
+            </Tag>
+          ))}
           <Typography.Text style={{ color: palette.textMuted }}>
             {turn.sample.token_total ?? '-'} tokens / {turn.sample.latency_ms ?? '-'} ms
           </Typography.Text>
@@ -168,7 +187,7 @@ function IssueTag({ issue }: { issue: DataFlywheelIssueCandidate }) {
   const color = issue.severity === 'critical' ? 'red' : 'orange';
   return (
     <Tag color={color} title={issue.reason}>
-      {issueText[issue.type] ?? issue.type}
+      规则：{issueText[issue.type] ?? issue.type}
     </Tag>
   );
 }

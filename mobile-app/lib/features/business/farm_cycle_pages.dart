@@ -7,6 +7,7 @@ import '../../shared/assets/app_assets.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'business_ui.dart';
+import 'farm_log_create_page.dart';
 
 class FarmCycleListPage extends StatelessWidget {
   const FarmCycleListPage({
@@ -39,36 +40,55 @@ class FarmCycleListPage extends StatelessWidget {
         ),
       ),
       children: [
-        const CycleSummaryBanner(asset: AppAssets.businessCycleWideBanner),
-        const SearchFieldCard(text: '搜索作物、地块、茬口'),
-        const ChipRail(
-          items: ['全部', '在种', '计划', '已结束'],
-          activeColor: businessGreen,
-        ),
         FutureBuilder<PageResult<ApiRecord>>(
           future: repository.listCycles(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingCard();
-            }
-            final items = snapshot.data?.items ?? const <ApiRecord>[];
-            if (items.isEmpty && snapshot.hasError) {
-              return const BusinessCard(
-                padding: EdgeInsets.all(18),
-                child: Text('还没有茬口，先新建一个生产批次。'),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _cycleSummaryBanner(const <ApiRecord>[]),
+                  const SizedBox(height: 13),
+                  const LoadingCard(),
+                ],
               );
             }
+            final items = snapshot.data?.items ?? const <ApiRecord>[];
             return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var index = 0;
-                    index < _cycleFallbacks.length;
-                    index++) ...[
-                  CycleListCard(
-                    record: index < items.length ? items[index] : null,
-                    index: index,
+                _cycleSummaryBanner(items),
+                const SizedBox(height: 13),
+                const SearchFieldCard(text: '搜索作物、地块、茬口'),
+                const SizedBox(height: 13),
+                const ChipRail(
+                  items: ['全部', '在种', '计划', '已结束'],
+                  activeColor: businessGreen,
+                ),
+                const SizedBox(height: 13),
+                if (items.isEmpty && snapshot.hasError)
+                  const BusinessCard(
+                    padding: EdgeInsets.all(18),
+                    child: Text('茬口数据加载失败，请稍后重试。'),
+                  )
+                else if (items.isEmpty)
+                  const BusinessCard(
+                    padding: EdgeInsets.all(18),
+                    child: Text('还没有茬口，先新建一个生产批次。'),
+                  )
+                else
+                  Column(
+                    children: [
+                      for (final item in items) ...[
+                        CycleListCard(
+                          record: item,
+                          repository: repository,
+                          onBottomTabChanged: onBottomTabChanged,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                ],
               ],
             );
           },
@@ -97,13 +117,13 @@ class FarmCycleFormPage extends StatefulWidget {
 }
 
 class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
-  final _name = TextEditingController(text: '西瓜春茬');
-  final _templateId = TextEditingController(text: '8424西瓜');
-  final _startDate = TextEditingController(text: '2026-04-01');
-  final _field = TextEditingController(text: '东大棚');
-  final _area = TextEditingController(text: '8.6');
-  final _season = TextEditingController(text: '春季');
-  final _note = TextEditingController(text: '第一批试种');
+  final _name = TextEditingController();
+  final _templateId = TextEditingController();
+  final _startDate = TextEditingController(text: _todayText());
+  final _field = TextEditingController();
+  final _area = TextEditingController();
+  final _season = TextEditingController();
+  final _note = TextEditingController();
   bool _saving = false;
 
   @override
@@ -145,7 +165,8 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -157,6 +178,7 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
         secondaryLabel: '保存草稿',
         primaryLabel: _saving ? '保存中' : '创建茬口',
         onPrimary: _save,
+        onSecondary: () => _showMessage('草稿已保留在当前页面'),
         showTabs: true,
         onBottomTabChanged: widget.onBottomTabChanged,
       ),
@@ -175,20 +197,32 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
           title: '基础信息',
           icon: LucideIcons.layers,
           children: [
-            BusinessFormRow(label: '茬口名称', value: '西瓜春茬', controller: _name),
+            BusinessFormRow(
+              label: '茬口名称',
+              value: '',
+              controller: _name,
+              hintText: '输入茬口名称',
+            ),
             BusinessFormRow(
               label: '作物模板',
-              value: '8424西瓜',
+              value: '',
               controller: _templateId,
+              hintText: '输入模板 ID',
               chevron: true,
             ),
             BusinessFormRow(
               label: '开始日期',
-              value: '2026-04-01',
+              value: '',
               controller: _startDate,
+              hintText: '选择日期',
               chevron: true,
             ),
-            BusinessFormRow(label: '地块', value: '东大棚', controller: _field),
+            BusinessFormRow(
+              label: '地块',
+              value: '',
+              controller: _field,
+              hintText: '输入地块',
+            ),
           ],
         ),
         FormRowsCard(
@@ -197,39 +231,67 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
           children: [
             BusinessFormRow(
               label: '面积',
-              value: '8.6亩',
+              value: '',
               controller: _area,
+              hintText: '输入亩数',
               keyboardType: TextInputType.number,
             ),
-            BusinessFormRow(label: '季节', value: '春季', controller: _season),
-            BusinessFormRow(label: '备注', value: '第一批试种', controller: _note),
+            BusinessFormRow(
+              label: '季节',
+              value: '',
+              controller: _season,
+              hintText: '输入季节',
+            ),
+            BusinessFormRow(
+              label: '备注',
+              value: '',
+              controller: _note,
+              hintText: '补充说明',
+            ),
           ],
         ),
-        const StagePreviewCard(),
+        const StagePreviewCard(stages: []),
       ],
     );
   }
 }
 
 class CycleListCard extends StatelessWidget {
-  const CycleListCard({super.key, this.record, this.index = 0});
+  const CycleListCard({
+    super.key,
+    required this.record,
+    required this.repository,
+    this.onBottomTabChanged,
+  });
 
-  final ApiRecord? record;
-  final int index;
+  final ApiRecord record;
+  final BusinessRepository repository;
+  final ValueChanged<int>? onBottomTabChanged;
 
   @override
   Widget build(BuildContext context) {
-    final json = record?.json ?? const <String, Object?>{};
-    final fallback = _cycleFallbacks[index % _cycleFallbacks.length];
-    final name = fallback.name;
-    final variety = fallback.variety;
-    final field = fallback.field;
-    final area = fallback.area;
-    final stage = fallback.stage;
-    final startDate = fallback.startDate;
-    final progressValue =
-        ((json['progress_percent'] as num?)?.toDouble() ?? fallback.progress);
+    final json = record.json;
+    final name = _firstNonEmpty([json['name']], fallback: '未命名茬口');
+    final variety = _firstNonEmpty([
+      json['crop_name'],
+      json['crop_template_name'],
+      json['template_name'],
+      json['variety'],
+      json['crop_template_id'] == null
+          ? null
+          : '模板ID ${json['crop_template_id']}',
+    ], fallback: '未关联模板');
+    final field = _firstNonEmpty([json['field_name']], fallback: '未填写地块');
+    final area = _firstNonEmpty([json['total_area_mu'], json['unit_area_mu']],
+        fallback: '未填写面积');
+    final stage = _firstNonEmpty(
+      [json['current_stage_name'], json['status']],
+      fallback: '未设置阶段',
+    );
+    final startDate = _firstNonEmpty([json['start_date']], fallback: '未填写');
+    final progressValue = ((json['progress_percent'] as num?)?.toDouble() ?? 0);
     final progress = progressValue / 100;
+    final isPlan = '${json['status'] ?? ''}'.toLowerCase() == 'planned';
     return CycleVisualCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,7 +299,10 @@ class CycleListCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CropIllustrationAvatar(asset: fallback.asset, size: 96),
+              const CropIllustrationAvatar(
+                asset: AppAssets.businessCycleBanner,
+                size: 96,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -271,7 +336,7 @@ class CycleListCard extends StatelessWidget {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '$field  |  $area亩',
+                            '$field  |  $area',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.body.copyWith(
@@ -287,9 +352,8 @@ class CycleListCard extends StatelessWidget {
               ),
               SoftPill(
                 text: stage,
-                color: fallback.isPlan ? businessBlue : AppColors.greenDark,
-                background:
-                    fallback.isPlan ? AppColors.blueSoft : AppColors.greenSoft,
+                color: isPlan ? businessBlue : AppColors.greenDark,
+                background: isPlan ? AppColors.blueSoft : AppColors.greenSoft,
               ),
             ],
           ),
@@ -357,6 +421,14 @@ class CycleListCard extends StatelessWidget {
                   borderColor: AppColors.greenSoft,
                   icon: LucideIcons.squarePen,
                   height: 38,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => FarmLogCreatePage(
+                        repository: repository,
+                        onBottomTabChanged: onBottomTabChanged,
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -369,6 +441,7 @@ class CycleListCard extends StatelessWidget {
                   borderColor: AppColors.blueSoft,
                   icon: LucideIcons.bookOpenText,
                   height: 38,
+                  onTap: () => onBottomTabChanged?.call(3),
                 ),
               ),
             ],
@@ -409,76 +482,10 @@ class CycleVisualCard extends StatelessWidget {
   }
 }
 
-const _cycleFallbacks = [
-  _CycleFallback(
-    name: '西瓜春茬',
-    variety: '8424西瓜',
-    field: '东大棚',
-    area: '8.6',
-    stage: '苗期',
-    progress: 42,
-    startDate: '2026-04-01',
-    isPlan: false,
-    asset: AppAssets.businessCropWatermelon,
-  ),
-  _CycleFallback(
-    name: '番茄夏茬',
-    variety: '普罗旺斯',
-    field: '2号棚',
-    area: '6',
-    stage: '开花坐果期',
-    progress: 68,
-    startDate: '2026-03-12',
-    isPlan: false,
-    asset: AppAssets.businessCropTomato,
-  ),
-  _CycleFallback(
-    name: '玉米秋茬',
-    variety: '甜玉米',
-    field: '北地',
-    area: '4',
-    stage: '计划中',
-    progress: 0,
-    startDate: '2026-06-20',
-    isPlan: true,
-    asset: AppAssets.businessCropCorn,
-  ),
-];
-
-class _CycleFallback {
-  const _CycleFallback({
-    required this.name,
-    required this.variety,
-    required this.field,
-    required this.area,
-    required this.stage,
-    required this.progress,
-    required this.startDate,
-    required this.isPlan,
-    required this.asset,
-  });
-
-  final String name;
-  final String variety;
-  final String field;
-  final String area;
-  final String stage;
-  final double progress;
-  final String startDate;
-  final bool isPlan;
-  final String asset;
-}
-
 class StagePreviewCard extends StatelessWidget {
-  const StagePreviewCard({super.key});
+  const StagePreviewCard({super.key, required this.stages});
 
-  static const stages = [
-    ('播种期', '7天'),
-    ('苗期', '18天'),
-    ('伸蔓期', '22天'),
-    ('开花坐果期', '25天'),
-    ('采收期', '20天'),
-  ];
+  final List<({String name, String days})> stages;
 
   @override
   Widget build(BuildContext context) {
@@ -489,70 +496,176 @@ class StagePreviewCard extends StatelessWidget {
           const BusinessCardHeader(title: '阶段预览', icon: LucideIcons.gitBranch),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 2, 20, 16),
-            child: Column(
-              children: [
-                for (var i = 0; i < stages.length; i++)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            child: stages.isEmpty
+                ? Text(
+                    '选择作物模板后显示阶段预览。',
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                : Column(
                     children: [
-                      Column(
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              color: businessGreen,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          if (i != stages.length - 1)
-                            Container(
-                              width: 2,
-                              height: 40,
-                              color: businessGreen.withValues(alpha: 0.48),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Container(
-                          height: 38,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: AppColors.greenSoft.withValues(alpha: 0.38),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.lineSoft),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  stages[i].$1,
-                                  style: AppTextStyles.body.copyWith(
-                                    color: AppColors.ink,
-                                    fontWeight: FontWeight.w700,
+                      for (var i = 0; i < stages.length; i++)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: const BoxDecoration(
+                                    color: businessGreen,
+                                    shape: BoxShape.circle,
                                   ),
                                 ),
-                              ),
-                              Text(
-                                stages[i].$2,
-                                style: AppTextStyles.body.copyWith(
-                                  color: AppColors.ink,
-                                  fontWeight: FontWeight.w700,
+                                if (i != stages.length - 1)
+                                  Container(
+                                    width: 2,
+                                    height: 40,
+                                    color:
+                                        businessGreen.withValues(alpha: 0.48),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Container(
+                                height: 38,
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 14),
+                                decoration: BoxDecoration(
+                                  color: AppColors.greenSoft
+                                      .withValues(alpha: 0.38),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.lineSoft),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        stages[i].name,
+                                        style: AppTextStyles.body.copyWith(
+                                          color: AppColors.ink,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      stages[i].days,
+                                      style: AppTextStyles.body.copyWith(
+                                        color: AppColors.ink,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ),
                     ],
                   ),
-              ],
-            ),
           ),
         ],
       ),
     );
   }
+}
+
+CycleSummaryBanner _cycleSummaryBanner(List<ApiRecord> items) {
+  final summary = _CycleSummary.from(items);
+  return CycleSummaryBanner(
+    asset: AppAssets.businessCycleWideBanner,
+    cycleCount: items.length,
+    totalAreaText: summary.totalAreaText,
+    currentStageText: summary.currentStageText,
+    activeCount: summary.activeCount,
+    plannedCount: summary.plannedCount,
+    endedCount: summary.endedCount,
+  );
+}
+
+class _CycleSummary {
+  const _CycleSummary({
+    required this.totalAreaText,
+    required this.currentStageText,
+    required this.activeCount,
+    required this.plannedCount,
+    required this.endedCount,
+  });
+
+  factory _CycleSummary.from(List<ApiRecord> items) {
+    var totalArea = 0.0;
+    var hasArea = false;
+    var activeCount = 0;
+    var plannedCount = 0;
+    var endedCount = 0;
+    var currentStageText = '暂无';
+    for (final item in items) {
+      final json = item.json;
+      final area = _parseDouble(json['total_area_mu'] ?? json['unit_area_mu']);
+      if (area != null) {
+        totalArea += area;
+        hasArea = true;
+      }
+      final status = '${json['status'] ?? ''}'.toLowerCase();
+      if (status == 'planned' || status == 'plan') {
+        plannedCount++;
+      } else if (status == 'ended' ||
+          status == 'finished' ||
+          status == 'completed') {
+        endedCount++;
+      } else if (status.isNotEmpty) {
+        activeCount++;
+      }
+      if (currentStageText == '暂无') {
+        currentStageText = _firstNonEmpty(
+          [json['current_stage_name']],
+          fallback: '暂无',
+        );
+      }
+    }
+    return _CycleSummary(
+      totalAreaText: hasArea ? '${_trimNumber(totalArea)}亩' : '暂无',
+      currentStageText: currentStageText,
+      activeCount: activeCount,
+      plannedCount: plannedCount,
+      endedCount: endedCount,
+    );
+  }
+
+  final String totalAreaText;
+  final String currentStageText;
+  final int activeCount;
+  final int plannedCount;
+  final int endedCount;
+}
+
+String _todayText() {
+  final now = DateTime.now();
+  final month = now.month.toString().padLeft(2, '0');
+  final day = now.day.toString().padLeft(2, '0');
+  return '${now.year}-$month-$day';
+}
+
+String _firstNonEmpty(List<Object?> values, {String fallback = ''}) {
+  for (final value in values) {
+    final text = '$value'.trim();
+    if (value != null && text.isNotEmpty && text != 'null') return text;
+  }
+  return fallback;
+}
+
+double? _parseDouble(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value');
+}
+
+String _trimNumber(double value) {
+  if (value == value.roundToDouble()) return value.round().toString();
+  return value.toStringAsFixed(1);
 }

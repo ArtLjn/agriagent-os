@@ -28,6 +28,7 @@ import SessionArchivePanel, { type SessionArchiveItem } from './components/Sessi
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
 const ALL_ARCHIVE_KEY = '__all__';
 const ISSUE_ARCHIVE_KEY = '__issues__';
+const CONFIRMED_ISSUE_ARCHIVE_KEY = '__confirmed_issues__';
 
 interface SampleQuery {
   searchText: string;
@@ -84,18 +85,33 @@ export default function DataFlywheel() {
     () => samples.filter((sample) => sample.issue_candidates.length > 0).length,
     [samples]
   );
+  const confirmedIssueCount = useMemo(
+    () => samples.filter((sample) => hasConfirmedIssue(sample)).length,
+    [samples]
+  );
   const visibleSamples = useMemo(() => {
     if (activeArchiveKey === ALL_ARCHIVE_KEY) return samples;
     if (activeArchiveKey === ISSUE_ARCHIVE_KEY) {
       return samples.filter((sample) => sample.issue_candidates.length > 0);
     }
+    if (activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY) {
+      return samples.filter((sample) => hasConfirmedIssue(sample));
+    }
     return samples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
   }, [activeArchiveKey, samples]);
   const isSessionArchiveActive =
-    activeArchiveKey !== ALL_ARCHIVE_KEY && activeArchiveKey !== ISSUE_ARCHIVE_KEY;
+    activeArchiveKey !== ALL_ARCHIVE_KEY &&
+    activeArchiveKey !== ISSUE_ARCHIVE_KEY &&
+    activeArchiveKey !== CONFIRMED_ISSUE_ARCHIVE_KEY;
 
   useEffect(() => {
-    if (activeArchiveKey === ALL_ARCHIVE_KEY || activeArchiveKey === ISSUE_ARCHIVE_KEY) return;
+    if (
+      activeArchiveKey === ALL_ARCHIVE_KEY ||
+      activeArchiveKey === ISSUE_ARCHIVE_KEY ||
+      activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY
+    ) {
+      return;
+    }
     if (archiveGroups.some((group) => group.key === activeArchiveKey)) return;
     setActiveArchiveKey(ALL_ARCHIVE_KEY);
   }, [activeArchiveKey, archiveGroups]);
@@ -307,7 +323,7 @@ export default function DataFlywheel() {
   const handleSelectArchive = (key: string) => {
     setActiveArchiveKey(key);
     clearSelection();
-    if (key === ALL_ARCHIVE_KEY || key === ISSUE_ARCHIVE_KEY) {
+    if (key === ALL_ARCHIVE_KEY || key === ISSUE_ARCHIVE_KEY || key === CONFIRMED_ISSUE_ARCHIVE_KEY) {
       sessionReviewRequestSeq.current += 1;
       setSessionReview(null);
       setLoadingSessionReview(false);
@@ -321,9 +337,11 @@ export default function DataFlywheel() {
       groups={archiveGroups}
       total={samples.length}
       issueCount={issueCount}
+      confirmedIssueCount={confirmedIssueCount}
       activeKey={activeArchiveKey}
       allKey={ALL_ARCHIVE_KEY}
       issueKey={ISSUE_ARCHIVE_KEY}
+      confirmedIssueKey={CONFIRMED_ISSUE_ARCHIVE_KEY}
       onSelect={handleSelectArchive}
     />
   );
@@ -434,17 +452,29 @@ function sessionArchiveKey(sample: DataFlywheelSample) {
   return sample.session_id ?? 'unknown-session';
 }
 
+function hasConfirmedIssue(sample: DataFlywheelSample) {
+  return sample.quality_labels.some((label) => confirmedIssueLabels.has(label));
+}
+
+const confirmedIssueLabels = new Set<DataFlywheelLabel>([
+  'bad_reply',
+  'wrong_tool_selection',
+  'pending_missed',
+  'hallucinated_execution',
+  'off_topic',
+  'sensitive_info_leak',
+  'missing_wage',
+  'disabled_worker_used',
+  'needs_regression',
+]);
+
 function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[] {
   const groups = new Map<string, SessionArchiveItem>();
 
   samples.forEach((sample) => {
     const key = sessionArchiveKey(sample);
     const current = groups.get(key);
-    const isBadCase =
-      sample.quality_labels.includes('bad_reply') ||
-      sample.quality_labels.includes('wrong_tool_selection') ||
-      sample.quality_labels.includes('pending_missed') ||
-      sample.quality_labels.includes('hallucinated_execution');
+    const isBadCase = hasConfirmedIssue(sample);
 
     if (!current) {
       groups.set(key, {

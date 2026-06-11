@@ -99,7 +99,6 @@ class VersionInfo {
     required this.latestVersionCode,
     required this.downloadUrl,
     required this.changelog,
-    required this.forceUpdate,
   });
 
   factory VersionInfo.fromJson(Map<String, dynamic> json) {
@@ -108,7 +107,6 @@ class VersionInfo {
       latestVersionCode: (json['latest_version_code'] as num?)?.toInt() ?? 0,
       downloadUrl: '${json['download_url'] ?? ''}',
       changelog: '${json['changelog'] ?? ''}',
-      forceUpdate: json['force_update'] == true,
     );
   }
 
@@ -116,7 +114,6 @@ class VersionInfo {
   final int latestVersionCode;
   final String downloadUrl;
   final String changelog;
-  final bool forceUpdate;
 }
 
 class ChatReply {
@@ -176,7 +173,8 @@ class ConversationMessage {
       id: (json['id'] as num?)?.toInt() ?? 0,
       role: '${json['role'] ?? ''}',
       content: '${json['content'] ?? ''}',
-      skills: (json['skills'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
+      skills:
+          (json['skills'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
       pendingAction: json['pending_action'] as Map<String, dynamic>?,
     );
   }
@@ -186,6 +184,41 @@ class ConversationMessage {
   final String content;
   final List<String> skills;
   final Map<String, dynamic>? pendingAction;
+}
+
+class YayaSkill {
+  const YayaSkill({
+    required this.key,
+    required this.title,
+    required this.description,
+    required this.category,
+    required this.icon,
+    required this.iconColor,
+    required this.recommended,
+    required this.enabled,
+  });
+
+  factory YayaSkill.fromJson(Map<String, dynamic> json) {
+    return YayaSkill(
+      key: '${json['key'] ?? ''}',
+      title: '${json['title'] ?? ''}',
+      description: '${json['description'] ?? ''}',
+      category: '${json['category'] ?? ''}',
+      icon: '${json['icon'] ?? ''}',
+      iconColor: '${json['icon_color'] ?? ''}',
+      recommended: json['recommended'] == true,
+      enabled: json['enabled'] != false,
+    );
+  }
+
+  final String key;
+  final String title;
+  final String description;
+  final String category;
+  final String icon;
+  final String iconColor;
+  final bool recommended;
+  final bool enabled;
 }
 
 class DailyAdvice {
@@ -201,7 +234,8 @@ class DailyAdvice {
       cycleId: (json['cycle_id'] as num?)?.toInt(),
       preview: '${json['preview'] ?? ''}',
       items: (json['items'] as List<dynamic>? ?? [])
-          .map((item) => AdviceItem.fromJson(Map<String, dynamic>.from(item as Map)))
+          .map((item) =>
+              AdviceItem.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList(),
       advice: '${json['advice'] ?? ''}',
     );
@@ -260,9 +294,11 @@ class SmartFillResult {
     return SmartFillResult(
       scene: '${json['scene'] ?? ''}',
       draft: Map<String, dynamic>.from(json['draft'] as Map? ?? {}),
-      missingFields:
-          (json['missing_fields'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
-      warnings: (json['warnings'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
+      missingFields: (json['missing_fields'] as List<dynamic>? ?? [])
+          .map((v) => '$v')
+          .toList(),
+      warnings:
+          (json['warnings'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
       traceId: json['trace_id'] as String?,
     );
   }

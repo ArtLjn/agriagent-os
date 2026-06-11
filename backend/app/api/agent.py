@@ -20,6 +20,7 @@ from app.agent.application.history_use_case import (
     list_report_page,
 )
 from app.agent.application.report_use_case import create_report
+from app.agent.application.skill_catalog import list_app_skills
 from app.agent.application.stream_chat_use_case import (
     resolve_stream_user_and_farm,
     stream_chat_events,
@@ -35,6 +36,7 @@ from app.schemas.agent import (
     ReportListResponse,
     ConversationListItem,
     ConversationMessageItem,
+    AppSkillListResponse,
 )
 from app.services.agent_service import (
     get_advice_history,
@@ -44,6 +46,15 @@ from app.services.session_debug_export_service import build_session_debug_export
 
 
 router = APIRouter(prefix="/agent", tags=["agent"])
+
+
+@router.get("/skills", response_model=AppSkillListResponse)
+def list_agent_skills(
+    _current_user: User = Depends(get_current_user),
+) -> AppSkillListResponse:
+    """列出 App 端可展示的技能能力。"""
+    items = list_app_skills()
+    return AppSkillListResponse(items=items, total=len(items))
 
 
 @router.post("/chat", response_model=ChatResponse)

@@ -1,12 +1,15 @@
 """Admin 数据飞轮 API。"""
 
+import uuid
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_farm, get_current_user, get_db, require_admin
+from app.core.database import SessionLocal
 from app.models.farm import Farm
 from app.models.user import User
 from app.services.data_flywheel_service import (
@@ -18,12 +21,16 @@ from app.services.data_flywheel_service import (
     list_samples,
 )
 from app.services.data_flywheel_session_review_service import get_session_review
+from app.services.data_flywheel_session_sync_service import sync_session_events
 
 router = APIRouter(
     prefix="/admin/data-flywheel",
     tags=["admin-data-flywheel"],
     dependencies=[Depends(require_admin)],
 )
+
+AGENT_EVENT_BASE_DIR = Path("data/agent-events")
+_SYNC_JOBS: dict[str, dict[str, Any]] = {}
 
 
 class LabelRequest(BaseModel):
@@ -46,6 +53,13 @@ class ExportJsonlRequest(BaseModel):
 
 class CaseDraftRequest(BaseModel):
     target_type: str = "evaluation_replay"
+
+
+class SyncSessionsRequest(BaseModel):
+    session_id: str | None = None
+    only_missing: bool = True
+    limit: int = 100
+    run_inline: bool = False
 
 
 @router.get("/samples")
@@ -100,6 +114,94 @@ def get_admin_data_flywheel_session_review(
 ) -> dict[str, Any]:
     """获取单个会话的完整 turn 审阅时间线。"""
     return get_session_review(db, farm_id=farm.id, session_id=session_id)
+
+
+@router.post("/sync-sessions")
+def sync_admin_data_flywheel_sessions(
+    background_tasks: BackgroundTasks,
+    body: SyncSessionsRequest | None = None,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """将数据库已有会话补齐同步到 Agent JSONL 事件日志。"""
+    payload = body or SyncSessionsRequest()
+    if payload.run_inline:
+        return {
+            "mode": "inline",
+            **sync_session_events(
+                db,
+                farm_id=farm.id,
+                session_id=payload.session_id,
+                only_missing=payload.only_missing,
+                event_base_dir=AGENT_EVENT_BASE_DIR,
+                limit=payload.limit,
+            ),
+        }
+
+    job_id = f"session-sync-{uuid.uuid4().hex[:12]}"
+    _SYNC_JOBS[job_id] = {
+        "job_id": job_id,
+        "status": "queued",
+        "mode": "background",
+        "farm_id": farm.id,
+        "session_id": payload.session_id,
+        "result": None,
+        "error": None,
+    }
+    background_tasks.add_task(
+        run_session_events_sync_job,
+        job_id=job_id,
+        farm_id=farm.id,
+        session_id=payload.session_id,
+        only_missing=payload.only_missing,
+        event_base_dir=AGENT_EVENT_BASE_DIR,
+        limit=payload.limit,
+    )
+    return _SYNC_JOBS[job_id]
+
+
+@router.get("/sync-sessions/{job_id}")
+def get_admin_data_flywheel_sync_job(job_id: str) -> dict[str, Any]:
+    """查询会话事件补齐同步任务状态。"""
+    job = _SYNC_JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail={"code": "SYNC_JOB_NOT_FOUND"})
+    return job
+
+
+def run_session_events_sync_job(
+    *,
+    job_id: str,
+    farm_id: int,
+    session_id: str | None,
+    only_missing: bool,
+    event_base_dir: str | Path,
+    limit: int,
+) -> None:
+    """后台执行会话事件补齐任务。"""
+    job = _SYNC_JOBS.get(job_id)
+    if job is not None:
+        job["status"] = "running"
+    db = SessionLocal()
+    try:
+        result = sync_session_events(
+            db,
+            farm_id=farm_id,
+            session_id=session_id,
+            only_missing=only_missing,
+            event_base_dir=event_base_dir,
+            limit=limit,
+        )
+    except Exception as exc:
+        if job is not None:
+            job["status"] = "failed"
+            job["error"] = str(exc)
+        raise
+    finally:
+        db.close()
+    if job is not None:
+        job["status"] = "completed"
+        job["result"] = result
 
 
 @router.post("/samples/{sample_id}/labels")

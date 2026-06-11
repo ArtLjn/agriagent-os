@@ -167,6 +167,22 @@ final messageResponse = {
   'created_at': '2026-06-08T08:02:00',
 };
 
+final yayaSkillsResponse = {
+  'items': [
+    {
+      'key': 'create_cost_record',
+      'title': '智能记账',
+      'description': '一句话生成账本记录',
+      'category': '记录',
+      'icon': 'receipt-yuan',
+      'icon_color': 'green',
+      'recommended': true,
+      'enabled': true,
+    }
+  ],
+  'total': 1,
+};
+
 final dailyAdviceResponse = {
   'cycle_id': 7,
   'preview': '注意控水',

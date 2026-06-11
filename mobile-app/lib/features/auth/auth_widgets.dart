@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../shared/app_identity.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -84,7 +85,7 @@ class AuthBrandHeader extends StatelessWidget {
                   const AuthLogo(size: 46),
                   const SizedBox(width: 12),
                   Text(
-                    '农场管家',
+                    AppIdentity.displayName,
                     style: AppTextStyles.sectionTitle.copyWith(fontSize: 18),
                   ),
                 ],

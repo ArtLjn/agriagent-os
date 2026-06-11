@@ -7,6 +7,7 @@ import '../../shared/assets/app_assets.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'business_ui.dart';
+import 'wage_create_page.dart';
 
 class WorkerListPage extends StatelessWidget {
   const WorkerListPage({
@@ -28,64 +29,101 @@ class WorkerListPage extends StatelessWidget {
       showBottomTabs: true,
       onBottomTabChanged: onBottomTabChanged,
       children: [
-        const WorkerSummaryBanner(
-          asset: AppAssets.businessWorkerHatBanner,
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: FilledActionButton(
-                label: '记一笔工资',
-                foreground: Colors.white,
-                background: businessBlue,
-                borderColor: businessBlue,
-                icon: LucideIcons.squarePen,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledActionButton(
-                label: '新增工人',
-                foreground: businessBlue,
-                background: Colors.white,
-                borderColor: businessBlue,
-                icon: LucideIcons.userRoundPlus,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => WorkerFormPage(
-                      repository: repository,
-                      onBottomTabChanged: onBottomTabChanged,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SearchFieldCard(text: '搜索工人姓名'),
-        const ChipRail(items: ['全部', '有欠款', '已结清', '停用']),
         FutureBuilder<PageResult<ApiRecord>>(
           future: repository.listWorkerSummaries(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingCard();
-            }
-            final items = snapshot.data?.items ?? const <ApiRecord>[];
-            if (items.isEmpty && snapshot.hasError) {
-              return const BusinessCard(
-                padding: EdgeInsets.all(18),
-                child: Text('还没有工人档案。'),
+              return const Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  WorkerSummaryBanner(
+                    asset: AppAssets.businessWorkerHatBanner,
+                    unpaidText: '0',
+                    workerCount: 0,
+                    monthlyWorkCount: 0,
+                    relatedCycleCount: 0,
+                  ),
+                  SizedBox(height: 13),
+                  LoadingCard(),
+                ],
               );
             }
+            final items = snapshot.data?.items ?? const <ApiRecord>[];
+            final summary = _workerSummary(items);
             return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var index = 0; index < _workerFallbacks.length; index++) ...[
-                  WorkerListCard(
-                    record: index < items.length ? items[index] : null,
-                    index: index,
+                WorkerSummaryBanner(
+                  asset: AppAssets.businessWorkerHatBanner,
+                  unpaidText: summary.unpaidText,
+                  workerCount: summary.workerCount,
+                  monthlyWorkCount: summary.monthlyWorkCount,
+                  relatedCycleCount: summary.relatedCycleCount,
+                ),
+                const SizedBox(height: 13),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledActionButton(
+                        label: '记一笔工资',
+                        foreground: Colors.white,
+                        background: businessBlue,
+                        borderColor: businessBlue,
+                        icon: LucideIcons.squarePen,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => WageCreatePage(
+                              repository: repository,
+                              onBottomTabChanged: onBottomTabChanged,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledActionButton(
+                        label: '新增工人',
+                        foreground: businessBlue,
+                        background: Colors.white,
+                        borderColor: businessBlue,
+                        icon: LucideIcons.userRoundPlus,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => WorkerFormPage(
+                              repository: repository,
+                              onBottomTabChanged: onBottomTabChanged,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 13),
+                const SearchFieldCard(text: '搜索工人姓名'),
+                const SizedBox(height: 13),
+                const ChipRail(items: ['全部', '有欠款', '已结清', '停用']),
+                const SizedBox(height: 13),
+                if (items.isEmpty && snapshot.hasError)
+                  const BusinessCard(
+                    padding: EdgeInsets.all(18),
+                    child: Text('工人档案加载失败，请稍后重试。'),
+                  )
+                else if (items.isEmpty)
+                  const BusinessCard(
+                    padding: EdgeInsets.all(18),
+                    child: Text('还没有工人档案。'),
+                  )
+                else
+                  Column(
+                    children: [
+                      for (final item in items) ...[
+                        WorkerListCard(record: item),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                ],
               ],
             );
           },
@@ -93,6 +131,54 @@ class WorkerListPage extends StatelessWidget {
       ],
     );
   }
+}
+
+_WorkerSummary _workerSummary(List<ApiRecord> items) {
+  var unpaid = 0.0;
+  final cycleIds = <String>{};
+  for (final item in items) {
+    final json = item.json;
+    unpaid += _parseDouble(json['unpaid_amount']) ?? 0;
+    final cycleId = _firstNonEmpty([json['cycle_id']]);
+    if (cycleId.isNotEmpty) cycleIds.add(cycleId);
+  }
+  return _WorkerSummary(
+    unpaidText: _trimNumber(unpaid),
+    workerCount: items.length,
+    monthlyWorkCount: items.fold<int>(0, (total, item) {
+      final value = item.json['monthly_work_count'] ??
+          item.json['work_count'] ??
+          item.json['entry_count'];
+      if (value is num) return total + value.toInt();
+      return total + (int.tryParse('$value') ?? 0);
+    }),
+    relatedCycleCount: cycleIds.length,
+  );
+}
+
+class _WorkerSummary {
+  const _WorkerSummary({
+    required this.unpaidText,
+    required this.workerCount,
+    required this.monthlyWorkCount,
+    required this.relatedCycleCount,
+  });
+
+  final String unpaidText;
+  final int workerCount;
+  final int monthlyWorkCount;
+  final int relatedCycleCount;
+}
+
+double? _parseDouble(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value');
+}
+
+String _trimNumber(double value) {
+  if (value == value.roundToDouble()) return value.round().toString();
+  return value.toStringAsFixed(1);
 }
 
 class WorkerFormPage extends StatefulWidget {
@@ -114,10 +200,10 @@ class WorkerFormPage extends StatefulWidget {
 }
 
 class _WorkerFormPageState extends State<WorkerFormPage> {
-  final _name = TextEditingController(text: '老王');
-  final _phone = TextEditingController(text: '138 0000 0000');
-  final _unitPrice = TextEditingController(text: '200 元/天');
-  final _note = TextEditingController(text: '西瓜茬口常用工');
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _unitPrice = TextEditingController();
+  final _note = TextEditingController();
   String _payType = 'daily';
   bool _saving = false;
 
@@ -156,7 +242,8 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -167,6 +254,7 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
         secondaryLabel: '取消',
         primaryLabel: _saving ? '保存中' : '保存工人',
         onPrimary: _save,
+        onSecondary: () => Navigator.of(context).maybePop(),
         showTabs: true,
         onBottomTabChanged: widget.onBottomTabChanged,
       ),
@@ -182,9 +270,18 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
           title: '基础信息',
           icon: LucideIcons.userRound,
           children: [
-            BusinessFormRow(label: '姓名', value: '老王', controller: _name),
             BusinessFormRow(
-                label: '手机号', value: '138 0000 0000', controller: _phone),
+              label: '姓名',
+              value: '',
+              controller: _name,
+              hintText: '输入姓名',
+            ),
+            BusinessFormRow(
+              label: '手机号',
+              value: '',
+              controller: _phone,
+              hintText: '输入手机号',
+            ),
             const BusinessFormRow(label: '状态', value: '在用', chevron: true),
           ],
         ),
@@ -200,8 +297,9 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
             ),
             BusinessFormRow(
               label: '默认单价',
-              value: '200 元/天',
+              value: '',
               controller: _unitPrice,
+              hintText: '输入默认单价',
             ),
           ],
         ),
@@ -210,8 +308,16 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
           icon: LucideIcons.tags,
           children: [
             const BusinessFormRow(
-                label: '标签', value: '常用工    授粉熟练', chevron: true),
-            BusinessFormRow(label: '备注', value: '西瓜茬口常用工', controller: _note),
+              label: '标签',
+              value: '未设置',
+              chevron: true,
+            ),
+            BusinessFormRow(
+              label: '备注',
+              value: '',
+              controller: _note,
+              hintText: '补充说明',
+            ),
           ],
         ),
         const AssistEntryCard(
@@ -224,25 +330,24 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
 }
 
 class WorkerListCard extends StatelessWidget {
-  const WorkerListCard({super.key, this.record, this.index = 0});
+  const WorkerListCard({super.key, required this.record});
 
-  final ApiRecord? record;
-  final int index;
+  final ApiRecord record;
 
   @override
   Widget build(BuildContext context) {
-    final json = record?.json ?? const <String, Object?>{};
-    final fallback = _workerFallbacks[index % _workerFallbacks.length];
-    final name = fallback.name;
-    final unitPrice = fallback.unitPrice;
-    final unpaid = json['unpaid_amount'] ?? fallback.unpaid;
+    final json = record.json;
+    final name = _firstNonEmpty([json['name']], fallback: '未命名工人');
+    final unitPrice =
+        _firstNonEmpty([json['default_unit_price']], fallback: '未设置');
+    final unpaid = json['unpaid_amount'] ?? 0;
     final isSettled = unpaid == 0 || '$unpaid' == '0';
     return BusinessCard(
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       child: Row(
         children: [
           AssetAvatar(
-            asset: fallback.asset,
+            asset: AppAssets.businessWorkerAvatar1,
             size: 74,
             background: const Color(0xFFEAF5FF),
           ),
@@ -265,12 +370,6 @@ class WorkerListCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    SoftPill(
-                      text: '常用',
-                      color: businessBlue,
-                      background: AppColors.blueSoft,
-                    ),
-                    const SizedBox(width: 6),
                     Text(
                       '$unitPrice/天',
                       style: AppTextStyles.body.copyWith(
@@ -283,15 +382,9 @@ class WorkerListCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    SoftPill(
-                      text: fallback.primaryCycle,
-                      color: AppColors.greenDark,
-                      background: AppColors.greenSoft,
-                    ),
-                    const SizedBox(width: 6),
-                    if (fallback.secondaryCycle != null)
+                    if (_firstNonEmpty([json['status']]).isNotEmpty)
                       SoftPill(
-                        text: fallback.secondaryCycle!,
+                        text: _statusLabel(json['status']),
                         color: AppColors.greenDark,
                         background: AppColors.greenSoft,
                       ),
@@ -307,7 +400,7 @@ class WorkerListCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      fallback.phone,
+                      _firstNonEmpty([json['phone']], fallback: '未填写手机号'),
                       style: AppTextStyles.small,
                     ),
                   ],
@@ -340,52 +433,19 @@ class WorkerListCard extends StatelessWidget {
   }
 }
 
-const _workerFallbacks = [
-  _WorkerFallback(
-    name: '老王',
-    phone: '138 0011 2233',
-    unitPrice: '200',
-    unpaid: '400',
-    primaryCycle: '西瓜春茬',
-    secondaryCycle: '豆角春茬',
-    asset: AppAssets.businessWorkerAvatar1,
-  ),
-  _WorkerFallback(
-    name: '老李',
-    phone: '139 0022 3344',
-    unitPrice: '220',
-    unpaid: '660',
-    primaryCycle: '西瓜春茬',
-    secondaryCycle: null,
-    asset: AppAssets.businessWorkerAvatar2,
-  ),
-  _WorkerFallback(
-    name: '小赵',
-    phone: '137 0033 4455',
-    unitPrice: '180',
-    unpaid: 0,
-    primaryCycle: '豆角春茬',
-    secondaryCycle: null,
-    asset: AppAssets.businessWorkerAvatar1,
-  ),
-];
+String _statusLabel(Object? value) {
+  return switch ('$value'.trim().toLowerCase()) {
+    'active' => '在用',
+    'inactive' => '停用',
+    '' => '',
+    _ => '$value',
+  };
+}
 
-class _WorkerFallback {
-  const _WorkerFallback({
-    required this.name,
-    required this.phone,
-    required this.unitPrice,
-    required this.unpaid,
-    required this.primaryCycle,
-    required this.secondaryCycle,
-    required this.asset,
-  });
-
-  final String name;
-  final String phone;
-  final String unitPrice;
-  final Object unpaid;
-  final String primaryCycle;
-  final String? secondaryCycle;
-  final String asset;
+String _firstNonEmpty(List<Object?> values, {String fallback = ''}) {
+  for (final value in values) {
+    final text = '$value'.trim();
+    if (value != null && text.isNotEmpty && text != 'null') return text;
+  }
+  return fallback;
 }

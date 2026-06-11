@@ -34,6 +34,10 @@ class AppAssets {
       'assets/images/ai_advice_harvester_hero.png';
   static const aiFinanceInsightLogo =
       'assets/images/ai_finance_insight_logo.png';
+  static const recordAiCardBackground =
+      'assets/images/record/ai_card_background.png';
+  static const recordManualCardBackground =
+      'assets/images/record/manual_card_background.png';
   static const recordAiRobot = 'assets/images/record/ai_robot.png';
   static const recordAiSparkle = 'assets/images/record/ai_sparkle.png';
   static const recordBrandLogo = 'assets/images/record/brand_logo.png';

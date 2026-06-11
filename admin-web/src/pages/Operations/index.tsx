@@ -43,6 +43,7 @@ import { cardStyle, palette } from '../../styles/theme';
 import { createCycle, listCycles, type CropCycleListItem, type CycleParseResponse } from '../../api/cycles';
 import { createTemplate, type CropTemplateParseResponse } from '../../api/crops';
 import { createRecord, type CostParseResponse } from '../../api/costs';
+import { listAppSkills, type AppSkillItem, type AppSkillListResponse } from '../../api/agent';
 import {
   operationsApi,
   type CostCategory,
@@ -55,7 +56,7 @@ import {
   type Worker,
   type WorkerLaborSummary,
 } from '../../api/operations';
-import { listSmartFillScenarios, parseSmartFill, type SmartFillScenario } from '../../api/smartFill';
+import { parseSmartFill } from '../../api/smartFill';
 import {
   buildRequestBody,
   calculateLaborAmount,
@@ -68,6 +69,8 @@ import {
   SMART_FILL_FALLBACK_SCENARIOS,
   buildCycleFormValues,
   buildTemplateFormValues,
+  inferSmartFillScene,
+  isSupportedSmartCreateScene,
   normalizeSmartResult,
   type SmartCreateMeta,
   type SmartCreateResult,
@@ -213,7 +216,7 @@ export default function Operations() {
           {
             key: 'smart',
             label: <span><RobotOutlined /> 智能创建</span>,
-            children: <SmartCreatePanel cycles={cycles} />,
+            children: <SmartCreatePanel />,
           },
           {
             key: 'planting',
@@ -241,53 +244,36 @@ export default function Operations() {
   );
 }
 
-function SmartCreatePanel({ cycles }: { cycles: CropCycleListItem[] }) {
-  const [scenarios, setScenarios] = useState<SmartFillScenario[]>(SMART_FILL_FALLBACK_SCENARIOS);
-  const [selectedScene, setSelectedScene] = useState('crop.template');
+function SmartCreatePanel() {
   const [smartText, setSmartText] = useState('');
   const [smartResult, setSmartResult] = useState<SmartCreateResult | null>(null);
   const [smartMeta, setSmartMeta] = useState<SmartCreateMeta | null>(null);
   const [smartLoading, setSmartLoading] = useState(false);
   const [creatingScene, setCreatingScene] = useState<string | null>(null);
-  const [selectedCostCycle, setSelectedCostCycle] = useState<number | undefined>();
 
   const getScenario = useCallback(
-    (key: string) => scenarios.find((item) => item.key === key),
-    [scenarios],
+    (key: string) => SMART_FILL_FALLBACK_SCENARIOS.find((item) => item.key === key),
+    [],
   );
-
-  useEffect(() => {
-    listSmartFillScenarios()
-      .then((items) => {
-        const enabledItems = items.filter((item) => item.enabled);
-        setScenarios(enabledItems.length ? enabledItems : SMART_FILL_FALLBACK_SCENARIOS);
-      })
-      .catch(() => {
-        message.warning('智能填写场景加载失败，已使用本地默认配置');
-      });
-  }, []);
-
-  const selectedScenario = getScenario(selectedScene);
 
   const runSmartParse = async () => {
     if (!smartText.trim()) {
-      message.warning(`请输入${selectedScenario?.title || '智能填写'}描述`);
+      message.warning('请输入要测试的业务描述');
       return;
     }
+    const inferredScene = inferSmartFillScene(smartText);
+    const inferredScenario = getScenario(inferredScene);
     setSmartLoading(true);
     try {
-      const context = selectedScene === 'ledger.record' && selectedCostCycle !== undefined
-        ? { cycle_id: selectedCostCycle }
-        : {};
-      const response = await parseSmartFill<unknown>(selectedScene, smartText.trim(), context);
+      const response = await parseSmartFill<unknown>(inferredScene, smartText.trim());
       setSmartResult(normalizeSmartResult(response.scene, response.draft));
       setSmartMeta({
         missingFields: response.missing_fields,
         warnings: response.warnings,
       });
-      message.success(`${getScenario(response.scene)?.title || selectedScenario?.title || '智能填写'}解析完成`);
+      message.success(`${getScenario(response.scene)?.title || inferredScenario?.title || '智能填写'}解析完成`);
     } catch {
-      message.error(`${selectedScenario?.title || '智能填写'}解析失败`);
+      message.error(`${inferredScenario?.title || '智能填写'}解析失败`);
     } finally {
       setSmartLoading(false);
     }
@@ -339,7 +325,7 @@ function SmartCreatePanel({ cycles }: { cycles: CropCycleListItem[] }) {
     setCreatingScene('ledger.record');
     try {
       const values = buildCostFormValues(draft);
-      await createRecord(buildCostCreatePayload(values, selectedCostCycle));
+      await createRecord(buildCostCreatePayload(values));
       setSmartResult(null);
       setSmartMeta(null);
       message.success('记账记录已创建');
@@ -358,36 +344,22 @@ function SmartCreatePanel({ cycles }: { cycles: CropCycleListItem[] }) {
       <Row gutter={[20, 20]} align="top">
         <Col xs={24} xl={12}>
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <Select
-              value={selectedScene}
-              onChange={(value) => {
-                setSelectedScene(value);
-                setSmartResult(null);
-                setSmartMeta(null);
-              }}
-              options={scenarios.map((scenario) => ({
-                value: scenario.key,
-                label: scenario.title,
-              }))}
-            />
-            {selectedScene === 'ledger.record' && (
-              <Select
-                allowClear
-                placeholder="关联茬口（可选）"
-                value={selectedCostCycle}
-                onChange={setSelectedCostCycle}
-                options={cycles.map((cycle) => ({ value: cycle.id, label: cycle.name }))}
-              />
-            )}
             <Input.TextArea
               rows={8}
               value={smartText}
-              onChange={(event) => setSmartText(event.target.value)}
-              placeholder={selectedScenario?.request_example || '输入要创建的数据描述'}
+              onChange={(event) => {
+                setSmartText(event.target.value);
+                setSmartResult(null);
+                setSmartMeta(null);
+              }}
+              placeholder="例如：我要种 8424 西瓜，生成完整生长阶段；4 月 1 日在东棚种一茬西瓜；今天买肥料 128 元"
             />
             <Button type="primary" block loading={smartLoading} onClick={runSmartParse}>
-              解析{selectedScenario?.title || '智能填写'}
+              按语义解析智能填写
             </Button>
+            <Typography.Text type="secondary">
+              系统会根据语义自动判断作物模板、茬口或记账，不需要先选择智能填写列表。
+            </Typography.Text>
           </Space>
         </Col>
         <Col xs={24} xl={12}>
@@ -454,6 +426,11 @@ function SmartCreatePanel({ cycles }: { cycles: CropCycleListItem[] }) {
                 <Typography.Text strong>{smartResult.sourceScene}</Typography.Text>
                 <pre style={rawPreviewStyle}>{JSON.stringify(smartResult.draft, null, 2)}</pre>
               </Space>
+            )}
+            {smartResult && smartResult.scene !== 'unsupported' && isSupportedSmartCreateScene(smartResult.scene) && (
+              <Typography.Text type="secondary">
+                已识别为：{getScenario(smartResult.scene)?.title || smartResult.scene}
+              </Typography.Text>
             )}
           </div>
         </Col>
@@ -1004,7 +981,9 @@ function SystemPanel() {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [feedback, setFeedback] = useState<Record<string, unknown> | null>(null);
   const [version, setVersion] = useState<VersionCheck | null>(null);
+  const [appSkills, setAppSkills] = useState<AppSkillListResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [skillsLoading, setSkillsLoading] = useState(false);
   const [settingsForm] = Form.useForm<SettingsForm>();
   const [versionCode, setVersionCode] = useState(0);
 
@@ -1030,9 +1009,25 @@ function SystemPanel() {
     }
   }, [settingsForm, versionCode]);
 
+  const refreshAppSkills = useCallback(async () => {
+    setSkillsLoading(true);
+    try {
+      const data = await listAppSkills();
+      setAppSkills(data);
+    } catch {
+      message.error('加载 App 技能列表失败');
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    refreshAppSkills();
+  }, [refreshAppSkills]);
 
   const updateSettings = async () => {
     const values = await settingsForm.validateFields();
@@ -1040,6 +1035,17 @@ function SystemPanel() {
     setSettings(res.data);
     message.success('用户设置已更新');
   };
+
+  const skillColumns: ColumnsType<AppSkillItem> = [
+    { title: 'Key', dataIndex: 'key', width: 180 },
+    { title: '名称', dataIndex: 'title', width: 120, render: (text: string) => <strong>{text}</strong> },
+    { title: '分类', dataIndex: 'category', width: 90, render: (value: string) => <Tag color="blue">{value}</Tag> },
+    { title: '图标', dataIndex: 'icon', width: 130 },
+    { title: '颜色', dataIndex: 'icon_color', width: 90 },
+    { title: '推荐', dataIndex: 'recommended', width: 80, render: (value: boolean) => value ? <Tag color="success">是</Tag> : <Tag>否</Tag> },
+    { title: '启用', dataIndex: 'enabled', width: 80, render: (value: boolean) => value ? <Tag color="success">是</Tag> : <Tag color="default">否</Tag> },
+    { title: '描述', dataIndex: 'description', ellipsis: true },
+  ];
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -1052,6 +1058,34 @@ function SystemPanel() {
         )}
         right={<Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>刷新全部</Button>}
       />
+      <Card
+        title={<span><AppstoreOutlined /> App 技能列表接口</span>}
+        extra={(
+          <Button icon={<ReloadOutlined />} onClick={refreshAppSkills} loading={skillsLoading}>
+            调试 GET /agent/skills
+          </Button>
+        )}
+        style={cardStyle}
+        styles={{ body: { padding: 12 } }}
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            showIcon
+            message={`当前接口：GET /agent/skills${appSkills ? `，返回 ${appSkills.total} 个技能` : ''}`}
+          />
+          <Table
+            rowKey="key"
+            size="small"
+            loading={skillsLoading}
+            dataSource={appSkills?.items ?? []}
+            columns={skillColumns}
+            pagination={false}
+            scroll={{ x: 980 }}
+          />
+          <pre style={rawPreviewStyle}>{JSON.stringify(appSkills ?? {}, null, 2)}</pre>
+        </Space>
+      </Card>
       <Row gutter={[16, 16]} align="top">
         <Col xs={24} lg={12}>
           <Card title={<span><SettingOutlined /> 当前用户设置</span>} style={cardStyle}>

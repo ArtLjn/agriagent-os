@@ -60,6 +60,21 @@ void main() {
     expect(find.text('收到'), findsOneWidget);
   });
 
+  testWidgets('从芽芽首页进入全部技能页会加载接口技能', (tester) async {
+    final repository = _SkillsYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaScreen(repository: repository)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('全部技能'));
+    await tester.pumpAndSettle();
+
+    expect(repository.loadSkillsCalls, 1);
+    expect(find.text('智能记账'), findsOneWidget);
+    expect(find.text('赊账汇总'), findsNothing);
+  });
+
   testWidgets('点击菜单打开历史聊天抽屉', (tester) async {
     await tester.pumpWidget(yayaScreen());
     await tester.pump();
@@ -70,7 +85,8 @@ void main() {
     expect(find.text('新对话'), findsOneWidget);
     expect(find.text('最近对话'), findsOneWidget);
     expect(find.text('7天内'), findsOneWidget);
-    expect(find.text('张三'), findsOneWidget);
+    expect(find.text('农友'), findsOneWidget);
+    expect(find.text('张三'), findsNothing);
     expect(find.textContaining('检测到工具调用格式异常'), findsOneWidget);
     expect(find.text('对话'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -136,8 +152,12 @@ void main() {
     expect(find.text('已执行'), findsOneWidget);
   });
 
-  testWidgets('全部技能页使用独立 banner 图片资产', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: YayaSkillsPage()));
+  testWidgets('全部技能页使用独立 banner 图片资产并展示接口技能', (tester) async {
+    final repository = _SkillsYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaSkillsPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('全部技能'), findsOneWidget);
     expect(find.text('搜索技能'), findsOneWidget);
@@ -146,6 +166,8 @@ void main() {
       find.byKey(const ValueKey('yaya-skills-banner')),
     );
     expect((banner.image as AssetImage).assetName, AppAssets.yayaSkillsBanner);
+    expect(banner.fit, BoxFit.contain);
+    expect(repository.loadSkillsCalls, 1);
     expect(find.text('今日简报'), findsOneWidget);
     expect(find.text('智能记账'), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -154,6 +176,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('天气提醒'), findsOneWidget);
+    expect(find.text('赊账汇总'), findsNothing);
   });
 
   test('芽芽主色不是紫色', () {
@@ -197,6 +220,47 @@ class _YayaCopyRepository extends YayaRepository {
   }) async* {
     yield const YayaStreamEvent(content: '收到');
     yield const YayaStreamEvent(done: true);
+  }
+}
+
+class _SkillsYayaRepository extends _YayaCopyRepository {
+  int loadSkillsCalls = 0;
+
+  @override
+  Future<List<YayaSkill>> loadSkills() async {
+    loadSkillsCalls += 1;
+    return const [
+      YayaSkill(
+        key: 'get_farm_status',
+        title: '今日简报',
+        description: '查看今天待办与风险',
+        category: '推荐',
+        icon: 'clipboard-list',
+        iconColor: 'blue',
+        recommended: true,
+        enabled: true,
+      ),
+      YayaSkill(
+        key: 'create_cost_record',
+        title: '智能记账',
+        description: '一句话生成账本记录',
+        category: '记录',
+        icon: 'receipt-yuan',
+        iconColor: 'green',
+        recommended: true,
+        enabled: true,
+      ),
+      YayaSkill(
+        key: 'get_weather_forecast',
+        title: '天气提醒',
+        description: '查看天气和风险',
+        category: '推荐',
+        icon: 'cloud-sun',
+        iconColor: 'amber',
+        recommended: false,
+        enabled: true,
+      ),
+    ];
   }
 }
 

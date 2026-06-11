@@ -55,4 +55,24 @@ describe('smartFill api', () => {
     });
     expect(result.draft.amount).toBe('128.00');
   });
+
+  it('未传上下文时使用空 context 解析', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        scene: 'ledger.record',
+        draft: { amount: '200.00' },
+        missing_fields: [],
+        warnings: [],
+        trace_id: null,
+      },
+    });
+
+    await parseSmartFill('ledger.record', '欠老王农药钱两百块');
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith('/smart-fill/parse', {
+      scene: 'ledger.record',
+      text: '欠老王农药钱两百块',
+      context: {},
+    });
+  });
 });

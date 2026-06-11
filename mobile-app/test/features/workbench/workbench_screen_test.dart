@@ -34,6 +34,19 @@ void main() {
     );
   }
 
+  WorkbenchScreen screenWithAdapter(RecordingAdapter adapter) {
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final client = ApiClient(dio: dio);
+    return WorkbenchScreen(
+      businessRepository: BusinessRepository(client),
+      recordFlowController: RecordFlowController(
+        workbench: WorkbenchRepository(client),
+        billing: BillingRepository(client),
+      ),
+    );
+  }
+
   WorkbenchScreen screenWithNavigation({
     VoidCallback? onGoHome,
     VoidCallback? onGoLedger,
@@ -68,19 +81,39 @@ void main() {
     );
   }
 
-  testWidgets('记录页展示 AI 帮填、手动快捷记录和确认卡', (tester) async {
+  testWidgets('记录页展示当前工作台入口且不展示语音和样例确认卡', (tester) async {
     await tester.pumpWidget(MaterialApp(home: screen()));
 
     expect(find.bySemanticsLabel('田掌柜'), findsOneWidget);
     expect(find.text('AI帮我填'), findsOneWidget);
+    expect(find.text('输入一句，自动整理成记录'), findsOneWidget);
+    expect(find.text('输入一句话记录，芽芽会帮你整理'), findsOneWidget);
+    expect(find.text('立即识别'), findsOneWidget);
     expect(find.text('自己填'), findsOneWidget);
-    expect(find.text('例如：今天买饲料 3680 元'), findsOneWidget);
+    expect(find.text('开始说话'), findsNothing);
+    expect(find.text('例如：今天买饲料 3680 元'), findsNothing);
     expect(find.text('记账'), findsOneWidget);
     expect(find.text('建模板'), findsOneWidget);
-    expect(find.text('AI待确认'), findsOneWidget);
-    expect(find.text('改一下'), findsOneWidget);
-    expect(find.text('保存'), findsOneWidget);
-    expect(find.text('XX饲料厂'), findsOneWidget);
+    expect(find.text('AI待确认'), findsNothing);
+    expect(find.text('改一下'), findsNothing);
+    expect(find.text('保存'), findsNothing);
+    expect(find.text('XX饲料厂'), findsNothing);
+  });
+
+  testWidgets('AI 帮填使用用户输入文本解析而不是固定样例', (tester) async {
+    final adapter = RecordingAdapter({
+      '/smart-fill/parse': smartFillParseResponse,
+      'POST /costs': costRecordResponse,
+    });
+    await tester.pumpWidget(MaterialApp(home: screenWithAdapter(adapter)));
+
+    await tester.enterText(find.byType(TextField), '今天买种子 120 元');
+    await tester.tap(find.text('立即识别'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('POST', '/smart-fill/parse');
+    expect(request.data, containsPair('text', '今天买种子 120 元'));
+    expect(request.data, isNot(containsPair('text', '今天买饲料 3680 元')));
   });
 
   testWidgets('工作台不展示 API 路径', (tester) async {
@@ -91,11 +124,43 @@ void main() {
   testWidgets('手动快捷记账入口进入记账页', (tester) async {
     await tester.pumpWidget(MaterialApp(home: screen()));
 
-    await tester.tap(find.text('记账').first);
+    await tester.tap(find.text('记账').last);
     await tester.pumpAndSettle();
 
     expect(find.text('保存记录'), findsOneWidget);
     expect(find.text('关联茬口'), findsOneWidget);
+  });
+
+  testWidgets('自己填入口进入手动记账页', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: screen()));
+
+    await tester.tap(find.text('自己填'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('保存记录'), findsOneWidget);
+    expect(find.text('关联茬口'), findsOneWidget);
+  });
+
+  testWidgets('记农事入口进入农事记录页', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: screen()));
+
+    await tester.tap(find.text('记农事'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('记农事'), findsWidgets);
+    expect(find.text('作业类型'), findsOneWidget);
+    expect(find.text('保存农事'), findsOneWidget);
+  });
+
+  testWidgets('记工资入口进入工资记录页', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: screen()));
+
+    await tester.tap(find.text('记工资'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('记工资'), findsWidgets);
+    expect(find.text('工人姓名'), findsOneWidget);
+    expect(find.text('保存工资'), findsOneWidget);
   });
 
   testWidgets('业务页底部 Tab 可回到主导航', (tester) async {
@@ -108,7 +173,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('记账').first);
+    await tester.tap(find.text('记账').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('账本').last);
     await tester.pumpAndSettle();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app_identity.dart';
 import '../assets/app_assets.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -59,7 +60,7 @@ class ReferenceHeader extends StatelessWidget {
             child: showLogo
                 ? const FarmBrandLockup(height: 42)
                 : const Text(
-                    '田掌柜',
+                    AppIdentity.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.title,
@@ -81,24 +82,24 @@ class FarmBrandLockup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Image.asset(
-        AppAssets.brandLockup,
-        height: height,
-        fit: BoxFit.contain,
-        semanticLabel: '田掌柜',
-        errorBuilder: (_, __, ___) => const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FarmBrandMark(size: 38),
-            SizedBox(width: 10),
-            Text(
-              '田掌柜',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.title,
-            ),
-          ],
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            AppAssets.brandLogo,
+            height: height,
+            fit: BoxFit.contain,
+            excludeFromSemantics: true,
+            errorBuilder: (_, __, ___) => FarmBrandMark(size: height),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            AppIdentity.displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.title,
+          ),
+        ],
       ),
     );
   }
