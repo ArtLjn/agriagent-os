@@ -239,7 +239,6 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
     turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
     events = _events_for_turn(turn)
     labels = _labels_by_sample(db, [sample_id]).get(sample_id, [])
-    router_decision = _router_decision(events)
     user_message = _message_by_id(db, turn.user_message_id)
     assistant_message = _message_by_id(db, turn.assistant_message_id)
     return {
@@ -251,7 +250,7 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
             "assistant": _message_to_dict(assistant_message),
         },
         "turn": _turn_to_dict(turn),
-        "router_decision": router_decision,
+        "router_decision": _router_decision(events),
         "tool_events": _tool_events(events),
         "pending_lifecycle": _pending_lifecycle(events),
         "debug_export": build_session_debug_export(
@@ -274,9 +273,9 @@ def export_sample_jsonl(db: Session, *, farm_id: int, sample_id: str) -> dict[st
         "session_id": sample["session_id"],
         "turn_id": sample["turn_id"],
         "request_id": sample["request_id"],
-        "user_input": user_message.get("content") or sample.get("user_preview"),
+        "user_input": user_message.get("content") or sample.get("user_input_preview"),
         "assistant_reply": assistant_message.get("content")
-        or sample.get("assistant_preview"),
+        or sample.get("assistant_reply_preview"),
         "selected_tools": sample["selected_tools"],
         "actual_tools": sample["actual_tools"],
         "router_decision": detail["router_decision"],
@@ -311,14 +310,18 @@ def build_case_draft(
     user_message = detail["messages"]["user"] or {}
     assistant_message = detail["messages"]["assistant"] or {}
     quality_labels = detail["quality_labels"]
+    label_text = ", ".join(quality_labels) if quality_labels else "unlabeled"
     case_json = {
         "case_id": f"regression-{sample['session_id']}-{sample['turn_id']}",
-        "description": _case_description(sample_id, quality_labels),
-        "user_input": user_message.get("content") or sample.get("user_preview") or "",
+        "description": f"Data flywheel regression sample {sample_id} ({label_text})",
+        "user_input": user_message.get("content")
+        or sample.get("user_input_preview")
+        or "",
         "category": quality_labels[0] if quality_labels else "data_flywheel",
         "expected_skills": [
             {"name": tool_name} for tool_name in sample["selected_tools"]
         ],
+        "expected_pending_action": None,
         "confirmation_flow": [],
         "expected_database_diff": [],
         "reply_assertions": _reply_assertions(assistant_message, sample),
@@ -330,11 +333,9 @@ def build_case_draft(
             "quality_labels": quality_labels,
         },
     }
-    pending_action = _expected_pending_action(
-        detail["pending_lifecycle"], quality_labels
+    case_json["expected_pending_action"] = _expected_pending_action(
+        detail["pending_lifecycle"], quality_labels, sample["selected_tools"]
     )
-    if pending_action:
-        case_json["expected_pending_action"] = pending_action
 
     draft = AgentCaseDraft(
         farm_id=farm_id,
@@ -383,16 +384,13 @@ def _sample_row(
         "session_id": turn.session_id,
         "turn_id": turn.id,
         "request_id": turn.request_id,
-        "user_preview": turn.input_preview,
-        "assistant_preview": turn.reply_preview,
+        "user_input_preview": turn.input_preview,
+        "assistant_reply_preview": turn.reply_preview,
+        "source_type": "agent_event_log" if turn.event_file else "agent_turns",
         "selected_tools": _selected_tools(router_decision),
         "actual_tools": _actual_tools(events),
         "quality_labels": quality_labels,
         "annotation_status": "labeled" if quality_labels else "unlabeled",
-        "token_total": turn.token_total,
-        "latency_ms": turn.latency_ms,
-        "status": turn.status,
-        "created_at": turn.created_at.isoformat() if turn.created_at else None,
     }
 
 
@@ -415,36 +413,18 @@ def _message_to_dict(message: ConversationMessage | None) -> dict[str, Any] | No
         return None
     return {
         "id": message.id,
-        "turn_id": message.turn_id,
         "role": message.role,
         "content": message.content,
-        "meta": message.meta_json,
-        "created_at": message.created_at.isoformat() if message.created_at else None,
     }
 
 
 def _turn_to_dict(turn: AgentTurn) -> dict[str, Any]:
     return {
         "id": turn.id,
-        "farm_id": turn.farm_id,
-        "session_id": turn.session_id,
-        "conversation_id": turn.conversation_id,
         "request_id": turn.request_id,
-        "user_message_id": turn.user_message_id,
-        "assistant_message_id": turn.assistant_message_id,
-        "input_preview": turn.input_preview,
-        "reply_preview": turn.reply_preview,
-        "selected_tools_count": turn.selected_tools_count,
-        "tool_calls_count": turn.tool_calls_count,
         "token_total": turn.token_total,
         "latency_ms": turn.latency_ms,
         "status": turn.status,
-        "pending_plan_id": turn.pending_plan_id,
-        "event_file": turn.event_file,
-        "event_seq_start": turn.event_seq_start,
-        "event_seq_end": turn.event_seq_end,
-        "event_write_status": turn.event_write_status,
-        "created_at": turn.created_at.isoformat() if turn.created_at else None,
     }
 
 
@@ -459,58 +439,59 @@ def _source_to_dict(turn: AgentTurn) -> dict[str, Any]:
 def _label_to_dict(row: AgentDataFlywheelLabel) -> dict[str, Any]:
     return {
         "id": row.id,
-        "farm_id": row.farm_id,
         "sample_id": row.sample_id,
-        "sample_type": row.sample_type,
-        "session_id": row.session_id,
-        "turn_id": row.turn_id,
-        "request_id": row.request_id,
         "label": row.label,
         "comment": row.comment,
         "annotator_id": row.annotator_id,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
 
 
 def _draft_to_dict(draft: AgentCaseDraft) -> dict[str, Any]:
     return {
         "id": draft.id,
-        "farm_id": draft.farm_id,
         "draft_id": draft.draft_id,
         "source_sample_id": draft.source_sample_id,
         "target_type": draft.target_type,
         "status": draft.status,
         "case_json": draft.case_json,
         "created_by": draft.created_by,
-        "created_at": draft.created_at.isoformat() if draft.created_at else None,
-        "updated_at": draft.updated_at.isoformat() if draft.updated_at else None,
     }
-
-
-def _case_description(sample_id: str, quality_labels: list[str]) -> str:
-    label_text = ", ".join(quality_labels) if quality_labels else "unlabeled"
-    return f"Data flywheel regression sample {sample_id} ({label_text})"
 
 
 def _reply_assertions(
     assistant_message: dict[str, Any] | None,
     sample: dict[str, Any],
 ) -> list[dict[str, str]]:
-    reply = (assistant_message or {}).get("content") or sample.get("assistant_preview")
+    reply = (assistant_message or {}).get("content") or sample.get(
+        "assistant_reply_preview"
+    )
     return [{"contains": reply}] if reply else []
 
 
 def _expected_pending_action(
-    pending_lifecycle: list[dict[str, Any]], quality_labels: list[str]
+    pending_lifecycle: list[dict[str, Any]],
+    quality_labels: list[str],
+    selected_tools: list[str],
 ) -> dict[str, Any] | None:
     if not pending_lifecycle and "pending_missed" not in quality_labels:
         return None
-    first_payload = pending_lifecycle[0].get("payload") if pending_lifecycle else {}
-    if not isinstance(first_payload, dict):
-        first_payload = {}
+    skill_name = _pending_skill_name(pending_lifecycle) or (
+        selected_tools[0] if selected_tools else ""
+    )
     return {
-        "required": True,
-        "plan_id": first_payload.get("plan_id"),
-        "event_types": [event.get("event_type") for event in pending_lifecycle],
+        "skill_name": skill_name,
+        "params": {},
+        "status": "created",
+        "confirmation_required": True,
     }
+
+
+def _pending_skill_name(pending_lifecycle: list[dict[str, Any]]) -> str | None:
+    for event in pending_lifecycle:
+        payload = event.get("payload") or {}
+        steps = payload.get("steps") if isinstance(payload, dict) else None
+        if isinstance(steps, list) and steps:
+            skill_name = steps[0].get("skill_name")
+            if skill_name:
+                return str(skill_name)
+    return None

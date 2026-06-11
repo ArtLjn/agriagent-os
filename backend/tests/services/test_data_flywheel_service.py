@@ -45,7 +45,7 @@ def setup_function():
     db.close()
 
 
-def _seed_turn(db, tmp_path):
+def _seed_turn(db, tmp_path, *, include_pending=True):
     session_id = "sess-flywheel"
     user_input = "王大妈工资100一天，去5号棚收水稻"
     assistant_reply = "已安排王大妈去5号棚收水稻"
@@ -68,24 +68,14 @@ def _seed_turn(db, tmp_path):
     db.commit()
 
     writer = AgentEventWriter(base_dir=tmp_path)
-    writes = [
-        writer.write(
-            event_type="message.user",
-            farm_id=1,
-            user_id="user-1",
-            session_id=session_id,
-            turn_id=turn.id,
-            request_id="abcd1234",
-            payload={"content": user_input},
+    event_specs = [
+        (
+            "message.user",
+            {"content": user_input},
         ),
-        writer.write(
-            event_type="router.decision",
-            farm_id=1,
-            user_id="user-1",
-            session_id=session_id,
-            turn_id=turn.id,
-            request_id="abcd1234",
-            payload={
+        (
+            "router.decision",
+            {
                 "selected_tools": [
                     "manage_workers",
                     "create_operation_work_order",
@@ -94,36 +84,38 @@ def _seed_turn(db, tmp_path):
                 "fallback": False,
             },
         ),
+        (
+            "tool.call.finished",
+            {"tool_name": "manage_workers", "result": {"id": 7}},
+        ),
+    ]
+    if include_pending:
+        event_specs.append(
+            (
+                "pending.plan.created",
+                {
+                    "plan_id": "plan-1",
+                    "steps": [{"skill_name": "manage_workers"}],
+                },
+            )
+        )
+    event_specs.append(
+        (
+            "message.assistant",
+            {"content": assistant_reply},
+        )
+    )
+    writes = [
         writer.write(
-            event_type="tool.call.finished",
+            event_type=event_type,
             farm_id=1,
             user_id="user-1",
             session_id=session_id,
             turn_id=turn.id,
             request_id="abcd1234",
-            payload={"tool_name": "manage_workers", "result": {"id": 7}},
-        ),
-        writer.write(
-            event_type="pending.plan.created",
-            farm_id=1,
-            user_id="user-1",
-            session_id=session_id,
-            turn_id=turn.id,
-            request_id="abcd1234",
-            payload={
-                "plan_id": "plan-1",
-                "steps": [{"skill_name": "manage_workers"}],
-            },
-        ),
-        writer.write(
-            event_type="message.assistant",
-            farm_id=1,
-            user_id="user-1",
-            session_id=session_id,
-            turn_id=turn.id,
-            request_id="abcd1234",
-            payload={"content": assistant_reply},
-        ),
+            payload=payload,
+        )
+        for event_type, payload in event_specs
     ]
     turn = finish_turn(
         db,
@@ -135,7 +127,7 @@ def _seed_turn(db, tmp_path):
         token_total=680,
         latency_ms=1320,
         status="success",
-        pending_plan_id="plan-1",
+        pending_plan_id="plan-1" if include_pending else None,
     )
     turn = mark_event_range(
         db,
@@ -159,8 +151,13 @@ def test_list_samples_returns_lightweight_turn_rows(tmp_path):
     assert result["items"][0]["sample_type"] == "session_turn"
     assert result["items"][0]["session_id"] == "sess-flywheel"
     assert result["items"][0]["request_id"] == "abcd1234"
-    assert result["items"][0]["user_preview"] == "王大妈工资100一天，去5号棚收水稻"
-    assert result["items"][0]["assistant_preview"] == "已安排王大妈去5号棚收水稻"
+    assert result["items"][0]["user_input_preview"] == (
+        "王大妈工资100一天，去5号棚收水稻"
+    )
+    assert result["items"][0]["assistant_reply_preview"] == (
+        "已安排王大妈去5号棚收水稻"
+    )
+    assert result["items"][0]["source_type"] == "agent_event_log"
     assert result["items"][0]["selected_tools"] == [
         "manage_workers",
         "create_operation_work_order",
@@ -187,6 +184,24 @@ def test_labels_are_reflected_in_sample_list(tmp_path):
     assert result["total"] == 1
     assert result["items"][0]["quality_labels"] == ["wrong_tool_selection"]
     assert result["items"][0]["annotation_status"] == "labeled"
+
+    unannotated = list_samples(db, farm_id=1, unannotated_only=True)
+    assert unannotated["total"] == 0
+    db.close()
+
+
+def test_invalid_label_and_farm_mismatch_raise_value_error(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+
+    with pytest.raises(ValueError) as invalid_label:
+        add_sample_label(db, farm_id=1, sample_id=sample_id, label="unknown_label")
+    assert str(invalid_label.value) == "INVALID_LABEL"
+
+    with pytest.raises(ValueError) as farm_mismatch:
+        get_sample_detail(db, farm_id=2, sample_id=sample_id)
+    assert str(farm_mismatch.value) == "SAMPLE_NOT_FOUND"
     db.close()
 
 
@@ -245,5 +260,28 @@ def test_build_case_draft_from_sample(tmp_path):
     assert draft["target_type"] == "evaluation_replay"
     assert draft["case_json"]["user_input"] == "王大妈工资100一天，去5号棚收水稻"
     assert draft["case_json"]["expected_skills"][0]["name"] == "manage_workers"
+    assert draft["case_json"]["expected_pending_action"] == {
+        "skill_name": "manage_workers",
+        "params": {},
+        "status": "created",
+        "confirmation_required": True,
+    }
     assert draft["case_json"]["metadata"]["source_sample_id"] == sample_id
+    db.close()
+
+
+def test_build_case_draft_without_pending_sets_expected_pending_action_none(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, include_pending=False)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="needs_regression")
+
+    draft = build_case_draft(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        target_type="evaluation_replay",
+    )
+
+    assert draft["case_json"]["expected_pending_action"] is None
     db.close()
