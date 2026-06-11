@@ -16,6 +16,7 @@ from app.models.conversation import (
     ConversationStatus,
 )
 from app.models.agent_turn import AgentTurn
+from app.models.data_flywheel import AgentCaseDraft, AgentDataFlywheelLabel
 from app.models.feedback import FeedbackRecord
 from app.models.user_setting import UserSetting
 from app.models.simulation import SimulationRun, SimulationResultRecord
@@ -47,6 +48,8 @@ __all__ = [
     "ConversationMessage",
     "ConversationStatus",
     "AgentTurn",
+    "AgentCaseDraft",
+    "AgentDataFlywheelLabel",
     "FeedbackRecord",
     "UserSetting",
     "SimulationRun",
