@@ -164,6 +164,9 @@ def test_list_samples_returns_lightweight_turn_rows(tmp_path):
     ]
     assert result["items"][0]["actual_tools"] == ["manage_workers"]
     assert result["items"][0]["annotation_status"] == "unlabeled"
+    assert result["items"][0]["token_total"] == 680
+    assert result["items"][0]["latency_ms"] == 1320
+    assert result["items"][0]["created_at"] is not None
     db.close()
 
 

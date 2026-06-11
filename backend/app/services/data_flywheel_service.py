@@ -380,7 +380,6 @@ def _sample_row(
     return {
         "sample_id": _sample_id(turn),
         "sample_type": SAMPLE_TYPE_SESSION_TURN,
-        "farm_id": turn.farm_id,
         "session_id": turn.session_id,
         "turn_id": turn.id,
         "request_id": turn.request_id,
@@ -391,6 +390,9 @@ def _sample_row(
         "actual_tools": _actual_tools(events),
         "quality_labels": quality_labels,
         "annotation_status": "labeled" if quality_labels else "unlabeled",
+        "token_total": turn.token_total,
+        "latency_ms": turn.latency_ms,
+        "created_at": turn.created_at.isoformat() if turn.created_at else None,
     }
 
 
