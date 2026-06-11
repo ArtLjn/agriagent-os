@@ -1,5 +1,7 @@
 """Skill Router 服务入口。"""
 
+from copy import deepcopy
+
 from langchain_core.tools import BaseTool
 
 from app.agent.router.catalog import SkillCatalog
@@ -60,7 +62,7 @@ class SkillRouter:
 
     @staticmethod
     def _params_for_frame(frame: IntentFrame) -> dict:
-        params = dict(frame.params_hint or {})
+        params = deepcopy(frame.params_hint or {})
         if frame.intent == "create_worker":
             params.setdefault("action", "create")
         return params

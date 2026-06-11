@@ -15,7 +15,7 @@ class RuleIntentClassifier:
     _write_entity_hints = ("工人", "作业", "账")
     _worker_create_hints = ("新来", "招了", "新增", "创建")
     _worker_pay_hints = ("工资", "日薪", "每天")
-    _work_order_hints = ("作业", "采收", "授粉", "安排", "收")
+    _work_order_hints = ("作业", "采收", "授粉", "安排")
     _work_order_read_hints = ("作业单", "作业", "采收", "授粉")
     _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
     _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
@@ -189,7 +189,9 @@ class RuleIntentClassifier:
     def _looks_like_create_work_order(self, message: str) -> bool:
         if self._has_any(message, self._read_blockers):
             return False
-        return self._has_any(message, self._work_order_hints)
+        return self._has_any(message, self._work_order_hints) or (
+            self._extract_operation_type(message) is not None
+        )
 
     def _looks_like_ambiguous_write(self, message: str) -> bool:
         return self._has_any(message, self._write_action_hints) and self._has_any(
@@ -243,11 +245,15 @@ class RuleIntentClassifier:
     @staticmethod
     def _extract_unit_price(message: str) -> int | None:
         match = re.search(
-            r"(?:工资|日薪|每天)?\s*"
-            r"(?P<price>\d+)\s*(?:元|块)?\s*(?:一?天|/天|每天)?",
+            r"(?:工资|日薪|每天|一天|每人|单价)\s*"
+            r"(?P<price>\d+)\s*(?:元|块)?\s*(?:一?天|/天|每天)?"
+            r"|(?P<price_before>\d+)\s*(?:元|块)?\s*(?:一?天|/天|每天|每人)",
             message,
         )
-        return int(match.group("price")) if match else None
+        if not match:
+            return None
+        price = match.group("price") or match.group("price_before")
+        return int(price)
 
     @staticmethod
     def _extract_unit_name(message: str) -> str | None:

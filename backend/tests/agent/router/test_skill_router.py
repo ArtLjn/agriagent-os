@@ -246,6 +246,46 @@ def test_session4_create_worker_and_work_order_keeps_single_write_tool() -> None
     ]
 
 
+def test_income_receipt_does_not_select_create_work_order() -> None:
+    tools = [_tool("create_cost_record"), _tool("create_operation_work_order")]
+
+    decision = SkillRouter().route("收到客户付款100元", tools)
+
+    assert "create_operation_work_order" not in decision.selected_tools
+    assert all(frame.intent != "create_work_order" for frame in decision.frames)
+
+
+def test_session4_extracts_wage_after_greenhouse_number() -> None:
+    tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
+
+    decision = SkillRouter().route("让王大妈去5号棚收水稻，工资100一天", tools)
+
+    work_order_frame = next(
+        frame for frame in decision.frames if frame.intent == "create_work_order"
+    )
+    assert work_order_frame.params_hint is not None
+    assert work_order_frame.params_hint["unit_price"] == 100
+    assert work_order_frame.params_hint["unit_names"] == ["5号棚"]
+    assert "create_operation_work_order" in work_order_frame.candidate_tools
+
+
+def test_build_pending_plan_steps_deep_copies_params_hint() -> None:
+    router = SkillRouter()
+    decision = router.route(
+        "我招了一个工人王大妈工资100一天，早上来了让他去5号棚收水稻了",
+        [_tool("manage_workers"), _tool("create_operation_work_order")],
+    )
+    work_order_frame = next(
+        frame for frame in decision.frames if frame.intent == "create_work_order"
+    )
+
+    steps = router.build_pending_plan_steps(decision)
+    steps[1]["params"]["workers"].append("李师傅")
+
+    assert work_order_frame.params_hint is not None
+    assert work_order_frame.params_hint["workers"] == ["王大妈"]
+
+
 @pytest.mark.parametrize("message", ["我的作业单有哪些", "采收作业有哪些"])
 def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
     tools = [_tool("get_operation_work_orders"), _tool("create_operation_work_order")]

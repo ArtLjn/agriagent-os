@@ -148,6 +148,87 @@ async def test_runtime_tool_flow_stores_pending_plan_without_invoking_write_tool
 
 
 @pytest.mark.asyncio
+async def test_runtime_pending_plan_returns_tool_message_for_each_tool_call():
+    message = "我招了一个工人王大妈工资100一天，早上来了让他去5号棚收水稻了"
+    router_decision = SkillRouter().route(
+        message,
+        [_tool("manage_workers"), _tool("create_operation_work_order")],
+    )
+    manage_workers = SimpleNamespace(
+        name="manage_workers",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行工人写入"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            cache_invalidation=["get_farm_status"],
+        ),
+    )
+    create_work_order = SimpleNamespace(
+        name="create_operation_work_order",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行作业单写入"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            cache_invalidation=["farm_logs"],
+        ),
+    )
+    tool_calls = [
+        {
+            "id": "tc-worker",
+            "name": "manage_workers",
+            "args": {
+                "action": "create",
+                "name": "王大妈",
+                "default_pay_type": "daily",
+                "default_unit_price": 100,
+            },
+        },
+        {
+            "id": "tc-work-order",
+            "name": "create_operation_work_order",
+            "args": {
+                "workers": ["王大妈"],
+                "unit_names": ["5号棚"],
+                "operation_type": "采收",
+                "unit_price": 100,
+            },
+        },
+    ]
+    state = {
+        "messages": [
+            HumanMessage(content=message),
+            AIMessage(content="", tool_calls=tool_calls),
+        ],
+        "farm_id": 1,
+        "farm_uid": "farm-uid-1",
+        "session_id": "session4",
+        "router_decision": router_decision,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[manage_workers, create_work_order],
+        ),
+        patch("app.agent.runtime.tool_executor.get_collector"),
+    ):
+        result = await _parallel_tool_node(state)
+
+    returned_messages = result["messages"]
+    assert len(returned_messages) == len(tool_calls)
+    assert {message.tool_call_id for message in returned_messages} == {
+        "tc-worker",
+        "tc-work-order",
+    }
+    assert PENDING_MARKER in returned_messages[0].content
+    assert "请确认将执行 2 步" in returned_messages[0].content
+    assert "已纳入待确认计划" in returned_messages[1].content
+    assert get_pending_plan(1, session_id="session4") is not None
+    manage_workers.ainvoke.assert_not_awaited()
+    create_work_order.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_handle_pending_plan_confirm_executes_steps_in_order():
     _store_session4_plan()
 
