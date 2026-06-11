@@ -33,6 +33,15 @@ const sample: DataFlywheelSample = {
   assistant_reply_preview: '我来帮你检查工资记录。',
   selected_tools: ['worker.search', 'wage.list'],
   actual_tools: ['worker.search'],
+  issue_candidates: [
+    {
+      type: 'sensitive_info_leak',
+      severity: 'critical',
+      reason: '回复疑似暴露模型参数或系统提示',
+      evidence: 'temperature',
+      suggested_label: 'sensitive_info_leak',
+    },
+  ],
   token_total: 680,
   latency_ms: 920,
   source_type: 'debug_event',
@@ -47,6 +56,7 @@ const anotherSample: DataFlywheelSample = {
   request_id: 'req:def',
   user_input_preview: '给李四补一条今天的浇水记录',
   assistant_reply_preview: '我来记录今天的浇水作业。',
+  issue_candidates: [],
   token_total: 420,
 };
 
@@ -88,6 +98,7 @@ const detail: DataFlywheelDetail = {
       payload: { skill: 'wage.list' },
     },
   ],
+  issue_candidates: sample.issue_candidates,
   debug_export: {
     sample_id: sample.sample_id,
     request_id: 'req:abc',
@@ -119,6 +130,7 @@ const anotherDetail: DataFlywheelDetail = {
     { role: 'user', content: '给李四补一条今天的浇水记录' },
     { role: 'assistant', content: '已为李四记录今天的浇水作业。' },
   ],
+  issue_candidates: [],
   debug_export: {
     sample_id: anotherSample.sample_id,
     request_id: 'req:def',
@@ -172,6 +184,8 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
     expect(screen.getByText('req:abc')).toBeInTheDocument();
     expect(screen.getByText('680 tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('参数/提示泄露').length).toBeGreaterThan(0);
+    expect(screen.getByText('问题候选')).toBeInTheDocument();
   });
 
   it('点击样本行后加载详情并显示工具与 pending 生命周期', async () => {
@@ -189,7 +203,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('pending.plan.created')).toBeInTheDocument();
   });
 
-  it('输入搜索框不会立刻重新请求，点击查询后才使用新 request_id', async () => {
+  it('输入搜索框不会立刻重新请求，点击查询后才使用通用 q 搜索', async () => {
     const user = userEvent.setup();
     render(<DataFlywheel />);
 
@@ -209,8 +223,24 @@ describe('DataFlywheel 页面', () => {
       offset: 0,
       label: undefined,
       unannotated_only: undefined,
-      request_id: 'req:new',
+      q: 'req:new',
     });
+  });
+
+  it('点击问题候选后只显示有候选问题的样本', async () => {
+    const cleanSample: DataFlywheelSample = {
+      ...anotherSample,
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [sample, cleanSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    fireEvent.click(screen.getByTestId('archive-issues'));
+
+    expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
+    expect(screen.queryByTestId('sample-row-turn:session-b:4')).not.toBeInTheDocument();
+    expect(screen.getByText('回复疑似暴露模型参数或系统提示')).toBeInTheDocument();
   });
 
   it('快速切换样本时旧详情响应不会覆盖新详情', async () => {

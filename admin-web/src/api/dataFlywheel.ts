@@ -6,10 +6,20 @@ export type DataFlywheelLabel =
   | 'wrong_tool_selection'
   | 'pending_missed'
   | 'hallucinated_execution'
+  | 'off_topic'
+  | 'sensitive_info_leak'
   | 'missing_wage'
   | 'disabled_worker_used'
   | 'needs_regression'
   | 'not_actionable';
+
+export interface DataFlywheelIssueCandidate {
+  type: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | string;
+  reason: string;
+  evidence: string;
+  suggested_label: DataFlywheelLabel | string;
+}
 
 export interface DataFlywheelSample {
   sample_id: string;
@@ -23,6 +33,7 @@ export interface DataFlywheelSample {
   assistant_reply_preview: string | null;
   selected_tools: string[];
   actual_tools: string[];
+  issue_candidates: DataFlywheelIssueCandidate[];
   token_total: number | null;
   latency_ms: number | null;
   source_type: string;
@@ -35,6 +46,7 @@ export interface DataFlywheelSampleListParams {
   unannotated_only?: boolean;
   session_id?: string;
   request_id?: string;
+  q?: string;
   limit?: number;
   offset?: number;
 }
@@ -80,6 +92,7 @@ export interface DataFlywheelDetail {
   router_decision: Record<string, unknown> | null;
   tool_events: Array<Record<string, unknown>>;
   pending_lifecycle: Array<Record<string, unknown>>;
+  issue_candidates: DataFlywheelIssueCandidate[];
   debug_export: Record<string, unknown> | null;
   source: DataFlywheelSource;
 }

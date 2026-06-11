@@ -45,9 +45,22 @@ def setup_function():
     db.close()
 
 
-def _seed_turn(db, tmp_path, *, include_pending=True, session_id="sess-flywheel"):
-    user_input = "王大妈工资100一天，去5号棚收水稻"
-    assistant_reply = "已安排王大妈去5号棚收水稻"
+def _seed_turn(
+    db,
+    tmp_path,
+    *,
+    include_pending=True,
+    session_id="sess-flywheel",
+    user_input="王大妈工资100一天，去5号棚收水稻",
+    assistant_reply="已安排王大妈去5号棚收水稻",
+    request_id="abcd1234",
+    router_tools=None,
+    tool_events=None,
+):
+    router_tools = router_tools or ["manage_workers", "create_operation_work_order"]
+    tool_events = tool_events if tool_events is not None else [
+        ("tool.call.finished", {"tool_name": "manage_workers", "result": {"id": 7}})
+    ]
     conv = get_or_create_conversation(
         db, farm_id=1, session_id=session_id, user_id="user-1"
     )
@@ -57,7 +70,7 @@ def _seed_turn(db, tmp_path, *, include_pending=True, session_id="sess-flywheel"
         farm_id=1,
         session_id=session_id,
         conversation_id=conv.id,
-        request_id="abcd1234",
+        request_id=request_id,
         user_message_id=user_msg.id,
         input_text=user_input,
     )
@@ -75,19 +88,13 @@ def _seed_turn(db, tmp_path, *, include_pending=True, session_id="sess-flywheel"
         (
             "router.decision",
             {
-                "selected_tools": [
-                    "manage_workers",
-                    "create_operation_work_order",
-                ],
+                "selected_tools": router_tools,
                 "rejected_tools": ["get_weather_forecast"],
                 "fallback": False,
             },
         ),
-        (
-            "tool.call.finished",
-            {"tool_name": "manage_workers", "result": {"id": 7}},
-        ),
     ]
+    event_specs.extend(tool_events)
     if include_pending:
         event_specs.append(
             (
@@ -111,7 +118,7 @@ def _seed_turn(db, tmp_path, *, include_pending=True, session_id="sess-flywheel"
             user_id="user-1",
             session_id=session_id,
             turn_id=turn.id,
-            request_id="abcd1234",
+            request_id=request_id,
             payload=payload,
         )
         for event_type, payload in event_specs
@@ -121,8 +128,8 @@ def _seed_turn(db, tmp_path, *, include_pending=True, session_id="sess-flywheel"
         turn.id,
         reply_text=assistant_reply,
         assistant_message_id=assistant_msg.id,
-        selected_tools_count=2,
-        tool_calls_count=1,
+        selected_tools_count=len(router_tools),
+        tool_calls_count=len(tool_events),
         token_total=680,
         latency_ms=1320,
         status="success",
@@ -166,6 +173,15 @@ def test_list_samples_returns_lightweight_turn_rows(tmp_path):
     assert result["items"][0]["token_total"] == 680
     assert result["items"][0]["latency_ms"] == 1320
     assert result["items"][0]["created_at"] is not None
+    assert result["items"][0]["issue_candidates"] == [
+        {
+            "type": "pending_missed",
+            "severity": "high",
+            "reason": "router 选择了写操作工具，但 pending lifecycle 中没有对应的确认计划",
+            "evidence": "create_operation_work_order",
+            "suggested_label": "pending_missed",
+        }
+    ]
     db.close()
 
 
@@ -229,6 +245,55 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     assert detail["pending_lifecycle"][0]["event_type"] == "pending.plan.created"
     assert detail["source"]["event_seq_start"] == 1
     assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.v2"
+    assert detail["issue_candidates"][0]["type"] == "pending_missed"
+    db.close()
+
+
+def test_issue_candidates_detect_hallucinated_execution_and_sensitive_leak(tmp_path):
+    db = Session()
+    turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=True,
+        session_id="sess-risky",
+        user_input="今天有哪些记录？",
+        assistant_reply="已创建记录。当前 temperature=0.7，system prompt 已启用。",
+        request_id="risk1234",
+        router_tools=["create_operation_work_order"],
+        tool_events=[],
+    )
+    sample_id = f"turn:1:sess-risky:{turn.id}"
+
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert [item["type"] for item in detail["issue_candidates"]] == [
+        "hallucinated_execution",
+        "unsafe_write_on_question",
+        "sensitive_info_leak",
+    ]
+    assert detail["sample"]["issue_candidates"][0]["suggested_label"] == (
+        "hallucinated_execution"
+    )
+    db.close()
+
+
+def test_list_samples_supports_q_search_for_session_request_and_text(tmp_path):
+    db = Session()
+    turn = _seed_turn(
+        db,
+        tmp_path,
+        session_id="playground-user-9",
+        user_input="这个回复好像答非所问",
+        request_id="searchreq",
+    )
+
+    by_session = list_samples(db, farm_id=1, q="playground-user-9")
+    by_request = list_samples(db, farm_id=1, q="searchreq")
+    by_text = list_samples(db, farm_id=1, q="答非所问")
+
+    assert by_session["items"][0]["sample_id"] == f"turn:1:playground-user-9:{turn.id}"
+    assert by_request["total"] == 1
+    assert by_text["total"] == 1
     db.close()
 
 

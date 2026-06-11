@@ -36,6 +36,7 @@ describe('dataFlywheel api', () => {
             assistant_reply_preview: '今天适合下地',
             selected_tools: ['weather'],
             actual_tools: ['weather'],
+            issue_candidates: [],
             token_total: 128,
             latency_ms: 320,
             source_type: 'event_log',
@@ -71,6 +72,7 @@ describe('dataFlywheel api', () => {
         router_decision: null,
         tool_events: [],
         pending_lifecycle: [],
+        issue_candidates: [],
         debug_export: null,
         source: {
           event_file: 'events.jsonl',

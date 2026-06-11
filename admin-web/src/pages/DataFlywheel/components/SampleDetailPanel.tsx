@@ -1,4 +1,4 @@
-import { Card, Col, Descriptions, Empty, Row, Space, Spin, Tabs, Typography } from 'antd';
+import { Card, Col, Descriptions, Empty, Row, Space, Spin, Tabs, Tag, Typography } from 'antd';
 import type { CSSProperties } from 'react';
 
 import type { DataFlywheelDetail } from '../../../api/dataFlywheel';
@@ -41,6 +41,27 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
 
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      {detail.issue_candidates.length > 0 && (
+        <Card title="问题定位" style={cardStyle} styles={{ body: { padding: 14 } }}>
+          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+            {detail.issue_candidates.map((issue) => (
+              <div key={`${issue.type}-${issue.evidence}`} style={issueStyle}>
+                <Space size={8} wrap>
+                  <Tag color={issue.severity === 'critical' ? 'red' : 'orange'}>{issueName(issue.type)}</Tag>
+                  <Tag color="blue">建议：{issue.suggested_label}</Tag>
+                </Space>
+                <Typography.Text style={{ display: 'block', color: palette.text, marginTop: 8 }}>
+                  {issue.reason}
+                </Typography.Text>
+                <Typography.Text style={{ display: 'block', color: palette.textMuted, marginTop: 4 }}>
+                  证据：{issue.evidence || '-'}
+                </Typography.Text>
+              </div>
+            ))}
+          </Space>
+        </Card>
+      )}
+
       <Card title="样本详情" style={cardStyle} styles={{ body: { padding: 14 } }}>
         <Row gutter={[12, 12]}>
           <Col xs={24} lg={12}>
@@ -109,6 +130,18 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
   );
 }
 
+function issueName(type: string) {
+  const names: Record<string, string> = {
+    hallucinated_execution: '幻觉执行',
+    unsafe_write_on_question: '问句触发写入',
+    pending_missed: 'pending 漏拦截',
+    tool_error_ignored: '工具错误未处理',
+    sensitive_info_leak: '参数/提示泄露',
+    off_topic: '答非所问',
+  };
+  return names[type] ?? type;
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={sectionStyle}>
@@ -123,6 +156,13 @@ const sectionStyle: CSSProperties = {
   background: palette.bg,
   border: `1px solid ${palette.borderSoft}`,
   borderRadius: 6,
+  padding: 12,
+};
+
+const issueStyle: CSSProperties = {
+  border: `1px solid ${palette.borderSoft}`,
+  borderRadius: 6,
+  background: palette.bg,
   padding: 12,
 };
 

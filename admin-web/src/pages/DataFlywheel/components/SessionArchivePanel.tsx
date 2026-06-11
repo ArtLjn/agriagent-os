@@ -16,16 +16,20 @@ export interface SessionArchiveItem {
 interface SessionArchivePanelProps {
   groups: SessionArchiveItem[];
   total: number;
+  issueCount: number;
   activeKey: string;
   allKey: string;
+  issueKey: string;
   onSelect: (key: string) => void;
 }
 
 export default function SessionArchivePanel({
   groups,
   total,
+  issueCount,
   activeKey,
   allKey,
+  issueKey,
   onSelect,
 }: SessionArchivePanelProps) {
   return (
@@ -44,6 +48,21 @@ export default function SessionArchivePanel({
             </Typography.Text>
           </span>
           <Badge count={total} color={palette.accentStrong} />
+        </button>
+
+        <button
+          type="button"
+          data-testid="archive-issues"
+          onClick={() => onSelect(issueKey)}
+          style={archiveButtonStyle(activeKey === issueKey)}
+        >
+          <span>
+            <Typography.Text style={{ color: palette.text }}>问题候选</Typography.Text>
+            <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
+              规则命中的幻觉、泄露或写入风险
+            </Typography.Text>
+          </span>
+          <Badge count={issueCount} color={palette.danger} />
         </button>
 
         {groups.length === 0 ? (

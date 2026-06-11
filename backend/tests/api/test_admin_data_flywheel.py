@@ -127,6 +127,15 @@ def test_list_samples_returns_items_total_and_request_id(db_session, tmp_path) -
     assert data["items"][0]["sample_id"] == _sample_id(turn)
     assert data["items"][0]["request_id"] == "adminfly"
     assert data["items"][0]["quality_labels"] == []
+    assert data["items"][0]["issue_candidates"][0]["type"] == "pending_missed"
+
+    with auth_override_scope(app):
+        q_resp = client.get(
+            "/admin/data-flywheel/samples?q=sess-admin-flywheel",
+            headers=admin_headers(),
+        )
+    assert q_resp.status_code == 200
+    assert q_resp.json()["total"] == 1
 
 
 def test_add_label_uses_current_admin_as_annotator(db_session, tmp_path) -> None:
@@ -187,6 +196,7 @@ def test_get_sample_detail_returns_labels_router_decision_and_messages(
             "content": "已安排王大妈去5号棚收水稻",
         },
     ]
+    assert data["issue_candidates"][0]["suggested_label"] == "pending_missed"
 
 
 def test_export_jsonl_returns_content_ending_with_newline(db_session, tmp_path) -> None:

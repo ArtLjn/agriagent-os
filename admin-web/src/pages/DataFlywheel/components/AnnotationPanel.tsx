@@ -32,6 +32,8 @@ const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '工具选错', value: 'wrong_tool_selection' },
   { label: 'pending 漏拦截', value: 'pending_missed' },
   { label: '幻觉执行', value: 'hallucinated_execution' },
+  { label: '答非所问', value: 'off_topic' },
+  { label: '参数/提示泄露', value: 'sensitive_info_leak' },
   { label: '工资缺失', value: 'missing_wage' },
   { label: '禁用工人', value: 'disabled_worker_used' },
   { label: '需要回归', value: 'needs_regression' },

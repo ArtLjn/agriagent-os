@@ -23,6 +23,7 @@ import SessionArchivePanel, { type SessionArchiveItem } from './components/Sessi
 
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
 const ALL_ARCHIVE_KEY = '__all__';
+const ISSUE_ARCHIVE_KEY = '__issues__';
 
 interface SampleQuery {
   searchText: string;
@@ -36,6 +37,8 @@ const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '工具选错', value: 'wrong_tool_selection' },
   { label: 'pending 漏拦截', value: 'pending_missed' },
   { label: '幻觉执行', value: 'hallucinated_execution' },
+  { label: '答非所问', value: 'off_topic' },
+  { label: '参数/提示泄露', value: 'sensitive_info_leak' },
   { label: '工资缺失', value: 'missing_wage' },
   { label: '禁用工人', value: 'disabled_worker_used' },
   { label: '需要回归', value: 'needs_regression' },
@@ -68,13 +71,20 @@ export default function DataFlywheel() {
   const detailRequestSeq = useRef(0);
 
   const archiveGroups = useMemo(() => buildArchiveGroups(samples), [samples]);
+  const issueCount = useMemo(
+    () => samples.filter((sample) => sample.issue_candidates.length > 0).length,
+    [samples]
+  );
   const visibleSamples = useMemo(() => {
     if (activeArchiveKey === ALL_ARCHIVE_KEY) return samples;
+    if (activeArchiveKey === ISSUE_ARCHIVE_KEY) {
+      return samples.filter((sample) => sample.issue_candidates.length > 0);
+    }
     return samples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
   }, [activeArchiveKey, samples]);
 
   useEffect(() => {
-    if (activeArchiveKey === ALL_ARCHIVE_KEY) return;
+    if (activeArchiveKey === ALL_ARCHIVE_KEY || activeArchiveKey === ISSUE_ARCHIVE_KEY) return;
     if (archiveGroups.some((group) => group.key === activeArchiveKey)) return;
     setActiveArchiveKey(ALL_ARCHIVE_KEY);
   }, [activeArchiveKey, archiveGroups]);
@@ -90,7 +100,7 @@ export default function DataFlywheel() {
         offset: 0,
         label: nextQuery.qualityLabel,
         unannotated_only: nextQuery.unannotatedOnly || undefined,
-        request_id: trimmed || undefined,
+        q: trimmed || undefined,
       });
       if (requestSeq !== listRequestSeq.current) return;
       setSamples(result.items);
@@ -288,8 +298,10 @@ export default function DataFlywheel() {
           <SessionArchivePanel
             groups={archiveGroups}
             total={samples.length}
+            issueCount={issueCount}
             activeKey={activeArchiveKey}
             allKey={ALL_ARCHIVE_KEY}
+            issueKey={ISSUE_ARCHIVE_KEY}
             onSelect={setActiveArchiveKey}
           />
         </Col>

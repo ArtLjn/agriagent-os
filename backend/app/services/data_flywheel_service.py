@@ -6,13 +6,15 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.infra.agent_events import read_event_segment
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import ConversationMessage
 from app.models.data_flywheel import AgentCaseDraft, AgentDataFlywheelLabel
+from app.services.data_flywheel_case_builder import build_case_json
+from app.services.data_flywheel_issue_detector import detect_issue_candidates
 from app.services.session_debug_export_service import build_session_debug_export
 
 ALLOWED_LABELS = {
@@ -24,6 +26,8 @@ ALLOWED_LABELS = {
     "missing_wage",
     "disabled_worker_used",
     "needs_regression",
+    "off_topic",
+    "sensitive_info_leak",
     "not_actionable",
 }
 SAMPLE_TYPE_SESSION_TURN = "session_turn"
@@ -128,6 +132,7 @@ def list_samples(
     label: str | None = None,
     session_id: str | None = None,
     request_id: str | None = None,
+    q: str | None = None,
     unannotated_only: bool = False,
     limit: int = 50,
     offset: int = 0,
@@ -143,6 +148,17 @@ def list_samples(
         query = query.filter(AgentTurn.session_id == session_id)
     if request_id:
         query = query.filter(AgentTurn.request_id == request_id)
+    if q:
+        keyword = q.strip()
+        if keyword:
+            query = query.filter(
+                or_(
+                    AgentTurn.session_id.contains(keyword),
+                    AgentTurn.request_id.contains(keyword),
+                    AgentTurn.input_preview.contains(keyword),
+                    AgentTurn.reply_preview.contains(keyword),
+                )
+            )
     if label:
         label_turn_ids = select(AgentDataFlywheelLabel.turn_id).where(
             AgentDataFlywheelLabel.farm_id == farm_id,
@@ -242,8 +258,9 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
     turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
     events = _events_for_turn(turn)
     labels = _labels_by_sample(db, [sample_id]).get(sample_id, [])
+    sample = _sample_row(turn, labels, events)
     return {
-        "sample": _sample_row(turn, labels, events),
+        "sample": sample,
         "quality_labels": [row.label for row in labels],
         "labels": [_label_to_dict(row) for row in labels],
         "messages": _messages_for_turn(db, turn),
@@ -255,6 +272,7 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
             db, farm_id=farm_id, session_id=turn.session_id
         ),
         "source": _source_to_dict(turn),
+        "issue_candidates": sample["issue_candidates"],
     }
 
 
@@ -304,33 +322,7 @@ def build_case_draft(
 
     detail = get_sample_detail(db, farm_id=farm_id, sample_id=sample_id)
     sample = detail["sample"]
-    quality_labels = detail["quality_labels"]
-    label_text = ", ".join(quality_labels) if quality_labels else "unlabeled"
-    case_json = {
-        "case_id": f"regression-{sample['session_id']}-{sample['turn_id']}",
-        "description": f"Data flywheel regression sample {sample_id} ({label_text})",
-        "user_input": _message_content(detail, "user")
-        or sample.get("user_input_preview")
-        or "",
-        "category": quality_labels[0] if quality_labels else "data_flywheel",
-        "expected_skills": [
-            {"name": tool_name} for tool_name in sample["selected_tools"]
-        ],
-        "expected_pending_action": None,
-        "confirmation_flow": [],
-        "expected_database_diff": [],
-        "reply_assertions": _reply_assertions(detail, sample),
-        "metadata": {
-            "source": "data_flywheel",
-            "source_sample_id": sample_id,
-            "source_session_id": sample["session_id"],
-            "source_request_id": sample["request_id"],
-            "quality_labels": quality_labels,
-        },
-    }
-    case_json["expected_pending_action"] = _expected_pending_action(
-        detail["pending_lifecycle"], quality_labels, sample["selected_tools"]
-    )
+    case_json = build_case_json(sample_id=sample_id, sample=sample, detail=detail)
 
     draft = AgentCaseDraft(
         farm_id=farm_id,
@@ -371,6 +363,8 @@ def _sample_row(
     events: list[dict[str, Any]],
 ) -> dict[str, Any]:
     router_decision = _router_decision(events)
+    selected_tools = _selected_tools(router_decision)
+    pending_lifecycle = _pending_lifecycle(events)
     quality_labels = [row.label for row in labels]
     return {
         "sample_id": _sample_id(turn),
@@ -381,8 +375,15 @@ def _sample_row(
         "user_input_preview": turn.input_preview,
         "assistant_reply_preview": turn.reply_preview,
         "source_type": "agent_event_log" if turn.event_file else "agent_turns",
-        "selected_tools": _selected_tools(router_decision),
+        "selected_tools": selected_tools,
         "actual_tools": _actual_tools(events),
+        "issue_candidates": detect_issue_candidates(
+            user_input=turn.input_preview,
+            assistant_reply=turn.reply_preview,
+            selected_tools=selected_tools,
+            events=events,
+            pending_lifecycle=pending_lifecycle,
+        ),
         "quality_labels": quality_labels,
         "annotation_status": "labeled" if quality_labels else "unlabeled",
         "token_total": turn.token_total,
@@ -459,42 +460,4 @@ def _message_content(detail: dict[str, Any], role: str) -> str | None:
     for message in detail["messages"]:
         if message.get("role") == role:
             return message.get("content")
-    return None
-
-
-def _reply_assertions(
-    detail: dict[str, Any], sample: dict[str, Any]
-) -> list[dict[str, str]]:
-    reply = _message_content(detail, "assistant") or sample.get(
-        "assistant_reply_preview"
-    )
-    return [{"contains": reply}] if reply else []
-
-
-def _expected_pending_action(
-    pending_lifecycle: list[dict[str, Any]],
-    quality_labels: list[str],
-    selected_tools: list[str],
-) -> dict[str, Any] | None:
-    if not pending_lifecycle and "pending_missed" not in quality_labels:
-        return None
-    skill_name = _pending_skill_name(pending_lifecycle) or (
-        selected_tools[0] if selected_tools else ""
-    )
-    return {
-        "skill_name": skill_name,
-        "params": {},
-        "status": "created",
-        "confirmation_required": True,
-    }
-
-
-def _pending_skill_name(pending_lifecycle: list[dict[str, Any]]) -> str | None:
-    for event in pending_lifecycle:
-        payload = event.get("payload") or {}
-        steps = payload.get("steps") if isinstance(payload, dict) else None
-        if isinstance(steps, list) and steps:
-            skill_name = steps[0].get("skill_name")
-            if skill_name:
-                return str(skill_name)
     return None

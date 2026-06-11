@@ -23,10 +23,21 @@ const labelText: Record<string, string> = {
   wrong_tool_selection: '工具选错',
   pending_missed: 'pending 漏拦截',
   hallucinated_execution: '幻觉执行',
+  off_topic: '答非所问',
+  sensitive_info_leak: '参数/提示泄露',
   missing_wage: '工资缺失',
   disabled_worker_used: '禁用工人',
   needs_regression: '需要回归',
   not_actionable: '暂不处理',
+};
+
+const issueText: Record<string, string> = {
+  hallucinated_execution: '幻觉执行',
+  unsafe_write_on_question: '问句触发写入',
+  pending_missed: 'pending 漏拦截',
+  tool_error_ignored: '工具错误未处理',
+  sensitive_info_leak: '参数/提示泄露',
+  off_topic: '答非所问',
 };
 
 export default function SampleQueueTable({ samples, loading, selectedSampleId, onSelect }: SampleQueueTableProps) {
@@ -41,6 +52,11 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
           {record.quality_labels.slice(0, 1).map((label) => (
             <Tag key={label} color="blue" style={{ marginTop: 4 }}>
               {labelText[label] ?? label}
+            </Tag>
+          ))}
+          {record.issue_candidates.slice(0, 1).map((issue) => (
+            <Tag key={issue.type} color={issue.severity === 'critical' ? 'red' : 'orange'} style={{ marginTop: 4 }}>
+              {issueText[issue.type] ?? issue.type}
             </Tag>
           ))}
         </div>
@@ -63,6 +79,11 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
           <Typography.Text ellipsis style={{ color: palette.textMuted, fontSize: 12, maxWidth: 330 }}>
             {record.request_id || record.session_id || '-'}
           </Typography.Text>
+          {record.issue_candidates[0] && (
+            <Typography.Text ellipsis style={{ color: palette.warning, fontSize: 12, maxWidth: 330 }}>
+              {record.issue_candidates[0].reason}
+            </Typography.Text>
+          )}
         </Space>
       ),
     },
