@@ -17,6 +17,7 @@ from app.services.conversation_service import (
     get_recent_messages,
     list_conversations,
     save_message,
+    save_messages_batch,
 )
 
 
@@ -136,6 +137,40 @@ class TestSaveAndGetMessages:
         assert len(recent) == 6
         # 从第 3 轮开始的最后 6 条
         assert recent[0].content == "msg-2"
+        db.close()
+
+
+class TestBatchMessageSave:
+    """批量保存消息测试。"""
+
+    def test_save_messages_batch_uses_one_transaction_and_sets_light_metadata(self):
+        db = _TestSession()
+        conv = get_or_create_conversation(db, farm_id=1, session_id="sess-batch")
+
+        messages = save_messages_batch(
+            db,
+            conv.id,
+            [
+                {
+                    "role": "user",
+                    "content": "查一下作物",
+                    "turn_id": 1,
+                    "meta_json": {"trace_request_id": "abcd1234"},
+                },
+                {
+                    "role": "assistant",
+                    "content": "当前有水稻",
+                    "turn_id": 1,
+                    "meta_json": {"skills": ["get_farm_status"]},
+                },
+            ],
+        )
+
+        assert [m.role for m in messages] == ["user", "assistant"]
+        assert messages[0].turn_id == 1
+        assert messages[1].meta_json == {"skills": ["get_farm_status"]}
+        db.refresh(conv)
+        assert conv.last_active_at is not None
         db.close()
 
 

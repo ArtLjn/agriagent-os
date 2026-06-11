@@ -1,7 +1,10 @@
 """会话服务 -- 管理 Conversation 生命周期和历史消息。"""
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -109,6 +112,43 @@ def save_message(
     return msg
 
 
+def _content_hash(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def save_messages_batch(
+    db: Session,
+    conversation_id: int,
+    messages: list[dict[str, Any]],
+) -> list[ConversationMessage]:
+    """在一次事务中保存多条消息并更新会话活跃时间。"""
+    rows: list[ConversationMessage] = []
+    for item in messages:
+        meta_json = item.get("meta_json")
+        meta_text = item.get("meta")
+        if meta_text is None and meta_json is not None:
+            meta_text = json.dumps(meta_json, ensure_ascii=False)
+        row = ConversationMessage(
+            conversation_id=conversation_id,
+            role=item["role"],
+            content=item["content"],
+            meta=meta_text,
+            turn_id=item.get("turn_id"),
+            content_hash=_content_hash(item["content"]),
+            meta_json=meta_json,
+        )
+        db.add(row)
+        rows.append(row)
+    db.flush()
+    db.query(Conversation).filter(Conversation.id == conversation_id).update(
+        {"last_active_at": datetime.now()}
+    )
+    db.commit()
+    for row in rows:
+        db.refresh(row)
+    return rows
+
+
 def get_recent_messages(
     db: Session, conversation_id: int, limit: int = _MAX_INJECT_MESSAGES
 ) -> list[ConversationMessage]:
@@ -165,6 +205,7 @@ __all__ = [
     "get_or_create_conversation",
     "close_expired_conversations",
     "save_message",
+    "save_messages_batch",
     "get_recent_messages",
     "list_conversations",
     "get_conversation_by_session",
