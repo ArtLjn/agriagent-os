@@ -17,7 +17,7 @@ export interface DataFlywheelSample {
   quality_labels: DataFlywheelLabel[];
   annotation_status: string;
   session_id: string | null;
-  turn_id: string | null;
+  turn_id: number;
   request_id: string | null;
   user_input_preview: string | null;
   assistant_reply_preview: string | null;
@@ -26,13 +26,13 @@ export interface DataFlywheelSample {
   token_total: number | null;
   latency_ms: number | null;
   source_type: string;
-  created_at: string;
+  created_at: string | null;
 }
 
 export interface DataFlywheelSampleListParams {
   sample_type?: string;
   label?: DataFlywheelLabel | string;
-  annotation_status?: string;
+  unannotated_only?: boolean;
   session_id?: string;
   request_id?: string;
   limit?: number;
@@ -41,7 +41,7 @@ export interface DataFlywheelSampleListParams {
 
 export interface DataFlywheelSampleListResponse {
   items: DataFlywheelSample[];
-  total?: number;
+  total: number;
 }
 
 export interface DataFlywheelLabelRecord {
@@ -52,7 +52,7 @@ export interface DataFlywheelLabelRecord {
   annotator_id: string | null;
   sample_type?: string;
   session_id?: string | null;
-  turn_id?: string | null;
+  turn_id?: number | null;
   request_id?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -76,18 +76,21 @@ export interface DataFlywheelDetail {
   quality_labels: DataFlywheelLabel[];
   labels: DataFlywheelLabelRecord[];
   messages: DataFlywheelMessage[];
-  turn: unknown;
-  router_decision: unknown;
-  tool_events: unknown[];
-  pending_lifecycle: unknown[];
-  debug_export: unknown;
+  turn: Record<string, unknown> | null;
+  router_decision: Record<string, unknown> | null;
+  tool_events: Array<Record<string, unknown>>;
+  pending_lifecycle: Array<Record<string, unknown>>;
+  debug_export: Record<string, unknown> | null;
   source: DataFlywheelSource;
 }
 
 export interface AddSampleLabelRequest {
   label: DataFlywheelLabel;
+  sample_type?: string;
+  session_id?: string;
+  turn_id?: number;
+  request_id?: string;
   comment?: string | null;
-  annotator_id?: string | null;
 }
 
 export interface ExportJsonlResponse {
@@ -101,11 +104,13 @@ export interface CaseDraft {
   source_sample_id: string;
   target_type: string;
   status: string;
-  case_json: unknown;
+  case_json: Record<string, unknown>;
   created_by: string | null;
   created_at?: string;
   updated_at?: string;
 }
+
+export type CaseDraftTargetType = 'simulation' | 'evaluation_replay';
 
 const samplePath = (sampleId: string) => `/admin/data-flywheel/samples/${encodeURIComponent(sampleId)}`;
 
@@ -144,7 +149,7 @@ export async function exportSampleJsonl(sampleId: string): Promise<ExportJsonlRe
   return response.data;
 }
 
-export async function createCaseDraft(sampleId: string, targetType: string): Promise<CaseDraft> {
+export async function createCaseDraft(sampleId: string, targetType: CaseDraftTargetType): Promise<CaseDraft> {
   const response = await apiClient.post<CaseDraft>(`${samplePath(sampleId)}/case-draft`, {
     target_type: targetType,
   });

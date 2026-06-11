@@ -30,7 +30,7 @@ describe('dataFlywheel api', () => {
             quality_labels: ['good_reply'],
             annotation_status: 'unlabeled',
             session_id: 's:1',
-            turn_id: 'turn:1',
+            turn_id: 1,
             request_id: 'req:1',
             user_input_preview: '查一下天气',
             assistant_reply_preview: '今天适合下地',
@@ -49,7 +49,7 @@ describe('dataFlywheel api', () => {
     const params = {
       session_id: 's:1',
       label: 'good_reply',
-      annotation_status: 'unlabeled',
+      unannotated_only: true,
       limit: 20,
       offset: 0,
     };
@@ -100,7 +100,6 @@ describe('dataFlywheel api', () => {
     const body = {
       label: 'bad_reply' as const,
       comment: '答非所问',
-      annotator_id: 'admin',
     };
 
     const result = await addSampleLabel('turn:1:s:1', body);
@@ -123,7 +122,6 @@ describe('dataFlywheel api', () => {
     const body = {
       label: 'needs_regression' as const,
       comment: '需要回归',
-      annotator_id: 'admin',
     };
 
     const result = await markBadCase('turn:1:s:1', body);
@@ -154,17 +152,17 @@ describe('dataFlywheel api', () => {
         id: 12,
         draft_id: 'draft:1',
         source_sample_id: 'turn:1:s:1',
-        target_type: 'regression',
+        target_type: 'evaluation_replay',
         status: 'draft',
         case_json: { sample_id: 'turn:1:s:1' },
         created_by: 'admin',
       },
     });
 
-    const result = await createCaseDraft('turn:1:s:1', 'regression');
+    const result = await createCaseDraft('turn:1:s:1', 'evaluation_replay');
 
     expect(mockedApiClient.post).toHaveBeenCalledWith('/admin/data-flywheel/samples/turn%3A1%3As%3A1/case-draft', {
-      target_type: 'regression',
+      target_type: 'evaluation_replay',
     });
     expect(result.draft_id).toBe('draft:1');
   });
