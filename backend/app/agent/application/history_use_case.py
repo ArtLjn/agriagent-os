@@ -11,6 +11,7 @@ from app.schemas.agent import (
     ConversationListItem,
     ConversationMessageItem,
     PendingActionResponse,
+    PendingPlanResponse,
     ReportHistoryItem,
     ReportListResponse,
 )
@@ -130,6 +131,7 @@ def list_message_items(
     for message in messages:
         skills = None
         pending_action = None
+        pending_plan = None
         meta_obj = message.meta_json if isinstance(message.meta_json, dict) else None
         if meta_obj is None and message.meta:
             try:
@@ -143,6 +145,9 @@ def list_message_items(
             pending_raw = meta_obj.get("pending_action")
             if pending_raw:
                 pending_action = PendingActionResponse.model_validate(pending_raw)
+            pending_plan_raw = meta_obj.get("pending_plan")
+            if pending_plan_raw:
+                pending_plan = PendingPlanResponse.model_validate(pending_plan_raw)
         result.append(
             ConversationMessageItem(
                 id=message.id,
@@ -150,6 +155,7 @@ def list_message_items(
                 content=message.content,
                 skills=skills,
                 pending_action=pending_action,
+                pending_plan=pending_plan,
                 created_at=message.created_at,
             )
         )

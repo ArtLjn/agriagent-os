@@ -31,11 +31,21 @@ class PendingActionResponse(BaseModel):
     context: PendingActionContext | None = None
 
 
+class PendingPlanResponse(BaseModel):
+    """待确认计划信息，供前端展示确认 UI。"""
+
+    plan_id: str
+    status: str = "pending"
+    raw_user_input: str = ""
+    steps: list[dict] = []
+
+
 class ChatResponse(BaseModel):
     """Agent 对话响应。"""
 
     reply: str
     pending_action: PendingActionResponse | None = None
+    pending_plan: PendingPlanResponse | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -137,5 +147,6 @@ class ConversationMessageItem(BaseModel):
     content: str
     skills: list[str] | None = None
     pending_action: PendingActionResponse | None = None
+    pending_plan: PendingPlanResponse | None = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

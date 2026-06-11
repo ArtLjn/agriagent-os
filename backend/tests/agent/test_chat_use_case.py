@@ -395,6 +395,35 @@ async def test_stream_chat_handles_pending_without_legacy_service_or_advisor():
     )
 
 
+async def test_get_skill_names_falls_back_to_fresh_session(db_session, monkeypatch):
+    """trace flush 使用独立 session 写入时，读取 skills 不受当前事务快照影响。"""
+    from app.agent.application import chat_use_case
+    from app.models.trace import TraceRecord
+
+    db_session.add(
+        TraceRecord(
+            request_id="req-fresh-trace",
+            farm_id=1,
+            node_type="skill_call",
+            node_name="get_weather_forecast",
+            status="success",
+        )
+    )
+    db_session.commit()
+    empty_current_db = MagicMock()
+    empty_current_db.query.return_value.filter.return_value.filter.return_value.distinct.return_value.all.return_value = []
+    monkeypatch.setattr(
+        chat_use_case,
+        "SessionLocal",
+        lambda: db_session,
+        raising=False,
+    )
+
+    assert chat_use_case._get_skill_names(empty_current_db, "req-fresh-trace") == [
+        "get_weather_forecast"
+    ]
+
+
 async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():
     """pending 未处理时 Application 直接调用 advisor 流并继续 SSE 收尾。"""
     db = MagicMock()

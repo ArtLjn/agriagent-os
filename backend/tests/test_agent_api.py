@@ -246,6 +246,44 @@ class TestAgentHistory:
 
         remove_pending(farm.id, session_id=session_id)
 
+    def test_conversation_messages_include_pending_plan(self, db_session) -> None:
+        """历史会话消息应保留 pending_plan，前端不再只靠文案正则判断。"""
+        import json
+
+        from app.agent.application.history_use_case import list_message_items
+        from app.models.conversation import Conversation, ConversationMessage
+        from app.models.farm import Farm
+
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
+        session_id = "sess-pending-plan-history"
+        conversation = Conversation(
+            farm_id=farm.id,
+            user_id=farm.user_id,
+            session_id=session_id,
+        )
+        db_session.add(conversation)
+        db_session.commit()
+        db_session.refresh(conversation)
+        pending_plan = {
+            "plan_id": "plan-1",
+            "status": "pending",
+            "steps": [{"skill_name": "manage_workers"}],
+        }
+        db_session.add(
+            ConversationMessage(
+                conversation_id=conversation.id,
+                role="assistant",
+                content="请确认将执行 1 步",
+                meta=json.dumps({"pending_plan": pending_plan}, ensure_ascii=False),
+            )
+        )
+        db_session.commit()
+
+        items = list_message_items(db_session, farm=farm, session_id=session_id)
+
+        assert items[0].pending_plan is not None
+        assert items[0].pending_plan.plan_id == "plan-1"
+
 
 class TestAgentTraceFilter:
     """验证 trace 查询只查 skill_call 类型。"""

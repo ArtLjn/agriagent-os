@@ -12,8 +12,9 @@ from app.agent.advisor import invoke_advisor, stream_advisor
 from app.agent.application.session_flywheel import SessionFlywheelRecorder
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.llm import LlmNotConfiguredError
+from app.core.database import SessionLocal
 from app.core.logger import request_id_var
-from app.infra.pending_actions import get_pending
+from app.infra.pending_actions import get_pending, get_pending_plan
 from app.memory.service import get_memory_service
 from app.models.agent_record import AgentRecord
 from app.models.conversation import Conversation
@@ -25,6 +26,7 @@ from app.schemas.agent import (
     ChatResponse,
     PendingActionContext,
     PendingActionResponse,
+    PendingPlanResponse,
 )
 from app.services.conversation_service import get_or_create_conversation
 from app.services.conversation_service import ConversationAccessError
@@ -59,6 +61,31 @@ def build_pending_action_response(
             extracted_params=display_params,
             notes=notes,
         ),
+    )
+
+
+def build_pending_plan_response(
+    farm_id: int, session_id: str | None = None
+) -> PendingPlanResponse | None:
+    """构造 pending plan 响应。"""
+    pending_plan = get_pending_plan(farm_id, session_id=session_id)
+    if not pending_plan:
+        return None
+    return PendingPlanResponse(
+        plan_id=pending_plan.plan_id,
+        status=pending_plan.status,
+        raw_user_input=pending_plan.raw_user_input,
+        steps=[
+            {
+                "step_id": step.step_id,
+                "step_index": step.step_index,
+                "skill_name": step.tool_name,
+                "params": step.params,
+                "depends_on": step.depends_on,
+                "status": step.execution_status,
+            }
+            for step in pending_plan.steps
+        ],
     )
 
 
@@ -178,8 +205,13 @@ async def chat(
     pending_action = build_pending_action_response(
         farm.id, session_id=chat_request.session_id
     )
+    pending_plan = build_pending_plan_response(
+        farm.id, session_id=chat_request.session_id
+    )
     if pending_action:
         result.pending_action = pending_action
+    if pending_plan:
+        result.pending_plan = pending_plan
     if conversation and started_turn:
         recorder.finish_turn(
             db,
@@ -189,6 +221,8 @@ async def chat(
             pending_action=pending_action.model_dump(mode="json")
             if pending_action
             else None,
+            pending_plan=pending_plan.model_dump(mode="json") if pending_plan else None,
+            pending_plan_id=pending_plan.plan_id if pending_plan else None,
             selected_tools_count=None,
             tool_calls_count=None,
             token_total=None,
@@ -305,6 +339,14 @@ async def stream_chat_events(
         pending_action = build_pending_action_response(
             farm.id, session_id=chat_request.session_id
         )
+        pending_plan = build_pending_plan_response(
+            farm.id, session_id=chat_request.session_id
+        )
+        skill_names = _merge_skill_names(
+            skill_names,
+            _skill_names_from_pending_decision(decision),
+            _skill_names_from_pending_plan(pending_plan),
+        )
         if conversation and started_turn and full_reply:
             recorder.finish_turn(
                 db,
@@ -314,8 +356,12 @@ async def stream_chat_events(
                 pending_action=pending_action.model_dump(mode="json")
                 if pending_action
                 else None,
+                pending_plan=pending_plan.model_dump(mode="json")
+                if pending_plan
+                else None,
+                pending_plan_id=pending_plan.plan_id if pending_plan else None,
                 selected_tools_count=None,
-                tool_calls_count=None,
+                tool_calls_count=len(skill_names) or None,
                 token_total=None,
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 status="success",
@@ -349,6 +395,8 @@ async def stream_chat_events(
                 pending_action.skill_name,
             )
             yield f"data: {json.dumps({'pending_action': pending_action.model_dump()}, ensure_ascii=False)}\n\n"
+        if pending_plan:
+            yield f"data: {json.dumps({'pending_plan': pending_plan.model_dump()}, ensure_ascii=False)}\n\n"
 
         logger.info(
             "[%s] /chat/stream 完成 | 耗时 %.2fs | reply %d 字符 | skills=%s conversation=%s",
@@ -405,6 +453,18 @@ async def _flush_trace_queue() -> None:
 
 def _get_skill_names(db: Session, request_id: str) -> list[str]:
     """查询当前请求调用的 skill 名称。"""
+    skills = _query_skill_names(db, request_id)
+    if skills:
+        return skills
+    fresh_db = SessionLocal()
+    try:
+        return _query_skill_names(fresh_db, request_id)
+    finally:
+        fresh_db.close()
+
+
+def _query_skill_names(db: Session, request_id: str) -> list[str]:
+    """从指定 DB session 查询 skill_call 名称。"""
     skills = (
         db.query(TraceRecord.node_name)
         .filter(TraceRecord.request_id == request_id)
@@ -413,6 +473,41 @@ def _get_skill_names(db: Session, request_id: str) -> list[str]:
         .all()
     )
     return [s[0] for s in skills if s[0]]
+
+
+def _merge_skill_names(*groups: list[str]) -> list[str]:
+    """按出现顺序合并技能名并去重。"""
+    merged: list[str] = []
+    for group in groups:
+        for name in group:
+            if name and name not in merged:
+                merged.append(name)
+    return merged
+
+
+def _skill_names_from_pending_decision(decision) -> list[str]:
+    """从 pending plan 确认执行结果中提取已执行工具。"""
+    steps = decision.metadata.get("steps") if decision and decision.metadata else None
+    if not isinstance(steps, list):
+        return []
+    return [
+        str(step.get("tool_name"))
+        for step in steps
+        if isinstance(step, dict) and step.get("tool_name")
+    ]
+
+
+def _skill_names_from_pending_plan(
+    pending_plan: PendingPlanResponse | None,
+) -> list[str]:
+    """从待确认计划结构中提取工具名。"""
+    if pending_plan is None:
+        return []
+    return [
+        str(step.get("skill_name"))
+        for step in pending_plan.steps
+        if isinstance(step, dict) and step.get("skill_name")
+    ]
 
 
 def _save_stream_reply(
