@@ -1,15 +1,19 @@
 """Session debug export service 测试。"""
 
+import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
+from app.infra.pending_actions import store_pending_plan
 from app.infra.agent_events import AgentEventWriter
 from app.models.farm import Farm
 from app.services.agent_turn_service import create_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
 from app.services.pending_plan_service import create_pending_plan
 from app.services.session_debug_export_service import build_session_debug_export
+
+pytestmark = pytest.mark.no_db
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -98,3 +102,46 @@ def test_build_session_debug_export_includes_messages_turns_pending_and_events(
     assert result["events"][0]["event_type"] == "message.user"
     assert result["pending_plans"][0]["raw_user_input"] == "停用李一凡"
     db.close()
+
+
+def test_debug_export_includes_pending_plan_created_by_runtime_store(monkeypatch):
+    db = Session()
+
+    class _SessionFactory:
+        def __call__(self):
+            return db
+
+    monkeypatch.setattr("app.infra.pending_actions.SessionLocal", _SessionFactory())
+
+    try:
+        store_pending_plan(
+            farm_id=1,
+            session_id="sess-runtime-pending",
+            raw_user_input="王大妈去5号棚收水稻",
+            router_decision={
+                "selected_tools": ["manage_workers", "create_operation_work_order"]
+            },
+            steps=[
+                {
+                    "tool_name": "manage_workers",
+                    "params": {"name": "王大妈", "daily_wage": 100},
+                    "depends_on": [],
+                },
+                {
+                    "tool_name": "create_operation_work_order",
+                    "params": {"field_name": "5号棚", "crop_name": "水稻"},
+                    "depends_on": ["step-1"],
+                },
+            ],
+        )
+
+        result = build_session_debug_export(
+            db, farm_id=1, session_id="sess-runtime-pending"
+        )
+
+        assert result["pending_plans"][0]["raw_user_input"] == "王大妈去5号棚收水稻"
+        assert result["pending_plans"][0]["steps"][1]["skill_name"] == (
+            "create_operation_work_order"
+        )
+    finally:
+        db.close()

@@ -13,6 +13,7 @@ from app.core.compat import UTC
 
 logger = logging.getLogger(__name__)
 _SAFE_SEGMENT_RE = re.compile(r"[^a-zA-Z0-9_.=-]+")
+_SEQ_CACHE: dict[str, int] = {}
 
 
 @dataclass(frozen=True)
@@ -131,7 +132,13 @@ def _safe_segment(value: str) -> str:
 
 
 def _next_seq(path: Path) -> int:
+    cache_key = str(path.resolve())
+    if cache_key in _SEQ_CACHE:
+        _SEQ_CACHE[cache_key] += 1
+        return _SEQ_CACHE[cache_key]
+
     if not path.exists():
+        _SEQ_CACHE[cache_key] = 1
         return 1
     last_seq = 0
     with path.open("r", encoding="utf-8") as handle:
@@ -142,7 +149,9 @@ def _next_seq(path: Path) -> int:
                 last_seq = int(json.loads(line).get("seq") or last_seq)
             except json.JSONDecodeError:
                 continue
-    return last_seq + 1
+    next_seq = last_seq + 1
+    _SEQ_CACHE[cache_key] = next_seq
+    return next_seq
 
 
 def read_event_segment(

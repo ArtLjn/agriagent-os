@@ -31,6 +31,7 @@ def create_pending_plan(
         status="pending",
         current_step_index=0,
         raw_user_input=raw_user_input,
+        router_decision=router_decision,
         router_decision_json=router_decision,
         expires_at=datetime.now() + timedelta(seconds=ttl_seconds),
     )
@@ -39,9 +40,15 @@ def create_pending_plan(
         db.add(
             AgentPendingPlanStep(
                 plan_id=plan_id,
+                step_id=item.get("step_id") or f"step-{index + 1}",
                 step_index=index,
+                tool_name=item["skill_name"],
                 skill_name=item["skill_name"],
+                params=item.get("params") or {},
                 params_json=item.get("params") or {},
+                depends_on=item.get("depends_on") or [],
+                confirmation_state="pending",
+                execution_status="pending",
                 status="pending",
                 requires_confirmation=item.get("requires_confirmation", True),
                 confirmation_text=item.get("confirmation_text"),
@@ -75,6 +82,9 @@ def get_active_plan(
         return None
     if plan.expires_at is not None and plan.expires_at <= current:
         plan.status = "expired"
+        for step in plan.steps:
+            if step.status == "pending":
+                step.status = "expired"
         db.commit()
         return None
     return plan
@@ -111,7 +121,9 @@ def mark_step_executed(
     plan = db.query(AgentPendingPlan).filter(AgentPendingPlan.plan_id == plan_id).one()
     target = next(step for step in plan.steps if step.step_index == step_index)
     target.status = "executed"
+    target.execution_status = "executed"
     target.result_json = result
+    target.result_payload = result
     next_pending = next((step for step in plan.steps if step.status == "pending"), None)
     if next_pending is None:
         plan.status = "completed"
@@ -134,7 +146,9 @@ def mark_step_failed(
     plan = db.query(AgentPendingPlan).filter(AgentPendingPlan.plan_id == plan_id).one()
     target = next(step for step in plan.steps if step.step_index == step_index)
     target.status = "failed"
+    target.execution_status = "failed"
     target.error_message = error_message
+    target.error_payload = {"error": error_message}
     plan.status = "failed"
     db.commit()
     db.refresh(plan)

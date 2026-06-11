@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -14,6 +15,8 @@ from app.services.pending_plan_service import (
     get_active_plan,
     mark_step_executed,
 )
+
+pytestmark = pytest.mark.no_db
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):

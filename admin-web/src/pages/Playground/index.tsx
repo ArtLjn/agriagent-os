@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
 import { listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
 import type { PendingAction } from '../../api/agent';
+import type { PendingPlan } from '../../api/agent';
 import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
@@ -30,6 +31,7 @@ interface Message {
   content: string;
   skills?: string[];
   pendingAction?: PendingAction | null;
+  pendingPlan?: PendingPlan | null;
 }
 
 interface ChatSessionState {
@@ -102,9 +104,9 @@ function ExecutionStatus({ skills, pendingAction, pendingPlan }: { skills?: stri
 }
 
 /* ── 聊天气泡组件 ── */
-function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; onAction?: (action: string) => void }) {
+function ChatBubble({ role, content, skills, pendingAction, pendingPlan, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: PendingPlan | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
-  const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction });
+  const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction, pendingPlan });
   return (
     <div style={{ marginBottom: 16, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
       {!isUser && (
@@ -161,7 +163,11 @@ function ChatBubble({ role, content, skills, pendingAction, onAction }: { role: 
   );
 }
 
-type StreamChunk = { type: 'content'; data: string } | { type: 'skills'; data: string[] } | { type: 'pending_action'; data: PendingAction };
+type StreamChunk =
+  | { type: 'content'; data: string }
+  | { type: 'skills'; data: string[] }
+  | { type: 'pending_action'; data: PendingAction }
+  | { type: 'pending_plan'; data: PendingPlan };
 
 /* ── SSE 流式对话 ── */
 async function* streamPlaygroundChat(message: string, sessionId: string, simulateUserId?: string | null): AsyncGenerator<StreamChunk> {
@@ -194,6 +200,7 @@ async function* streamPlaygroundChat(message: string, sessionId: string, simulat
         if (obj.content) yield { type: 'content', data: obj.content };
         if (obj.skills) yield { type: 'skills', data: obj.skills };
         if (obj.pending_action) yield { type: 'pending_action', data: obj.pending_action };
+        if (obj.pending_plan) yield { type: 'pending_plan', data: obj.pending_plan };
       } catch (e) {
         if (e instanceof SyntaxError) continue;
         throw e;
@@ -310,6 +317,7 @@ export default function Playground() {
           content: m.content,
           skills: m.skills,
           pendingAction: m.pending_action,
+          pendingPlan: m.pending_plan,
         })),
         timeline: null,
       }));
@@ -334,6 +342,7 @@ export default function Playground() {
         content: m.content,
         skills: m.skills,
         pendingAction: m.pendingAction,
+        pendingPlan: m.pendingPlan,
       }));
       try {
         const persistedMessages = await getConversationMessages(sid, selectedUserId);
@@ -343,6 +352,7 @@ export default function Playground() {
             content: m.content,
             skills: m.skills,
             pendingAction: m.pending_action,
+            pendingPlan: m.pending_plan,
           }));
         }
       } catch {
@@ -419,6 +429,13 @@ export default function Playground() {
           updateSession(targetSessionId, (state) => {
             const next = state.messages.map((item) => (
               item.id === assistantMessage.id ? { ...item, pendingAction: chunk.data } : item
+            ));
+            return { ...state, messages: next };
+          });
+        } else if (chunk.type === 'pending_plan') {
+          updateSession(targetSessionId, (state) => {
+            const next = state.messages.map((item) => (
+              item.id === assistantMessage.id ? { ...item, pendingPlan: chunk.data } : item
             ));
             return { ...state, messages: next };
           });
@@ -627,6 +644,7 @@ export default function Playground() {
               content={m.content}
               skills={m.skills}
               pendingAction={m.pendingAction}
+              pendingPlan={m.pendingPlan}
               onAction={loading ? undefined : (action) => handleSend(action)}
             />
           ))}

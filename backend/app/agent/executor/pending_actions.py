@@ -9,6 +9,8 @@ from app.agent.skills import get_langchain_tools
 from app.infra.pending_actions import (
     PendingAction,
     PendingPlan,
+    _pending,
+    _pending_plans,
     build_confirm_message,
     build_plan_confirm_message,
     detect_user_intent,
@@ -17,6 +19,12 @@ from app.infra.pending_actions import (
     get_pending_plan,
     remove_pending,
     store_pending,
+)
+from app.core.database import SessionLocal
+from app.services.pending_plan_service import (
+    cancel_active_plan,
+    mark_step_executed,
+    mark_step_failed,
 )
 from app.infra.skill_cache import clear_cache as clear_skill_cache
 from app.infra.trace_collector import get_collector
@@ -223,12 +231,17 @@ async def _confirm_pending_plan(
 
     for step in sorted(plan.steps, key=lambda item: item.step_index):
         params = _normalize_pending_plan_step_params(step.tool_name, step.params)
-        result = await _execute_write_skill(
-            farm_id=farm_id,
-            skill_name=step.tool_name,
-            params=params,
-            farm_uid=farm_uid,
-        )
+        try:
+            result = await _execute_write_skill(
+                farm_id=farm_id,
+                skill_name=step.tool_name,
+                params=params,
+                farm_uid=farm_uid,
+            )
+        except Exception as exc:
+            _mark_pending_plan_step_failed(plan.plan_id, step.step_index, str(exc))
+            raise
+        _mark_pending_plan_step_executed(plan.plan_id, step.step_index, result)
         results.append(result)
         cache_groups = _get_metadata_cache_groups(
             step.tool_name,
@@ -244,13 +257,67 @@ async def _confirm_pending_plan(
             }
         )
 
-    remove_pending(farm_id, session_id=session_id)
+    _clear_runtime_pending_plan_cache(farm_id, session_id)
     reply_lines = ["已执行："]
     reply_lines.extend(f"{index}. {result}" for index, result in enumerate(results, 1))
     return PendingActionDecision.confirmed(
         "\n".join(reply_lines),
         metadata={"steps": cleared_groups_by_step},
     )
+
+
+def _mark_pending_plan_step_executed(
+    plan_id: str,
+    step_index: int,
+    result: str,
+) -> None:
+    db = SessionLocal()
+    try:
+        mark_step_executed(
+            db,
+            plan_id=plan_id,
+            step_index=step_index,
+            result={"message": result},
+        )
+    finally:
+        db.close()
+
+
+def _mark_pending_plan_step_failed(
+    plan_id: str,
+    step_index: int,
+    error_message: str,
+) -> None:
+    db = SessionLocal()
+    try:
+        mark_step_failed(
+            db,
+            plan_id=plan_id,
+            step_index=step_index,
+            error_message=error_message,
+        )
+    finally:
+        db.close()
+
+
+def _clear_runtime_pending_plan_cache(
+    farm_id: int,
+    session_id: str | None,
+) -> None:
+    _pending.pop((farm_id, session_id or None), None)
+    _pending_plans.pop((farm_id, session_id or None), None)
+
+
+def _cancel_pending_plan(
+    farm_id: int,
+    session_id: str | None,
+) -> None:
+    db = SessionLocal()
+    try:
+        cancel_active_plan(db, farm_id=farm_id, session_id=session_id)
+    finally:
+        db.close()
+    _clear_runtime_pending_plan_cache(farm_id, session_id)
 
 
 def _normalize_pending_plan_step_params(tool_name: str, params: dict) -> dict:
@@ -290,7 +357,7 @@ async def handle_pending_action(
                 )
 
             if intent == "cancel":
-                remove_pending(farm_id, session_id=session_id)
+                _cancel_pending_plan(farm_id, session_id)
                 return PendingActionDecision.canceled()
 
             confirm = build_plan_confirm_message(pending_plan.steps)
@@ -298,7 +365,7 @@ async def handle_pending_action(
             return PendingActionDecision.modified(reply=reply, handled=True)
         except Exception as exc:
             logger.exception("执行 pending plan 失败")
-            remove_pending(farm_id, session_id=session_id)
+            _clear_runtime_pending_plan_cache(farm_id, session_id)
             return PendingActionDecision.failed(f"执行失败：{exc}")
 
     pending = get_pending(farm_id, session_id=session_id)

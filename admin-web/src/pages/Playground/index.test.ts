@@ -61,4 +61,18 @@ describe('pending plan confirmation controls', () => {
       }),
     ).toBe(false);
   });
+
+  it('识别结构化 pending_plan 字段并允许确认', () => {
+    expect(
+      canConfirmAssistantMessage({
+        role: 'assistant',
+        content: '我将执行这些步骤，请确认。',
+        pendingAction: null,
+        pending_plan: {
+          plan_id: 'plan-1',
+          steps: [{ skill_name: 'manage_workers' }],
+        },
+      }),
+    ).toBe(true);
+  });
 });

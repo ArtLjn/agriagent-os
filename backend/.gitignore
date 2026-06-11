@@ -5,3 +5,4 @@ __pycache__/
 logs/
 logs/
 providers.json
+/data/agent-events/

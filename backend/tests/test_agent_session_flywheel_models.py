@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -10,6 +11,8 @@ from app.models.agent_turn import AgentTurn
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.farm import Farm
 from app.models.pending_plan import AgentPendingPlan, AgentPendingPlanStep
+
+pytestmark = pytest.mark.no_db
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):

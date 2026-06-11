@@ -11,13 +11,13 @@ from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_action_presenter import build_plan_confirm_message
 from app.infra.pending_actions import (
     PENDING_MARKER,
+    _pending_plans,
     get_pending_plan,
     remove_pending,
     store_pending_plan,
 )
-
-
-pytestmark = pytest.mark.no_db
+from app.models.farm import Farm
+from app.models.pending_plan import AgentPendingPlan
 
 
 def _tool(name: str, description: str = ""):
@@ -56,10 +56,25 @@ def _store_session4_plan() -> None:
 
 
 @pytest.fixture(autouse=True)
-def clean_pending_plan():
+def clean_pending_plan(db_session, monkeypatch):
+    if db_session.query(Farm).filter(Farm.id == 2).first() is None:
+        db_session.add(Farm(id=2, name="恢复测试农场"))
+        db_session.commit()
+    monkeypatch.setattr(
+        "app.infra.pending_actions.SessionLocal",
+        lambda: db_session,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.agent.executor.pending_actions.SessionLocal",
+        lambda: db_session,
+        raising=False,
+    )
     remove_pending(1)
+    remove_pending(2)
     yield
     remove_pending(1)
+    remove_pending(2)
 
 
 @pytest.mark.asyncio
@@ -328,6 +343,79 @@ async def test_handle_pending_plan_confirm_normalizes_legacy_list_args():
         },
         farm_uid="farm-uid-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_handle_pending_plan_confirm_recovers_plan_from_database(
+    db_session, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.infra.pending_actions.SessionLocal",
+        lambda: db_session,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.agent.executor.pending_actions.SessionLocal",
+        lambda: db_session,
+        raising=False,
+    )
+    store_pending_plan(
+        farm_id=2,
+        session_id="recover-session",
+        raw_user_input="王大妈去5号棚收水稻",
+        router_decision={
+            "selected_tools": ["manage_workers", "create_operation_work_order"]
+        },
+        steps=[
+            {
+                "step_id": "create_worker",
+                "tool_name": "manage_workers",
+                "params": {"action": "create", "name": "王大妈"},
+            },
+            {
+                "step_id": "create_work_order",
+                "tool_name": "create_operation_work_order",
+                "params": {"workers": ["王大妈"], "unit_names": ["5号棚"]},
+            },
+        ],
+    )
+    _pending_plans.clear()
+
+    with patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        mock_execute.side_effect = ["已创建工人", "已创建农事作业单"]
+        decision = await handle_pending_action(
+            farm_id=2,
+            session_id="recover-session",
+            message="确认",
+            farm_uid="farm-uid-2",
+        )
+
+    assert decision.status == "confirmed"
+    assert get_pending_plan(2, session_id="recover-session") is None
+    db_plan = (
+        db_session.query(AgentPendingPlan)
+        .filter_by(farm_id=2, session_id="recover-session")
+        .one()
+    )
+    assert db_plan.status == "completed"
+    assert [step.status for step in db_plan.steps] == ["executed", "executed"]
+    assert mock_execute.await_args_list == [
+        call(
+            farm_id=2,
+            skill_name="manage_workers",
+            params={"action": "create", "name": "王大妈"},
+            farm_uid="farm-uid-2",
+        ),
+        call(
+            farm_id=2,
+            skill_name="create_operation_work_order",
+            params={"workers": "王大妈", "unit_names": "5号棚"},
+            farm_uid="farm-uid-2",
+        ),
+    ]
 
 
 def test_build_plan_confirm_message_summarizes_multi_step_plan():

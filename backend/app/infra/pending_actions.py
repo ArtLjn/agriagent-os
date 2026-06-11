@@ -6,14 +6,17 @@ import time
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime
 
 from langchain_core.messages import ToolMessage
 
+from app.core.database import SessionLocal
 from app.infra.pending_action_presenter import (
     build_confirm_message,
     build_confirmation_context,
     build_plan_confirm_message,
 )
+from app.services import pending_plan_service
 
 _CONFIRM_PATTERNS = re.compile(r"(确认|好的|是的|没问题|对)")
 _CANCEL_PATTERNS = re.compile(r"(算了|取消|不要了|不需要了)")
@@ -198,10 +201,34 @@ def store_pending_plan(
     steps: list[dict | PendingPlanStep],
 ) -> str:
     """存储 pending plan，返回 plan_id。"""
-    plan_id = uuid.uuid4().hex
     pending_steps = [
         _coerce_pending_plan_step(step, index) for index, step in enumerate(steps)
     ]
+    db = SessionLocal()
+    try:
+        db_plan = pending_plan_service.create_pending_plan(
+            db,
+            farm_id=farm_id,
+            session_id=session_id,
+            raw_user_input=raw_user_input,
+            router_decision=deepcopy(router_decision),
+            steps=[
+                {
+                    "skill_name": step.tool_name,
+                    "params": deepcopy(step.params),
+                    "requires_confirmation": True,
+                    "confirmation_text": None,
+                    "step_id": step.step_id,
+                    "depends_on": deepcopy(step.depends_on),
+                }
+                for step in pending_steps
+            ],
+            ttl_seconds=_TIMEOUT_SECONDS,
+        )
+        plan_id = db_plan.plan_id
+    finally:
+        db.close()
+
     _pending_plans[_pending_key(farm_id, session_id)] = PendingPlan(
         plan_id=plan_id,
         farm_id=farm_id,
@@ -281,14 +308,18 @@ def get_pending_plan(farm_id: int, session_id: str | None = None) -> PendingPlan
     key = _pending_key(farm_id, session_id)
     plan = _pending_plans.get(key)
     if plan is None:
-        return None
+        plan = _load_pending_plan_from_db(farm_id, session_id)
+        if plan is None:
+            return None
+        _pending_plans[key] = plan
     if plan.expires_at is not None and time.time() > plan.expires_at:
         logger.warning(
             "Pending plan 已超时 | farm_id=%d | plan_id=%s",
             farm_id,
             plan.plan_id,
         )
-        del _pending_plans[key]
+        _expire_pending_plan_in_db(farm_id, session_id)
+        _pending_plans.pop(key, None)
         return None
     logger.debug(
         "Pending plan 获取 | farm_id=%d | plan_id=%s",
@@ -305,10 +336,123 @@ def remove_pending(farm_id: int, session_id: str | None = None) -> None:
             _pending.pop(key, None)
         for key in [key for key in _pending_plans if key[0] == farm_id]:
             _pending_plans.pop(key, None)
+        _cancel_pending_plan_in_db(farm_id, session_id=None)
     else:
         _pending.pop(_pending_key(farm_id, session_id), None)
         _pending_plans.pop(_pending_key(farm_id, session_id), None)
+        _cancel_pending_plan_in_db(farm_id, session_id=session_id)
     logger.debug("Pending action 已删除 | farm_id=%d", farm_id)
+
+
+def _load_pending_plan_from_db(
+    farm_id: int,
+    session_id: str | None,
+) -> PendingPlan | None:
+    db = SessionLocal()
+    try:
+        db_plan = pending_plan_service.get_active_plan(
+            db,
+            farm_id=farm_id,
+            session_id=session_id,
+        )
+        if db_plan is None:
+            return None
+        return _db_plan_to_runtime_plan(db_plan)
+    finally:
+        db.close()
+
+
+def _db_plan_to_runtime_plan(db_plan) -> PendingPlan:
+    created_at = _datetime_to_timestamp(getattr(db_plan, "created_at", None))
+    expires_at = _datetime_to_timestamp(getattr(db_plan, "expires_at", None))
+    return PendingPlan(
+        plan_id=db_plan.plan_id,
+        farm_id=db_plan.farm_id,
+        session_id=db_plan.session_id,
+        status=db_plan.status,
+        current_step_index=db_plan.current_step_index,
+        raw_user_input=db_plan.raw_user_input or "",
+        router_decision=deepcopy(
+            db_plan.router_decision_json
+            or getattr(db_plan, "router_decision", None)
+            or {}
+        ),
+        steps=[
+            PendingPlanStep(
+                step_id=step.step_id or f"step-{step.step_index + 1}",
+                step_index=step.step_index,
+                tool_name=step.skill_name or step.tool_name,
+                params=deepcopy(step.params_json or step.params or {}),
+                depends_on=deepcopy(step.depends_on or []),
+                confirmation_state="pending" if step.requires_confirmation else "none",
+                execution_status=step.status,
+                result_payload=deepcopy(step.result_json or step.result_payload),
+                error_payload=(
+                    {"error": step.error_message}
+                    if step.error_message
+                    else deepcopy(step.error_payload)
+                ),
+            )
+            for step in db_plan.steps
+        ],
+        created_at=created_at,
+        expires_at=expires_at,
+    )
+
+
+def _datetime_to_timestamp(value) -> float:
+    if isinstance(value, datetime):
+        return value.timestamp()
+    return time.time()
+
+
+def _cancel_pending_plan_in_db(farm_id: int, session_id: str | None) -> None:
+    db = SessionLocal()
+    try:
+        if session_id is None:
+            plans = (
+                db.query(pending_plan_service.AgentPendingPlan)
+                .filter(
+                    pending_plan_service.AgentPendingPlan.farm_id == farm_id,
+                    pending_plan_service.AgentPendingPlan.status.in_(
+                        pending_plan_service._ACTIVE_STATUSES
+                    ),
+                )
+                .all()
+            )
+            for plan in plans:
+                plan.status = "cancelled"
+                for step in plan.steps:
+                    if step.status == "pending":
+                        step.status = "cancelled"
+            db.commit()
+        else:
+            pending_plan_service.cancel_active_plan(
+                db,
+                farm_id=farm_id,
+                session_id=session_id,
+            )
+    finally:
+        db.close()
+
+
+def _expire_pending_plan_in_db(farm_id: int, session_id: str | None) -> None:
+    db = SessionLocal()
+    try:
+        plan = pending_plan_service.get_active_plan(
+            db,
+            farm_id=farm_id,
+            session_id=session_id,
+            now=datetime.fromtimestamp(time.time()),
+        )
+        if plan is not None:
+            plan.status = "expired"
+            for step in plan.steps:
+                if step.status == "pending":
+                    step.status = "expired"
+            db.commit()
+    finally:
+        db.close()
 
 
 def is_write_skill(skill_name: str) -> bool:

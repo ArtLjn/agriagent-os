@@ -1,5 +1,6 @@
 """Session flywheel orchestration 测试。"""
 
+import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -10,6 +11,8 @@ from app.agent.application.session_flywheel import (
 from app.core.database import Base
 from app.models.farm import Farm
 from app.services.conversation_service import get_or_create_conversation
+
+pytestmark = pytest.mark.no_db
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):

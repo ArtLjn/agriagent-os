@@ -7,9 +7,25 @@ from app.infra.pending_actions import (
     remove_pending,
     store_pending_plan,
 )
+from app.models.farm import Farm
+from app.models.pending_plan import AgentPendingPlan
 
 
-pytestmark = pytest.mark.no_db
+@pytest.fixture(autouse=True)
+def db_backed_pending_plan(db_session, monkeypatch):
+    if db_session.query(Farm).filter(Farm.id == 2).first() is None:
+        db_session.add(Farm(id=2, name="其他农场"))
+        db_session.commit()
+    monkeypatch.setattr(
+        "app.infra.pending_actions.SessionLocal",
+        lambda: db_session,
+        raising=False,
+    )
+    remove_pending(1)
+    remove_pending(2)
+    yield
+    remove_pending(1)
+    remove_pending(2)
 
 
 def test_store_pending_plan_keeps_steps_and_dependencies():
@@ -147,7 +163,7 @@ def test_remove_pending_by_session_keeps_same_farm_other_sessions():
     remove_pending(1, session_id="session-b")
 
 
-def test_get_pending_plan_removes_expired_plan(monkeypatch):
+def test_get_pending_plan_removes_expired_plan(db_session, monkeypatch):
     remove_pending(1)
     monkeypatch.setattr("app.infra.pending_actions.time.time", lambda: 1_000.0)
     store_pending_plan(
@@ -162,3 +178,10 @@ def test_get_pending_plan_removes_expired_plan(monkeypatch):
 
     assert get_pending_plan(1, session_id="session-a") is None
     assert get_pending_plan(1, session_id="session-a") is None
+    db_plan = (
+        db_session.query(AgentPendingPlan)
+        .filter_by(farm_id=1, session_id="session-a")
+        .one()
+    )
+    assert db_plan.status == "expired"
+    assert [step.status for step in db_plan.steps] == ["expired"]

@@ -67,10 +67,17 @@ export interface PendingAction {
   context?: PendingActionContext | null;
 }
 
+export interface PendingPlan {
+  plan_id?: string;
+  status?: string;
+  steps?: unknown[];
+}
+
 export type StreamChunk =
   | { type: 'content'; data: string }
   | { type: 'skills'; data: string[] }
-  | { type: 'pending_action'; data: PendingAction };
+  | { type: 'pending_action'; data: PendingAction }
+  | { type: 'pending_plan'; data: PendingPlan };
 
 export async function* streamChat(message: string, cycleId?: number, sessionId?: string): AsyncGenerator<StreamChunk> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -102,6 +109,7 @@ export async function* streamChat(message: string, cycleId?: number, sessionId?:
         if (obj.content) yield { type: 'content', data: obj.content };
         if (obj.skills) yield { type: 'skills', data: obj.skills };
         if (obj.pending_action) yield { type: 'pending_action', data: obj.pending_action };
+        if (obj.pending_plan) yield { type: 'pending_plan', data: obj.pending_plan };
       } catch (e) {
         if (e instanceof SyntaxError) continue;
         throw e;
@@ -145,6 +153,7 @@ export interface ConversationMessage {
   content: string;
   skills?: string[];
   pending_action?: PendingAction | null;
+  pending_plan?: PendingPlan | null;
   created_at: string;
 }
 
