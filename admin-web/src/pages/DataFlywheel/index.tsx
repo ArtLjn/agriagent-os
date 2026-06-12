@@ -473,6 +473,11 @@ export default function DataFlywheel() {
     setActiveArchiveKey(key);
     clearSelection();
     loadSessionReview(key);
+    const problemTurn = latestConfirmedProblemTurn(samples, key);
+    if (problemTurn) {
+      loadDetail(problemTurn);
+      return;
+    }
     loadSessionAnnotations(key);
   };
 
@@ -673,6 +678,12 @@ function sessionAnnotationPlaceholder(target: AnnotationTarget): DataFlywheelSam
 
 function sessionArchiveKey(sample: DataFlywheelSample) {
   return sample.session_id ?? 'unknown-session';
+}
+
+function latestConfirmedProblemTurn(samples: DataFlywheelSample[], sessionKey: string) {
+  return samples
+    .filter((sample) => sessionArchiveKey(sample) === sessionKey && hasTurnConfirmedIssue(sample))
+    .sort((left, right) => right.turn_id - left.turn_id)[0];
 }
 
 function hasTurnConfirmedIssue(sample: DataFlywheelSample) {

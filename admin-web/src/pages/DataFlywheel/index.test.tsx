@@ -489,6 +489,28 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('完整对话记录')).toBeInTheDocument();
   });
 
+  it('从问题会话归档进入时优先打开已标注的问题 turn', async () => {
+    const confirmedBadSample: DataFlywheelSample = {
+      ...anotherSample,
+      quality_labels: ['bad_reply'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [sample, confirmedBadSample], total: 2 });
+    mockedDetail.mockResolvedValue(anotherDetail);
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
+    fireEvent.click(screen.getByTestId('problem-session-session-b'));
+
+    await waitFor(() => {
+      expect(mockedDetail).toHaveBeenCalledWith(confirmedBadSample.sample_id);
+    });
+    expect(screen.getByText('质量标签 · turn #4')).toBeInTheDocument();
+    expect(screen.getAllByText('第二条样本备注').length).toBeGreaterThan(0);
+  });
+
   it('点击已标注问题后会按单个会话归档显示会话级问题标注', async () => {
     const sessionLevelBadSample: DataFlywheelSample = {
       ...sample,
