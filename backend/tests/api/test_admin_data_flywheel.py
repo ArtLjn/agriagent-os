@@ -322,6 +322,45 @@ def test_build_case_draft_returns_source_sample_metadata(db_session, tmp_path) -
     assert data["case_json"]["metadata"]["source_sample_id"] == sample_id
 
 
+def test_build_case_draft_api_returns_issue_candidate_assertions(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels",
+            json={"label": "needs_regression"},
+            headers=admin_headers(),
+        )
+        resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/case-draft",
+            json={"target_type": "evaluation_replay"},
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["case_json"]["metadata"]["issue_candidates"] == [
+        {
+            "type": "pending_missed",
+            "severity": "high",
+            "reason": "router 选择了写操作工具，但 pending lifecycle 中没有对应的确认计划",
+            "evidence": "create_operation_work_order",
+            "suggested_label": "pending_missed",
+        }
+    ]
+    assert data["case_json"]["issue_assertions"] == [
+        {
+            "type": "pending_missed",
+            "expected": "写操作必须先创建 pending plan，用户确认后才能执行",
+            "evidence": "create_operation_work_order",
+        }
+    ]
+
+
 def test_invalid_label_returns_code_detail(db_session, tmp_path) -> None:
     turn = _seed_turn(db_session, tmp_path)
     sample_id = _sample_id(turn)
