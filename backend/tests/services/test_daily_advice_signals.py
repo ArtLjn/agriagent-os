@@ -165,7 +165,7 @@ def test_render_candidate_context_uses_source_type_instead_of_category():
     assert "source=weather " not in context
 
 
-def test_collect_finance_candidates_skips_debt_without_due_date_and_labor_debt(
+async def test_collect_finance_candidates_skips_debt_without_due_date_and_labor_debt(
     db_session,
 ):
     today = date(2026, 6, 12)
@@ -193,12 +193,14 @@ def test_collect_finance_candidates_skips_debt_without_due_date_and_labor_debt(
     db_session.add_all([debt_without_due_date, labor_debt])
     db_session.commit()
 
-    candidates = collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
 
     assert [item.category for item in candidates] == []
 
 
-def test_collect_finance_candidates_includes_overdue_and_due_soon_debts(db_session):
+async def test_collect_finance_candidates_includes_overdue_and_due_soon_debts(
+    db_session,
+):
     today = date(2026, 6, 12)
     overdue_debt = CostRecord(
         farm_id=1,
@@ -247,7 +249,7 @@ def test_collect_finance_candidates_includes_overdue_and_due_soon_debts(db_sessi
     db_session.add_all([overdue_debt, due_soon_debt, later_debt, settled_debt])
     db_session.commit()
 
-    candidates = collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
     finance_candidates = [item for item in candidates if item.category == "finance"]
 
     assert [item.source_id for item in finance_candidates] == [
@@ -262,7 +264,7 @@ def test_collect_finance_candidates_includes_overdue_and_due_soon_debts(db_sessi
     assert "300.00" in finance_candidates[1].detail_hint
 
 
-def test_collect_operation_candidates_includes_overdue_today_and_next_three_days(
+async def test_collect_operation_candidates_includes_overdue_today_and_next_three_days(
     db_session,
 ):
     today = date(2026, 6, 12)
@@ -315,7 +317,7 @@ def test_collect_operation_candidates_includes_overdue_today_and_next_three_days
     )
     db_session.commit()
 
-    candidates = collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
     operation_candidates = [item for item in candidates if item.category == "operation"]
 
     assert [item.source_id for item in operation_candidates] == [

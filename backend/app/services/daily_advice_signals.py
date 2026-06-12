@@ -138,7 +138,7 @@ def fingerprint_candidates(candidates: list[DailyAdviceCandidate]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 
-def collect_daily_advice_candidates(
+async def collect_daily_advice_candidates(
     db: Session,
     *,
     farm_id: int,
