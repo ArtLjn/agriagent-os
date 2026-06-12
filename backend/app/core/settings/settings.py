@@ -15,6 +15,7 @@ from app.core.settings.models import (
     DatabaseConfig,
     LangSmithConfig,
     RateLimitConfig,
+    ReflectionConfig,
     SecretsConfig,
     ServerConfig,
     TokenQuotaConfig,
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     langsmith: LangSmithConfig = LangSmithConfig()
     auth: AuthConfig = AuthConfig()
     trace: TraceConfig = TraceConfig()
+    reflection: ReflectionConfig = ReflectionConfig()
     token_quota: TokenQuotaConfig = TokenQuotaConfig()
     secrets: SecretsConfig = SecretsConfig()
     app: AppConfig = AppConfig()
