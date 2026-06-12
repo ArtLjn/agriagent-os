@@ -24,11 +24,13 @@ ALLOWED_LABELS = {
     "wrong_tool_selection",
     "pending_missed",
     "hallucinated_execution",
+    "tool_error_ignored",
     "missing_wage",
     "disabled_worker_used",
     "needs_regression",
     "off_topic",
     "sensitive_info_leak",
+    "unclear_intent",
     "not_actionable",
 }
 SAMPLE_TYPE_SESSION_TURN = "session_turn"

@@ -337,6 +337,34 @@ def test_invalid_label_and_farm_mismatch_raise_value_error(tmp_path):
     db.close()
 
 
+def test_new_issue_candidate_labels_can_be_saved(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+
+    tool_error_label = add_sample_label(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        label="tool_error_ignored",
+        annotator_id="admin-1",
+    )
+    unclear_label = add_sample_label(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        label="unclear_intent",
+        annotator_id="admin-1",
+    )
+
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert tool_error_label["label"] == "tool_error_ignored"
+    assert unclear_label["label"] == "unclear_intent"
+    assert detail["quality_labels"] == ["tool_error_ignored", "unclear_intent"]
+    db.close()
+
+
 def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     db = Session()
     turn = _seed_turn(db, tmp_path)
