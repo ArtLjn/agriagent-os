@@ -13,6 +13,7 @@ import {
   listDataFlywheelSamples,
   markBadCase,
   deleteSampleLabel,
+  resolveSampleLabel,
   syncDataFlywheelSessions,
 } from '../../api/dataFlywheel';
 import type {
@@ -34,6 +35,7 @@ vi.mock('../../api/dataFlywheel', () => ({
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
   deleteSampleLabel: vi.fn(),
+  resolveSampleLabel: vi.fn(),
   syncDataFlywheelSessions: vi.fn(),
 }));
 
@@ -319,6 +321,7 @@ const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateDraft = vi.mocked(createCaseDraft);
 const mockedMarkBadCase = vi.mocked(markBadCase);
 const mockedDeleteLabel = vi.mocked(deleteSampleLabel);
+const mockedResolveLabel = vi.mocked(resolveSampleLabel);
 
 describe('DataFlywheel 页面', () => {
   beforeEach(() => {
@@ -373,6 +376,14 @@ describe('DataFlywheel 页面', () => {
       annotator_id: 'admin',
     });
     mockedDeleteLabel.mockResolvedValue({ deleted: true, id: 1 });
+    mockedResolveLabel.mockResolvedValue({
+      id: 1,
+      sample_id: sample.sample_id,
+      label: 'good_reply',
+      comment: '初始备注',
+      annotator_id: 'admin',
+      status: 'resolved',
+    });
   });
 
   it('初次渲染显示标题、样本输入摘要、request_id 和 token 数', async () => {
@@ -470,6 +481,25 @@ describe('DataFlywheel 页面', () => {
     expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
     expect(screen.queryByTestId('sample-row-turn:session-c:5')).not.toBeInTheDocument();
     expect(screen.getByText('坏回复')).toBeInTheDocument();
+  });
+
+  it('点击已标注问题后会显示只有会话级问题标注的会话', async () => {
+    const sessionLevelBadSample: DataFlywheelSample = {
+      ...sample,
+      quality_labels: [],
+      annotation_status: 'unlabeled',
+      session_quality_labels: ['needs_regression'],
+      session_annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [sessionLevelBadSample], total: 1 });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
+
+    expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
+    expect(screen.getByText('1 bad')).toBeInTheDocument();
   });
 
   it('快速切换样本时旧详情响应不会覆盖新详情', async () => {
@@ -705,6 +735,20 @@ describe('DataFlywheel 页面', () => {
 
     await waitFor(() => {
       expect(mockedDeleteLabel).toHaveBeenCalledWith(sample.sample_id, 1);
+    });
+    expect(mockedDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it('可以将已有标注标记为已解决并刷新当前样本', async () => {
+    const user = userEvent.setup();
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    await screen.findByText('样本详情');
+    await user.click(screen.getByRole('button', { name: /标记已解决 good_reply/ }));
+
+    await waitFor(() => {
+      expect(mockedResolveLabel).toHaveBeenCalledWith(sample.sample_id, 1);
     });
     expect(mockedDetail).toHaveBeenCalledTimes(2);
   });

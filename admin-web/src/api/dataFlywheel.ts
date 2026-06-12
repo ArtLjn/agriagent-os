@@ -26,6 +26,9 @@ export interface DataFlywheelSample {
   sample_type: string;
   quality_labels: DataFlywheelLabel[];
   annotation_status: string;
+  session_quality_labels?: DataFlywheelLabel[];
+  session_annotation_status?: string;
+  session_labels?: DataFlywheelLabelRecord[];
   session_id: string | null;
   turn_id: number;
   request_id: string | null;
@@ -68,6 +71,7 @@ export interface DataFlywheelLabelRecord {
   session_id?: string | null;
   turn_id?: number | null;
   request_id?: string | null;
+  status?: 'open' | 'resolved' | string;
   created_at?: string;
   updated_at?: string;
 }
@@ -213,6 +217,16 @@ export async function deleteSampleLabel(
 ): Promise<DeleteSampleLabelResponse> {
   const response = await apiClient.delete<DeleteSampleLabelResponse>(
     `${samplePath(sampleId)}/labels/${labelId}`
+  );
+  return response.data;
+}
+
+export async function resolveSampleLabel(
+  sampleId: string,
+  labelId: number
+): Promise<DataFlywheelLabelRecord> {
+  const response = await apiClient.post<DataFlywheelLabelRecord>(
+    `${samplePath(sampleId)}/labels/${labelId}/resolve`
   );
   return response.data;
 }

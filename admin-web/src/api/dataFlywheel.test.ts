@@ -12,6 +12,7 @@ import {
   listDataFlywheelSamples,
   markBadCase,
   deleteSampleLabel,
+  resolveSampleLabel,
   syncDataFlywheelSessions,
 } from './dataFlywheel';
 
@@ -165,6 +166,24 @@ describe('dataFlywheel api', () => {
       '/admin/data-flywheel/samples/turn%3A1%3As%3A1/labels/7'
     );
     expect(result.deleted).toBe(true);
+  });
+
+  it('将指定样本标注标记为已解决', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 7,
+        sample_id: 'turn:1:s:1',
+        label: 'bad_reply',
+        status: 'resolved',
+      },
+    });
+
+    const result = await resolveSampleLabel('turn:1:s:1', 7);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/samples/turn%3A1%3As%3A1/labels/7/resolve'
+    );
+    expect(result.status).toBe('resolved');
   });
 
   it('向 bad-case 路径提交坏例标注', async () => {

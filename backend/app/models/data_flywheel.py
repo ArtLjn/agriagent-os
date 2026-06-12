@@ -20,6 +20,7 @@ class AgentDataFlywheelLabel(Base):
     turn_id = Column(Integer, nullable=True, index=True)
     request_id = Column(String(32), nullable=True, index=True)
     label = Column(String(64), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="open", index=True)
     comment = Column(Text, nullable=True)
     annotator_id = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)

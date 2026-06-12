@@ -13,6 +13,7 @@ import {
   getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
+  resolveSampleLabel,
   syncDataFlywheelSessions,
   type CaseDraft,
   type DataFlywheelDetail,
@@ -99,7 +100,7 @@ export default function DataFlywheel() {
     [samples]
   );
   const confirmedIssueCount = useMemo(
-    () => samples.filter((sample) => hasConfirmedIssue(sample)).length,
+    () => confirmedIssueTotal(samples),
     [samples]
   );
   const visibleSamples = useMemo(() => {
@@ -281,6 +282,22 @@ export default function DataFlywheel() {
       await refreshSessionReviewIfActive();
     } catch {
       message.error('删除标注失败');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleResolveLabel = async (label: DataFlywheelLabelRecord) => {
+    if (!annotationTarget) return;
+    setActing(true);
+    try {
+      await resolveSampleLabel(annotationSampleId(annotationTarget), label.id);
+      message.success('标注已标记为已解决');
+      await refreshAnnotationTarget(annotationTarget);
+      await fetchSamples(query);
+      await refreshSessionReviewIfActive();
+    } catch {
+      message.error('标记已解决失败');
     } finally {
       setActing(false);
     }
@@ -491,6 +508,7 @@ export default function DataFlywheel() {
         onCommentChange={setComment}
         onSave={handleSave}
         onDeleteLabel={handleDeleteLabel}
+        onResolveLabel={handleResolveLabel}
         onCopyDebug={handleCopyDebug}
         onExportJsonl={handleExportJsonl}
         onMarkBadCase={handleMarkBadCase}
@@ -609,7 +627,29 @@ function sessionArchiveKey(sample: DataFlywheelSample) {
 }
 
 function hasConfirmedIssue(sample: DataFlywheelSample) {
+  return hasTurnConfirmedIssue(sample) || hasSessionConfirmedIssue(sample);
+}
+
+function hasTurnConfirmedIssue(sample: DataFlywheelSample) {
   return sample.quality_labels.some((label) => confirmedIssueLabels.has(label));
+}
+
+function hasSessionConfirmedIssue(sample: DataFlywheelSample) {
+  return (sample.session_quality_labels ?? []).some((label) => confirmedIssueLabels.has(label));
+}
+
+function confirmedIssueTotal(samples: DataFlywheelSample[]) {
+  const sessionIssueKeys = new Set<string>();
+  let total = 0;
+  samples.forEach((sample) => {
+    if (hasTurnConfirmedIssue(sample)) {
+      total += 1;
+    }
+    if (hasSessionConfirmedIssue(sample)) {
+      sessionIssueKeys.add(sessionArchiveKey(sample));
+    }
+  });
+  return total + sessionIssueKeys.size;
 }
 
 const confirmedIssueLabels = new Set<DataFlywheelLabel>([
@@ -626,11 +666,17 @@ const confirmedIssueLabels = new Set<DataFlywheelLabel>([
 
 function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[] {
   const groups = new Map<string, SessionArchiveItem>();
+  const countedSessionIssues = new Set<string>();
 
   samples.forEach((sample) => {
     const key = sessionArchiveKey(sample);
     const current = groups.get(key);
-    const isBadCase = hasConfirmedIssue(sample);
+    const turnBadCase = hasTurnConfirmedIssue(sample);
+    const sessionBadCase = hasSessionConfirmedIssue(sample) && !countedSessionIssues.has(key);
+    if (sessionBadCase) {
+      countedSessionIssues.add(key);
+    }
+    const badCaseCount = (turnBadCase ? 1 : 0) + (sessionBadCase ? 1 : 0);
 
     if (!current) {
       groups.set(key, {
@@ -638,7 +684,7 @@ function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[]
         sessionId: sample.session_id,
         total: 1,
         unannotated: sample.annotation_status === 'unlabeled' ? 1 : 0,
-        badCases: isBadCase ? 1 : 0,
+        badCases: badCaseCount,
         latestTurnId: sample.turn_id,
         latestInputPreview: sample.user_input_preview,
       });
@@ -647,7 +693,7 @@ function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[]
 
     current.total += 1;
     current.unannotated += sample.annotation_status === 'unlabeled' ? 1 : 0;
-    current.badCases += isBadCase ? 1 : 0;
+    current.badCases += badCaseCount;
     if (sample.turn_id >= current.latestTurnId) {
       current.latestTurnId = sample.turn_id;
       current.latestInputPreview = sample.user_input_preview;

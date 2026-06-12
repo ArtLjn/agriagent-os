@@ -1,7 +1,8 @@
-import { Button, Card, Input, Radio, Space, Typography, message } from 'antd';
+import { Button, Card, Input, Radio, Space, Tag, Typography, message } from 'antd';
 import {
   BranchesOutlined,
   BugOutlined,
+  CheckCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
@@ -24,6 +25,7 @@ interface AnnotationPanelProps {
   onCommentChange: (comment: string) => void;
   onSave: () => void;
   onDeleteLabel: (label: DataFlywheelLabelRecord) => void;
+  onResolveLabel: (label: DataFlywheelLabelRecord) => void;
   onCopyDebug: () => void;
   onExportJsonl: () => void;
   onMarkBadCase: () => void;
@@ -60,6 +62,7 @@ export default function AnnotationPanel({
   onCommentChange,
   onSave,
   onDeleteLabel,
+  onResolveLabel,
   onCopyDebug,
   onExportJsonl,
   onMarkBadCase,
@@ -103,43 +106,61 @@ export default function AnnotationPanel({
         {existingLabels.length > 0 && (
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             <Typography.Text style={{ color: palette.textMuted }}>已有标注</Typography.Text>
-            {existingLabels.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  border: `1px solid ${palette.borderSoft}`,
-                  borderRadius: 6,
-                  padding: '8px 10px',
-                  background: palette.bg,
-                }}
-              >
-                <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
-                  <Space direction="vertical" size={2}>
-                    <Typography.Text style={{ color: palette.text }}>
-                      {labelText[item.label] ?? item.label}
-                    </Typography.Text>
-                    {item.comment && (
-                      <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                        {item.comment}
-                      </Typography.Text>
-                    )}
-                    {item.annotator_id && (
-                      <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                        {item.annotator_id}
-                      </Typography.Text>
-                    )}
+            {existingLabels.map((item) => {
+              const resolved = item.status === 'resolved';
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    border: `1px solid ${palette.borderSoft}`,
+                    borderRadius: 6,
+                    padding: '8px 10px',
+                    background: palette.bg,
+                  }}
+                >
+                  <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Space direction="vertical" size={2}>
+                      <Space size={6} wrap>
+                        <Typography.Text style={{ color: palette.text }}>
+                          {labelText[item.label] ?? item.label}
+                        </Typography.Text>
+                        {resolved && <Tag color="green">已解决</Tag>}
+                      </Space>
+                      {item.comment && (
+                        <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                          {item.comment}
+                        </Typography.Text>
+                      )}
+                      {item.annotator_id && (
+                        <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                          {item.annotator_id}
+                        </Typography.Text>
+                      )}
+                    </Space>
+                    <Space size={6}>
+                      <Button
+                        aria-label={resolved ? `已解决 ${item.label}` : `标记已解决 ${item.label}`}
+                        size="small"
+                        icon={<CheckCircleOutlined />}
+                        loading={acting}
+                        disabled={resolved}
+                        onClick={() => onResolveLabel(item)}
+                      >
+                        已解决
+                      </Button>
+                      <Button
+                        aria-label={`删除标注 ${item.label}`}
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        loading={acting}
+                        onClick={() => onDeleteLabel(item)}
+                      />
+                    </Space>
                   </Space>
-                  <Button
-                    aria-label={`删除标注 ${item.label}`}
-                    danger
-                    size="small"
-                    icon={<DeleteOutlined />}
-                    loading={acting}
-                    onClick={() => onDeleteLabel(item)}
-                  />
-                </Space>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </Space>
         )}
 

@@ -21,6 +21,7 @@ from app.services.data_flywheel_service import (
     get_session_annotation_detail,
     get_sample_detail,
     list_samples,
+    resolve_sample_label,
 )
 from app.services.data_flywheel_session_review_service import get_session_review
 from app.services.data_flywheel_session_sync_service import sync_session_events
@@ -255,6 +256,25 @@ def delete_admin_data_flywheel_label(
     """删除当前农场样本的一条人工标注。"""
     try:
         return delete_sample_label(
+            db,
+            farm_id=farm.id,
+            sample_id=sample_id,
+            label_id=label_id,
+        )
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/samples/{sample_id}/labels/{label_id}/resolve")
+def resolve_admin_data_flywheel_label(
+    sample_id: str,
+    label_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """将当前农场样本的一条人工标注标记为已解决。"""
+    try:
+        return resolve_sample_label(
             db,
             farm_id=farm.id,
             sample_id=sample_id,

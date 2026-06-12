@@ -33,6 +33,8 @@ ALLOWED_LABELS = {
 }
 SAMPLE_TYPE_SESSION_TURN = "session_turn"
 SAMPLE_TYPE_SESSION = "session"
+LABEL_STATUS_OPEN = "open"
+LABEL_STATUS_RESOLVED = "resolved"
 _ALLOWED_TARGET_TYPES = {"simulation", "evaluation_replay"}
 CHAT_RECORD_SOURCE_MYSQL = "mysql_conversation_messages"
 EVENT_LOG_STATUS_AVAILABLE = "available"
@@ -198,6 +200,7 @@ def list_samples(
             AgentDataFlywheelLabel.farm_id == farm_id,
             AgentDataFlywheelLabel.sample_type == sample_type,
             AgentDataFlywheelLabel.label == label,
+            AgentDataFlywheelLabel.status != LABEL_STATUS_RESOLVED,
             AgentDataFlywheelLabel.turn_id.isnot(None),
         )
         query = query.filter(AgentTurn.id.in_(label_turn_ids))
@@ -205,6 +208,7 @@ def list_samples(
         annotated_turn_ids = select(AgentDataFlywheelLabel.turn_id).where(
             AgentDataFlywheelLabel.farm_id == farm_id,
             AgentDataFlywheelLabel.sample_type == sample_type,
+            AgentDataFlywheelLabel.status != LABEL_STATUS_RESOLVED,
             AgentDataFlywheelLabel.turn_id.isnot(None),
         )
         query = query.filter(~AgentTurn.id.in_(annotated_turn_ids))
@@ -218,8 +222,21 @@ def list_samples(
     )
     sample_ids = [_sample_id(turn) for turn in turns]
     labels = _labels_by_sample(db, sample_ids)
+    session_sample_ids = [
+        session_sample_id(farm_id=turn.farm_id, session_id=turn.session_id)
+        for turn in turns
+    ]
+    session_labels = _labels_by_sample(db, session_sample_ids)
     items = [
-        _sample_row(turn, labels.get(_sample_id(turn), []), _events_for_turn(turn))
+        _sample_row(
+            turn,
+            labels.get(_sample_id(turn), []),
+            _events_for_turn(turn),
+            session_labels=session_labels.get(
+                session_sample_id(farm_id=turn.farm_id, session_id=turn.session_id),
+                [],
+            ),
+        )
         for turn in turns
     ]
     return {"items": items, "total": total}
@@ -279,6 +296,7 @@ def add_sample_label(
         existing.request_id = turn.request_id
         existing.comment = comment
         existing.annotator_id = annotator_id
+        existing.status = LABEL_STATUS_OPEN
         row = existing
     else:
         row = AgentDataFlywheelLabel(
@@ -289,6 +307,7 @@ def add_sample_label(
             turn_id=turn.id,
             request_id=turn.request_id,
             label=label,
+            status=LABEL_STATUS_OPEN,
             comment=comment,
             annotator_id=annotator_id,
         )
@@ -333,6 +352,7 @@ def _add_session_label(
         existing.request_id = None
         existing.comment = comment
         existing.annotator_id = annotator_id
+        existing.status = LABEL_STATUS_OPEN
         row = existing
     else:
         row = AgentDataFlywheelLabel(
@@ -343,6 +363,7 @@ def _add_session_label(
             turn_id=None,
             request_id=None,
             label=label,
+            status=LABEL_STATUS_OPEN,
             comment=comment,
             annotator_id=annotator_id,
         )
@@ -376,6 +397,31 @@ def delete_sample_label(
     return {"deleted": True, "id": label_id}
 
 
+def resolve_sample_label(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_id: str,
+    label_id: int,
+) -> dict[str, Any]:
+    """将当前农场某个样本的一条人工标注标记为已解决。"""
+    row = (
+        db.query(AgentDataFlywheelLabel)
+        .filter(
+            AgentDataFlywheelLabel.id == label_id,
+            AgentDataFlywheelLabel.farm_id == farm_id,
+            AgentDataFlywheelLabel.sample_id == sample_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise ValueError("LABEL_NOT_FOUND")
+    row.status = LABEL_STATUS_RESOLVED
+    db.commit()
+    db.refresh(row)
+    return _label_to_dict(row)
+
+
 def get_session_annotation_detail(
     db: Session, *, farm_id: int, session_id: str
 ) -> dict[str, Any]:
@@ -388,7 +434,7 @@ def get_session_annotation_detail(
         "sample_id": sample_id,
         "sample_type": SAMPLE_TYPE_SESSION,
         "session_id": session_id,
-        "quality_labels": [row.label for row in labels],
+        "quality_labels": _open_quality_labels(labels),
         "labels": [_label_to_dict(row) for row in labels],
     }
 
@@ -401,7 +447,7 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
     sample = _sample_row(turn, labels, events)
     return {
         "sample": sample,
-        "quality_labels": [row.label for row in labels],
+        "quality_labels": _open_quality_labels(labels),
         "labels": [_label_to_dict(row) for row in labels],
         "messages": _messages_for_turn(db, turn),
         "turn": _turn_to_dict(turn),
@@ -510,11 +556,15 @@ def _sample_row(
     turn: AgentTurn,
     labels: list[AgentDataFlywheelLabel],
     events: list[dict[str, Any]],
+    *,
+    session_labels: list[AgentDataFlywheelLabel] | None = None,
 ) -> dict[str, Any]:
     router_decision = _router_decision(events)
     selected_tools = _selected_tools(router_decision)
     pending_lifecycle = _pending_lifecycle(events)
-    quality_labels = [row.label for row in labels]
+    session_labels = session_labels or []
+    quality_labels = _open_quality_labels(labels)
+    session_quality_labels = _open_quality_labels(session_labels)
     event_log_status = _event_log_status(turn, events)
     return {
         "sample_id": _sample_id(turn),
@@ -538,6 +588,11 @@ def _sample_row(
         ),
         "quality_labels": quality_labels,
         "annotation_status": "labeled" if quality_labels else "unlabeled",
+        "session_quality_labels": session_quality_labels,
+        "session_annotation_status": (
+            "labeled" if session_quality_labels else "unlabeled"
+        ),
+        "session_labels": [_label_to_dict(row) for row in session_labels],
         "token_total": turn.token_total,
         "latency_ms": turn.latency_ms,
         "created_at": turn.created_at.isoformat() if turn.created_at else None,
@@ -606,9 +661,20 @@ def _label_to_dict(row: AgentDataFlywheelLabel) -> dict[str, Any]:
         "turn_id": row.turn_id,
         "request_id": row.request_id,
         "label": row.label,
+        "status": row.status,
         "comment": row.comment,
         "annotator_id": row.annotator_id,
     }
+
+
+def _open_quality_labels(
+    labels: list[AgentDataFlywheelLabel],
+) -> list[str]:
+    return [
+        row.label
+        for row in labels
+        if (row.status or LABEL_STATUS_OPEN) != LABEL_STATUS_RESOLVED
+    ]
 
 
 def _draft_to_dict(draft: AgentCaseDraft) -> dict[str, Any]:

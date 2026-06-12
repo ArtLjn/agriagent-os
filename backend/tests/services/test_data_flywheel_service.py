@@ -21,6 +21,7 @@ from app.services.data_flywheel_service import (
     get_session_annotation_detail,
     get_sample_detail,
     list_samples,
+    resolve_sample_label,
 )
 from app.services.data_flywheel_session_sync_service import sync_session_events
 from app.services.data_flywheel_session_review_service import get_session_review
@@ -238,6 +239,7 @@ def test_session_label_can_be_saved_and_deleted(tmp_path):
     assert saved["sample_type"] == SAMPLE_TYPE_SESSION
     assert saved["session_id"] == "sess-session-label"
     assert saved["turn_id"] is None
+    assert saved["status"] == "open"
     assert detail["sample_id"] == session_sample_id
     assert detail["quality_labels"] == ["needs_regression"]
 
@@ -256,6 +258,67 @@ def test_session_label_can_be_saved_and_deleted(tmp_path):
     assert deleted == {"deleted": True, "id": saved["id"]}
     assert refreshed["quality_labels"] == []
     assert refreshed["labels"] == []
+    db.close()
+
+
+def test_session_label_is_reflected_in_sample_list(tmp_path):
+    db = Session()
+    _seed_turn(db, tmp_path, session_id="sess-session-summary")
+    session_sample_id = "session:1:sess-session-summary"
+
+    add_sample_label(
+        db,
+        farm_id=1,
+        sample_id=session_sample_id,
+        sample_type=SAMPLE_TYPE_SESSION,
+        session_id="sess-session-summary",
+        label="bad_reply",
+        comment="整段对话答非所问",
+        annotator_id="admin-1",
+    )
+
+    result = list_samples(db, farm_id=1)
+
+    assert result["total"] == 1
+    assert result["items"][0]["session_quality_labels"] == ["bad_reply"]
+    assert result["items"][0]["session_annotation_status"] == "labeled"
+    assert result["items"][0]["session_labels"][0]["comment"] == "整段对话答非所问"
+    db.close()
+
+
+def test_resolved_label_stays_visible_but_is_not_open_quality_label(tmp_path):
+    db = Session()
+    _seed_turn(db, tmp_path, session_id="sess-session-resolved")
+    session_sample_id = "session:1:sess-session-resolved"
+    saved = add_sample_label(
+        db,
+        farm_id=1,
+        sample_id=session_sample_id,
+        sample_type=SAMPLE_TYPE_SESSION,
+        session_id="sess-session-resolved",
+        label="needs_regression",
+        comment="已修复后保留记录",
+        annotator_id="admin-1",
+    )
+
+    resolved = resolve_sample_label(
+        db,
+        farm_id=1,
+        sample_id=session_sample_id,
+        label_id=saved["id"],
+    )
+    detail = get_session_annotation_detail(
+        db,
+        farm_id=1,
+        session_id="sess-session-resolved",
+    )
+    result = list_samples(db, farm_id=1)
+
+    assert resolved["status"] == "resolved"
+    assert detail["quality_labels"] == []
+    assert detail["labels"][0]["status"] == "resolved"
+    assert result["items"][0]["session_quality_labels"] == []
+    assert result["items"][0]["session_annotation_status"] == "unlabeled"
     db.close()
 
 

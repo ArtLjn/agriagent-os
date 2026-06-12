@@ -181,6 +181,15 @@ def test_add_session_label_and_delete_label_by_id(db_session, tmp_path) -> None:
             "/admin/data-flywheel/sessions/sess-admin-flywheel/annotations",
             headers=admin_headers(),
         )
+        resolve_resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels/"
+            f"{create_resp.json()['id']}/resolve",
+            headers=admin_headers(),
+        )
+        resolved_detail_resp = client.get(
+            "/admin/data-flywheel/sessions/sess-admin-flywheel/annotations",
+            headers=admin_headers(),
+        )
         delete_resp = client.delete(
             f"/admin/data-flywheel/samples/{sample_id}/labels/"
             f"{create_resp.json()['id']}",
@@ -190,8 +199,14 @@ def test_add_session_label_and_delete_label_by_id(db_session, tmp_path) -> None:
     assert create_resp.status_code == 200
     assert create_resp.json()["sample_type"] == "session"
     assert create_resp.json()["turn_id"] is None
+    assert create_resp.json()["status"] == "open"
     assert detail_resp.status_code == 200
     assert detail_resp.json()["quality_labels"] == ["needs_regression"]
+    assert resolve_resp.status_code == 200
+    assert resolve_resp.json()["status"] == "resolved"
+    assert resolved_detail_resp.status_code == 200
+    assert resolved_detail_resp.json()["quality_labels"] == []
+    assert resolved_detail_resp.json()["labels"][0]["status"] == "resolved"
     assert delete_resp.status_code == 200
     assert delete_resp.json() == {"deleted": True, "id": create_resp.json()["id"]}
     assert (
