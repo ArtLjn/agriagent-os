@@ -55,7 +55,10 @@ _JSON_ACTION_RE = re.compile(
     re.DOTALL,
 )
 
-_FALLBACK_TOOL_CALL_REPLY = "检测到工具调用格式异常，正在重新处理。请稍等片刻。"
+_FALLBACK_TOOL_CALL_REPLY = (
+    "我刚才没组织好。这个问题可以直接聊，不需要展示工具调用。"
+    "你可以换个说法继续问，我会用自然语言回答。"
+)
 
 
 def check_input(text: str) -> tuple[bool, str | None]:

@@ -19,6 +19,9 @@ templates:
   cycle_parse:
     file: cycle_parse.j2
     description: "茬口解析 prompt，从自然语言描述提取结构化种植计划"
+  worker_parse:
+    file: worker_parse.j2
+    description: "工人档案解析 prompt，从自然语言描述提取轻量用工档案"
 compositions:
   system_base:
     snippets:
@@ -28,6 +31,15 @@ compositions:
       - p2-role
       - p2-capability
       - p2-tool-guide
+      - p3-format
+      - p3-style
+      - p4-context
+    separator: "\n\n"
+  system_chat:
+    snippets:
+      - p1-language
+      - p1-no-tool-chat-guardrails
+      - p2-role
       - p3-format
       - p3-style
       - p4-context
@@ -46,6 +58,11 @@ compositions:
     snippets:
       - p1-language
     template: cycle_parse
+    separator: "\n\n"
+  worker_parse:
+    snippets:
+      - p1-language
+    template: worker_parse
     separator: "\n\n"
   report:
     snippets:

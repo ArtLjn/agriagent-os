@@ -76,6 +76,7 @@ class UserSettings {
     this.defaultCity,
     this.defaultLat,
     this.defaultLon,
+    this.assistantRole = 'warm',
   });
 
   factory UserSettings.fromJson(Map<String, dynamic> json) {
@@ -84,6 +85,7 @@ class UserSettings {
       defaultCity: json['default_city'] as String?,
       defaultLat: (json['default_lat'] as num?)?.toDouble(),
       defaultLon: (json['default_lon'] as num?)?.toDouble(),
+      assistantRole: '${json['assistant_role'] ?? 'warm'}',
     );
   }
 
@@ -91,6 +93,7 @@ class UserSettings {
   final String? defaultCity;
   final double? defaultLat;
   final double? defaultLon;
+  final String assistantRole;
 }
 
 class VersionInfo {

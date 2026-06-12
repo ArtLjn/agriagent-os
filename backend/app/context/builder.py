@@ -5,6 +5,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from sqlalchemy.orm import Session
 
+from app.agent.assistant_roles import (
+    DEFAULT_ASSISTANT_ROLE,
+    assistant_role_prompt,
+    normalize_assistant_role,
+)
 from app.context.budget import TokenBudget
 from app.context.models import ContextBlock, ContextBundle
 from app.context.selectors import (
@@ -158,6 +163,7 @@ class ContextBuilder:
         user_lat = None
         user_lon = None
         active_crops = ""
+        assistant_role = DEFAULT_ASSISTANT_ROLE
 
         if farm and farm.user_id:
             user = db.query(User).filter(User.id == farm.user_id).first()
@@ -172,6 +178,7 @@ class ContextBuilder:
                 user_city = setting.default_city or ""
                 user_lat = setting.default_lat
                 user_lon = setting.default_lon
+                assistant_role = normalize_assistant_role(setting.assistant_role)
 
             cycle_block = CycleSelector().select(db=db, farm_id=farm_id)[0]
             active_crops = (
@@ -190,6 +197,8 @@ class ContextBuilder:
             "farm_coords": farm_coords,
             "display_name": display_name,
             "active_crops": active_crops,
+            "assistant_role": assistant_role,
+            "assistant_role_prompt": assistant_role_prompt(assistant_role),
         }
 
     @staticmethod

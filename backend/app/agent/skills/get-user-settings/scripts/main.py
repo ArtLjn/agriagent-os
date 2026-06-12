@@ -3,6 +3,7 @@
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.agent.assistant_roles import assistant_role_label, normalize_assistant_role
 from app.agent.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.core.database import SessionLocal
 from app.models.user import User
@@ -16,7 +17,7 @@ class GetUserSettingsSkill(Skill):
         return "get_user_settings"
 
     def description(self) -> str:
-        return "查询当前用户的显示名和默认天气城市/经纬度设置。"
+        return "查询当前用户的显示名、默认天气城市/经纬度和助手回复角色设置。"
 
     def parameters_schema(self) -> dict:
         return {"type": "object", "properties": {}}
@@ -49,12 +50,16 @@ class GetUserSettingsSkill(Skill):
             city = setting.default_city if setting else None
             lat = setting.default_lat if setting else None
             lon = setting.default_lon if setting else None
+            role = normalize_assistant_role(setting.assistant_role if setting else None)
             location_text = city or "未设置"
             if lat is not None and lon is not None:
                 location_text = f"{location_text}（{lat}, {lon}）"
             return SkillResult(
                 status=ResultStatus.SUCCESS,
-                reply=f"当前设置：显示名 {display_name}，默认天气位置 {location_text}。",
+                reply=(
+                    f"当前设置：显示名 {display_name}，默认天气位置 {location_text}，"
+                    f"助手角色 {assistant_role_label(role)}。"
+                ),
             )
         except Exception as exc:
             return SkillResult(

@@ -14,6 +14,7 @@ class TestGetSettings:
         assert resp.status_code == 200
         data = resp.json()
         assert data["display_name"] == "测试用户"
+        assert data["assistant_role"] == "warm"
         assert data["default_city"] is None
         assert data["default_lat"] is None
         assert data["default_lon"] is None
@@ -76,14 +77,45 @@ class TestUpdateSettings:
         assert resp.status_code == 200
         assert resp.json()["display_name"] == "新名字"
 
+    def test_update_assistant_role(self, client: TestClient, auth_headers, db_session):
+        """更新助手回复角色。"""
+        resp = client.put(
+            "/settings",
+            json={"assistant_role": "professional"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["assistant_role"] == "professional"
+
+        setting = (
+            db_session.query(UserSetting).filter_by(user_id="test-user-001").first()
+        )
+        assert setting is not None
+        assert setting.assistant_role == "professional"
+
+    def test_reject_invalid_assistant_role(self, client: TestClient, auth_headers):
+        """非法助手角色返回 422。"""
+        resp = client.put(
+            "/settings",
+            json={"assistant_role": "robot"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422
+
     def test_get_after_update(self, client: TestClient, auth_headers):
         """更新后再获取，数据一致。"""
         client.put(
             "/settings",
-            json={"default_city": "苏州", "default_lat": 31.3, "default_lon": 120.62},
+            json={
+                "default_city": "苏州",
+                "default_lat": 31.3,
+                "default_lon": 120.62,
+                "assistant_role": "creative",
+            },
             headers=auth_headers,
         )
         resp = client.get("/settings", headers=auth_headers)
         data = resp.json()
         assert data["default_city"] == "苏州"
         assert data["default_lat"] == 31.3
+        assert data["assistant_role"] == "creative"

@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.agent.assistant_roles import AssistantRole, DEFAULT_ASSISTANT_ROLE
+
 __all__ = ["UserSettingsResponse", "UserSettingsUpdate"]
 
 
@@ -14,6 +16,7 @@ class UserSettingsResponse(BaseModel):
     default_city: Optional[str] = None
     default_lat: Optional[float] = None
     default_lon: Optional[float] = None
+    assistant_role: AssistantRole = DEFAULT_ASSISTANT_ROLE
 
 
 class UserSettingsUpdate(BaseModel):
@@ -23,3 +26,4 @@ class UserSettingsUpdate(BaseModel):
     default_city: Optional[str] = Field(default=None, max_length=50)
     default_lat: Optional[float] = None
     default_lon: Optional[float] = None
+    assistant_role: Optional[AssistantRole] = None

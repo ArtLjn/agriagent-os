@@ -137,6 +137,7 @@ final settingsResponse = {
   'default_city': '寿光',
   'default_lat': 36.8,
   'default_lon': 118.7,
+  'assistant_role': 'warm',
 };
 
 final versionResponse = {

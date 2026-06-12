@@ -77,6 +77,7 @@ _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
         "default_city",
         "default_lat",
         "default_lon",
+        "assistant_role",
     ],
 }
 

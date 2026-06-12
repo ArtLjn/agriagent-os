@@ -2,14 +2,18 @@ import dayjs from 'dayjs';
 import type { CropTemplateParseResponse } from '../../api/crops';
 import type { CycleParseResponse } from '../../api/cycles';
 import type { CostParseResponse } from '../../api/costs';
+import type { Worker } from '../../api/operations';
 import type { SmartFillScenario, SmartFillSceneKey } from '../../api/smartFill';
 
-export type SupportedSmartCreateScene = 'crop.template' | 'crop.cycle' | 'ledger.record';
+export type SupportedSmartCreateScene = 'crop.template' | 'crop.cycle' | 'ledger.record' | 'labor.worker';
+export type InferredSmartCreateScene = SupportedSmartCreateScene | 'unsupported';
+export type WorkerParseResponse = Omit<Worker, 'id' | 'farm_id' | 'created_at'>;
 
 export type SmartCreateResult =
   | { scene: 'crop.template'; draft: CropTemplateParseResponse }
   | { scene: 'crop.cycle'; draft: CycleParseResponse }
   | { scene: 'ledger.record'; draft: CostParseResponse }
+  | { scene: 'labor.worker'; draft: WorkerParseResponse }
   | { scene: 'unsupported'; sourceScene: string; draft: unknown };
 
 export interface SmartCreateMeta {
@@ -42,6 +46,14 @@ export const SMART_FILL_FALLBACK_SCENARIOS: SmartFillScenario[] = [
     enabled: true,
     request_example: '今天买复合肥 128.5 元，记到春季西瓜',
   },
+  {
+    key: 'labor.worker',
+    title: '智能工人档案',
+    description: '解析工人姓名、电话、默认计薪和备注',
+    legacy_endpoint: '/planting/workers',
+    enabled: true,
+    request_example: '新增工人老王，电话 13800138000，日薪 200，擅长授粉',
+  },
 ];
 
 const MONEY_OR_LEDGER_PATTERN =
@@ -50,9 +62,16 @@ const CYCLE_PATTERN =
   /(茬口|一茬|春茬|夏茬|秋茬|冬茬|地块|田块|棚|大棚|东棚|西棚|南棚|北棚|露天|亩|种植|播种|定植|移栽|开种|开始种|种一茬|\d{1,2}\s*月\s*\d{1,2}\s*(?:日|号)?)/;
 const TEMPLATE_PATTERN =
   /(模板|作物模板|生长阶段|完整生长|生成.*阶段|阶段模板|建模板|新建模板|创建模板|新增模板)/;
+const SIMPLE_CROP_TEMPLATE_PATTERN =
+  /^(?:我想|我要|准备|计划)?种[\u4e00-\u9fffA-Za-z0-9·]{1,30}$/;
+const WORKER_PATTERN =
+  /(新来.*工人|新增工人|新建工人|创建工人|工人.*电话|工人.*(?:一天|日薪|时薪|长工|短工)|招了|招工|工人档案|临时工|长工|短工|日薪|时薪|计件|按天|按小时|按件)/;
 
-export function inferSmartFillScene(text: string): SupportedSmartCreateScene {
+export function inferSmartFillScene(text: string): InferredSmartCreateScene {
   const normalized = text.trim().replace(/\s+/g, '');
+  if (looksLikeWorkerScene(normalized)) {
+    return 'labor.worker';
+  }
   if (MONEY_OR_LEDGER_PATTERN.test(normalized)) {
     return 'ledger.record';
   }
@@ -62,11 +81,24 @@ export function inferSmartFillScene(text: string): SupportedSmartCreateScene {
   if (CYCLE_PATTERN.test(normalized)) {
     return 'crop.cycle';
   }
-  return 'crop.template';
+  if (SIMPLE_CROP_TEMPLATE_PATTERN.test(normalized)) {
+    return 'crop.template';
+  }
+  return 'unsupported';
+}
+
+function looksLikeWorkerScene(normalized: string): boolean {
+  if (WORKER_PATTERN.test(normalized)) {
+    return true;
+  }
+  if (!/(师傅|工人|员工|帮工)/.test(normalized)) {
+    return false;
+  }
+  return /(新来|新增|新建|创建|招|雇|请|电话|手机号|手机|日薪|时薪|计件|一天|按天|按小时|按件|长工|短工|临时工)/.test(normalized);
 }
 
 export function isSupportedSmartCreateScene(scene: SmartFillSceneKey): scene is SupportedSmartCreateScene {
-  return scene === 'crop.template' || scene === 'crop.cycle' || scene === 'ledger.record';
+  return scene === 'crop.template' || scene === 'crop.cycle' || scene === 'ledger.record' || scene === 'labor.worker';
 }
 
 export interface TemplateFormValues {
@@ -116,6 +148,9 @@ export function normalizeSmartResult(scene: string, draft: unknown): SmartCreate
   }
   if (scene === 'ledger.record') {
     return { scene, draft: draft as CostParseResponse };
+  }
+  if (scene === 'labor.worker') {
+    return { scene, draft: draft as WorkerParseResponse };
   }
   return { scene: 'unsupported', sourceScene: scene, draft };
 }

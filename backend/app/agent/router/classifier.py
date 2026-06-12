@@ -11,6 +11,26 @@ class RuleIntentClassifier:
     _query_hints = ("哪些", "有哪些", "看看", "查询", "查一下", "最近", "怎么样")
     _farm_hints = ("作物", "栽种", "农场", "茬口", "种植")
     _crop_hints = ("作物", "栽种", "茬口", "种植")
+    _daily_advice_time_hints = ("今天", "明天", "这几天", "最近")
+    _daily_advice_action_hints = (
+        "适合",
+        "该做",
+        "做什么",
+        "做啥",
+        "安排什么",
+        "干什么",
+        "干啥",
+    )
+    _weather_sensitive_operation_hints = (
+        "打药",
+        "施药",
+        "喷药",
+        "浇水",
+        "施肥",
+        "采收",
+        "播种",
+        "移栽",
+    )
     _write_action_hints = (
         "处理",
         "弄一下",
@@ -40,6 +60,7 @@ class RuleIntentClassifier:
         "湿度",
         "极端天气",
     )
+    _finance_overview_hints = ("money", "finance", "financial")
     _cost_summary_hints = (
         "余额",
         "收支",
@@ -88,7 +109,18 @@ class RuleIntentClassifier:
                 )
             ]
 
-        if self._looks_like_active_crop_query(normalized):
+        if self._looks_like_daily_operation_advice(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="operation",
+                    intent="query_daily_operation_advice",
+                    risk="read",
+                    entities=["weather", "farm", "crop_cycle"],
+                    candidate_tools=["get_weather_forecast", "get_farm_status"],
+                    confidence=0.84,
+                )
+            )
+        elif self._looks_like_active_crop_query(normalized):
             frames.append(
                 IntentFrame(
                     domain="planting",
@@ -131,6 +163,18 @@ class RuleIntentClassifier:
                     entities=["operation_work_order"],
                     candidate_tools=["get_operation_work_orders"],
                     confidence=0.82,
+                )
+            )
+
+        if self._looks_like_finance_overview_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="finance",
+                    intent="query_finance_overview",
+                    risk="read",
+                    entities=["cost", "income", "debt"],
+                    candidate_tools=["get_cost_summary", "get_debt_summary"],
+                    confidence=0.78,
                 )
             )
 
@@ -250,6 +294,17 @@ class RuleIntentClassifier:
     def _looks_like_weather_query(self, message: str) -> bool:
         return self._has_any(message, self._weather_hints)
 
+    def _looks_like_daily_operation_advice(self, message: str) -> bool:
+        has_time = self._has_any(message, self._daily_advice_time_hints)
+        has_advice_action = self._has_any(message, self._daily_advice_action_hints)
+        has_weather_sensitive_operation = self._has_any(
+            message,
+            self._weather_sensitive_operation_hints,
+        )
+        if has_time and has_advice_action:
+            return True
+        return has_time and "适合" in message and has_weather_sensitive_operation
+
     def _looks_like_create_worker(self, message: str) -> bool:
         if "工人" not in message:
             return False
@@ -271,6 +326,9 @@ class RuleIntentClassifier:
 
     def _looks_like_cost_summary_query(self, message: str) -> bool:
         return self._has_any(message, self._cost_summary_hints)
+
+    def _looks_like_finance_overview_query(self, message: str) -> bool:
+        return message.lower() in self._finance_overview_hints
 
     def _looks_like_debt_summary_query(self, message: str) -> bool:
         return self._has_any(message, self._debt_summary_hints)

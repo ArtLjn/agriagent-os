@@ -2,6 +2,7 @@
 
 from sqlalchemy.orm import Session
 
+from app.agent.assistant_roles import assistant_role_label, normalize_assistant_role
 from app.context.models import ContextBlock
 from app.models.farm import Farm
 from app.models.user_setting import UserSetting
@@ -28,6 +29,8 @@ class UserSettingsSelector:
             if setting.default_lat is not None and setting.default_lon is not None:
                 coords = f"{setting.default_lat:.4f},{setting.default_lon:.4f}"
             parts = ["用户设置"]
+            role = normalize_assistant_role(setting.assistant_role)
+            parts.append(f"助手角色：{assistant_role_label(role)}")
             if setting.default_city:
                 parts.append(f"默认城市：{setting.default_city}")
             if coords:
@@ -36,6 +39,7 @@ class UserSettingsSelector:
             metadata = {
                 "default_city": setting.default_city or "",
                 "farm_coords": coords,
+                "assistant_role": role,
             }
 
         return [

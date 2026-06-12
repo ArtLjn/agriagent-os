@@ -29,11 +29,13 @@ class _FakeUserSetting:
         default_city: str | None,
         default_lat: float | None = None,
         default_lon: float | None = None,
+        assistant_role: str | None = None,
     ):
         self.user_id = "u1"
         self.default_city = default_city
         self.default_lat = default_lat
         self.default_lon = default_lon
+        self.assistant_role = assistant_role
 
 
 def _make_query_side_effect(*results):
@@ -182,6 +184,17 @@ class TestUserSettingCityPriority:
         variables = await _run_llm_node(mock_env, farm, user, user_setting)
         assert variables["farm_location"] == "农场地址"
 
+    @pytest.mark.asyncio
+    async def test_user_setting_assistant_role_injected(self, mock_env):
+        """UserSetting.assistant_role 应注入 prompt 变量。"""
+        farm = _FakeFarm(user_id="u1", location="农场地址")
+        user = _FakeUser(nickname="李四")
+        user_setting = _FakeUserSetting(default_city=None, assistant_role="creative")
+
+        variables = await _run_llm_node(mock_env, farm, user, user_setting)
+        assert variables["assistant_role"] == "creative"
+        assert "灵感创意型" in variables["assistant_role_prompt"]
+
 
 class TestRuntimeContextBundleHelper:
     @pytest.mark.asyncio
@@ -203,6 +216,7 @@ class TestRuntimeContextBundleHelper:
                 default_city="广州",
                 default_lat=23.1291,
                 default_lon=113.2644,
+                assistant_role="professional",
             )
         )
         db_session.commit()
@@ -227,11 +241,13 @@ class TestRuntimeContextBundleHelper:
         block_keys = {block.key for block in bundle.blocks}
         assert {"user_settings", "short_term_recent", "ledger"}.issubset(block_keys)
         assert "默认城市：广州" in bundle.render_text()
+        assert "助手角色：冷静专业型" in bundle.render_text()
         assert "上次说要控水" in bundle.render_text()
         assert bundle.metadata["policy"]["intent"] == "query"
         assert bundle.metadata["policy"]["selected_tool_names"] == ["get_cost_summary"]
         assert farm_ctx["farm_location"] == "广州"
         assert farm_ctx["farm_coords"] == "23.1291,113.2644"
+        assert farm_ctx["assistant_role"] == "professional"
         assert memory_service.called_with == {
             "user_id": "test-user-001",
             "farm_id": 1,

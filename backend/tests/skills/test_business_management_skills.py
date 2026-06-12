@@ -306,7 +306,12 @@ async def test_delete_crop_cycle_removes_related_records(patched_skill_sessions,
 @pytest.mark.asyncio
 async def test_user_settings_skills_read_and_update(patched_skill_sessions, ctx):
     result = await ManageUserSettingsSkill().execute(
-        {"display_name": "老李", "default_city": "杭州", "default_lat": 30.25},
+        {
+            "display_name": "老李",
+            "default_city": "杭州",
+            "default_lat": 30.25,
+            "assistant_role": "creative",
+        },
         ctx,
     )
     assert result.status.value == "success"
@@ -316,8 +321,10 @@ async def test_user_settings_skills_read_and_update(patched_skill_sessions, ctx)
     assert user.nickname == "老李"
     assert setting.default_city == "杭州"
     assert setting.default_lat == 30.25
+    assert setting.assistant_role == "creative"
 
     read = await GetUserSettingsSkill().execute({}, ctx)
     assert read.status.value == "success"
     assert "老李" in read.reply
     assert "杭州" in read.reply
+    assert "灵感创意型" in read.reply

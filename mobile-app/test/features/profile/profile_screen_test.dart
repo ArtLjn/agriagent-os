@@ -37,6 +37,7 @@ void main() {
     expect(find.text('数据同步'), findsOneWidget);
     expect(find.text('AI 偏好设置'), findsOneWidget);
     expect(find.text('回答风格'), findsOneWidget);
+    expect(find.text('温暖陪伴型'), findsOneWidget);
     expect(find.text('分析深度'), findsOneWidget);
     expect(find.text('自动生成报表'), findsOneWidget);
     expect(find.text('数据备份与恢复'), findsOneWidget);

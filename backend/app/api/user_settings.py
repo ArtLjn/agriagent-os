@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.agent.application.context_invalidation import invalidate_user_farm_context
+from app.agent.assistant_roles import DEFAULT_ASSISTANT_ROLE, normalize_assistant_role
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.models.user_setting import UserSetting
@@ -31,6 +32,9 @@ def get_settings(
         default_city=setting.default_city if setting else None,
         default_lat=setting.default_lat if setting else None,
         default_lon=setting.default_lon if setting else None,
+        assistant_role=normalize_assistant_role(
+            setting.assistant_role if setting else None
+        ),
     )
 
 
@@ -53,15 +57,18 @@ def update_settings(
         "default_lon": payload.default_lon,
     }
     has_city_update = any(v is not None for v in city_fields.values())
+    has_role_update = payload.assistant_role is not None
 
-    if setting is None and has_city_update:
-        setting = UserSetting(user_id=user.id)
+    if setting is None and (has_city_update or has_role_update):
+        setting = UserSetting(user_id=user.id, assistant_role=DEFAULT_ASSISTANT_ROLE)
         db.add(setting)
 
     if setting is not None:
         for field, value in city_fields.items():
             if value is not None:
                 setattr(setting, field, value)
+        if payload.assistant_role is not None:
+            setting.assistant_role = payload.assistant_role
 
     db.commit()
     invalidate_user_farm_context(db, user.id)
@@ -71,4 +78,7 @@ def update_settings(
         default_city=setting.default_city if setting else None,
         default_lat=setting.default_lat if setting else None,
         default_lon=setting.default_lon if setting else None,
+        assistant_role=normalize_assistant_role(
+            setting.assistant_role if setting else None
+        ),
     )

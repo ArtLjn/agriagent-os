@@ -51,7 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 14),
             _LocationWeatherCard(model: model),
             const SizedBox(height: 14),
-            const _AiPreferenceCard(),
+            _AiPreferenceCard(model: model),
             const SizedBox(height: 14),
             _SystemSettingsCard(
               model: model,
@@ -109,40 +109,42 @@ class _LocationWeatherCard extends StatelessWidget {
 }
 
 class _AiPreferenceCard extends StatelessWidget {
-  const _AiPreferenceCard();
+  const _AiPreferenceCard({required this.model});
+
+  final ProfileViewModel model;
 
   @override
   Widget build(BuildContext context) {
-    return const CardPanel(
-      padding: EdgeInsets.fromLTRB(18, 16, 18, 4),
+    return CardPanel(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               Icon(LucideIcons.sparkles, size: 24, color: AppColors.blue),
               SizedBox(width: 10),
               Text('AI 偏好设置', style: AppTextStyles.dateTitle),
             ],
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           _ProfileOptionRow(
             icon: LucideIcons.messagesSquare,
             color: AppColors.blue,
             background: AppColors.blueSoft,
             title: '回答风格',
-            value: '简洁实用',
+            value: model.assistantRoleLabel,
           ),
-          Divider(height: 1, color: AppColors.lineSoft),
-          _ProfileOptionRow(
+          const Divider(height: 1, color: AppColors.lineSoft),
+          const _ProfileOptionRow(
             icon: LucideIcons.chartNoAxesColumnIncreasing,
             color: AppColors.greenDark,
             background: AppColors.greenSoft,
             title: '分析深度',
             value: '标准',
           ),
-          Divider(height: 1, color: AppColors.lineSoft),
-          _ProfileOptionRow(
+          const Divider(height: 1, color: AppColors.lineSoft),
+          const _ProfileOptionRow(
             icon: LucideIcons.wandSparkles,
             color: AppColors.purple,
             background: AppColors.purpleSoft,

@@ -59,6 +59,8 @@ def can_skip_llm_tool_selection(
     selected_names: list[str],
     direct_names: list[str],
 ) -> bool:
+    if selected_names and len(direct_names) == len(selected_names):
+        return True
     if len(tools) == 1 or len(selected_names) < len(tools):
         return True
     return (

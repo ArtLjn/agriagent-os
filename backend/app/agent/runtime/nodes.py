@@ -22,6 +22,11 @@ from app.agent.runtime.llm_support import (
     _record_llm_success,
     _warm_tool_caches,
 )
+from app.agent.runtime.chat_fallbacks import (
+    SYSTEM_BASE_SCENE,
+    retry_no_tool_json_leak,
+    select_system_prompt_scene,
+)
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.agent.runtime.direct_routing import (
     can_direct_route,
@@ -276,30 +281,51 @@ async def _llm_node(state: AgentState) -> dict:
         farm_ctx = await _get_farm_context(farm_id)
     display_name = farm_ctx["display_name"]
     farm_location = farm_ctx["farm_location"]
+    assistant_role = farm_ctx.get("assistant_role", "warm")
+    assistant_role_prompt = farm_ctx.get("assistant_role_prompt", "")
 
     if prepared_system_prompt:
         system_text = prepared_system_prompt
+        prompt_scene = "prepared"
     else:
         current_date = get_request_date()
         date_str = str(current_date)
-        prompt_cache = get_prompt_cache()
-        cached_prompt = prompt_cache.get(farm_id=farm_id, date_str=date_str)
-        if cached_prompt is not None:
-            system_text = cached_prompt
+        current_season = _get_season(current_date)
+        prompt_scene = select_system_prompt_scene(
+            selected_tool_names=selected_tool_names,
+            has_tool_results=has_tool_results,
+            router_decision=router_decision,
+        )
+        prompt_variables = {
+            "display_name": display_name,
+            "farm_location": farm_location,
+            "farm_coords": farm_ctx["farm_coords"],
+            "current_season": current_season,
+            "active_crops": farm_ctx["active_crops"],
+            "assistant_role": assistant_role,
+            "assistant_role_prompt": assistant_role_prompt,
+        }
+        if prompt_scene == SYSTEM_BASE_SCENE:
+            prompt_cache = get_prompt_cache()
+            cache_date_key = f"{date_str}:{assistant_role}"
+            cached_prompt = prompt_cache.get(farm_id=farm_id, date_str=cache_date_key)
+            if cached_prompt is not None:
+                system_text = cached_prompt
+            else:
+                system_text = get_composer().compose(
+                    prompt_scene,
+                    variables=prompt_variables,
+                    current_date=current_date,
+                )
+                prompt_cache.set(
+                    farm_id=farm_id, date_str=cache_date_key, value=system_text
+                )
         else:
-            current_season = _get_season(current_date)
             system_text = get_composer().compose(
-                "system_base",
-                variables={
-                    "display_name": display_name,
-                    "farm_location": farm_location,
-                    "farm_coords": farm_ctx["farm_coords"],
-                    "current_season": current_season,
-                    "active_crops": farm_ctx["active_crops"],
-                },
+                prompt_scene,
+                variables=prompt_variables,
                 current_date=current_date,
             )
-            prompt_cache.set(farm_id=farm_id, date_str=date_str, value=system_text)
 
     runtime_context_text = context_bundle.render_text()
     if runtime_context_text:
@@ -314,7 +340,7 @@ async def _llm_node(state: AgentState) -> dict:
         node_type="prompt_render",
         node_name="system_prompt",
         input_data={
-            "template": "system_base",
+            "template": prompt_scene,
             "variables_count": 5,
             "context_blocks": [block.key for block in context_bundle.blocks],
         },
@@ -435,6 +461,15 @@ async def _llm_node(state: AgentState) -> dict:
     # 这里检测并手动解析，确保 graph 能正确路由到 tools 节点。
     if not response.tool_calls:
         parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
+        if parsed_tool_calls and not selected_tools:
+            response = await retry_no_tool_json_leak(
+                llm=llm,
+                system_text=system_text,
+                messages=messages,
+                response=response,
+                model_name=model_name,
+            )
+            parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
         if parsed_tool_calls:
             filtered_tool_calls = filter_tool_calls_by_selected(
                 parsed_tool_calls,

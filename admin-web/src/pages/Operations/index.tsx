@@ -262,6 +262,18 @@ function SmartCreatePanel() {
       return;
     }
     const inferredScene = inferSmartFillScene(smartText);
+    if (inferredScene === 'unsupported') {
+      setSmartResult({
+        scene: 'unsupported',
+        sourceScene: 'unsupported',
+        draft: { text: smartText.trim() },
+      });
+      setSmartMeta({
+        missingFields: ['scene'],
+        warnings: ['暂未识别出可智能填写的业务类型，请补充作物模板、茬口、记账或工人档案信息。'],
+      });
+      return;
+    }
     const inferredScenario = getScenario(inferredScene);
     setSmartLoading(true);
     try {
@@ -336,6 +348,20 @@ function SmartCreatePanel() {
     }
   };
 
+  const createParsedWorker = async (draft: Omit<Worker, 'id' | 'farm_id' | 'created_at'>) => {
+    setCreatingScene('labor.worker');
+    try {
+      await operationsApi.createWorker(buildRequestBody(draft) as Omit<Worker, 'id' | 'farm_id' | 'created_at'>);
+      setSmartResult(null);
+      setSmartMeta(null);
+      message.success('工人档案已创建');
+    } catch {
+      message.error('工人档案创建失败，请检查解析结果或后端服务');
+    } finally {
+      setCreatingScene(null);
+    }
+  };
+
   return (
     <Card
       title={<Space size={8}><RobotOutlined /><span>智能填写</span></Space>}
@@ -358,7 +384,7 @@ function SmartCreatePanel() {
               按语义解析智能填写
             </Button>
             <Typography.Text type="secondary">
-              系统会根据语义自动判断作物模板、茬口或记账，不需要先选择智能填写列表。
+              系统会根据语义自动判断作物模板、茬口、记账或工人档案，不需要先选择智能填写列表。
             </Typography.Text>
           </Space>
         </Col>
@@ -418,6 +444,25 @@ function SmartCreatePanel() {
                 </Descriptions>
                 <Button loading={creatingScene === 'ledger.record'} onClick={() => createParsedCost(smartResult.draft)}>
                   确认创建记账
+                </Button>
+              </Space>
+            )}
+            {smartResult?.scene === 'labor.worker' && (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Descriptions column={1} size="small">
+                  <Descriptions.Item label="姓名">{smartResult.draft.name}</Descriptions.Item>
+                  <Descriptions.Item label="电话">{smartResult.draft.phone || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="默认计薪">{payTypeOptions.find((item) => item.value === smartResult.draft.default_pay_type)?.label || smartResult.draft.default_pay_type}</Descriptions.Item>
+                  <Descriptions.Item label="默认单价">{smartResult.draft.default_unit_price ? formatMoney(smartResult.draft.default_unit_price) : '-'}</Descriptions.Item>
+                  <Descriptions.Item label="状态">{smartResult.draft.status === 'active' ? '启用' : '停用'}</Descriptions.Item>
+                  <Descriptions.Item label="备注">{smartResult.draft.note || '-'}</Descriptions.Item>
+                </Descriptions>
+                <Button
+                  disabled={(smartMeta?.missingFields.length ?? 0) > 0}
+                  loading={creatingScene === 'labor.worker'}
+                  onClick={() => createParsedWorker(smartResult.draft)}
+                >
+                  确认创建工人
                 </Button>
               </Space>
             )}

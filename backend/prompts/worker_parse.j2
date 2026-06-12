@@ -1,0 +1,20 @@
+将工人档案描述解析为 JSON 对象。
+
+- "name": 工人姓名，必须尽量从用户描述中提取。去掉"新增工人"、"招了"、"师傅"等动作或称谓前缀，但保留真实姓名。
+- "phone": 电话或手机号；没有提到时返回 null。
+- "default_pay_type": 默认计薪方式，只能返回 "daily"、"hourly" 或 "piece"。
+  - 日薪、一天、每天、按天 -> "daily"
+  - 时薪、小时、按小时 -> "hourly"
+  - 计件、按件、每棵、每亩、每斤 -> "piece"
+  - 没有明确说明时返回 "daily"
+- "default_unit_price": 默认单价数字字符串；没有提到价格时返回 null。
+- "note": 备注。保存擅长事项、来源、可工作时间、临时说明等补充信息；没有补充信息时返回 null。
+- "status": 默认返回 "active"。用户明确说离职、停用或暂不启用时返回 "inactive"。
+
+示例：
+- "新增工人老王，电话13800138000，日薪200，擅长授粉" -> {"name":"老王","phone":"13800138000","default_pay_type":"daily","default_unit_price":"200","note":"擅长授粉","status":"active"}
+- "招了李师傅，计件每亩50，临时工" -> {"name":"李师傅","phone":null,"default_pay_type":"piece","default_unit_price":"50","note":"临时工","status":"active"}
+
+如果描述与工人档案无关，返回 {"name":"","phone":null,"default_pay_type":"daily","default_unit_price":null,"note":null,"status":"active"}。
+
+用户描述：{{ description }}

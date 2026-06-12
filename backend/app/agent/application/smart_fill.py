@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.agent.llm import get_llm
@@ -19,6 +19,7 @@ from app.models.idempotency_key import IdempotencyKey
 from app.schemas.cost import CostParseResponse, CostParseResult
 from app.schemas.crop import CropTemplateParseResponse
 from app.schemas.cycle import CycleParseResponse
+from app.schemas.planting import WorkerCreate
 from app.schemas.smart_fill import (
     SmartFillParseRequest,
     SmartFillParseResponse,
@@ -74,7 +75,7 @@ async def parse_smart_fill(
 ) -> SmartFillParseResponse:
     """按场景解析自然语言，返回统一表单草稿。"""
     scenario = get_scenario(req.scene)
-    cache_key = _build_cache_key(idempotency_key, scenario.key)
+    cache_key = _build_cache_key(idempotency_key, scenario.key, farm.id)
     cached = _load_cached_response(db, cache_key)
     if cached:
         return cached
@@ -94,9 +95,12 @@ async def parse_smart_fill(
     llm = get_llm()
     parsed = await parse_with_llm(llm, prompt, scenario.output_model)
     validated = _validate_result(scenario, parsed, prompt_vars)
+    metadata = _build_response_metadata(scenario, validated, prompt_vars)
     response = SmartFillParseResponse(
         scene=scenario.key,
         draft=validated.model_dump(mode="json"),
+        missing_fields=metadata["missing_fields"],
+        warnings=metadata["warnings"],
     )
     _store_cached_response(db, cache_key, response)
     return response
@@ -113,6 +117,12 @@ async def parse_with_llm(
             output_model, method="function_calling"
         )
         return await structured_llm.ainvoke([HumanMessage(content=prompt)])
+    except ValidationError as structured_err:
+        logger.warning(
+            "with_structured_output 校验失败，回退到 JSON 解析 | model=%s | errors=%d",
+            output_model.__name__,
+            len(structured_err.errors()),
+        )
     except Exception as structured_err:
         logger.warning(
             "with_structured_output 失败，回退到 JSON 解析 | model=%s | error=%s",
@@ -290,14 +300,126 @@ def _validate_cycle_result(parsed: BaseModel, prompt_vars: dict[str, Any]) -> Ba
     return result
 
 
+def _validate_worker_result(
+    parsed: BaseModel,
+    _prompt_vars: dict[str, Any],
+) -> BaseModel:
+    data = parsed.model_dump(mode="json")
+    data["name"] = str(data.get("name") or "").strip()
+    if not data["name"]:
+        raise HTTPException(status_code=422, detail=_error_message_for("labor.worker"))
+    data["phone"] = _clean_optional_text(data.get("phone"), max_length=30)
+    data["note"] = _clean_optional_text(data.get("note"), max_length=500)
+    data["default_pay_type"] = _normalize_pay_type(data.get("default_pay_type"))
+    data["status"] = _normalize_worker_status(data.get("status"))
+    try:
+        return WorkerCreate.model_validate(data)
+    except ValidationError:
+        logger.warning("智能填写工人草稿无法通过响应校验", exc_info=True)
+        raise HTTPException(status_code=422, detail=_error_message_for("labor.worker"))
+
+
+def _build_response_metadata(
+    scenario: SmartFillScenario,
+    validated: BaseModel,
+    prompt_vars: dict[str, Any],
+) -> dict[str, list[str]]:
+    if scenario.key == "labor.worker":
+        return _build_worker_metadata(validated, prompt_vars)
+    return {"missing_fields": [], "warnings": []}
+
+
+def _build_worker_metadata(
+    validated: BaseModel,
+    prompt_vars: dict[str, Any],
+) -> dict[str, list[str]]:
+    worker = (
+        validated
+        if isinstance(validated, WorkerCreate)
+        else WorkerCreate.model_validate(validated.model_dump(mode="json"))
+    )
+    original_text = str(prompt_vars.get("original_text") or "")
+    warnings: list[str] = []
+    missing_fields: list[str] = []
+    if worker.phone and _looks_like_invalid_mobile_phone(worker.phone, original_text):
+        worker.phone = None
+        missing_fields.append("phone")
+        warnings.append("手机号格式不正确，请检查后再创建工人。")
+    if worker.default_unit_price is None and _pay_price_was_mentioned(original_text):
+        missing_fields.append("default_unit_price")
+        warnings.append("已提到计薪方式，但默认单价不明确，请补充后再创建工人。")
+    return {"missing_fields": missing_fields, "warnings": warnings}
+
+
+def _clean_optional_text(value: Any, *, max_length: int) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned[:max_length] or None
+
+
+def _looks_like_invalid_mobile_phone(phone: str, original_text: str) -> bool:
+    normalized = re.sub(r"[\s-]+", "", phone)
+    if not normalized.isdigit():
+        return False
+    phone_is_named = bool(re.search(r"(电话|手机号|手机)", original_text))
+    if not phone_is_named:
+        return False
+    if not normalized.startswith("1"):
+        return False
+    if len(normalized) == 11 and re.fullmatch(r"1[3-9]\d{9}", normalized):
+        return False
+    return True
+
+
+def _pay_price_was_mentioned(original_text: str) -> bool:
+    return bool(
+        re.search(
+            r"(日薪|时薪|计件|按天|按小时|按件|一天|每[天小时件亩棵斤]|工资|工钱)",
+            original_text,
+        )
+    )
+
+
+def _normalize_pay_type(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    aliases = {
+        "日薪": "daily",
+        "按天": "daily",
+        "每天": "daily",
+        "天": "daily",
+        "daily": "daily",
+        "小时": "hourly",
+        "时薪": "hourly",
+        "按小时": "hourly",
+        "hourly": "hourly",
+        "计件": "piece",
+        "按件": "piece",
+        "件": "piece",
+        "piece": "piece",
+    }
+    return aliases.get(raw, "daily")
+
+
+def _normalize_worker_status(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"inactive", "disabled", "离职", "停用", "不启用"}:
+        return "inactive"
+    return "active"
+
+
 def _error_message_for(scene: str) -> str:
     return _ERROR_MESSAGES.get(scene, "无法识别智能填写内容，请补充更具体的信息")
 
 
-def _build_cache_key(idempotency_key: str | None, scene: str) -> str | None:
+def _build_cache_key(
+    idempotency_key: str | None,
+    scene: str,
+    farm_id: int,
+) -> str | None:
     if not idempotency_key:
         return None
-    return f"smart_fill:{scene}:{idempotency_key}"
+    return f"smart_fill:farm:{farm_id}:{scene}:{idempotency_key}"
 
 
 def _load_cached_response(
@@ -335,6 +457,7 @@ _ERROR_MESSAGES = {
     "ledger.record": "无法识别记账内容，请描述具体的收支信息，例如：买了化肥200块",
     "crop.template": "无法识别作物信息，请描述作物名称，例如：我要种8424西瓜、种番茄",
     "crop.cycle": "无法识别茬口信息，请描述种植计划，例如：春季种番茄、秋茬种西瓜",
+    "labor.worker": "无法识别工人信息，请描述工人姓名，例如：新增工人老王，日薪200",
 }
 
 _SCENARIOS = {
@@ -370,6 +493,16 @@ _SCENARIOS = {
         request_example="4月1日在东棚种一茬8424西瓜",
         context_builder=_build_cycle_context,
         validator=_validate_cycle_result,
+    ),
+    "labor.worker": SmartFillScenario(
+        key="labor.worker",
+        title="智能工人档案",
+        description="从用工描述提取工人姓名、电话、默认计薪方式、默认单价和备注。",
+        legacy_endpoint="/planting/workers",
+        prompt_key="worker_parse",
+        output_model=WorkerCreate,
+        request_example="新增工人老王，电话 13800138000，日薪 200，擅长授粉",
+        validator=_validate_worker_result,
     ),
 }
 

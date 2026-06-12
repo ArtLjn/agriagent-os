@@ -163,6 +163,8 @@ async def _get_farm_context(farm_id: int) -> dict:
                 "farm_coords": "",
                 "display_name": "农友",
                 "active_crops": "",
+                "assistant_role": "warm",
+                "assistant_role_prompt": "",
             }
         finally:
             db.close()

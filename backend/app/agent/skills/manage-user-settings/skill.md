@@ -1,11 +1,13 @@
 ---
 name: manage_user_settings
 type: write
-description: 更新当前用户显示名、默认天气城市和默认经纬度。
+description: 更新当前用户显示名、默认天气城市、默认经纬度和助手回复角色。
 triggers:
   - 修改用户设置
   - 修改默认城市
   - 改显示名
+  - 修改助手角色
+  - 调整回复语气
 parameters:
   type: object
   properties:
@@ -21,6 +23,10 @@ parameters:
     default_lon:
       type: number
       description: 默认经度。
+    assistant_role:
+      type: string
+      enum: [professional, warm, creative]
+      description: 助手回复角色，professional=冷静专业型，warm=温暖陪伴型，creative=灵感创意型。
   required: []
 ---
 
@@ -30,7 +36,7 @@ parameters:
 
 ## 何时使用
 
-用户明确要修改自己的显示名、默认城市、天气位置或经纬度时使用。
+用户明确要修改自己的显示名、默认城市、天气位置、经纬度或助手回复角色时使用。
 
 ## 不要使用
 
@@ -40,6 +46,9 @@ parameters:
 
 - “默认城市改成上海” -> `default_city=上海`。
 - “显示名改成老李” -> `display_name=老李`。
+- “以后专业一点” -> `assistant_role=professional`。
+- “以后温柔一点” -> `assistant_role=warm`。
+- “以后有创意一点” -> `assistant_role=creative`。
 
 ## 缺参策略
 

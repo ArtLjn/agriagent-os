@@ -71,6 +71,30 @@ class TestComposerCompose:
         assert "get_weather_forecast" in result
         assert "farm_context_summary" not in result
 
+    def test_system_chat_excludes_tool_protocol(self, _composer):
+        """system_chat 是闲聊快通道 prompt，不暴露工具协议和工具名。"""
+        result = _composer.compose(
+            "system_chat",
+            variables={
+                "display_name": "农友",
+                "farm_location": "苏州",
+                "assistant_role_prompt": "语气偏好：冷静专业型。",
+            },
+            current_date=date(2026, 5, 29),
+        )
+
+        assert "【语言规则】" in result
+        assert "【角色定义】" in result
+        assert "芽芽" in result
+        assert "轻松闲聊" in result
+        assert "【回复格式】" in result
+        assert "冷静专业型" in result
+        assert "苏州" in result
+        assert "get_farm_status" not in result
+        assert "get_weather_forecast" not in result
+        assert "JSON 工具调用" not in result
+        assert "只输出 JSON" not in result
+
     def test_system_base_contains_current_labor_skill_capabilities(self, _composer):
         """system_base 能力范围包含当前已接入的用工 Skill。"""
         result = _composer.compose(

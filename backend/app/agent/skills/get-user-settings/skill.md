@@ -1,11 +1,13 @@
 ---
 name: get_user_settings
 type: read
-description: 查询当前用户的显示名和默认天气城市/经纬度设置。
+description: 查询当前用户的显示名、默认天气城市/经纬度和助手回复角色设置。
 triggers:
   - 用户设置
   - 我的设置
   - 默认城市
+  - 助手角色
+  - 回复语气
 parameters:
   type: object
   properties: {}
@@ -18,7 +20,7 @@ parameters:
 
 ## 何时使用
 
-用户询问自己的显示名、默认城市、天气位置或个人设置时使用。
+用户询问自己的显示名、默认城市、天气位置、助手回复角色或个人设置时使用。
 
 ## 不要使用
 

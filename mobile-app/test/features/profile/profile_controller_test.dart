@@ -29,6 +29,7 @@ void main() {
     expect(model.status, '正常');
     expect(model.city, '寿光');
     expect(model.weatherCity, '寿光');
+    expect(model.assistantRoleLabel, '温暖陪伴型');
     expect(model.latestVersion, '0.1.0');
     expect(model.hasVersionUpdate, isTrue);
     expect(model.updateSummary, '更新至 v0.1.0');
@@ -135,6 +136,7 @@ void main() {
       status: '正常',
       city: '寿光',
       weatherCity: '寿光',
+      assistantRoleLabel: '温暖陪伴型',
       versionLabel: null as dynamic,
       versionStatus: null as dynamic,
       versionChangelog: null as dynamic,

@@ -183,6 +183,30 @@ def test_planting_advice_uses_read_frame(message: str) -> None:
     assert decision.frames[0].risk == "read"
 
 
+@pytest.mark.parametrize(
+    "message",
+    ["今天适合做什么", "今天适合做啥", "今天适合打药吗"],
+)
+def test_daily_operation_advice_binds_weather_and_farm_status(message: str) -> None:
+    tools = [_tool("get_weather_forecast"), _tool("get_farm_status")]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == ["get_weather_forecast", "get_farm_status"]
+    assert decision.frames[0].intent == "query_daily_operation_advice"
+    assert decision.frames[0].risk == "read"
+
+
+def test_english_money_query_binds_finance_read_tools() -> None:
+    tools = [_tool("get_cost_summary"), _tool("get_debt_summary")]
+
+    decision = SkillRouter().route("money", tools)
+
+    assert decision.selected_tools == ["get_cost_summary", "get_debt_summary"]
+    assert decision.frames[0].intent == "query_finance_overview"
+    assert decision.frames[0].risk == "read"
+
+
 def test_unknown_write_asks_clarification_without_write_tool() -> None:
     tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
 
