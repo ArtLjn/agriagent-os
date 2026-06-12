@@ -172,7 +172,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/services/test_daily_advice_signals.py -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py -q
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.services.daily_advice_signals'`.
@@ -315,7 +315,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/services/test_daily_advice_signals.py -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py -q
 ```
 
 Expected: PASS.
@@ -470,7 +470,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/services/test_daily_advice_signals.py::test_collect_excludes_undated_debts_and_unpaid_labor tests/services/test_daily_advice_signals.py::test_collect_includes_overdue_and_upcoming_due_debts tests/services/test_daily_advice_signals.py::test_collect_operation_candidates_for_overdue_and_upcoming -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py::test_collect_excludes_undated_debts_and_unpaid_labor tests/services/test_daily_advice_signals.py::test_collect_includes_overdue_and_upcoming_due_debts tests/services/test_daily_advice_signals.py::test_collect_operation_candidates_for_overdue_and_upcoming -q
 ```
 
 Expected: FAIL because `collect_daily_advice_candidates` is not implemented.
@@ -617,7 +617,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/services/test_daily_advice_signals.py -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py -q
 ```
 
 Expected: PASS for Task 1 and Task 2 tests.
@@ -776,7 +776,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/services/test_daily_advice_signals.py::test_collect_weather_high_temperature_as_p1 tests/services/test_daily_advice_signals.py::test_collect_merges_continuous_high_temperature tests/services/test_daily_advice_signals.py::test_collect_current_crop_stage_candidate tests/services/test_daily_advice_signals.py::test_recent_operation_suppresses_same_crop_stage_action -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py::test_collect_weather_high_temperature_as_p1 tests/services/test_daily_advice_signals.py::test_collect_merges_continuous_high_temperature tests/services/test_daily_advice_signals.py::test_collect_current_crop_stage_candidate tests/services/test_daily_advice_signals.py::test_recent_operation_suppresses_same_crop_stage_action -q
 ```
 
 Expected: FAIL because weather and crop-stage collectors are not implemented.
@@ -1006,7 +1006,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/services/test_daily_advice_signals.py -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py -q
 ```
 
 Expected: PASS.
@@ -1129,7 +1129,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_agent_service.py::TestGetDailyAdvice::test_get_daily_advice_uses_ranked_candidate_context tests/test_agent_service.py::TestGetDailyAdvice::test_get_daily_advice_stores_candidate_meta -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/test_agent_service.py::TestGetDailyAdvice::test_get_daily_advice_uses_ranked_candidate_context tests/test_agent_service.py::TestGetDailyAdvice::test_get_daily_advice_stores_candidate_meta -q
 ```
 
 Expected: FAIL because `agent_service` does not import or use the signal pipeline.
@@ -1238,7 +1238,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_agent_service.py::TestGetDailyAdvice -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/test_agent_service.py::TestGetDailyAdvice -q
 ```
 
 Expected: PASS.
@@ -1320,7 +1320,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_advice_cache.py::TestDailyAdviceCache::test_cache_hit_requires_same_candidate_fingerprint -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/test_advice_cache.py::TestDailyAdviceCache::test_cache_hit_requires_same_candidate_fingerprint -q
 ```
 
 Expected: FAIL because cache hit does not inspect candidate fingerprint.
@@ -1387,7 +1387,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_advice_cache.py tests/test_agent_service.py::TestGetDailyAdvice tests/services/test_daily_advice_signals.py -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/test_advice_cache.py tests/test_agent_service.py::TestGetDailyAdvice tests/services/test_daily_advice_signals.py -q
 ```
 
 Expected: PASS.
@@ -1398,8 +1398,8 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run ruff check app/services/daily_advice_signals.py app/services/agent_service.py tests/services/test_daily_advice_signals.py tests/test_agent_service.py tests/test_advice_cache.py
-poetry run pytest tests/services/test_daily_advice_signals.py tests/test_agent_service.py::TestGetDailyAdvice tests/test_advice_cache.py tests/services/test_farm_context_service.py -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m ruff check app/services/daily_advice_signals.py app/services/agent_service.py tests/services/test_daily_advice_signals.py tests/test_agent_service.py tests/test_advice_cache.py
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py tests/test_agent_service.py::TestGetDailyAdvice tests/test_advice_cache.py tests/services/test_farm_context_service.py -q
 ```
 
 Expected: ruff exits 0; pytest exits 0.
@@ -1422,8 +1422,8 @@ After all tasks pass, run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run ruff check app tests
-poetry run pytest tests/services/test_daily_advice_signals.py tests/test_agent_service.py::TestGetDailyAdvice tests/test_advice_cache.py tests/services/test_farm_context_service.py tests/test_agent_api.py -q
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m ruff check app tests
+/Users/ljn/Documents/demo/explore/backend/.venv/bin/python -m pytest tests/services/test_daily_advice_signals.py tests/test_agent_service.py::TestGetDailyAdvice tests/test_advice_cache.py tests/services/test_farm_context_service.py tests/test_agent_api.py -q
 ```
 
 Expected: all checks pass.
