@@ -453,7 +453,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('规则候选：回复疑似暴露模型参数或系统提示')).toBeInTheDocument();
   });
 
-  it('点击已标注问题后只显示人工确认的问题样本', async () => {
+  it('点击已标注问题后按会话归档显示人工确认的问题', async () => {
     const confirmedBadSample: DataFlywheelSample = {
       ...anotherSample,
       quality_labels: ['bad_reply'],
@@ -477,13 +477,19 @@ describe('DataFlywheel 页面', () => {
     await screen.findByTestId('sample-row-turn:session-a:3');
     fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
 
-    expect(screen.getByTestId('sample-row-turn:session-b:4')).toBeInTheDocument();
-    expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('sample-row-turn:session-c:5')).not.toBeInTheDocument();
-    expect(screen.getByText('坏回复')).toBeInTheDocument();
+    expect(screen.getByText('问题会话归档')).toBeInTheDocument();
+    expect(screen.getByTestId('problem-session-session-b')).toBeInTheDocument();
+    expect(screen.queryByTestId('problem-session-session-a')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('problem-session-session-c')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('problem-session-session-b'));
+
+    await waitFor(() => {
+      expect(mockedSessionReview).toHaveBeenCalledWith('session-b');
+    });
+    expect(screen.getByText('完整对话记录')).toBeInTheDocument();
   });
 
-  it('点击已标注问题后会显示只有会话级问题标注的会话', async () => {
+  it('点击已标注问题后会按单个会话归档显示会话级问题标注', async () => {
     const sessionLevelBadSample: DataFlywheelSample = {
       ...sample,
       quality_labels: [],
@@ -498,8 +504,10 @@ describe('DataFlywheel 页面', () => {
     await screen.findByTestId('sample-row-turn:session-a:3');
     fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
 
-    expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
-    expect(screen.getByText('1 bad')).toBeInTheDocument();
+    expect(screen.getByText('问题会话归档')).toBeInTheDocument();
+    expect(screen.getByTestId('problem-session-session-a')).toBeInTheDocument();
+    expect(screen.getAllByText('1 bad').length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
   });
 
   it('快速切换样本时旧详情响应不会覆盖新详情', async () => {
@@ -760,7 +768,64 @@ describe('DataFlywheel 页面', () => {
 
     fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
 
-    expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
+    expect(screen.getByTestId('problem-session-session-a')).toBeInTheDocument();
+  });
+
+  it('从问题会话归档进入后可以将完整会话标注标记为已完成', async () => {
+    const user = userEvent.setup();
+    const sessionLevelBadSample: DataFlywheelSample = {
+      ...sample,
+      quality_labels: [],
+      annotation_status: 'unlabeled',
+      session_quality_labels: ['sensitive_info_leak'],
+      session_annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [sessionLevelBadSample, sessionSecondSample], total: 2 });
+    mockedSessionAnnotations.mockResolvedValue({
+      sample_id: 'session:1:session-a',
+      sample_type: 'session',
+      session_id: 'session-a',
+      quality_labels: ['sensitive_info_leak'],
+      labels: [
+        {
+          id: 9,
+          sample_id: 'session:1:session-a',
+          sample_type: 'session',
+          session_id: 'session-a',
+          turn_id: null,
+          request_id: null,
+          label: 'sensitive_info_leak',
+          comment: '错误的 json 泄漏判断',
+          annotator_id: 'admin',
+          status: 'open',
+        },
+      ],
+    });
+    mockedResolveLabel.mockResolvedValue({
+      id: 9,
+      sample_id: 'session:1:session-a',
+      sample_type: 'session',
+      session_id: 'session-a',
+      turn_id: null,
+      request_id: null,
+      label: 'sensitive_info_leak',
+      comment: '错误的 json 泄漏判断',
+      annotator_id: 'admin',
+      status: 'resolved',
+    });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
+    fireEvent.click(screen.getByTestId('problem-session-session-a'));
+    await screen.findByText('完整对话记录');
+    await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
+    await user.click(screen.getByRole('button', { name: /标记已完成 sensitive_info_leak/ }));
+
+    await waitFor(() => {
+      expect(mockedResolveLabel).toHaveBeenCalledWith('session:1:session-a', 9);
+    });
   });
 
   it('可以删除已有标注并刷新当前样本', async () => {
@@ -777,13 +842,13 @@ describe('DataFlywheel 页面', () => {
     expect(mockedDetail).toHaveBeenCalledTimes(2);
   });
 
-  it('可以将已有标注标记为已解决并刷新当前样本', async () => {
+  it('可以将已有标注标记为已完成并刷新当前样本', async () => {
     const user = userEvent.setup();
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
     await screen.findByText('样本详情');
-    await user.click(screen.getByRole('button', { name: /标记已解决 good_reply/ }));
+    await user.click(screen.getByRole('button', { name: /标记已完成 good_reply/ }));
 
     await waitFor(() => {
       expect(mockedResolveLabel).toHaveBeenCalledWith(sample.sample_id, 1);

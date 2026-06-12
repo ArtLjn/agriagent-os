@@ -124,7 +124,7 @@ export default function AnnotationPanel({
                         <Typography.Text style={{ color: palette.text }}>
                           {labelText[item.label] ?? item.label}
                         </Typography.Text>
-                        {resolved && <Tag color="green">已解决</Tag>}
+                        {resolved && <Tag color="green">已完成</Tag>}
                       </Space>
                       {item.comment && (
                         <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
@@ -139,14 +139,14 @@ export default function AnnotationPanel({
                     </Space>
                     <Space size={6}>
                       <Button
-                        aria-label={resolved ? `已解决 ${item.label}` : `标记已解决 ${item.label}`}
+                        aria-label={resolved ? `已完成 ${item.label}` : `标记已完成 ${item.label}`}
                         size="small"
                         icon={<CheckCircleOutlined />}
                         loading={acting}
                         disabled={resolved}
                         onClick={() => onResolveLabel(item)}
                       >
-                        已解决
+                        已完成
                       </Button>
                       <Button
                         aria-label={`删除标注 ${item.label}`}

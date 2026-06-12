@@ -15,6 +15,7 @@ export interface SessionArchiveItem {
 }
 
 interface SessionArchivePanelProps {
+  title?: string;
   groups: SessionArchiveItem[];
   total: number;
   issueCount: number;
@@ -23,10 +24,13 @@ interface SessionArchivePanelProps {
   allKey: string;
   issueKey: string;
   confirmedIssueKey: string;
+  showBuckets?: boolean;
+  testIdPrefix?: string;
   onSelect: (key: string) => void;
 }
 
 export default function SessionArchivePanel({
+  title = '用户 / 会话归档',
   groups,
   total,
   issueCount,
@@ -35,55 +39,61 @@ export default function SessionArchivePanel({
   allKey,
   issueKey,
   confirmedIssueKey,
+  showBuckets = true,
+  testIdPrefix = 'archive-session',
   onSelect,
 }: SessionArchivePanelProps) {
   return (
-    <Card title="用户 / 会话归档" style={cardStyle} styles={{ body: { padding: 12 } }}>
+    <Card title={title} style={cardStyle} styles={{ body: { padding: 12 } }}>
       <Space direction="vertical" size={10} style={{ width: '100%' }}>
-        <button
-          type="button"
-          data-testid="archive-session-all"
-          onClick={() => onSelect(allKey)}
-          style={archiveButtonStyle(activeKey === allKey)}
-        >
-          <span>
-            <Typography.Text style={{ color: palette.text }}>全部用户会话</Typography.Text>
-            <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
-              当前筛选结果内的会话样本
-            </Typography.Text>
-          </span>
-          <Badge count={total} color={palette.accentStrong} />
-        </button>
+        {showBuckets && (
+          <>
+            <button
+              type="button"
+              data-testid="archive-session-all"
+              onClick={() => onSelect(allKey)}
+              style={archiveButtonStyle(activeKey === allKey)}
+            >
+              <span>
+                <Typography.Text style={{ color: palette.text }}>全部用户会话</Typography.Text>
+                <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
+                  当前筛选结果内的会话样本
+                </Typography.Text>
+              </span>
+              <Badge count={total} color={palette.accentStrong} />
+            </button>
 
-        <button
-          type="button"
-          data-testid="archive-issues"
-          onClick={() => onSelect(issueKey)}
-          style={archiveButtonStyle(activeKey === issueKey)}
-        >
-          <span>
-            <Typography.Text style={{ color: palette.text }}>规则候选</Typography.Text>
-            <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
-              规则命中，仍需人工确认
-            </Typography.Text>
-          </span>
-          <Badge count={issueCount} color={palette.danger} />
-        </button>
+            <button
+              type="button"
+              data-testid="archive-issues"
+              onClick={() => onSelect(issueKey)}
+              style={archiveButtonStyle(activeKey === issueKey)}
+            >
+              <span>
+                <Typography.Text style={{ color: palette.text }}>规则候选</Typography.Text>
+                <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
+                  规则命中，仍需人工确认
+                </Typography.Text>
+              </span>
+              <Badge count={issueCount} color={palette.danger} />
+            </button>
 
-        <button
-          type="button"
-          data-testid="archive-confirmed-issues"
-          onClick={() => onSelect(confirmedIssueKey)}
-          style={archiveButtonStyle(activeKey === confirmedIssueKey)}
-        >
-          <span>
-            <Typography.Text style={{ color: palette.text }}>已标注问题</Typography.Text>
-            <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
-              人工确认并保存的问题样本
-            </Typography.Text>
-          </span>
-          <Badge count={confirmedIssueCount} color={palette.danger} />
-        </button>
+            <button
+              type="button"
+              data-testid="archive-confirmed-issues"
+              onClick={() => onSelect(confirmedIssueKey)}
+              style={archiveButtonStyle(activeKey === confirmedIssueKey)}
+            >
+              <span>
+                <Typography.Text style={{ color: palette.text }}>已标注问题</Typography.Text>
+                <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
+                  人工确认并保存的问题样本
+                </Typography.Text>
+              </span>
+              <Badge count={confirmedIssueCount} color={palette.danger} />
+            </button>
+          </>
+        )}
 
         {groups.length === 0 ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可归档会话" />
@@ -92,7 +102,7 @@ export default function SessionArchivePanel({
             <button
               key={group.key}
               type="button"
-              data-testid={`archive-session-${group.sessionId ?? 'unknown'}`}
+              data-testid={`${testIdPrefix}-${group.sessionId ?? 'unknown'}`}
               onClick={() => onSelect(group.key)}
               style={archiveButtonStyle(activeKey === group.key)}
             >

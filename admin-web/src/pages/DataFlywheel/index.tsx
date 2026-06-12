@@ -103,6 +103,10 @@ export default function DataFlywheel() {
     () => buildArchiveGroups(samples, sessionAnnotationOverlays),
     [samples, sessionAnnotationOverlays]
   );
+  const confirmedIssueGroups = useMemo(
+    () => archiveGroups.filter((group) => group.badCases > 0),
+    [archiveGroups]
+  );
   const issueCount = useMemo(
     () => samples.filter((sample) => sample.issue_candidates.length > 0).length,
     [samples]
@@ -117,10 +121,10 @@ export default function DataFlywheel() {
       return samples.filter((sample) => sample.issue_candidates.length > 0);
     }
     if (activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY) {
-      return samples.filter((sample) => hasConfirmedIssue(sample, sessionAnnotationOverlays));
+      return [];
     }
     return samples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
-  }, [activeArchiveKey, samples, sessionAnnotationOverlays]);
+  }, [activeArchiveKey, samples]);
   const isSessionArchiveActive =
     activeArchiveKey !== ALL_ARCHIVE_KEY &&
     activeArchiveKey !== ISSUE_ARCHIVE_KEY &&
@@ -304,12 +308,12 @@ export default function DataFlywheel() {
     setActing(true);
     try {
       await resolveSampleLabel(annotationSampleId(annotationTarget), label.id);
-      message.success('标注已标记为已解决');
+      message.success('标注已标记为已完成');
       await refreshAnnotationTarget(annotationTarget);
       await fetchSamples(query);
       await refreshSessionReviewIfActive();
     } catch {
-      message.error('标记已解决失败');
+      message.error('标记已完成失败');
     } finally {
       setActing(false);
     }
@@ -465,6 +469,12 @@ export default function DataFlywheel() {
     loadSessionReview(key);
   };
 
+  const handleSelectProblemSession = (key: string) => {
+    setActiveArchiveKey(key);
+    clearSelection();
+    loadSessionReview(key);
+  };
+
   const archiveContent = (
     <SessionArchivePanel
       groups={archiveGroups}
@@ -478,7 +488,22 @@ export default function DataFlywheel() {
       onSelect={handleSelectArchive}
     />
   );
-  const mainContent = isSessionArchiveActive ? (
+  const mainContent = activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY ? (
+    <SessionArchivePanel
+      title="问题会话归档"
+      groups={confirmedIssueGroups}
+      total={confirmedIssueGroups.reduce((sum, group) => sum + group.total, 0)}
+      issueCount={0}
+      confirmedIssueCount={confirmedIssueCount}
+      activeKey=""
+      allKey={ALL_ARCHIVE_KEY}
+      issueKey={ISSUE_ARCHIVE_KEY}
+      confirmedIssueKey={CONFIRMED_ISSUE_ARCHIVE_KEY}
+      showBuckets={false}
+      testIdPrefix="problem-session"
+      onSelect={handleSelectProblemSession}
+    />
+  ) : isSessionArchiveActive ? (
     <SessionConversationView
       review={sessionReview}
       loading={loadingSessionReview}
@@ -647,13 +672,6 @@ function sessionAnnotationPlaceholder(target: AnnotationTarget): DataFlywheelSam
 
 function sessionArchiveKey(sample: DataFlywheelSample) {
   return sample.session_id ?? 'unknown-session';
-}
-
-function hasConfirmedIssue(
-  sample: DataFlywheelSample,
-  sessionAnnotations: DataFlywheelSessionAnnotations[] = []
-) {
-  return hasTurnConfirmedIssue(sample) || hasSessionConfirmedIssue(sample, sessionAnnotations);
 }
 
 function hasTurnConfirmedIssue(sample: DataFlywheelSample) {
