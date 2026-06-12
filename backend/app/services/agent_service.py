@@ -30,6 +30,12 @@ from app.services.conversation_service import (
     get_or_create_conversation,
     save_message,
 )
+from app.services.daily_advice_models import (
+    fingerprint_candidates,
+    rank_daily_advice_candidates,
+    render_candidate_context,
+)
+from app.services.daily_advice_signals import collect_daily_advice_candidates
 from app.services import farm_context_service
 from app.services import agent_report_service
 
@@ -239,8 +245,21 @@ async def get_daily_advice(
                 created_at=cached.created_at,
             )
 
+    candidates = await collect_daily_advice_candidates(db, farm_id=farm_id)
+    selected_candidates = rank_daily_advice_candidates(candidates, limit=5)
+    if selected_candidates:
+        context = render_candidate_context(selected_candidates)
+    else:
+        context = await farm_context_service.build_summary(db, farm_id)
+
+    candidate_meta = {
+        "selected_candidates": [
+            candidate.to_meta() for candidate in selected_candidates[:_ADVICE_ITEM_MAX]
+        ],
+        "candidate_fingerprint": fingerprint_candidates(selected_candidates),
+    }
+
     # 注入农场上下文，通过 PromptComposer 渲染模板
-    context = await farm_context_service.build_summary(db, farm_id)
     prompt = get_composer().compose(
         "daily_advice",
         variables={"farm_context": context, "cycle_id": cycle_id},
@@ -262,7 +281,11 @@ async def get_daily_advice(
     preview, items = _parse_advice_items(advice)
 
     record = AgentRecord(
-        cycle_id=cycle_id, record_type="daily", content=advice, farm_id=farm_id
+        cycle_id=cycle_id,
+        record_type="daily",
+        content=advice,
+        farm_id=farm_id,
+        meta=json.dumps(candidate_meta, ensure_ascii=False),
     )
     db.add(record)
     try:
