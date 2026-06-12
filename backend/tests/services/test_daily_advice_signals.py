@@ -8,13 +8,13 @@ from app.models.cost import CostRecord
 from app.models.crop import CropTemplate
 from app.models.cycle import CropCycle, CycleStage
 from app.models.planting import OperationWorkOrder
-from app.services.daily_advice_signals import (
+from app.services.daily_advice_models import (
     DailyAdviceCandidate,
     DailyAdviceCategory,
-    collect_daily_advice_candidates,
     rank_daily_advice_candidates,
     render_candidate_context,
 )
+from app.services.daily_advice_signals import collect_daily_advice_candidates
 
 
 def _candidate(
@@ -43,13 +43,14 @@ def _candidate(
 def _weather_data(
     *,
     temps: list[float],
+    times: list[str] | None = None,
     rain: list[float] | None = None,
     wind: list[float] | None = None,
 ) -> dict:
     days = len(temps)
     return {
         "daily": {
-            "time": [f"2026-06-{12 + index:02d}" for index in range(days)],
+            "time": times or [f"2026-06-{12 + index:02d}" for index in range(days)],
             "temperature_2m_max": temps,
             "precipitation_sum": rain or [0] * days,
             "windspeed_10m_max": wind or [0] * days,
@@ -431,6 +432,52 @@ async def test_collect_weather_candidates_merges_continuous_high_temperature(
     assert "持续高温" in weather_candidates[0].detail_hint
 
 
+async def test_collect_weather_candidates_ignores_expired_hot_days(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        AsyncMock(
+            return_value=_weather_data(
+                times=["2026-06-14", "2026-06-11", "2026-06-13"],
+                temps=[36, 39, 31],
+            )
+        ),
+    )
+
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    weather_candidates = [item for item in candidates if item.category == "weather"]
+
+    assert len(weather_candidates) == 1
+    assert "2026-06-14" in weather_candidates[0].detail_hint
+    assert "2026-06-11" not in weather_candidates[0].detail_hint
+
+
+async def test_collect_weather_candidates_checks_future_third_day_after_expired_prefix(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        AsyncMock(
+            return_value=_weather_data(
+                times=["2026-06-11", "2026-06-12", "2026-06-13", "2026-06-15"],
+                temps=[39, 30, 31, 36],
+            )
+        ),
+    )
+
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    weather_candidates = [item for item in candidates if item.category == "weather"]
+
+    assert len(weather_candidates) == 1
+    assert "2026-06-15" in weather_candidates[0].detail_hint
+    assert "2026-06-11" not in weather_candidates[0].detail_hint
+
+
 async def test_collect_crop_stage_candidates_from_current_active_cycle(
     db_session,
     monkeypatch,
@@ -465,13 +512,14 @@ async def test_collect_crop_stage_candidates_suppresses_recent_same_operation(
         "app.services.daily_advice_signals.weather_service.fetch_weather",
         AsyncMock(return_value=_weather_data(temps=[30, 31, 32])),
     )
-    _create_active_cycle(db_session, today=today, key_tasks="巡田、理蔓")
+    cycle = _create_active_cycle(db_session, today=today, key_tasks="巡田、理蔓")
     db_session.add(
         OperationWorkOrder(
             farm_id=1,
+            cycle_id=cycle.id,
             operation_type="巡田",
             operation_date=today - timedelta(days=1),
-            scope_type="farm",
+            scope_type="cycle",
         )
     )
     db_session.commit()
@@ -481,3 +529,46 @@ async def test_collect_crop_stage_candidates_suppresses_recent_same_operation(
     assert [
         item for item in candidates if item.category == "crop_stage"
     ] == []
+
+
+async def test_collect_crop_stage_candidates_suppresses_by_cycle_only(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        AsyncMock(return_value=_weather_data(temps=[30, 31, 32])),
+    )
+    cycle_a = _create_active_cycle(
+        db_session,
+        today=today,
+        crop_name="西瓜",
+        cycle_name="西瓜一茬",
+        key_tasks="巡田、理蔓",
+    )
+    cycle_b = _create_active_cycle(
+        db_session,
+        today=today,
+        crop_name="番茄",
+        cycle_name="番茄一茬",
+        key_tasks="巡田、绑蔓",
+    )
+    db_session.add(
+        OperationWorkOrder(
+            farm_id=1,
+            cycle_id=cycle_a.id,
+            operation_type="巡田",
+            operation_date=today - timedelta(days=1),
+            scope_type="cycle",
+        )
+    )
+    db_session.commit()
+
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    crop_stage_candidates = [
+        item for item in candidates if item.category == "crop_stage"
+    ]
+
+    assert [item.source_id for item in crop_stage_candidates] == [cycle_b.id]
+    assert "番茄一茬" in crop_stage_candidates[0].detail_hint

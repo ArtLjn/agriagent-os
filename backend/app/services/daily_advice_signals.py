@@ -1,14 +1,11 @@
-"""今日建议候选信号管线。"""
+"""今日建议候选信号收集管线。"""
 
 from __future__ import annotations
 
-import hashlib
-import json
-from dataclasses import dataclass
 from datetime import date
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -16,128 +13,20 @@ from app.models.cost import CostRecord
 from app.models.cycle import CropCycle
 from app.models.planting import OperationWorkOrder
 from app.services import weather_service
+from app.services.daily_advice_models import DailyAdviceCandidate
+from app.services.daily_advice_models import DailyAdviceCategory
+from app.services.daily_advice_models import fingerprint_candidates
+from app.services.daily_advice_models import rank_daily_advice_candidates
+from app.services.daily_advice_models import render_candidate_context
 
-DailyAdviceCategory = Literal[
-    "weather",
-    "operation",
-    "crop_stage",
-    "finance",
-    "setup",
-    "record",
+__all__ = [
+    "DailyAdviceCandidate",
+    "DailyAdviceCategory",
+    "collect_daily_advice_candidates",
+    "fingerprint_candidates",
+    "rank_daily_advice_candidates",
+    "render_candidate_context",
 ]
-
-_CATEGORY_ORDER: dict[DailyAdviceCategory, int] = {
-    "weather": 0,
-    "operation": 1,
-    "crop_stage": 2,
-    "finance": 3,
-    "setup": 4,
-    "record": 5,
-}
-
-_CATEGORY_LIMITS: dict[DailyAdviceCategory, int] = {
-    "weather": 1,
-    "finance": 1,
-    "operation": 2,
-    "crop_stage": 2,
-    "setup": 1,
-    "record": 1,
-}
-
-
-@dataclass(slots=True)
-class DailyAdviceCandidate:
-    """今日建议生成前的结构化候选。"""
-
-    id: str
-    category: DailyAdviceCategory
-    title_hint: str
-    detail_hint: str
-    priority: int
-    due_date: date | None
-    source_type: str
-    source_id: int | None
-    dedupe_key: str
-    reason: str
-
-    def to_meta(self) -> dict[str, Any]:
-        """输出可稳定序列化的候选元数据。"""
-        return {
-            "id": self.id,
-            "category": self.category,
-            "title_hint": self.title_hint,
-            "detail_hint": self.detail_hint,
-            "priority": self.priority,
-            "due_date": self.due_date.isoformat() if self.due_date else None,
-            "source_type": self.source_type,
-            "source_id": self.source_id,
-            "dedupe_key": self.dedupe_key,
-            "reason": self.reason,
-        }
-
-
-def rank_daily_advice_candidates(
-    candidates: list[DailyAdviceCandidate],
-    *,
-    today: date | None = None,
-    limit: int = 3,
-) -> list[DailyAdviceCandidate]:
-    """排序、去重并按类别抑制今日建议候选。"""
-    if limit <= 0:
-        return []
-
-    reference_day = today or date.today()
-    ranked = sorted(candidates, key=lambda item: _candidate_sort_key(item, reference_day))
-    selected: list[DailyAdviceCandidate] = []
-    seen_dedupe_keys: set[str] = set()
-    category_counts: dict[DailyAdviceCategory, int] = {
-        category: 0 for category in _CATEGORY_LIMITS
-    }
-
-    for candidate in ranked:
-        if candidate.dedupe_key in seen_dedupe_keys:
-            continue
-
-        category_limit = _CATEGORY_LIMITS[candidate.category]
-        if category_counts[candidate.category] >= category_limit:
-            continue
-
-        selected.append(candidate)
-        seen_dedupe_keys.add(candidate.dedupe_key)
-        category_counts[candidate.category] += 1
-
-        if len(selected) >= limit:
-            break
-
-    return selected
-
-
-def render_candidate_context(candidates: list[DailyAdviceCandidate]) -> str:
-    """渲染给大模型使用的今日行动候选上下文。"""
-    if not candidates:
-        return "今日无明确高优先级行动候选。"
-
-    lines = ["【今日行动候选】"]
-    for index, candidate in enumerate(candidates, start=1):
-        due = candidate.due_date.isoformat() if candidate.due_date else "none"
-        lines.append(
-            f"{index}. priority={candidate.priority} "
-            f"category={candidate.category} "
-            f"source={candidate.source_type} "
-            f"due={due} "
-            f"title={candidate.title_hint} "
-            f"detail={candidate.detail_hint} "
-            f"reason={candidate.reason}"
-        )
-
-    return "\n".join(lines)
-
-
-def fingerprint_candidates(candidates: list[DailyAdviceCandidate]) -> str:
-    """为候选集合生成稳定短指纹。"""
-    payload = [candidate.to_meta() for candidate in candidates]
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 
 async def collect_daily_advice_candidates(
@@ -181,7 +70,7 @@ async def _collect_weather_candidates(
     precipitations = daily.get("precipitation_sum", [])
     winds = daily.get("windspeed_10m_max", [])
 
-    hot_days = _weather_hits(times, max_temps, threshold=35)
+    hot_days = _weather_hits(times, max_temps, threshold=35, today=today)
     if hot_days:
         return [
             _weather_candidate(
@@ -194,7 +83,7 @@ async def _collect_weather_candidates(
             )
         ]
 
-    rain_days = _weather_hits(times, precipitations, threshold=10)
+    rain_days = _weather_hits(times, precipitations, threshold=10, today=today)
     if rain_days:
         return [
             _weather_candidate(
@@ -207,7 +96,7 @@ async def _collect_weather_candidates(
             )
         ]
 
-    wind_days = _weather_hits(times, winds, threshold=17)
+    wind_days = _weather_hits(times, winds, threshold=17, today=today)
     if wind_days:
         return [
             _weather_candidate(
@@ -228,7 +117,7 @@ def _collect_crop_stage_candidates(
     *,
     farm_id: int,
     today: date,
-    recent_operation_types: set[str],
+    recent_operation_types: dict[int | None, set[str]],
 ) -> list[DailyAdviceCandidate]:
     cycles = (
         db.query(CropCycle)
@@ -259,7 +148,7 @@ def _collect_crop_stage_candidates(
             continue
 
         task = _first_stage_task(stage.key_tasks or "巡田观察")
-        if task in recent_operation_types:
+        if task in recent_operation_types.get(cycle.id, set()):
             continue
 
         crop_name = cycle.crop_template.name if cycle.crop_template else "未知作物"
@@ -372,10 +261,10 @@ def _recent_operation_types(
     *,
     farm_id: int,
     today: date,
-) -> set[str]:
+) -> dict[int | None, set[str]]:
     since = today - timedelta(days=3)
     rows = (
-        db.query(OperationWorkOrder.operation_type)
+        db.query(OperationWorkOrder.cycle_id, OperationWorkOrder.operation_type)
         .filter(
             OperationWorkOrder.farm_id == farm_id,
             OperationWorkOrder.operation_date >= since,
@@ -383,7 +272,10 @@ def _recent_operation_types(
         )
         .all()
     )
-    return {operation_type for (operation_type,) in rows}
+    operation_types: dict[int | None, set[str]] = {}
+    for cycle_id, operation_type in rows:
+        operation_types.setdefault(cycle_id, set()).add(operation_type)
+    return operation_types
 
 
 def _weather_hits(
@@ -391,19 +283,35 @@ def _weather_hits(
     values: list[Any],
     *,
     threshold: float,
+    today: date,
 ) -> list[tuple[str, float]]:
+    horizon = today + timedelta(days=3)
     hits: list[tuple[str, float]] = []
-    for index, raw_value in enumerate(values[:3]):
+    for index, raw_value in enumerate(values):
+        day = _parse_weather_day(times[index] if index < len(times) else None)
+        if day is None or not today <= day <= horizon:
+            continue
+
         try:
             value = float(raw_value)
         except (TypeError, ValueError):
             continue
 
         if value >= threshold:
-            day = str(times[index]) if index < len(times) else f"第 {index + 1} 天"
-            hits.append((day, value))
+            hits.append((day.isoformat(), value))
 
     return hits
+
+
+def _parse_weather_day(raw_day: Any) -> date | None:
+    if isinstance(raw_day, date):
+        return raw_day
+    if not raw_day:
+        return None
+    try:
+        return date.fromisoformat(str(raw_day)[:10])
+    except ValueError:
+        return None
 
 
 def _weather_candidate(
@@ -453,19 +361,6 @@ def _first_stage_task(key_tasks: str) -> str:
     for separator in ("、", "，", ",", "；", ";", "\n"):
         key_tasks = key_tasks.replace(separator, " ")
     return key_tasks.split()[0] if key_tasks.split() else "巡田观察"
-
-
-def _candidate_sort_key(
-    candidate: DailyAdviceCandidate,
-    today: date,
-) -> tuple[int, int, int, str]:
-    due_offset = (candidate.due_date - today).days if candidate.due_date else 99
-    return (
-        candidate.priority,
-        due_offset,
-        _CATEGORY_ORDER[candidate.category],
-        candidate.id,
-    )
 
 
 def _operation_title(operation_type: str, day_offset: int) -> str:
