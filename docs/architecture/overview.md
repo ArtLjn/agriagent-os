@@ -51,6 +51,7 @@ backend/app/
 `modules/crop`、`modules/cycle`、`modules/ledger`、`modules/weather`、`modules/conversation`、`modules/feedback`、`modules/admin` 以及平台级 `skills/` 属于后续迁移目标。当前不保留只有 `__init__.py` 的空壳目录，避免目录树和真实职责脱节。
 
 更细的后端结构、请求链路和分图见 [backend-architecture.md](/Users/ljn/Documents/demo/explore/docs/architecture/backend-architecture.md)。
+Agent 数据飞轮的工业级完成态、AI 预标注边界和分阶段闭环路线见 [agent-data-flywheel-industrial-roadmap.md](/Users/ljn/Documents/demo/explore/docs/architecture/agent-data-flywheel-industrial-roadmap.md)。
 
 ## Agent 平台边界
 
@@ -66,6 +67,7 @@ Agent 平台由 `agent/`、`prompt/`、`context/`、`memory/`、`evaluation/`、
 - `memory/` 负责短时记忆、长时记忆、检索和 observation event；Agent 只能通过 Memory Service 接口访问。
 - `evaluation/` 负责 Agent 回放、Prompt 回归、Context 质量、Skill 调用质量和结构化报告。
 - `observability/` 负责平台级 trace、token、延迟、tool call、memory observe 和 evaluation capture 事件。
+- `DataFlywheel` 是 Agent 平台的数据加工台：从真实会话、trace、event log 和仿真失败中整理样本，经过规则候选、LLM 预标注和人工确认后，输出 regression case、evaluation replay 和训练数据。
 
 Context 工程边界：Agent 不直接拼接全量业务数据。Runtime 通过 `ContextPolicy -> ContextBuilder -> ContextBundle -> TokenBudget` 构建动态上下文；短时记忆由 Memory Service 提供 session 视图，并经 application 层适配进入 runtime；详细账务、天气、日志和作物数据由 tool 按需查询。
 

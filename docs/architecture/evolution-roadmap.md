@@ -106,6 +106,7 @@ status: active
 | P1 | ③ Dual Weather | 已落地 QWeather/Open-Meteo 策略和预警注入 | 继续补齐稳定性和城市覆盖测试 |
 | P1 | ④ Session & Context | 已落地会话、ContextBuilder、Memory observation 骨架 | 收敛 runtime 对 context 的直接构建 |
 | P2 | ⑤ Context Engineering | 已进入工程化阶段：selector、budget、cache、memory | 增强长期记忆、检索和评测闭环 |
+| P2 | ⑥ Agent 数据飞轮 | 已落地 DataFlywheel 页面、事件同步、标注、case draft 基础 | 演进到规则候选、LLM 预标注、人工确认、仿真回归和训练数据出口闭环 |
 
 ---
 
@@ -331,11 +332,33 @@ Skill 文本匹配/Function Calling       Skill 精准路由
 
 | 方向 | 描述 | 依赖 |
 |------|------|------|
-| RLHF 循环 | 利用 feedback_records 评估 Prompt 质量，人工标注 + 自动评分 | Phase 2 feedback 表 |
+| Agent 数据飞轮 | 真实会话和仿真失败进入 DataFlywheel，经规则候选、LLM 预标注、人工确认后输出回归和训练数据 | Session event log、Trace、Simulation、Evaluation |
+| RLHF/偏好数据循环 | 利用人工确认的好坏样本、纠正回复和 pairwise 对比评估 Prompt 质量 | DataFlywheel 标签和数据集版本 |
 | Prompt A/B 测试 | 同一意图多版本 Prompt，按效果自动切换 | RLHF 数据 |
 | 个性化记忆 | 用户偏好、历史操作模式 → 注入 prompt | Phase 2 多用户 |
 | 多 Agent 协作 | 种植顾问 + 气象分析师 + 财务顾问 分工 | Function Calling 稳定 |
 | 知识库 (RAG) | 作物种植指南、病虫害图谱 → 检索增强 | 知识库数据源 |
+
+Agent 数据飞轮按 [agent-data-flywheel-industrial-roadmap.md](/Users/ljn/Documents/demo/explore/docs/architecture/agent-data-flywheel-industrial-roadmap.md) 推进。完成态是：
+
+```text
+真实会话 / Playground / Simulation 失败
+  → MySQL 热索引 + JSONL 原始事件
+  → 规则初筛
+  → LLM 自动预标注
+  → 人工确认和根因标注
+  → Bad Case / Tool Selection / Pending Safety / SFT 数据集
+  → Simulation / Evaluation 回归验证
+  → 修 prompt / router / skill / pending plan
+```
+
+阶段目标：
+
+- P0：证据完整化，确保每轮对话能导出 debug JSON 并回溯 trace、tool、pending lifecycle。
+- P1：人工标注闭环，支持固定标签、备注、规则候选、case draft 和当前样本 JSONL 导出。
+- P2：AI 自动预标注，引入 `llm_judge` 建议标签、置信度、根因和采纳/驳回工作流。
+- P3：Dataset 与仿真评测闭环，支持数据集版本、DB-backed simulation cases、失败回流和趋势评分。
+- P4：训练与调优出口，导出 SFT、router、pending safety 和 prompt regression 数据。
 
 ---
 
