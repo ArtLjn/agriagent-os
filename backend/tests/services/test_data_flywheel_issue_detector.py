@@ -92,6 +92,44 @@ def test_detects_missing_wage_when_work_order_has_workers_without_wage_policy() 
     ]
 
 
+def test_detects_missing_wage_when_work_order_only_has_quantity() -> None:
+    candidates = detect_issue_candidates(
+        user_input="今天王大妈去5号棚收水稻1亩",
+        assistant_reply="已安排王大妈去5号棚收水稻。",
+        selected_tools=["create_operation_work_order"],
+        events=[
+            {
+                "event_type": "tool.call.finished",
+                "payload": {
+                    "tool_name": "create_operation_work_order",
+                    "params": {
+                        "workers": "王大妈",
+                        "operation_type": "收水稻",
+                        "quantity": 1,
+                    },
+                    "result": {"id": 9},
+                },
+            }
+        ],
+        pending_lifecycle=[
+            {
+                "event_type": "pending.plan.created",
+                "payload": {
+                    "steps": [{"skill_name": "create_operation_work_order"}],
+                },
+            }
+        ],
+    )
+
+    assert {
+        "type": "missing_wage",
+        "severity": "high",
+        "reason": "作业包含工人，但没有工资单价、已付金额、不计工资或欠款策略",
+        "evidence": "王大妈",
+        "suggested_label": "missing_wage",
+    } in candidates
+
+
 def test_no_missing_wage_when_no_wage_policy_is_explicit() -> None:
     candidates = detect_issue_candidates(
         user_input="今天王大妈帮忙巡棚，不计工资",

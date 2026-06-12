@@ -60,7 +60,6 @@ WAGE_FIELD_KEYS = (
     "paid_amount",
     "payable_amount",
     "unpaid_amount",
-    "quantity",
 )
 NO_WAGE_FIELD_KEYS = ("no_wage", "wage_policy")
 NO_WAGE_VALUES = ("none", "no_wage", "free", "不计工资", "无工资")
