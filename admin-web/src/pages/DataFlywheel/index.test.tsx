@@ -511,6 +511,79 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getAllByText('第二条样本备注').length).toBeGreaterThan(0);
   });
 
+  it('同一问题会话有多个已标注 turn 时右侧展示并可切换', async () => {
+    const user = userEvent.setup();
+    const firstProblemSample: DataFlywheelSample = {
+      ...sample,
+      quality_labels: ['bad_reply'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    const secondProblemSample: DataFlywheelSample = {
+      ...sessionSecondSample,
+      quality_labels: ['hallucinated_execution'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [firstProblemSample, secondProblemSample], total: 2 });
+    mockedDetail.mockImplementation((sampleId) => {
+      if (sampleId === secondProblemSample.sample_id) {
+        return Promise.resolve({
+          ...detail,
+          sample: secondProblemSample,
+          quality_labels: ['hallucinated_execution'],
+          labels: [
+            {
+              id: 8,
+              sample_id: secondProblemSample.sample_id,
+              label: 'hallucinated_execution',
+              comment: '确认时幻觉执行',
+              annotator_id: 'admin',
+              sample_type: 'turn',
+              session_id: 'session-a',
+              turn_id: 4,
+              request_id: 'req:confirm',
+            },
+          ],
+        });
+      }
+      return Promise.resolve({
+        ...detail,
+        sample: firstProblemSample,
+        quality_labels: ['bad_reply'],
+        labels: [
+          {
+            id: 7,
+            sample_id: firstProblemSample.sample_id,
+            label: 'bad_reply',
+            comment: '查询工人答错',
+            annotator_id: 'admin',
+            sample_type: 'turn',
+            session_id: 'session-a',
+            turn_id: 3,
+            request_id: 'req:abc',
+          },
+        ],
+      });
+    });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
+    fireEvent.click(screen.getByTestId('problem-session-session-a'));
+
+    expect(await screen.findByText('本会话问题标注')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /查看问题标注 turn #4/ })).toHaveTextContent('#4');
+    expect(screen.getByRole('button', { name: /查看问题标注 turn #3/ })).toHaveTextContent('#3');
+
+    await user.click(screen.getByRole('button', { name: /查看问题标注 turn #3/ }));
+
+    await waitFor(() => {
+      expect(mockedDetail).toHaveBeenCalledWith(firstProblemSample.sample_id);
+    });
+    expect(screen.getAllByText('查询工人答错').length).toBeGreaterThan(0);
+  });
+
   it('点击已标注问题后会按单个会话归档显示会话级问题标注', async () => {
     const sessionLevelBadSample: DataFlywheelSample = {
       ...sample,

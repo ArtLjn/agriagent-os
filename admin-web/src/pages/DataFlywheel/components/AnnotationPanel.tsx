@@ -13,6 +13,10 @@ import {
 import type { DataFlywheelLabel, DataFlywheelLabelRecord, DataFlywheelSample } from '../../../api/dataFlywheel';
 import { cardStyle, palette } from '../../../styles/theme';
 
+export interface SessionProblemItem {
+  sample: DataFlywheelSample;
+}
+
 interface AnnotationPanelProps {
   selectedSample: DataFlywheelSample | null;
   label: DataFlywheelLabel;
@@ -21,8 +25,10 @@ interface AnnotationPanelProps {
   acting: boolean;
   annotationTargetLabel?: string;
   existingLabels?: DataFlywheelLabelRecord[];
+  sessionProblemItems?: SessionProblemItem[];
   onLabelChange: (label: DataFlywheelLabel) => void;
   onCommentChange: (comment: string) => void;
+  onSelectSessionProblem?: (sample: DataFlywheelSample) => void;
   onSave: () => void;
   onDeleteLabel: (label: DataFlywheelLabelRecord) => void;
   onResolveLabel: (label: DataFlywheelLabelRecord) => void;
@@ -58,8 +64,10 @@ export default function AnnotationPanel({
   acting,
   annotationTargetLabel,
   existingLabels = [],
+  sessionProblemItems = [],
   onLabelChange,
   onCommentChange,
+  onSelectSessionProblem,
   onSave,
   onDeleteLabel,
   onResolveLabel,
@@ -102,6 +110,27 @@ export default function AnnotationPanel({
             ))}
           </Radio.Group>
         </div>
+
+        {sessionProblemItems.length > 1 && (
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Typography.Text style={{ color: palette.textMuted }}>本会话问题标注</Typography.Text>
+            {sessionProblemItems.map(({ sample }) => (
+              <Button
+                key={sample.sample_id}
+                aria-label={`查看问题标注 turn #${sample.turn_id}`}
+                block
+                size="small"
+                type={selectedSample?.sample_id === sample.sample_id ? 'primary' : 'default'}
+                onClick={() => onSelectSessionProblem?.(sample)}
+              >
+                <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                  <span>#{sample.turn_id} {sample.user_input_preview || sample.request_id || sample.sample_id}</span>
+                  <span>{sample.quality_labels.map((item) => labelText[item] ?? item).join('、')}</span>
+                </Space>
+              </Button>
+            ))}
+          </Space>
+        )}
 
         {existingLabels.length > 0 && (
           <Space direction="vertical" size={8} style={{ width: '100%' }}>

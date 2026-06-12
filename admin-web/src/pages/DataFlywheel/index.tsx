@@ -547,8 +547,10 @@ export default function DataFlywheel() {
         acting={acting}
         annotationTargetLabel={annotationTargetLabel(annotationTarget)}
         existingLabels={annotationLabels(detail, sessionAnnotations)}
+        sessionProblemItems={sessionProblemItems(samples, activeArchiveKey)}
         onLabelChange={setCurrentLabel}
         onCommentChange={setComment}
+        onSelectSessionProblem={loadDetail}
         onSave={handleSave}
         onDeleteLabel={handleDeleteLabel}
         onResolveLabel={handleResolveLabel}
@@ -681,9 +683,17 @@ function sessionArchiveKey(sample: DataFlywheelSample) {
 }
 
 function latestConfirmedProblemTurn(samples: DataFlywheelSample[], sessionKey: string) {
+  return confirmedProblemTurns(samples, sessionKey)[0];
+}
+
+function sessionProblemItems(samples: DataFlywheelSample[], sessionKey: string) {
+  return confirmedProblemTurns(samples, sessionKey).map((sample) => ({ sample }));
+}
+
+function confirmedProblemTurns(samples: DataFlywheelSample[], sessionKey: string) {
   return samples
     .filter((sample) => sessionArchiveKey(sample) === sessionKey && hasTurnConfirmedIssue(sample))
-    .sort((left, right) => right.turn_id - left.turn_id)[0];
+    .sort((left, right) => right.turn_id - left.turn_id);
 }
 
 function hasTurnConfirmedIssue(sample: DataFlywheelSample) {
