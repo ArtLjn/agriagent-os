@@ -702,6 +702,87 @@ def test_build_case_draft_from_sample(tmp_path):
     db.close()
 
 
+def test_build_case_draft_preserves_issue_candidate_assertions(tmp_path):
+    db = Session()
+    turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=True,
+        session_id="sess-case-issues",
+        user_input="今天李一凡和王大妈去5号棚收水稻",
+        assistant_reply="已安排李一凡和王大妈去5号棚收水稻。",
+        request_id="case-issues-1",
+        router_tools=["create_operation_work_order"],
+        tool_events=[
+            (
+                "tool.call.finished",
+                {
+                    "tool_name": "create_operation_work_order",
+                    "params": {
+                        "workers": "李一凡，王大妈",
+                        "operation_type": "收水稻",
+                    },
+                    "result": {
+                        "id": 9,
+                        "labor_entries": [
+                            {
+                                "worker_name": "李一凡",
+                                "worker_status": "inactive",
+                            },
+                            {
+                                "worker_name": "王大妈",
+                                "worker_status": "active",
+                            },
+                        ],
+                    },
+                },
+            )
+        ],
+    )
+    sample_id = f"turn:1:sess-case-issues:{turn.id}"
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="disabled_worker_used")
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="missing_wage")
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="needs_regression")
+
+    draft = build_case_draft(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        target_type="evaluation_replay",
+        created_by="admin-1",
+    )
+
+    assert draft["case_json"]["metadata"]["issue_candidates"] == [
+        {
+            "type": "disabled_worker_used",
+            "severity": "high",
+            "reason": "已停用工人仍被安排到作业或工资记录中",
+            "evidence": "李一凡",
+            "suggested_label": "disabled_worker_used",
+        },
+        {
+            "type": "missing_wage",
+            "severity": "high",
+            "reason": "作业包含工人，但没有工资单价、已付金额、不计工资或欠款策略",
+            "evidence": "李一凡, 王大妈",
+            "suggested_label": "missing_wage",
+        },
+    ]
+    assert draft["case_json"]["issue_assertions"] == [
+        {
+            "type": "disabled_worker_used",
+            "expected": "停用或离职工人不得被安排到作业或工资记录中",
+            "evidence": "李一凡",
+        },
+        {
+            "type": "missing_wage",
+            "expected": "包含工人的作业必须明确工资、已付金额、不计工资或欠款策略",
+            "evidence": "李一凡, 王大妈",
+        },
+    ]
+    db.close()
+
+
 def test_build_case_draft_without_pending_sets_expected_pending_action_none(tmp_path):
     db = Session()
     turn = _seed_turn(db, tmp_path, include_pending=False)

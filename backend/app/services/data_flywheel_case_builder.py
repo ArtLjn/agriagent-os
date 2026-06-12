@@ -26,12 +26,14 @@ def build_case_json(
         "confirmation_flow": [],
         "expected_database_diff": [],
         "reply_assertions": _reply_assertions(detail, sample),
+        "issue_assertions": _issue_assertions(detail),
         "metadata": {
             "source": "data_flywheel",
             "source_sample_id": sample_id,
             "source_session_id": sample["session_id"],
             "source_request_id": sample["request_id"],
             "quality_labels": quality_labels,
+            "issue_candidates": detail.get("issue_candidates", []),
         },
     }
     case_json["expected_pending_action"] = _expected_pending_action(
@@ -54,6 +56,35 @@ def _reply_assertions(
         "assistant_reply_preview"
     )
     return [{"contains": reply}] if reply else []
+
+
+def _issue_assertions(detail: dict[str, Any]) -> list[dict[str, str]]:
+    assertions: list[dict[str, str]] = []
+    for candidate in detail.get("issue_candidates", []):
+        issue_type = candidate.get("type")
+        expected = _expected_for_issue(issue_type)
+        if not expected:
+            continue
+        assertions.append(
+            {
+                "type": str(issue_type),
+                "expected": expected,
+                "evidence": str(candidate.get("evidence") or ""),
+            }
+        )
+    return assertions
+
+
+def _expected_for_issue(issue_type: str | None) -> str | None:
+    expected_by_type = {
+        "disabled_worker_used": "停用或离职工人不得被安排到作业或工资记录中",
+        "missing_wage": "包含工人的作业必须明确工资、已付金额、不计工资或欠款策略",
+        "pending_missed": "写操作必须先创建 pending plan，用户确认后才能执行",
+        "hallucinated_execution": "没有成功写工具调用时，回复不得声称已完成写入",
+        "tool_error_ignored": "工具失败时回复必须说明失败或要求补充信息，不得伪装成功",
+        "wrong_tool_selection": "router 必须选择与用户意图匹配的 skill",
+    }
+    return expected_by_type.get(issue_type)
 
 
 def _expected_pending_action(
