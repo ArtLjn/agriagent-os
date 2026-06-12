@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Button, Card, Empty, Space, Spin, Tag, Typography } from 'antd';
 
 import type {
@@ -46,6 +47,15 @@ export default function SessionConversationView({
   onSelectTurn,
   onSelectSession,
 }: SessionConversationViewProps) {
+  const turnRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  useEffect(() => {
+    if (!selectedSampleId) return;
+    const element = turnRefs.current[selectedSampleId];
+    if (typeof element?.scrollIntoView !== 'function') return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [selectedSampleId]);
+
   return (
     <Card
       title="完整对话记录"
@@ -74,6 +84,9 @@ export default function SessionConversationView({
                 key={turn.sample.sample_id}
                 turn={turn}
                 active={turn.sample.sample_id === selectedSampleId}
+                setElement={(element) => {
+                  turnRefs.current[turn.sample.sample_id] = element;
+                }}
                 onSelect={() => onSelectTurn(turn.sample)}
               />
             ))}
@@ -87,10 +100,12 @@ export default function SessionConversationView({
 function TurnReviewCard({
   turn,
   active,
+  setElement,
   onSelect,
 }: {
   turn: DataFlywheelSessionTurnReview;
   active: boolean;
+  setElement: (element: HTMLElement | null) => void;
   onSelect: () => void;
 }) {
   const userMessage = messageContent(turn, 'user') || turn.sample.user_input_preview || '无用户输入';
@@ -99,6 +114,8 @@ function TurnReviewCard({
   const routerReason = routerReasonText(turn.router_decision);
   return (
     <article
+      ref={setElement}
+      data-testid={`session-turn-${turn.sample.sample_id}`}
       style={{
         border: `1px solid ${active ? palette.accentStrong : palette.borderSoft}`,
         borderRadius: 8,

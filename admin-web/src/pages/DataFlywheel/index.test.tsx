@@ -513,6 +513,14 @@ describe('DataFlywheel 页面', () => {
 
   it('同一问题会话有多个已标注 turn 时右侧展示并可切换', async () => {
     const user = userEvent.setup();
+    const scrolledElements: Element[] = [];
+    const scrollIntoView = vi.fn(function (this: Element) {
+      scrolledElements.push(this);
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
     const firstProblemSample: DataFlywheelSample = {
       ...sample,
       quality_labels: ['bad_reply'],
@@ -576,12 +584,18 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByRole('button', { name: /查看问题标注 turn #4/ })).toHaveTextContent('#4');
     expect(screen.getByRole('button', { name: /查看问题标注 turn #3/ })).toHaveTextContent('#3');
 
+    scrollIntoView.mockClear();
+    scrolledElements.length = 0;
     await user.click(screen.getByRole('button', { name: /查看问题标注 turn #3/ }));
 
     await waitFor(() => {
       expect(mockedDetail).toHaveBeenCalledWith(firstProblemSample.sample_id);
     });
     expect(screen.getAllByText('查询工人答错').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalled();
+    });
+    expect(scrolledElements.at(-1)?.getAttribute('data-testid')).toBe('session-turn-turn:session-a:3');
   });
 
   it('点击已标注问题后会按单个会话归档显示会话级问题标注', async () => {
