@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from types import SimpleNamespace
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 # title 超过此长度截断并加省略号
 _TITLE_MAX_DISPLAY = 10
 _ADVICE_ITEM_MAX = 5
+_HOMEPAGE_ADVICE_ITEM_MAX = 3
 _NON_ADVICE_RESPONSES = set(QUOTA_REJECT_MESSAGES.values())
 application_chat = None
 
@@ -113,6 +115,26 @@ def _parse_advice_items(raw: str) -> tuple[str, list[AdviceItem]]:
     except (ValueError, json.JSONDecodeError, KeyError, TypeError) as exc:
         logger.warning("建议 JSON 解析失败，fallback 为单条 | error=%s", exc)
         return "", [fallback_item]
+
+
+def _limit_homepage_items(items: list[AdviceItem]) -> list[AdviceItem]:
+    """首页每日建议最多展示 3 条。"""
+    return items[:_HOMEPAGE_ADVICE_ITEM_MAX]
+
+
+def _parse_record_meta(raw: str | None) -> dict[str, Any]:
+    """防御性解析 AgentRecord.meta，旧数据或异常数据按空对象处理。"""
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        logger.warning("建议缓存 meta 解析失败，按旧缓存兼容处理 | error=%s", exc)
+        return {}
+    if not isinstance(parsed, dict):
+        logger.warning("建议缓存 meta 非对象，按旧缓存兼容处理")
+        return {}
+    return parsed
 
 
 def _build_notice_response(message: str, cycle_id: int | None) -> DailyAdviceResponse:
@@ -222,6 +244,15 @@ async def get_daily_advice(
     """生成每日农事建议并保存。命中今日缓存则直接返回。"""
     user_id = _resolve_user_id(db, farm_id, user_id)
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    candidates = await collect_daily_advice_candidates(db, farm_id=farm_id)
+    selected_candidates = rank_daily_advice_candidates(candidates, limit=5)
+    candidate_fingerprint = fingerprint_candidates(selected_candidates)
+    candidate_meta = {
+        "selected_candidates": [
+            candidate.to_meta() for candidate in selected_candidates[:_ADVICE_ITEM_MAX]
+        ],
+        "candidate_fingerprint": candidate_fingerprint,
+    }
     cached = (
         db.query(AgentRecord)
         .filter(
@@ -236,28 +267,27 @@ async def get_daily_advice(
         if cached.content.strip() in _NON_ADVICE_RESPONSES:
             logger.warning("忽略非建议缓存 | record_id=%s", cached.id)
         else:
-            preview, items = _parse_advice_items(cached.content)
-            logger.info("缓存命中 | record_id=%s", cached.id)
-            return DailyAdviceResponse(
-                cycle_id=cached.cycle_id,
-                preview=preview,
-                items=items,
-                created_at=cached.created_at,
-            )
+            cached_meta = _parse_record_meta(cached.meta)
+            cached_fingerprint = cached_meta.get("candidate_fingerprint")
+            if cached_fingerprint and cached_fingerprint != candidate_fingerprint:
+                logger.info(
+                    "建议缓存候选已变化，重新生成 | record_id=%s",
+                    cached.id,
+                )
+            else:
+                preview, items = _parse_advice_items(cached.content)
+                logger.info("缓存命中 | record_id=%s", cached.id)
+                return DailyAdviceResponse(
+                    cycle_id=cached.cycle_id,
+                    preview=preview,
+                    items=_limit_homepage_items(items),
+                    created_at=cached.created_at,
+                )
 
-    candidates = await collect_daily_advice_candidates(db, farm_id=farm_id)
-    selected_candidates = rank_daily_advice_candidates(candidates, limit=5)
     if selected_candidates:
         context = render_candidate_context(selected_candidates)
     else:
         context = await farm_context_service.build_summary(db, farm_id)
-
-    candidate_meta = {
-        "selected_candidates": [
-            candidate.to_meta() for candidate in selected_candidates[:_ADVICE_ITEM_MAX]
-        ],
-        "candidate_fingerprint": fingerprint_candidates(selected_candidates),
-    }
 
     # 注入农场上下文，通过 PromptComposer 渲染模板
     prompt = get_composer().compose(
@@ -299,7 +329,7 @@ async def get_daily_advice(
     return DailyAdviceResponse(
         cycle_id=record.cycle_id,
         preview=preview,
-        items=items,
+        items=_limit_homepage_items(items),
         created_at=record.created_at,
     )
 
