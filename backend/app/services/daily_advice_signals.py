@@ -19,9 +19,9 @@ DailyAdviceCategory = Literal[
 
 _CATEGORY_ORDER: dict[DailyAdviceCategory, int] = {
     "weather": 0,
-    "finance": 1,
-    "operation": 2,
-    "crop_stage": 3,
+    "operation": 1,
+    "crop_stage": 2,
+    "finance": 3,
     "setup": 4,
     "record": 5,
 }
@@ -47,7 +47,7 @@ class DailyAdviceCandidate:
     priority: int
     due_date: date | None
     source_type: str
-    source_id: str | None
+    source_id: int | None
     dedupe_key: str
     reason: str
 
@@ -114,7 +114,7 @@ def render_candidate_context(candidates: list[DailyAdviceCandidate]) -> str:
         lines.append(
             f"{index}. priority={candidate.priority} "
             f"category={candidate.category} "
-            f"source={candidate.category} "
+            f"source={candidate.source_type} "
             f"due={due} "
             f"title={candidate.title_hint} "
             f"detail={candidate.detail_hint} "
@@ -135,7 +135,7 @@ def _candidate_sort_key(
     candidate: DailyAdviceCandidate,
     today: date,
 ) -> tuple[int, int, int, str]:
-    due_offset = (candidate.due_date - today).days if candidate.due_date else 0
+    due_offset = (candidate.due_date - today).days if candidate.due_date else 99
     return (
         candidate.priority,
         due_offset,

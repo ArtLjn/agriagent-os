@@ -88,19 +88,40 @@ def test_rank_deduplicates_by_dedupe_key():
     ranked = rank_daily_advice_candidates(candidates, today=today, limit=5)
 
     assert len(ranked) == 1
-    assert ranked[0].id == "hot-1"
+    assert ranked[0].id == "hot-2"
+
+
+def test_rank_places_candidates_with_due_date_before_without_due_date():
+    today = date.today()
+    candidates = [
+        _candidate(key="none-due", category="operation", priority=1),
+        _candidate(
+            key="has-due",
+            category="operation",
+            priority=1,
+            due_date=today + timedelta(days=3),
+        ),
+    ]
+
+    ranked = rank_daily_advice_candidates(candidates, today=today, limit=2)
+
+    assert [item.id for item in ranked] == ["has-due", "none-due"]
 
 
 def test_render_candidate_context_contains_only_ranked_candidates():
     today = date.today()
     candidates = [
-        _candidate(
-            key="weather",
+        DailyAdviceCandidate(
+            id="weather",
             category="weather",
+            title_hint="高温错峰采收",
+            detail_hint="今天最高温 36 度，避开中午高温时段",
             priority=1,
             due_date=today,
-            title="高温错峰采收",
-            detail="今天最高温 36 度，避开中午高温时段",
+            source_type="weather",
+            source_id=None,
+            dedupe_key="weather",
+            reason="测试原因",
         ),
         _candidate(
             key="operation",
@@ -118,3 +139,23 @@ def test_render_candidate_context_contains_only_ranked_candidates():
     assert "安排巡田" in context
     assert "priority=1" in context
     assert "source=weather" in context
+
+
+def test_render_candidate_context_uses_source_type_instead_of_category():
+    candidate = DailyAdviceCandidate(
+        id="weather-service",
+        category="weather",
+        title_hint="高温错峰采收",
+        detail_hint="避开中午高温时段",
+        priority=1,
+        due_date=None,
+        source_type="weather_service",
+        source_id=12,
+        dedupe_key="weather:service",
+        reason="天气服务命中高温规则",
+    )
+
+    context = render_candidate_context([candidate])
+
+    assert "source=weather_service" in context
+    assert "source=weather " not in context
