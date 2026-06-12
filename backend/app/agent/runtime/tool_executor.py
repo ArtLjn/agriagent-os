@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from app.agent.reflector import ReflectorService
+from app.agent.reflector.models import ReflectionDecision, ReflectionTrigger
 from app.agent.router import SkillRouter
 from app.agent.skills import get_langchain_tools
 from app.agent.skills.metadata import SkillPermissionLevel
@@ -436,6 +438,28 @@ def _pending_plan_tool_message(
         )
         for index, step in enumerate(steps)
     ]
+    confirm_text = build_plan_confirm_message(pending_steps)
+    reflection_result = ReflectorService().check_pending_plan(
+        trigger=ReflectionTrigger.PRE_WRITE_PLAN,
+        steps=pending_steps,
+        confirmation_text=confirm_text,
+        trace_metadata={
+            "farm_id": farm_id,
+            "session_id": state.get("session_id"),
+            "raw_user_input": original_input,
+            "tool_names": sorted(step_tool_names),
+            "tool_call_ids": [str(tool_call["id"]) for tool_call in tool_calls],
+        },
+    )
+    if reflection_result.decision != ReflectionDecision.PASS:
+        return [
+            ToolMessage(
+                content=reflection_result.reason,
+                tool_call_id=tool_call["id"],
+            )
+            for tool_call in tool_calls
+        ]
+
     session_id = state.get("session_id")
     store_pending_plan(
         farm_id=farm_id,
@@ -444,7 +468,6 @@ def _pending_plan_tool_message(
         router_decision=router_decision.to_trace_payload(),
         steps=pending_steps,
     )
-    confirm_text = build_plan_confirm_message(pending_steps)
     messages = [
         ToolMessage(
             content="已纳入待确认计划。",
@@ -616,6 +639,38 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             confirmation_context = build_confirmation_context(
                 name, confirmation_args, original_input=original_input
             )
+            confirm_text = build_confirm_message(
+                name, confirmation_args, original_input=original_input
+            )
+            reflection_result = ReflectorService().check_write_plan(
+                trigger=ReflectionTrigger.PRE_WRITE_PLAN,
+                skill_name=name,
+                params=execution_args,
+                confirmation_text=confirm_text,
+                trace_metadata={
+                    "farm_id": farm_id,
+                    "session_id": state.get("session_id"),
+                    "tool_name": name,
+                    "tool_call_id": tool_call_id,
+                },
+            )
+            if reflection_result.decision != ReflectionDecision.PASS:
+                collector.record(
+                    node_type="skill_call",
+                    node_name=name,
+                    input_data=execution_args,
+                    output_data={
+                        "status": "reflection_blocked",
+                        "permission_level": permission_decision.permission_level,
+                        "reflection": reflection_result.to_trace_payload(),
+                    },
+                    duration_ms=0,
+                )
+                return ToolMessage(
+                    content=reflection_result.reason,
+                    tool_call_id=tool_call_id,
+                )
+
             session_id = state.get("session_id")
             action_id = store_pending(
                 farm_id,
@@ -641,9 +696,6 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                     "confirmation_context": confirmation_context,
                 },
                 duration_ms=0,
-            )
-            confirm_text = build_confirm_message(
-                name, confirmation_args, original_input=original_input
             )
             return ToolMessage(
                 content=f"{PENDING_MARKER} {confirm_text}",
