@@ -2,8 +2,11 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 from app.models.cost import CostRecord
+from app.models.crop import CropTemplate
+from app.models.cycle import CropCycle, CycleStage
 from app.models.planting import OperationWorkOrder
 from app.services.daily_advice_signals import (
     DailyAdviceCandidate,
@@ -35,6 +38,59 @@ def _candidate(
         dedupe_key=key,
         reason="测试原因",
     )
+
+
+def _weather_data(
+    *,
+    temps: list[float],
+    rain: list[float] | None = None,
+    wind: list[float] | None = None,
+) -> dict:
+    days = len(temps)
+    return {
+        "daily": {
+            "time": [f"2026-06-{12 + index:02d}" for index in range(days)],
+            "temperature_2m_max": temps,
+            "precipitation_sum": rain or [0] * days,
+            "windspeed_10m_max": wind or [0] * days,
+        }
+    }
+
+
+def _create_active_cycle(
+    db_session,
+    *,
+    today: date,
+    crop_name: str = "西瓜",
+    cycle_name: str = "早春西瓜一茬",
+    stage_name: str = "伸蔓期",
+    key_tasks: str | None = "巡田、理蔓",
+) -> CropCycle:
+    template = CropTemplate(farm_id=1, name=crop_name)
+    db_session.add(template)
+    db_session.flush()
+    cycle = CropCycle(
+        farm_id=1,
+        name=cycle_name,
+        crop_template_id=template.id,
+        start_date=today - timedelta(days=5),
+        status="active",
+    )
+    db_session.add(cycle)
+    db_session.flush()
+    stage = CycleStage(
+        cycle_id=cycle.id,
+        name=stage_name,
+        start_date=today - timedelta(days=3),
+        end_date=today + timedelta(days=7),
+        order_index=1,
+        duration_days=11,
+        key_tasks=key_tasks,
+        is_current=True,
+    )
+    db_session.add(stage)
+    db_session.commit()
+    return cycle
 
 
 def test_rank_keeps_p1_before_p2_and_limits_homepage_to_three():
@@ -194,8 +250,9 @@ async def test_collect_finance_candidates_skips_debt_without_due_date_and_labor_
     db_session.commit()
 
     candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    finance_candidates = [item for item in candidates if item.category == "finance"]
 
-    assert [item.category for item in candidates] == []
+    assert finance_candidates == []
 
 
 async def test_collect_finance_candidates_includes_overdue_and_due_soon_debts(
@@ -333,3 +390,94 @@ async def test_collect_operation_candidates_includes_overdue_today_and_next_thre
     assert operation_candidates[2].title_hint == "明日安排打药"
     assert operation_candidates[3].title_hint == "近期安排浇水"
     assert operation_candidates[4].title_hint == "近期安排采收"
+
+
+async def test_collect_weather_candidates_includes_high_temperature_p1(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    fetch_weather = AsyncMock(return_value=_weather_data(temps=[36, 32, 31]))
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        fetch_weather,
+    )
+
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    weather_candidates = [item for item in candidates if item.category == "weather"]
+
+    fetch_weather.assert_awaited_once_with(days=3)
+    assert len(weather_candidates) == 1
+    assert weather_candidates[0].priority == 1
+    assert weather_candidates[0].source_type == "weather_service"
+    assert weather_candidates[0].due_date == today
+    assert "高温" in weather_candidates[0].title_hint
+
+
+async def test_collect_weather_candidates_merges_continuous_high_temperature(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        AsyncMock(return_value=_weather_data(temps=[35, 36, 37])),
+    )
+
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    weather_candidates = [item for item in candidates if item.category == "weather"]
+
+    assert len(weather_candidates) == 1
+    assert "持续高温" in weather_candidates[0].detail_hint
+
+
+async def test_collect_crop_stage_candidates_from_current_active_cycle(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        AsyncMock(return_value=_weather_data(temps=[30, 31, 32])),
+    )
+    cycle = _create_active_cycle(db_session, today=today)
+
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    crop_stage_candidates = [
+        item for item in candidates if item.category == "crop_stage"
+    ]
+
+    assert len(crop_stage_candidates) == 1
+    assert crop_stage_candidates[0].priority == 2
+    assert crop_stage_candidates[0].source_id == cycle.id
+    assert crop_stage_candidates[0].source_type == "crop_cycle"
+    assert "西瓜" in crop_stage_candidates[0].detail_hint
+    assert "早春西瓜一茬" in crop_stage_candidates[0].detail_hint
+    assert "伸蔓期" in crop_stage_candidates[0].detail_hint
+
+
+async def test_collect_crop_stage_candidates_suppresses_recent_same_operation(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        AsyncMock(return_value=_weather_data(temps=[30, 31, 32])),
+    )
+    _create_active_cycle(db_session, today=today, key_tasks="巡田、理蔓")
+    db_session.add(
+        OperationWorkOrder(
+            farm_id=1,
+            operation_type="巡田",
+            operation_date=today - timedelta(days=1),
+            scope_type="farm",
+        )
+    )
+    db_session.commit()
+
+    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+
+    assert [
+        item for item in candidates if item.category == "crop_stage"
+    ] == []

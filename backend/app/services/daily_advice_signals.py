@@ -13,7 +13,9 @@ from typing import Any, Literal
 from sqlalchemy.orm import Session
 
 from app.models.cost import CostRecord
+from app.models.cycle import CropCycle
 from app.models.planting import OperationWorkOrder
+from app.services import weather_service
 
 DailyAdviceCategory = Literal[
     "weather",
@@ -146,10 +148,140 @@ async def collect_daily_advice_candidates(
 ) -> list[DailyAdviceCandidate]:
     """收集今日建议候选信号。"""
     reference_day = today or date.today()
+    recent_operation_types = _recent_operation_types(
+        db,
+        farm_id=farm_id,
+        today=reference_day,
+    )
     return [
+        *await _collect_weather_candidates(today=reference_day),
+        *_collect_crop_stage_candidates(
+            db,
+            farm_id=farm_id,
+            today=reference_day,
+            recent_operation_types=recent_operation_types,
+        ),
         *_collect_operation_candidates(db, farm_id=farm_id, today=reference_day),
         *_collect_finance_candidates(db, farm_id=farm_id, today=reference_day),
     ]
+
+
+async def _collect_weather_candidates(
+    *,
+    today: date,
+) -> list[DailyAdviceCandidate]:
+    try:
+        weather = await weather_service.fetch_weather(days=3)
+    except Exception:
+        return []
+
+    daily = weather.get("daily", {})
+    times = daily.get("time", [])
+    max_temps = daily.get("temperature_2m_max", [])
+    precipitations = daily.get("precipitation_sum", [])
+    winds = daily.get("windspeed_10m_max", [])
+
+    hot_days = _weather_hits(times, max_temps, threshold=35)
+    if hot_days:
+        return [
+            _weather_candidate(
+                kind="heat",
+                title="高温天气注意错峰作业",
+                detail=_weather_detail("高温", hot_days, "持续高温"),
+                priority=1,
+                today=today,
+                reason="未来 3 天最高温达到 35 度及以上",
+            )
+        ]
+
+    rain_days = _weather_hits(times, precipitations, threshold=10)
+    if rain_days:
+        return [
+            _weather_candidate(
+                kind="rain",
+                title="明显降雨注意排水防涝",
+                detail=_weather_detail("降雨", rain_days, "持续明显降雨"),
+                priority=1,
+                today=today,
+                reason="未来 3 天降雨量达到 10 毫米及以上",
+            )
+        ]
+
+    wind_days = _weather_hits(times, winds, threshold=17)
+    if wind_days:
+        return [
+            _weather_candidate(
+                kind="wind",
+                title="大风天气注意设施加固",
+                detail=_weather_detail("大风", wind_days, "持续大风"),
+                priority=1,
+                today=today,
+                reason="未来 3 天最大风速达到 17 米每秒及以上",
+            )
+        ]
+
+    return []
+
+
+def _collect_crop_stage_candidates(
+    db: Session,
+    *,
+    farm_id: int,
+    today: date,
+    recent_operation_types: set[str],
+) -> list[DailyAdviceCandidate]:
+    cycles = (
+        db.query(CropCycle)
+        .filter(CropCycle.farm_id == farm_id, CropCycle.status == "active")
+        .order_by(CropCycle.start_date.asc(), CropCycle.id.asc())
+        .all()
+    )
+    if not cycles:
+        return [
+            DailyAdviceCandidate(
+                id=f"setup:crop_cycle:{farm_id}",
+                category="setup",
+                title_hint="补充当前茬口信息",
+                detail_hint="当前农场还没有活跃茬口，建议先建立作物和茬口阶段。",
+                priority=3,
+                due_date=None,
+                source_type="crop_cycle",
+                source_id=None,
+                dedupe_key=f"setup:crop_cycle:{farm_id}",
+                reason="缺少活跃茬口，无法根据生长阶段生成建议",
+            )
+        ]
+
+    candidates: list[DailyAdviceCandidate] = []
+    for cycle in cycles:
+        stage = _current_stage(cycle)
+        if stage is None:
+            continue
+
+        task = _first_stage_task(stage.key_tasks or "巡田观察")
+        if task in recent_operation_types:
+            continue
+
+        crop_name = cycle.crop_template.name if cycle.crop_template else "未知作物"
+        candidates.append(
+            DailyAdviceCandidate(
+                id=f"crop_stage:cycle:{cycle.id}:stage:{stage.id}",
+                category="crop_stage",
+                title_hint=f"{stage.name}建议{task}",
+                detail_hint=(
+                    f"{crop_name}茬口「{cycle.name}」当前处于{stage.name}，"
+                    f"关键任务：{stage.key_tasks or '巡田观察'}。"
+                ),
+                priority=2,
+                due_date=today,
+                source_type="crop_cycle",
+                source_id=cycle.id,
+                dedupe_key=f"crop_stage:{cycle.id}:{stage.id}:{task}",
+                reason="当前活跃茬口阶段存在关键农事任务",
+            )
+        )
+
+    return candidates
 
 
 def _collect_operation_candidates(
@@ -233,6 +365,94 @@ def _collect_finance_candidates(
         )
 
     return candidates
+
+
+def _recent_operation_types(
+    db: Session,
+    *,
+    farm_id: int,
+    today: date,
+) -> set[str]:
+    since = today - timedelta(days=3)
+    rows = (
+        db.query(OperationWorkOrder.operation_type)
+        .filter(
+            OperationWorkOrder.farm_id == farm_id,
+            OperationWorkOrder.operation_date >= since,
+            OperationWorkOrder.operation_date <= today,
+        )
+        .all()
+    )
+    return {operation_type for (operation_type,) in rows}
+
+
+def _weather_hits(
+    times: list[Any],
+    values: list[Any],
+    *,
+    threshold: float,
+) -> list[tuple[str, float]]:
+    hits: list[tuple[str, float]] = []
+    for index, raw_value in enumerate(values[:3]):
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+
+        if value >= threshold:
+            day = str(times[index]) if index < len(times) else f"第 {index + 1} 天"
+            hits.append((day, value))
+
+    return hits
+
+
+def _weather_candidate(
+    *,
+    kind: str,
+    title: str,
+    detail: str,
+    priority: int,
+    today: date,
+    reason: str,
+) -> DailyAdviceCandidate:
+    return DailyAdviceCandidate(
+        id=f"weather:{kind}",
+        category="weather",
+        title_hint=title,
+        detail_hint=detail,
+        priority=priority,
+        due_date=today,
+        source_type="weather_service",
+        source_id=None,
+        dedupe_key=f"weather:{kind}",
+        reason=reason,
+    )
+
+
+def _weather_detail(
+    label: str,
+    hits: list[tuple[str, float]],
+    continuous_text: str,
+) -> str:
+    day_values = "、".join(f"{day} {value:g}" for day, value in hits)
+    if len(hits) > 1:
+        return f"未来 3 天{continuous_text}：{day_values}。"
+    return f"未来 3 天有{label}风险：{day_values}。"
+
+
+def _current_stage(cycle: CropCycle) -> Any | None:
+    stages = sorted(cycle.stages, key=lambda stage: stage.order_index)
+    if not stages:
+        return None
+
+    current = next((stage for stage in stages if stage.is_current), None)
+    return current or stages[-1]
+
+
+def _first_stage_task(key_tasks: str) -> str:
+    for separator in ("、", "，", ",", "；", ";", "\n"):
+        key_tasks = key_tasks.replace(separator, " ")
+    return key_tasks.split()[0] if key_tasks.split() else "巡田观察"
 
 
 def _candidate_sort_key(
