@@ -725,6 +725,44 @@ describe('DataFlywheel 页面', () => {
     });
   });
 
+  it('加载完整会话标注后左侧归档会显示会话级问题', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
+    mockedSessionAnnotations.mockResolvedValue({
+      sample_id: 'session:1:session-a',
+      sample_type: 'session',
+      session_id: 'session-a',
+      quality_labels: ['sensitive_info_leak'],
+      labels: [
+        {
+          id: 9,
+          sample_id: 'session:1:session-a',
+          sample_type: 'session',
+          session_id: 'session-a',
+          turn_id: null,
+          request_id: null,
+          label: 'sensitive_info_leak',
+          comment: '错误的 json 泄漏判断',
+          annotator_id: 'admin',
+          status: 'open',
+        },
+      ],
+    });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-a');
+    fireEvent.click(screen.getByTestId('archive-session-session-a'));
+    await screen.findByText('完整对话记录');
+    await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
+
+    expect(await screen.findByText('1 会话标注')).toBeInTheDocument();
+    expect(screen.getByText('1 bad')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
+
+    expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
+  });
+
   it('可以删除已有标注并刷新当前样本', async () => {
     const user = userEvent.setup();
     render(<DataFlywheel />);

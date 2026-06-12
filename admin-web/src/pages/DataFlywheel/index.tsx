@@ -79,6 +79,7 @@ export default function DataFlywheel() {
   const [selectedSample, setSelectedSample] = useState<DataFlywheelSample | null>(null);
   const [detail, setDetail] = useState<DataFlywheelDetail | null>(null);
   const [sessionAnnotations, setSessionAnnotations] = useState<DataFlywheelSessionAnnotations | null>(null);
+  const [sessionAnnotationCache, setSessionAnnotationCache] = useState<Record<string, DataFlywheelSessionAnnotations>>({});
   const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const [currentLabel, setCurrentLabel] = useState<DataFlywheelLabel>(DEFAULT_LABEL);
   const [comment, setComment] = useState('');
@@ -94,14 +95,21 @@ export default function DataFlywheel() {
   const detailRequestSeq = useRef(0);
   const sessionReviewRequestSeq = useRef(0);
 
-  const archiveGroups = useMemo(() => buildArchiveGroups(samples), [samples]);
+  const sessionAnnotationOverlays = useMemo(
+    () => mergeSessionAnnotations(Object.values(sessionAnnotationCache), sessionAnnotations),
+    [sessionAnnotationCache, sessionAnnotations]
+  );
+  const archiveGroups = useMemo(
+    () => buildArchiveGroups(samples, sessionAnnotationOverlays),
+    [samples, sessionAnnotationOverlays]
+  );
   const issueCount = useMemo(
     () => samples.filter((sample) => sample.issue_candidates.length > 0).length,
     [samples]
   );
   const confirmedIssueCount = useMemo(
-    () => confirmedIssueTotal(samples),
-    [samples]
+    () => confirmedIssueTotal(samples, sessionAnnotationOverlays),
+    [samples, sessionAnnotationOverlays]
   );
   const visibleSamples = useMemo(() => {
     if (activeArchiveKey === ALL_ARCHIVE_KEY) return samples;
@@ -109,10 +117,10 @@ export default function DataFlywheel() {
       return samples.filter((sample) => sample.issue_candidates.length > 0);
     }
     if (activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY) {
-      return samples.filter((sample) => hasConfirmedIssue(sample));
+      return samples.filter((sample) => hasConfirmedIssue(sample, sessionAnnotationOverlays));
     }
     return samples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
-  }, [activeArchiveKey, samples]);
+  }, [activeArchiveKey, samples, sessionAnnotationOverlays]);
   const isSessionArchiveActive =
     activeArchiveKey !== ALL_ARCHIVE_KEY &&
     activeArchiveKey !== ISSUE_ARCHIVE_KEY &&
@@ -218,6 +226,10 @@ export default function DataFlywheel() {
       setSelectedSample(null);
       setDetail(null);
       setSessionAnnotations(result);
+      setSessionAnnotationCache((current) => ({
+        ...current,
+        [result.session_id]: result,
+      }));
       setAnnotationTarget({
         type: 'session',
         sampleId: result.sample_id,
@@ -594,6 +606,17 @@ function annotationLabels(
   return sessionAnnotations?.labels ?? detail?.labels ?? [];
 }
 
+function mergeSessionAnnotations(
+  cached: DataFlywheelSessionAnnotations[],
+  active: DataFlywheelSessionAnnotations | null
+) {
+  if (!active) return cached;
+  return [
+    ...cached.filter((item) => item.session_id !== active.session_id),
+    active,
+  ];
+}
+
 function annotationTargetLabel(target: AnnotationTarget | null) {
   if (!target) return undefined;
   if (target.type === 'session') return '完整会话';
@@ -626,26 +649,35 @@ function sessionArchiveKey(sample: DataFlywheelSample) {
   return sample.session_id ?? 'unknown-session';
 }
 
-function hasConfirmedIssue(sample: DataFlywheelSample) {
-  return hasTurnConfirmedIssue(sample) || hasSessionConfirmedIssue(sample);
+function hasConfirmedIssue(
+  sample: DataFlywheelSample,
+  sessionAnnotations: DataFlywheelSessionAnnotations[] = []
+) {
+  return hasTurnConfirmedIssue(sample) || hasSessionConfirmedIssue(sample, sessionAnnotations);
 }
 
 function hasTurnConfirmedIssue(sample: DataFlywheelSample) {
   return sample.quality_labels.some((label) => confirmedIssueLabels.has(label));
 }
 
-function hasSessionConfirmedIssue(sample: DataFlywheelSample) {
-  return (sample.session_quality_labels ?? []).some((label) => confirmedIssueLabels.has(label));
+function hasSessionConfirmedIssue(
+  sample: DataFlywheelSample,
+  sessionAnnotations: DataFlywheelSessionAnnotations[] = []
+) {
+  return sessionQualityLabels(sample, sessionAnnotations).some((label) => confirmedIssueLabels.has(label));
 }
 
-function confirmedIssueTotal(samples: DataFlywheelSample[]) {
+function confirmedIssueTotal(
+  samples: DataFlywheelSample[],
+  sessionAnnotations: DataFlywheelSessionAnnotations[] = []
+) {
   const sessionIssueKeys = new Set<string>();
   let total = 0;
   samples.forEach((sample) => {
     if (hasTurnConfirmedIssue(sample)) {
       total += 1;
     }
-    if (hasSessionConfirmedIssue(sample)) {
+    if (hasSessionConfirmedIssue(sample, sessionAnnotations)) {
       sessionIssueKeys.add(sessionArchiveKey(sample));
     }
   });
@@ -664,7 +696,10 @@ const confirmedIssueLabels = new Set<DataFlywheelLabel>([
   'needs_regression',
 ]);
 
-function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[] {
+function buildArchiveGroups(
+  samples: DataFlywheelSample[],
+  sessionAnnotations: DataFlywheelSessionAnnotations[] = []
+): SessionArchiveItem[] {
   const groups = new Map<string, SessionArchiveItem>();
   const countedSessionIssues = new Set<string>();
 
@@ -672,11 +707,13 @@ function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[]
     const key = sessionArchiveKey(sample);
     const current = groups.get(key);
     const turnBadCase = hasTurnConfirmedIssue(sample);
-    const sessionBadCase = hasSessionConfirmedIssue(sample) && !countedSessionIssues.has(key);
+    const sessionLabels = sessionQualityLabels(sample, sessionAnnotations);
+    const sessionBadCase = sessionLabels.some((label) => confirmedIssueLabels.has(label)) && !countedSessionIssues.has(key);
     if (sessionBadCase) {
       countedSessionIssues.add(key);
     }
     const badCaseCount = (turnBadCase ? 1 : 0) + (sessionBadCase ? 1 : 0);
+    const sessionLabelCount = sessionLabels.length;
 
     if (!current) {
       groups.set(key, {
@@ -684,6 +721,7 @@ function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[]
         sessionId: sample.session_id,
         total: 1,
         unannotated: sample.annotation_status === 'unlabeled' ? 1 : 0,
+        sessionLabels: sessionLabelCount,
         badCases: badCaseCount,
         latestTurnId: sample.turn_id,
         latestInputPreview: sample.user_input_preview,
@@ -693,6 +731,7 @@ function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[]
 
     current.total += 1;
     current.unannotated += sample.annotation_status === 'unlabeled' ? 1 : 0;
+    current.sessionLabels = Math.max(current.sessionLabels, sessionLabelCount);
     current.badCases += badCaseCount;
     if (sample.turn_id >= current.latestTurnId) {
       current.latestTurnId = sample.turn_id;
@@ -701,4 +740,14 @@ function buildArchiveGroups(samples: DataFlywheelSample[]): SessionArchiveItem[]
   });
 
   return Array.from(groups.values()).sort((left, right) => right.latestTurnId - left.latestTurnId);
+}
+
+function sessionQualityLabels(
+  sample: DataFlywheelSample,
+  sessionAnnotations: DataFlywheelSessionAnnotations[] = []
+) {
+  const overlay = sessionAnnotations.find(
+    (item) => item.session_id === sample.session_id
+  );
+  return overlay?.quality_labels ?? sample.session_quality_labels ?? [];
 }

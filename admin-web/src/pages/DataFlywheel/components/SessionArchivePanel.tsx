@@ -8,6 +8,7 @@ export interface SessionArchiveItem {
   sessionId: string | null;
   total: number;
   unannotated: number;
+  sessionLabels: number;
   badCases: number;
   latestTurnId: number;
   latestInputPreview: string | null;
@@ -108,6 +109,7 @@ export default function SessionArchivePanel({
                 <Space size={4} wrap style={{ marginTop: 8 }}>
                   <Tag color="blue">{group.total} turn</Tag>
                   {group.unannotated > 0 && <Tag color="gold">{group.unannotated} 未标注</Tag>}
+                  {group.sessionLabels > 0 && <Tag color="purple">{group.sessionLabels} 会话标注</Tag>}
                   {group.badCases > 0 && <Tag color="red">{group.badCases} bad</Tag>}
                 </Space>
               </span>
