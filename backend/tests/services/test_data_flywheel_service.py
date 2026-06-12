@@ -1,6 +1,7 @@
 """Agent 数据飞轮服务测试。"""
 
 import json
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -248,6 +249,28 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     assert detail["source"]["event_seq_start"] == 1
     assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.v2"
     assert detail["issue_candidates"][0]["type"] == "pending_missed"
+    db.close()
+
+
+def test_missing_event_file_is_reported_without_hiding_db_messages(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    event_path = turn.event_file
+    assert event_path is not None
+    Path(event_path).unlink()
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+
+    samples = list_samples(db, farm_id=1)
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+    review = get_session_review(db, farm_id=1, session_id="sess-flywheel")
+
+    assert samples["items"][0]["source_type"] == "missing_event_log"
+    assert detail["source"]["event_log_status"] == "missing"
+    assert detail["source"]["chat_record_source"] == "mysql_conversation_messages"
+    assert detail["messages"][0]["content"] == "王大妈工资100一天，去5号棚收水稻"
+    assert detail["router_decision"] == {}
+    assert review["turns"][0]["source"]["event_log_status"] == "missing"
+    assert review["turns"][0]["messages"][1]["content"] == "已安排王大妈去5号棚收水稻"
     db.close()
 
 

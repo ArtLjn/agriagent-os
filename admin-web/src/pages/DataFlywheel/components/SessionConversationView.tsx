@@ -137,6 +137,13 @@ function TurnReviewCard({
           </Space>
         )}
 
+        <Space wrap size={6}>
+          <Tag color="default">{chatRecordSourceText(turn.source.chat_record_source)}</Tag>
+          <Tag color={eventLogStatusColor(turn.source.event_log_status)}>
+            {eventLogStatusText(turn.source.event_log_status)}
+          </Tag>
+        </Space>
+
         <Space wrap>
           <Button
             size="small"
@@ -222,4 +229,23 @@ function routerReasonText(routerDecision: Record<string, unknown> | null) {
   const selectedSkill = routerDecision.selected_skill;
   if (typeof selectedSkill === 'string') return selectedSkill;
   return '';
+}
+
+function chatRecordSourceText(source?: string) {
+  if (source === 'mysql_conversation_messages') return '聊天记录：MySQL';
+  return '聊天记录：未知来源';
+}
+
+function eventLogStatusText(status?: string) {
+  if (status === 'available') return '事件证据：JSONL 可用';
+  if (status === 'missing') return '事件文件缺失，可同步重建';
+  if (status === 'unbound') return '事件证据：未绑定 JSONL';
+  return '事件证据：未知状态';
+}
+
+function eventLogStatusColor(status?: string) {
+  if (status === 'available') return 'green';
+  if (status === 'missing') return 'orange';
+  if (status === 'unbound') return 'default';
+  return 'default';
 }

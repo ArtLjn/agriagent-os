@@ -37,6 +37,8 @@ export interface DataFlywheelSample {
   token_total: number | null;
   latency_ms: number | null;
   source_type: string;
+  event_log_status?: 'available' | 'missing' | 'unbound' | string;
+  chat_record_source?: 'mysql_conversation_messages' | string;
   created_at: string | null;
 }
 
@@ -80,6 +82,8 @@ export interface DataFlywheelSource {
   event_file: string | null;
   event_seq_start: number | null;
   event_seq_end: number | null;
+  event_log_status?: 'available' | 'missing' | 'unbound' | string;
+  chat_record_source?: 'mysql_conversation_messages' | string;
   missing_event_segments?: unknown[];
 }
 

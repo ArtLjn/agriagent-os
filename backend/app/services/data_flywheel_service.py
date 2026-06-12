@@ -4,6 +4,7 @@ import json
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -32,6 +33,10 @@ ALLOWED_LABELS = {
 }
 SAMPLE_TYPE_SESSION_TURN = "session_turn"
 _ALLOWED_TARGET_TYPES = {"simulation", "evaluation_replay"}
+CHAT_RECORD_SOURCE_MYSQL = "mysql_conversation_messages"
+EVENT_LOG_STATUS_AVAILABLE = "available"
+EVENT_LOG_STATUS_MISSING = "missing"
+EVENT_LOG_STATUS_UNBOUND = "unbound"
 
 
 def _sample_id(turn: AgentTurn) -> str:
@@ -57,6 +62,16 @@ def _events_for_turn(turn: AgentTurn) -> list[dict[str, Any]]:
     if not turn.event_file:
         return []
     return read_event_segment(turn.event_file, turn.event_seq_start, turn.event_seq_end)
+
+
+def _event_log_status(turn: AgentTurn, events: list[dict[str, Any]] | None = None) -> str:
+    if not turn.event_file:
+        return EVENT_LOG_STATUS_UNBOUND
+    if not Path(turn.event_file).exists():
+        return EVENT_LOG_STATUS_MISSING
+    if events is not None and not events:
+        return EVENT_LOG_STATUS_MISSING
+    return EVENT_LOG_STATUS_AVAILABLE
 
 
 def _labels_by_sample(
@@ -366,6 +381,7 @@ def _sample_row(
     selected_tools = _selected_tools(router_decision)
     pending_lifecycle = _pending_lifecycle(events)
     quality_labels = [row.label for row in labels]
+    event_log_status = _event_log_status(turn, events)
     return {
         "sample_id": _sample_id(turn),
         "sample_type": SAMPLE_TYPE_SESSION_TURN,
@@ -374,7 +390,9 @@ def _sample_row(
         "request_id": turn.request_id,
         "user_input_preview": turn.input_preview,
         "assistant_reply_preview": turn.reply_preview,
-        "source_type": "agent_event_log" if turn.event_file else "agent_turns",
+        "source_type": _source_type_for_event_status(event_log_status),
+        "event_log_status": event_log_status,
+        "chat_record_source": CHAT_RECORD_SOURCE_MYSQL,
         "selected_tools": selected_tools,
         "actual_tools": _actual_tools(events),
         "issue_candidates": detect_issue_candidates(
@@ -427,11 +445,22 @@ def _turn_to_dict(turn: AgentTurn) -> dict[str, Any]:
 
 
 def _source_to_dict(turn: AgentTurn) -> dict[str, Any]:
+    events = _events_for_turn(turn)
     return {
         "event_file": turn.event_file,
         "event_seq_start": turn.event_seq_start,
         "event_seq_end": turn.event_seq_end,
+        "event_log_status": _event_log_status(turn, events),
+        "chat_record_source": CHAT_RECORD_SOURCE_MYSQL,
     }
+
+
+def _source_type_for_event_status(event_log_status: str) -> str:
+    if event_log_status == EVENT_LOG_STATUS_AVAILABLE:
+        return "agent_event_log"
+    if event_log_status == EVENT_LOG_STATUS_MISSING:
+        return "missing_event_log"
+    return "agent_turns"
 
 
 def _label_to_dict(row: AgentDataFlywheelLabel) -> dict[str, Any]:

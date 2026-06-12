@@ -151,6 +151,42 @@ const detail: DataFlywheelDetail = {
   },
 };
 
+const missingEventSample: DataFlywheelSample = {
+  ...sample,
+  sample_id: 'turn:session-missing:5',
+  session_id: 'session-missing',
+  turn_id: 5,
+  request_id: 'req:missing',
+  user_input_preview: '今天的天气怎么样',
+  assistant_reply_preview: '今天晴，适合巡田。',
+  selected_tools: [],
+  actual_tools: [],
+  issue_candidates: [],
+  source_type: 'missing_event_log',
+  event_log_status: 'missing',
+  chat_record_source: 'mysql_conversation_messages',
+};
+
+const missingEventDetail: DataFlywheelDetail = {
+  ...detail,
+  sample: missingEventSample,
+  messages: [
+    { role: 'user', content: '今天的天气怎么样' },
+    { role: 'assistant', content: '今天晴，适合巡田。' },
+  ],
+  router_decision: {},
+  tool_events: [],
+  pending_lifecycle: [],
+  issue_candidates: [],
+  source: {
+    event_file: 'data/agent-events/dt=2026-06-11/farm_id=2/session_id=session-missing/events.jsonl',
+    event_seq_start: 1,
+    event_seq_end: 2,
+    event_log_status: 'missing',
+    chat_record_source: 'mysql_conversation_messages',
+  },
+};
+
 const anotherDetail: DataFlywheelDetail = {
   ...detail,
   sample: anotherSample,
@@ -242,6 +278,20 @@ const anotherSessionReview: DataFlywheelSessionReview = {
         event_seq_start: 25,
         event_seq_end: 28,
       },
+    },
+  ],
+};
+
+const missingEventSessionReview: DataFlywheelSessionReview = {
+  session_id: 'session-missing',
+  turns: [
+    {
+      sample: missingEventSample,
+      messages: missingEventDetail.messages,
+      router_decision: {},
+      tool_events: [],
+      pending_lifecycle: [],
+      source: missingEventDetail.source,
     },
   ],
 };
@@ -577,5 +627,28 @@ describe('DataFlywheel 页面', () => {
     expect(mockedSyncJob).toHaveBeenCalledWith('session-sync-1');
     expect(mockedList).toHaveBeenCalledTimes(2);
     expect(mockedSessionReview).toHaveBeenCalledTimes(2);
+  });
+
+  it('事件 JSONL 缺失时明确提示聊天来自 MySQL 且可同步重建', async () => {
+    mockedList.mockResolvedValue({ items: [missingEventSample], total: 1 });
+    mockedDetail.mockResolvedValue(missingEventDetail);
+    mockedSessionReview.mockResolvedValue(missingEventSessionReview);
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('archive-session-session-missing'));
+
+    expect(await screen.findByText('完整对话记录')).toBeInTheDocument();
+    expect(screen.getAllByText('聊天记录：MySQL').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('事件文件缺失，可同步重建').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTestId('review-select-turn:session-missing:5'));
+
+    await waitFor(() => {
+      expect(mockedDetail).toHaveBeenCalledWith(missingEventSample.sample_id);
+    });
+    expect(screen.getByText('聊天记录来源')).toBeInTheDocument();
+    expect(screen.getByText('MySQL conversation_messages')).toBeInTheDocument();
+    expect(screen.getByText('事件证据状态')).toBeInTheDocument();
+    expect(screen.getByText('缺失，可点击“同步会话”重建基础事件')).toBeInTheDocument();
   });
 });

@@ -84,6 +84,11 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
               规则候选：{record.issue_candidates[0].reason}
             </Typography.Text>
           )}
+          {record.event_log_status === 'missing' && (
+            <Typography.Text ellipsis style={{ color: palette.warning, fontSize: 12, maxWidth: 330 }}>
+              事件文件缺失，可同步重建
+            </Typography.Text>
+          )}
         </Space>
       ),
     },

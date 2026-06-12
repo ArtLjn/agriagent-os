@@ -120,6 +120,14 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
         >
           <Descriptions.Item label="token_total">{detail.sample.token_total ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="latency_ms">{detail.sample.latency_ms ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label="聊天记录来源">
+            {chatRecordSourceText(detail.source.chat_record_source)}
+          </Descriptions.Item>
+          <Descriptions.Item label="事件证据状态">
+            <Tag color={eventLogStatusColor(detail.source.event_log_status)}>
+              {eventLogStatusText(detail.source.event_log_status)}
+            </Tag>
+          </Descriptions.Item>
           <Descriptions.Item label="source event file">{detail.source.event_file ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="event seq">
             {detail.source.event_seq_start ?? '-'} - {detail.source.event_seq_end ?? '-'}
@@ -140,6 +148,25 @@ function issueName(type: string) {
     off_topic: '答非所问',
   };
   return names[type] ?? type;
+}
+
+function chatRecordSourceText(source?: string) {
+  if (source === 'mysql_conversation_messages') return 'MySQL conversation_messages';
+  return '未知';
+}
+
+function eventLogStatusText(status?: string) {
+  if (status === 'available') return 'JSONL 可用';
+  if (status === 'missing') return '缺失，可点击“同步会话”重建基础事件';
+  if (status === 'unbound') return '未绑定 JSONL';
+  return '未知';
+}
+
+function eventLogStatusColor(status?: string) {
+  if (status === 'available') return 'green';
+  if (status === 'missing') return 'orange';
+  if (status === 'unbound') return 'default';
+  return 'default';
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
