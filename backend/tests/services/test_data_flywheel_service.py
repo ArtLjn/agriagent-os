@@ -108,7 +108,7 @@ def _seed_turn(
                 "pending.plan.created",
                 {
                     "plan_id": "plan-1",
-                    "steps": [{"skill_name": "manage_workers"}],
+                    "steps": [{"skill_name": router_tools[0]}],
                 },
             )
         )
@@ -510,6 +510,102 @@ def test_issue_candidates_detect_hallucinated_execution_and_sensitive_leak(tmp_p
     assert detail["sample"]["issue_candidates"][0]["suggested_label"] == (
         "hallucinated_execution"
     )
+    db.close()
+
+
+def test_issue_candidates_detect_disabled_worker_and_missing_wage_from_events(tmp_path):
+    db = Session()
+    turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=True,
+        session_id="sess-worker-risk",
+        user_input="今天李一凡和王大妈去5号棚收水稻",
+        assistant_reply="已安排李一凡和王大妈去5号棚收水稻。",
+        request_id="worker-risk-1",
+        router_tools=["create_operation_work_order"],
+        tool_events=[
+            (
+                "tool.call.finished",
+                {
+                    "tool_name": "create_operation_work_order",
+                    "params": {
+                        "workers": "李一凡，王大妈",
+                        "operation_type": "收水稻",
+                    },
+                    "result": {
+                        "id": 9,
+                        "labor_entries": [
+                            {
+                                "worker_name": "李一凡",
+                                "worker_status": "inactive",
+                            },
+                            {
+                                "worker_name": "王大妈",
+                                "worker_status": "active",
+                            },
+                        ],
+                    },
+                },
+            )
+        ],
+    )
+    sample_id = f"turn:1:sess-worker-risk:{turn.id}"
+
+    samples = list_samples(db, farm_id=1, q="worker-risk-1")
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert [item["type"] for item in samples["items"][0]["issue_candidates"]] == [
+        "disabled_worker_used",
+        "missing_wage",
+    ]
+    assert detail["issue_candidates"] == samples["items"][0]["issue_candidates"]
+    assert detail["issue_candidates"][0]["evidence"] == "李一凡"
+    assert detail["issue_candidates"][1]["evidence"] == "李一凡, 王大妈"
+    db.close()
+
+
+def test_issue_candidates_do_not_flag_missing_wage_when_unit_price_exists(tmp_path):
+    db = Session()
+    turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=True,
+        session_id="sess-wage-ok",
+        user_input="今天王大妈去5号棚收水稻，工资100一天",
+        assistant_reply="已安排王大妈去5号棚收水稻，工资100元。",
+        request_id="wage-ok-1",
+        router_tools=["create_operation_work_order"],
+        tool_events=[
+            (
+                "tool.call.finished",
+                {
+                    "tool_name": "create_operation_work_order",
+                    "params": {
+                        "workers": "王大妈",
+                        "operation_type": "收水稻",
+                        "unit_price": 100,
+                    },
+                    "result": {
+                        "id": 10,
+                        "labor_entries": [
+                            {
+                                "worker_name": "王大妈",
+                                "worker_status": "active",
+                            }
+                        ],
+                    },
+                },
+            )
+        ],
+    )
+    sample_id = f"turn:1:sess-wage-ok:{turn.id}"
+
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert "missing_wage" not in [
+        item["type"] for item in detail["issue_candidates"]
+    ]
     db.close()
 
 
