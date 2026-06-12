@@ -161,6 +161,47 @@ def test_add_label_uses_current_admin_as_annotator(db_session, tmp_path) -> None
     assert row.annotator_id == ADMIN_USER_ID
 
 
+def test_add_session_label_and_delete_label_by_id(db_session, tmp_path) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = f"session:{turn.farm_id}:sess-admin-flywheel"
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        create_resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels",
+            json={
+                "label": "needs_regression",
+                "sample_type": "session",
+                "session_id": "sess-admin-flywheel",
+                "comment": "整段会话需要回归",
+            },
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            "/admin/data-flywheel/sessions/sess-admin-flywheel/annotations",
+            headers=admin_headers(),
+        )
+        delete_resp = client.delete(
+            f"/admin/data-flywheel/samples/{sample_id}/labels/"
+            f"{create_resp.json()['id']}",
+            headers=admin_headers(),
+        )
+
+    assert create_resp.status_code == 200
+    assert create_resp.json()["sample_type"] == "session"
+    assert create_resp.json()["turn_id"] is None
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()["quality_labels"] == ["needs_regression"]
+    assert delete_resp.status_code == 200
+    assert delete_resp.json() == {"deleted": True, "id": create_resp.json()["id"]}
+    assert (
+        db_session.query(AgentDataFlywheelLabel)
+        .filter_by(sample_id=sample_id)
+        .count()
+        == 0
+    )
+
+
 def test_get_sample_detail_returns_labels_router_decision_and_messages(
     db_session, tmp_path
 ) -> None:

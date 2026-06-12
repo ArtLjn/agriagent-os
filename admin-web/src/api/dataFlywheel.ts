@@ -115,6 +115,14 @@ export interface DataFlywheelSessionReview {
   turns: DataFlywheelSessionTurnReview[];
 }
 
+export interface DataFlywheelSessionAnnotations {
+  sample_id: string;
+  sample_type: 'session' | string;
+  session_id: string;
+  quality_labels: DataFlywheelLabel[];
+  labels: DataFlywheelLabelRecord[];
+}
+
 export interface AddSampleLabelRequest {
   label: DataFlywheelLabel;
   sample_type?: string;
@@ -158,6 +166,11 @@ export interface DataFlywheelSyncJob {
   error?: string | null;
 }
 
+export interface DeleteSampleLabelResponse {
+  deleted: boolean;
+  id: number;
+}
+
 const samplePath = (sampleId: string) => `/admin/data-flywheel/samples/${encodeURIComponent(sampleId)}`;
 
 export async function listDataFlywheelSamples(
@@ -179,11 +192,28 @@ export async function getSessionReview(sessionId: string): Promise<DataFlywheelS
   return response.data;
 }
 
+export async function getSessionAnnotations(sessionId: string): Promise<DataFlywheelSessionAnnotations> {
+  const response = await apiClient.get<DataFlywheelSessionAnnotations>(
+    `/admin/data-flywheel/sessions/${encodeURIComponent(sessionId)}/annotations`
+  );
+  return response.data;
+}
+
 export async function addSampleLabel(
   sampleId: string,
   body: AddSampleLabelRequest
 ): Promise<DataFlywheelLabelRecord> {
   const response = await apiClient.post<DataFlywheelLabelRecord>(`${samplePath(sampleId)}/labels`, body);
+  return response.data;
+}
+
+export async function deleteSampleLabel(
+  sampleId: string,
+  labelId: number
+): Promise<DeleteSampleLabelResponse> {
+  const response = await apiClient.delete<DeleteSampleLabelResponse>(
+    `${samplePath(sampleId)}/labels/${labelId}`
+  );
   return response.data;
 }
 

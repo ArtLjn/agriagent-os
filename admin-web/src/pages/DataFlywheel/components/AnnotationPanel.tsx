@@ -3,12 +3,13 @@ import {
   BranchesOutlined,
   BugOutlined,
   CopyOutlined,
+  DeleteOutlined,
   DownloadOutlined,
   ExperimentOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
 
-import type { DataFlywheelLabel, DataFlywheelSample } from '../../../api/dataFlywheel';
+import type { DataFlywheelLabel, DataFlywheelLabelRecord, DataFlywheelSample } from '../../../api/dataFlywheel';
 import { cardStyle, palette } from '../../../styles/theme';
 
 interface AnnotationPanelProps {
@@ -17,9 +18,12 @@ interface AnnotationPanelProps {
   comment: string;
   saving: boolean;
   acting: boolean;
+  annotationTargetLabel?: string;
+  existingLabels?: DataFlywheelLabelRecord[];
   onLabelChange: (label: DataFlywheelLabel) => void;
   onCommentChange: (comment: string) => void;
   onSave: () => void;
+  onDeleteLabel: (label: DataFlywheelLabelRecord) => void;
   onCopyDebug: () => void;
   onExportJsonl: () => void;
   onMarkBadCase: () => void;
@@ -40,15 +44,22 @@ const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '暂不处理', value: 'not_actionable' },
 ];
 
+const labelText = Object.fromEntries(
+  labelOptions.map((option) => [option.value, option.label])
+) as Record<DataFlywheelLabel, string>;
+
 export default function AnnotationPanel({
   selectedSample,
   label,
   comment,
   saving,
   acting,
+  annotationTargetLabel,
+  existingLabels = [],
   onLabelChange,
   onCommentChange,
   onSave,
+  onDeleteLabel,
   onCopyDebug,
   onExportJsonl,
   onMarkBadCase,
@@ -72,7 +83,9 @@ export default function AnnotationPanel({
     <Card title="标注与动作" style={{ ...cardStyle, marginTop: 14 }} styles={{ body: { padding: 14 } }}>
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <div>
-          <Typography.Text style={{ color: palette.textMuted }}>质量标签</Typography.Text>
+          <Typography.Text style={{ color: palette.textMuted }}>
+            质量标签{annotationTargetLabel ? ` · ${annotationTargetLabel}` : ''}
+          </Typography.Text>
           <Radio.Group
             value={label}
             onChange={(event) => onLabelChange(event.target.value)}
@@ -86,6 +99,49 @@ export default function AnnotationPanel({
             ))}
           </Radio.Group>
         </div>
+
+        {existingLabels.length > 0 && (
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Typography.Text style={{ color: palette.textMuted }}>已有标注</Typography.Text>
+            {existingLabels.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  border: `1px solid ${palette.borderSoft}`,
+                  borderRadius: 6,
+                  padding: '8px 10px',
+                  background: palette.bg,
+                }}
+              >
+                <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
+                  <Space direction="vertical" size={2}>
+                    <Typography.Text style={{ color: palette.text }}>
+                      {labelText[item.label] ?? item.label}
+                    </Typography.Text>
+                    {item.comment && (
+                      <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                        {item.comment}
+                      </Typography.Text>
+                    )}
+                    {item.annotator_id && (
+                      <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                        {item.annotator_id}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                  <Button
+                    aria-label={`删除标注 ${item.label}`}
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    loading={acting}
+                    onClick={() => onDeleteLabel(item)}
+                  />
+                </Space>
+              </div>
+            ))}
+          </Space>
+        )}
 
         <Input.TextArea
           rows={5}

@@ -13,9 +13,12 @@ from app.models import Farm
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
 from app.services.data_flywheel_service import (
+    SAMPLE_TYPE_SESSION,
     add_sample_label,
     build_case_draft,
+    delete_sample_label,
     export_sample_jsonl,
+    get_session_annotation_detail,
     get_sample_detail,
     list_samples,
 )
@@ -208,6 +211,51 @@ def test_labels_are_reflected_in_sample_list(tmp_path):
 
     unannotated = list_samples(db, farm_id=1, unannotated_only=True)
     assert unannotated["total"] == 0
+    db.close()
+
+
+def test_session_label_can_be_saved_and_deleted(tmp_path):
+    db = Session()
+    _seed_turn(db, tmp_path, session_id="sess-session-label")
+    session_sample_id = "session:1:sess-session-label"
+
+    saved = add_sample_label(
+        db,
+        farm_id=1,
+        sample_id=session_sample_id,
+        sample_type=SAMPLE_TYPE_SESSION,
+        session_id="sess-session-label",
+        label="needs_regression",
+        comment="整段会话需要回归",
+        annotator_id="admin-1",
+    )
+    detail = get_session_annotation_detail(
+        db,
+        farm_id=1,
+        session_id="sess-session-label",
+    )
+
+    assert saved["sample_type"] == SAMPLE_TYPE_SESSION
+    assert saved["session_id"] == "sess-session-label"
+    assert saved["turn_id"] is None
+    assert detail["sample_id"] == session_sample_id
+    assert detail["quality_labels"] == ["needs_regression"]
+
+    deleted = delete_sample_label(
+        db,
+        farm_id=1,
+        sample_id=session_sample_id,
+        label_id=saved["id"],
+    )
+    refreshed = get_session_annotation_detail(
+        db,
+        farm_id=1,
+        session_id="sess-session-label",
+    )
+
+    assert deleted == {"deleted": True, "id": saved["id"]}
+    assert refreshed["quality_labels"] == []
+    assert refreshed["labels"] == []
     db.close()
 
 

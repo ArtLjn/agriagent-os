@@ -32,6 +32,7 @@ ALLOWED_LABELS = {
     "not_actionable",
 }
 SAMPLE_TYPE_SESSION_TURN = "session_turn"
+SAMPLE_TYPE_SESSION = "session"
 _ALLOWED_TARGET_TYPES = {"simulation", "evaluation_replay"}
 CHAT_RECORD_SOURCE_MYSQL = "mysql_conversation_messages"
 EVENT_LOG_STATUS_AVAILABLE = "available"
@@ -41,6 +42,10 @@ EVENT_LOG_STATUS_UNBOUND = "unbound"
 
 def _sample_id(turn: AgentTurn) -> str:
     return f"turn:{turn.farm_id}:{turn.session_id}:{turn.id}"
+
+
+def session_sample_id(*, farm_id: int, session_id: str) -> str:
+    return f"session:{farm_id}:{session_id}"
 
 
 def _parse_sample_id(sample_id: str) -> dict[str, int | str]:
@@ -56,6 +61,20 @@ def _parse_sample_id(sample_id: str) -> dict[str, int | str]:
     except ValueError as exc:
         raise ValueError("INVALID_SAMPLE_ID") from exc
     return {"farm_id": farm_id, "session_id": parts[2], "turn_id": turn_id}
+
+
+def _parse_session_sample_id(sample_id: str) -> dict[str, int | str]:
+    prefix, separator, session_id = sample_id.partition(":")
+    if prefix != "session" or not separator or not session_id:
+        raise ValueError("INVALID_SAMPLE_ID")
+    farm_id_text, separator, session_tail = session_id.partition(":")
+    if not separator or not session_tail:
+        raise ValueError("INVALID_SAMPLE_ID")
+    try:
+        farm_id = int(farm_id_text)
+    except ValueError as exc:
+        raise ValueError("INVALID_SAMPLE_ID") from exc
+    return {"farm_id": farm_id, "session_id": session_tail}
 
 
 def _events_for_turn(turn: AgentTurn) -> list[dict[str, Any]]:
@@ -222,8 +241,19 @@ def add_sample_label(
     """保存管理员样本标注。"""
     if label not in ALLOWED_LABELS:
         raise ValueError("INVALID_LABEL")
-    if sample_type != SAMPLE_TYPE_SESSION_TURN:
+    if sample_type not in {SAMPLE_TYPE_SESSION_TURN, SAMPLE_TYPE_SESSION}:
         raise ValueError("INVALID_SAMPLE_TYPE")
+
+    if sample_type == SAMPLE_TYPE_SESSION:
+        return _add_session_label(
+            db,
+            farm_id=farm_id,
+            sample_id=sample_id,
+            label=label,
+            session_id=session_id,
+            comment=comment,
+            annotator_id=annotator_id,
+        )
 
     turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
     if session_id is not None and session_id != turn.session_id:
@@ -266,6 +296,101 @@ def add_sample_label(
     db.commit()
     db.refresh(row)
     return _label_to_dict(row)
+
+
+def _add_session_label(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_id: str,
+    label: str,
+    session_id: str | None,
+    comment: str | None,
+    annotator_id: str | None,
+) -> dict[str, Any]:
+    parsed = _parse_session_sample_id(sample_id)
+    if parsed["farm_id"] != farm_id:
+        raise ValueError("SAMPLE_NOT_FOUND")
+    parsed_session_id = str(parsed["session_id"])
+    if session_id is not None and session_id != parsed_session_id:
+        raise ValueError("SAMPLE_NOT_FOUND")
+    if not _session_exists(db, farm_id=farm_id, session_id=parsed_session_id):
+        raise ValueError("SAMPLE_NOT_FOUND")
+
+    existing = (
+        db.query(AgentDataFlywheelLabel)
+        .filter(
+            AgentDataFlywheelLabel.farm_id == farm_id,
+            AgentDataFlywheelLabel.sample_id == sample_id,
+            AgentDataFlywheelLabel.sample_type == SAMPLE_TYPE_SESSION,
+            AgentDataFlywheelLabel.label == label,
+        )
+        .first()
+    )
+    if existing:
+        existing.session_id = parsed_session_id
+        existing.turn_id = None
+        existing.request_id = None
+        existing.comment = comment
+        existing.annotator_id = annotator_id
+        row = existing
+    else:
+        row = AgentDataFlywheelLabel(
+            farm_id=farm_id,
+            sample_id=sample_id,
+            sample_type=SAMPLE_TYPE_SESSION,
+            session_id=parsed_session_id,
+            turn_id=None,
+            request_id=None,
+            label=label,
+            comment=comment,
+            annotator_id=annotator_id,
+        )
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _label_to_dict(row)
+
+
+def delete_sample_label(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_id: str,
+    label_id: int,
+) -> dict[str, int | bool]:
+    """删除当前农场某个样本的一条人工标注。"""
+    row = (
+        db.query(AgentDataFlywheelLabel)
+        .filter(
+            AgentDataFlywheelLabel.id == label_id,
+            AgentDataFlywheelLabel.farm_id == farm_id,
+            AgentDataFlywheelLabel.sample_id == sample_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise ValueError("LABEL_NOT_FOUND")
+    db.delete(row)
+    db.commit()
+    return {"deleted": True, "id": label_id}
+
+
+def get_session_annotation_detail(
+    db: Session, *, farm_id: int, session_id: str
+) -> dict[str, Any]:
+    """返回会话级人工标注。"""
+    if not _session_exists(db, farm_id=farm_id, session_id=session_id):
+        raise ValueError("SAMPLE_NOT_FOUND")
+    sample_id = session_sample_id(farm_id=farm_id, session_id=session_id)
+    labels = _labels_by_sample(db, [sample_id]).get(sample_id, [])
+    return {
+        "sample_id": sample_id,
+        "sample_type": SAMPLE_TYPE_SESSION,
+        "session_id": session_id,
+        "quality_labels": [row.label for row in labels],
+        "labels": [_label_to_dict(row) for row in labels],
+    }
 
 
 def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str, Any]:
@@ -372,6 +497,15 @@ def _turn_for_sample(db: Session, *, farm_id: int, sample_id: str) -> AgentTurn:
     return turn
 
 
+def _session_exists(db: Session, *, farm_id: int, session_id: str) -> bool:
+    return (
+        db.query(AgentTurn.id)
+        .filter(AgentTurn.farm_id == farm_id, AgentTurn.session_id == session_id)
+        .first()
+        is not None
+    )
+
+
 def _sample_row(
     turn: AgentTurn,
     labels: list[AgentDataFlywheelLabel],
@@ -467,6 +601,10 @@ def _label_to_dict(row: AgentDataFlywheelLabel) -> dict[str, Any]:
     return {
         "id": row.id,
         "sample_id": row.sample_id,
+        "sample_type": row.sample_type,
+        "session_id": row.session_id,
+        "turn_id": row.turn_id,
+        "request_id": row.request_id,
         "label": row.label,
         "comment": row.comment,
         "annotator_id": row.annotator_id,

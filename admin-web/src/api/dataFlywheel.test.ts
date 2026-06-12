@@ -8,13 +8,16 @@ import {
   getSampleDetail,
   getSessionReview,
   getDataFlywheelSyncJob,
+  getSessionAnnotations,
   listDataFlywheelSamples,
   markBadCase,
+  deleteSampleLabel,
   syncDataFlywheelSessions,
 } from './dataFlywheel';
 
 vi.mock('./client', () => ({
   default: {
+    delete: vi.fn(),
     get: vi.fn(),
     post: vi.fn(),
   },
@@ -107,6 +110,25 @@ describe('dataFlywheel api', () => {
     expect(result.session_id).toBe('playground:s:1');
   });
 
+  it('编码 session_id 后读取会话级标注', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        sample_id: 'session:1:playground:s:1',
+        sample_type: 'session',
+        session_id: 'playground:s:1',
+        quality_labels: ['needs_regression'],
+        labels: [],
+      },
+    });
+
+    const result = await getSessionAnnotations('playground:s:1');
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith(
+      '/admin/data-flywheel/sessions/playground%3As%3A1/annotations'
+    );
+    expect(result.sample_type).toBe('session');
+  });
+
   it('向 labels 路径提交样本标签和备注', async () => {
     mockedApiClient.post.mockResolvedValueOnce({
       data: {
@@ -127,6 +149,22 @@ describe('dataFlywheel api', () => {
 
     expect(mockedApiClient.post).toHaveBeenCalledWith('/admin/data-flywheel/samples/turn%3A1%3As%3A1/labels', body);
     expect(result.label).toBe('bad_reply');
+  });
+
+  it('删除指定样本标注', async () => {
+    mockedApiClient.delete.mockResolvedValueOnce({
+      data: {
+        deleted: true,
+        id: 7,
+      },
+    });
+
+    const result = await deleteSampleLabel('turn:1:s:1', 7);
+
+    expect(mockedApiClient.delete).toHaveBeenCalledWith(
+      '/admin/data-flywheel/samples/turn%3A1%3As%3A1/labels/7'
+    );
+    expect(result.deleted).toBe(true);
   });
 
   it('向 bad-case 路径提交坏例标注', async () => {

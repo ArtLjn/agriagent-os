@@ -16,7 +16,9 @@ from app.services.data_flywheel_service import (
     SAMPLE_TYPE_SESSION_TURN,
     add_sample_label,
     build_case_draft,
+    delete_sample_label,
     export_sample_jsonl,
+    get_session_annotation_detail,
     get_sample_detail,
     list_samples,
 )
@@ -114,6 +116,19 @@ def get_admin_data_flywheel_session_review(
 ) -> dict[str, Any]:
     """获取单个会话的完整 turn 审阅时间线。"""
     return get_session_review(db, farm_id=farm.id, session_id=session_id)
+
+
+@router.get("/sessions/{session_id}/annotations")
+def get_admin_data_flywheel_session_annotations(
+    session_id: str,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """获取单个会话的会话级标注。"""
+    try:
+        return get_session_annotation_detail(db, farm_id=farm.id, session_id=session_id)
+    except ValueError as exc:
+        raise _http_error(exc) from exc
 
 
 @router.post("/sync-sessions")
@@ -230,6 +245,25 @@ def add_admin_data_flywheel_label(
         raise _http_error(exc) from exc
 
 
+@router.delete("/samples/{sample_id}/labels/{label_id}")
+def delete_admin_data_flywheel_label(
+    sample_id: str,
+    label_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, int | bool]:
+    """删除当前农场样本的一条人工标注。"""
+    try:
+        return delete_sample_label(
+            db,
+            farm_id=farm.id,
+            sample_id=sample_id,
+            label_id=label_id,
+        )
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
 @router.post("/samples/{sample_id}/bad-case")
 def mark_admin_data_flywheel_bad_case(
     sample_id: str,
@@ -292,7 +326,7 @@ def build_admin_data_flywheel_case_draft(
 
 def _http_error(exc: ValueError) -> HTTPException:
     code = str(exc)
-    status_code = 404 if code == "SAMPLE_NOT_FOUND" else 400
+    status_code = 404 if code in {"SAMPLE_NOT_FOUND", "LABEL_NOT_FOUND"} else 400
     return HTTPException(status_code=status_code, detail={"code": code})
 
 

@@ -5,9 +5,11 @@ import { CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/i
 import {
   addSampleLabel,
   createCaseDraft,
+  deleteSampleLabel,
   exportSampleJsonl,
   getDataFlywheelSyncJob,
   getSampleDetail,
+  getSessionAnnotations,
   getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
@@ -15,7 +17,9 @@ import {
   type CaseDraft,
   type DataFlywheelDetail,
   type DataFlywheelLabel,
+  type DataFlywheelLabelRecord,
   type DataFlywheelSample,
+  type DataFlywheelSessionAnnotations,
   type DataFlywheelSessionReview,
 } from '../../api/dataFlywheel';
 import { cardStyle, palette } from '../../styles/theme';
@@ -37,6 +41,10 @@ interface SampleQuery {
   qualityLabel?: DataFlywheelLabel;
   unannotatedOnly: boolean;
 }
+
+type AnnotationTarget =
+  | { type: 'turn'; sample: DataFlywheelSample }
+  | { type: 'session'; sampleId: string; sessionId: string };
 
 const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '好回复', value: 'good_reply' },
@@ -69,6 +77,8 @@ export default function DataFlywheel() {
   });
   const [selectedSample, setSelectedSample] = useState<DataFlywheelSample | null>(null);
   const [detail, setDetail] = useState<DataFlywheelDetail | null>(null);
+  const [sessionAnnotations, setSessionAnnotations] = useState<DataFlywheelSessionAnnotations | null>(null);
+  const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const [currentLabel, setCurrentLabel] = useState<DataFlywheelLabel>(DEFAULT_LABEL);
   const [comment, setComment] = useState('');
   const [draft, setDraft] = useState<CaseDraft | null>(null);
@@ -185,6 +195,8 @@ export default function DataFlywheel() {
       const result = await getSampleDetail(sample.sample_id);
       if (requestSeq !== detailRequestSeq.current) return;
       setDetail(result);
+      setSessionAnnotations(null);
+      setAnnotationTarget({ type: 'turn', sample });
       const firstLabel = result.labels[0];
       setCurrentLabel(firstLabel?.label ?? DEFAULT_LABEL);
       setComment(firstLabel?.comment ?? '');
@@ -199,27 +211,56 @@ export default function DataFlywheel() {
     }
   };
 
+  const loadSessionAnnotations = async (sessionId: string) => {
+    try {
+      const result = await getSessionAnnotations(sessionId);
+      setSelectedSample(null);
+      setDetail(null);
+      setSessionAnnotations(result);
+      setAnnotationTarget({
+        type: 'session',
+        sampleId: result.sample_id,
+        sessionId: result.session_id,
+      });
+      const firstLabel = result.labels[0];
+      setCurrentLabel(firstLabel?.label ?? DEFAULT_LABEL);
+      setComment(firstLabel?.comment ?? '');
+      setRightCollapsed(false);
+    } catch {
+      message.error('加载会话级标注失败');
+    }
+  };
+
   const labelBody = (label: DataFlywheelLabel) => {
-    if (!selectedSample) return null;
+    if (!annotationTarget) return null;
+    if (annotationTarget.type === 'session') {
+      return {
+        label,
+        comment,
+        sample_type: 'session',
+        session_id: annotationTarget.sessionId,
+      };
+    }
+    const selected = annotationTarget.sample;
     return {
       label,
       comment,
-      sample_type: selectedSample.sample_type,
-      session_id: selectedSample.session_id ?? undefined,
-      turn_id: selectedSample.turn_id,
-      request_id: selectedSample.request_id ?? undefined,
+      sample_type: selected.sample_type,
+      session_id: selected.session_id ?? undefined,
+      turn_id: selected.turn_id,
+      request_id: selected.request_id ?? undefined,
     };
   };
 
   const handleSave = async () => {
-    if (!selectedSample) return;
+    if (!annotationTarget) return;
     const body = labelBody(currentLabel);
     if (!body) return;
     setSaving(true);
     try {
-      await addSampleLabel(selectedSample.sample_id, body);
+      await addSampleLabel(annotationSampleId(annotationTarget), body);
       message.success('标注已保存');
-      await loadDetail(selectedSample);
+      await refreshAnnotationTarget(annotationTarget);
       await fetchSamples(query);
       await refreshSessionReviewIfActive();
     } catch {
@@ -227,6 +268,30 @@ export default function DataFlywheel() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeleteLabel = async (label: DataFlywheelLabelRecord) => {
+    if (!annotationTarget) return;
+    setActing(true);
+    try {
+      await deleteSampleLabel(annotationSampleId(annotationTarget), label.id);
+      message.success('标注已删除');
+      await refreshAnnotationTarget(annotationTarget);
+      await fetchSamples(query);
+      await refreshSessionReviewIfActive();
+    } catch {
+      message.error('删除标注失败');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const refreshAnnotationTarget = async (target: AnnotationTarget) => {
+    if (target.type === 'session') {
+      await loadSessionAnnotations(target.sessionId);
+      return;
+    }
+    await loadDetail(target.sample);
   };
 
   const handleCopyDebug = async () => {
@@ -327,6 +392,8 @@ export default function DataFlywheel() {
     detailRequestSeq.current += 1;
     setSelectedSample(null);
     setDetail(null);
+    setSessionAnnotations(null);
+    setAnnotationTarget(null);
     setCurrentLabel(DEFAULT_LABEL);
     setComment('');
     setLoadingDetail(false);
@@ -388,6 +455,7 @@ export default function DataFlywheel() {
       loading={loadingSessionReview}
       selectedSampleId={selectedSample?.sample_id}
       onSelectTurn={loadDetail}
+      onSelectSession={() => loadSessionAnnotations(activeArchiveKey)}
     />
   ) : (
     <Card
@@ -412,14 +480,17 @@ export default function DataFlywheel() {
     <>
       <SampleDetailPanel detail={detail} loading={loadingDetail} />
       <AnnotationPanel
-        selectedSample={selectedSample}
+        selectedSample={annotationTarget ? selectedSample ?? sessionAnnotationPlaceholder(annotationTarget) : null}
         label={currentLabel}
         comment={comment}
         saving={saving}
         acting={acting}
+        annotationTargetLabel={annotationTargetLabel(annotationTarget)}
+        existingLabels={annotationLabels(detail, sessionAnnotations)}
         onLabelChange={setCurrentLabel}
         onCommentChange={setComment}
         onSave={handleSave}
+        onDeleteLabel={handleDeleteLabel}
         onCopyDebug={handleCopyDebug}
         onExportJsonl={handleExportJsonl}
         onMarkBadCase={handleMarkBadCase}
@@ -492,6 +563,45 @@ function sleep(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function annotationSampleId(target: AnnotationTarget) {
+  return target.type === 'session' ? target.sampleId : target.sample.sample_id;
+}
+
+function annotationLabels(
+  detail: DataFlywheelDetail | null,
+  sessionAnnotations: DataFlywheelSessionAnnotations | null
+) {
+  return sessionAnnotations?.labels ?? detail?.labels ?? [];
+}
+
+function annotationTargetLabel(target: AnnotationTarget | null) {
+  if (!target) return undefined;
+  if (target.type === 'session') return '完整会话';
+  return `turn #${target.sample.turn_id}`;
+}
+
+function sessionAnnotationPlaceholder(target: AnnotationTarget): DataFlywheelSample | null {
+  if (target.type !== 'session') return null;
+  return {
+    sample_id: target.sampleId,
+    sample_type: 'session',
+    quality_labels: [],
+    annotation_status: 'unlabeled',
+    session_id: target.sessionId,
+    turn_id: 0,
+    request_id: null,
+    user_input_preview: '完整会话',
+    assistant_reply_preview: null,
+    selected_tools: [],
+    actual_tools: [],
+    issue_candidates: [],
+    token_total: null,
+    latency_ms: null,
+    source_type: 'session',
+    created_at: null,
+  };
 }
 
 function sessionArchiveKey(sample: DataFlywheelSample) {

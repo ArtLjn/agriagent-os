@@ -13,6 +13,7 @@ interface SessionConversationViewProps {
   loading: boolean;
   selectedSampleId?: string;
   onSelectTurn: (sample: DataFlywheelSample) => void;
+  onSelectSession: () => void;
 }
 
 const issueText: Record<string, string> = {
@@ -43,14 +44,22 @@ export default function SessionConversationView({
   loading,
   selectedSampleId,
   onSelectTurn,
+  onSelectSession,
 }: SessionConversationViewProps) {
   return (
     <Card
       title="完整对话记录"
       extra={
-        <Typography.Text style={{ color: palette.textMuted }}>
-          {review ? `${review.turns.length} turn` : '选择左侧会话'}
-        </Typography.Text>
+        <Space>
+          <Typography.Text style={{ color: palette.textMuted }}>
+            {review ? `${review.turns.length} turn` : '选择左侧会话'}
+          </Typography.Text>
+          {review && review.turns.length > 0 && (
+            <Button size="small" onClick={onSelectSession}>
+              标注整个会话
+            </Button>
+          )}
+        </Space>
       }
       style={cardStyle}
       styles={{ body: { padding: 12, maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' } }}

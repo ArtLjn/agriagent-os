@@ -9,13 +9,16 @@ import {
   getDataFlywheelSyncJob,
   getSampleDetail,
   getSessionReview,
+  getSessionAnnotations,
   listDataFlywheelSamples,
   markBadCase,
+  deleteSampleLabel,
   syncDataFlywheelSessions,
 } from '../../api/dataFlywheel';
 import type {
   DataFlywheelDetail,
   DataFlywheelSample,
+  DataFlywheelSessionAnnotations,
   DataFlywheelSessionReview,
   DataFlywheelSyncJob,
 } from '../../api/dataFlywheel';
@@ -27,8 +30,10 @@ vi.mock('../../api/dataFlywheel', () => ({
   getDataFlywheelSyncJob: vi.fn(),
   getSampleDetail: vi.fn(),
   getSessionReview: vi.fn(),
+  getSessionAnnotations: vi.fn(),
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
+  deleteSampleLabel: vi.fn(),
   syncDataFlywheelSessions: vi.fn(),
 }));
 
@@ -296,14 +301,24 @@ const missingEventSessionReview: DataFlywheelSessionReview = {
   ],
 };
 
+const sessionAnnotations: DataFlywheelSessionAnnotations = {
+  sample_id: 'session:1:session-a',
+  sample_type: 'session',
+  session_id: 'session-a',
+  quality_labels: [],
+  labels: [],
+};
+
 const mockedList = vi.mocked(listDataFlywheelSamples);
 const mockedDetail = vi.mocked(getSampleDetail);
 const mockedSessionReview = vi.mocked(getSessionReview);
+const mockedSessionAnnotations = vi.mocked(getSessionAnnotations);
 const mockedSyncSessions = vi.mocked(syncDataFlywheelSessions);
 const mockedSyncJob = vi.mocked(getDataFlywheelSyncJob);
 const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateDraft = vi.mocked(createCaseDraft);
 const mockedMarkBadCase = vi.mocked(markBadCase);
+const mockedDeleteLabel = vi.mocked(deleteSampleLabel);
 
 describe('DataFlywheel 页面', () => {
   beforeEach(() => {
@@ -317,6 +332,7 @@ describe('DataFlywheel 页面', () => {
     mockedSessionReview.mockImplementation((sessionId) =>
       Promise.resolve(sessionId === 'session-b' ? anotherSessionReview : sessionReview)
     );
+    mockedSessionAnnotations.mockResolvedValue(sessionAnnotations);
     mockedSyncSessions.mockResolvedValue({
       job_id: 'session-sync-1',
       status: 'queued',
@@ -356,6 +372,7 @@ describe('DataFlywheel 页面', () => {
       comment: '初始备注',
       annotator_id: 'admin',
     });
+    mockedDeleteLabel.mockResolvedValue({ deleted: true, id: 1 });
   });
 
   it('初次渲染显示标题、样本输入摘要、request_id 和 token 数', async () => {
@@ -650,5 +667,45 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('MySQL conversation_messages')).toBeInTheDocument();
     expect(screen.getByText('事件证据状态')).toBeInTheDocument();
     expect(screen.getByText('缺失，可点击“同步会话”重建基础事件')).toBeInTheDocument();
+  });
+
+  it('可以对完整会话保存会话级标注', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-a');
+    fireEvent.click(screen.getByTestId('archive-session-session-a'));
+    await screen.findByText('完整对话记录');
+    await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
+
+    await user.click(screen.getByLabelText('需要回归'));
+    const commentBox = screen.getByPlaceholderText('记录判断依据、复现条件或后续处理建议');
+    await user.clear(commentBox);
+    await user.type(commentBox, '整段会话需要回归');
+    await user.click(screen.getByRole('button', { name: /保存标注/ }));
+
+    await waitFor(() => {
+      expect(mockedAddLabel).toHaveBeenCalledWith('session:1:session-a', {
+        label: 'needs_regression',
+        comment: '整段会话需要回归',
+        sample_type: 'session',
+        session_id: 'session-a',
+      });
+    });
+  });
+
+  it('可以删除已有标注并刷新当前样本', async () => {
+    const user = userEvent.setup();
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    await screen.findByText('样本详情');
+    await user.click(screen.getByRole('button', { name: /删除标注 good_reply/ }));
+
+    await waitFor(() => {
+      expect(mockedDeleteLabel).toHaveBeenCalledWith(sample.sample_id, 1);
+    });
+    expect(mockedDetail).toHaveBeenCalledTimes(2);
   });
 });
