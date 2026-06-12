@@ -820,7 +820,10 @@ describe('DataFlywheel 页面', () => {
     fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
     fireEvent.click(screen.getByTestId('problem-session-session-a'));
     await screen.findByText('完整对话记录');
-    await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
+    await waitFor(() => {
+      expect(mockedSessionAnnotations).toHaveBeenCalledWith('session-a');
+    });
+    expect(screen.getAllByText('错误的 json 泄漏判断').length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: /标记已完成 sensitive_info_leak/ }));
 
     await waitFor(() => {

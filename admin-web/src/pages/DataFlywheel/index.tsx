@@ -473,6 +473,7 @@ export default function DataFlywheel() {
     setActiveArchiveKey(key);
     clearSelection();
     loadSessionReview(key);
+    loadSessionAnnotations(key);
   };
 
   const archiveContent = (
