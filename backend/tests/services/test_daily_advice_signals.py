@@ -1,10 +1,14 @@
 """Daily advice signal pipeline tests."""
 
 from datetime import date, timedelta
+from decimal import Decimal
 
+from app.models.cost import CostRecord
+from app.models.planting import OperationWorkOrder
 from app.services.daily_advice_signals import (
     DailyAdviceCandidate,
     DailyAdviceCategory,
+    collect_daily_advice_candidates,
     rank_daily_advice_candidates,
     render_candidate_context,
 )
@@ -159,3 +163,171 @@ def test_render_candidate_context_uses_source_type_instead_of_category():
 
     assert "source=weather_service" in context
     assert "source=weather " not in context
+
+
+def test_collect_finance_candidates_skips_debt_without_due_date_and_labor_debt(
+    db_session,
+):
+    today = date(2026, 6, 12)
+    debt_without_due_date = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="农资",
+        amount=Decimal("300.00"),
+        settled_amount=Decimal("0.00"),
+        record_date=today,
+        record_subtype="赊账",
+        counterparty="农资店",
+    )
+    labor_debt = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="人工",
+        amount=Decimal("180.00"),
+        settled_amount=Decimal("0.00"),
+        record_date=today,
+        record_subtype="工资记录人工",
+        due_date=today,
+        counterparty="张师傅",
+    )
+    db_session.add_all([debt_without_due_date, labor_debt])
+    db_session.commit()
+
+    candidates = collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+
+    assert [item.category for item in candidates] == []
+
+
+def test_collect_finance_candidates_includes_overdue_and_due_soon_debts(db_session):
+    today = date(2026, 6, 12)
+    overdue_debt = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="农资",
+        amount=Decimal("300.00"),
+        settled_amount=Decimal("0.00"),
+        record_date=today - timedelta(days=7),
+        record_subtype="赊账",
+        due_date=today - timedelta(days=1),
+        counterparty="老李农资",
+    )
+    due_soon_debt = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="肥料",
+        amount=Decimal("500.00"),
+        settled_amount=Decimal("200.00"),
+        record_date=today,
+        record_subtype="赊账",
+        due_date=today + timedelta(days=3),
+        counterparty="肥料供应商",
+    )
+    later_debt = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="农资",
+        amount=Decimal("600.00"),
+        settled_amount=Decimal("0.00"),
+        record_date=today,
+        record_subtype="赊账",
+        due_date=today + timedelta(days=4),
+        counterparty="下周供应商",
+    )
+    settled_debt = CostRecord(
+        farm_id=1,
+        record_type="cost",
+        category="农资",
+        amount=Decimal("100.00"),
+        settled_amount=Decimal("100.00"),
+        record_date=today,
+        record_subtype="赊账",
+        due_date=today,
+        counterparty="已结供应商",
+    )
+    db_session.add_all([overdue_debt, due_soon_debt, later_debt, settled_debt])
+    db_session.commit()
+
+    candidates = collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    finance_candidates = [item for item in candidates if item.category == "finance"]
+
+    assert [item.source_id for item in finance_candidates] == [
+        overdue_debt.id,
+        due_soon_debt.id,
+    ]
+    assert [item.priority for item in finance_candidates] == [1, 2]
+    assert finance_candidates[0].title_hint == "赊账已逾期"
+    assert "老李农资" in finance_candidates[0].detail_hint
+    assert "300.00" in finance_candidates[0].detail_hint
+    assert finance_candidates[1].title_hint == "赊账即将到期"
+    assert "300.00" in finance_candidates[1].detail_hint
+
+
+def test_collect_operation_candidates_includes_overdue_today_and_next_three_days(
+    db_session,
+):
+    today = date(2026, 6, 12)
+    overdue_order = OperationWorkOrder(
+        farm_id=1,
+        operation_type="补肥",
+        operation_date=today - timedelta(days=1),
+        scope_type="farm",
+        note="逾期作业",
+    )
+    today_order = OperationWorkOrder(
+        farm_id=1,
+        operation_type="巡田",
+        operation_date=today,
+        scope_type="farm",
+    )
+    tomorrow_order = OperationWorkOrder(
+        farm_id=1,
+        operation_type="打药",
+        operation_date=today + timedelta(days=1),
+        scope_type="farm",
+    )
+    two_days_order = OperationWorkOrder(
+        farm_id=1,
+        operation_type="浇水",
+        operation_date=today + timedelta(days=2),
+        scope_type="farm",
+    )
+    three_days_order = OperationWorkOrder(
+        farm_id=1,
+        operation_type="采收",
+        operation_date=today + timedelta(days=3),
+        scope_type="farm",
+    )
+    later_order = OperationWorkOrder(
+        farm_id=1,
+        operation_type="整地",
+        operation_date=today + timedelta(days=4),
+        scope_type="farm",
+    )
+    db_session.add_all(
+        [
+            overdue_order,
+            today_order,
+            tomorrow_order,
+            two_days_order,
+            three_days_order,
+            later_order,
+        ]
+    )
+    db_session.commit()
+
+    candidates = collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    operation_candidates = [item for item in candidates if item.category == "operation"]
+
+    assert [item.source_id for item in operation_candidates] == [
+        overdue_order.id,
+        today_order.id,
+        tomorrow_order.id,
+        two_days_order.id,
+        three_days_order.id,
+    ]
+    assert [item.priority for item in operation_candidates] == [1, 1, 1, 2, 2]
+    assert operation_candidates[0].title_hint == "补肥作业已逾期"
+    assert operation_candidates[1].title_hint == "今日安排巡田"
+    assert operation_candidates[2].title_hint == "明日安排打药"
+    assert operation_candidates[3].title_hint == "近期安排浇水"
+    assert operation_candidates[4].title_hint == "近期安排采收"

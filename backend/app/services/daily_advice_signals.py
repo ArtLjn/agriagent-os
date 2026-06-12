@@ -6,7 +6,14 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import date
+from datetime import timedelta
+from decimal import Decimal
 from typing import Any, Literal
+
+from sqlalchemy.orm import Session
+
+from app.models.cost import CostRecord
+from app.models.planting import OperationWorkOrder
 
 DailyAdviceCategory = Literal[
     "weather",
@@ -131,6 +138,103 @@ def fingerprint_candidates(candidates: list[DailyAdviceCandidate]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 
+def collect_daily_advice_candidates(
+    db: Session,
+    *,
+    farm_id: int,
+    today: date | None = None,
+) -> list[DailyAdviceCandidate]:
+    """收集今日建议候选信号。"""
+    reference_day = today or date.today()
+    return [
+        *_collect_operation_candidates(db, farm_id=farm_id, today=reference_day),
+        *_collect_finance_candidates(db, farm_id=farm_id, today=reference_day),
+    ]
+
+
+def _collect_operation_candidates(
+    db: Session,
+    *,
+    farm_id: int,
+    today: date,
+) -> list[DailyAdviceCandidate]:
+    horizon = today + timedelta(days=3)
+    work_orders = (
+        db.query(OperationWorkOrder)
+        .filter(
+            OperationWorkOrder.farm_id == farm_id,
+            OperationWorkOrder.operation_date <= horizon,
+        )
+        .order_by(OperationWorkOrder.operation_date.asc(), OperationWorkOrder.id.asc())
+        .all()
+    )
+
+    candidates: list[DailyAdviceCandidate] = []
+    for work_order in work_orders:
+        day_offset = (work_order.operation_date - today).days
+        priority = 1 if day_offset <= 1 else 2
+        title = _operation_title(work_order.operation_type, day_offset)
+        candidates.append(
+            DailyAdviceCandidate(
+                id=f"operation:work_order:{work_order.id}",
+                category="operation",
+                title_hint=title,
+                detail_hint=_operation_detail(work_order, day_offset),
+                priority=priority,
+                due_date=work_order.operation_date,
+                source_type="operation_work_order",
+                source_id=work_order.id,
+                dedupe_key=f"operation_work_order:{work_order.id}",
+                reason="作业单日期进入今日建议窗口",
+            )
+        )
+
+    return candidates
+
+
+def _collect_finance_candidates(
+    db: Session,
+    *,
+    farm_id: int,
+    today: date,
+) -> list[DailyAdviceCandidate]:
+    horizon = today + timedelta(days=3)
+    debts = (
+        db.query(CostRecord)
+        .filter(
+            CostRecord.farm_id == farm_id,
+            CostRecord.record_subtype == "赊账",
+            CostRecord.due_date.isnot(None),
+            CostRecord.due_date <= horizon,
+            CostRecord.settled_amount < CostRecord.amount,
+            CostRecord.deleted_at.is_(None),
+        )
+        .order_by(CostRecord.due_date.asc(), CostRecord.id.asc())
+        .all()
+    )
+
+    candidates: list[DailyAdviceCandidate] = []
+    for debt in debts:
+        day_offset = (debt.due_date - today).days
+        overdue = day_offset < 0
+        candidates.append(
+            DailyAdviceCandidate(
+                id=f"finance:cost_record:{debt.id}",
+                category="finance",
+                title_hint="赊账已逾期" if overdue else "赊账即将到期",
+                detail_hint=_finance_detail(debt, day_offset),
+                priority=1 if overdue else 2,
+                due_date=debt.due_date,
+                source_type="cost_record",
+                source_id=debt.id,
+                dedupe_key=f"finance:cost_record:{debt.id}",
+                reason="赊账到期日进入今日建议窗口且尚未结清",
+            )
+        )
+
+    return candidates
+
+
 def _candidate_sort_key(
     candidate: DailyAdviceCandidate,
     today: date,
@@ -142,3 +246,45 @@ def _candidate_sort_key(
         _CATEGORY_ORDER[candidate.category],
         candidate.id,
     )
+
+
+def _operation_title(operation_type: str, day_offset: int) -> str:
+    if day_offset < 0:
+        return f"{operation_type}作业已逾期"
+    if day_offset == 0:
+        return f"今日安排{operation_type}"
+    if day_offset == 1:
+        return f"明日安排{operation_type}"
+    return f"近期安排{operation_type}"
+
+
+def _operation_detail(work_order: OperationWorkOrder, day_offset: int) -> str:
+    if day_offset < 0:
+        time_text = f"已逾期 {abs(day_offset)} 天"
+    elif day_offset == 0:
+        time_text = "今天到期"
+    else:
+        time_text = f"{day_offset} 天后到期"
+
+    note = f"，备注：{work_order.note}" if work_order.note else ""
+    return f"{work_order.operation_date.isoformat()} {work_order.operation_type}，{time_text}{note}"
+
+
+def _finance_detail(debt: CostRecord, day_offset: int) -> str:
+    counterparty = debt.counterparty or "未标注对象"
+    if day_offset < 0:
+        time_text = f"已逾期 {abs(day_offset)} 天"
+    elif day_offset == 0:
+        time_text = "今天到期"
+    else:
+        time_text = f"{day_offset} 天后到期"
+
+    return (
+        f"{counterparty} 赊账未结 {_money(debt.unsettled_amount)} 元，"
+        f"到期日 {debt.due_date.isoformat()}，{time_text}"
+    )
+
+
+def _money(value: Decimal | int | float | str | None) -> str:
+    amount = Decimal(str(value or "0")).quantize(Decimal("0.01"))
+    return f"{amount:.2f}"
