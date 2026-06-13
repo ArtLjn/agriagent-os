@@ -209,3 +209,91 @@ def test_diagnostic_service_records_pending_cache_invalidation() -> None:
         "status": "recorded",
         "groups": ["crop_cycle", "get_farm_status"],
     }
+
+
+def test_diagnostic_service_summarizes_reflection_checks() -> None:
+    report = SkillDiagnosticService().build_report(
+        "trace-1",
+        [
+            _record(
+                id=1,
+                node_type="reflection_check",
+                node_name="pre_write_plan",
+                input_data={"skill_name": "create_cost_record"},
+                output_data={
+                    "trigger": "pre_write_plan",
+                    "decision": "ask_clarification",
+                    "reason": "写操作参数不完整。",
+                    "issues": [
+                        {
+                            "code": "empty_write_params",
+                            "severity": "blocker",
+                            "message": "写操作参数为空。",
+                        }
+                    ],
+                },
+            ),
+            _record(
+                id=2,
+                node_type="reflection_check",
+                node_name="pre_final_response",
+                input_data={"final_text": "已完成"},
+                output_data={
+                    "trigger": "pre_final_response",
+                    "decision": "require_tool",
+                    "reason": "最终回复缺少必要工具调用。",
+                    "issues": [
+                        {
+                            "code": "required_tool_missing",
+                            "severity": "blocker",
+                            "message": "必须先调用工具。",
+                        },
+                        {
+                            "code": "empty_write_params",
+                            "severity": "warning",
+                            "message": "重复 issue code 应去重。",
+                        },
+                    ],
+                },
+            ),
+        ],
+    )
+
+    assert report.reflection_checks == [
+        {
+            "trigger": "pre_write_plan",
+            "decision": "ask_clarification",
+            "reason": "写操作参数不完整。",
+            "issues": [
+                {
+                    "code": "empty_write_params",
+                    "severity": "blocker",
+                    "message": "写操作参数为空。",
+                }
+            ],
+            "input": {"skill_name": "create_cost_record"},
+        },
+        {
+            "trigger": "pre_final_response",
+            "decision": "require_tool",
+            "reason": "最终回复缺少必要工具调用。",
+            "issues": [
+                {
+                    "code": "required_tool_missing",
+                    "severity": "blocker",
+                    "message": "必须先调用工具。",
+                },
+                {
+                    "code": "empty_write_params",
+                    "severity": "warning",
+                    "message": "重复 issue code 应去重。",
+                },
+            ],
+            "input": {"final_text": "已完成"},
+        },
+    ]
+    assert report.reflection_diagnostic == {
+        "blocked": True,
+        "decisions": ["ask_clarification", "require_tool"],
+        "issue_codes": ["empty_write_params", "required_tool_missing"],
+    }
