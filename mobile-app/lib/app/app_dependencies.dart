@@ -1,4 +1,6 @@
 import '../data/api/api_client.dart';
+import '../data/location/location_service.dart';
+import '../data/location/system_location_service.dart';
 import '../data/repositories/billing_repository.dart';
 import '../data/repositories/business_repository.dart';
 import '../data/repositories/dashboard_repository.dart';
@@ -20,6 +22,8 @@ abstract class AppDependencies {
   BusinessRepository get business;
 
   YayaRepository get yaya;
+
+  LocationService get location;
 
   Future<bool> restoreSession();
 
@@ -49,7 +53,8 @@ class BackendAppDependencies implements AppDependencies {
         billing = BillingRepository(client),
         business = BusinessRepository(client),
         workbench = WorkbenchRepository(client),
-        yaya = YayaRepository(client);
+        yaya = YayaRepository(client),
+        location = SystemLocationService();
 
   final ApiClient client;
   final AppSession session;
@@ -65,6 +70,8 @@ class BackendAppDependencies implements AppDependencies {
   final WorkbenchRepository workbench;
   @override
   final YayaRepository yaya;
+  @override
+  final LocationService location;
 
   @override
   Future<bool> restoreSession() {

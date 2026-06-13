@@ -11,15 +11,14 @@ from sqlalchemy.orm import Session
 
 from app.models.cost import CostRecord
 from app.models.cycle import CropCycle
-from app.models.farm import Farm
 from app.models.planting import OperationWorkOrder
-from app.models.user_setting import UserSetting
 from app.services import weather_service
 from app.services.daily_advice_models import DailyAdviceCandidate
 from app.services.daily_advice_models import DailyAdviceCategory
 from app.services.daily_advice_models import fingerprint_candidates
 from app.services.daily_advice_models import rank_daily_advice_candidates
 from app.services.daily_advice_models import render_candidate_context
+from app.services.location_resolver import resolve_weather_location
 
 __all__ = [
     "DailyAdviceCandidate",
@@ -67,45 +66,18 @@ async def _collect_weather_candidates(
     farm_id: int,
     today: date,
 ) -> list[DailyAdviceCandidate]:
-    location, lat, lon = _resolve_weather_location(db, farm_id=farm_id)
+    resolved = resolve_weather_location(db, farm_id=farm_id)
     try:
         weather = await weather_service.fetch_weather(
-            location,
+            resolved.location,
             days=3,
-            lat=lat,
-            lon=lon,
+            lat=resolved.lat,
+            lon=resolved.lon,
         )
     except Exception:
         return []
 
     return _weather_candidates_from_payload(weather, today=today)
-
-
-def _resolve_weather_location(
-    db: Session,
-    *,
-    farm_id: int,
-) -> tuple[str, float | None, float | None]:
-    farm = db.query(Farm).filter(Farm.id == farm_id).first()
-    if farm and farm.user_id:
-        setting = (
-            db.query(UserSetting).filter(UserSetting.user_id == farm.user_id).first()
-        )
-        if (
-            setting
-            and setting.default_lat is not None
-            and setting.default_lon is not None
-        ):
-            return (
-                setting.default_city or farm.location or "",
-                setting.default_lat,
-                setting.default_lon,
-            )
-        if setting and setting.default_city:
-            return setting.default_city, None, None
-    if farm and farm.location:
-        return farm.location, None, None
-    return "", None, None
 
 
 def _weather_candidates_from_payload(

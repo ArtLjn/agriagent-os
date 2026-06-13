@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/location/location_service.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../shared/app_identity.dart';
 import '../../shared/widgets/card_panel.dart';
@@ -15,10 +16,12 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.repository,
+    this.location,
     this.onLogout,
   });
 
   final ProfileRepository repository;
+  final LocationService? location;
   final Future<void> Function()? onLogout;
 
   @override
@@ -29,7 +32,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final ProfileController _controller = ProfileController(
     repository: widget.repository,
   );
-  late final Future<ProfileViewModel> _profileFuture = _controller.load();
+  late Future<ProfileViewModel> _profileFuture = _controller.load();
+
+  void _reloadProfile() {
+    setState(() {
+      _profileFuture = _controller.load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +58,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 14),
             _ProfileCard(model: model),
             const SizedBox(height: 14),
-            _LocationWeatherCard(model: model),
+            _LocationWeatherCard(
+              model: model,
+              repository: widget.repository,
+              location: widget.location,
+              onUpdated: _reloadProfile,
+            ),
             const SizedBox(height: 14),
             _AiPreferenceCard(model: model),
             const SizedBox(height: 14),
@@ -68,9 +82,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 class _LocationWeatherCard extends StatelessWidget {
-  const _LocationWeatherCard({required this.model});
+  const _LocationWeatherCard({
+    required this.model,
+    required this.repository,
+    this.location,
+    required this.onUpdated,
+  });
 
   final ProfileViewModel model;
+  final ProfileRepository repository;
+  final LocationService? location;
+  final VoidCallback onUpdated;
 
   @override
   Widget build(BuildContext context) {
@@ -82,16 +104,9 @@ class _LocationWeatherCard extends StatelessWidget {
             icon: LucideIcons.mapPin,
             color: AppColors.blue,
             background: AppColors.blueSoft,
-            title: '所在城市',
+            title: '经营地区',
             value: model.city,
-          ),
-          const Divider(height: 1, color: AppColors.lineSoft),
-          _ProfileOptionRow(
-            icon: LucideIcons.cloudSun,
-            color: AppColors.blue,
-            background: AppColors.blueSoft,
-            title: '默认天气',
-            value: model.weatherCity,
+            onTap: () => _editLocation(context),
           ),
           const Divider(height: 1, color: AppColors.lineSoft),
           const _ProfileOptionRow(
@@ -104,6 +119,118 @@ class _LocationWeatherCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _editLocation(BuildContext context) async {
+    final location = await showDialog<String>(
+      context: context,
+      builder: (_) => _LocationEditDialog(
+        initialValue: model.city == '未设置' ? '' : model.city,
+        location: this.location,
+      ),
+    );
+    if (location == null || location.isEmpty) return;
+    await repository.updateFarmLocation(location: location);
+    onUpdated();
+  }
+}
+
+class _LocationEditDialog extends StatefulWidget {
+  const _LocationEditDialog({
+    required this.initialValue,
+    this.location,
+  });
+
+  final String initialValue;
+  final LocationService? location;
+
+  @override
+  State<_LocationEditDialog> createState() => _LocationEditDialogState();
+}
+
+class _LocationEditDialogState extends State<_LocationEditDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
+  bool _locating = false;
+  String? _message;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  Future<void> _relocate() async {
+    final service = widget.location;
+    if (service == null || _locating) return;
+    setState(() {
+      _locating = true;
+      _message = null;
+    });
+    final suggestion = await service.requestCurrentFarmLocation();
+    if (!mounted) return;
+    if (suggestion == null) {
+      setState(() {
+        _locating = false;
+        _message = '无法获取当前位置';
+      });
+      return;
+    }
+    _controller.text = suggestion.city;
+    Navigator.of(context).pop(suggestion.city);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('经营地区'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: '请输入经营地区'),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+          ),
+          if (widget.location != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _locating ? null : _relocate,
+              icon: Icon(
+                _locating ? LucideIcons.loaderCircle : LucideIcons.locateFixed,
+                size: 17,
+              ),
+              label: Text(_locating ? '定位中...' : '重新定位'),
+            ),
+          ],
+          if (_message != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _message!,
+              style: AppTextStyles.small.copyWith(color: AppColors.red),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

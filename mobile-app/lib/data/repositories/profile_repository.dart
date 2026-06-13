@@ -22,6 +22,21 @@ class ProfileRepository {
     return UserSettings.fromJson(await client.putMap('/settings', data: data));
   }
 
+  Future<AppUser> updateFarmLocation({
+    required String location,
+    int? farmId,
+  }) async {
+    return AppUser.fromJson(
+      await client.putMap(
+        '/auth/me/farm-location',
+        data: {
+          'location': location,
+          if (farmId != null) 'farm_id': farmId,
+        },
+      ),
+    );
+  }
+
   Future<VersionInfo> checkVersion({int currentVersionCode = 0}) async {
     final data = await client.getMap(
       '/api/app/version',

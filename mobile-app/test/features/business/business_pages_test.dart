@@ -239,6 +239,57 @@ void main() {
     expect(find.text('小赵'), findsNothing);
   });
 
+  testWidgets('工人管理默认只展示在职工人并将停用显示为离职', (tester) async {
+    setUpRepository({
+      '/planting/workers/summary': workerSummaryFilterResponse,
+    });
+
+    await pump(tester, WorkerListPage(repository: repository));
+
+    expect(find.text('张三'), findsOneWidget);
+    expect(find.text('李四'), findsOneWidget);
+    expect(find.text('老王'), findsNothing);
+    expect(find.text('离职'), findsOneWidget);
+    expect(find.text('停用'), findsNothing);
+  });
+
+  testWidgets('工人管理支持姓名搜索和标签筛选', (tester) async {
+    setUpRepository({
+      '/planting/workers/summary': workerSummaryFilterResponse,
+    });
+
+    await pump(tester, WorkerListPage(repository: repository));
+
+    await tester.enterText(find.byType(TextField), '李');
+    await tester.pumpAndSettle();
+
+    expect(find.text('李四'), findsOneWidget);
+    expect(find.text('张三'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('有欠款'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('李四'), findsOneWidget);
+    expect(find.text('张三'), findsNothing);
+    expect(find.text('老王'), findsNothing);
+
+    await tester.tap(find.text('已结清'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('张三'), findsOneWidget);
+    expect(find.text('李四'), findsNothing);
+    expect(find.text('老王'), findsNothing);
+
+    await tester.tap(find.text('离职'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('老王'), findsOneWidget);
+    expect(find.text('张三'), findsNothing);
+    expect(find.text('李四'), findsNothing);
+  });
+
   testWidgets('工人管理页长按进入多选并批量删除', (tester) async {
     await pump(tester, WorkerListPage(repository: repository));
 
@@ -279,6 +330,8 @@ void main() {
     await pump(tester, FarmLogCreatePage(repository: repository));
 
     expect(find.text('记农事'), findsWidgets);
+    expect(find.text('选择茬口'), findsOneWidget);
+    expect(find.text('输入茬口 ID'), findsNothing);
     expect(find.text('作业类型'), findsOneWidget);
     expect(find.text('作业日期'), findsOneWidget);
     expect(find.text('保存农事'), findsOneWidget);
@@ -287,10 +340,13 @@ void main() {
   testWidgets('农事记录页保存到后端', (tester) async {
     await pump(tester, FarmLogCreatePage(repository: repository));
 
-    await tester.enterText(find.byType(TextField).at(0), '7');
-    await tester.enterText(find.byType(TextField).at(1), '浇水');
-    await tester.enterText(find.byType(TextField).at(2), '2026-06-10');
-    await tester.enterText(find.byType(TextField).at(3), '东棚少量浇水');
+    await tester.tap(find.text('选择茬口'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('春茬').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), '浇水');
+    await tester.enterText(find.byType(TextField).at(1), '2026-06-10');
+    await tester.enterText(find.byType(TextField).at(2), '东棚少量浇水');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存农事'));
@@ -309,6 +365,8 @@ void main() {
     await pump(tester, WageCreatePage(repository: repository));
 
     expect(find.text('记工资'), findsWidgets);
+    expect(find.text('选择茬口'), findsOneWidget);
+    expect(find.text('输入茬口 ID'), findsNothing);
     expect(find.text('工人姓名'), findsOneWidget);
     expect(find.text('计薪方式'), findsOneWidget);
     expect(find.text('保存工资'), findsOneWidget);
@@ -317,14 +375,17 @@ void main() {
   testWidgets('工资记录页保存到后端', (tester) async {
     await pump(tester, WageCreatePage(repository: repository));
 
-    await tester.enterText(find.byType(TextField).at(0), '7');
-    await tester.enterText(find.byType(TextField).at(1), '张三');
-    await tester.enterText(find.byType(TextField).at(2), '浇水');
-    await tester.enterText(find.byType(TextField).at(3), '2026-06-10');
-    await tester.enterText(find.byType(TextField).at(4), '1');
-    await tester.enterText(find.byType(TextField).at(5), '200');
-    await tester.enterText(find.byType(TextField).at(6), '0');
-    await tester.enterText(find.byType(TextField).at(7), '今日浇水工资');
+    await tester.tap(find.text('选择茬口'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('春茬').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), '张三');
+    await tester.enterText(find.byType(TextField).at(1), '浇水');
+    await tester.enterText(find.byType(TextField).at(2), '2026-06-10');
+    await tester.enterText(find.byType(TextField).at(3), '1');
+    await tester.enterText(find.byType(TextField).at(4), '200');
+    await tester.enterText(find.byType(TextField).at(5), '0');
+    await tester.enterText(find.byType(TextField).at(6), '今日浇水工资');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存工资'));

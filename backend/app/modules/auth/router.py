@@ -9,14 +9,21 @@ from app.models.user import User
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.errors import invalid_credentials_error, register_failed_error
 from app.modules.auth.schemas import (
+    FarmProfileResponse,
     LoginRequest,
     RegisterRequest,
     TokenResponse,
+    UpdateFarmLocationRequest,
     UpdateProfileRequest,
+    UserProfileResponse,
     UserResponse,
 )
 from app.modules.auth.service import login as auth_login
 from app.modules.auth.service import register as auth_register
+from app.modules.farm.service import (
+    backfill_default_farm_location_from_settings,
+    update_default_farm_location,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,18 +55,32 @@ def login(req: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     )
 
 
-@router.get("/me", response_model=UserResponse)
-def get_me(user: User = Depends(get_current_user)) -> UserResponse:
+def _build_user_profile(db: Session, user: User) -> UserProfileResponse:
+    """构建包含默认农场的当前用户资料。"""
+    farm = backfill_default_farm_location_from_settings(db, user_id=user.id)
+    if farm and farm.location:
+        db.commit()
+        db.refresh(farm)
+    profile = UserProfileResponse.model_validate(user)
+    profile.farm = FarmProfileResponse.model_validate(farm) if farm else None
+    return profile
+
+
+@router.get("/me", response_model=UserProfileResponse)
+def get_me(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserProfileResponse:
     """获取当前用户信息。"""
-    return UserResponse.model_validate(user)
+    return _build_user_profile(db, user)
 
 
-@router.put("/me", response_model=UserResponse)
+@router.put("/me", response_model=UserProfileResponse)
 def update_me(
     req: UpdateProfileRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> UserResponse:
+) -> UserProfileResponse:
     """更新当前用户信息。"""
     if req.nickname is not None:
         user.nickname = req.nickname
@@ -67,4 +88,21 @@ def update_me(
         user.avatar_url = req.avatar_url
     db.commit()
     db.refresh(user)
-    return UserResponse.model_validate(user)
+    return _build_user_profile(db, user)
+
+
+@router.put("/me/farm-location", response_model=UserProfileResponse)
+def update_me_farm_location(
+    req: UpdateFarmLocationRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserProfileResponse:
+    """更新当前用户默认农场经营地区。"""
+    update_default_farm_location(
+        db,
+        user_id=user.id,
+        location=req.location,
+        farm_id=req.farm_id,
+    )
+    db.refresh(user)
+    return _build_user_profile(db, user)

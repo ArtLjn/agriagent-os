@@ -26,11 +26,12 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
   final _category = TextEditingController();
   final _amount = TextEditingController();
   final _date = TextEditingController(text: _todayText());
-  final _cycle = TextEditingController();
   final _counterparty = TextEditingController();
   final _note = TextEditingController();
   String _recordType = 'cost';
   String _settlement = 'paid';
+  int? _selectedCycleId;
+  String _selectedCycleName = '';
   bool _saving = false;
 
   @override
@@ -38,7 +39,6 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
     _category.dispose();
     _amount.dispose();
     _date.dispose();
-    _cycle.dispose();
     _counterparty.dispose();
     _note.dispose();
     super.dispose();
@@ -56,6 +56,7 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
         'amount': num.tryParse(amountText) ?? amountText,
         'record_date': dateText,
         'record_subtype': _settlement,
+        'cycle_id': _selectedCycleId,
         'counterparty': _counterparty.text.trim(),
         'note': _note.text.trim(),
       }..removeWhere((_, value) => value == null || value == ''));
@@ -128,12 +129,14 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
               hintText: '选择日期',
               chevron: true,
             ),
-            BusinessFormRow(
-              label: '关联茬口',
-              value: '',
-              controller: _cycle,
-              hintText: '可选',
-              chevron: true,
+            CyclePickerFormRow(
+              repository: widget.repository,
+              selectedCycleId: _selectedCycleId,
+              selectedCycleName: _selectedCycleName,
+              onSelected: (cycle) => setState(() {
+                _selectedCycleId = cycle.id;
+                _selectedCycleName = cycle.name;
+              }),
             ),
             BusinessFormRow(
               label: '供应商',

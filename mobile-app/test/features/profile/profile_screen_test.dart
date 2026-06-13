@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/location/location_service.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/features/profile/profile_screen.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/api_test_fixtures.dart'
     show RecordingAdapter, settingsResponse, userResponse, versionResponse;
-import '../../support/fake_app_dependencies.dart' show setMockAppPackageInfo;
+import '../../support/fake_app_dependencies.dart'
+    show FakeLocationService, setMockAppPackageInfo;
 
 void main() {
   testWidgets('我的页面展示接口资料、AI 偏好和设置', (tester) async {
@@ -24,7 +26,7 @@ void main() {
     expect(find.text('田掌柜'), findsOneWidget);
     expect(find.text('农友'), findsOneWidget);
     expect(find.text('13800138000 · 用户'), findsOneWidget);
-    expect(find.text('寿光'), findsNWidgets(3));
+    expect(find.text('睢宁县'), findsNWidgets(2));
     expect(find.text('正常'), findsWidgets);
     expect(find.text('active'), findsNothing);
     expect(find.text('发现新版本 0.1.0'), findsOneWidget);
@@ -32,8 +34,9 @@ void main() {
     expect(find.text('更新说明'), findsNothing);
     expect(find.text('下载地址'), findsNothing);
     expect(find.text('https://example.test/app.apk'), findsNothing);
-    expect(find.text('所在城市'), findsOneWidget);
-    expect(find.text('默认天气'), findsOneWidget);
+    expect(find.text('经营地区'), findsOneWidget);
+    expect(find.text('所在城市'), findsNothing);
+    expect(find.text('默认天气'), findsNothing);
     expect(find.text('数据同步'), findsOneWidget);
     expect(find.text('AI 偏好设置'), findsOneWidget);
     expect(find.text('回答风格'), findsOneWidget);
@@ -129,6 +132,90 @@ void main() {
 
     expect(find.text('退出登录'), findsOneWidget);
     expect(logoutCalls, 1);
+  });
+
+  testWidgets('点击经营地区可手动保存新地区', (tester) async {
+    setMockAppPackageInfo(version: '0.1.0', buildNumber: '1');
+    final adapter = RecordingAdapter({
+      '/auth/me': userResponse,
+      '/settings': settingsResponse,
+      '/api/app/version': versionResponse,
+      'PUT /auth/me/farm-location': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': '邳州市',
+        },
+      },
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            repository: ProfileRepository(ApiClient(dio: dio)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('经营地区'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '邳州市');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+      'location': '邳州市',
+    });
+  });
+
+  testWidgets('资料页可用重新定位更新经营地区', (tester) async {
+    setMockAppPackageInfo(version: '0.1.0', buildNumber: '1');
+    final location = FakeLocationService(
+      suggestion: const FarmLocationSuggestion(city: '邳州市'),
+    );
+    final adapter = RecordingAdapter({
+      '/auth/me': userResponse,
+      '/settings': settingsResponse,
+      '/api/app/version': versionResponse,
+      'PUT /auth/me/farm-location': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': '邳州市',
+        },
+      },
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            repository: ProfileRepository(ApiClient(dio: dio)),
+            location: location,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('经营地区'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重新定位'));
+    await tester.pumpAndSettle();
+
+    expect(location.requestCalls, 1);
+    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+      'location': '邳州市',
+    });
   });
 }
 

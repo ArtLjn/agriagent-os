@@ -6,7 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.schemas.agent import ChatRequest
-from app.services.daily_advice_models import DailyAdviceCandidate
+from app.services.daily_advice_models import (
+    DailyAdviceCandidate,
+    build_daily_advice_item_skeletons,
+)
 from app.services.agent_service import (
     chat_with_agent,
     get_daily_advice,
@@ -253,8 +256,40 @@ class TestStreamChatWithAgent:
 class TestGetDailyAdvice:
     """测试每日建议服务。"""
 
+    def _candidate(self, *, key: str = "operation:work_order:7") -> DailyAdviceCandidate:
+        return DailyAdviceCandidate(
+            id=key,
+            category="operation",
+            title_hint="今日完成追肥",
+            detail_hint="玉米拔节期作业单今日到期，需要安排人员执行。",
+            priority=1,
+            due_date=date(2026, 6, 12),
+            source_type="operation_work_order",
+            source_id=7,
+            dedupe_key=key,
+            reason="作业单日期进入今日建议窗口",
+        )
+
+    def _v2_payload(self, candidate: DailyAdviceCandidate) -> str:
+        item = build_daily_advice_item_skeletons([candidate])[0]
+        return json.dumps(
+            {
+                "preview": "今日需追肥",
+                "items": [item.model_dump(mode="json")],
+                "generation": {
+                    "schema_version": "daily_advice_v2",
+                    "mode": "llm",
+                    "retry_count": 0,
+                    "cache_hit": False,
+                    "candidate_fingerprint": "placeholder",
+                },
+                "created_at": datetime(2026, 6, 13, 8, 0, 0).isoformat(),
+            },
+            ensure_ascii=False,
+        )
+
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.collect_daily_advice_candidates")
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_uses_ranked_candidates_for_generation(
@@ -278,11 +313,7 @@ class TestGetDailyAdvice:
         )
         mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
-        mock_invoke.return_value = (
-            '{"preview":"今日追肥","items":['
-            '{"title":"追肥","detail":"按作业单完成追肥","priority":1,"icon":"🌱"}'
-            "]}"
-        )
+        mock_invoke.return_value = self._v2_payload(candidate)
         mock_db = _make_mock_db()
 
         await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
@@ -298,8 +329,96 @@ class TestGetDailyAdvice:
         assert saved_meta["candidate_fingerprint"]
 
     @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.services.agent_service.get_composer")
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_retries_invalid_then_caches_repaired(
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
+    ) -> None:
+        """首次 v2 草稿校验失败时，应带修复提示重试并缓存 repaired 元数据。"""
+        candidate = self._candidate()
+        invalid_payload = json.loads(self._v2_payload(candidate))
+        invalid_payload["items"][0]["compact"]["subtitle"] = "太短"
+        mock_collect_candidates.return_value = [candidate]
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
+        mock_invoke.side_effect = [
+            json.dumps(invalid_payload, ensure_ascii=False),
+            self._v2_payload(candidate),
+        ]
+        mock_db = _make_mock_db()
+
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        assert mock_invoke.await_count == 2
+        assert result.generation.mode == "repaired"
+        assert result.generation.retry_count == 1
+        saved_record = mock_db.add.call_args.args[0]
+        saved_meta = json.loads(saved_record.meta)
+        assert saved_meta["schema_version"] == "daily_advice_v2"
+        assert saved_meta["generation_mode"] == "repaired"
+        assert saved_meta["retry_count"] == 1
+        assert saved_meta["reflection_decision"] == "pass"
+        assert "daily_advice_content_too_thin" in saved_meta["validation_errors"]
+
+    @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.services.agent_service.get_composer")
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_retry_exhausted_returns_fallback(
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
+    ) -> None:
+        """连续无效时返回基于同一候选骨架生成的 fallback，并缓存 fallback。"""
+        candidate = self._candidate()
+        invalid_payload = json.loads(self._v2_payload(candidate))
+        invalid_payload["items"][0]["id"] = "unknown"
+        mock_collect_candidates.return_value = [candidate]
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
+        mock_invoke.return_value = json.dumps(invalid_payload, ensure_ascii=False)
+        mock_db = _make_mock_db()
+
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        assert mock_invoke.await_count == 3
+        assert result.generation.mode == "fallback"
+        assert result.items[0].id == candidate.id
+        saved_record = mock_db.add.call_args.args[0]
+        saved_meta = json.loads(saved_record.meta)
+        assert saved_meta["generation_mode"] == "fallback"
+        assert saved_meta["retry_count"] == 2
+        assert "candidate_id_not_allowed" in saved_meta["validation_errors"]
+
+    @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.services.agent_service.get_composer")
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_empty_candidates_skips_llm(
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
+    ) -> None:
+        """没有候选时直接返回 empty 模式，并缓存结构化 empty 响应。"""
+        mock_collect_candidates.return_value = []
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
+        mock_db = _make_mock_db()
+
+        result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        mock_invoke.assert_not_awaited()
+        assert result.generation.mode == "empty"
+        assert result.items[0].id == "empty-today"
+        mock_db.add.assert_not_called()
+        mock_db.commit.assert_not_called()
+
+    @pytest.mark.asyncio
     @patch("app.services.farm_context_service.build_summary")
-    @patch("app.services.agent_service.collect_daily_advice_candidates")
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_does_not_fallback_to_debt_summary(
@@ -324,44 +443,49 @@ class TestGetDailyAdvice:
         await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
         mock_build_summary.assert_not_awaited()
-        variables = mock_get_composer.return_value.compose.call_args.kwargs["variables"]
-        assert variables["farm_context"] == "今日无明确高优先级行动候选。"
-        assert "欠账" not in variables["farm_context"]
-        assert "未付" not in variables["farm_context"]
-        assert "诸葛四郎" not in variables["farm_context"]
+        mock_get_composer.return_value.compose.assert_not_called()
+        mock_invoke.assert_not_awaited()
 
     @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_returns_structured_items(
-        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
     ) -> None:
-        """验证每日建议生成结构化 items 并保存（旧数组格式）。"""
+        """验证每日建议生成 v2 结构化 items 并保存。"""
+        candidate = self._candidate()
+        mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
-        mock_invoke.return_value = (
-            '[{"title":"施肥","detail":"生长期需追肥","priority":1,"icon":"🌱"}]'
-        )
+        mock_invoke.return_value = self._v2_payload(candidate)
         mock_db = _make_mock_db()
 
         result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
         assert len(result.items) == 1
-        assert result.items[0].title == "施肥"
-        assert result.preview == ""
+        assert result.items[0].id == candidate.id
+        assert result.preview == "今日需追肥"
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_passes_trusted_user_context(
-        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
     ) -> None:
         """每日建议调用 Agent 时应携带可信 user_id，避免 quota 身份拦截。"""
+        candidate = self._candidate()
+        mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
-        mock_invoke.return_value = (
-            '[{"title":"巡田","detail":"检查长势","priority":1,"icon":"📋"}]'
-        )
+        mock_invoke.return_value = self._v2_payload(candidate)
         mock_db = _make_mock_db()
         farm = MagicMock()
         farm.user_id = "user-1"
@@ -378,18 +502,24 @@ class TestGetDailyAdvice:
         )
 
     @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_new_format_with_preview(
-        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
     ) -> None:
-        """验证新格式（含 preview + items）正确解析。"""
+        """验证 v2 格式（含 preview + items）正确解析。"""
+        candidate = self._candidate()
+        mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
-        mock_invoke.return_value = (
-            '{"preview":"今日需浇水","items":['
-            '{"title":"浇水","detail":"土壤干燥需补水","priority":1,"icon":"💧"}'
-            "]}"
-        )
+        payload = json.loads(self._v2_payload(candidate))
+        payload["preview"] = "今日需浇水"
+        payload["items"][0]["compact"]["title"] = "浇水"
+        payload["items"][0]["detail_view"]["title"] = "浇水"
+        mock_invoke.return_value = json.dumps(payload, ensure_ascii=False)
         mock_db = _make_mock_db()
 
         result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
@@ -397,15 +527,21 @@ class TestGetDailyAdvice:
         assert result.preview == "今日需浇水"
         assert len(result.items) == 1
         assert result.items[0].title == "浇水"
-        assert result.items[0].icon == "💧"
+        assert result.items[0].icon == "ClipboardList"
 
     @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_old_format_backward_compatible(
-        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
     ) -> None:
-        """验证旧数组格式仍然兼容。"""
+        """旧数组格式不再作为生成结果缓存，应重试并 fallback。"""
+        candidate = self._candidate()
+        mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = (
             '[{"title":"除草","detail":"杂草影响生长","priority":2,"icon":"🌿"},'
@@ -415,32 +551,35 @@ class TestGetDailyAdvice:
 
         result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
-        assert result.preview == ""
-        assert len(result.items) == 2
-        # 按 priority 排序
-        assert result.items[0].priority == 1
-        assert result.items[0].title == "施肥"
-        assert result.items[1].priority == 2
-        assert result.items[1].title == "除草"
+        assert mock_invoke.await_count == 3
+        assert result.generation.mode == "fallback"
+        assert len(result.items) == 1
+        assert result.items[0].id == candidate.id
 
     @pytest.mark.asyncio
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_fallback_on_plain_text(
-        self, mock_invoke: AsyncMock, mock_get_composer: MagicMock
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
     ) -> None:
-        """验证 LLM 返回纯文本时 fallback 为单条 item。"""
+        """验证 LLM 返回纯文本时重试并 fallback 到候选 skeleton。"""
+        candidate = self._candidate()
+        mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = "今日建议：施肥。"
         mock_db = _make_mock_db()
 
         result = await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
 
+        assert mock_invoke.await_count == 3
         assert len(result.items) == 1
-        assert result.items[0].title == "今日农事建议"
-        assert result.preview == ""
-        # 向后兼容：advice property 返回拼接文本
-        assert "今日建议：施肥。" in result.advice
+        assert result.items[0].id == candidate.id
+        assert result.generation.mode == "fallback"
+        assert "今日完成追肥" in result.advice
 
 
 class TestGenerateReport:

@@ -29,6 +29,7 @@ class AppUser {
     required this.status,
     this.avatarUrl,
     this.createdAt,
+    this.farm,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
@@ -40,6 +41,9 @@ class AppUser {
       status: '${json['status'] ?? ''}',
       avatarUrl: json['avatar_url'] as String?,
       createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
+      farm: json['farm'] is Map
+          ? FarmProfile.fromJson(Map<String, dynamic>.from(json['farm'] as Map))
+          : null,
     );
   }
 
@@ -50,6 +54,27 @@ class AppUser {
   final String status;
   final String? avatarUrl;
   final DateTime? createdAt;
+  final FarmProfile? farm;
+}
+
+class FarmProfile {
+  const FarmProfile({
+    required this.id,
+    required this.name,
+    this.location,
+  });
+
+  factory FarmProfile.fromJson(Map<String, dynamic> json) {
+    return FarmProfile(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: '${json['name'] ?? ''}',
+      location: json['location'] as String?,
+    );
+  }
+
+  final int id;
+  final String name;
+  final String? location;
 }
 
 class PageResult<T> {

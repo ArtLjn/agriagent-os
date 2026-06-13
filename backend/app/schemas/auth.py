@@ -42,6 +42,22 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FarmProfileResponse(BaseModel):
+    """当前用户默认农场信息。"""
+
+    id: int
+    name: str
+    location: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class UserProfileResponse(UserResponse):
+    """当前用户资料响应，包含默认农场。"""
+
+    farm: FarmProfileResponse | None = None
+
+
 class TokenResponse(BaseModel):
     """登录成功响应（含 token）。"""
 
@@ -55,3 +71,10 @@ class UpdateProfileRequest(BaseModel):
 
     nickname: str | None = Field(None, max_length=50)
     avatar_url: str | None = Field(None, max_length=500)
+
+
+class UpdateFarmLocationRequest(BaseModel):
+    """更新默认农场经营地区请求。"""
+
+    location: str = Field(..., min_length=1, max_length=200)
+    farm_id: int | None = None

@@ -23,7 +23,6 @@ class WageCreatePage extends StatefulWidget {
 }
 
 class _WageCreatePageState extends State<WageCreatePage> {
-  final _cycleId = TextEditingController();
   final _workerName = TextEditingController();
   final _operationType = TextEditingController();
   final _workDate = TextEditingController(text: _todayText());
@@ -32,11 +31,12 @@ class _WageCreatePageState extends State<WageCreatePage> {
   final _paidAmount = TextEditingController();
   final _note = TextEditingController();
   String _payType = 'daily';
+  int? _selectedCycleId;
+  String _selectedCycleName = '';
   bool _saving = false;
 
   @override
   void dispose() {
-    _cycleId.dispose();
     _workerName.dispose();
     _operationType.dispose();
     _workDate.dispose();
@@ -52,7 +52,7 @@ class _WageCreatePageState extends State<WageCreatePage> {
     setState(() => _saving = true);
     try {
       await widget.repository.createWage({
-        'cycle_id': int.tryParse(_cycleId.text.trim()),
+        'cycle_id': _selectedCycleId,
         'operation_type': _operationType.text.trim(),
         'worker_name': _workerName.text.trim(),
         'pay_type': _payType,
@@ -105,12 +105,14 @@ class _WageCreatePageState extends State<WageCreatePage> {
           title: '用工信息',
           icon: LucideIcons.handCoins,
           children: [
-            BusinessFormRow(
-              label: '关联茬口',
-              value: '',
-              controller: _cycleId,
-              hintText: '输入茬口 ID',
-              keyboardType: TextInputType.number,
+            CyclePickerFormRow(
+              repository: widget.repository,
+              selectedCycleId: _selectedCycleId,
+              selectedCycleName: _selectedCycleName,
+              onSelected: (cycle) => setState(() {
+                _selectedCycleId = cycle.id;
+                _selectedCycleName = cycle.name;
+              }),
             ),
             BusinessFormRow(
               label: '工人姓名',

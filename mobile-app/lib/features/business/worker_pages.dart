@@ -28,11 +28,21 @@ class WorkerListPage extends StatefulWidget {
 
 class _WorkerListPageState extends State<WorkerListPage> {
   late Future<PageResult<ApiRecord>> _workersFuture;
+  final _searchController = TextEditingController();
+  int _filterIndex = 0;
+
+  static const _filters = ['全部', '有欠款', '已结清', '离职'];
 
   @override
   void initState() {
     super.initState();
     _workersFuture = widget.repository.listWorkerSummaries();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _reloadWorkers() {
@@ -69,7 +79,12 @@ class _WorkerListPageState extends State<WorkerListPage> {
               );
             }
             final items = snapshot.data?.items ?? const <ApiRecord>[];
-            final summary = _workerSummary(items);
+            final visibleItems = _filterWorkers(
+              items,
+              query: _searchController.text,
+              filterIndex: _filterIndex,
+            );
+            final summary = _workerSummary(visibleItems);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -121,12 +136,20 @@ class _WorkerListPageState extends State<WorkerListPage> {
                   ],
                 ),
                 const SizedBox(height: 13),
-                const SearchFieldCard(text: '搜索工人姓名'),
+                SearchFieldCard(
+                  text: '搜索工人姓名',
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                ),
                 const SizedBox(height: 13),
-                const ChipRail(items: ['全部', '有欠款', '已结清', '停用']),
+                ChipRail(
+                  items: _filters,
+                  activeIndex: _filterIndex,
+                  onSelected: (index) => setState(() => _filterIndex = index),
+                ),
                 const SizedBox(height: 13),
                 BulkDeleteListSection(
-                  items: items,
+                  items: visibleItems,
                   hasError: snapshot.hasError,
                   emptyMessage: '还没有工人档案。',
                   errorMessage: '工人档案加载失败，请稍后重试。',
@@ -148,6 +171,41 @@ class _WorkerListPageState extends State<WorkerListPage> {
       ],
     );
   }
+}
+
+List<ApiRecord> _filterWorkers(
+  List<ApiRecord> items, {
+  required String query,
+  required int filterIndex,
+}) {
+  final keyword = query.trim().toLowerCase();
+  return items.where((item) {
+    final json = item.json;
+    final isInactive = _isInactiveWorker(json['status']);
+    if (filterIndex == 0 && isInactive) return false;
+    if (filterIndex == 1 &&
+        (!_hasUnpaidAmount(json['unpaid_amount']) || isInactive)) {
+      return false;
+    }
+    if (filterIndex == 2 &&
+        (_hasUnpaidAmount(json['unpaid_amount']) || isInactive)) {
+      return false;
+    }
+    if (filterIndex == 3 && !isInactive) return false;
+    if (keyword.isEmpty) return true;
+    final searchable = [
+      json['name'],
+      json['phone'],
+    ].map((value) => _firstNonEmpty([value]).toLowerCase()).join(' ');
+    return searchable.contains(keyword);
+  }).toList(growable: false);
+}
+
+bool _hasUnpaidAmount(Object? value) => (_parseDouble(value) ?? 0) > 0;
+
+bool _isInactiveWorker(Object? value) {
+  final status = '$value'.trim().toLowerCase();
+  return status == 'inactive' || status == 'disabled' || status == '离职';
 }
 
 _WorkerSummary _workerSummary(List<ApiRecord> items) {
@@ -461,7 +519,7 @@ class WorkerListCard extends StatelessWidget {
 String _statusLabel(Object? value) {
   return switch ('$value'.trim().toLowerCase()) {
     'active' => '在用',
-    'inactive' => '停用',
+    'inactive' || 'disabled' => '离职',
     '' => '',
     _ => '$value',
   };

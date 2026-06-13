@@ -418,7 +418,7 @@ async def test_collect_weather_candidates_includes_high_temperature_p1(
     )
     weather_candidates = [item for item in candidates if item.category == "weather"]
 
-    fetch_weather.assert_awaited_once_with("", days=3, lat=None, lon=None)
+    fetch_weather.assert_awaited_once_with("", days=3, lat=34.26, lon=117.18)
     assert len(weather_candidates) == 1
     assert weather_candidates[0].priority == 1
     assert weather_candidates[0].source_type == "weather_service"
@@ -426,7 +426,7 @@ async def test_collect_weather_candidates_includes_high_temperature_p1(
     assert "高温" in weather_candidates[0].title_hint
 
 
-async def test_collect_weather_candidates_uses_user_setting_coordinates(
+async def test_collect_weather_candidates_uses_farm_location_first(
     db_session,
     monkeypatch,
 ):
@@ -453,6 +453,42 @@ async def test_collect_weather_candidates_uses_user_setting_coordinates(
     )
 
     await collect_daily_advice_candidates(db_session, farm_id=77, today=today)
+
+    fetch_weather.assert_awaited_once_with(
+        "苏州",
+        days=3,
+        lat=None,
+        lon=None,
+    )
+
+
+async def test_collect_weather_candidates_falls_back_to_user_setting_coordinates(
+    db_session,
+    monkeypatch,
+):
+    today = date(2026, 6, 12)
+    user = User(
+        id="user-weather-fallback",
+        phone="19000000001",
+        password_hash="hash",
+        nickname="天气用户",
+    )
+    farm = Farm(id=79, name="定位农场", user_id=user.id, location=None)
+    setting = UserSetting(
+        user_id=user.id,
+        default_city="徐州",
+        default_lat=34.26,
+        default_lon=117.18,
+    )
+    db_session.add_all([user, farm, setting])
+    db_session.commit()
+    fetch_weather = AsyncMock(return_value=_weather_data(temps=[36, 32, 31]))
+    monkeypatch.setattr(
+        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        fetch_weather,
+    )
+
+    await collect_daily_advice_candidates(db_session, farm_id=79, today=today)
 
     fetch_weather.assert_awaited_once_with(
         "徐州",

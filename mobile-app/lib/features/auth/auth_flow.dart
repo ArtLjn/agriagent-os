@@ -37,13 +37,24 @@ class _AuthFlowState extends State<AuthFlow> {
   Future<void> _restoreSession() async {
     final restored = await widget.dependencies.restoreSession();
     if (!mounted) return;
-    setState(() => step = restored ? AuthStep.app : AuthStep.login);
+    if (!restored) {
+      setState(() => step = AuthStep.login);
+      return;
+    }
+    await _enterAfterAuth();
   }
 
   Future<void> _logout() async {
     await widget.dependencies.logout();
     if (!mounted) return;
     setState(() => step = AuthStep.login);
+  }
+
+  Future<void> _enterAfterAuth() async {
+    final user = await widget.dependencies.profile.getProfile();
+    final location = user.farm?.location?.trim() ?? '';
+    if (!mounted) return;
+    setState(() => step = location.isEmpty ? AuthStep.setup : AuthStep.app);
   }
 
   @override
@@ -58,7 +69,7 @@ class _AuthFlowState extends State<AuthFlow> {
             required String password,
           }) async {
             await widget.dependencies.login(phone: phone, password: password);
-            if (mounted) setState(() => step = AuthStep.app);
+            await _enterAfterAuth();
           },
           onRegister: () => setState(() => step = AuthStep.register),
         ),
@@ -78,6 +89,8 @@ class _AuthFlowState extends State<AuthFlow> {
           onLogin: () => setState(() => step = AuthStep.login),
         ),
       AuthStep.setup => OnboardingSetupScreen(
+          profile: widget.dependencies.profile,
+          location: widget.dependencies.location,
           onStart: () => setState(() => step = AuthStep.app),
           onSkip: () => setState(() => step = AuthStep.app),
         ),

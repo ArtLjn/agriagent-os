@@ -5,8 +5,11 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
 from app.core.security import create_access_token
+from app.models.agent_record import AgentRecord
+from app.models.farm import Farm
 from app.main import app
 from app.models.user import User
+from app.models.user_setting import UserSetting
 
 
 @pytest.fixture
@@ -127,6 +130,59 @@ class TestAuthMe:
 
         assert resp.status_code == 200
         assert resp.json()["phone"] == "13800138003"
+        assert resp.json()["farm"]["name"] == "农友的农场"
+        assert resp.json()["farm"]["location"] is None
+
+    def test_get_me_returns_farm_location(self, client, clean_db):
+        """GET /auth/me 返回当前用户默认农场经营地区。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138013", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+        from app.api.deps import get_db
+
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            user = db.query(User).filter(User.phone == "13800138013").first()
+            farm = db.query(Farm).filter(Farm.user_id == user.id).first()
+            farm.location = "睢宁县"
+            db.commit()
+        finally:
+            db.close()
+
+        resp = client.get(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["farm"]["location"] == "睢宁县"
+
+    def test_get_me_backfills_farm_location_from_user_settings(self, client, clean_db):
+        """默认农场地区为空时，从旧 user_settings 城市回填。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138014", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+        from app.api.deps import get_db
+
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            user = db.query(User).filter(User.phone == "13800138014").first()
+            db.add(UserSetting(user_id=user.id, default_city="寿光"))
+            db.commit()
+        finally:
+            db.close()
+
+        resp = client.get(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["farm"]["location"] == "寿光"
 
     def test_get_me_without_token(self, client, clean_db):
         """无 token 访问 /auth/me 返回 401。"""
@@ -200,3 +256,107 @@ class TestAuthUpdateMe:
 
         assert resp.status_code == 401
         assert resp.json()["detail"]["code"] == "AUTH_MISSING_TOKEN"
+
+
+class TestAuthFarmLocation:
+    """测试当前用户默认农场经营地区更新。"""
+
+    def test_update_own_default_farm_location(self, client, clean_db):
+        """PUT /auth/me/farm-location 更新当前用户默认农场地区。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138015", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+
+        resp = client.put(
+            "/auth/me/farm-location",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"location": "邳州市"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["farm"]["location"] == "邳州市"
+
+    def test_update_farm_location_deletes_daily_advice_cache(self, client, clean_db):
+        """更新经营地区后删除该农场每日建议缓存。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138017", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+        from app.api.deps import get_db
+
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            user = db.query(User).filter(User.phone == "13800138017").first()
+            farm = db.query(Farm).filter(Farm.user_id == user.id).first()
+            db.add(
+                AgentRecord(
+                    farm_id=farm.id,
+                    record_type="daily",
+                    content='{"items":[]}',
+                )
+            )
+            db.commit()
+            farm_id = farm.id
+        finally:
+            db.close()
+
+        resp = client.put(
+            "/auth/me/farm-location",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"location": "邳州市"},
+        )
+
+        assert resp.status_code == 200
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            remaining = (
+                db.query(AgentRecord)
+                .filter(
+                    AgentRecord.farm_id == farm_id,
+                    AgentRecord.record_type == "daily",
+                )
+                .count()
+            )
+        finally:
+            db.close()
+        assert remaining == 0
+
+    def test_update_other_farm_location_returns_403_code(self, client, clean_db):
+        """传入其他 farm_id 时返回 403 结构化错误码。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138016", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+        from app.api.deps import get_db
+
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            other = User(
+                id="other-farm-location-user",
+                phone="13800138999",
+                password_hash="hash",
+                nickname="别人",
+                status="active",
+            )
+            db.add(other)
+            db.flush()
+            other_farm = Farm(name="别人农场", user_id=other.id, location="南京")
+            db.add(other_farm)
+            db.commit()
+            db.refresh(other_farm)
+            other_farm_id = other_farm.id
+        finally:
+            db.close()
+
+        resp = client.put(
+            "/auth/me/farm-location",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"farm_id": other_farm_id, "location": "邳州市"},
+        )
+
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["code"] == "FARM_LOCATION_FORBIDDEN"

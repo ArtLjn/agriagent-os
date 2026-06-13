@@ -92,6 +92,29 @@ def _v2_payload(candidate: DailyAdviceCandidate, *, label: str | None = None) ->
     }
 
 
+def _v2_content(candidate: DailyAdviceCandidate, *, label: str | None = None) -> str:
+    return json.dumps(_v2_payload(candidate, label=label), ensure_ascii=False)
+
+
+def _v2_meta(
+    candidate: DailyAdviceCandidate,
+    *,
+    schema_version: str = "daily_advice_v2",
+) -> str:
+    return json.dumps(
+        {
+            "schema_version": schema_version,
+            "generation_mode": "llm",
+            "retry_count": 0,
+            "reflection_decision": "pass",
+            "validation_errors": [],
+            "selected_candidates": [candidate.to_meta()],
+            "candidate_fingerprint": fingerprint_candidates([candidate]),
+        },
+        ensure_ascii=False,
+    )
+
+
 @pytest.fixture
 def db():
     """提供独立的内存 SQLite 会话。"""
@@ -135,7 +158,7 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = json.dumps(_v2_payload(candidate), ensure_ascii=False)
+            mock_llm.return_value = _v2_content(candidate)
             from app.services.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
@@ -150,22 +173,13 @@ class TestDailyAdviceCache:
         """schema version 和 candidate fingerprint 匹配时直接返回缓存。"""
         today = _today_start()
         candidate = _candidate("weather:hot:cache")
-        fingerprint = fingerprint_candidates([candidate])
-        payload = _v2_payload(candidate, label="缓存建议")
-        payload["generation"]["candidate_fingerprint"] = fingerprint
         db.add(
             AgentRecord(
                 farm_id=1,
                 record_type="daily",
-                content=json.dumps(payload, ensure_ascii=False),
+                content=_v2_content(candidate, label="缓存建议"),
                 created_at=today,
-                meta=json.dumps(
-                    {
-                        "schema_version": "daily_advice_v2",
-                        "candidate_fingerprint": fingerprint,
-                    },
-                    ensure_ascii=False,
-                ),
+                meta=_v2_meta(candidate),
             )
         )
         db.commit()
@@ -190,22 +204,13 @@ class TestDailyAdviceCache:
         today = _today_start()
         old_candidate = _candidate("weather:old", "旧候选")
         new_candidate = _candidate("weather:new", "新候选")
-        cached_payload = _v2_payload(old_candidate)
         db.add(
             AgentRecord(
                 farm_id=1,
                 record_type="daily",
-                content=json.dumps(cached_payload, ensure_ascii=False),
+                content=_v2_content(old_candidate),
                 created_at=today,
-                meta=json.dumps(
-                    {
-                        "schema_version": "daily_advice_v2",
-                        "candidate_fingerprint": fingerprint_candidates(
-                            [old_candidate]
-                        ),
-                    },
-                    ensure_ascii=False,
-                ),
+                meta=_v2_meta(old_candidate),
             )
         )
         db.commit()
@@ -214,10 +219,7 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = json.dumps(
-                _v2_payload(new_candidate),
-                ensure_ascii=False,
-            )
+            mock_llm.return_value = _v2_content(new_candidate)
             from app.services.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
@@ -247,13 +249,135 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = json.dumps(_v2_payload(candidate), ensure_ascii=False)
+            mock_llm.return_value = _v2_content(candidate)
             from app.services.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
         mock_llm.assert_called_once()
         assert result.items[0].id == candidate.id
+
+    @pytest.mark.asyncio
+    async def test_cache_schema_mismatch_regenerates(
+        self, db, mock_composer, mock_collect_candidates
+    ):
+        """schema version 不匹配时忽略旧缓存并重新生成。"""
+        today = _today_start()
+        candidate = _candidate("weather:schema", "schema 候选")
+        db.add(
+            AgentRecord(
+                farm_id=1,
+                record_type="daily",
+                content=_v2_content(candidate),
+                created_at=today,
+                meta=_v2_meta(candidate, schema_version="daily_advice_v1"),
+            )
+        )
+        db.commit()
+        mock_collect_candidates.return_value = [candidate]
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = _v2_content(candidate)
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=1)
+
+        mock_llm.assert_called_once()
+        assert result.generation.mode == "llm"
+
+    @pytest.mark.asyncio
+    async def test_legacy_debt_advice_cache_is_ignored(
+        self, db, mock_composer, mock_collect_candidates
+    ):
+        """旧缓存里若含未结人工建议，应重新生成而不是继续命中。"""
+        today = _today_start()
+        candidate = _candidate("weather:debt-legacy", "重新生成")
+        db.add(
+            AgentRecord(
+                farm_id=1,
+                record_type="daily",
+                content=(
+                    '[{"title":"结算工人欠款","detail":"诸葛四郎、李海、朱7'
+                    '三人各有100元未付，建议尽快安排支付","priority":2,"icon":"💰"}]'
+                ),
+                created_at=today,
+            )
+        )
+        db.commit()
+        mock_collect_candidates.return_value = [candidate]
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = _v2_content(candidate, label="重新生成")
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=1)
+
+        mock_llm.assert_called_once()
+        assert result.items[0].title == "重新生成"
+
+    @pytest.mark.asyncio
+    async def test_quota_reject_message_cache_is_ignored(
+        self, db, mock_composer, mock_collect_candidates
+    ):
+        """身份/配额拦截文案不应作为每日建议缓存复用。"""
+        today = _today_start()
+        candidate = _candidate("weather:auth-reject", "重新生成")
+        db.add(
+            AgentRecord(
+                farm_id=1,
+                record_type="daily",
+                content="缺少可信用户上下文，无法继续处理。",
+                created_at=today,
+            )
+        )
+        db.commit()
+        mock_collect_candidates.return_value = [candidate]
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = _v2_content(candidate, label="重新生成")
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=1)
+
+        mock_llm.assert_called_once()
+        assert result.items[0].title == "重新生成"
+
+    @pytest.mark.asyncio
+    async def test_different_farm_cache_miss(
+        self, db, mock_composer, mock_collect_candidates
+    ):
+        """不同 farm_id 应视为缓存未命中。"""
+        today = _today_start()
+        old_candidate = _candidate("weather:farm-1", "农场1")
+        new_candidate = _candidate("weather:farm-2", "农场2建议")
+        db.add(
+            AgentRecord(
+                farm_id=1,
+                record_type="daily",
+                content=_v2_content(old_candidate),
+                created_at=today,
+                meta=_v2_meta(old_candidate),
+            )
+        )
+        db.commit()
+        mock_collect_candidates.return_value = [new_candidate]
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = _v2_content(new_candidate, label="农场2建议")
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=2)
+
+        mock_llm.assert_called_once()
+        assert result.items[0].title == "农场2建议"
 
     @pytest.mark.asyncio
     async def test_yesterday_record_is_expired(
@@ -267,17 +391,9 @@ class TestDailyAdviceCache:
             AgentRecord(
                 farm_id=1,
                 record_type="daily",
-                content=json.dumps(_v2_payload(old_candidate), ensure_ascii=False),
+                content=_v2_content(old_candidate),
                 created_at=yesterday,
-                meta=json.dumps(
-                    {
-                        "schema_version": "daily_advice_v2",
-                        "candidate_fingerprint": fingerprint_candidates(
-                            [old_candidate]
-                        ),
-                    },
-                    ensure_ascii=False,
-                ),
+                meta=_v2_meta(old_candidate),
             )
         )
         db.commit()
@@ -286,7 +402,7 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = json.dumps(_v2_payload(new_candidate), ensure_ascii=False)
+            mock_llm.return_value = _v2_content(new_candidate)
             from app.services.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
@@ -306,17 +422,9 @@ class TestDailyAdviceCache:
             AgentRecord(
                 farm_id=1,
                 record_type="daily",
-                content=json.dumps(_v2_payload(old_candidate), ensure_ascii=False),
+                content=_v2_content(old_candidate),
                 created_at=today,
-                meta=json.dumps(
-                    {
-                        "schema_version": "daily_advice_v2",
-                        "candidate_fingerprint": fingerprint_candidates(
-                            [old_candidate]
-                        ),
-                    },
-                    ensure_ascii=False,
-                ),
+                meta=_v2_meta(old_candidate),
             )
         )
         db.commit()
@@ -325,7 +433,7 @@ class TestDailyAdviceCache:
         with patch(
             "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            mock_llm.return_value = json.dumps(_v2_payload(new_candidate), ensure_ascii=False)
+            mock_llm.return_value = _v2_content(new_candidate)
             from app.services.agent_service import refresh_daily_advice
 
             result = await refresh_daily_advice(db, farm_id=1)

@@ -25,7 +25,10 @@ class ProfileController {
     final VersionInfo version = await repository.checkVersion(
       currentVersionCode: currentVersionCode,
     );
-    final city = _fallback(settings.defaultCity, '未设置');
+    final city = _fallback(
+      user.farm?.location,
+      _fallback(settings.defaultCity, '未设置'),
+    );
     final hasUpdate = version.latestVersionCode > currentVersionCode;
     final latestVersion = _fallback(version.latestVersion, '');
 
@@ -35,7 +38,6 @@ class ProfileController {
       role: _roleLabel(user.role),
       status: _statusLabel(user.status),
       city: city,
-      weatherCity: city,
       assistantRoleLabel: _assistantRoleLabel(settings.assistantRole),
       latestVersion: latestVersion,
       hasVersionUpdate: hasUpdate,
@@ -107,7 +109,6 @@ class ProfileViewModel {
     required this.role,
     required this.status,
     required this.city,
-    required this.weatherCity,
     required this.assistantRoleLabel,
     this.latestVersion,
     this.hasVersionUpdate = false,
@@ -122,7 +123,6 @@ class ProfileViewModel {
   final String role;
   final String status;
   final String city;
-  final String weatherCity;
   final String assistantRoleLabel;
   final String? latestVersion;
   final bool hasVersionUpdate;

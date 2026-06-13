@@ -10,7 +10,6 @@ void main() {
   test('首页 controller 聚合建议、天气、作业单和未结人工摘要', () async {
     final adapter = RecordingAdapter({
       '/agent/daily': dailyAdviceResponse,
-      '/settings': settingsResponse,
       '/weather/forecast': weatherResponse,
       '/planting/work-orders': paginatedWorkOrdersResponse,
       '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
@@ -31,13 +30,12 @@ void main() {
     expect(model.unsettledLaborText, '¥200');
     expect(model.riskText, '1项');
     expect(adapter.find('GET', '/planting/work-orders').query['size'], 10);
-    expect(adapter.find('GET', '/weather/forecast').query['location'], '寿光');
+    expect(adapter.find('GET', '/weather/forecast').query, {'days': 7});
   });
 
   test('天气接口失败时首页仍展示其他数据', () async {
     final adapter = RecordingAdapter({
       '/agent/daily': dailyAdviceResponse,
-      '/settings': settingsResponse,
       'GET /weather/forecast': {'detail': '内部服务器错误'},
       '/planting/work-orders': paginatedWorkOrdersResponse,
       '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,
@@ -60,7 +58,6 @@ void main() {
   test('首页天气兼容后端真实 daily 结构', () async {
     final adapter = RecordingAdapter({
       '/agent/daily': dailyAdviceResponse,
-      '/settings': settingsResponse,
       '/weather/forecast': backendWeatherResponse,
       '/planting/work-orders': paginatedWorkOrdersResponse,
       '/planting/labor/unsettled-summary': unsettledLaborSummaryResponse,

@@ -17,6 +17,14 @@ void main() {
       '/auth/register': tokenResponse,
       '/auth/me': userResponse,
       'PUT /auth/me': userResponse,
+      'PUT /auth/me/farm-location': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': '邳州市',
+        },
+      },
       '/settings': settingsResponse,
       'PUT /settings': settingsResponse,
       '/api/app/version': versionResponse,
@@ -93,6 +101,7 @@ void main() {
     );
     await profile.getProfile();
     await profile.updateProfile({'nickname': '新昵称'});
+    final updatedUser = await profile.updateFarmLocation(location: '邳州市');
     await profile.getSettings();
     await profile.updateSettings({'default_city': '寿光'});
     await profile.checkVersion(currentVersionCode: 3);
@@ -154,6 +163,10 @@ void main() {
       adapter.find('GET', '/auth/me').headers['Authorization'],
       'Bearer token-1',
     );
+    expect(updatedUser.farm?.location, '邳州市');
+    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+      'location': '邳州市',
+    });
     expect(adapter.find('POST', '/agent/chat').data, {
       'cycle_id': 7,
       'message': '今天浇水吗',
@@ -164,8 +177,6 @@ void main() {
     expect(adapter.find('GET', '/weather/forecast').query, {
       'days': 3,
       'location': '寿光',
-      'lat': 34.20442,
-      'lon': 117.28386,
     });
     expect(adapter.find('GET', '/costs').query, {
       'cycle_id': 7,

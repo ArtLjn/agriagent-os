@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_models.dart';
+import '../../data/repositories/business_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../shell/bottom_tab_bar.dart';
@@ -547,10 +549,12 @@ class CycleSummaryBanner extends StatelessWidget {
             ),
           ),
           Positioned(
-            left: 18,
-            right: 18,
-            top: 18,
+            left: 10,
+            right: 26,
+            top: 12,
+            height: 104,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: _CycleMetric(label: '茬口数', value: '$cycleCount'),
@@ -559,7 +563,11 @@ class CycleSummaryBanner extends StatelessWidget {
                   child: _CycleMetric(label: '总面积', value: totalAreaText),
                 ),
                 Expanded(
-                  child: _CycleMetric(label: '当前阶段', value: currentStageText),
+                  child: _CycleMetric(
+                    label: '当前阶段',
+                    value: currentStageText,
+                    valueFontSize: 23,
+                  ),
                 ),
               ],
             ),
@@ -782,13 +790,13 @@ class WorkerSummaryBanner extends StatelessWidget {
             ),
           ),
           Positioned(
-            right: -30,
-            top: -32,
+            right: 10,
+            top: 20,
             child: Opacity(
               opacity: 0.72,
               child: Image.asset(
                 asset,
-                width: 132,
+                width: 102,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
@@ -943,14 +951,20 @@ class _SoftCircle extends StatelessWidget {
 }
 
 class _CycleMetric extends StatelessWidget {
-  const _CycleMetric({required this.label, required this.value});
+  const _CycleMetric({
+    required this.label,
+    required this.value,
+    this.valueFontSize = 25,
+  });
 
   final String label;
   final String value;
+  final double valueFontSize;
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           label,
@@ -964,17 +978,22 @@ class _CycleMetric extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF1F8F5A),
-            fontSize: 23,
-            height: 28 / 23,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF0A9B63),
+                fontSize: valueFontSize,
+                height: 30 / valueFontSize,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0,
+              ),
+            ),
           ),
         ),
       ],
@@ -1231,6 +1250,178 @@ class BusinessFormRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class CyclePickerFormRow extends StatefulWidget {
+  const CyclePickerFormRow({
+    super.key,
+    required this.repository,
+    required this.selectedCycleId,
+    required this.selectedCycleName,
+    required this.onSelected,
+    this.label = '关联茬口',
+  });
+
+  final BusinessRepository repository;
+  final int? selectedCycleId;
+  final String selectedCycleName;
+  final ValueChanged<ApiRecord> onSelected;
+  final String label;
+
+  @override
+  State<CyclePickerFormRow> createState() => _CyclePickerFormRowState();
+}
+
+class _CyclePickerFormRowState extends State<CyclePickerFormRow> {
+  late Future<PageResult<ApiRecord>> _cyclesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _cyclesFuture = widget.repository.listCycles();
+  }
+
+  Future<void> _showPicker() async {
+    final result = await showModalBottomSheet<ApiRecord>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: FutureBuilder<PageResult<ApiRecord>>(
+              future: _cyclesFuture,
+              builder: (context, snapshot) {
+                final items = snapshot.data?.items ?? const <ApiRecord>[];
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '选择茬口',
+                      style: AppTextStyles.sectionTitle.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (snapshot.connectionState == ConnectionState.waiting)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (snapshot.hasError)
+                      const _CyclePickerMessage(text: '茬口加载失败，请稍后再试')
+                    else if (items.isEmpty)
+                      const _CyclePickerMessage(text: '还没有茬口，先新建一个生产批次')
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            final selected = item.id == widget.selectedCycleId;
+                            return Material(
+                              color: Colors.transparent,
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  _cycleDisplayName(item),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.listTitle.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  _cycleSubtitle(item),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: Icon(
+                                  selected
+                                      ? LucideIcons.circleCheck
+                                      : LucideIcons.chevronRight,
+                                  size: 20,
+                                  color: selected
+                                      ? businessGreen
+                                      : AppColors.subtle,
+                                ),
+                                onTap: () => Navigator.of(context).pop(item),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+    if (result != null) widget.onSelected(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedText = widget.selectedCycleName.trim();
+    return BusinessFormRow(
+      label: widget.label,
+      value: selectedText.isEmpty ? '选择茬口' : selectedText,
+      chevron: true,
+      onTap: _showPicker,
+    );
+  }
+}
+
+class _CyclePickerMessage extends StatelessWidget {
+  const _CyclePickerMessage({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: AppTextStyles.body.copyWith(color: AppColors.muted),
+      ),
+    );
+  }
+}
+
+String _cycleDisplayName(ApiRecord record) {
+  return _firstNonEmpty([record.json['name']], fallback: '未命名茬口');
+}
+
+String _cycleSubtitle(ApiRecord record) {
+  final fieldName = _firstNonEmpty([record.json['field_name']]);
+  final crop = _firstNonEmpty([record.json['crop_name']]);
+  final stage = _firstNonEmpty([record.json['current_stage_name']]);
+  final status = _firstNonEmpty([record.json['status']]);
+  return [fieldName, crop, stage, status]
+      .where((item) => item.isNotEmpty)
+      .join(' · ');
+}
+
+String _firstNonEmpty(List<Object?> values, {String fallback = ''}) {
+  for (final value in values) {
+    final text = '$value'.trim();
+    if (value != null && text.isNotEmpty && text != 'null') return text;
+  }
+  return fallback;
 }
 
 class SegmentedFormRow extends StatelessWidget {
@@ -1793,18 +1984,18 @@ class CycleCreateFab extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 48,
-          constraints: const BoxConstraints(minWidth: 152),
-          padding: const EdgeInsets.fromLTRB(8, 0, 18, 0),
+          height: 52,
+          constraints: const BoxConstraints(minWidth: 148),
+          padding: const EdgeInsets.fromLTRB(9, 0, 17, 0),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.96),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppColors.lineSoft),
+            color: const Color(0xFFF7FFF9).withValues(alpha: 0.98),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFC8F1D7)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0B2447).withValues(alpha: 0.1),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
+                color: const Color(0xFF0F8F5A).withValues(alpha: 0.14),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -1813,15 +2004,18 @@ class CycleCreateFab extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 34,
-                height: 34,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF19C7B8), businessBlue],
-                  ),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: businessGreen,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: businessGreen.withValues(alpha: 0.24),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
                 child: const Icon(
                   LucideIcons.plus,
@@ -1833,7 +2027,7 @@ class CycleCreateFab extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.sectionTitle.copyWith(
-                  color: AppColors.ink,
+                  color: const Color(0xFF123D2D),
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                 ),
@@ -1867,9 +2061,16 @@ class HeaderIconButton extends StatelessWidget {
 }
 
 class SearchFieldCard extends StatelessWidget {
-  const SearchFieldCard({super.key, required this.text});
+  const SearchFieldCard({
+    super.key,
+    required this.text,
+    this.controller,
+    this.onChanged,
+  });
 
   final String text;
+  final TextEditingController? controller;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1886,13 +2087,30 @@ class SearchFieldCard extends StatelessWidget {
           const Icon(LucideIcons.search, size: 20, color: AppColors.subtle),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              text,
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.subtle,
-                fontSize: 15,
-              ),
-            ),
+            child: controller == null && onChanged == null
+                ? Text(
+                    text,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.subtle,
+                      fontSize: 15,
+                    ),
+                  )
+                : TextField(
+                    controller: controller,
+                    onChanged: onChanged,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration.collapsed(
+                      hintText: text,
+                      hintStyle: AppTextStyles.body.copyWith(
+                        color: AppColors.subtle,
+                        fontSize: 15,
+                      ),
+                    ),
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.ink,
+                      fontSize: 15,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -1906,11 +2124,13 @@ class ChipRail extends StatelessWidget {
     required this.items,
     this.activeIndex = 0,
     this.activeColor = businessBlue,
+    this.onSelected,
   });
 
   final List<String> items;
   final int activeIndex;
   final Color activeColor;
+  final ValueChanged<int>? onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1919,12 +2139,16 @@ class ChipRail extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < items.length; i++) ...[
-            SoftPill(
-              text: items[i],
-              color: i == activeIndex ? activeColor : AppColors.ink2,
-              background: i == activeIndex
-                  ? activeColor.withValues(alpha: 0.10)
-                  : Colors.white,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onSelected == null ? null : () => onSelected!(i),
+              child: SoftPill(
+                text: items[i],
+                color: i == activeIndex ? activeColor : AppColors.ink2,
+                background: i == activeIndex
+                    ? activeColor.withValues(alpha: 0.10)
+                    : Colors.white,
+              ),
             ),
             const SizedBox(width: 8),
           ],

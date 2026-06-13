@@ -6,6 +6,7 @@ from skillify.skills.base import Skill
 from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
+from app.services.location_resolver import resolve_weather_location
 from app.services.weather_service import check_weather_warnings, fetch_weather
 
 # 常见城市名列表（用于从消息中提取）
@@ -68,27 +69,12 @@ def _extract_city(text: str) -> str | None:
 
 
 def _get_user_location(farm_id: int) -> tuple[str, float | None, float | None] | None:
-    """从用户设置或 Farm.location 读取可信位置，无配置时返回 None。"""
+    """按农场经营地区、旧用户设置和系统默认顺序读取可信位置。"""
     try:
         db = SessionLocal()
         try:
-            from app.models.farm import Farm
-            from app.models.user_setting import UserSetting
-
-            farm = db.query(Farm).filter(Farm.id == farm_id).first()
-            if farm and farm.user_id:
-                setting = (
-                    db.query(UserSetting)
-                    .filter(UserSetting.user_id == farm.user_id)
-                    .first()
-                )
-                if setting and setting.default_lat and setting.default_lon:
-                    city = setting.default_city or farm.location or ""
-                    return city, setting.default_lat, setting.default_lon
-                if setting and setting.default_city:
-                    return setting.default_city, None, None
-            if farm and farm.location:
-                return farm.location, None, None
+            resolved = resolve_weather_location(db, farm_id=farm_id)
+            return resolved.location, resolved.lat, resolved.lon
         finally:
             db.close()
     except Exception:

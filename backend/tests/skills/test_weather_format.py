@@ -6,8 +6,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
+from app.models.farm import Farm
+from app.infra.skill_cache import clear_cache
+from app.models.user import User
+from app.models.user_setting import UserSetting
+
 _weather_mod = importlib.import_module("app.agent.skills.weather.scripts.main")
 WeatherSkill = _weather_mod.WeatherSkill
+
+
+@pytest.fixture(autouse=True)
+def _clear_weather_skill_cache():
+    clear_cache("get_weather_forecast")
+    yield
+    clear_cache("get_weather_forecast")
 
 
 def _make_weather_data(days=3) -> dict:
@@ -21,6 +33,19 @@ def _make_weather_data(days=3) -> dict:
             "windspeed_10m_max": [5, 12, 8],
         }
     }
+
+
+class _SessionProxy:
+    """给 WeatherSkill 测试复用 pytest 会话，忽略内部 close。"""
+
+    def __init__(self, db):
+        self._db = db
+
+    def __getattr__(self, name):
+        return getattr(self._db, name)
+
+    def close(self) -> None:
+        pass
 
 
 class TestWeatherFormatMarkdown:
@@ -86,29 +111,120 @@ class TestWeatherLocationMissing:
     @pytest.mark.asyncio
     @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
     @patch.object(_weather_mod, "SessionLocal")
-    async def test_no_city_and_no_user_location_needs_clarify(
+    async def test_no_city_and_no_user_location_uses_system_default(
         self, mock_session_local, mock_fetch_weather
     ):
-        """无 city、无用户设置、无 Farm.location 时不使用默认城市。"""
+        """无 city、无用户设置、无 Farm.location 时使用系统默认坐标兜底。"""
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = None
         mock_session_local.return_value = db
+        mock_fetch_weather.return_value = _make_weather_data()
 
         result = await WeatherSkill().execute({}, SkillContext(farm_id=1))
 
-        assert result.status.value == "need_clarify"
-        assert "城市" in result.reply
-        mock_fetch_weather.assert_not_called()
+        assert result.status.value == "success"
+        mock_fetch_weather.assert_awaited_once_with(
+            "",
+            days=3,
+            lat=34.26,
+            lon=117.18,
+        )
 
     @pytest.mark.asyncio
     @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
     async def test_explicit_city_can_query_without_farm_location(
-        self, mock_fetch_weather
+        self, mock_fetch_weather, db_session, monkeypatch
     ):
         """用户显式给城市时不依赖 Farm.location。"""
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
+        farm.location = "睢宁县"
+        db_session.commit()
+        monkeypatch.setattr(
+            _weather_mod,
+            "SessionLocal",
+            lambda: _SessionProxy(db_session),
+        )
         mock_fetch_weather.return_value = _make_weather_data()
 
         result = await WeatherSkill().execute({"city": "上海"}, SkillContext())
 
         assert result.status.value == "success"
-        mock_fetch_weather.assert_awaited_once()
+        mock_fetch_weather.assert_awaited_once_with(
+            "上海",
+            days=3,
+            lat=None,
+            lon=None,
+        )
+        db_session.refresh(farm)
+        assert farm.location == "睢宁县"
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    async def test_unspecified_city_uses_farm_location_first(
+        self, mock_fetch_weather, db_session, monkeypatch
+    ):
+        """未指定城市时优先使用当前农场经营地区。"""
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
+        farm.location = "睢宁县"
+        setting = UserSetting(
+            user_id="test-user-001",
+            default_city="徐州",
+            default_lat=34.26,
+            default_lon=117.18,
+        )
+        db_session.add(setting)
+        db_session.commit()
+        monkeypatch.setattr(
+            _weather_mod,
+            "SessionLocal",
+            lambda: _SessionProxy(db_session),
+        )
+        mock_fetch_weather.return_value = _make_weather_data()
+
+        result = await WeatherSkill().execute({}, SkillContext(farm_id=1))
+
+        assert result.status.value == "success"
+        mock_fetch_weather.assert_awaited_once_with(
+            "睢宁县",
+            days=3,
+            lat=None,
+            lon=None,
+        )
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    async def test_unspecified_city_falls_back_to_user_setting_coordinates(
+        self, mock_fetch_weather, db_session, monkeypatch
+    ):
+        """农场经营地区缺失时使用旧用户设置坐标兜底。"""
+        user = User(
+            id="weather-skill-user",
+            phone="19000000002",
+            password_hash="hash",
+            nickname="天气用户",
+        )
+        farm = Farm(id=80, name="技能农场", user_id=user.id, location=None)
+        setting = UserSetting(
+            user_id=user.id,
+            default_city="徐州",
+            default_lat=34.26,
+            default_lon=117.18,
+        )
+        db_session.add_all([user, farm, setting])
+        db_session.commit()
+        monkeypatch.setattr(
+            _weather_mod,
+            "SessionLocal",
+            lambda: _SessionProxy(db_session),
+        )
+        mock_fetch_weather.return_value = _make_weather_data()
+
+        result = await WeatherSkill().execute({}, SkillContext(farm_id=80))
+
+        assert result.status.value == "success"
+        mock_fetch_weather.assert_awaited_once_with(
+            "徐州",
+            days=3,
+            lat=34.26,
+            lon=117.18,
+        )

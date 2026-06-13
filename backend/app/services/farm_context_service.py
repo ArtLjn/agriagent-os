@@ -14,10 +14,10 @@ from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from app.models.cost import CostRecord
-from app.models.farm import Farm
 from app.models.cycle import CropCycle
 from app.models.planting import LaborEntry, OperationWorkOrder, PlantingUnit, Worker
 from app.services import weather_service
+from app.services.location_resolver import resolve_weather_location
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,6 @@ _MAX_CYCLES = 3
 _MAX_LOGS = 3
 _MAX_DEBTS = 3
 _MAX_WEATHER_DAYS = 3
-
-# 默认天气坐标（苏州）
-_DEFAULT_LAT = 31.3
-_DEFAULT_LON = 120.6
 
 
 def _is_mock_session(db: Session) -> bool:
@@ -366,26 +362,19 @@ def _build_cost_line(db: Session, farm_id: int) -> str:
 async def _build_weather_line(db: Session, farm_id: int) -> str:
     """组装天气行，取未来 3 天。
 
-    优先从 user_settings 读取用户坐标，无记录时降级到默认坐标。
+    优先从默认农场经营地区读取，无记录时降级到用户设置和系统默认坐标。
     """
-    lat, lon = _DEFAULT_LAT, _DEFAULT_LON
     try:
-        farm = db.query(Farm).filter(Farm.id == farm_id).first()
-        if farm and farm.user_id:
-            from app.models.user_setting import UserSetting
-
-            setting = (
-                db.query(UserSetting)
-                .filter(UserSetting.user_id == farm.user_id)
-                .first()
-            )
-            if setting and setting.default_lat and setting.default_lon:
-                lat, lon = setting.default_lat, setting.default_lon
+        resolved = resolve_weather_location(db, farm_id=farm_id)
     except Exception:
-        logger.warning("读取用户设置失败，使用默认坐标")
+        logger.warning("解析天气位置失败，使用系统默认坐标")
+        resolved = resolve_weather_location(db)
     try:
         data = await weather_service.fetch_weather(
-            lat=lat, lon=lon, days=_MAX_WEATHER_DAYS
+            resolved.location,
+            days=_MAX_WEATHER_DAYS,
+            lat=resolved.lat,
+            lon=resolved.lon,
         )
         return _format_weather_line(data, days=_MAX_WEATHER_DAYS)
     except Exception:

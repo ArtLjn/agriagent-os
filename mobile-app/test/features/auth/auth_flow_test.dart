@@ -1,7 +1,13 @@
+import 'package:dio/dio.dart';
+import 'package:farm_manager_app/data/api/api_client.dart';
+import 'package:farm_manager_app/data/location/location_service.dart';
+import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/features/auth/auth_flow.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/api_test_fixtures.dart'
+    show RecordingAdapter, settingsResponse, userResponse, versionResponse;
 import '../../support/fake_app_dependencies.dart';
 
 void main() {
@@ -50,8 +56,9 @@ void main() {
 
     expect(find.text('完善农场信息'), findsOneWidget);
     expect(find.text('农场名称'), findsOneWidget);
-    expect(find.text('所在城市'), findsOneWidget);
-    expect(find.text('默认天气城市'), findsOneWidget);
+    expect(find.text('经营地区'), findsOneWidget);
+    expect(find.text('所在城市'), findsNothing);
+    expect(find.text('默认天气城市'), findsNothing);
     expect(find.text('身份'), findsOneWidget);
     expect(find.text('农场负责人'), findsOneWidget);
     expect(find.text('可稍后在我的中修改'), findsOneWidget);
@@ -139,6 +146,104 @@ void main() {
     expect(find.text('账本'), findsWidgets);
   });
 
+  testWidgets('登录后默认农场无经营地区时进入首次设置', (tester) async {
+    final dependencies = FakeAppDependencies(
+      profile: _profileRepositoryWithLocation(null),
+    );
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(dependencies.loginCalls, 1);
+    expect(find.text('完善农场信息'), findsOneWidget);
+    expect(find.text('经营地区'), findsOneWidget);
+    expect(find.text('首页'), findsNothing);
+  });
+
+  testWidgets('首次设置可用当前位置初始化经营地区并进入主应用', (tester) async {
+    final location = FakeLocationService(
+      suggestion: const FarmLocationSuggestion(city: '邳州市'),
+    );
+    final adapter = RecordingAdapter({
+      '/auth/me': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': null,
+        },
+      },
+      'PUT /auth/me/farm-location': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': '邳州市',
+        },
+      },
+      '/settings': settingsResponse,
+      '/api/app/version': versionResponse,
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final dependencies = FakeAppDependencies(
+      profile: ProfileRepository(ApiClient(dio: dio)),
+      location: location,
+    );
+
+    await pumpAuthFlow(tester, dependencies: dependencies);
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('完善农场信息'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('邳州市'), findsOneWidget);
+    await tester.tap(find.text('开始使用'));
+    await tester.pumpAndSettle();
+
+    expect(location.requestCalls, 1);
+    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+      'location': '邳州市',
+    });
+    expect(find.text('首页'), findsWidgets);
+  });
+
+  testWidgets('首次设置定位失败时保留手动填写和稍后进入', (tester) async {
+    final location = FakeLocationService();
+    final adapter = RecordingAdapter({
+      '/auth/me': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': null,
+        },
+      },
+      'PUT /auth/me/farm-location': userResponse,
+      '/settings': settingsResponse,
+      '/api/app/version': versionResponse,
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final dependencies = FakeAppDependencies(
+      profile: ProfileRepository(ApiClient(dio: dio)),
+      location: location,
+    );
+
+    await pumpAuthFlow(tester, dependencies: dependencies);
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(location.requestCalls, 1);
+    expect(find.text('无法获取当前位置，请手动填写经营地区'), findsOneWidget);
+    await tester.tap(find.text('稍后再说'));
+    await tester.pumpAndSettle();
+
+    expect(adapter.requests.where((r) => r.path == '/auth/me/farm-location'), isEmpty);
+    expect(find.text('首页'), findsWidgets);
+  });
+
   testWidgets('退出登录后清理 session 并回到登录页', (tester) async {
     final dependencies = FakeAppDependencies(restoreResult: true);
     await pumpAuthFlow(tester, dependencies: dependencies);
@@ -154,4 +259,22 @@ void main() {
     expect(find.text('手机号'), findsOneWidget);
     expect(find.text('首页'), findsNothing);
   });
+}
+
+ProfileRepository _profileRepositoryWithLocation(String? location) {
+  final adapter = RecordingAdapter({
+    '/auth/me': {
+      ...userResponse,
+      'farm': {
+        'id': 1,
+        'name': '农友的农场',
+        'location': location,
+      },
+    },
+    '/settings': settingsResponse,
+    '/api/app/version': versionResponse,
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return ProfileRepository(ApiClient(dio: dio));
 }

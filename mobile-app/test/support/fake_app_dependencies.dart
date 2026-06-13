@@ -7,6 +7,7 @@ import 'package:farm_manager_app/data/repositories/dashboard_repository.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
+import 'package:farm_manager_app/data/location/location_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'api_test_fixtures.dart'
@@ -62,12 +63,14 @@ class FakeAppDependencies implements AppDependencies {
     BusinessRepository? business,
     WorkbenchRepository? workbench,
     YayaRepository? yaya,
+    LocationService? location,
   })  : profile = profile ?? _fakeProfileRepository(),
         dashboard = dashboard ?? _fakeDashboardRepository(),
         billing = billing ?? _fakeBillingRepository(),
         business = business ?? _fakeBusinessRepository(),
         workbench = workbench ?? _fakeWorkbenchRepository(),
-        yaya = yaya ?? _fakeYayaRepository() {
+        yaya = yaya ?? _fakeYayaRepository(),
+        location = location ?? FakeLocationService() {
     setMockAppPackageInfo();
   }
 
@@ -83,6 +86,8 @@ class FakeAppDependencies implements AppDependencies {
   final WorkbenchRepository workbench;
   @override
   final YayaRepository yaya;
+  @override
+  final LocationService location;
   final bool restoreResult;
   final Object? loginError;
   final Object? registerError;
@@ -130,6 +135,19 @@ class FakeAppDependencies implements AppDependencies {
   @override
   Future<void> logout() async {
     logoutCalls += 1;
+  }
+}
+
+class FakeLocationService implements LocationService {
+  FakeLocationService({this.suggestion});
+
+  FarmLocationSuggestion? suggestion;
+  int requestCalls = 0;
+
+  @override
+  Future<FarmLocationSuggestion?> requestCurrentFarmLocation() async {
+    requestCalls += 1;
+    return suggestion;
   }
 }
 

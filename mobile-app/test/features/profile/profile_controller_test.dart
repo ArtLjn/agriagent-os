@@ -27,8 +27,7 @@ void main() {
     expect(model.phone, '13800138000');
     expect(model.role, '用户');
     expect(model.status, '正常');
-    expect(model.city, '寿光');
-    expect(model.weatherCity, '寿光');
+    expect(model.city, '睢宁县');
     expect(model.assistantRoleLabel, '温暖陪伴型');
     expect(model.latestVersion, '0.1.0');
     expect(model.hasVersionUpdate, isTrue);
@@ -98,6 +97,56 @@ void main() {
     expect(model.updateSummary, '更新至 v1.2.7');
   });
 
+  test('农场地区缺失时兼容使用 settings.defaultCity', () async {
+    final adapter = RecordingAdapter({
+      '/auth/me': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': null,
+        },
+      },
+      '/settings': settingsResponse,
+      '/api/app/version': versionResponse,
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final controller = ProfileController(
+      repository: ProfileRepository(ApiClient(dio: dio)),
+      currentVersionCode: 3,
+    );
+
+    final model = await controller.load();
+
+    expect(model.city, '寿光');
+  });
+
+  test('仓库更新经营地区时调用 farm-location 接口', () async {
+    final adapter = RecordingAdapter({
+      'PUT /auth/me/farm-location': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': '邳州市',
+        },
+      },
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final repository = ProfileRepository(ApiClient(dio: dio));
+
+    final user = await repository.updateFarmLocation(
+      location: '邳州市',
+      farmId: 1,
+    );
+
+    final request = adapter.find('PUT', '/auth/me/farm-location');
+    expect(request.data, {'location': '邳州市', 'farm_id': 1});
+    expect(user.farm?.location, '邳州市');
+  });
+
   test('默认使用运行时构建号检查版本，最新版不提示更新', () async {
     final adapter = RecordingAdapter({
       '/auth/me': userResponse,
@@ -135,7 +184,6 @@ void main() {
       role: '用户',
       status: '正常',
       city: '寿光',
-      weatherCity: '寿光',
       assistantRoleLabel: '温暖陪伴型',
       versionLabel: null as dynamic,
       versionStatus: null as dynamic,

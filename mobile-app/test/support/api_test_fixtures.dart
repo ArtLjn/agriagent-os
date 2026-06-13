@@ -127,6 +127,11 @@ final userResponse = {
   'role': 'user',
   'status': 'active',
   'created_at': '2026-06-08T08:00:00',
+  'farm': {
+    'id': 1,
+    'name': '农友的农场',
+    'location': '睢宁县',
+  },
 };
 
 final tokenResponse = {
@@ -376,6 +381,36 @@ final paginatedWorkersResponse = {
 final paginatedWorkerSummariesResponse = {
   'items': [workerResponse],
   'total': 1
+};
+
+final workerSummaryFilterResponse = {
+  'items': [
+    {
+      ...workerResponse,
+      'id': 4,
+      'name': '张三',
+      'status': 'active',
+      'unpaid_amount': 0,
+      'monthly_work_count': 6,
+    },
+    {
+      ...workerResponse,
+      'id': 5,
+      'name': '李四',
+      'status': 'active',
+      'unpaid_amount': 120,
+      'monthly_work_count': 4,
+    },
+    {
+      ...workerResponse,
+      'id': 6,
+      'name': '老王',
+      'status': 'inactive',
+      'unpaid_amount': 80,
+      'monthly_work_count': 3,
+    },
+  ],
+  'total': 3,
 };
 
 final operationTypeResponse = {

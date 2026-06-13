@@ -23,15 +23,15 @@ class FarmLogCreatePage extends StatefulWidget {
 }
 
 class _FarmLogCreatePageState extends State<FarmLogCreatePage> {
-  final _cycleId = TextEditingController();
   final _operationType = TextEditingController();
   final _operationDate = TextEditingController(text: _todayText());
   final _note = TextEditingController();
+  int? _selectedCycleId;
+  String _selectedCycleName = '';
   bool _saving = false;
 
   @override
   void dispose() {
-    _cycleId.dispose();
     _operationType.dispose();
     _operationDate.dispose();
     _note.dispose();
@@ -43,7 +43,7 @@ class _FarmLogCreatePageState extends State<FarmLogCreatePage> {
     setState(() => _saving = true);
     try {
       await widget.repository.createFarmLog({
-        'cycle_id': int.tryParse(_cycleId.text.trim()),
+        'cycle_id': _selectedCycleId,
         'operation_type': _operationType.text.trim(),
         'operation_date': _operationDate.text.trim(),
         'note': _note.text.trim(),
@@ -87,12 +87,14 @@ class _FarmLogCreatePageState extends State<FarmLogCreatePage> {
           title: '作业信息',
           icon: LucideIcons.leaf,
           children: [
-            BusinessFormRow(
-              label: '关联茬口',
-              value: '',
-              controller: _cycleId,
-              hintText: '输入茬口 ID',
-              keyboardType: TextInputType.number,
+            CyclePickerFormRow(
+              repository: widget.repository,
+              selectedCycleId: _selectedCycleId,
+              selectedCycleName: _selectedCycleName,
+              onSelected: (cycle) => setState(() {
+                _selectedCycleId = cycle.id;
+                _selectedCycleName = cycle.name;
+              }),
             ),
             BusinessFormRow(
               label: '作业类型',
