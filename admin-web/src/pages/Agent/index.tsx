@@ -239,15 +239,13 @@ export function AdviceTab({ cycleId }: { cycleId?: number }) {
   };
 
   const busy = loading || refreshing;
+  const handlePrimaryAdviceClick = fetched ? handleRefreshAdvice : fetchAdvice;
 
   return (
     <div style={{ height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Button type="primary" icon={<BulbOutlined />} onClick={fetchAdvice} loading={loading} disabled={refreshing} size="large">
+        <Button type="primary" icon={<BulbOutlined />} onClick={handlePrimaryAdviceClick} loading={busy} size="large">
           {fetched ? '刷新建议' : '获取今日建议'}
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={handleRefreshAdvice} loading={refreshing} disabled={loading} size="large">
-          重新获取建议
         </Button>
         {busy && <span style={{ color: TEXT_DIM }}>AI 正在分析天气和种植数据，请稍候...</span>}
       </div>

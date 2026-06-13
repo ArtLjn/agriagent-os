@@ -14,7 +14,7 @@ const mockedGetDailyAdvice = vi.mocked(getDailyAdvice);
 const mockedRefreshDailyAdvice = vi.mocked(refreshDailyAdvice);
 
 describe('AdviceTab', () => {
-  it('点击重新获取建议时强制刷新今日建议', async () => {
+  it('再次点击刷新建议时强制刷新今日建议', async () => {
     const user = userEvent.setup();
     mockedGetDailyAdvice.mockResolvedValueOnce({
       advice: '缓存建议',
@@ -31,11 +31,12 @@ describe('AdviceTab', () => {
 
     expect(await screen.findByText('缓存建议')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /重新获取建议/ }));
+    await user.click(screen.getByRole('button', { name: /刷新建议/ }));
 
     await waitFor(() => {
       expect(screen.getByText('重新生成的建议')).toBeInTheDocument();
     });
+    expect(mockedGetDailyAdvice).toHaveBeenCalledTimes(1);
     expect(mockedGetDailyAdvice).toHaveBeenCalledWith(7);
     expect(mockedRefreshDailyAdvice).toHaveBeenCalledWith(7);
   });
