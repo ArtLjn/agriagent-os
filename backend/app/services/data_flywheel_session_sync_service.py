@@ -255,7 +255,11 @@ def _message_for_turn(
 
 
 def _has_readable_event_range(turn: AgentTurn) -> bool:
-    if not turn.event_file or turn.event_seq_start is None or turn.event_seq_end is None:
+    if (
+        not turn.event_file
+        or turn.event_seq_start is None
+        or turn.event_seq_end is None
+    ):
         return False
     return bool(
         read_event_segment(turn.event_file, turn.event_seq_start, turn.event_seq_end)

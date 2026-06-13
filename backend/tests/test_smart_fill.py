@@ -42,7 +42,12 @@ def test_list_smart_fill_scenarios_exposes_registered_business_scenes():
     assert response.status_code == 200
     data = response.json()
     scene_keys = {item["key"] for item in data["items"]}
-    assert {"ledger.record", "crop.template", "crop.cycle", "labor.worker"} <= scene_keys
+    assert {
+        "ledger.record",
+        "crop.template",
+        "crop.cycle",
+        "labor.worker",
+    } <= scene_keys
     ledger = next(item for item in data["items"] if item["key"] == "ledger.record")
     assert ledger["legacy_endpoint"] == "/costs/parse"
     assert ledger["enabled"] is True
@@ -353,7 +358,9 @@ def test_parse_smart_fill_worker_batch_cases(mock_get_llm):
     cases = [
         (
             "新增工人赵六，日薪180",
-            WorkerCreate(name="赵六", default_pay_type="daily", default_unit_price="180"),
+            WorkerCreate(
+                name="赵六", default_pay_type="daily", default_unit_price="180"
+            ),
             {"name": "赵六", "default_pay_type": "daily", "default_unit_price": "180"},
         ),
         (
@@ -368,7 +375,9 @@ def test_parse_smart_fill_worker_batch_cases(mock_get_llm):
         ),
         (
             "新增临时工小刘，按件每棵0.5",
-            WorkerCreate(name="小刘", default_pay_type="piece", default_unit_price="0.5"),
+            WorkerCreate(
+                name="小刘", default_pay_type="piece", default_unit_price="0.5"
+            ),
             {"name": "小刘", "default_pay_type": "piece", "default_unit_price": "0.5"},
         ),
     ]
@@ -578,7 +587,10 @@ def test_parse_smart_fill_worker_marks_missing_unit_price_when_pay_mentioned(
 
     response = client.post(
         "/smart-fill/parse",
-        json={"scene": "labor.worker", "text": "新增工人老王，日薪面议，电话13800138000"},
+        json={
+            "scene": "labor.worker",
+            "text": "新增工人老王，日薪面议，电话13800138000",
+        },
         headers={"X-Idempotency-Key": "smart-fill-worker-missing-price-001"},
     )
 

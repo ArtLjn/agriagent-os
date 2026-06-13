@@ -172,6 +172,5 @@ def test_post_migration_audit_checks_columns_and_indexes(db_session):
 
     assert "schema_objects" in data
     assert all(
-        issue["reason"] != "missing column"
-        for issue in report.schema_objects.issues
+        issue["reason"] != "missing column" for issue in report.schema_objects.issues
     )

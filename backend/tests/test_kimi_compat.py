@@ -106,6 +106,7 @@ class TestToolCalling:
             tc = msg.tool_calls[0]
             assert tc.function.name == "get_weather"
             import json
+
             args = json.loads(tc.function.arguments)
             assert "city" in args
 
@@ -118,9 +119,7 @@ class TestToolCalling:
                     "description": "获取指定城市的天气",
                     "parameters": {
                         "type": "object",
-                        "properties": {
-                            "city": {"type": "string"}
-                        },
+                        "properties": {"city": {"type": "string"}},
                         "required": ["city"],
                     },
                 },
@@ -138,7 +137,9 @@ class TestToolCalling:
         )
 
         msg = resp.choices[0].message
-        print(f"\n[Parallel] tool_calls count={len(msg.tool_calls) if msg.tool_calls else 0}")
+        print(
+            f"\n[Parallel] tool_calls count={len(msg.tool_calls) if msg.tool_calls else 0}"
+        )
 
 
 class TestStreaming:

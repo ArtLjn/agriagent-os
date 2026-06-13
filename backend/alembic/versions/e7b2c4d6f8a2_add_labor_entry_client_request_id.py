@@ -33,7 +33,9 @@ def upgrade() -> None:
 
         indexes = {index["name"] for index in inspector.get_indexes("labor_entries")}
         if "ix_labor_entries_client_request_id" in indexes:
-            op.drop_index("ix_labor_entries_client_request_id", table_name="labor_entries")
+            op.drop_index(
+                "ix_labor_entries_client_request_id", table_name="labor_entries"
+            )
         if "uq_labor_entries_farm_client_request" not in indexes:
             bind.execute(
                 text(
@@ -111,7 +113,9 @@ def downgrade() -> None:
 
     indexes = {index["name"] for index in inspector.get_indexes("labor_entries")}
     if "uq_labor_entries_farm_client_request" in indexes:
-        op.drop_index("uq_labor_entries_farm_client_request", table_name="labor_entries")
+        op.drop_index(
+            "uq_labor_entries_farm_client_request", table_name="labor_entries"
+        )
 
     columns = {column["name"] for column in inspector.get_columns("labor_entries")}
     if "client_request_id" in columns:

@@ -253,7 +253,9 @@ async def test_collect_finance_candidates_skips_debt_without_due_date_and_labor_
     db_session.add_all([debt_without_due_date, labor_debt])
     db_session.commit()
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     finance_candidates = [item for item in candidates if item.category == "finance"]
 
     assert finance_candidates == []
@@ -310,7 +312,9 @@ async def test_collect_finance_candidates_includes_overdue_and_due_soon_debts(
     db_session.add_all([overdue_debt, due_soon_debt, later_debt, settled_debt])
     db_session.commit()
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     finance_candidates = [item for item in candidates if item.category == "finance"]
 
     assert [item.source_id for item in finance_candidates] == [
@@ -378,7 +382,9 @@ async def test_collect_operation_candidates_includes_overdue_today_and_next_thre
     )
     db_session.commit()
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     operation_candidates = [item for item in candidates if item.category == "operation"]
 
     assert [item.source_id for item in operation_candidates] == [
@@ -407,7 +413,9 @@ async def test_collect_weather_candidates_includes_high_temperature_p1(
         fetch_weather,
     )
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     weather_candidates = [item for item in candidates if item.category == "weather"]
 
     fetch_weather.assert_awaited_once_with("", days=3, lat=None, lon=None)
@@ -483,7 +491,9 @@ async def test_collect_weather_candidates_merges_continuous_high_temperature(
         AsyncMock(return_value=_weather_data(temps=[35, 36, 37])),
     )
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     weather_candidates = [item for item in candidates if item.category == "weather"]
 
     assert len(weather_candidates) == 1
@@ -505,7 +515,9 @@ async def test_collect_weather_candidates_ignores_expired_hot_days(
         ),
     )
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     weather_candidates = [item for item in candidates if item.category == "weather"]
 
     assert len(weather_candidates) == 1
@@ -528,7 +540,9 @@ async def test_collect_weather_candidates_checks_future_third_day_after_expired_
         ),
     )
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     weather_candidates = [item for item in candidates if item.category == "weather"]
 
     assert len(weather_candidates) == 1
@@ -547,7 +561,9 @@ async def test_collect_crop_stage_candidates_from_current_active_cycle(
     )
     cycle = _create_active_cycle(db_session, today=today)
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     crop_stage_candidates = [
         item for item in candidates if item.category == "crop_stage"
     ]
@@ -582,11 +598,11 @@ async def test_collect_crop_stage_candidates_suppresses_recent_same_operation(
     )
     db_session.commit()
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
 
-    assert [
-        item for item in candidates if item.category == "crop_stage"
-    ] == []
+    assert [item for item in candidates if item.category == "crop_stage"] == []
 
 
 async def test_collect_crop_stage_candidates_suppresses_by_cycle_only(
@@ -623,7 +639,9 @@ async def test_collect_crop_stage_candidates_suppresses_by_cycle_only(
     )
     db_session.commit()
 
-    candidates = await collect_daily_advice_candidates(db_session, farm_id=1, today=today)
+    candidates = await collect_daily_advice_candidates(
+        db_session, farm_id=1, today=today
+    )
     crop_stage_candidates = [
         item for item in candidates if item.category == "crop_stage"
     ]

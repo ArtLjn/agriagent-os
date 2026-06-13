@@ -312,8 +312,7 @@ class TestGetDailyAdvice:
         """无候选时不能把旧摘要里的欠账/未结人工喂给今日建议。"""
         mock_collect_candidates.return_value = []
         mock_build_summary.return_value = (
-            "【农场现状】\n"
-            "欠账：诸葛四郎未付100元、李海未付100元、朱7未付100元"
+            "【农场现状】\n欠账：诸葛四郎未付100元、李海未付100元、朱7未付100元"
         )
         mock_get_composer.return_value.compose.return_value = "daily prompt"
         mock_invoke.return_value = (

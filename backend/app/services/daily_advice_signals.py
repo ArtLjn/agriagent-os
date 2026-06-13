@@ -89,12 +89,18 @@ def _resolve_weather_location(
     farm = db.query(Farm).filter(Farm.id == farm_id).first()
     if farm and farm.user_id:
         setting = (
-            db.query(UserSetting)
-            .filter(UserSetting.user_id == farm.user_id)
-            .first()
+            db.query(UserSetting).filter(UserSetting.user_id == farm.user_id).first()
         )
-        if setting and setting.default_lat is not None and setting.default_lon is not None:
-            return setting.default_city or farm.location or "", setting.default_lat, setting.default_lon
+        if (
+            setting
+            and setting.default_lat is not None
+            and setting.default_lon is not None
+        ):
+            return (
+                setting.default_city or farm.location or "",
+                setting.default_lat,
+                setting.default_lon,
+            )
         if setting and setting.default_city:
             return setting.default_city, None, None
     if farm and farm.location:

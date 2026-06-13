@@ -26,8 +26,7 @@ _ROLE_DEFINITIONS: dict[str, dict] = _ROLE_CONFIG["roles"]
 DEFAULT_ASSISTANT_ROLE: AssistantRole = _ROLE_CONFIG.get("default", "warm")
 
 ASSISTANT_ROLE_LABELS: dict[str, str] = {
-    role: str(definition["label"])
-    for role, definition in _ROLE_DEFINITIONS.items()
+    role: str(definition["label"]) for role, definition in _ROLE_DEFINITIONS.items()
 }
 
 ASSISTANT_ROLE_TEMPERATURES: dict[str, float] = {
@@ -36,8 +35,7 @@ ASSISTANT_ROLE_TEMPERATURES: dict[str, float] = {
 }
 
 ASSISTANT_ROLE_PROMPTS: dict[str, str] = {
-    role: str(definition["prompt"])
-    for role, definition in _ROLE_DEFINITIONS.items()
+    role: str(definition["prompt"]) for role, definition in _ROLE_DEFINITIONS.items()
 }
 
 

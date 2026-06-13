@@ -37,7 +37,9 @@ async def _run_migrations() -> None:
     alembic_cfg = AlembicConfig(
         str(Path(__file__).resolve().parent.parent.parent / "alembic.ini")
     )
-    alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+    alembic_cfg.set_main_option(
+        "sqlalchemy.url", settings.database_url.replace("%", "%%")
+    )
     db = SessionLocal()
     try:
         inspector = inspect(db.bind)

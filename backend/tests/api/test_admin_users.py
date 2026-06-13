@@ -264,7 +264,9 @@ def test_update_user_quota_rejects_weekly_limit_over_monthly(
     assert "周额度不能大于月额度" in resp.json()["detail"]
 
 
-def test_batch_update_user_quota(client, admin_user, admin_headers, target_user, quota_user):
+def test_batch_update_user_quota(
+    client, admin_user, admin_headers, target_user, quota_user
+):
     """批量更新用户配额，支持内部用户自定义用量。"""
     resp = client.put(
         "/admin/users/quota/batch",
@@ -283,7 +285,9 @@ def test_batch_update_user_quota(client, admin_user, admin_headers, target_user,
     db_iter = _get_test_db()
     db = next(db_iter)
     try:
-        refreshed = db.query(User).filter(User.id.in_([target_user.id, quota_user.id])).all()
+        refreshed = (
+            db.query(User).filter(User.id.in_([target_user.id, quota_user.id])).all()
+        )
         assert {user.token_monthly_limit for user in refreshed} == {9000000}
         assert {user.token_weekly_limit for user in refreshed} == {2000000}
     finally:

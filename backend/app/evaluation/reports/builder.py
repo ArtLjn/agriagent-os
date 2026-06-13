@@ -75,7 +75,9 @@ class EvaluationReportBuilder:
         for result in results:
             metadata = result.case_metadata
             self._count(coverage["by_business_domain"], metadata.get("business_domain"))
-            self._count(coverage["by_permission_level"], metadata.get("permission_level"))
+            self._count(
+                coverage["by_permission_level"], metadata.get("permission_level")
+            )
             self._count(
                 coverage["by_confirmation_path"],
                 metadata.get("confirmation_path"),

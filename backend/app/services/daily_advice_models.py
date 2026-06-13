@@ -78,7 +78,9 @@ def rank_daily_advice_candidates(
         return []
 
     reference_day = today or date.today()
-    ranked = sorted(candidates, key=lambda item: _candidate_sort_key(item, reference_day))
+    ranked = sorted(
+        candidates, key=lambda item: _candidate_sort_key(item, reference_day)
+    )
     selected: list[DailyAdviceCandidate] = []
     seen_dedupe_keys: set[str] = set()
     category_counts: dict[DailyAdviceCategory, int] = {
@@ -127,7 +129,9 @@ def render_candidate_context(candidates: list[DailyAdviceCandidate]) -> str:
 def fingerprint_candidates(candidates: list[DailyAdviceCandidate]) -> str:
     """为候选集合生成稳定短指纹。"""
     payload = [candidate.to_meta() for candidate in candidates]
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 

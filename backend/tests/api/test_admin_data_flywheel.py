@@ -229,9 +229,7 @@ def test_add_session_label_and_delete_label_by_id(db_session, tmp_path) -> None:
     assert delete_resp.status_code == 200
     assert delete_resp.json() == {"deleted": True, "id": create_resp.json()["id"]}
     assert (
-        db_session.query(AgentDataFlywheelLabel)
-        .filter_by(sample_id=sample_id)
-        .count()
+        db_session.query(AgentDataFlywheelLabel).filter_by(sample_id=sample_id).count()
         == 0
     )
 
@@ -622,7 +620,9 @@ def test_sync_sessions_schedules_background_job_by_default(
         calls.append(kwargs)
 
     monkeypatch.setattr(admin_data_flywheel_api, "AGENT_EVENT_BASE_DIR", tmp_path)
-    monkeypatch.setattr(admin_data_flywheel_api, "run_session_events_sync_job", fake_run_job)
+    monkeypatch.setattr(
+        admin_data_flywheel_api, "run_session_events_sync_job", fake_run_job
+    )
 
     auth_scope, client = _admin_client()
     with auth_scope:

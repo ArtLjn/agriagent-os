@@ -190,7 +190,9 @@ def create_work_order(
     return planting_read_service.to_work_order_response(work_order)
 
 
-@router.get("/work-orders", response_model=PaginatedResponse[OperationWorkOrderResponse])
+@router.get(
+    "/work-orders", response_model=PaginatedResponse[OperationWorkOrderResponse]
+)
 def list_work_orders(
     cycle_id: int | None = None,
     page: int = Query(1, ge=1),
@@ -232,7 +234,9 @@ def list_recent_operations(
     farm: Farm = Depends(get_current_farm),
 ):
     """查询合并新作业单和旧日志的近期农事。"""
-    return planting_read_service.list_recent_operations(db, farm.id, cycle_id, days, limit)
+    return planting_read_service.list_recent_operations(
+        db, farm.id, cycle_id, days, limit
+    )
 
 
 @router.get("/labor/unsettled-summary")

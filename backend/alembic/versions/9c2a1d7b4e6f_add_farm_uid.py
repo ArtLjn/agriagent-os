@@ -38,7 +38,9 @@ def upgrade() -> None:
         op.create_index("ix_farms_uid", "farms", ["uid"], unique=True)
 
     if bind.dialect.name != "sqlite":
-        op.alter_column("farms", "uid", existing_type=sa.String(length=36), nullable=False)
+        op.alter_column(
+            "farms", "uid", existing_type=sa.String(length=36), nullable=False
+        )
 
 
 def downgrade() -> None:

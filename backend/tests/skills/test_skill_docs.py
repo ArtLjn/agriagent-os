@@ -260,7 +260,9 @@ def test_all_existing_skill_docs_are_valid():
     assert failures == []
 
 
-def test_validator_rejects_empty_properties_when_parameter_inference_has_params(tmp_path):
+def test_validator_rejects_empty_properties_when_parameter_inference_has_params(
+    tmp_path,
+):
     doc = tmp_path / "skill.md"
     doc.write_text(
         """---
@@ -306,7 +308,10 @@ parameters:
 
     result = validate_skill_doc(doc)
 
-    assert "frontmatter parameters.properties 为空，但参数推断包含具体参数" in result.errors
+    assert (
+        "frontmatter parameters.properties 为空，但参数推断包含具体参数"
+        in result.errors
+    )
 
 
 def test_validator_rejects_invalid_tool_name_even_when_name_is_snake_case(tmp_path):

@@ -31,7 +31,9 @@ def test_report_builder_generates_ci_ready_report_dict() -> None:
     assert data["prompt_version"] == "system_base:v1"
     assert data["metrics"]["pass_rate"] == 1.0
     assert data["cases"][0]["skill_calls"] == ["create_cost_record"]
-    assert data["cases"][0]["drilldown_links"]["timeline"] == "/admin/traces/abc/timeline"
+    assert (
+        data["cases"][0]["drilldown_links"]["timeline"] == "/admin/traces/abc/timeline"
+    )
     assert "created_at" in data
 
 

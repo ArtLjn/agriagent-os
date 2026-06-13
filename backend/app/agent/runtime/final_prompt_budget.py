@@ -105,7 +105,8 @@ class FinalPromptBudget:
             changed = True
             result.append(
                 ToolMessage(
-                    content=content[: self.tool_result_limit * 2] + "\n[工具结果已压缩]",
+                    content=content[: self.tool_result_limit * 2]
+                    + "\n[工具结果已压缩]",
                     tool_call_id=message.tool_call_id,
                 )
             )

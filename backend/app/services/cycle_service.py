@@ -225,7 +225,9 @@ def advance_stage(db: Session, cycle_id: int, farm_id: int) -> CropCycle:
     return cycle
 
 
-def get_cycle_unit_stats(db: Session, cycle_ids: list[int], farm_id: int) -> dict[int, dict]:
+def get_cycle_unit_stats(
+    db: Session, cycle_ids: list[int], farm_id: int
+) -> dict[int, dict]:
     """按批次汇总种植单元数量和面积。"""
     if not cycle_ids:
         return {}

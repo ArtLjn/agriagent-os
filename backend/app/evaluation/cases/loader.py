@@ -261,9 +261,7 @@ def _raw_to_replay_case(raw: dict[str, Any]) -> AgentReplayCase:
             for item in raw.get("expected_skills", [])
         ],
         expected_parameters=raw.get("expected_parameters", {}),
-        expected_pending_action=_raw_pending_action(
-            raw.get("expected_pending_action")
-        ),
+        expected_pending_action=_raw_pending_action(raw.get("expected_pending_action")),
         confirmation_flow=[
             ConfirmationFlowStep(
                 user_input=item["user_input"],

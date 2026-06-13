@@ -53,11 +53,17 @@ def _indexes(inspector, table_name: str) -> set[str]:
 def _add_crop_cycle_fields(inspector) -> None:
     columns = _columns(inspector, "crop_cycles")
     if "total_area_mu" not in columns:
-        op.add_column("crop_cycles", sa.Column("total_area_mu", sa.Numeric(10, 2), nullable=True))
+        op.add_column(
+            "crop_cycles", sa.Column("total_area_mu", sa.Numeric(10, 2), nullable=True)
+        )
     if "season" not in columns:
-        op.add_column("crop_cycles", sa.Column("season", sa.String(length=50), nullable=True))
+        op.add_column(
+            "crop_cycles", sa.Column("season", sa.String(length=50), nullable=True)
+        )
     if "batch_note" not in columns:
-        op.add_column("crop_cycles", sa.Column("batch_note", sa.String(length=500), nullable=True))
+        op.add_column(
+            "crop_cycles", sa.Column("batch_note", sa.String(length=500), nullable=True)
+        )
 
 
 def _drop_crop_cycle_fields(inspector) -> None:
@@ -70,9 +76,14 @@ def _drop_crop_cycle_fields(inspector) -> None:
 def _add_cost_source_fields(inspector) -> None:
     columns = _columns(inspector, "cost_records")
     if "source_type" not in columns:
-        op.add_column("cost_records", sa.Column("source_type", sa.String(length=50), nullable=True))
+        op.add_column(
+            "cost_records",
+            sa.Column("source_type", sa.String(length=50), nullable=True),
+        )
     if "source_id" not in columns:
-        op.add_column("cost_records", sa.Column("source_id", sa.Integer(), nullable=True))
+        op.add_column(
+            "cost_records", sa.Column("source_id", sa.Integer(), nullable=True)
+        )
 
 
 def _drop_cost_source_fields(inspector) -> None:
@@ -93,11 +104,20 @@ def _create_planting_tables(inspector) -> None:
             sa.Column("name", sa.String(length=100), nullable=False),
             sa.Column("area_mu", sa.Numeric(10, 2), nullable=True),
             sa.Column("planted_date", sa.Date(), nullable=True),
-            sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+            sa.Column(
+                "status", sa.String(length=20), nullable=False, server_default="active"
+            ),
             sa.Column("note", sa.String(length=500), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=True,
+            ),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-            sa.ForeignKeyConstraint(["cycle_id"], ["crop_cycles.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(
+                ["cycle_id"], ["crop_cycles.id"], ondelete="CASCADE"
+            ),
             sa.ForeignKeyConstraint(["farm_id"], ["farms.id"]),
             sa.PrimaryKeyConstraint("id"),
         )
@@ -109,13 +129,23 @@ def _create_planting_tables(inspector) -> None:
             sa.Column("cycle_id", sa.Integer(), nullable=True),
             sa.Column("operation_type", sa.String(length=50), nullable=False),
             sa.Column("operation_date", sa.Date(), nullable=False),
-            sa.Column("scope_type", sa.String(length=20), nullable=False, server_default="cycle"),
+            sa.Column(
+                "scope_type",
+                sa.String(length=20),
+                nullable=False,
+                server_default="cycle",
+            ),
             sa.Column("note", sa.String(length=500), nullable=True),
             sa.Column("photo_urls", sa.Text(), nullable=True),
             sa.Column("source_type", sa.String(length=50), nullable=True),
             sa.Column("source_id", sa.Integer(), nullable=True),
             sa.Column("labor_cost_record_id", sa.Integer(), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=True,
+            ),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
             sa.ForeignKeyConstraint(["cycle_id"], ["crop_cycles.id"]),
             sa.ForeignKeyConstraint(["farm_id"], ["farms.id"]),
@@ -128,8 +158,12 @@ def _create_planting_tables(inspector) -> None:
             sa.Column("id", sa.Integer(), nullable=False),
             sa.Column("work_order_id", sa.Integer(), nullable=False),
             sa.Column("unit_id", sa.Integer(), nullable=False),
-            sa.ForeignKeyConstraint(["unit_id"], ["planting_units.id"], ondelete="CASCADE"),
-            sa.ForeignKeyConstraint(["work_order_id"], ["operation_work_orders.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(
+                ["unit_id"], ["planting_units.id"], ondelete="CASCADE"
+            ),
+            sa.ForeignKeyConstraint(
+                ["work_order_id"], ["operation_work_orders.id"], ondelete="CASCADE"
+            ),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint(
                 "work_order_id",
@@ -144,11 +178,23 @@ def _create_planting_tables(inspector) -> None:
             sa.Column("farm_id", sa.Integer(), nullable=False),
             sa.Column("name", sa.String(length=100), nullable=False),
             sa.Column("phone", sa.String(length=30), nullable=True),
-            sa.Column("default_pay_type", sa.String(length=20), nullable=False, server_default="daily"),
+            sa.Column(
+                "default_pay_type",
+                sa.String(length=20),
+                nullable=False,
+                server_default="daily",
+            ),
             sa.Column("default_unit_price", sa.Numeric(10, 2), nullable=True),
             sa.Column("note", sa.String(length=500), nullable=True),
-            sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
+            sa.Column(
+                "status", sa.String(length=20), nullable=False, server_default="active"
+            ),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=True,
+            ),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
             sa.ForeignKeyConstraint(["farm_id"], ["farms.id"]),
             sa.PrimaryKeyConstraint("id"),
@@ -160,20 +206,40 @@ def _create_planting_tables(inspector) -> None:
             sa.Column("farm_id", sa.Integer(), nullable=False),
             sa.Column("work_order_id", sa.Integer(), nullable=False),
             sa.Column("worker_id", sa.Integer(), nullable=False),
-            sa.Column("pay_type", sa.String(length=20), nullable=False, server_default="daily"),
-            sa.Column("quantity", sa.Numeric(10, 2), nullable=False, server_default="1"),
+            sa.Column(
+                "pay_type", sa.String(length=20), nullable=False, server_default="daily"
+            ),
+            sa.Column(
+                "quantity", sa.Numeric(10, 2), nullable=False, server_default="1"
+            ),
             sa.Column("unit_price", sa.Numeric(10, 2), nullable=False),
             sa.Column("payable_amount", sa.Numeric(10, 2), nullable=False),
-            sa.Column("paid_amount", sa.Numeric(10, 2), nullable=False, server_default="0"),
-            sa.Column("unpaid_amount", sa.Numeric(10, 2), nullable=False, server_default="0"),
-            sa.Column("settlement_status", sa.String(length=20), nullable=False, server_default="unpaid"),
+            sa.Column(
+                "paid_amount", sa.Numeric(10, 2), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "unpaid_amount", sa.Numeric(10, 2), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "settlement_status",
+                sa.String(length=20),
+                nullable=False,
+                server_default="unpaid",
+            ),
             sa.Column("client_request_id", sa.String(length=100), nullable=True),
             sa.Column("note", sa.String(length=500), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=True,
+            ),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
             sa.ForeignKeyConstraint(["farm_id"], ["farms.id"]),
             sa.ForeignKeyConstraint(["worker_id"], ["workers.id"]),
-            sa.ForeignKeyConstraint(["work_order_id"], ["operation_work_orders.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(
+                ["work_order_id"], ["operation_work_orders.id"], ondelete="CASCADE"
+            ),
             sa.PrimaryKeyConstraint("id"),
         )
 
@@ -195,15 +261,29 @@ def _create_indexes(inspector) -> None:
     index_specs = [
         ("cost_records", "ix_cost_records_source", ["source_type", "source_id"]),
         ("planting_units", "ix_planting_units_farm_cycle", ["farm_id", "cycle_id"]),
-        ("operation_work_orders", "ix_work_orders_farm_date", ["farm_id", "operation_date"]),
-        ("operation_work_orders", "ix_work_orders_farm_cycle_date", ["farm_id", "cycle_id", "operation_date"]),
+        (
+            "operation_work_orders",
+            "ix_work_orders_farm_date",
+            ["farm_id", "operation_date"],
+        ),
+        (
+            "operation_work_orders",
+            "ix_work_orders_farm_cycle_date",
+            ["farm_id", "cycle_id", "operation_date"],
+        ),
         ("operation_work_order_units", "ix_work_order_units_unit", ["unit_id"]),
         ("workers", "ix_workers_farm_status", ["farm_id", "status"]),
-        ("labor_entries", "ix_labor_entries_farm_status", ["farm_id", "settlement_status"]),
+        (
+            "labor_entries",
+            "ix_labor_entries_farm_status",
+            ["farm_id", "settlement_status"],
+        ),
         ("labor_entries", "ix_labor_entries_work_order", ["work_order_id"]),
     ]
     for table_name, index_name, columns in index_specs:
-        if table_name in _tables(inspector) and index_name not in _indexes(inspector, table_name):
+        if table_name in _tables(inspector) and index_name not in _indexes(
+            inspector, table_name
+        ):
             op.create_index(index_name, table_name, columns, unique=False)
 
 
@@ -218,5 +298,7 @@ def _drop_indexes(inspector) -> None:
         ("planting_units", "ix_planting_units_farm_cycle"),
         ("cost_records", "ix_cost_records_source"),
     ]:
-        if table_name in _tables(inspector) and index_name in _indexes(inspector, table_name):
+        if table_name in _tables(inspector) and index_name in _indexes(
+            inspector, table_name
+        ):
             op.drop_index(index_name, table_name=table_name)

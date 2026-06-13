@@ -76,7 +76,9 @@ async def test_stream_advisor_refuses_unsupported_delete_cost_request():
     with patch("app.agent.advisor._get_advisor_graph") as mock_graph:
         chunks = [
             chunk
-            async for chunk in stream_advisor("清理所有账单", farm_id=1, user_id="user-1")
+            async for chunk in stream_advisor(
+                "清理所有账单", farm_id=1, user_id="user-1"
+            )
         ]
 
     assert "暂不支持" in "".join(chunks)

@@ -24,7 +24,9 @@ from app.schemas.planting import (
 from app.services.labor_service import WORK_ORDER_SOURCE
 
 
-def to_work_order_response(work_order: OperationWorkOrder) -> OperationWorkOrderResponse:
+def to_work_order_response(
+    work_order: OperationWorkOrder,
+) -> OperationWorkOrderResponse:
     """将 ORM 作业单转换为 API 响应。"""
     entries = []
     total_payable = Decimal("0")
@@ -179,7 +181,9 @@ def list_operation_work_orders(
     if cycle_id is not None:
         query = query.filter(OperationWorkOrder.cycle_id == cycle_id)
     if cycle_name:
-        query = query.join(CropCycle).filter(CropCycle.name.contains(cycle_name.strip()))
+        query = query.join(CropCycle).filter(
+            CropCycle.name.contains(cycle_name.strip())
+        )
     if unit_id is not None:
         query = query.join(OperationWorkOrderUnit).filter(
             OperationWorkOrderUnit.unit_id == unit_id
@@ -191,7 +195,9 @@ def list_operation_work_orders(
             .filter(PlantingUnit.name.contains(unit_name.strip()))
         )
     if operation_type:
-        query = query.filter(OperationWorkOrder.operation_type.contains(operation_type.strip()))
+        query = query.filter(
+            OperationWorkOrder.operation_type.contains(operation_type.strip())
+        )
     if worker_name:
         query = (
             query.join(LaborEntry)
@@ -208,7 +214,9 @@ def list_operation_work_orders(
 
     items = (
         query.distinct()
-        .order_by(OperationWorkOrder.operation_date.desc(), OperationWorkOrder.id.desc())
+        .order_by(
+            OperationWorkOrder.operation_date.desc(), OperationWorkOrder.id.desc()
+        )
         .limit(limit)
         .all()
     )
@@ -241,7 +249,9 @@ def list_labor_payables(
     if cycle_id is not None:
         query = query.filter(OperationWorkOrder.cycle_id == cycle_id)
     if cycle_name:
-        query = query.join(CropCycle).filter(CropCycle.name.contains(cycle_name.strip()))
+        query = query.join(CropCycle).filter(
+            CropCycle.name.contains(cycle_name.strip())
+        )
     if work_order_id is not None:
         query = query.filter(LaborEntry.work_order_id == work_order_id)
     if start_date is not None:
@@ -258,7 +268,9 @@ def list_labor_payables(
 def get_unsettled_labor_summary(db: Session, farm_id: int) -> dict:
     """汇总未结人工。"""
     rows = (
-        db.query(Worker.name, func.sum(LaborEntry.unpaid_amount), func.count(LaborEntry.id))
+        db.query(
+            Worker.name, func.sum(LaborEntry.unpaid_amount), func.count(LaborEntry.id)
+        )
         .join(Worker, Worker.id == LaborEntry.worker_id)
         .filter(
             LaborEntry.farm_id == farm_id,

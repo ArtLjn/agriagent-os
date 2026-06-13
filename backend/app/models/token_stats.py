@@ -1,7 +1,16 @@
 """Token 日用量统计模型。"""
 
 from datetime import datetime
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from app.core.database import Base
 
 

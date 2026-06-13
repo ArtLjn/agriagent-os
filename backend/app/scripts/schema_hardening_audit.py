@@ -130,7 +130,13 @@ def _audit_schema_objects(db: Session) -> AuditSection:
 
     required_columns = {
         "cost_records": {"category_id", "category_name_snapshot"},
-        "trace_records": {"input_data", "output_data", "token_usage", "start_time", "end_time"},
+        "trace_records": {
+            "input_data",
+            "output_data",
+            "token_usage",
+            "start_time",
+            "end_time",
+        },
         "token_daily_stats": {"date", "user_id"},
         "cycle_stages": {"is_current"},
     }

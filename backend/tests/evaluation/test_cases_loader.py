@@ -2,7 +2,11 @@
 
 from pathlib import Path
 
-from app.evaluation.cases.loader import builtin_skill_regression_cases, load_replay_cases, load_simulation_cases
+from app.evaluation.cases.loader import (
+    builtin_skill_regression_cases,
+    load_replay_cases,
+    load_simulation_cases,
+)
 
 
 def test_load_simulation_cases_reuses_existing_json() -> None:

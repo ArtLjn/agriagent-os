@@ -11,7 +11,9 @@ class CostCategory(Base):
     __tablename__ = "cost_categories"
 
     id = Column(Integer, primary_key=True, index=True)
-    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1, index=True)
+    farm_id = Column(
+        Integer, ForeignKey("farms.id"), nullable=False, default=1, index=True
+    )
     name = Column(String(50), nullable=False)
     type = Column(String(10), nullable=False)  # cost 或 income
     icon = Column(String(50), nullable=False, default="tag")

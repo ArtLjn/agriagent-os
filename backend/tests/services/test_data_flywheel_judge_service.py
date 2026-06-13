@@ -285,9 +285,7 @@ def test_openai_judge_client_parses_json_completion() -> None:
                 ]
             )
 
-    fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=FakeCompletions())
-    )
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
     judge = OpenAIDataFlywheelJudgeClient(
         client=fake_client,
         judge_model="fake-model",
@@ -308,9 +306,7 @@ def test_openai_judge_client_defaults_invalid_json_to_empty_dict() -> None:
                 choices=[SimpleNamespace(message=SimpleNamespace(content="not-json"))]
             )
 
-    fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=FakeCompletions())
-    )
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
     judge = OpenAIDataFlywheelJudgeClient(
         client=fake_client,
         judge_model="fake-model",

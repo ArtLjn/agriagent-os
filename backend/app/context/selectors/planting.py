@@ -43,7 +43,9 @@ class PlantingUnitSelector:
                     if unit.area_mu is not None
                     else "面积未填"
                 )
-                parts.append(f"{unit.name}(cycle={unit.cycle_id}，{area}，{unit.status})")
+                parts.append(
+                    f"{unit.name}(cycle={unit.cycle_id}，{area}，{unit.status})"
+                )
             content = "种植单元：" + "；".join(parts)
         return [
             ContextBlock(
@@ -64,7 +66,9 @@ class OperationWorkOrderSelector:
         work_orders = (
             db.query(OperationWorkOrder)
             .filter(OperationWorkOrder.farm_id == farm_id)
-            .order_by(OperationWorkOrder.operation_date.desc(), OperationWorkOrder.id.desc())
+            .order_by(
+                OperationWorkOrder.operation_date.desc(), OperationWorkOrder.id.desc()
+            )
             .limit(6)
             .all()
         )

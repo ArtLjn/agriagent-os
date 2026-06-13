@@ -100,7 +100,9 @@ def _events_for_turn(turn: AgentTurn) -> list[dict[str, Any]]:
     return read_event_segment(turn.event_file, turn.event_seq_start, turn.event_seq_end)
 
 
-def _event_log_status(turn: AgentTurn, events: list[dict[str, Any]] | None = None) -> str:
+def _event_log_status(
+    turn: AgentTurn, events: list[dict[str, Any]] | None = None
+) -> str:
     if not turn.event_file:
         return EVENT_LOG_STATUS_UNBOUND
     if not Path(turn.event_file).exists():
@@ -512,9 +514,9 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
     turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
     events = _events_for_turn(turn)
     labels = _labels_by_sample(db, [sample_id]).get(sample_id, [])
-    prelabels = _prelabels_by_sample(
-        db, farm_id=farm_id, sample_ids=[sample_id]
-    ).get(sample_id, [])
+    prelabels = _prelabels_by_sample(db, farm_id=farm_id, sample_ids=[sample_id]).get(
+        sample_id, []
+    )
     sample = _sample_row(turn, labels, events, prelabels=prelabels)
     return {
         "sample": sample,

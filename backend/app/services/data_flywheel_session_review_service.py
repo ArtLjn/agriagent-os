@@ -18,9 +18,7 @@ from app.services.data_flywheel_service import (
 )
 
 
-def get_session_review(
-    db: Session, *, farm_id: int, session_id: str
-) -> dict[str, Any]:
+def get_session_review(db: Session, *, farm_id: int, session_id: str) -> dict[str, Any]:
     """返回单个会话的完整 turn 审阅时间线。"""
     turns = (
         db.query(AgentTurn)

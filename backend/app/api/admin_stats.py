@@ -167,7 +167,11 @@ def token_hourly(
             continue
 
         hour = trace.start_time.strftime("%H") if trace.start_time else "00"
-        day = trace.start_time.date().isoformat() if trace.start_time else start.isoformat()
+        day = (
+            trace.start_time.date().isoformat()
+            if trace.start_time
+            else start.isoformat()
+        )
         item_key = (
             day,
             farm_user_id,

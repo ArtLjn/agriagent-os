@@ -59,7 +59,9 @@ class AgentDataFlywheelPrelabel(Base):
     reviewed_by = Column(String(64), nullable=True, index=True)
     reviewed_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.now, onupdate=datetime.now, nullable=False
+    )
 
 
 class AgentCaseDraft(Base):

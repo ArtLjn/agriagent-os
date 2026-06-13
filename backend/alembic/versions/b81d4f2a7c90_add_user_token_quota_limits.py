@@ -23,9 +23,13 @@ def upgrade() -> None:
     columns = {column["name"] for column in inspector.get_columns("users")}
 
     if "token_monthly_limit" not in columns:
-        op.add_column("users", sa.Column("token_monthly_limit", sa.Integer(), nullable=True))
+        op.add_column(
+            "users", sa.Column("token_monthly_limit", sa.Integer(), nullable=True)
+        )
     if "token_weekly_limit" not in columns:
-        op.add_column("users", sa.Column("token_weekly_limit", sa.Integer(), nullable=True))
+        op.add_column(
+            "users", sa.Column("token_weekly_limit", sa.Integer(), nullable=True)
+        )
 
 
 def downgrade() -> None:

@@ -183,9 +183,7 @@ async def chat_with_agent(
         from app.agent.application.chat_use_case import chat as application_chat
 
     farm = _load_farm_for_application(db, farm_id)
-    application_farm = (
-        SimpleNamespace(id=farm.id, user_id=user_id) if user_id else farm
-    )
+    application_farm = SimpleNamespace(id=farm.id, user_id=user_id) if user_id else farm
     return await application_chat(
         db,
         ChatRequest(

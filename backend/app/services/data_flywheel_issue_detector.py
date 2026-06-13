@@ -103,7 +103,9 @@ def detect_issue_candidates(
             )
         )
     missing_pending = [
-        tool for tool in write_selected if write_successful and tool not in pending_tools
+        tool
+        for tool in write_selected
+        if write_successful and tool not in pending_tools
     ]
     if missing_pending:
         candidates.append(
@@ -205,7 +207,9 @@ def _pending_tools(pending_lifecycle: list[dict[str, Any]]) -> set[str]:
             continue
         steps = payload.get("steps")
         if isinstance(steps, list):
-            tools.update(str(step["skill_name"]) for step in steps if step.get("skill_name"))
+            tools.update(
+                str(step["skill_name"]) for step in steps if step.get("skill_name")
+            )
         if payload.get("skill_name"):
             tools.add(str(payload["skill_name"]))
     return tools

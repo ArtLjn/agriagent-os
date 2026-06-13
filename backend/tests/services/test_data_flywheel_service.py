@@ -85,9 +85,13 @@ def _seed_turn(
     tool_events=None,
 ):
     router_tools = router_tools or ["manage_workers", "create_operation_work_order"]
-    tool_events = tool_events if tool_events is not None else [
-        ("tool.call.finished", {"tool_name": "manage_workers", "result": {"id": 7}})
-    ]
+    tool_events = (
+        tool_events
+        if tool_events is not None
+        else [
+            ("tool.call.finished", {"tool_name": "manage_workers", "result": {"id": 7}})
+        ]
+    )
     conv = get_or_create_conversation(
         db, farm_id=1, session_id=session_id, user_id="user-1"
     )
@@ -792,9 +796,7 @@ def test_get_session_review_returns_full_turn_timeline_with_evidence(tmp_path):
     assert review["turns"][1]["tool_events"][0]["payload"]["tool_name"] == (
         "create_operation_work_order"
     )
-    assert review["turns"][1]["sample"]["quality_labels"] == [
-        "hallucinated_execution"
-    ]
+    assert review["turns"][1]["sample"]["quality_labels"] == ["hallucinated_execution"]
     assert review["turns"][1]["sample"]["issue_candidates"][0]["type"] == (
         "pending_missed"
     )
@@ -919,9 +921,7 @@ def test_issue_candidates_do_not_flag_missing_wage_when_unit_price_exists(tmp_pa
 
     detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
 
-    assert "missing_wage" not in [
-        item["type"] for item in detail["issue_candidates"]
-    ]
+    assert "missing_wage" not in [item["type"] for item in detail["issue_candidates"]]
     db.close()
 
 

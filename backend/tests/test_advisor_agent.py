@@ -94,9 +94,13 @@ class TestBuildHistoryMessages:
 
         mock_get_recent.return_value = [
             MagicMock(role="user", content="你的功能"),
-            MagicMock(role="assistant", content="我是芽芽，可以查数据、记账、管理种植。"),
+            MagicMock(
+                role="assistant", content="我是芽芽，可以查数据、记账、管理种植。"
+            ),
             MagicMock(role="user", content="我的茬口"),
-            MagicMock(role="assistant", content="活跃茬口有夏季水稻、夏季苹果、夏季玉米。"),
+            MagicMock(
+                role="assistant", content="活跃茬口有夏季水稻、夏季苹果、夏季玉米。"
+            ),
             MagicMock(role="user", content="水稻今天打药了"),
             MagicMock(role="assistant", content="已记录水稻打药。"),
             MagicMock(role="user", content="我想种橘子"),

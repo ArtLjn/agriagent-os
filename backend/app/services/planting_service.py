@@ -282,7 +282,9 @@ def list_work_orders(
     if cycle_id is not None:
         query = query.filter(OperationWorkOrder.cycle_id == cycle_id)
     return (
-        query.order_by(OperationWorkOrder.operation_date.desc(), OperationWorkOrder.id.desc())
+        query.order_by(
+            OperationWorkOrder.operation_date.desc(), OperationWorkOrder.id.desc()
+        )
         .offset(skip)
         .limit(limit)
         .all()
@@ -303,7 +305,10 @@ def get_work_order(
     """查询作业单详情。"""
     return (
         db.query(OperationWorkOrder)
-        .filter(OperationWorkOrder.id == work_order_id, OperationWorkOrder.farm_id == farm_id)
+        .filter(
+            OperationWorkOrder.id == work_order_id,
+            OperationWorkOrder.farm_id == farm_id,
+        )
         .first()
     )
 
@@ -317,10 +322,14 @@ def update_work_order(
     """更新作业单和可选用工明细。"""
     work_order = _get_work_order_or_raise(db, work_order_id, farm_id)
     cycle_id = data.cycle_id if data.cycle_id is not None else work_order.cycle_id
-    scope_type = data.scope_type if data.scope_type is not None else work_order.scope_type
-    unit_ids = data.unit_ids if data.unit_ids is not None else [
-        link.unit_id for link in work_order.unit_links
-    ]
+    scope_type = (
+        data.scope_type if data.scope_type is not None else work_order.scope_type
+    )
+    unit_ids = (
+        data.unit_ids
+        if data.unit_ids is not None
+        else [link.unit_id for link in work_order.unit_links]
+    )
     validation_data = OperationWorkOrderCreate(
         cycle_id=cycle_id,
         operation_type=data.operation_type or work_order.operation_type,
@@ -404,8 +413,12 @@ def settle_labor_payment(
             break
         pay_amount = min(entry.unpaid_amount, remaining)
         entry.paid_amount = _quantize_money(entry.paid_amount + pay_amount)
-        entry.unpaid_amount = _quantize_money(max(entry.payable_amount - entry.paid_amount, Decimal("0")))
-        entry.settlement_status = _settlement_status(entry.paid_amount, entry.unpaid_amount)
+        entry.unpaid_amount = _quantize_money(
+            max(entry.payable_amount - entry.paid_amount, Decimal("0"))
+        )
+        entry.settlement_status = _settlement_status(
+            entry.paid_amount, entry.unpaid_amount
+        )
         remaining -= pay_amount
         paid_total += pay_amount
         affected.append(

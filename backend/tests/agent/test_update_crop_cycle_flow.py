@@ -64,12 +64,17 @@ async def test_update_crop_cycle_tool_call_stores_structured_pending_context(
     _create_cycle(db_session)
     tool = _write_confirm_tool()
     collector = MagicMock()
-    monkeypatch.setattr(tool_executor, "SessionLocal", lambda: db_session, raising=False)
+    monkeypatch.setattr(
+        tool_executor, "SessionLocal", lambda: db_session, raising=False
+    )
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch("app.agent.runtime.tool_executor.get_collector", return_value=collector):
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch("app.agent.runtime.tool_executor.get_collector", return_value=collector),
+    ):
         result = await _parallel_tool_node(
             {
                 "farm_id": 1,
@@ -121,12 +126,19 @@ async def test_update_crop_cycle_pending_context_uses_cycle_id_when_provided(
     cycle = _create_cycle(db_session, name="夏季玉米", crop_name="玉米")
     _create_cycle(db_session, name="秋季玉米", crop_name="玉米")
     tool = _write_confirm_tool()
-    monkeypatch.setattr(tool_executor, "SessionLocal", lambda: db_session, raising=False)
+    monkeypatch.setattr(
+        tool_executor, "SessionLocal", lambda: db_session, raising=False
+    )
 
-    with patch(
-        "app.agent.runtime.tool_executor.get_langchain_tools",
-        return_value=[tool],
-    ), patch("app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()):
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
+    ):
         await _parallel_tool_node(
             {
                 "farm_id": 1,
