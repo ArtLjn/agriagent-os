@@ -13,6 +13,14 @@ class TraceConfig(BaseModel):
     token_stats_ttl_days: int = 90
 
 
+class ReflectionConfig(BaseModel):
+    enabled: bool = True
+    pre_write_plan: bool = True
+    pre_execution: bool = True
+    post_tool_result: bool = True
+    fallback_guard: bool = True
+
+
 class TokenQuotaConfig(BaseModel):
     monthly_limit: int = 200000
     weekly_limit: int = 50000

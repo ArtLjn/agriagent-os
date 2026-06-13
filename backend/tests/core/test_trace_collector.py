@@ -106,3 +106,28 @@ class TestTraceCollector:
             },
         )
         collector._dao.accumulate_token_stats.assert_not_called()
+
+    def test_reflection_check_records_without_accumulating_token_stats(self) -> None:
+        """reflection_check 只记录 trace，不累计 token 统计。"""
+        init_trace(farm_id=1, user_id="u1", call_type="chat")
+        from app.infra.trace_collector import TraceCollector
+
+        collector = TraceCollector.__new__(TraceCollector)
+        collector._dao = MagicMock()
+        collector._dao.record = MagicMock()
+        collector._dao.accumulate_token_stats = MagicMock()
+        collector.record(
+            node_type="reflection_check",
+            node_name="pre_write_plan",
+            input_data={"skill_name": "create_cost_record"},
+            output_data={"decision": "block_write"},
+            token_usage={
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_tokens": 150,
+                "usage_source": "provider",
+            },
+        )
+
+        collector._dao.record.assert_called_once()
+        collector._dao.accumulate_token_stats.assert_not_called()

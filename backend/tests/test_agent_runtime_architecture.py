@@ -53,7 +53,10 @@ def test_legacy_agent_entrypoints_do_not_duplicate_pending_execution():
                     violations.append(f"{relative_path}: defines {node.name}")
             if not isinstance(node, ast.Call):
                 continue
-            if isinstance(node.func, ast.Name) and node.func.id in forbidden_function_names:
+            if (
+                isinstance(node.func, ast.Name)
+                and node.func.id in forbidden_function_names
+            ):
                 violations.append(f"{relative_path}: calls {node.func.id}")
             if _is_manager_execute_pending_skill(node):
                 violations.append(f"{relative_path}: executes pending.skill_name")
@@ -118,6 +121,79 @@ def test_agent_application_does_not_import_legacy_chat_orchestration():
     assert violations == []
 
 
+def test_reflection_logic_lives_in_reflector_boundary():
+    """Runtime/Executor 只调用 Reflection 服务，不内联核心策略与检查。"""
+    app_dir = Path(__file__).resolve().parents[1] / "app"
+    guarded_files = [
+        *sorted((app_dir / "agent" / "runtime").rglob("*.py")),
+        *sorted((app_dir / "agent" / "executor").rglob("*.py")),
+    ]
+    forbidden_definitions = {
+        "ReflectionIssue",
+        "ReflectionResult",
+        "ReflectionPolicy",
+        "ReflectionTrigger",
+        "ReflectionDecision",
+        "ReflectionSeverity",
+        "ReflectorService",
+        "check_write_plan_consistency",
+        "check_pending_plan_consistency",
+        "check_tool_failure_success_reply",
+        "check_required_tool_missing",
+        "check_tool_result_final_contradiction",
+    }
+    forbidden_modules = {
+        "app.agent.reflector.checks",
+        "app.agent.reflector.policy",
+    }
+    forbidden_submodule_aliases = {"checks", "policy"}
+
+    violations = []
+    for file_path in guarded_files:
+        tree = ast.parse(file_path.read_text(encoding="utf-8"))
+        relative_path = file_path.relative_to(app_dir)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+                if node.name in forbidden_definitions:
+                    violations.append(f"{relative_path}: defines {node.name}")
+            elif isinstance(node, ast.ImportFrom):
+                if _is_forbidden_reflector_module(node.module or "", forbidden_modules):
+                    violations.append(f"{relative_path}: imports {node.module}")
+                elif _imports_reflector_submodule(node, forbidden_submodule_aliases):
+                    imported = ", ".join(alias.name for alias in node.names)
+                    violations.append(f"{relative_path}: imports {imported}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if _is_forbidden_reflector_module(alias.name, forbidden_modules):
+                        violations.append(f"{relative_path}: imports {alias.name}")
+
+    assert violations == []
+
+
+def _is_forbidden_reflector_module(module: str, forbidden_modules: set[str]) -> bool:
+    return (
+        module in forbidden_modules
+        or module
+        in {
+            "reflector.checks",
+            "reflector.policy",
+        }
+        or module.endswith((".reflector.checks", ".reflector.policy"))
+    )
+
+
+def _imports_reflector_submodule(
+    node: ast.ImportFrom,
+    forbidden_names: set[str],
+) -> bool:
+    module = node.module or ""
+    if module == "app.agent.reflector":
+        return any(alias.name in forbidden_names for alias in node.names)
+    return (module == "reflector" or module.endswith(".reflector")) and any(
+        alias.name in forbidden_names for alias in node.names
+    )
+
+
 def _uses_legacy_chat_service_attribute(
     node: ast.AST,
     service_aliases: set[str],
@@ -175,9 +251,7 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
     llm = AsyncMock()
     llm.model_name = "test-model"
     llm.bind_tools = MagicMock(return_value=llm)
-    llm.ainvoke = AsyncMock(
-        return_value=AIMessage(content="准备好了", tool_calls=[])
-    )
+    llm.ainvoke = AsyncMock(return_value=AIMessage(content="准备好了", tool_calls=[]))
 
     with (
         patch("app.agent.runtime.nodes.check_quota", return_value=True),

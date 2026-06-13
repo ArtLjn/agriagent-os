@@ -5,6 +5,11 @@ import re
 import time
 
 from app.agent.executor.models import PendingActionDecision
+from app.agent.reflector import (
+    ReflectionDecision,
+    ReflectionTrigger,
+    ReflectorService,
+)
 from app.agent.skills import get_langchain_tools
 from app.infra.pending_actions import (
     PendingAction,
@@ -151,6 +156,26 @@ async def _confirm_pending(
     session_id: str | None = None,
 ) -> PendingActionDecision:
     """执行已确认的 pending action，并处理缺模板和链式动作。"""
+    reflection_result = ReflectorService().check_write_plan(
+        trigger=ReflectionTrigger.PRE_EXECUTION,
+        skill_name=pending.skill_name,
+        params=pending.params,
+        confirmation_text=build_confirm_message(
+            pending.skill_name,
+            pending.params,
+            original_input=pending.original_input,
+        ),
+        trace_metadata={
+            "farm_id": farm_id,
+            "session_id": session_id,
+            "phase": "confirm_pending_action",
+            "action_id": pending.action_id,
+            "tool_name": pending.skill_name,
+        },
+    )
+    if reflection_result.decision != ReflectionDecision.PASS:
+        return PendingActionDecision.failed(f"执行失败：{reflection_result.reason}")
+
     result = await _execute_write_skill(
         farm_id=farm_id,
         skill_name=pending.skill_name,
@@ -226,6 +251,21 @@ async def _confirm_pending_plan(
     session_id: str | None = None,
 ) -> PendingActionDecision:
     """按顺序执行 pending plan 中的所有写操作步骤。"""
+    reflection_result = ReflectorService().check_pending_plan(
+        trigger=ReflectionTrigger.PRE_EXECUTION,
+        steps=plan.steps,
+        confirmation_text=build_plan_confirm_message(plan.steps),
+        trace_metadata={
+            "farm_id": farm_id,
+            "session_id": session_id,
+            "phase": "confirm_pending_plan",
+            "plan_id": plan.plan_id,
+            "tool_names": [step.tool_name for step in plan.steps],
+        },
+    )
+    if reflection_result.decision != ReflectionDecision.PASS:
+        return PendingActionDecision.failed(f"执行失败：{reflection_result.reason}")
+
     results: list[str] = []
     cleared_groups_by_step: list[dict] = []
 

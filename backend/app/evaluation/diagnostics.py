@@ -21,12 +21,16 @@ class SkillDiagnosticReport:
     tool_not_called_reason: str = ""
     pending_action_diagnostic: dict[str, Any] = field(default_factory=dict)
     context_dependency_diagnostic: list[dict[str, Any]] = field(default_factory=list)
+    reflection_checks: list[dict[str, Any]] = field(default_factory=list)
+    reflection_diagnostic: dict[str, Any] = field(default_factory=dict)
 
 
 class SkillDiagnosticService:
     """从 trace records 汇总 Skill 执行诊断信息。"""
 
-    def build_report(self, request_id: str, records: list[Any]) -> SkillDiagnosticReport:
+    def build_report(
+        self, request_id: str, records: list[Any]
+    ) -> SkillDiagnosticReport:
         report = SkillDiagnosticReport(request_id=request_id)
         ordered_records = sorted(records, key=lambda item: (item.round_index, item.id))
         for record in ordered_records:
@@ -56,6 +60,8 @@ class SkillDiagnosticService:
                 event = self._pending_event(record)
                 report.pending_actions.append(event)
                 report.pending_lifecycle.append(event)
+            elif record.node_type == "reflection_check":
+                report.reflection_checks.append(self._reflection_event(record))
             elif record.node_type in {"final_response", "assistant_response"}:
                 report.final_response = str(
                     output_data.get("reply")
@@ -73,12 +79,15 @@ class SkillDiagnosticService:
                     }
                 )
 
-        report.drilldown_links = self._build_drilldown_links(request_id, ordered_records)
+        report.drilldown_links = self._build_drilldown_links(
+            request_id, ordered_records
+        )
         report.tool_not_called_reason = self._diagnose_tool_not_called(report)
         report.pending_action_diagnostic = self._diagnose_pending_action(report)
         report.context_dependency_diagnostic = self._diagnose_context_dependencies(
             report
         )
+        report.reflection_diagnostic = self._diagnose_reflection(report)
         return report
 
     @staticmethod
@@ -97,9 +106,19 @@ class SkillDiagnosticService:
         }
 
     @staticmethod
-    def _build_drilldown_links(
-        request_id: str, records: list[Any]
-    ) -> dict[str, str]:
+    def _reflection_event(record: Any) -> dict[str, Any]:
+        output_data = record.output_data or {}
+        input_data = record.input_data or {}
+        return {
+            "trigger": output_data.get("trigger") or record.node_name,
+            "decision": output_data.get("decision", ""),
+            "reason": output_data.get("reason", ""),
+            "issues": output_data.get("issues") or [],
+            "input": input_data,
+        }
+
+    @staticmethod
+    def _build_drilldown_links(request_id: str, records: list[Any]) -> dict[str, str]:
         links = {"timeline": f"/admin/traces/{request_id}/timeline"}
         for record in records:
             key = f"{record.node_type}:{record.node_name}"
@@ -188,6 +207,35 @@ class SkillDiagnosticService:
         return {
             "status": "recorded" if unique_groups else "not_recorded",
             "groups": unique_groups,
+        }
+
+    @staticmethod
+    def _diagnose_reflection(report: SkillDiagnosticReport) -> dict[str, Any]:
+        """汇总 reflection check 的阻断决策和 issue code。"""
+        blocking_decisions = {
+            "ask_clarification",
+            "block_write",
+            "require_tool",
+        }
+        decisions = sorted(
+            {
+                str(event.get("decision"))
+                for event in report.reflection_checks
+                if event.get("decision")
+            }
+        )
+        issue_codes = sorted(
+            {
+                str(issue.get("code"))
+                for event in report.reflection_checks
+                for issue in event.get("issues", [])
+                if isinstance(issue, dict) and issue.get("code")
+            }
+        )
+        return {
+            "blocked": any(decision in blocking_decisions for decision in decisions),
+            "decisions": decisions,
+            "issue_codes": issue_codes,
         }
 
     @staticmethod
