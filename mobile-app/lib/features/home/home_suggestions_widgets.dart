@@ -25,9 +25,9 @@ class _AiSuggestionsCard extends StatelessWidget {
           const SizedBox(height: 12),
           for (var index = 0; index < visible.length; index++) ...[
             _SuggestionRow(
-              icon: _suggestionIcon(index),
-              color: _suggestionColor(index),
-              background: _suggestionBackground(index),
+              icon: _suggestionIcon(visible[index], index),
+              color: _suggestionColor(visible[index], index),
+              background: _suggestionBackground(visible[index], index),
               title: visible[index].title,
               subtitle: visible[index].subtitle,
               onTap: () {
@@ -47,7 +47,13 @@ class _AiSuggestionsCard extends StatelessWidget {
     );
   }
 
-  IconData _suggestionIcon(int index) {
+  IconData _suggestionIcon(HomeSuggestionViewModel suggestion, int index) {
+    final icon = suggestion.item?.compact.icon;
+    if (icon == 'CloudSun') return LucideIcons.cloudSun;
+    if (icon == 'ClipboardList') return LucideIcons.clipboardList;
+    if (icon == 'CircleDollarSign') return LucideIcons.circleDollarSign;
+    if (icon == 'Sprout') return LucideIcons.sprout;
+    if (icon == 'NotebookPen') return LucideIcons.notebookPen;
     return const [
       LucideIcons.cloudRain,
       LucideIcons.droplets,
@@ -55,7 +61,11 @@ class _AiSuggestionsCard extends StatelessWidget {
     ][index % 3];
   }
 
-  Color _suggestionColor(int index) {
+  Color _suggestionColor(HomeSuggestionViewModel suggestion, int index) {
+    final color = suggestion.item?.compact.iconColor;
+    if (color == 'green' || color == 'emerald') return AppColors.greenDark;
+    if (color == 'amber') return AppColors.amber;
+    if (color == 'blue') return AppColors.blue;
     return const [
       AppColors.blue,
       AppColors.greenDark,
@@ -63,7 +73,11 @@ class _AiSuggestionsCard extends StatelessWidget {
     ][index % 3];
   }
 
-  Color _suggestionBackground(int index) {
+  Color _suggestionBackground(HomeSuggestionViewModel suggestion, int index) {
+    final color = suggestion.item?.compact.iconColor;
+    if (color == 'green' || color == 'emerald') return AppColors.greenSoft;
+    if (color == 'amber') return AppColors.amberSoft;
+    if (color == 'blue') return AppColors.blueSoft;
     return const [
       AppColors.blueSoft,
       AppColors.greenSoft,

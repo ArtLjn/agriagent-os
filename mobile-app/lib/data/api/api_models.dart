@@ -1,3 +1,5 @@
+part 'daily_advice_models.dart';
+
 class AuthSession {
   const AuthSession({
     required this.token,
@@ -222,55 +224,6 @@ class YayaSkill {
   final String iconColor;
   final bool recommended;
   final bool enabled;
-}
-
-class DailyAdvice {
-  const DailyAdvice({
-    this.cycleId,
-    required this.preview,
-    required this.items,
-    required this.advice,
-  });
-
-  factory DailyAdvice.fromJson(Map<String, dynamic> json) {
-    return DailyAdvice(
-      cycleId: (json['cycle_id'] as num?)?.toInt(),
-      preview: '${json['preview'] ?? ''}',
-      items: (json['items'] as List<dynamic>? ?? [])
-          .map((item) =>
-              AdviceItem.fromJson(Map<String, dynamic>.from(item as Map)))
-          .toList(),
-      advice: '${json['advice'] ?? ''}',
-    );
-  }
-
-  final int? cycleId;
-  final String preview;
-  final List<AdviceItem> items;
-  final String advice;
-}
-
-class AdviceItem {
-  const AdviceItem({
-    required this.title,
-    required this.detail,
-    required this.priority,
-    required this.icon,
-  });
-
-  factory AdviceItem.fromJson(Map<String, dynamic> json) {
-    return AdviceItem(
-      title: '${json['title'] ?? ''}',
-      detail: '${json['detail'] ?? ''}',
-      priority: (json['priority'] as num?)?.toInt() ?? 3,
-      icon: '${json['icon'] ?? ''}',
-    );
-  }
-
-  final String title;
-  final String detail;
-  final int priority;
-  final String icon;
 }
 
 class ApiRecord {

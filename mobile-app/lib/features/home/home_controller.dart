@@ -44,8 +44,9 @@ class HomeController {
     final items = advice.items
         .map(
           (item) => HomeSuggestionViewModel(
-            title: _nonEmpty(item.title, fallback: '暂无建议'),
-            subtitle: _nonEmpty(item.detail, fallback: advice.advice),
+            title: _nonEmpty(item.compact.title, fallback: '暂无建议'),
+            subtitle: _nonEmpty(item.compact.subtitle, fallback: advice.advice),
+            item: item,
           ),
         )
         .toList();
@@ -135,10 +136,15 @@ class HomeViewModel {
 }
 
 class HomeSuggestionViewModel {
-  const HomeSuggestionViewModel({required this.title, required this.subtitle});
+  const HomeSuggestionViewModel({
+    required this.title,
+    required this.subtitle,
+    this.item,
+  });
 
   final String title;
   final String subtitle;
+  final AdviceItem? item;
 }
 
 String _nonEmpty(String value, {required String fallback}) {

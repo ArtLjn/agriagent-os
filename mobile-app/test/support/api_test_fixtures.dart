@@ -4,6 +4,9 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+part 'api_daily_advice_fixture.dart';
+part 'api_agent_fixture.dart';
+
 class RecordingAdapter implements HttpClientAdapter {
   RecordingAdapter(this.responses, {this.statusCodes = const {}});
 
@@ -146,52 +149,6 @@ final versionResponse = {
   'download_url': 'https://example.test/app.apk',
   'changelog': '更新',
   'force_update': false,
-};
-
-final conversationResponse = {
-  'id': 1,
-  'session_id': 's1',
-  'status': 'active',
-  'title': '问答',
-  'preview': '今天浇水吗',
-  'category': '对话',
-  'created_at': '2026-06-08T08:00:00',
-  'last_active_at': '2026-06-08T08:01:00',
-};
-
-final messageResponse = {
-  'id': 2,
-  'role': 'assistant',
-  'content': '建议傍晚浇水',
-  'skills': ['weather'],
-  'pending_action': null,
-  'created_at': '2026-06-08T08:02:00',
-};
-
-final yayaSkillsResponse = {
-  'items': [
-    {
-      'key': 'create_cost_record',
-      'title': '智能记账',
-      'description': '一句话生成账本记录',
-      'category': '记录',
-      'icon': 'receipt-yuan',
-      'icon_color': 'green',
-      'recommended': true,
-      'enabled': true,
-    }
-  ],
-  'total': 1,
-};
-
-final dailyAdviceResponse = {
-  'cycle_id': 7,
-  'preview': '注意控水',
-  'items': [
-    {'title': '浇水', 'detail': '傍晚少量浇水', 'priority': 1, 'icon': 'water'}
-  ],
-  'created_at': '2026-06-08T08:00:00',
-  'advice': '浇水: 傍晚少量浇水',
 };
 
 final reportResponse = {

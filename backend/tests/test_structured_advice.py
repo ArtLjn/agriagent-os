@@ -1,25 +1,28 @@
-"""测试每日建议结构化返回 — AdviceItem schema + JSON 解析 + fallback。"""
+"""测试每日建议结构化返回 — AdviceItem schema + v2 响应兼容。"""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.schemas.agent import AdviceItem, DailyAdviceResponse
 from app.services.agent_service import get_daily_advice, refresh_daily_advice
+from app.services.daily_advice_models import DailyAdviceCandidate
 
 
-def _make_mock_db() -> MagicMock:
-    """创建带 refresh side_effect 的 mock 数据库会话。"""
-    mock_db = MagicMock()
-
-    def _refresh_side_effect(record):
-        record.created_at = datetime(2024, 1, 1, 12, 0, 0)
-
-    mock_db.refresh.side_effect = _refresh_side_effect
-    # 让缓存查询链式调用返回 None，确保走 LLM 路径
-    mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
-    return mock_db
+def _candidate() -> DailyAdviceCandidate:
+    return DailyAdviceCandidate(
+        id="weather:hot",
+        category="weather",
+        title_hint="高温错峰采收",
+        detail_hint="今天最高温较高，建议避开中午高温时段安排采收。",
+        priority=2,
+        due_date=None,
+        source_type="weather_service",
+        source_id=12,
+        dedupe_key="weather:hot",
+        reason="天气服务命中高温规则",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -47,6 +50,12 @@ class TestAdviceItemSchema:
         with pytest.raises(Exception):
             AdviceItem(title="A" * 16, detail="ok", priority=1)
 
+    def test_legacy_title_at_max_length_passes_without_compact(self) -> None:
+        """旧字段输入没有 compact 时仍按旧 title 长度约束校验。"""
+        item = AdviceItem(title="A" * 15, detail="ok", priority=1)
+        assert item.title == "A" * 15
+        assert item.detail == "ok"
+
     def test_priority_out_of_range_raises(self) -> None:
         """priority 超出 1-3 范围时校验失败。"""
         with pytest.raises(Exception):
@@ -61,6 +70,36 @@ class TestAdviceItemSchema:
         """icon 默认值为 📋。"""
         item = AdviceItem(title="ok", detail="ok", priority=2)
         assert item.icon == "📋"
+
+    def test_compact_only_defaults_priority(self) -> None:
+        """v2 compact-only 输入缺省 priority 时默认常规优先级。"""
+        item = AdviceItem(
+            compact={
+                "title": "巡田记录",
+                "subtitle": "建议今天完成一次基础巡田并补齐记录。",
+                "icon": "NotebookPen",
+                "icon_color": "slate",
+            },
+        )
+
+        assert item.priority == 3
+        assert item.title == "巡田记录"
+        assert item.detail == "建议今天完成一次基础巡田并补齐记录。"
+
+    def test_compact_input_keeps_outer_priority(self) -> None:
+        """v2 compact 输入存在外层 priority 时保留外层值。"""
+        item = AdviceItem(
+            priority=1,
+            compact={
+                "title": "高温错峰",
+                "subtitle": "今天高温明显，建议避开中午时段安排作业。",
+                "icon": "CloudSun",
+                "icon_color": "amber",
+                "priority": 3,
+            },
+        )
+
+        assert item.priority == 1
 
 
 class TestDailyAdviceResponseSchema:
@@ -108,105 +147,71 @@ class TestDailyAdviceResponseSchema:
 # ---------- JSON 解析成功 ----------
 
 
-class TestDailyAdviceJsonParsing:
-    """测试 LLM 返回合法 JSON 数组时的解析逻辑。"""
+class TestDailyAdviceV2Empty:
+    """测试无候选时的 v2 empty 响应。"""
 
     @pytest.mark.asyncio
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    async def test_json_array_parsed_to_items(self, mock_invoke: AsyncMock) -> None:
-        """LLM 返回 JSON 数组时，正确解析为 AdviceItem 列表。"""
-        mock_invoke.return_value = (
-            "```json\n"
-            '[{"title":"浇水","detail":"土壤偏干需补水","priority":1,"icon":"💧"},'
-            '{"title":"施肥","detail":"生长期需追加氮肥","priority":2,"icon":"🌱"}]\n'
-            "```"
-        )
-        mock_db = _make_mock_db()
+    async def test_empty_candidates_do_not_call_llm(
+        self, mock_invoke: AsyncMock
+    ) -> None:
+        """没有候选时不让 LLM 自造建议，返回可展示 empty 结构。"""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
 
-        result = await get_daily_advice(mock_db, farm_id=1)
+        from app.core.database import Base
 
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        session = sessionmaker(bind=engine)()
+        with patch(
+            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            new_callable=AsyncMock,
+        ) as mock_collect:
+            mock_collect.return_value = []
+            result = await get_daily_advice(session, farm_id=1)
+
+        mock_invoke.assert_not_called()
         assert isinstance(result, DailyAdviceResponse)
-        assert len(result.items) == 2
-        assert result.items[0].title == "浇水"
-        assert result.items[0].priority == 1
-        assert result.items[1].title == "施肥"
-
-    @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    async def test_items_sorted_by_priority(self, mock_invoke: AsyncMock) -> None:
-        """items 按 priority 升序排列。"""
-        mock_invoke.return_value = (
-            '[{"title":"施肥","detail":"生长期","priority":3,"icon":"🌱"},'
-            '{"title":"浇水","detail":"土壤偏干","priority":1,"icon":"💧"},'
-            '{"title":"除草","detail":"杂草较多","priority":2,"icon":"🌾"}]'
-        )
-        mock_db = _make_mock_db()
-
-        result = await get_daily_advice(mock_db, farm_id=1)
-
-        priorities = [item.priority for item in result.items]
-        assert priorities == sorted(priorities)
-        assert result.items[0].title == "浇水"
+        assert result.generation.mode == "empty"
+        assert result.items[0].id == "empty-today"
+        session.close()
 
 
 # ---------- JSON 解析失败 fallback ----------
 
 
 class TestDailyAdviceFallback:
-    """测试 LLM 返回非 JSON 时的 fallback 逻辑。"""
+    """测试 v2 生成失败时的候选 skeleton fallback。"""
 
     @pytest.mark.asyncio
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    async def test_plain_text_fallback_single_item(
+    async def test_plain_text_fallback_uses_candidate_skeleton(
         self, mock_invoke: AsyncMock
     ) -> None:
-        """LLM 返回纯文本时，fallback 为单条 AdviceItem。"""
-        mock_invoke.return_value = "今天天气不错，建议给蔬菜浇水并追施氮肥。"
-        mock_db = _make_mock_db()
+        """LLM 返回纯文本时，fallback 不采纳纯文本，使用候选骨架。"""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
 
-        result = await get_daily_advice(mock_db, farm_id=1)
+        from app.core.database import Base
 
-        assert len(result.items) == 1
-        assert result.items[0].title == "今日农事建议"
-        assert result.items[0].priority == 2
-        assert result.items[0].icon == "📋"
-        assert result.items[0].detail == "今天天气不错，建议给蔬菜浇水并追施氮肥。"[:50]
-
-    @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    async def test_malformed_json_fallback(self, mock_invoke: AsyncMock) -> None:
-        """LLM 返回畸形 JSON 时，fallback 为单条 AdviceItem。"""
         mock_invoke.return_value = "这不是 JSON 格式，就是一段纯文本建议。"
-        mock_db = _make_mock_db()
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        session = sessionmaker(bind=engine)()
+        candidate = _candidate()
+        with patch(
+            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            new_callable=AsyncMock,
+        ) as mock_collect:
+            mock_collect.return_value = [candidate]
+            result = await get_daily_advice(session, farm_id=1)
 
-        result = await get_daily_advice(mock_db, farm_id=1)
-
-        assert len(result.items) == 1
-        assert result.items[0].title == "今日农事建议"
-
-
-# ---------- Title 截断 ----------
-
-
-class TestTitleTruncation:
-    """测试 title 超长时的截断逻辑。"""
-
-    @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
-    async def test_long_title_truncated(self, mock_invoke: AsyncMock) -> None:
-        """title 超过 10 字时截断并添加省略号。"""
-        long_title = "这是一个非常非常长的标题超过十个字"
-        mock_invoke.return_value = (
-            f'[{{"title":"{long_title}","detail":"ok","priority":1,"icon":"📋"}}]'
-        )
-        mock_db = _make_mock_db()
-
-        result = await get_daily_advice(mock_db, farm_id=1)
-
-        assert len(result.items) == 1
-        # 截断后 title <= 15 字符（10字 + "…" = 11字符，在 max_length=15 内）
-        assert result.items[0].title.endswith("…")
-        assert len(result.items[0].title) <= 15
+        assert mock_invoke.await_count == 3
+        assert result.generation.mode == "fallback"
+        assert result.items[0].id == candidate.id
+        assert result.items[0].title == "高温错峰采收"
+        session.close()
 
 
 # ---------- refresh_daily_advice ----------
@@ -220,17 +225,28 @@ class TestRefreshDailyAdvice:
     async def test_refresh_returns_structured_items(
         self, mock_invoke: AsyncMock
     ) -> None:
-        """refresh_daily_advice 也返回结构化 items。"""
-        mock_invoke.return_value = (
-            '[{"title":"防虫","detail":"近期蚜虫高发","priority":1,"icon":"🐛"}]'
-        )
-        mock_db = _make_mock_db()
+        """refresh_daily_advice 也返回 v2 结构化 items。"""
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
 
-        result = await refresh_daily_advice(mock_db, farm_id=1)
+        from app.core.database import Base
 
+        mock_invoke.return_value = "bad json"
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        session = sessionmaker(bind=engine)()
+        with patch(
+            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            new_callable=AsyncMock,
+        ) as mock_collect:
+            mock_collect.return_value = [_candidate()]
+            result = await refresh_daily_advice(session, farm_id=1)
+
+        assert mock_invoke.await_count == 3
         assert isinstance(result, DailyAdviceResponse)
         assert len(result.items) == 1
-        assert result.items[0].title == "防虫"
+        assert result.items[0].detail_view is not None
+        session.close()
 
 
 # ---------- cycle_id 传递 ----------
@@ -243,12 +259,22 @@ class TestCycleIdPassthrough:
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_cycle_id_in_response(self, mock_invoke: AsyncMock) -> None:
         """返回的 DailyAdviceResponse 包含正确的 cycle_id。"""
-        mock_invoke.return_value = (
-            '[{"title":"采收","detail":"番茄已成熟","priority":1,"icon":"🍅"}]'
-        )
-        mock_db = _make_mock_db()
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
 
-        result = await get_daily_advice(mock_db, cycle_id=42, farm_id=1)
+        from app.core.database import Base
+
+        mock_invoke.return_value = "bad json"
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        session = sessionmaker(bind=engine)()
+        with patch(
+            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            new_callable=AsyncMock,
+        ) as mock_collect:
+            mock_collect.return_value = [_candidate()]
+            result = await get_daily_advice(session, cycle_id=42, farm_id=1)
 
         assert result.cycle_id == 42
-        assert result.items[0].title == "采收"
+        assert result.items[0].title == "高温错峰采收"
+        session.close()

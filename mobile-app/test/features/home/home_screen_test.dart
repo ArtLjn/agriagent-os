@@ -19,7 +19,7 @@ void main() {
     expect(find.text('AI 今日建议'), findsOneWidget);
     expect(find.text('注意控水'), findsOneWidget);
     expect(find.text('浇水'), findsOneWidget);
-    expect(find.text('傍晚少量浇水'), findsOneWidget);
+    expect(find.text('傍晚少量浇水，避开中午高温时段。'), findsOneWidget);
     expect(find.text('天气'), findsOneWidget);
     expect(find.text('晴'), findsOneWidget);
     expect(find.text('作业'), findsWidgets);
@@ -53,7 +53,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('建议详情'), findsOneWidget);
-    expect(find.text('浇水'), findsWidgets);
+    expect(find.text('傍晚补水'), findsOneWidget);
+    expect(find.text('今天高温明显，建议傍晚少量补水并观察土壤墒情。'), findsOneWidget);
     expect(find.text('AI 判断依据'), findsOneWidget);
     expect(find.text('执行步骤'), findsOneWidget);
     expect(find.text('关联事项'), findsOneWidget);
