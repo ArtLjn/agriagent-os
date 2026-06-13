@@ -82,3 +82,7 @@ class AuthConfig(BaseModel):
 
 class AppConfig(BaseModel):
     apk_download_url: str = ""
+
+
+class DataFlywheelConfig(BaseModel):
+    llm_prelabel_enabled: bool = False

@@ -67,6 +67,26 @@ class TestYamlConfig:
         assert settings.project_name == "Farm Manager API"
         assert settings.weather_latitude == 34.26
 
+    def test_data_flywheel_llm_prelabel_defaults_to_false(self):
+        from app.core.config import Settings
+
+        with patch("pathlib.Path.exists", return_value=False):
+            settings = Settings(_config_path="/nonexistent/config.yaml")
+
+        assert settings.data_flywheel.llm_prelabel_enabled is False
+
+    def test_data_flywheel_llm_prelabel_can_be_enabled_from_yaml(self, tmp_path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            yaml.dump({"data_flywheel": {"llm_prelabel_enabled": True}})
+        )
+
+        from app.core.config import Settings
+
+        settings = Settings(_config_path=str(config_file))
+
+        assert settings.data_flywheel.llm_prelabel_enabled is True
+
 
 class TestAIConfig:
     def test_ai_config_default_model(self):

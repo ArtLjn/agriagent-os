@@ -14,19 +14,39 @@ from app.services.agent_turn_service import create_turn, finish_turn, mark_event
 from app.services.conversation_service import get_or_create_conversation, save_message
 from app.services.data_flywheel_service import (
     SAMPLE_TYPE_SESSION,
+    accept_sample_prelabel,
     add_sample_label,
     build_case_draft,
+    create_sample_prelabel,
     delete_sample_label,
     export_sample_jsonl,
     get_session_annotation_detail,
     get_sample_detail,
     list_samples,
+    reject_sample_prelabel,
     resolve_sample_label,
 )
+from app.services.data_flywheel_judge_service import DataFlywheelJudgeClient
 from app.services.data_flywheel_session_sync_service import sync_session_events
 from app.services.data_flywheel_session_review_service import get_session_review
 
 pytestmark = pytest.mark.no_db
+
+
+class FakePrelabelJudgeClient(DataFlywheelJudgeClient):
+    judge_model = "fake-judge"
+    prompt_version = "data-flywheel-prelabel-v1"
+
+    def judge(self, payload):
+        assert payload["sample"]["sample_id"].startswith("turn:1:")
+        return {
+            "labels": ["bad_reply", "pending_missed", "needs_regression"],
+            "root_cause": "写操作缺少 pending 确认",
+            "severity": "high",
+            "confidence": 0.86,
+            "reason": "回复声称已安排，但没有完整 pending lifecycle。",
+            "recommended_fix": "写操作执行前必须创建 pending plan。",
+        }
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -388,6 +408,302 @@ def test_get_sample_detail_includes_events_and_debug_export(tmp_path):
     assert detail["source"]["event_seq_start"] == 1
     assert detail["debug_export"]["format"] == "farm-manager.chat-session-debug.v2"
     assert detail["issue_candidates"][0]["type"] == "pending_missed"
+    db.close()
+
+
+def test_create_prelabel_does_not_enter_quality_labels_or_case_truth(tmp_path):
+    db = Session()
+    turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=False,
+        router_tools=["create_operation_work_order"],
+        tool_events=[
+            (
+                "tool.call.finished",
+                {"tool_name": "create_operation_work_order", "result": {"id": 9}},
+            )
+        ],
+    )
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+
+    create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+    listed = list_samples(db, farm_id=1)
+    draft = build_case_draft(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        target_type="evaluation_replay",
+    )
+
+    assert detail["quality_labels"] == []
+    assert detail["sample"]["quality_labels"] == []
+    assert detail["prelabels"][0]["labels"] == [
+        "bad_reply",
+        "pending_missed",
+        "needs_regression",
+    ]
+    assert detail["prelabels"][0]["status"] == "pending"
+    assert listed["items"][0]["latest_prelabel"]["status"] == "pending"
+    assert listed["items"][0]["prelabels"][0]["labels"] == [
+        "bad_reply",
+        "pending_missed",
+        "needs_regression",
+    ]
+    assert listed["items"][0]["quality_labels"] == []
+    assert draft["case_json"]["metadata"]["quality_labels"] == []
+    assert draft["case_json"]["category"] == "data_flywheel"
+    db.close()
+
+
+def test_accept_prelabel_writes_human_labels_and_links_prelabel(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, include_pending=False)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+    prelabel = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+
+    accepted = accept_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        prelabel_id=prelabel["id"],
+        labels=["pending_missed", "needs_regression"],
+        comment="采纳 AI 预判，人工确认需要回归。",
+        annotator_id="admin-1",
+    )
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert accepted["status"] == "accepted"
+    assert accepted["reviewed_by"] == "admin-1"
+    assert accepted["accepted_label_ids"]
+    assert detail["quality_labels"] == ["pending_missed", "needs_regression"]
+    assert detail["prelabels"][0]["status"] == "accepted"
+    assert detail["labels"][0]["comment"] == "采纳 AI 预判，人工确认需要回归。"
+    db.close()
+
+
+def test_reject_prelabel_keeps_quality_labels_empty(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, include_pending=False)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+    prelabel = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+
+    rejected = reject_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        prelabel_id=prelabel["id"],
+        annotator_id="admin-1",
+    )
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert rejected["status"] == "rejected"
+    assert rejected["reviewed_by"] == "admin-1"
+    assert detail["quality_labels"] == []
+    assert detail["prelabels"][0]["status"] == "rejected"
+    db.close()
+
+
+def test_prelabel_review_targets_explicit_prelabel_id(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, include_pending=False)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+    first = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+    second = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+
+    accepted = accept_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        prelabel_id=first["id"],
+        labels=["pending_missed"],
+        annotator_id="admin-1",
+    )
+    after_accept = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+    statuses_after_accept = {
+        item["id"]: item["status"] for item in after_accept["prelabels"]
+    }
+
+    rejected = reject_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        prelabel_id=second["id"],
+        annotator_id="admin-1",
+    )
+    after_reject = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+    statuses_after_reject = {
+        item["id"]: item["status"] for item in after_reject["prelabels"]
+    }
+
+    assert accepted["id"] == first["id"]
+    assert statuses_after_accept[first["id"]] == "accepted"
+    assert statuses_after_accept[second["id"]] == "pending"
+    assert rejected["id"] == second["id"]
+    assert statuses_after_reject[first["id"]] == "accepted"
+    assert statuses_after_reject[second["id"]] == "rejected"
+    db.close()
+
+
+def test_accepted_prelabel_cannot_be_rejected_again(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, include_pending=False)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+    prelabel = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+    accept_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        prelabel_id=prelabel["id"],
+        labels=["pending_missed"],
+        annotator_id="admin-1",
+    )
+
+    with pytest.raises(ValueError) as exc:
+        reject_sample_prelabel(
+            db,
+            farm_id=1,
+            sample_id=sample_id,
+            prelabel_id=prelabel["id"],
+            annotator_id="admin-2",
+        )
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert str(exc.value) == "PRELABEL_ALREADY_REVIEWED"
+    assert detail["quality_labels"] == ["pending_missed"]
+    assert detail["prelabels"][0]["status"] == "accepted"
+    db.close()
+
+
+def test_rejected_prelabel_cannot_be_accepted_again(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, include_pending=False)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+    prelabel = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+    reject_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        prelabel_id=prelabel["id"],
+        annotator_id="admin-1",
+    )
+
+    with pytest.raises(ValueError) as exc:
+        accept_sample_prelabel(
+            db,
+            farm_id=1,
+            sample_id=sample_id,
+            prelabel_id=prelabel["id"],
+            labels=["pending_missed"],
+            annotator_id="admin-2",
+        )
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert str(exc.value) == "PRELABEL_ALREADY_REVIEWED"
+    assert detail["quality_labels"] == []
+    assert detail["prelabels"][0]["status"] == "rejected"
+    db.close()
+
+
+def test_prelabel_id_from_other_sample_is_not_found(tmp_path):
+    db = Session()
+    first_turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=False,
+        session_id="sess-flywheel-a",
+        request_id="prelabel-a",
+    )
+    second_turn = _seed_turn(
+        db,
+        tmp_path,
+        include_pending=False,
+        session_id="sess-flywheel-b",
+        request_id="prelabel-b",
+    )
+    first_sample_id = f"turn:1:sess-flywheel-a:{first_turn.id}"
+    second_sample_id = f"turn:1:sess-flywheel-b:{second_turn.id}"
+    other_prelabel = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=second_sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+
+    with pytest.raises(ValueError) as exc:
+        accept_sample_prelabel(
+            db,
+            farm_id=1,
+            sample_id=first_sample_id,
+            prelabel_id=other_prelabel["id"],
+            labels=["pending_missed"],
+            annotator_id="admin-1",
+        )
+
+    assert str(exc.value) == "PRELABEL_NOT_FOUND"
+    db.close()
+
+
+def test_accept_prelabel_deduplicates_labels_preserving_order(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path, include_pending=False)
+    sample_id = f"turn:1:sess-flywheel:{turn.id}"
+    prelabel = create_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        judge_client=FakePrelabelJudgeClient(),
+    )
+
+    accepted = accept_sample_prelabel(
+        db,
+        farm_id=1,
+        sample_id=sample_id,
+        prelabel_id=prelabel["id"],
+        labels=["pending_missed", "needs_regression", "pending_missed"],
+        annotator_id="admin-1",
+    )
+    detail = get_sample_detail(db, farm_id=1, sample_id=sample_id)
+
+    assert detail["quality_labels"] == ["pending_missed", "needs_regression"]
+    assert len(accepted["accepted_label_ids"]) == 2
+    assert len(set(accepted["accepted_label_ids"])) == 2
     db.close()
 
 

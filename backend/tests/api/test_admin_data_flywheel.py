@@ -19,6 +19,25 @@ from tests.api.auth_helpers import (
 )
 
 
+class FakeJudgeClient:
+    judge_model = "fake-judge"
+    prompt_version = "data-flywheel-prelabel-v1"
+
+    def __init__(self):
+        self.calls = []
+
+    def judge(self, payload):
+        self.calls.append(payload)
+        return {
+            "labels": ["bad_reply", "pending_missed"],
+            "root_cause": "缺少 pending 确认",
+            "severity": "high",
+            "confidence": 0.91,
+            "reason": "回复声称已安排，但证据中缺少写操作确认链路。",
+            "recommended_fix": "补齐 pending 确认后再执行写工具。",
+        }
+
+
 def _seed_turn(db, tmp_path):
     ensure_admin_user(db)
     farm = db.query(Farm).filter(Farm.user_id == ADMIN_USER_ID).one()
@@ -359,6 +378,206 @@ def test_build_case_draft_api_returns_issue_candidate_assertions(
             "evidence": "create_operation_work_order",
         }
     ]
+
+
+def test_prelabel_endpoint_is_disabled_by_default(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    calls = []
+
+    def forbidden_factory():
+        calls.append("called")
+        return FakeJudgeClient()
+
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        False,
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api,
+        "build_data_flywheel_judge_client",
+        forbidden_factory,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/prelabel",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "LLM_PRELABEL_DISABLED"
+    assert calls == []
+
+
+def test_prelabel_endpoint_creates_pending_llm_judge_prelabel(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    fake_client = FakeJudgeClient()
+
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api,
+        "build_data_flywheel_judge_client",
+        lambda: fake_client,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/prelabel",
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/samples/{sample_id}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["source"] == "llm_judge"
+    assert data["status"] == "pending"
+    assert data["labels"] == ["bad_reply", "pending_missed"]
+    assert len(fake_client.calls) == 1
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["quality_labels"] == []
+    assert detail["prelabels"][0]["id"] == data["id"]
+    assert detail["prelabels"][0]["status"] == "pending"
+
+
+def test_build_prelabel_judge_client_uses_llm_manager(monkeypatch) -> None:
+    class FakeManager:
+        fallback_mode = False
+
+        def get_sync_client_with_info(self, role):
+            assert role == "generation"
+            return object(), {"model": "judge-model"}
+
+    monkeypatch.setattr(
+        "app.core.llm_client_manager.get_llm_manager",
+        lambda: FakeManager(),
+    )
+
+    judge_client = admin_data_flywheel_api.build_data_flywheel_judge_client()
+
+    assert judge_client.judge_model == "judge-model"
+
+
+def test_build_prelabel_judge_client_requires_config(monkeypatch) -> None:
+    class FakeManager:
+        fallback_mode = True
+
+    monkeypatch.setattr(
+        "app.core.llm_client_manager.get_llm_manager",
+        lambda: FakeManager(),
+    )
+    monkeypatch.setattr(admin_data_flywheel_api.settings.ai, "api_key", "")
+
+    try:
+        admin_data_flywheel_api.build_data_flywheel_judge_client()
+    except ValueError as exc:
+        assert str(exc) == "JUDGE_CLIENT_NOT_CONFIGURED"
+    else:
+        raise AssertionError("missing judge config should raise")
+
+
+def test_accept_prelabel_endpoint_supports_human_modified_labels(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    fake_client = FakeJudgeClient()
+
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api,
+        "build_data_flywheel_judge_client",
+        lambda: fake_client,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        prelabel_resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/prelabel",
+            headers=admin_headers(),
+        )
+        accept_resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/prelabels/"
+            f"{prelabel_resp.json()['id']}/accept",
+            json={"labels": ["needs_regression"], "comment": "人工改为回归标签"},
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/samples/{sample_id}",
+            headers=admin_headers(),
+        )
+
+    assert accept_resp.status_code == 200
+    assert accept_resp.json()["status"] == "accepted"
+    assert accept_resp.json()["reviewed_by"] == ADMIN_USER_ID
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["quality_labels"] == ["needs_regression"]
+    assert detail["prelabels"][0]["status"] == "accepted"
+    assert detail["labels"][0]["comment"] == "人工改为回归标签"
+
+
+def test_reject_prelabel_endpoint_does_not_write_quality_labels(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    fake_client = FakeJudgeClient()
+
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api,
+        "build_data_flywheel_judge_client",
+        lambda: fake_client,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        prelabel_resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/prelabel",
+            headers=admin_headers(),
+        )
+        reject_resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/prelabels/"
+            f"{prelabel_resp.json()['id']}/reject",
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/samples/{sample_id}",
+            headers=admin_headers(),
+        )
+
+    assert reject_resp.status_code == 200
+    assert reject_resp.json()["status"] == "rejected"
+    assert reject_resp.json()["reviewed_by"] == ADMIN_USER_ID
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["quality_labels"] == []
+    assert detail["prelabels"][0]["status"] == "rejected"
 
 
 def test_invalid_label_returns_code_detail(db_session, tmp_path) -> None:
