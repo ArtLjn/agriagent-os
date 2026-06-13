@@ -1523,7 +1523,7 @@ git commit -m "chore: mark ledger settlement tasks complete"
 
 **Spec coverage:**  
 - `ledger-settlement-status` creation defaults are covered in Task 1 and Task 2.  
-- Settlement updates on original payable and receivable records are covered in Task 2.
+- Settlement updates on original payable and receivable records are covered in Task 2.  
 - Occurred/settled/unsettled summaries and legacy repayment exclusion are covered in Task 3.  
 - Labor settlement alignment is covered in Task 4.  
 - Ledger UI summary and labels are covered in Task 5.  
