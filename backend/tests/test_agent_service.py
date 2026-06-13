@@ -447,6 +447,7 @@ class TestGenerateReport:
     """测试报告生成服务。"""
 
     @pytest.mark.asyncio
+    @pytest.mark.no_db
     @patch("app.services.agent_service.get_llm")
     @patch("app.services.report_data_service.get_weekly_report_data")
     async def test_generate_report_returns_content(
@@ -470,3 +471,281 @@ class TestGenerateReport:
         assert "报告内容..." in result.content
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_db
+    @patch("app.services.agent_service.get_llm")
+    @patch("app.services.report_data_service.get_weekly_report_data")
+    async def test_generate_report_ignores_llm_fact_overrides(
+        self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
+    ) -> None:
+        """LLM 只能补文案，不能覆盖后端确定性事实和信源。"""
+        report_data = _make_report_data()
+        report_data.period = {
+            "start": "2026-06-01",
+            "end": "2026-06-07",
+            "label": "本周",
+            "granularity": "week",
+        }
+        report_data.metrics = [{"label": "净收支", "value": "0", "unit": "元"}]
+        report_data.sections = [
+            {
+                "type": "weekly_snapshot",
+                "title": "本周快照",
+                "data": {"net_profit": "0"},
+                "source_ref_ids": ["cost_record:1"],
+            }
+        ]
+        report_data.source_summary = [{"source_type": "cost_record", "count": 1}]
+        report_data.source_refs = [
+            {
+                "id": "cost_record:1",
+                "source_type": "cost_record",
+                "source_id": 1,
+                "label": "肥料支出 100 元",
+                "occurred_on": "2026-06-02",
+            }
+        ]
+        mock_report_data.return_value = report_data
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=MagicMock(
+                content=json.dumps(
+                    {
+                        "summary": {"text": "本周经营平稳"},
+                        "highlights": [{"text": "完成一次成本复盘"}],
+                        "metrics": [{"label": "净收支", "value": "9999"}],
+                        "sections": [
+                            {"type": "fake", "title": "模型伪造模块"}
+                        ],
+                        "source_refs": [
+                            {
+                                "id": "weather_service:fake",
+                                "source_type": "weather_service",
+                            }
+                        ],
+                        "recommendations": [
+                            {
+                                "title": "继续记录",
+                                "detail": "保持农事和成本记录完整",
+                                "priority": 2,
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        )
+        mock_get_llm.return_value = mock_llm
+        mock_db = _make_mock_db()
+
+        result = await generate_report(mock_db, farm_id=1, report_type="weekly")
+
+        assert result.structured_data is not None
+        assert result.structured_data["metrics"][0]["label"] == "净收支"
+        assert result.structured_data["metrics"][0]["value"] == "0"
+        assert result.structured_data["sections"][0]["type"] == "weekly_snapshot"
+        assert result.structured_data["sections"][0]["data"] == {"net_profit": "0"}
+        assert result.structured_data["source_refs"][0]["id"] == "cost_record:1"
+        assert result.structured_data["summary"]["text"] == "本周经营平稳"
+        assert result.structured_data["summary"]["highlights"] == ["完成一次成本复盘"]
+        assert result.structured_data["recommendations"][0]["title"] == "继续记录"
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_db
+    @patch("app.services.agent_service.get_llm")
+    @patch("app.services.report_data_service.get_weekly_report_data")
+    async def test_generate_report_rebuilds_facts_after_cycle_filter(
+        self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
+    ) -> None:
+        """带 cycle_id 的报告不会保留其他茬口的派生事实和信源。"""
+        report_data = _make_report_data()
+        report_data.period = {
+            "start": "2026-06-01",
+            "end": "2026-06-07",
+            "label": "本周",
+            "granularity": "week",
+        }
+        report_data.cycles = [
+            {
+                "cycle_id": 1,
+                "name": "一号棚番茄",
+                "field_name": "一号棚",
+                "current_stage": "开花期",
+                "progress_percent": 30,
+                "period_log_count": 1,
+                "total_stages": 2,
+                "current_stage_index": 1,
+                "days_elapsed": 10,
+                "source_ref_ids": ["crop_cycle:1", "cycle_stage:10"],
+            },
+            {
+                "cycle_id": 2,
+                "name": "二号棚番茄",
+                "field_name": "二号棚",
+                "current_stage": "坐果期",
+                "progress_percent": 50,
+                "period_log_count": 1,
+                "total_stages": 2,
+                "current_stage_index": 2,
+                "days_elapsed": 20,
+                "source_ref_ids": ["crop_cycle:2", "cycle_stage:20"],
+            },
+        ]
+        report_data.costs = [
+            {
+                "id": 1,
+                "cycle_id": 1,
+                "category": "农药",
+                "amount": "80",
+                "record_type": "cost",
+                "record_date": date(2026, 6, 2),
+            },
+            {
+                "id": 2,
+                "cycle_id": 2,
+                "category": "销售",
+                "amount": "500",
+                "record_type": "income",
+                "record_date": date(2026, 6, 3),
+            },
+        ]
+        report_data.logs = [
+            {
+                "id": 1,
+                "cycle_id": 1,
+                "operation_type": "打药",
+                "operation_date": date(2026, 6, 2),
+            },
+            {
+                "id": 2,
+                "cycle_id": 2,
+                "operation_type": "采收",
+                "operation_date": date(2026, 6, 3),
+            },
+        ]
+        report_data.operation_work_orders = [
+            {
+                "id": 1,
+                "cycle_id": 1,
+                "operation_type": "打药",
+                "operation_date": date(2026, 6, 2),
+                "scope_type": "cycle",
+            },
+            {
+                "id": 2,
+                "cycle_id": 2,
+                "operation_type": "采收",
+                "operation_date": date(2026, 6, 3),
+                "scope_type": "cycle",
+            },
+        ]
+        report_data.source_refs = [
+            {"id": "crop_cycle:1", "source_type": "crop_cycle", "source_id": 1, "label": "一号棚番茄"},
+            {"id": "cycle_stage:10", "source_type": "cycle_stage", "source_id": 10, "label": "开花期"},
+            {"id": "cost_record:1", "source_type": "cost_record", "source_id": 1, "label": "农药 80元"},
+            {"id": "farm_log:1", "source_type": "farm_log", "source_id": 1, "label": "打药"},
+            {"id": "operation_work_order:1", "source_type": "operation_work_order", "source_id": 1, "label": "打药"},
+            {"id": "crop_cycle:2", "source_type": "crop_cycle", "source_id": 2, "label": "二号棚番茄"},
+            {"id": "cycle_stage:20", "source_type": "cycle_stage", "source_id": 20, "label": "坐果期"},
+            {"id": "cost_record:2", "source_type": "cost_record", "source_id": 2, "label": "销售 500元"},
+            {"id": "farm_log:2", "source_type": "farm_log", "source_id": 2, "label": "采收"},
+            {"id": "operation_work_order:2", "source_type": "operation_work_order", "source_id": 2, "label": "采收"},
+        ]
+        mock_report_data.return_value = report_data
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=MagicMock(
+                content=json.dumps({"summary": "单茬口报告", "advice_items": []})
+            )
+        )
+        mock_get_llm.return_value = mock_llm
+
+        result = await generate_report(
+            _make_mock_db(), farm_id=1, cycle_id=1, report_type="weekly"
+        )
+
+        source_ref_ids = {ref["id"] for ref in result.structured_data["source_refs"]}
+        assert result.structured_data["overview"]["active_cycles"] == 1
+        assert result.structured_data["overview"]["total_income"] == "0"
+        assert result.structured_data["overview"]["total_cost"] == "80"
+        assert "crop_cycle:1" in source_ref_ids
+        assert "cost_record:1" in source_ref_ids
+        assert "crop_cycle:2" not in source_ref_ids
+        assert "cost_record:2" not in source_ref_ids
+
+    @pytest.mark.asyncio
+    @pytest.mark.no_db
+    @patch("app.services.agent_service.get_llm")
+    @patch("app.services.report_data_service.get_monthly_report_data")
+    async def test_generate_monthly_cycle_report_does_not_mix_previous_period(
+        self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
+    ) -> None:
+        """带 cycle_id 的月报不会使用全农场上一周期对比。"""
+        report_data = _make_report_data()
+        report_data.report_type = "monthly"
+        report_data.period = {
+            "start": "2026-06-01",
+            "end": "2026-06-30",
+            "label": "本月",
+            "granularity": "month",
+        }
+        report_data.cycles = [
+            {
+                "cycle_id": 1,
+                "name": "一号棚番茄",
+                "field_name": "一号棚",
+                "current_stage": "开花期",
+                "progress_percent": 30,
+                "period_log_count": 0,
+                "total_stages": 1,
+                "current_stage_index": 1,
+                "days_elapsed": 10,
+                "source_ref_ids": ["crop_cycle:1"],
+            }
+        ]
+        report_data.previous_period = {
+            "period": {
+                "granularity": "month",
+                "start": date(2026, 5, 1),
+                "end": date(2026, 5, 31),
+            },
+            "has_baseline": True,
+            "metrics": {
+                "total_cost": "999",
+                "total_income": "888",
+                "net_profit": "-111",
+                "log_count": 99,
+                "work_order_count": 99,
+            },
+            "changes": {"net_profit": "-111"},
+        }
+        report_data.source_refs = [
+            {
+                "id": "crop_cycle:1",
+                "source_type": "crop_cycle",
+                "source_id": 1,
+                "label": "一号棚番茄",
+            }
+        ]
+        mock_report_data.return_value = report_data
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(
+            return_value=MagicMock(
+                content=json.dumps({"summary": "单茬口月报", "advice_items": []})
+            )
+        )
+        mock_get_llm.return_value = mock_llm
+
+        result = await generate_report(
+            _make_mock_db(), farm_id=1, cycle_id=1, report_type="monthly"
+        )
+
+        comparison = next(
+            section
+            for section in result.structured_data["sections"]
+            if section["type"] == "period_comparison"
+        )
+        assert comparison["data"]["has_baseline"] is False
+        assert comparison["data"]["metrics"]["net_profit"] == "0"
+        assert comparison["data"]["changes"] == {}

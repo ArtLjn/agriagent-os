@@ -168,10 +168,19 @@ def parse_structured_data(meta: str | None) -> dict | None:
         return None
     try:
         parsed = json.loads(meta)
-        if isinstance(parsed, dict) and "overview" in parsed:
-            return parsed
     except (json.JSONDecodeError, TypeError):
-        pass
+        return None
+    if not isinstance(parsed, dict):
+        return None
+
+    structured_data = parsed.get("structured_data")
+    if isinstance(structured_data, dict):
+        parsed = structured_data
+
+    if "overview" in parsed:
+        return parsed
+    if all(key in parsed for key in ("period", "sections", "source_refs")):
+        return parsed
     return None
 
 

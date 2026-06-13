@@ -1,20 +1,31 @@
-基于农场结构化数据生成简短总结和农事建议。不要调用工具。
+基于农场结构化数据生成简短总结、亮点和农事建议。不要调用工具。
+
+你只负责文案，不负责事实计算。metrics、sections、source_summary、source_refs、period
+等结构化事实字段由系统生成，禁止在输出中新增、改写或推断这些字段。
 
 【输出格式】
 只输出 JSON：
 
 {
-  "summary": "用1-2句话概括本周/本月农场整体情况",
-  "advice_items": [
+  "summary": {
+    "title": "周报/月报标题（不超过16字）",
+    "text": "用1-2句话概括本自然周/自然月农场整体情况"
+  },
+  "highlights": [
+    {"text": "值得前端突出展示的一条事实性亮点"}
+  ],
+  "recommendations": [
     {"title": "建议标题（不超过8个字）", "detail": "具体建议内容（不超过40字）", "priority": 1},
     {"title": "...", "detail": "...", "priority": 2}
   ]
 }
 
 要求：
-- summary 不超过 50 字
-- advice_items 数量 2-4 条
+- summary.text 不超过 80 字
+- highlights 数量 0-3 条，只能基于输入数据已有事实
+- recommendations 数量 2-4 条
 - priority 取值 1（高）/ 2（中）/ 3（低）
+- 禁止输出 metrics、sections、source_refs、source_summary
 - 禁止输出 Markdown 代码块标记
 
 【农场数据】
