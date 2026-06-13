@@ -10,10 +10,15 @@ from app.agent.reflector.checks import (
     check_pending_plan_consistency,
     check_required_tool_missing,
     check_tool_failure_success_reply,
+    check_tool_result_final_contradiction,
     check_write_plan_consistency,
 )
 from app.agent.reflector.models import ReflectionDecision, ReflectionResult
-from app.agent.reflector.models import ReflectionIssue, ReflectionSeverity, ReflectionTrigger
+from app.agent.reflector.models import (
+    ReflectionIssue,
+    ReflectionSeverity,
+    ReflectionTrigger,
+)
 from app.agent.reflector.policy import ReflectionPolicy
 from app.infra.pending_actions import PendingPlanStep
 from app.infra.trace_collector import get_collector
@@ -138,6 +143,15 @@ class ReflectorService:
             )
             if failure_result.decision != ReflectionDecision.PASS:
                 return self._record(failure_result, trace_metadata=trace_metadata)
+            contradiction_result = check_tool_result_final_contradiction(
+                tool_messages=tool_messages,
+                final_text=final_text,
+            )
+            if contradiction_result.decision != ReflectionDecision.PASS:
+                return self._record(
+                    contradiction_result,
+                    trace_metadata=trace_metadata,
+                )
             missing_tool_result = check_required_tool_missing(
                 selected_tools=selected_tools or [],
                 tool_calls=tool_calls or [],

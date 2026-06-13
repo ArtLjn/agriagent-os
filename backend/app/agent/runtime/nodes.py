@@ -45,6 +45,7 @@ from app.agent.runtime.messages import (
     sliding_window_compact,
 )
 from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES, check_quota
+from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.router import RouterDecision, SkillRouter
 from app.agent.skills import get_langchain_tools
@@ -591,6 +592,15 @@ async def _llm_node(state: AgentState) -> dict:
                 model_name,
                 selected_tool_names,
             )
+        response = apply_post_tool_reflection(
+            response=response,
+            tool_messages=normal_msgs,
+            selected_tool_names=selected_tool_names,
+            farm_id=farm_id,
+            session_id=state.get("session_id"),
+            intent=intent,
+        )
+        content = response.content or ""
         logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
         output_summary = content[:200]
 

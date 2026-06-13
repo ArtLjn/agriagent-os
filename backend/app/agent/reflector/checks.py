@@ -22,6 +22,7 @@ _BUSINESS_FACT_HINTS = ("有", "共", "当前", "总", "金额", "茬口", "工�
 _WRITE_PLAN_CHECK = "write_plan_consistency"
 _PENDING_PLAN_CHECK = "pending_plan_consistency"
 _TOOL_RESPONSE_CHECK = "tool_failure_success_reply"
+_TOOL_CONCLUSION_CHECK = "tool_result_final_contradiction"
 _REQUIRED_TOOL_CHECK = "required_tool_missing"
 _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9.])\d+(?:\.\d+)?(?![A-Za-z0-9.])")
 
@@ -171,6 +172,37 @@ def check_required_tool_missing(
     )
 
 
+def check_tool_result_final_contradiction(
+    *,
+    tool_messages: list[ToolMessage],
+    final_text: str,
+) -> ReflectionResult:
+    tool_numbers = _extract_numbers_from_messages(tool_messages)
+    final_numbers = _extract_numbers(final_text)
+    if not tool_numbers or not final_numbers:
+        return ReflectionResult.passed(
+            ReflectionTrigger.POST_TOOL_RESULT,
+            checks=[_TOOL_CONCLUSION_CHECK],
+        )
+    if any(number in tool_numbers for number in final_numbers):
+        return ReflectionResult.passed(
+            ReflectionTrigger.POST_TOOL_RESULT,
+            checks=[_TOOL_CONCLUSION_CHECK],
+        )
+    return _single_issue(
+        trigger=ReflectionTrigger.POST_TOOL_RESULT,
+        decision=ReflectionDecision.FALLBACK_RESPONSE,
+        checks=[_TOOL_CONCLUSION_CHECK],
+        code="tool_result_final_contradiction",
+        message="工具结果与最终回复中的关键数量不一致。",
+        evidence={
+            "tool_numbers": [str(number) for number in tool_numbers],
+            "final_numbers": [str(number) for number in final_numbers],
+            "final_text": final_text[:160],
+        },
+    )
+
+
 def _find_confirmation_mismatch(
     params: dict[str, Any],
     confirmation_text: str,
@@ -202,6 +234,23 @@ def _normalize_decimal(value: Any) -> Decimal | None:
 def _decimal_text_present(value: Decimal, text: str) -> bool:
     tokens = (_normalize_decimal(match.group(0)) for match in _NUMBER_RE.finditer(text))
     return any(token == value for token in tokens if token is not None)
+
+
+def _extract_numbers_from_messages(messages: list[ToolMessage]) -> set[Decimal]:
+    numbers: set[Decimal] = set()
+    for message in messages:
+        numbers.update(_extract_numbers(str(message.content or "")))
+    return numbers
+
+
+def _extract_numbers(text: str) -> set[Decimal]:
+    return {
+        number
+        for number in (
+            _normalize_decimal(match.group(0)) for match in _NUMBER_RE.finditer(text)
+        )
+        if number is not None
+    }
 
 
 def _contains_any(text: str, hints: Iterable[str]) -> bool:

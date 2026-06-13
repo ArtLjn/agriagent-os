@@ -12,6 +12,7 @@ from app.agent.reflector import (
 from app.agent.reflector.checks import (
     check_required_tool_missing,
     check_tool_failure_success_reply,
+    check_tool_result_final_contradiction,
     check_write_plan_consistency,
 )
 from app.agent.reflector.policy import ReflectionPolicy
@@ -145,6 +146,21 @@ def test_check_required_tool_missing_requests_retry() -> None:
     assert result.issues[0].code == "required_tool_missing"
 
 
+def test_check_tool_result_final_contradiction_blocks_number_mismatch() -> None:
+    tool_message = ToolMessage(
+        content="查询结果：当前共有 2 个茬口。",
+        tool_call_id="tc-status",
+    )
+
+    result = check_tool_result_final_contradiction(
+        tool_messages=[tool_message],
+        final_text="你现在有 3 个茬口。",
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    assert result.issues[0].code == "tool_result_final_contradiction"
+
+
 def test_reflector_service_passes_valid_pending_plan() -> None:
     service = ReflectorService(policy=ReflectionPolicy(enabled=True))
     steps = [
@@ -210,7 +226,9 @@ def test_reflector_service_tool_response_errors_do_not_break_reply() -> None:
     assert result.issues[0].code == "reflection_check_failed"
 
 
-def test_reflector_service_trace_errors_are_best_effort(monkeypatch: MonkeyPatch) -> None:
+def test_reflector_service_trace_errors_are_best_effort(
+    monkeypatch: MonkeyPatch,
+) -> None:
     class BrokenCollector:
         def record(self, **_kwargs) -> None:
             raise RuntimeError("trace down")
