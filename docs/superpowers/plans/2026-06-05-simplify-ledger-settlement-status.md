@@ -24,9 +24,9 @@
 - Modify: `/Users/ljn/Documents/demo/explore/backend/app/services/cost_service.py`
   Centralize settlement defaults, status calculation, summary aggregation, and old repayment exclusion.
 - Modify: `/Users/ljn/Documents/demo/explore/backend/app/services/debt_service.py`
-  Create unsettled debt records and update original records on settlement.
+  Create unsettled payable/receivable records and update original records on settlement.
 - Modify: `/Users/ljn/Documents/demo/explore/backend/app/api/debt.py`
-  Keep current payload shape; return updated original `CostRecord`.
+  Keep current payload shape; return updated original `CostRecord`; keep `/debts` route names for compatibility while business labels distinguish payable and receivable by `record_type`.
 - Modify: `/Users/ljn/Documents/demo/explore/backend/app/services/labor_service.py`
   Sync labor cost record `settled_amount` from labor paid amount.
 - Modify: `/Users/ljn/Documents/demo/explore/backend/app/services/report_data_service.py`
@@ -109,7 +109,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_cost.py::test_create_settled_cost_record_defaults_settlement_fields tests/test_cost.py::test_create_record_rejects_settled_amount_greater_than_amount -v
+./.venv/bin/python -m pytest tests/test_cost.py::test_create_settled_cost_record_defaults_settlement_fields tests/test_cost.py::test_create_record_rejects_settled_amount_greater_than_amount -v
 ```
 
 Expected: first test fails because `settled_amount` is missing from the response; second may fail because the schema does not validate the new field yet.
@@ -396,7 +396,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_cost.py::test_create_settled_cost_record_defaults_settlement_fields tests/test_cost.py::test_create_record_rejects_settled_amount_greater_than_amount -v
+./.venv/bin/python -m pytest tests/test_cost.py::test_create_settled_cost_record_defaults_settlement_fields tests/test_cost.py::test_create_record_rejects_settled_amount_greater_than_amount -v
 ```
 
 Expected: PASS.
@@ -411,7 +411,7 @@ git commit -m "feat: add ledger settlement fields"
 
 ---
 
-### Task 2: Debt Settlement Updates Original Ledger Record
+### Task 2: Payable and Receivable Settlement Updates Original Ledger Record
 
 **Files:**
 - Modify: `/Users/ljn/Documents/demo/explore/backend/app/services/debt_service.py`
@@ -488,18 +488,57 @@ Add this test to `TestSettleDebt`:
         ] == []
 ```
 
+Add this receivable settlement test to `TestSettleDebt`:
+
+```python
+    def test_settle_receivable_income_updates_original_record(self):
+        """收入未收款在收款时更新原收入账单，不新增收支记录。"""
+        created = client.post(
+            "/debts",
+            json={
+                "record_type": "income",
+                "category": "销售",
+                "amount": "200",
+                "record_date": date.today().isoformat(),
+                "record_subtype": "赊账",
+                "counterparty": "收瓜商",
+                "due_date": (date.today() + timedelta(days=15)).isoformat(),
+            },
+        ).json()
+
+        resp = client.post(
+            "/debts/settle",
+            json={"counterparty": "收瓜商"},
+        )
+        records = client.get("/costs").json()["items"]
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == created["id"]
+        assert data["record_type"] == "income"
+        assert data["category"] == "销售"
+        assert Decimal(data["settled_amount"]) == Decimal("200")
+        assert Decimal(data["unsettled_amount"]) == Decimal("0")
+        assert data["settlement_status"] == "settled"
+        assert [
+            item
+            for item in records
+            if item["id"] != created["id"] and item["parent_record_id"] == created["id"]
+        ] == []
+```
+
 - [ ] **Step 2: Run tests and verify they fail**
 
 Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/api/test_debt.py -v
+./.venv/bin/python -m pytest tests/api/test_debt.py -v
 ```
 
 Expected: settlement tests fail because `settle_debt` still creates an income repayment record.
 
-- [ ] **Step 3: Update debt creation to default unsettled**
+- [ ] **Step 3: Update payable/receivable creation to default unsettled**
 
 In `/Users/ljn/Documents/demo/explore/backend/app/services/debt_service.py`, import helpers:
 
@@ -512,7 +551,7 @@ from app.services.cost_service import (
 )
 ```
 
-In `create_debt_record`, add fields to `CostRecord(...)`:
+In `create_debt_record`, add fields to `CostRecord(...)`. Use the same fields for `record_type="cost"` payables and `record_type="income"` receivables so old mobile payloads with `record_subtype="赊账"` remain compatible:
 
 ```python
         settled_amount=Decimal("0.00"),
@@ -521,21 +560,21 @@ In `create_debt_record`, add fields to `CostRecord(...)`:
 
 - [ ] **Step 4: Rewrite settle_debt to update the original record**
 
-Replace `settle_debt` body after the query with:
+Replace `settle_debt` body after the query with this direct update of the original unsettled payable/receivable record:
 
 ```python
     if debt is None:
-        raise ValueError(f"未找到 {counterparty} 的未结清赊账记录")
+        raise ValueError(f"未找到 {counterparty} 的未结清账单")
 
     current_settled = Decimal(str(debt.settled_amount or 0))
     remaining = Decimal(str(debt.amount)) - current_settled
-    repay_amount = remaining if amount is None else _quantize_money(amount)
-    if repay_amount <= 0:
-        raise ValueError("还款金额必须大于 0")
-    if repay_amount > remaining:
-        repay_amount = _quantize_money(remaining)
+    settlement_amount = remaining if amount is None else _quantize_money(amount)
+    if settlement_amount <= 0:
+        raise ValueError("结算金额必须大于 0")
+    if settlement_amount > remaining:
+        settlement_amount = _quantize_money(remaining)
 
-    debt.settled_amount = _quantize_money(current_settled + repay_amount)
+    debt.settled_amount = _quantize_money(current_settled + settlement_amount)
     debt.settlement_status = settlement_status_for(debt.amount, debt.settled_amount)
     if debt.settlement_status == "settled":
         debt.settled_at = datetime.now(timezone.utc)
@@ -560,7 +599,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/api/test_debt.py -v
+./.venv/bin/python -m pytest tests/api/test_debt.py -v
 ```
 
 Expected: PASS.
@@ -679,7 +718,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_cost.py::test_yearly_summary_separates_occurred_settled_and_unsettled tests/test_cost.py::test_legacy_repayment_record_is_excluded_from_income_summary -v
+./.venv/bin/python -m pytest tests/test_cost.py::test_yearly_summary_separates_occurred_settled_and_unsettled tests/test_cost.py::test_legacy_repayment_record_is_excluded_from_income_summary -v
 ```
 
 Expected: FAIL because summary response fields do not exist and old repayment records are still included.
@@ -858,7 +897,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_cost.py::test_yearly_summary_separates_occurred_settled_and_unsettled tests/test_cost.py::test_legacy_repayment_record_is_excluded_from_income_summary tests/test_cost.py::test_cycle_profit -v
+./.venv/bin/python -m pytest tests/test_cost.py::test_yearly_summary_separates_occurred_settled_and_unsettled tests/test_cost.py::test_legacy_repayment_record_is_excluded_from_income_summary tests/test_cost.py::test_cycle_profit -v
 ```
 
 Expected: PASS.
@@ -911,7 +950,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/api/test_planting_operations.py::test_create_work_order_with_labor_generates_cost_record tests/api/test_planting_operations.py::test_save_wage_generates_single_traceable_labor_cost tests/api/test_planting_operations.py::test_duplicate_wage_save_updates_source_cost_without_duplicate_expense -v
+./.venv/bin/python -m pytest tests/api/test_planting_operations.py::test_create_work_order_with_labor_generates_cost_record tests/api/test_planting_operations.py::test_save_wage_generates_single_traceable_labor_cost tests/api/test_planting_operations.py::test_duplicate_wage_save_updates_source_cost_without_duplicate_expense -v
 ```
 
 Expected: FAIL because synced labor cost records do not set `settled_amount`.
@@ -979,7 +1018,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/api/test_planting_operations.py::test_create_work_order_with_labor_generates_cost_record tests/api/test_planting_operations.py::test_save_wage_generates_single_traceable_labor_cost tests/api/test_planting_operations.py::test_duplicate_wage_save_updates_source_cost_without_duplicate_expense -v
+./.venv/bin/python -m pytest tests/api/test_planting_operations.py::test_create_work_order_with_labor_generates_cost_record tests/api/test_planting_operations.py::test_save_wage_generates_single_traceable_labor_cost tests/api/test_planting_operations.py::test_duplicate_wage_save_updates_source_cost_without_duplicate_expense -v
 ```
 
 Expected: PASS.
@@ -1412,7 +1451,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-poetry run pytest tests/test_cost.py tests/api/test_debt.py tests/api/test_planting_operations.py -v
+./.venv/bin/python -m pytest tests/test_cost.py tests/api/test_debt.py tests/api/test_planting_operations.py -v
 ```
 
 Expected: PASS.
@@ -1434,11 +1473,11 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-ruff check .
-ruff format . --check
+./.venv/bin/ruff check .
+./.venv/bin/ruff format . --check
 ```
 
-Expected: PASS. If formatting fails, run `ruff format .`, then re-run `ruff check .` and `ruff format . --check`.
+Expected: PASS. If formatting fails, run `./.venv/bin/ruff format .`, then re-run `./.venv/bin/ruff check .` and `./.venv/bin/ruff format . --check`.
 
 Run:
 
@@ -1484,7 +1523,7 @@ git commit -m "chore: mark ledger settlement tasks complete"
 
 **Spec coverage:**  
 - `ledger-settlement-status` creation defaults are covered in Task 1 and Task 2.  
-- Settlement updates on original debt records are covered in Task 2.  
+- Settlement updates on original payable and receivable records are covered in Task 2.  
 - Occurred/settled/unsettled summaries and legacy repayment exclusion are covered in Task 3.  
 - Labor settlement alignment is covered in Task 4.  
 - Ledger UI summary and labels are covered in Task 5.  
