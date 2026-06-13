@@ -134,6 +134,25 @@ class TestComposerCompose:
         with pytest.raises(KeyError, match="nonexistent"):
             _composer.compose("nonexistent")
 
+    def test_daily_advice_v2_prompt_renders_skeleton_json(self, _composer):
+        """daily_advice 模板可渲染 v2 候选骨架 JSON。"""
+        result = _composer.compose(
+            "daily_advice",
+            variables={
+                "schema_version": "daily_advice_v2",
+                "candidate_fingerprint": "abc123",
+                "farm_context": "【今日行动候选】\n1. priority=1 title=高温错峰",
+                "candidate_skeletons_json": '[{"id":"weather:hot"}]',
+                "repair_instruction": "",
+                "cycle_id": None,
+            },
+            current_date=date(2026, 6, 13),
+        )
+
+        assert "daily_advice_v2" in result
+        assert '[{"id":"weather:hot"}]' in result
+        assert "candidate_fingerprint=abc123" in result
+
 
 class TestPriorityStack:
     """Priority Stack 排序测试。"""
