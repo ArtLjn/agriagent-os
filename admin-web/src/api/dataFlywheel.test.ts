@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import apiClient from './client';
 import {
+  acceptSamplePrelabel,
   addSampleLabel,
   createCaseDraft,
+  createSamplePrelabel,
   exportSampleJsonl,
   getSampleDetail,
   getSessionReview,
@@ -12,8 +14,10 @@ import {
   listDataFlywheelSamples,
   markBadCase,
   deleteSampleLabel,
+  rejectSamplePrelabel,
   resolveSampleLabel,
   syncDataFlywheelSessions,
+  type AcceptPrelabelRequest,
 } from './dataFlywheel';
 
 vi.mock('./client', () => ({
@@ -284,5 +288,73 @@ describe('dataFlywheel api', () => {
       '/admin/data-flywheel/sync-sessions/session-sync-1'
     );
     expect(result.status).toBe('completed');
+  });
+
+  it('触发样本 LLM 预标注', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 3,
+        sample_id: 'turn:1:s:1',
+        source: 'llm_judge',
+        status: 'pending',
+        labels: ['bad_reply'],
+        root_cause: '回复不可验证',
+        severity: 'medium',
+        confidence: 0.72,
+        reason: '证据不足但回复声称完成。',
+        recommended_fix: '要求补充证据。',
+        judge_model: 'fake-judge',
+        prompt_version: 'data-flywheel-prelabel-v1',
+      },
+    });
+
+    const result = await createSamplePrelabel('turn:1:s:1');
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/samples/turn%3A1%3As%3A1/prelabel'
+    );
+    expect(result.source).toBe('llm_judge');
+  });
+
+  it('采纳并可修改样本 LLM 预标注', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 3,
+        sample_id: 'turn:1:s:1',
+        status: 'accepted',
+        labels: ['pending_missed', 'needs_regression'],
+        accepted_label_ids: [7, 8],
+      },
+    });
+
+    const body: AcceptPrelabelRequest = {
+      labels: ['pending_missed', 'needs_regression'],
+      comment: '人工修改后采纳',
+    };
+    const result = await acceptSamplePrelabel('turn:1:s:1', 3, body);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/samples/turn%3A1%3As%3A1/prelabels/3/accept',
+      body
+    );
+    expect(result.status).toBe('accepted');
+  });
+
+  it('驳回样本 LLM 预标注', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 3,
+        sample_id: 'turn:1:s:1',
+        status: 'rejected',
+        labels: ['bad_reply'],
+      },
+    });
+
+    const result = await rejectSamplePrelabel('turn:1:s:1', 3);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/samples/turn%3A1%3As%3A1/prelabels/3/reject'
+    );
+    expect(result.status).toBe('rejected');
   });
 });
