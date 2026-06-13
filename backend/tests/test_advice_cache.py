@@ -1,5 +1,6 @@
 """每日建议缓存逻辑测试。"""
 
+import json
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -9,6 +10,10 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.models.agent_record import AgentRecord
+from app.services.daily_advice_models import (
+    DailyAdviceCandidate,
+    fingerprint_candidates,
+)
 
 
 def _today_start() -> datetime:
@@ -19,6 +24,22 @@ def _today_start() -> datetime:
 def _json_items_response(label: str) -> str:
     """构造合法 JSON 数组 LLM 返回值。"""
     return f'[{{"title":"{label}","detail":"{label}详情","priority":1,"icon":"📋"}}]'
+
+
+def _candidate(key: str, title: str) -> DailyAdviceCandidate:
+    """构造用于缓存新鲜度判断的建议候选。"""
+    return DailyAdviceCandidate(
+        id=key,
+        category="operation",
+        title_hint=title,
+        detail_hint=f"{title}详情",
+        priority=1,
+        due_date=None,
+        source_type="test",
+        source_id=None,
+        dedupe_key=key,
+        reason="缓存测试",
+    )
 
 
 @pytest.fixture
@@ -37,6 +58,17 @@ def mock_composer():
     """隔离 prompt 渲染，缓存测试只关注命中/未命中行为。"""
     with patch("app.services.agent_service.get_composer") as mock:
         mock.return_value.compose.return_value = "daily prompt"
+        yield mock
+
+
+@pytest.fixture(autouse=True)
+def mock_collect_candidates():
+    """缓存测试默认不依赖真实候选采集。"""
+    with patch(
+        "app.services.agent_service.collect_daily_advice_candidates",
+        new_callable=AsyncMock,
+    ) as mock:
+        mock.return_value = []
         yield mock
 
 
@@ -80,6 +112,69 @@ class TestDailyAdviceCache:
 
         mock_llm.assert_not_called()
         assert result.items[0].title == "缓存建议"
+
+    @pytest.mark.asyncio
+    async def test_cache_with_stale_candidate_fingerprint_regenerates(
+        self, db, mock_composer, mock_collect_candidates
+    ):
+        """候选 fingerprint 变化时应忽略今日缓存并重新生成。"""
+        today = _today_start()
+        old_candidate = _candidate("operation:old", "旧候选")
+        new_candidate = _candidate("operation:new", "新候选")
+        cached = AgentRecord(
+            farm_id=1,
+            record_type="daily",
+            content=_json_items_response("旧缓存"),
+            created_at=today,
+            meta=json.dumps(
+                {
+                    "selected_candidates": [old_candidate.to_meta()],
+                    "candidate_fingerprint": fingerprint_candidates([old_candidate]),
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.add(cached)
+        db.commit()
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_collect_candidates.return_value = [new_candidate]
+            mock_llm.return_value = _json_items_response("新建议")
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=1)
+
+        mock_llm.assert_called_once()
+        assert result.items[0].title == "新建议"
+
+    @pytest.mark.asyncio
+    async def test_legacy_debt_advice_cache_is_ignored(self, db, mock_composer):
+        """旧缓存里若含未结人工建议，应重新生成而不是继续命中。"""
+        today = _today_start()
+        cached = AgentRecord(
+            farm_id=1,
+            record_type="daily",
+            content=(
+                '[{"title":"结算工人欠款","detail":"诸葛四郎、李海、朱7'
+                '三人各有100元未付，建议尽快安排支付","priority":2,"icon":"💰"}]'
+            ),
+            created_at=today,
+        )
+        db.add(cached)
+        db.commit()
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = _json_items_response("重新生成")
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=1)
+
+        mock_llm.assert_called_once()
+        assert result.items[0].title == "重新生成"
 
     @pytest.mark.asyncio
     async def test_quota_reject_message_cache_is_ignored(self, db, mock_composer):

@@ -193,6 +193,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "有哪些分类",
     },
     "get_crop_templates": {"作物模板", "模板列表", "有哪些模板", "生长阶段模板"},
+    "get_crop_cycles": {"我的茬口", "有哪些茬口", "茬口列表", "种植批次"},
     "get_crop_cycle_info": {"茬口", "当前阶段", "周期进度", "阶段"},
     "get_recent_farm_logs": {"农事记录", "操作日志", "干了啥", "记录"},
     "get_planting_units": {"种植单元", "地块", "大棚", "棚区", "有哪些棚"},

@@ -169,168 +169,246 @@ class BusinessHeroBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasMetric = metric != null;
-    return Container(
-      height: hasMetric ? 188 : 190,
-      padding: const EdgeInsets.fromLTRB(24, 20, 18, 18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Color(0xFFD8ECFF),
-            Color(0xFFEEF7FF),
-            Color(0xFFCFE4FF),
-          ],
-        ),
-        border: Border.all(color: Colors.white),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F2F73F6),
-            blurRadius: 24,
-            offset: Offset(0, 12),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 380;
+        return Container(
+          height: hasMetric ? 188 : 166,
+          padding: EdgeInsets.fromLTRB(
+            isCompact ? 18 : 22,
+            18,
+            isCompact ? 16 : 18,
+            16,
           ),
-        ],
-      ),
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          if (hasMetric) ...const [
-            Positioned(
-              left: -28,
-              bottom: -18,
-              child: _SoftHill(width: 168, height: 54),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Color(0xFFD8ECFF),
+                Color(0xFFEEF7FF),
+                Color(0xFFCFE4FF),
+              ],
             ),
-            Positioned(
-              left: 172,
-              bottom: 18,
-              child: _SoftSprout(),
+            border: Border.all(color: Colors.white),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F2F73F6),
+                blurRadius: 24,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: hasMetric
+              ? _MetricHeroContent(
+                  title: title,
+                  subtitle: subtitle,
+                  asset: asset,
+                  accent: accent,
+                  metric: metric!,
+                )
+              : _ManualLedgerHeroContent(
+                  asset: asset,
+                  accent: accent,
+                  tags: tags.take(3).toList(),
+                  compact: isCompact,
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _MetricHeroContent extends StatelessWidget {
+  const _MetricHeroContent({
+    required this.title,
+    required this.subtitle,
+    required this.asset,
+    required this.accent,
+    required this.metric,
+  });
+
+  final String title;
+  final String subtitle;
+  final String asset;
+  final Color accent;
+  final String metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        const Positioned(
+          left: -28,
+          bottom: -18,
+          child: _SoftHill(width: 168, height: 54),
+        ),
+        const Positioned(
+          left: 172,
+          bottom: 18,
+          child: _SoftSprout(),
+        ),
+        const Positioned(
+          right: 154,
+          top: 46,
+          child: _YuanMark(),
+        ),
+        Positioned(
+          right: -4,
+          top: 2,
+          bottom: 2,
+          child: IgnorePointer(
+            child: Image.asset(
+              asset,
+              width: 176,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Icon(
+                LucideIcons.leaf,
+                size: 96,
+                color: accent.withValues(alpha: 0.7),
+              ),
             ),
-            Positioned(
-              right: 154,
-              top: 46,
-              child: _YuanMark(),
-            ),
-          ],
-          Positioned(
-            right: hasMetric ? -4 : -26,
-            top: hasMetric ? 2 : -8,
-            bottom: hasMetric ? 2 : -8,
-            child: IgnorePointer(
+          ),
+        ),
+        Positioned.fill(
+          right: 150,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: businessBlueDark,
+                  fontSize: 27,
+                  height: 33 / 27,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.body.copyWith(
+                  color: const Color(0xFF234B82),
+                  fontSize: 15,
+                  height: 21 / 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                metric,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 35,
+                  height: 40 / 35,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManualLedgerHeroContent extends StatelessWidget {
+  const _ManualLedgerHeroContent({
+    required this.asset,
+    required this.accent,
+    required this.tags,
+    required this.compact,
+  });
+
+  final String asset;
+  final Color accent;
+  final List<String> tags;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        Positioned(
+          right: compact ? -34 : -24,
+          top: -8,
+          bottom: -10,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: 0.82,
               child: Image.asset(
                 asset,
-                width: hasMetric ? 176 : 190,
+                width: compact ? 176 : 198,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => Icon(
                   LucideIcons.leaf,
-                  size: 96,
+                  size: 92,
                   color: accent.withValues(alpha: 0.7),
                 ),
               ),
             ),
           ),
-          Positioned.fill(
-            right: hasMetric ? 150 : 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (hasMetric)
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: businessBlueDark,
-                      fontSize: 27,
-                      height: 33 / 27,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                if (hasMetric) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.body.copyWith(
-                      color: const Color(0xFF234B82),
-                      fontSize: 15,
-                      height: 21 / 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.10),
+                  Colors.white.withValues(alpha: 0.52),
+                  Colors.white.withValues(alpha: 0.0),
                 ],
-                if (hasMetric) const SizedBox(height: 12),
-                if (hasMetric)
-                  Text(
-                    metric!,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 35,
-                      height: 40 / 35,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0,
-                    ),
-                  ),
-              ],
+                stops: const [0, 0.54, 1],
+              ),
             ),
           ),
-          if (!hasMetric)
-            Positioned(
-              left: -4,
-              right: -4,
-              bottom: -8,
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: 0.54,
-                  child: Image.asset(
-                    asset,
-                    height: 116,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.bottomRight,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
+        ),
+        Positioned(
+          left: 0,
+          right: compact ? 102 : 126,
+          top: 10,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in tags)
+                SoftPill(
+                  text: _compactBannerTag(tag),
+                  color: accent,
+                  background: Colors.white.withValues(alpha: 0.88),
                 ),
-              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: compact ? 118 : 148,
+          bottom: 6,
+          child: Text(
+            '清晰记录每一笔农场收支',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.title.copyWith(
+              color: businessBlueDark,
+              fontSize: compact ? 22 : 24,
+              height: 30 / 24,
+              fontWeight: FontWeight.w900,
             ),
-          if (!hasMetric)
-            Positioned.fill(
-              top: 44,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final tag in tags.take(3)) ...[
-                    Expanded(
-                      child: _BannerLargeStat(text: tag, color: accent),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                ],
-              ),
-            ),
-          if (!hasMetric)
-            Positioned(
-              left: 54,
-              right: 54,
-              bottom: 54,
-              child: Row(
-                children: [
-                  for (final tag in tags.take(3)) ...[
-                    Expanded(
-                      child: SoftPill(
-                        text: _compactBannerTag(tag),
-                        color: accent,
-                        background: Colors.white.withValues(alpha: 0.86),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                ],
-              ),
-            ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -568,7 +646,7 @@ class TemplateLibraryBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 112,
-      padding: const EdgeInsets.fromLTRB(22, 16, 18, 14),
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
@@ -593,51 +671,60 @@ class TemplateLibraryBanner extends StatelessWidget {
             top: -24,
             child: _SoftCircle(size: 112, color: Color(0xFFE7F4FF)),
           ),
-          Positioned(
-            left: -20,
-            top: -6,
-            bottom: -10,
-            child: Image.asset(
-              asset,
-              width: 104,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                LucideIcons.bookOpenText,
-                color: AppColors.green,
-                size: 64,
+          Row(
+            children: [
+              SizedBox(
+                width: 94,
+                child: Transform.translate(
+                  offset: const Offset(-8, 2),
+                  child: Image.asset(
+                    asset,
+                    height: 82,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      LucideIcons.bookOpenText,
+                      color: AppColors.green,
+                      size: 64,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 112, top: 10, right: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '模板库',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.title.copyWith(
-                    color: AppColors.ink,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '模板库',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.title.copyWith(
+                          color: AppColors.ink,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        templateCount == 0
+                            ? '还没有作物模板，可新建模板后复用'
+                            : '已创建 $templateCount 个作物模板，生成茬口更快',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.body.copyWith(
+                          color: AppColors.ink2,
+                          fontSize: 13,
+                          height: 18 / 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  templateCount == 0
-                      ? '还没有作物模板，可新建模板后复用'
-                      : '已创建 $templateCount 个作物模板，生成茬口更快',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.ink2,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -940,50 +1027,6 @@ class _CycleChip extends StatelessWidget {
 
 String _compactBannerTag(String tag) {
   return tag;
-}
-
-class _BannerLargeStat extends StatelessWidget {
-  const _BannerLargeStat({required this.text, required this.color});
-
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final parts = text.split(' ');
-    final label = parts.first;
-    final value = parts.length > 1 ? parts.sublist(1).join(' ') : text;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: AppTextStyles.small.copyWith(
-            color: AppColors.ink2,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: color == AppColors.amber ? AppColors.amber : color,
-            fontSize: 21,
-            height: 26 / 21,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class BusinessCard extends StatelessWidget {

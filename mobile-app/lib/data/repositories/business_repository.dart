@@ -29,6 +29,10 @@ class BusinessRepository {
     return ApiRecord.fromJson(response);
   }
 
+  Future<void> deleteCycle(int cycleId) async {
+    await client.delete('/cycles/$cycleId');
+  }
+
   Future<PageResult<ApiRecord>> listCropTemplates({
     int page = 1,
     int size = 20,
@@ -50,6 +54,10 @@ class BusinessRepository {
     return ApiRecord.fromJson(response);
   }
 
+  Future<void> deleteCropTemplate(int templateId) async {
+    await client.delete('/crops/templates/$templateId');
+  }
+
   Future<PageResult<ApiRecord>> listWorkerSummaries({
     bool activeOnly = false,
   }) async {
@@ -67,6 +75,10 @@ class BusinessRepository {
         ? await client.postMap('/planting/workers', data: data)
         : await client.putMap('/planting/workers/$workerId', data: data);
     return ApiRecord.fromJson(response);
+  }
+
+  Future<void> deleteWorker(int workerId) async {
+    await client.delete('/planting/workers/$workerId');
   }
 
   Future<ApiRecord> createWage(Map<String, Object?> data) async {

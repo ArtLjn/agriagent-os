@@ -14,12 +14,15 @@ void main() {
       '/cycles': paginatedCyclesResponse,
       'POST /cycles': cycleResponse,
       'PUT /cycles/7': cycleResponse,
+      'DELETE /cycles/7': {'message': 'ok'},
       '/crops/templates': paginatedCropTemplatesResponse,
       'POST /crops/templates': cropTemplateResponse,
       'PUT /crops/templates/3': cropTemplateResponse,
+      'DELETE /crops/templates/3': {'message': 'ok'},
       '/planting/workers/summary': paginatedWorkerSummariesResponse,
       'POST /planting/workers': workerResponse,
       'PUT /planting/workers/5': workerResponse,
+      'DELETE /planting/workers/5': {'message': 'ok'},
       'POST /planting/labor/wages': wageResponse,
       'POST /logs': logResponse,
       'POST /planting/work-orders': workOrderResponse,
@@ -47,10 +50,12 @@ void main() {
     await repository.listCycles();
     await repository.saveCycle({'name': '春茬番茄'});
     await repository.saveCycle({'name': '春茬番茄'}, cycleId: 7);
+    await repository.deleteCycle(7);
 
     expect(adapter.find('GET', '/cycles').query, containsPair('page', 1));
     expect(adapter.find('POST', '/cycles').data, containsPair('name', '春茬番茄'));
     expect(adapter.find('PUT', '/cycles/7').data, containsPair('name', '春茬番茄'));
+    expect(adapter.find('DELETE', '/cycles/7').path, '/cycles/7');
   });
 
   test('作物模板接口映射正确', () async {
@@ -58,6 +63,7 @@ void main() {
     await repository.saveCropTemplate({'name': '西瓜', 'stages': []});
     await repository
         .saveCropTemplate({'name': '西瓜', 'stages': []}, templateId: 3);
+    await repository.deleteCropTemplate(3);
 
     expect(
         adapter.find('GET', '/crops/templates').query, containsPair('page', 1));
@@ -65,12 +71,17 @@ void main() {
         containsPair('name', '西瓜'));
     expect(adapter.find('PUT', '/crops/templates/3').data,
         containsPair('name', '西瓜'));
+    expect(
+      adapter.find('DELETE', '/crops/templates/3').path,
+      '/crops/templates/3',
+    );
   });
 
   test('工人、工资和农事作业接口映射正确', () async {
     await repository.listWorkerSummaries();
     await repository.saveWorker({'name': '老王'});
     await repository.saveWorker({'name': '老王'}, workerId: 5);
+    await repository.deleteWorker(5);
     await repository.createWage({'worker_name': '老王'});
     await repository.createWorkOrder({'operation_type': '浇水'});
 
@@ -80,6 +91,10 @@ void main() {
         containsPair('name', '老王'));
     expect(adapter.find('PUT', '/planting/workers/5').data,
         containsPair('name', '老王'));
+    expect(
+      adapter.find('DELETE', '/planting/workers/5').path,
+      '/planting/workers/5',
+    );
     expect(adapter.find('POST', '/planting/labor/wages').data,
         containsPair('worker_name', '老王'));
     expect(adapter.find('POST', '/planting/work-orders').data,

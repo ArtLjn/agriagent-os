@@ -81,6 +81,10 @@ _READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
         "context_dependencies": ["farm", "active_cycles"],
         "evaluation_tags": ["read", "crop_cycle"],
     },
+    "get_crop_cycles": {
+        "context_dependencies": ["farm", "crop_cycles"],
+        "evaluation_tags": ["read", "crop_cycle", "list"],
+    },
     "get_recent_farm_logs": {
         "context_dependencies": ["farm", "farm_logs"],
         "evaluation_tags": ["read", "farm_logs"],

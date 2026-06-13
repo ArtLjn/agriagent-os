@@ -6,10 +6,11 @@ import '../../data/repositories/business_repository.dart';
 import '../../shared/assets/app_assets.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'bulk_delete_ui.dart';
 import 'business_ui.dart';
 import 'farm_log_create_page.dart';
 
-class FarmCycleListPage extends StatelessWidget {
+class FarmCycleListPage extends StatefulWidget {
   const FarmCycleListPage({
     super.key,
     required this.repository,
@@ -22,26 +23,45 @@ class FarmCycleListPage extends StatelessWidget {
   final ValueChanged<int>? onBottomTabChanged;
 
   @override
+  State<FarmCycleListPage> createState() => _FarmCycleListPageState();
+}
+
+class _FarmCycleListPageState extends State<FarmCycleListPage> {
+  late Future<PageResult<ApiRecord>> _cyclesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _cyclesFuture = widget.repository.listCycles();
+  }
+
+  void _reloadCycles() {
+    setState(() {
+      _cyclesFuture = widget.repository.listCycles();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BusinessPageFrame(
       title: '茬口管理',
       trailingIcon: LucideIcons.slidersHorizontal,
       showBottomTabs: true,
-      onBottomTabChanged: onBottomTabChanged,
+      onBottomTabChanged: widget.onBottomTabChanged,
       bottomOverlay: CycleCreateFab(
         label: '新建茬口',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => FarmCycleFormPage(
-              repository: repository,
-              onBottomTabChanged: onBottomTabChanged,
+              repository: widget.repository,
+              onBottomTabChanged: widget.onBottomTabChanged,
             ),
           ),
         ),
       ),
       children: [
         FutureBuilder<PageResult<ApiRecord>>(
-          future: repository.listCycles(),
+          future: _cyclesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return Column(
@@ -66,29 +86,24 @@ class FarmCycleListPage extends StatelessWidget {
                   activeColor: businessGreen,
                 ),
                 const SizedBox(height: 13),
-                if (items.isEmpty && snapshot.hasError)
-                  const BusinessCard(
-                    padding: EdgeInsets.all(18),
-                    child: Text('茬口数据加载失败，请稍后重试。'),
-                  )
-                else if (items.isEmpty)
-                  const BusinessCard(
-                    padding: EdgeInsets.all(18),
-                    child: Text('还没有茬口，先新建一个生产批次。'),
-                  )
-                else
-                  Column(
-                    children: [
-                      for (final item in items) ...[
-                        CycleListCard(
-                          record: item,
-                          repository: repository,
-                          onBottomTabChanged: onBottomTabChanged,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                    ],
+                BulkDeleteListSection(
+                  items: items,
+                  hasError: snapshot.hasError,
+                  emptyMessage: '还没有茬口，先新建一个生产批次。',
+                  errorMessage: '茬口数据加载失败，请稍后重试。',
+                  deleteTitle: '茬口',
+                  deleteSuccessName: '茬口',
+                  onDeleteRecord: widget.repository.deleteCycle,
+                  onDeleted: _reloadCycles,
+                  cardBuilder: (record, selectionMode, selected) =>
+                      CycleListCard(
+                    record: record,
+                    repository: widget.repository,
+                    onBottomTabChanged: widget.onBottomTabChanged,
+                    selectionMode: selectionMode,
+                    selected: selected,
                   ),
+                ),
               ],
             );
           },
@@ -262,11 +277,15 @@ class CycleListCard extends StatelessWidget {
     required this.record,
     required this.repository,
     this.onBottomTabChanged,
+    this.selectionMode = false,
+    this.selected = false,
   });
 
   final ApiRecord record;
   final BusinessRepository repository;
   final ValueChanged<int>? onBottomTabChanged;
+  final bool selectionMode;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -299,6 +318,7 @@ class CycleListCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SelectionCheckbox(visible: selectionMode, selected: selected),
               const CropIllustrationAvatar(
                 asset: AppAssets.businessCycleBanner,
                 size: 96,
@@ -421,14 +441,16 @@ class CycleListCard extends StatelessWidget {
                   borderColor: AppColors.greenSoft,
                   icon: LucideIcons.squarePen,
                   height: 38,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FarmLogCreatePage(
-                        repository: repository,
-                        onBottomTabChanged: onBottomTabChanged,
-                      ),
-                    ),
-                  ),
+                  onTap: selectionMode
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => FarmLogCreatePage(
+                                repository: repository,
+                                onBottomTabChanged: onBottomTabChanged,
+                              ),
+                            ),
+                          ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -441,7 +463,8 @@ class CycleListCard extends StatelessWidget {
                   borderColor: AppColors.blueSoft,
                   icon: LucideIcons.bookOpenText,
                   height: 38,
-                  onTap: () => onBottomTabChanged?.call(3),
+                  onTap:
+                      selectionMode ? null : () => onBottomTabChanged?.call(3),
                 ),
               ),
             ],

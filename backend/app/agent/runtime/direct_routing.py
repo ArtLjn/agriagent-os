@@ -11,6 +11,7 @@ DIRECT_READ_TOOLS: set[str] = {
     "get_weather_forecast",
     "get_cost_summary",
     "get_debt_summary",
+    "get_crop_cycles",
     "get_farm_status",
     "get_workers",
 }
@@ -24,6 +25,8 @@ DIRECT_RETURN_TOOLS: set[str] = {
 def direct_query_tool_names(user_msg: str, selected_names: list[str]) -> list[str]:
     """返回可跳过 LLM 工具选择的读工具名称。"""
     names = list(selected_names)
+    if "get_crop_cycles" in names and not mentions_cycle_id(user_msg):
+        return ["get_crop_cycles"]
     if (
         "get_crop_cycle_info" in names
         and "get_farm_status" in names
@@ -45,6 +48,12 @@ def can_direct_route(
 ) -> bool:
     if len(direct_names) == len(selected_names):
         return True
+    if (
+        direct_names == ["get_crop_cycles"]
+        and "get_crop_cycles" in selected_names
+        and not mentions_cycle_id(user_msg)
+    ):
+        return True
     return (
         direct_names == ["get_farm_status"]
         and set(selected_names) == {"get_crop_cycle_info", "get_farm_status"}
@@ -60,6 +69,12 @@ def can_skip_llm_tool_selection(
     direct_names: list[str],
 ) -> bool:
     if selected_names and len(direct_names) == len(selected_names):
+        return True
+    if (
+        direct_names == ["get_crop_cycles"]
+        and "get_crop_cycles" in selected_names
+        and not mentions_cycle_id(user_msg)
+    ):
         return True
     if len(tools) == 1 or len(selected_names) < len(tools):
         return True

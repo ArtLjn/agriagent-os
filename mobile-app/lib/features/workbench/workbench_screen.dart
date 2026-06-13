@@ -205,66 +205,73 @@ class _RecordActionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _RecordActionCard(
-            title: 'AI帮我填',
-            subtitle: '输入一句，自动整理成记录',
-            backgroundAsset: AppAssets.recordAiCardBackground,
-            buttonIcon: LucideIcons.sparkles,
-            buttonLabel: '立即识别',
-            foregroundColor: Colors.white,
-            buttonColor: AppColors.blueDark,
-            onTap: onAiTap,
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1593FF), Color(0xFF16C2EE)],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 380;
+        return Row(
+          children: [
+            Expanded(
+              child: _RecordActionCard(
+                compact: isCompact,
+                title: 'AI帮我填',
+                subtitle: '输入一句，自动整理成记录',
+                backgroundAsset: AppAssets.recordAiCardBackground,
+                buttonIcon: LucideIcons.sparkles,
+                buttonLabel: '立即识别',
+                foregroundColor: Colors.white,
+                buttonColor: AppColors.blueDark,
+                onTap: onAiTap,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF1593FF), Color(0xFF16C2EE)],
+                ),
+                textScrim: const LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Color(0xE60476D9),
+                    Color(0x990E9EE7),
+                    Color(0x0016C2EE),
+                  ],
+                  stops: [0, 0.48, 1],
+                ),
+                textShadowColor: Color(0x66002572),
+              ),
             ),
-            textScrim: const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Color(0xE60476D9),
-                Color(0x990E9EE7),
-                Color(0x0016C2EE),
-              ],
-              stops: [0, 0.48, 1],
+            SizedBox(width: isCompact ? 10 : 14),
+            Expanded(
+              child: _RecordActionCard(
+                compact: isCompact,
+                title: '自己填',
+                subtitle: '手动记录，快速便捷',
+                backgroundAsset: AppAssets.recordManualCardBackground,
+                buttonIcon: LucideIcons.notebookPen,
+                buttonLabel: '立即记录',
+                foregroundColor: const Color(0xFF087849),
+                buttonColor: const Color(0xFF08A969),
+                onTap: onManualTap,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFE9FFF4), Color(0xFFCFF6E4)],
+                ),
+                textScrim: const LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Color(0xF2F4FFF8),
+                    Color(0xBDEFFFF6),
+                    Color(0x00CFF6E4),
+                  ],
+                  stops: [0, 0.52, 1],
+                ),
+                textShadowColor: Color(0x99FFFFFF),
+              ),
             ),
-            textShadowColor: Color(0x66002572),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _RecordActionCard(
-            title: '自己填',
-            subtitle: '手动记录，快速便捷',
-            backgroundAsset: AppAssets.recordManualCardBackground,
-            buttonIcon: LucideIcons.notebookPen,
-            buttonLabel: '立即记录',
-            foregroundColor: const Color(0xFF087849),
-            buttonColor: const Color(0xFF08A969),
-            onTap: onManualTap,
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFE9FFF4), Color(0xFFCFF6E4)],
-            ),
-            textScrim: const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Color(0xF2F4FFF8),
-                Color(0xBDEFFFF6),
-                Color(0x00CFF6E4),
-              ],
-              stops: [0, 0.52, 1],
-            ),
-            textShadowColor: Color(0x99FFFFFF),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -282,6 +289,7 @@ class _RecordActionCard extends StatelessWidget {
     required this.textScrim,
     required this.textShadowColor,
     required this.onTap,
+    this.compact = false,
   });
 
   final String title;
@@ -295,21 +303,23 @@ class _RecordActionCard extends StatelessWidget {
   final Gradient textScrim;
   final Color textShadowColor;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final radius = compact ? 18.0 : 20.0;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: CardPanel(
-        radius: 20,
+        radius: radius,
         padding: EdgeInsets.zero,
         gradient: gradient,
         borderColor: Colors.white.withValues(alpha: 0.42),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(radius),
           child: SizedBox(
-            height: 176,
+            height: compact ? 164 : 176,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -326,7 +336,12 @@ class _RecordActionCard extends StatelessWidget {
                   decoration: BoxDecoration(gradient: textScrim),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 12 : 16,
+                    compact ? 14 : 16,
+                    compact ? 12 : 16,
+                    compact ? 12 : 14,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -336,8 +351,8 @@ class _RecordActionCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: foregroundColor,
-                          fontSize: 23,
-                          height: 29 / 23,
+                          fontSize: compact ? 21 : 23,
+                          height: compact ? 27 / 21 : 29 / 23,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0,
                           shadows: [
@@ -349,56 +364,71 @@ class _RecordActionCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.body.copyWith(
-                          color: foregroundColor.withValues(alpha: 0.94),
-                          fontSize: 13.5,
-                          height: 18 / 13.5,
-                          shadows: [
-                            Shadow(
-                              color: textShadowColor,
-                              blurRadius: 7,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
+                      SizedBox(height: compact ? 5 : 6),
+                      SizedBox(
+                        width: compact ? 116 : 132,
+                        child: Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.body.copyWith(
+                            color: foregroundColor.withValues(alpha: 0.94),
+                            fontSize: compact ? 13 : 13.5,
+                            height: compact ? 18 / 13 : 18 / 13.5,
+                            shadows: [
+                              Shadow(
+                                color: textShadowColor,
+                                blurRadius: 7,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const Spacer(),
-                      Container(
-                        height: 40,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: buttonColor,
-                          borderRadius: BorderRadius.circular(999),
-                          boxShadow: [
-                            BoxShadow(
-                              color: buttonColor.withValues(alpha: 0.24),
-                              blurRadius: 14,
-                              offset: const Offset(0, 6),
+                      SizedBox(
+                        height: compact ? 38 : 40,
+                        width: double.infinity,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: buttonColor,
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: [
+                              BoxShadow(
+                                color: buttonColor.withValues(alpha: 0.24),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 8 : 10,
                             ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(buttonIcon, color: Colors.white, size: 19),
-                            const SizedBox(width: 7),
-                            Flexible(
-                              child: Text(
-                                buttonLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.sectionTitle.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    buttonIcon,
+                                    color: Colors.white,
+                                    size: compact ? 18 : 19,
+                                  ),
+                                  SizedBox(width: compact ? 6 : 7),
+                                  Text(
+                                    buttonLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.sectionTitle.copyWith(
+                                      color: Colors.white,
+                                      fontSize: compact ? 14 : 15,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ],

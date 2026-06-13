@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import apiClient from './client';
-import { listAppSkills } from './agent';
+import { listAppSkills, refreshDailyAdvice } from './agent';
 
 vi.mock('./client', () => ({
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
@@ -35,5 +36,22 @@ describe('agent api', () => {
 
     expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/skills');
     expect(result.items[0].title).toBe('智能记账');
+  });
+
+  it('强制刷新每日建议接口', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        cycle_id: 7,
+        advice: '重新生成的建议',
+        created_at: '2026-06-13T10:00:00',
+      },
+    });
+
+    const result = await refreshDailyAdvice(7);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith('/agent/daily/refresh', null, {
+      params: { cycle_id: 7 },
+    });
+    expect(result.advice).toBe('重新生成的建议');
   });
 });

@@ -142,7 +142,26 @@ type SettingsForm = {
   default_city?: string;
   default_lat?: number | null;
   default_lon?: number | null;
+  assistant_role?: 'professional' | 'warm' | 'creative';
 };
+
+const assistantRoleOptions = [
+  {
+    value: 'professional',
+    label: '冷静专业型',
+    description: '结论优先、克制准确，适合业务问答和技术支持。',
+  },
+  {
+    value: 'warm',
+    label: '温暖陪伴型',
+    description: '自然亲切、耐心稳定，默认回答风格。',
+  },
+  {
+    value: 'creative',
+    label: '灵感创意型',
+    description: '表达鲜活、主动发散，适合创意和方案讨论。',
+  },
+] as const;
 
 const payTypeOptions = [
   { value: 'daily', label: '按天' },
@@ -1046,6 +1065,7 @@ function SystemPanel() {
       settingsForm.setFieldsValue({
         ...settingsRes.data,
         default_city: settingsRes.data.default_city ?? undefined,
+        assistant_role: settingsRes.data.assistant_role ?? 'warm',
       });
     } catch {
       message.error('加载用户与应用调试数据失败');
@@ -1137,6 +1157,28 @@ function SystemPanel() {
             <Form form={settingsForm} layout="vertical">
               <Form.Item name="display_name" label="显示名" rules={[{ required: true }]}><Input /></Form.Item>
               <Form.Item name="default_city" label="默认城市"><Input /></Form.Item>
+              <Form.Item
+                name="assistant_role"
+                label="回答风格"
+                initialValue="warm"
+                tooltip="控制芽芽回复时使用的语气提示词"
+              >
+                <Select
+                  optionLabelProp="title"
+                  options={assistantRoleOptions.map((option) => ({
+                    value: option.value,
+                    title: option.label,
+                    label: (
+                      <Space direction="vertical" size={0}>
+                        <span>{option.label}</span>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {option.description}
+                        </Typography.Text>
+                      </Space>
+                    ),
+                  }))}
+                />
+              </Form.Item>
               <Row gutter={12}>
                 <Col span={12}><Form.Item name="default_lat" label="纬度"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>
                 <Col span={12}><Form.Item name="default_lon" label="经度"><InputNumber style={{ width: '100%' }} /></Form.Item></Col>

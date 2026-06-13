@@ -370,8 +370,8 @@ async def test_workers_query_skips_initial_llm_call():
 
 
 @pytest.mark.asyncio
-async def test_generic_crop_cycle_query_routes_to_farm_status_without_llm():
-    """泛问“我的茬口”时应先查农场状态，避免让 LLM 编造 cycle_id。"""
+async def test_generic_crop_cycle_query_routes_to_cycle_list_without_llm():
+    """泛问“我的茬口”时应查询茬口列表，而不是农场状态摘要。"""
     from app.agent.graph import _llm_node
 
     with (
@@ -387,13 +387,14 @@ async def test_generic_crop_cycle_query_routes_to_farm_status_without_llm():
         patch(
             "app.agent.runtime.nodes.get_langchain_tools",
             return_value=[
+                _make_tool("get_crop_cycles"),
                 _make_tool("get_crop_cycle_info"),
                 _make_tool("get_farm_status"),
             ],
         ),
         patch(
             "app.agent.runtime.nodes.select_tools",
-            return_value=["get_crop_cycle_info", "get_farm_status"],
+            return_value=["get_crop_cycles", "get_crop_cycle_info", "get_farm_status"],
         ),
         patch("app.agent.runtime.nodes.check_quota", return_value=True),
         patch("app.agent.runtime.nodes._get_classifier") as mock_classifier,
@@ -411,9 +412,9 @@ async def test_generic_crop_cycle_query_routes_to_farm_status_without_llm():
     assert isinstance(message, AIMessage)
     assert message.tool_calls == [
         {
-            "name": "get_farm_status",
+            "name": "get_crop_cycles",
             "args": {},
-            "id": "direct_get_farm_status",
+            "id": "direct_get_crop_cycles",
             "type": "tool_call",
         }
     ]

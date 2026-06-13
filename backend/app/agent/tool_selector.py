@@ -251,6 +251,9 @@ def select_tools(
     if "get_cost_categories" in candidates:
         candidates.difference_update({"get_cost_summary", "get_cost_analytics"})
 
+    if "get_crop_cycles" in candidates:
+        candidates.difference_update({"get_crop_cycle_info", "get_farm_status"})
+
     if "manage_user_settings" in candidates:
         candidates.discard("get_user_settings")
 

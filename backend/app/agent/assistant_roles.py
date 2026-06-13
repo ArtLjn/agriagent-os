@@ -1,36 +1,43 @@
 """助手回复角色偏好。"""
 
+from pathlib import Path
 from typing import Literal
+
+import yaml
 
 AssistantRole = Literal["professional", "warm", "creative"]
 
-DEFAULT_ASSISTANT_ROLE: AssistantRole = "warm"
+_PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
+_ROLE_CONFIG_PATH = _PROMPTS_DIR / "assistant_roles.yaml"
+
+
+def _load_role_config() -> dict:
+    """从 prompts 目录读取助手角色配置。"""
+    data = yaml.safe_load(_ROLE_CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    roles = data.get("roles") or {}
+    if not isinstance(roles, dict) or "warm" not in roles:
+        raise ValueError("assistant_roles.yaml 缺少 roles.warm 默认角色配置")
+    return data
+
+
+_ROLE_CONFIG = _load_role_config()
+_ROLE_DEFINITIONS: dict[str, dict] = _ROLE_CONFIG["roles"]
+
+DEFAULT_ASSISTANT_ROLE: AssistantRole = _ROLE_CONFIG.get("default", "warm")
 
 ASSISTANT_ROLE_LABELS: dict[str, str] = {
-    "professional": "冷静专业型",
-    "warm": "温暖陪伴型",
-    "creative": "灵感创意型",
+    role: str(definition["label"])
+    for role, definition in _ROLE_DEFINITIONS.items()
 }
 
 ASSISTANT_ROLE_TEMPERATURES: dict[str, float] = {
-    "professional": 0.3,
-    "warm": 0.6,
-    "creative": 0.8,
+    role: float(definition["temperature"])
+    for role, definition in _ROLE_DEFINITIONS.items()
 }
 
 ASSISTANT_ROLE_PROMPTS: dict[str, str] = {
-    "professional": (
-        "语气偏好：冷静专业型。回复应简洁、准确、克制，先给结论再补充必要解释；"
-        "不使用夸张表达，遇到不确定信息要明确说明。"
-    ),
-    "warm": (
-        "语气偏好：温暖陪伴型。回复应自然、亲切、耐心，先理解用户处境再给建议；"
-        "可以适度鼓励，但不要油腻、夸张或说教。"
-    ),
-    "creative": (
-        "语气偏好：灵感创意型。回复应鲜活、有画面感，主动提供多个方向和变体；"
-        "可以适度轻松有趣，但仍要清晰、实用。"
-    ),
+    role: str(definition["prompt"])
+    for role, definition in _ROLE_DEFINITIONS.items()
 }
 
 

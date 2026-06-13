@@ -102,7 +102,9 @@ async def build_summary(db: Session, farm_id: int) -> str:
     # 各部分分别查询并组装
     cycle_line = _build_cycle_line(db, farm_id)
     log_line = _build_log_line(db, farm_id)
-    debt_line = _build_unsettled_labor_line(db, farm_id) or _build_debt_line(db, farm_id)
+    debt_line = _build_unsettled_labor_line(db, farm_id) or _build_debt_line(
+        db, farm_id
+    )
     cost_line = _build_cost_line(db, farm_id)
     weather_line = await _build_weather_line(db, farm_id)
 
@@ -153,7 +155,12 @@ def _build_cycle_line(db: Session, farm_id: int) -> str:
         area_text = _format_cycle_area(db, cycle, farm_id)
         end_str = ""
         if current_stage and current_stage.end_date:
-            end_str = f"(预计{current_stage.end_date.isoformat()}采收)"
+            end_label = (
+                "预计采收"
+                if "采收" in str(getattr(current_stage, "name", ""))
+                else "阶段至"
+            )
+            end_str = f"({end_label}{current_stage.end_date.isoformat()})"
         parts.append(f"{cycle.name}{area_text}({stage_name}{end_str})")
 
     return "、".join(parts)
@@ -167,7 +174,9 @@ def _format_cycle_area(db: Session, cycle: CropCycle, farm_id: int) -> str:
         try:
             unit_count, unit_area = (
                 db.query(func.count(PlantingUnit.id), func.sum(PlantingUnit.area_mu))
-                .filter(PlantingUnit.farm_id == farm_id, PlantingUnit.cycle_id == cycle.id)
+                .filter(
+                    PlantingUnit.farm_id == farm_id, PlantingUnit.cycle_id == cycle.id
+                )
                 .first()
             )
         except Exception:

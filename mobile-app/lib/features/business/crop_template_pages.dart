@@ -6,10 +6,11 @@ import '../../data/repositories/business_repository.dart';
 import '../../shared/assets/app_assets.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'bulk_delete_ui.dart';
 import 'business_ui.dart';
 import 'farm_cycle_pages.dart';
 
-class CropTemplateListPage extends StatelessWidget {
+class CropTemplateListPage extends StatefulWidget {
   const CropTemplateListPage({
     super.key,
     required this.repository,
@@ -22,6 +23,25 @@ class CropTemplateListPage extends StatelessWidget {
   final ValueChanged<int>? onBottomTabChanged;
 
   @override
+  State<CropTemplateListPage> createState() => _CropTemplateListPageState();
+}
+
+class _CropTemplateListPageState extends State<CropTemplateListPage> {
+  late Future<PageResult<ApiRecord>> _templatesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _templatesFuture = widget.repository.listCropTemplates();
+  }
+
+  void _reloadTemplates() {
+    setState(() {
+      _templatesFuture = widget.repository.listCropTemplates();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BusinessPageFrame(
       title: '作物模板',
@@ -29,16 +49,16 @@ class CropTemplateListPage extends StatelessWidget {
       trailingOnTap: () => Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => CropTemplateFormPage(
-            repository: repository,
-            onBottomTabChanged: onBottomTabChanged,
+            repository: widget.repository,
+            onBottomTabChanged: widget.onBottomTabChanged,
           ),
         ),
       ),
       showBottomTabs: true,
-      onBottomTabChanged: onBottomTabChanged,
+      onBottomTabChanged: widget.onBottomTabChanged,
       children: [
         FutureBuilder<PageResult<ApiRecord>>(
-          future: repository.listCropTemplates(),
+          future: _templatesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Column(
@@ -66,29 +86,24 @@ class CropTemplateListPage extends StatelessWidget {
                 const SizedBox(height: 13),
                 const ChipRail(items: ['全部', '瓜果', '蔬菜', '粮食']),
                 const SizedBox(height: 13),
-                if (items.isEmpty && snapshot.hasError)
-                  const BusinessCard(
-                    padding: EdgeInsets.all(18),
-                    child: Text('作物模板加载失败，请稍后重试。'),
-                  )
-                else if (items.isEmpty)
-                  const BusinessCard(
-                    padding: EdgeInsets.all(18),
-                    child: Text('还没有作物模板。'),
-                  )
-                else
-                  Column(
-                    children: [
-                      for (final item in items) ...[
-                        TemplateListCard(
-                          record: item,
-                          repository: repository,
-                          onBottomTabChanged: onBottomTabChanged,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                    ],
+                BulkDeleteListSection(
+                  items: items,
+                  hasError: snapshot.hasError,
+                  emptyMessage: '还没有作物模板。',
+                  errorMessage: '作物模板加载失败，请稍后重试。',
+                  deleteTitle: '作物模板',
+                  deleteSuccessName: '作物模板',
+                  onDeleteRecord: widget.repository.deleteCropTemplate,
+                  onDeleted: _reloadTemplates,
+                  cardBuilder: (record, selectionMode, selected) =>
+                      TemplateListCard(
+                    record: record,
+                    repository: widget.repository,
+                    onBottomTabChanged: widget.onBottomTabChanged,
+                    selectionMode: selectionMode,
+                    selected: selected,
                   ),
+                ),
               ],
             );
           },
@@ -245,11 +260,15 @@ class TemplateListCard extends StatelessWidget {
     required this.record,
     required this.repository,
     this.onBottomTabChanged,
+    this.selectionMode = false,
+    this.selected = false,
   });
 
   final ApiRecord record;
   final BusinessRepository repository;
   final ValueChanged<int>? onBottomTabChanged;
+  final bool selectionMode;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +287,7 @@ class TemplateListCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SelectionCheckbox(visible: selectionMode, selected: selected),
               SizedBox(
                 width: 104,
                 child: Image.asset(
@@ -332,14 +352,16 @@ class TemplateListCard extends StatelessWidget {
                   borderColor: AppColors.blueSoft,
                   icon: LucideIcons.layers,
                   height: 42,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FarmCycleFormPage(
-                        repository: repository,
-                        onBottomTabChanged: onBottomTabChanged,
-                      ),
-                    ),
-                  ),
+                  onTap: selectionMode
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => FarmCycleFormPage(
+                                repository: repository,
+                                onBottomTabChanged: onBottomTabChanged,
+                              ),
+                            ),
+                          ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -351,14 +373,16 @@ class TemplateListCard extends StatelessWidget {
                   borderColor: AppColors.purpleSoft,
                   icon: LucideIcons.pencil,
                   height: 42,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => CropTemplateFormPage(
-                        repository: repository,
-                        onBottomTabChanged: onBottomTabChanged,
-                      ),
-                    ),
-                  ),
+                  onTap: selectionMode
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CropTemplateFormPage(
+                                repository: repository,
+                                onBottomTabChanged: onBottomTabChanged,
+                              ),
+                            ),
+                          ),
                 ),
               ),
             ],

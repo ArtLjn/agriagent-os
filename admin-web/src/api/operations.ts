@@ -146,6 +146,7 @@ export interface UserSettings {
   default_city?: string | null;
   default_lat?: number | null;
   default_lon?: number | null;
+  assistant_role?: 'professional' | 'warm' | 'creative';
 }
 
 export interface FeedbackStats {

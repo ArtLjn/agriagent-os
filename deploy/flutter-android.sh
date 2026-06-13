@@ -13,6 +13,19 @@ cd "$APP_DIR"
 
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/tmp/codex-gradle-home}"
 
+if [ -x "$APP_DIR/android/gradlew" ]; then
+  "$APP_DIR/android/gradlew" --stop >/dev/null 2>&1 || true
+fi
+
+GRADLE_WORK_CACHE_DIR="$GRADLE_USER_HOME/caches/8.14"
+if [ -d "$GRADLE_WORK_CACHE_DIR" ]; then
+  echo "清理 Gradle 8.14 可再生工作缓存：$GRADLE_WORK_CACHE_DIR"
+  rm -rf "$GRADLE_WORK_CACHE_DIR" 2>/dev/null || {
+    sleep 1
+    rm -rf "$GRADLE_WORK_CACHE_DIR" 2>/dev/null || true
+  }
+fi
+
 if ! adb devices | grep -q "^${DEVICE_ID}[[:space:]]*device"; then
   echo "启动安卓模拟器：$EMULATOR_ID"
   flutter emulators --launch "$EMULATOR_ID"

@@ -49,6 +49,22 @@ parameters:
 - “张三那边还欠多少” -> `counterparty=张三`, `direction=payable`。
 - “别人欠我多少钱” -> `direction=receivable`。
 
+## 缺参策略
+
+缺少参数时默认查询我方应付普通赊账；用户问总欠款时合并未付人工。
+
+## Runtime 策略
+
+- permission: read
+- direct_call: true
+- direct_return: true
+- cache: 读取欠款上下文。
+
 ## 失败处理
 
 查询失败时返回中文说明。没有未结赊账时返回空汇总，不要臆造欠款。
+
+## 示例
+
+- 用户：“我还欠多少钱” -> `get_debt_summary(scope="total_payable", direction="payable")`
+- 用户：“赊账还欠多少” -> `get_debt_summary(scope="debt_only", direction="payable")`

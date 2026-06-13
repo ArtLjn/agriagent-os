@@ -40,7 +40,7 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
   const assistantReply = findMessage(detail, 'assistant') || detail.sample.assistant_reply_preview || '';
 
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space direction="vertical" size={12} style={detailStackStyle}>
       {detail.issue_candidates.length > 0 && (
         <Card title="问题定位" style={cardStyle} styles={{ body: { padding: 14 } }}>
           <Space direction="vertical" size={10} style={{ width: '100%' }}>
@@ -63,14 +63,14 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
       )}
 
       <Card title="样本详情" style={cardStyle} styles={{ body: { padding: 14 } }}>
-        <Row gutter={[12, 12]}>
+        <Row gutter={[12, 12]} align="stretch">
           <Col xs={24} lg={12}>
-            <Section title="user input">
+            <Section title="user input" height={180}>
               <Typography.Paragraph style={paragraphStyle}>{userInput || '无用户输入'}</Typography.Paragraph>
             </Section>
           </Col>
           <Col xs={24} lg={12}>
-            <Section title="assistant reply">
+            <Section title="assistant reply" height={360}>
               <Typography.Paragraph style={paragraphStyle}>{assistantReply || '无助手回复'}</Typography.Paragraph>
             </Section>
           </Col>
@@ -169,21 +169,43 @@ function eventLogStatusColor(status?: string) {
   return 'default';
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  height,
+  children,
+}: {
+  title: string;
+  height: number;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={sectionStyle}>
+    <div style={{ ...sectionStyle, height }}>
       <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>{title}</Typography.Text>
-      <div style={{ marginTop: 8 }}>{children}</div>
+      <div style={sectionBodyStyle}>{children}</div>
     </div>
   );
 }
 
+const detailStackStyle: CSSProperties = {
+  width: '100%',
+  paddingRight: 2,
+};
+
 const sectionStyle: CSSProperties = {
-  minHeight: 168,
   background: palette.bg,
   border: `1px solid ${palette.borderSoft}`,
   borderRadius: 6,
   padding: 12,
+  display: 'flex',
+  flexDirection: 'column',
+  minWidth: 0,
+};
+
+const sectionBodyStyle: CSSProperties = {
+  marginTop: 8,
+  minHeight: 0,
+  overflow: 'auto',
+  scrollbarGutter: 'stable',
 };
 
 const issueStyle: CSSProperties = {
@@ -202,10 +224,11 @@ const paragraphStyle: CSSProperties = {
 
 const jsonBlockStyle: CSSProperties = {
   margin: 0,
-  maxHeight: 360,
+  maxHeight: 300,
   overflow: 'auto',
   whiteSpace: 'pre-wrap',
   color: palette.textMuted,
   background: palette.bg,
   padding: 14,
+  borderRadius: 6,
 };

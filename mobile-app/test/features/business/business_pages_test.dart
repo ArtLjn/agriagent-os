@@ -20,8 +20,11 @@ void main() {
       'POST /costs': costRecordResponse,
       'POST /logs': logResponse,
       'POST /cycles': cycleResponse,
+      'DELETE /cycles/7': {'message': 'ok'},
       'POST /crops/templates': cropTemplateResponse,
+      'DELETE /crops/templates/3': {'message': 'ok'},
       'POST /planting/workers': workerResponse,
+      'DELETE /planting/workers/4': {'message': 'ok'},
       'POST /planting/labor/wages': wageResponse,
       ...overrides,
     });
@@ -78,6 +81,28 @@ void main() {
     expect(find.text('玉米秋茬'), findsNothing);
   });
 
+  testWidgets('茬口管理页长按进入多选并批量删除', (tester) async {
+    await pump(tester, FarmCycleListPage(repository: repository));
+
+    await tester.longPress(find.text('春茬'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选 1 个'), findsOneWidget);
+    expect(find.byType(Checkbox), findsOneWidget);
+    expect(find.text('删除 1 项'), findsOneWidget);
+
+    await tester.tap(find.text('删除 1 项'));
+    await tester.pumpAndSettle();
+    expect(find.text('删除选中的茬口？'), findsOneWidget);
+
+    await tester.tap(find.text('确认删除'));
+    await tester.pumpAndSettle();
+
+    expect(adapter.find('DELETE', '/cycles/7').path, '/cycles/7');
+    expect(find.text('已删除 1 个茬口'), findsOneWidget);
+    expect(find.text('删除 1 项'), findsNothing);
+  });
+
   testWidgets('新建茬口页渲染字段和底部操作', (tester) async {
     await pump(tester, FarmCycleFormPage(repository: repository));
 
@@ -125,6 +150,31 @@ void main() {
     expect(find.text('8424西瓜'), findsNothing);
     expect(find.text('普罗旺斯番茄'), findsNothing);
     expect(find.text('甜玉米'), findsNothing);
+  });
+
+  testWidgets('作物模板页长按进入多选并批量删除', (tester) async {
+    await pump(tester, CropTemplateListPage(repository: repository));
+
+    await tester.longPress(find.text('番茄').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选 1 个'), findsOneWidget);
+    expect(find.byType(Checkbox), findsOneWidget);
+    expect(find.text('删除 1 项'), findsOneWidget);
+
+    await tester.tap(find.text('删除 1 项'));
+    await tester.pumpAndSettle();
+    expect(find.text('删除选中的作物模板？'), findsOneWidget);
+
+    await tester.tap(find.text('确认删除'));
+    await tester.pumpAndSettle();
+
+    expect(
+      adapter.find('DELETE', '/crops/templates/3').path,
+      '/crops/templates/3',
+    );
+    expect(find.text('已删除 1 个作物模板'), findsOneWidget);
+    expect(find.text('删除 1 项'), findsNothing);
   });
 
   testWidgets('作物模板表单页渲染阶段编辑字段', (tester) async {
@@ -187,6 +237,31 @@ void main() {
     expect(find.text('老王'), findsNothing);
     expect(find.text('老李'), findsNothing);
     expect(find.text('小赵'), findsNothing);
+  });
+
+  testWidgets('工人管理页长按进入多选并批量删除', (tester) async {
+    await pump(tester, WorkerListPage(repository: repository));
+
+    await tester.longPress(find.text('张三'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选 1 个'), findsOneWidget);
+    expect(find.byType(Checkbox), findsOneWidget);
+    expect(find.text('删除 1 项'), findsOneWidget);
+
+    await tester.tap(find.text('删除 1 项'));
+    await tester.pumpAndSettle();
+    expect(find.text('删除选中的工人档案？'), findsOneWidget);
+
+    await tester.tap(find.text('确认删除'));
+    await tester.pumpAndSettle();
+
+    expect(
+      adapter.find('DELETE', '/planting/workers/4').path,
+      '/planting/workers/4',
+    );
+    expect(find.text('已删除 1 个工人档案'), findsOneWidget);
+    expect(find.text('删除 1 项'), findsNothing);
   });
 
   testWidgets('工人表单页渲染工资默认项和保存按钮', (tester) async {

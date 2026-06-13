@@ -133,7 +133,9 @@ function CollapsedRail({
 function workspaceStyle(leftCollapsed: boolean, rightCollapsed: boolean): CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: `${leftCollapsed ? '52px' : '300px'} minmax(0, 1fr) ${rightCollapsed ? '52px' : 'minmax(380px, 520px)'}`,
+    gridTemplateColumns: `${leftCollapsed ? '52px' : '300px'} minmax(420px, 1fr) ${
+      rightCollapsed ? '52px' : 'clamp(480px, 34vw, 680px)'
+    }`,
     gap: 14,
     alignItems: 'start',
   };
@@ -141,6 +143,9 @@ function workspaceStyle(leftCollapsed: boolean, rightCollapsed: boolean): CSSPro
 
 const sidePanelStyle: CSSProperties = {
   minWidth: 0,
+  maxHeight: 'calc(100vh - 158px)',
+  overflow: 'auto',
+  scrollbarGutter: 'stable',
 };
 
 const mainPanelStyle: CSSProperties = {

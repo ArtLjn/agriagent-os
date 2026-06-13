@@ -6,10 +6,11 @@ import '../../data/repositories/business_repository.dart';
 import '../../shared/assets/app_assets.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'bulk_delete_ui.dart';
 import 'business_ui.dart';
 import 'wage_create_page.dart';
 
-class WorkerListPage extends StatelessWidget {
+class WorkerListPage extends StatefulWidget {
   const WorkerListPage({
     super.key,
     required this.repository,
@@ -22,15 +23,34 @@ class WorkerListPage extends StatelessWidget {
   final ValueChanged<int>? onBottomTabChanged;
 
   @override
+  State<WorkerListPage> createState() => _WorkerListPageState();
+}
+
+class _WorkerListPageState extends State<WorkerListPage> {
+  late Future<PageResult<ApiRecord>> _workersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _workersFuture = widget.repository.listWorkerSummaries();
+  }
+
+  void _reloadWorkers() {
+    setState(() {
+      _workersFuture = widget.repository.listWorkerSummaries();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BusinessPageFrame(
       title: '工人管理',
       trailingIcon: LucideIcons.slidersHorizontal,
       showBottomTabs: true,
-      onBottomTabChanged: onBottomTabChanged,
+      onBottomTabChanged: widget.onBottomTabChanged,
       children: [
         FutureBuilder<PageResult<ApiRecord>>(
-          future: repository.listWorkerSummaries(),
+          future: _workersFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Column(
@@ -73,8 +93,8 @@ class WorkerListPage extends StatelessWidget {
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => WageCreatePage(
-                              repository: repository,
-                              onBottomTabChanged: onBottomTabChanged,
+                              repository: widget.repository,
+                              onBottomTabChanged: widget.onBottomTabChanged,
                             ),
                           ),
                         ),
@@ -91,8 +111,8 @@ class WorkerListPage extends StatelessWidget {
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => WorkerFormPage(
-                              repository: repository,
-                              onBottomTabChanged: onBottomTabChanged,
+                              repository: widget.repository,
+                              onBottomTabChanged: widget.onBottomTabChanged,
                             ),
                           ),
                         ),
@@ -105,25 +125,22 @@ class WorkerListPage extends StatelessWidget {
                 const SizedBox(height: 13),
                 const ChipRail(items: ['全部', '有欠款', '已结清', '停用']),
                 const SizedBox(height: 13),
-                if (items.isEmpty && snapshot.hasError)
-                  const BusinessCard(
-                    padding: EdgeInsets.all(18),
-                    child: Text('工人档案加载失败，请稍后重试。'),
-                  )
-                else if (items.isEmpty)
-                  const BusinessCard(
-                    padding: EdgeInsets.all(18),
-                    child: Text('还没有工人档案。'),
-                  )
-                else
-                  Column(
-                    children: [
-                      for (final item in items) ...[
-                        WorkerListCard(record: item),
-                        const SizedBox(height: 12),
-                      ],
-                    ],
+                BulkDeleteListSection(
+                  items: items,
+                  hasError: snapshot.hasError,
+                  emptyMessage: '还没有工人档案。',
+                  errorMessage: '工人档案加载失败，请稍后重试。',
+                  deleteTitle: '工人档案',
+                  deleteSuccessName: '工人档案',
+                  onDeleteRecord: widget.repository.deleteWorker,
+                  onDeleted: _reloadWorkers,
+                  cardBuilder: (record, selectionMode, selected) =>
+                      WorkerListCard(
+                    record: record,
+                    selectionMode: selectionMode,
+                    selected: selected,
                   ),
+                ),
               ],
             );
           },
@@ -330,9 +347,16 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
 }
 
 class WorkerListCard extends StatelessWidget {
-  const WorkerListCard({super.key, required this.record});
+  const WorkerListCard({
+    super.key,
+    required this.record,
+    this.selectionMode = false,
+    this.selected = false,
+  });
 
   final ApiRecord record;
+  final bool selectionMode;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -346,6 +370,7 @@ class WorkerListCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       child: Row(
         children: [
+          SelectionCheckbox(visible: selectionMode, selected: selected),
           AssetAvatar(
             asset: AppAssets.businessWorkerAvatar1,
             size: 74,

@@ -34,6 +34,9 @@ _manage_units_mod = importlib.import_module(
 _get_templates_mod = importlib.import_module(
     "app.agent.skills.get-crop-templates.scripts.main"
 )
+_get_cycles_mod = importlib.import_module(
+    "app.agent.skills.get-crop-cycles.scripts.main"
+)
 _manage_templates_mod = importlib.import_module(
     "app.agent.skills.manage-crop-templates.scripts.main"
 )
@@ -56,6 +59,7 @@ ManageCostCategoriesSkill = _manage_categories_mod.ManageCostCategoriesSkill
 GetPlantingUnitsSkill = _get_units_mod.GetPlantingUnitsSkill
 ManagePlantingUnitsSkill = _manage_units_mod.ManagePlantingUnitsSkill
 GetCropTemplatesSkill = _get_templates_mod.GetCropTemplatesSkill
+GetCropCyclesSkill = _get_cycles_mod.GetCropCyclesSkill
 ManageCropTemplatesSkill = _manage_templates_mod.ManageCropTemplatesSkill
 ManageFarmLogsSkill = _manage_logs_mod.ManageFarmLogsSkill
 DeleteCropCycleSkill = _delete_cycle_mod.DeleteCropCycleSkill
@@ -77,6 +81,7 @@ def patched_skill_sessions(monkeypatch, db_session):
         _get_units_mod,
         _manage_units_mod,
         _get_templates_mod,
+        _get_cycles_mod,
         _manage_templates_mod,
         _manage_logs_mod,
         _delete_cycle_mod,
@@ -132,6 +137,39 @@ def _create_cycle(db, template: CropTemplate | None = None) -> CropCycle:
             start_date=date(2026, 3, 1),
             end_date=date(2026, 3, 10),
             duration_days=10,
+            order_index=0,
+            is_current=True,
+        )
+    )
+    db.commit()
+    db.refresh(cycle)
+    return cycle
+
+
+def _create_named_cycle(
+    db,
+    template: CropTemplate,
+    *,
+    name: str,
+    status: str,
+    start_date: date,
+) -> CropCycle:
+    cycle = CropCycle(
+        farm_id=1,
+        name=name,
+        crop_template_id=template.id,
+        start_date=start_date,
+        status=status,
+    )
+    db.add(cycle)
+    db.flush()
+    db.add(
+        CycleStage(
+            cycle_id=cycle.id,
+            name="播种期",
+            start_date=start_date,
+            end_date=start_date,
+            duration_days=1,
             order_index=0,
             is_current=True,
         )
@@ -242,6 +280,33 @@ async def test_crop_template_skills_list_update_delete(patched_skill_sessions, c
     )
     assert deleted.status.value == "success"
     assert patched_skill_sessions.get(CropTemplate, template.id) is None
+
+
+@pytest.mark.asyncio
+async def test_get_crop_cycles_lists_all_cycles(patched_skill_sessions, ctx):
+    template = _create_template(patched_skill_sessions)
+    _create_named_cycle(
+        patched_skill_sessions,
+        template,
+        name="夏季水稻",
+        status="active",
+        start_date=date(2026, 6, 1),
+    )
+    _create_named_cycle(
+        patched_skill_sessions,
+        template,
+        name="春季大豆",
+        status="finished",
+        start_date=date(2026, 3, 1),
+    )
+
+    listed = await GetCropCyclesSkill().execute({}, ctx)
+
+    assert listed.status.value == "success"
+    assert "茬口列表" in listed.reply
+    assert "夏季水稻" in listed.reply
+    assert "春季大豆" in listed.reply
+    assert "农场现状" not in listed.reply
 
 
 @pytest.mark.asyncio

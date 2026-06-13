@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -5,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.schemas.agent import ChatRequest
+from app.services.daily_advice_models import DailyAdviceCandidate
 from app.services.agent_service import (
     chat_with_agent,
     get_daily_advice,
@@ -250,6 +252,84 @@ class TestStreamChatWithAgent:
 
 class TestGetDailyAdvice:
     """测试每日建议服务。"""
+
+    @pytest.mark.asyncio
+    @patch("app.services.agent_service.collect_daily_advice_candidates")
+    @patch("app.services.agent_service.get_composer")
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_uses_ranked_candidates_for_generation(
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
+    ) -> None:
+        """每日建议生成应接入结构化候选并保存候选元数据。"""
+        candidate = DailyAdviceCandidate(
+            id="operation:work_order:7",
+            category="operation",
+            title_hint="今日完成追肥",
+            detail_hint="玉米拔节期作业单今日到期。",
+            priority=1,
+            due_date=date(2026, 6, 12),
+            source_type="operation_work_order",
+            source_id=7,
+            dedupe_key="operation_work_order:7",
+            reason="作业单日期进入今日建议窗口",
+        )
+        mock_collect_candidates.return_value = [candidate]
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
+        mock_invoke.return_value = (
+            '{"preview":"今日追肥","items":['
+            '{"title":"追肥","detail":"按作业单完成追肥","priority":1,"icon":"🌱"}'
+            "]}"
+        )
+        mock_db = _make_mock_db()
+
+        await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        mock_collect_candidates.assert_awaited_once_with(mock_db, farm_id=1)
+        variables = mock_get_composer.return_value.compose.call_args.kwargs["variables"]
+        assert "今日行动候选" in variables["farm_context"]
+        assert "今日完成追肥" in variables["farm_context"]
+
+        saved_record = mock_db.add.call_args.args[0]
+        saved_meta = json.loads(saved_record.meta)
+        assert saved_meta["selected_candidates"][0]["id"] == candidate.id
+        assert saved_meta["candidate_fingerprint"]
+
+    @pytest.mark.asyncio
+    @patch("app.services.farm_context_service.build_summary")
+    @patch("app.services.agent_service.collect_daily_advice_candidates")
+    @patch("app.services.agent_service.get_composer")
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_does_not_fallback_to_debt_summary(
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
+        mock_build_summary: AsyncMock,
+    ) -> None:
+        """无候选时不能把旧摘要里的欠账/未结人工喂给今日建议。"""
+        mock_collect_candidates.return_value = []
+        mock_build_summary.return_value = (
+            "【农场现状】\n"
+            "欠账：诸葛四郎未付100元、李海未付100元、朱7未付100元"
+        )
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
+        mock_invoke.return_value = (
+            '[{"title":"巡田","detail":"今日暂无明确高优先级行动，例行观察即可",'
+            '"priority":3,"icon":"📋"}]'
+        )
+        mock_db = _make_mock_db()
+
+        await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        mock_build_summary.assert_not_awaited()
+        variables = mock_get_composer.return_value.compose.call_args.kwargs["variables"]
+        assert variables["farm_context"] == "今日无明确高优先级行动候选。"
+        assert "欠账" not in variables["farm_context"]
+        assert "未付" not in variables["farm_context"]
+        assert "诸葛四郎" not in variables["farm_context"]
 
     @pytest.mark.asyncio
     @patch("app.services.agent_service.get_composer")
