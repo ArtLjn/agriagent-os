@@ -13,9 +13,18 @@ from sqlalchemy.orm import Session
 from app.infra.agent_events import read_event_segment
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import ConversationMessage
-from app.models.data_flywheel import AgentCaseDraft, AgentDataFlywheelLabel
+from app.models.data_flywheel import (
+    AgentCaseDraft,
+    AgentDataFlywheelLabel,
+    AgentDataFlywheelPrelabel,
+)
 from app.services.data_flywheel_case_builder import build_case_json
 from app.services.data_flywheel_issue_detector import detect_issue_candidates
+from app.services.data_flywheel_judge_service import (
+    DataFlywheelJudgeClient,
+    build_judge_input,
+    normalize_judge_output,
+)
 from app.services.session_debug_export_service import build_session_debug_export
 
 ALLOWED_LABELS = {
@@ -37,6 +46,10 @@ SAMPLE_TYPE_SESSION_TURN = "session_turn"
 SAMPLE_TYPE_SESSION = "session"
 LABEL_STATUS_OPEN = "open"
 LABEL_STATUS_RESOLVED = "resolved"
+PRELABEL_STATUS_PENDING = "pending"
+PRELABEL_STATUS_ACCEPTED = "accepted"
+PRELABEL_STATUS_REJECTED = "rejected"
+PRELABEL_SOURCE_LLM_JUDGE = "llm_judge"
 _ALLOWED_TARGET_TYPES = {"simulation", "evaluation_replay"}
 CHAT_RECORD_SOURCE_MYSQL = "mysql_conversation_messages"
 EVENT_LOG_STATUS_AVAILABLE = "available"
@@ -112,6 +125,29 @@ def _labels_by_sample(
         .all()
     )
     grouped: dict[str, list[AgentDataFlywheelLabel]] = defaultdict(list)
+    for row in rows:
+        grouped[row.sample_id].append(row)
+    return dict(grouped)
+
+
+def _prelabels_by_sample(
+    db: Session, *, farm_id: int, sample_ids: list[str]
+) -> dict[str, list[AgentDataFlywheelPrelabel]]:
+    if not sample_ids:
+        return {}
+    rows = (
+        db.query(AgentDataFlywheelPrelabel)
+        .filter(
+            AgentDataFlywheelPrelabel.farm_id == farm_id,
+            AgentDataFlywheelPrelabel.sample_id.in_(sample_ids),
+        )
+        .order_by(
+            AgentDataFlywheelPrelabel.created_at.desc(),
+            AgentDataFlywheelPrelabel.id.desc(),
+        )
+        .all()
+    )
+    grouped: dict[str, list[AgentDataFlywheelPrelabel]] = defaultdict(list)
     for row in rows:
         grouped[row.sample_id].append(row)
     return dict(grouped)
@@ -224,6 +260,7 @@ def list_samples(
     )
     sample_ids = [_sample_id(turn) for turn in turns]
     labels = _labels_by_sample(db, sample_ids)
+    prelabels = _prelabels_by_sample(db, farm_id=farm_id, sample_ids=sample_ids)
     session_sample_ids = [
         session_sample_id(farm_id=turn.farm_id, session_id=turn.session_id)
         for turn in turns
@@ -238,6 +275,7 @@ def list_samples(
                 session_sample_id(farm_id=turn.farm_id, session_id=turn.session_id),
                 [],
             ),
+            prelabels=prelabels.get(_sample_id(turn), []),
         )
         for turn in turns
     ]
@@ -274,46 +312,18 @@ def add_sample_label(
             annotator_id=annotator_id,
         )
 
-    turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
-    if session_id is not None and session_id != turn.session_id:
-        raise ValueError("SAMPLE_NOT_FOUND")
-    if turn_id is not None and turn_id != turn.id:
-        raise ValueError("SAMPLE_NOT_FOUND")
-    if request_id is not None and request_id != turn.request_id:
-        raise ValueError("SAMPLE_NOT_FOUND")
-
-    existing = (
-        db.query(AgentDataFlywheelLabel)
-        .filter(
-            AgentDataFlywheelLabel.farm_id == farm_id,
-            AgentDataFlywheelLabel.sample_id == sample_id,
-            AgentDataFlywheelLabel.sample_type == sample_type,
-            AgentDataFlywheelLabel.label == label,
-        )
-        .first()
+    row = _upsert_sample_label_row(
+        db,
+        farm_id=farm_id,
+        sample_id=sample_id,
+        label=label,
+        sample_type=sample_type,
+        session_id=session_id,
+        turn_id=turn_id,
+        request_id=request_id,
+        comment=comment,
+        annotator_id=annotator_id,
     )
-    if existing:
-        existing.session_id = turn.session_id
-        existing.turn_id = turn.id
-        existing.request_id = turn.request_id
-        existing.comment = comment
-        existing.annotator_id = annotator_id
-        existing.status = LABEL_STATUS_OPEN
-        row = existing
-    else:
-        row = AgentDataFlywheelLabel(
-            farm_id=farm_id,
-            sample_id=sample_id,
-            sample_type=sample_type,
-            session_id=turn.session_id,
-            turn_id=turn.id,
-            request_id=turn.request_id,
-            label=label,
-            status=LABEL_STATUS_OPEN,
-            comment=comment,
-            annotator_id=annotator_id,
-        )
-        db.add(row)
     db.commit()
     db.refresh(row)
     return _label_to_dict(row)
@@ -373,6 +383,62 @@ def _add_session_label(
     db.commit()
     db.refresh(row)
     return _label_to_dict(row)
+
+
+def _upsert_sample_label_row(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_id: str,
+    label: str,
+    sample_type: str,
+    session_id: str | None = None,
+    turn_id: int | None = None,
+    request_id: str | None = None,
+    comment: str | None = None,
+    annotator_id: str | None = None,
+) -> AgentDataFlywheelLabel:
+    turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
+    if session_id is not None and session_id != turn.session_id:
+        raise ValueError("SAMPLE_NOT_FOUND")
+    if turn_id is not None and turn_id != turn.id:
+        raise ValueError("SAMPLE_NOT_FOUND")
+    if request_id is not None and request_id != turn.request_id:
+        raise ValueError("SAMPLE_NOT_FOUND")
+
+    existing = (
+        db.query(AgentDataFlywheelLabel)
+        .filter(
+            AgentDataFlywheelLabel.farm_id == farm_id,
+            AgentDataFlywheelLabel.sample_id == sample_id,
+            AgentDataFlywheelLabel.sample_type == sample_type,
+            AgentDataFlywheelLabel.label == label,
+        )
+        .first()
+    )
+    if existing:
+        existing.session_id = turn.session_id
+        existing.turn_id = turn.id
+        existing.request_id = turn.request_id
+        existing.comment = comment
+        existing.annotator_id = annotator_id
+        existing.status = LABEL_STATUS_OPEN
+        return existing
+
+    row = AgentDataFlywheelLabel(
+        farm_id=farm_id,
+        sample_id=sample_id,
+        sample_type=sample_type,
+        session_id=turn.session_id,
+        turn_id=turn.id,
+        request_id=turn.request_id,
+        label=label,
+        status=LABEL_STATUS_OPEN,
+        comment=comment,
+        annotator_id=annotator_id,
+    )
+    db.add(row)
+    return row
 
 
 def delete_sample_label(
@@ -446,11 +512,16 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
     turn = _turn_for_sample(db, farm_id=farm_id, sample_id=sample_id)
     events = _events_for_turn(turn)
     labels = _labels_by_sample(db, [sample_id]).get(sample_id, [])
-    sample = _sample_row(turn, labels, events)
+    prelabels = _prelabels_by_sample(
+        db, farm_id=farm_id, sample_ids=[sample_id]
+    ).get(sample_id, [])
+    sample = _sample_row(turn, labels, events, prelabels=prelabels)
     return {
         "sample": sample,
         "quality_labels": _open_quality_labels(labels),
         "labels": [_label_to_dict(row) for row in labels],
+        "prelabels": [_prelabel_to_dict(row) for row in prelabels],
+        "latest_prelabel": _prelabel_to_dict(prelabels[0]) if prelabels else None,
         "messages": _messages_for_turn(db, turn),
         "turn": _turn_to_dict(turn),
         "router_decision": _router_decision(events),
@@ -462,6 +533,114 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
         "source": _source_to_dict(turn),
         "issue_candidates": sample["issue_candidates"],
     }
+
+
+def create_sample_prelabel(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_id: str,
+    judge_client: DataFlywheelJudgeClient,
+) -> dict[str, Any]:
+    """调用 LLM judge 为样本创建 pending 预标注。"""
+    detail = get_sample_detail(db, farm_id=farm_id, sample_id=sample_id)
+    sample = detail["sample"]
+    payload = build_judge_input(detail)
+    raw = judge_client.judge(payload)
+    normalized = normalize_judge_output(raw)
+
+    row = AgentDataFlywheelPrelabel(
+        farm_id=farm_id,
+        sample_id=sample_id,
+        sample_type=SAMPLE_TYPE_SESSION_TURN,
+        session_id=sample["session_id"],
+        turn_id=sample["turn_id"],
+        request_id=sample["request_id"],
+        source=PRELABEL_SOURCE_LLM_JUDGE,
+        status=PRELABEL_STATUS_PENDING,
+        labels=normalized["labels"],
+        root_cause=normalized["root_cause"],
+        severity=normalized["severity"],
+        confidence=normalized["confidence"],
+        reason=normalized["reason"],
+        recommended_fix=normalized["recommended_fix"],
+        judge_model=judge_client.judge_model,
+        prompt_version=judge_client.prompt_version,
+        raw_response=raw,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _prelabel_to_dict(row)
+
+
+def accept_sample_prelabel(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_id: str,
+    prelabel_id: int,
+    labels: list[str] | None = None,
+    comment: str | None = None,
+    annotator_id: str | None = None,
+) -> dict[str, Any]:
+    """采纳预标注并写入人工标签。"""
+    row = _prelabel_for_sample(
+        db, farm_id=farm_id, sample_id=sample_id, prelabel_id=prelabel_id
+    )
+    if row.status != PRELABEL_STATUS_PENDING:
+        raise ValueError("PRELABEL_ALREADY_REVIEWED")
+    selected_labels = _unique_labels(
+        labels if labels is not None else list(row.labels or [])
+    )
+    if not selected_labels:
+        raise ValueError("INVALID_LABEL")
+    if any(label not in ALLOWED_LABELS for label in selected_labels):
+        raise ValueError("INVALID_LABEL")
+
+    accepted_label_ids: list[int] = []
+    for label in selected_labels:
+        label_row = _upsert_sample_label_row(
+            db,
+            farm_id=farm_id,
+            sample_id=sample_id,
+            sample_type=SAMPLE_TYPE_SESSION_TURN,
+            label=label,
+            comment=comment,
+            annotator_id=annotator_id,
+        )
+        db.flush()
+        accepted_label_ids.append(int(label_row.id))
+
+    row.status = PRELABEL_STATUS_ACCEPTED
+    row.accepted_label_ids = accepted_label_ids
+    row.reviewed_by = annotator_id
+    row.reviewed_at = datetime.now()
+    db.commit()
+    db.refresh(row)
+    return _prelabel_to_dict(row)
+
+
+def reject_sample_prelabel(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_id: str,
+    prelabel_id: int,
+    annotator_id: str | None = None,
+) -> dict[str, Any]:
+    """拒绝预标注，不写入人工标签。"""
+    row = _prelabel_for_sample(
+        db, farm_id=farm_id, sample_id=sample_id, prelabel_id=prelabel_id
+    )
+    if row.status != PRELABEL_STATUS_PENDING:
+        raise ValueError("PRELABEL_ALREADY_REVIEWED")
+    row.status = PRELABEL_STATUS_REJECTED
+    row.reviewed_by = annotator_id
+    row.reviewed_at = datetime.now()
+    db.commit()
+    db.refresh(row)
+    return _prelabel_to_dict(row)
 
 
 def export_sample_jsonl(db: Session, *, farm_id: int, sample_id: str) -> dict[str, str]:
@@ -545,6 +724,23 @@ def _turn_for_sample(db: Session, *, farm_id: int, sample_id: str) -> AgentTurn:
     return turn
 
 
+def _prelabel_for_sample(
+    db: Session, *, farm_id: int, sample_id: str, prelabel_id: int
+) -> AgentDataFlywheelPrelabel:
+    row = (
+        db.query(AgentDataFlywheelPrelabel)
+        .filter(
+            AgentDataFlywheelPrelabel.id == prelabel_id,
+            AgentDataFlywheelPrelabel.farm_id == farm_id,
+            AgentDataFlywheelPrelabel.sample_id == sample_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise ValueError("PRELABEL_NOT_FOUND")
+    return row
+
+
 def _session_exists(db: Session, *, farm_id: int, session_id: str) -> bool:
     return (
         db.query(AgentTurn.id)
@@ -560,11 +756,13 @@ def _sample_row(
     events: list[dict[str, Any]],
     *,
     session_labels: list[AgentDataFlywheelLabel] | None = None,
+    prelabels: list[AgentDataFlywheelPrelabel] | None = None,
 ) -> dict[str, Any]:
     router_decision = _router_decision(events)
     selected_tools = _selected_tools(router_decision)
     pending_lifecycle = _pending_lifecycle(events)
     session_labels = session_labels or []
+    prelabels = prelabels or []
     quality_labels = _open_quality_labels(labels)
     session_quality_labels = _open_quality_labels(session_labels)
     event_log_status = _event_log_status(turn, events)
@@ -590,6 +788,8 @@ def _sample_row(
         ),
         "quality_labels": quality_labels,
         "annotation_status": "labeled" if quality_labels else "unlabeled",
+        "prelabels": [_prelabel_to_dict(row) for row in prelabels],
+        "latest_prelabel": _prelabel_to_dict(prelabels[0]) if prelabels else None,
         "session_quality_labels": session_quality_labels,
         "session_annotation_status": (
             "labeled" if session_quality_labels else "unlabeled"
@@ -667,6 +867,43 @@ def _label_to_dict(row: AgentDataFlywheelLabel) -> dict[str, Any]:
         "comment": row.comment,
         "annotator_id": row.annotator_id,
     }
+
+
+def _prelabel_to_dict(row: AgentDataFlywheelPrelabel) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "sample_id": row.sample_id,
+        "sample_type": row.sample_type,
+        "session_id": row.session_id,
+        "turn_id": row.turn_id,
+        "request_id": row.request_id,
+        "source": row.source,
+        "status": row.status,
+        "labels": row.labels or [],
+        "root_cause": row.root_cause,
+        "severity": row.severity,
+        "confidence": row.confidence,
+        "reason": row.reason,
+        "recommended_fix": row.recommended_fix,
+        "judge_model": row.judge_model,
+        "prompt_version": row.prompt_version,
+        "accepted_label_ids": row.accepted_label_ids or [],
+        "reviewed_by": row.reviewed_by,
+        "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def _unique_labels(labels: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for label in labels:
+        if label in seen:
+            continue
+        seen.add(label)
+        unique.append(label)
+    return unique
 
 
 def _open_quality_labels(

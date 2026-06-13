@@ -5,7 +5,11 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.data_flywheel import AgentCaseDraft, AgentDataFlywheelLabel
+from app.models.data_flywheel import (
+    AgentCaseDraft,
+    AgentDataFlywheelLabel,
+    AgentDataFlywheelPrelabel,
+)
 from app.models.farm import Farm
 
 pytestmark = pytest.mark.no_db
@@ -94,6 +98,48 @@ def test_agent_case_draft_round_trip():
     assert loaded.case_json["user_input"] == "王大妈工资 100 一天"
     assert loaded.case_json["reply_assertions"] == [{"contains": "100"}]
     assert loaded.case_json["metadata"]["source_sample_id"] == "turn:1:sess-1:12"
+    assert loaded.created_at is not None
+    assert loaded.updated_at is not None
+    db.close()
+
+
+def test_agent_data_flywheel_prelabel_round_trip():
+    db = Session()
+    prelabel = AgentDataFlywheelPrelabel(
+        farm_id=1,
+        sample_id="turn:1:sess-1:12",
+        sample_type="session_turn",
+        session_id="sess-1",
+        turn_id=12,
+        request_id="abcd1234",
+        source="llm_judge",
+        status="pending",
+        labels=["bad_reply", "pending_missed"],
+        root_cause="写操作缺少 pending 确认",
+        severity="high",
+        confidence=0.86,
+        reason="回复声称已安排，但证据中没有完整确认链路。",
+        recommended_fix="写操作必须先创建 pending plan。",
+        judge_model="gpt-4.1-mini",
+        prompt_version="data-flywheel-prelabel-v1",
+        raw_response={"labels": ["bad_reply", "pending_missed"]},
+    )
+    db.add(prelabel)
+    db.commit()
+    db.refresh(prelabel)
+
+    loaded = db.query(AgentDataFlywheelPrelabel).filter_by(id=prelabel.id).one()
+
+    assert loaded.id is not None
+    assert loaded.source == "llm_judge"
+    assert loaded.status == "pending"
+    assert loaded.labels == ["bad_reply", "pending_missed"]
+    assert loaded.root_cause == "写操作缺少 pending 确认"
+    assert loaded.severity == "high"
+    assert loaded.confidence == 0.86
+    assert loaded.accepted_label_ids is None
+    assert loaded.reviewed_by is None
+    assert loaded.reviewed_at is None
     assert loaded.created_at is not None
     assert loaded.updated_at is not None
     db.close()

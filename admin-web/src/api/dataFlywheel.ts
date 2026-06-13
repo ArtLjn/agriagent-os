@@ -10,6 +10,8 @@ export type DataFlywheelLabel =
   | 'sensitive_info_leak'
   | 'missing_wage'
   | 'disabled_worker_used'
+  | 'tool_error_ignored'
+  | 'unclear_intent'
   | 'needs_regression'
   | 'not_actionable';
 
@@ -21,11 +23,40 @@ export interface DataFlywheelIssueCandidate {
   suggested_label: DataFlywheelLabel | string;
 }
 
+export type DataFlywheelPrelabelStatus = 'pending' | 'accepted' | 'rejected' | string;
+export type DataFlywheelPrelabelSource = 'llm_judge' | string;
+
+export interface DataFlywheelPrelabel {
+  id: number;
+  sample_id: string;
+  sample_type: string;
+  session_id: string | null;
+  turn_id: number | null;
+  request_id: string | null;
+  source: DataFlywheelPrelabelSource;
+  status: DataFlywheelPrelabelStatus;
+  labels: DataFlywheelLabel[];
+  root_cause: string | null;
+  severity: 'critical' | 'high' | 'medium' | 'low' | string;
+  confidence: number;
+  reason: string;
+  recommended_fix: string | null;
+  judge_model: string;
+  prompt_version: string;
+  accepted_label_ids?: number[] | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface DataFlywheelSample {
   sample_id: string;
   sample_type: string;
   quality_labels: DataFlywheelLabel[];
   annotation_status: string;
+  prelabels?: DataFlywheelPrelabel[];
+  latest_prelabel?: DataFlywheelPrelabel | null;
   session_quality_labels?: DataFlywheelLabel[];
   session_annotation_status?: string;
   session_labels?: DataFlywheelLabelRecord[];
@@ -95,6 +126,7 @@ export interface DataFlywheelDetail {
   sample: DataFlywheelSample;
   quality_labels: DataFlywheelLabel[];
   labels: DataFlywheelLabelRecord[];
+  prelabels: DataFlywheelPrelabel[];
   messages: DataFlywheelMessage[];
   turn: Record<string, unknown> | null;
   router_decision: Record<string, unknown> | null;
@@ -133,6 +165,11 @@ export interface AddSampleLabelRequest {
   session_id?: string;
   turn_id?: number;
   request_id?: string;
+  comment?: string | null;
+}
+
+export interface AcceptPrelabelRequest {
+  labels?: DataFlywheelLabel[];
   comment?: string | null;
 }
 
@@ -186,6 +223,33 @@ export async function listDataFlywheelSamples(
 
 export async function getSampleDetail(sampleId: string): Promise<DataFlywheelDetail> {
   const response = await apiClient.get<DataFlywheelDetail>(samplePath(sampleId));
+  return response.data;
+}
+
+export async function createSamplePrelabel(sampleId: string): Promise<DataFlywheelPrelabel> {
+  const response = await apiClient.post<DataFlywheelPrelabel>(`${samplePath(sampleId)}/prelabel`);
+  return response.data;
+}
+
+export async function acceptSamplePrelabel(
+  sampleId: string,
+  prelabelId: number,
+  body: AcceptPrelabelRequest
+): Promise<DataFlywheelPrelabel> {
+  const response = await apiClient.post<DataFlywheelPrelabel>(
+    `${samplePath(sampleId)}/prelabels/${prelabelId}/accept`,
+    body
+  );
+  return response.data;
+}
+
+export async function rejectSamplePrelabel(
+  sampleId: string,
+  prelabelId: number
+): Promise<DataFlywheelPrelabel> {
+  const response = await apiClient.post<DataFlywheelPrelabel>(
+    `${samplePath(sampleId)}/prelabels/${prelabelId}/reject`
+  );
   return response.data;
 }
 

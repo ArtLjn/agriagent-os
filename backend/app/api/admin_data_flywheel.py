@@ -9,19 +9,27 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_farm, get_current_user, get_db, require_admin
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.farm import Farm
 from app.models.user import User
 from app.services.data_flywheel_service import (
     SAMPLE_TYPE_SESSION_TURN,
+    accept_sample_prelabel,
     add_sample_label,
     build_case_draft,
+    create_sample_prelabel,
     delete_sample_label,
     export_sample_jsonl,
     get_session_annotation_detail,
     get_sample_detail,
     list_samples,
+    reject_sample_prelabel,
     resolve_sample_label,
+)
+from app.services.data_flywheel_judge_service import (
+    DataFlywheelJudgeClient,
+    OpenAIDataFlywheelJudgeClient,
 )
 from app.services.data_flywheel_session_review_service import get_session_review
 from app.services.data_flywheel_session_sync_service import sync_session_events
@@ -56,6 +64,11 @@ class ExportJsonlRequest(BaseModel):
 
 class CaseDraftRequest(BaseModel):
     target_type: str = "evaluation_replay"
+
+
+class AcceptPrelabelRequest(BaseModel):
+    labels: list[str] | None = None
+    comment: str | None = None
 
 
 class SyncSessionsRequest(BaseModel):
@@ -284,6 +297,73 @@ def resolve_admin_data_flywheel_label(
         raise _http_error(exc) from exc
 
 
+@router.post("/samples/{sample_id}/prelabel")
+def create_admin_data_flywheel_prelabel(
+    sample_id: str,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """管理员手动触发 LLM 预标注。"""
+    try:
+        if not settings.data_flywheel.llm_prelabel_enabled:
+            raise ValueError("LLM_PRELABEL_DISABLED")
+        judge_client = build_data_flywheel_judge_client()
+        return create_sample_prelabel(
+            db,
+            farm_id=farm.id,
+            sample_id=sample_id,
+            judge_client=judge_client,
+        )
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/samples/{sample_id}/prelabels/{prelabel_id}/accept")
+def accept_admin_data_flywheel_prelabel(
+    sample_id: str,
+    prelabel_id: int,
+    body: AcceptPrelabelRequest | None = None,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+    user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """采纳 LLM 预标注，可由管理员修改标签和备注。"""
+    payload = body or AcceptPrelabelRequest()
+    try:
+        return accept_sample_prelabel(
+            db,
+            farm_id=farm.id,
+            sample_id=sample_id,
+            prelabel_id=prelabel_id,
+            labels=payload.labels,
+            comment=payload.comment,
+            annotator_id=user.id,
+        )
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/samples/{sample_id}/prelabels/{prelabel_id}/reject")
+def reject_admin_data_flywheel_prelabel(
+    sample_id: str,
+    prelabel_id: int,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+    user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """拒绝 LLM 预标注，不写入人工质量标签。"""
+    try:
+        return reject_sample_prelabel(
+            db,
+            farm_id=farm.id,
+            sample_id=sample_id,
+            prelabel_id=prelabel_id,
+            annotator_id=user.id,
+        )
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
 @router.post("/samples/{sample_id}/bad-case")
 def mark_admin_data_flywheel_bad_case(
     sample_id: str,
@@ -346,8 +426,40 @@ def build_admin_data_flywheel_case_draft(
 
 def _http_error(exc: ValueError) -> HTTPException:
     code = str(exc)
-    status_code = 404 if code in {"SAMPLE_NOT_FOUND", "LABEL_NOT_FOUND"} else 400
+    status_code = (
+        404
+        if code in {"SAMPLE_NOT_FOUND", "LABEL_NOT_FOUND", "PRELABEL_NOT_FOUND"}
+        else 400
+    )
     return HTTPException(status_code=status_code, detail={"code": code})
+
+
+def build_data_flywheel_judge_client() -> DataFlywheelJudgeClient:
+    try:
+        from app.core.llm_client_manager import get_llm_manager
+
+        manager = get_llm_manager()
+        if not manager.fallback_mode:
+            client, info = manager.get_sync_client_with_info(role="generation")
+            return OpenAIDataFlywheelJudgeClient(
+                client=client,
+                judge_model=str(info["model"]),
+            )
+    except Exception:
+        pass
+
+    if not settings.ai_api_key:
+        raise ValueError("JUDGE_CLIENT_NOT_CONFIGURED")
+
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise ValueError("JUDGE_CLIENT_NOT_CONFIGURED") from exc
+
+    return OpenAIDataFlywheelJudgeClient(
+        client=OpenAI(api_key=settings.ai_api_key, base_url=settings.ai_base_url),
+        judge_model=settings.ai_model,
+    )
 
 
 __all__ = ["router"]

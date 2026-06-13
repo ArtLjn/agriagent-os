@@ -45,3 +45,7 @@ langsmith:
   api_key: ""
   project_name: "farm-manager"
   enabled: false
+
+data_flywheel:
+  # 默认关闭；只有管理员手动触发 AI 预判且开关开启时才会消耗 judge token。
+  llm_prelabel_enabled: false

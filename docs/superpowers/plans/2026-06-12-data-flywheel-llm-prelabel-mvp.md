@@ -1,10 +1,15 @@
+---
+last_updated: 2026-06-12
+status: active
+---
+
 # DataFlywheel LLM Prelabel MVP Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 DataFlywheel 从“规则候选 -> 人工标注 -> case draft”扩展为“规则候选 -> LLM 预标注 -> 人工采纳/修改/驳回 -> case draft / regression”。
 
-**Architecture:** 新增独立 `agent_data_flywheel_prelabels` 表保存 `llm_judge` 预标注，人工未采纳前不写入 `agent_data_flywheel_labels`，也不进入 `quality_labels`、case draft、regression 或 SFT 真值。后端新增 judge service，把 sample detail/debug evidence 归一化后交给可注入 judge client，输出固定结构；API 暴露生成、采纳、驳回三个动作；前端在现有 `AnnotationPanel` 增加 AI 预判卡片，支持采纳、修改后保存、驳回。
+**Architecture:** 新增独立 `agent_data_flywheel_prelabels` 表保存 `llm_judge` 预标注，人工未采纳前不写入 `agent_data_flywheel_labels`，也不进入 `quality_labels`、case draft、regression 或 SFT 真值。后端新增 judge service，把 sample detail/debug evidence 归一化后交给可注入 judge client，输出固定结构；API 暴露生成、采纳、驳回三个动作，其中生成接口受配置开关保护且默认关闭。前端在现有 `AnnotationPanel` 增加 AI 预判卡片，只在管理员手动点击“AI 预判”时触发，不随列表或详情加载自动调用。
 
 **Tech Stack:** FastAPI, SQLAlchemy, Alembic, pytest, React, TypeScript, Ant Design, Vitest.
 
@@ -14,7 +19,7 @@
 
 本计划只覆盖 LLM 自动预标注 MVP：
 
-- 包含：DB 表、SQLAlchemy 模型、Alembic 迁移、judge service、DataFlywheel service/API 编排、前端 API 类型和 AI 预判 UI。
+- 包含：DB 表、SQLAlchemy 模型、Alembic 迁移、judge service、DataFlywheel service/API 编排、配置开关、前端 API 类型和 AI 预判 UI。
 - 包含：人工采纳/修改后才写入 `agent_data_flywheel_labels`，驳回只更新预标注状态。
 - 包含：服务/API/前端 Vitest 测试命令。
 - 不包含：批量预标注任务、队列、prompt 后台调优面板、统计报表、dataset 版本管理、DB-backed simulation cases。
@@ -86,6 +91,8 @@ git status --short
 
 - `agent_data_flywheel_prelabels.source` 固定为 `llm_judge`。
 - `agent_data_flywheel_prelabels.status = "pending"` 或 `"rejected"` 时，不写入 `agent_data_flywheel_labels`。
+- `data_flywheel.llm_prelabel_enabled` 默认 `false`；未开启时 `POST /prelabel` 返回 `LLM_PRELABEL_DISABLED`，不调用 judge client，不消耗 token。
+- 只有管理员手动调用 `POST /admin/data-flywheel/samples/{sample_id}/prelabel` 才能创建预标注；列表、详情、刷新和筛选流程都不得自动触发 judge。
 - `get_sample_detail()["quality_labels"]` 只来自 `AgentDataFlywheelLabel` 的 open 人工标签。
 - `export_sample_jsonl()` 和 `build_case_draft()` 只读取 `quality_labels`，最多在 metadata 附带 `prelabels` 作为参考信息，不能把未采纳的 labels 写成真值。
 - `accept_prelabel()` 支持人工修改 labels/comment 后保存，写入 label 的 `annotator_id` 是当前管理员，预标注记录只保存 `accepted_label_ids` 作为来源追溯。
@@ -238,7 +245,7 @@ Create `/Users/ljn/Documents/demo/explore/backend/alembic/versions/20260612_agen
 """add data flywheel llm prelabels
 
 Revision ID: 20260612_agent_data_flywheel_prelabels
-Revises: 20260612_agent_data_flywheel_label_status
+Revises: 20260612_add_user_assistant_role
 Create Date: 2026-06-12 18:00:00.000000
 """
 
@@ -250,7 +257,7 @@ from sqlalchemy import inspect
 
 
 revision: str = "20260612_agent_data_flywheel_prelabels"
-down_revision: Union[str, None] = "20260612_agent_data_flywheel_label_status"
+down_revision: Union[str, None] = "20260612_add_user_assistant_role"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -1087,6 +1094,11 @@ git commit -m "feat: wire data flywheel prelabel lifecycle"
 ### Task 4: Add Admin API Endpoints
 
 **Files:**
+- Modify: `/Users/ljn/Documents/demo/explore/backend/app/core/settings/models.py`
+- Modify: `/Users/ljn/Documents/demo/explore/backend/app/core/settings/settings.py`
+- Modify: `/Users/ljn/Documents/demo/explore/backend/app/core/settings/__init__.py`
+- Modify: `/Users/ljn/Documents/demo/explore/backend/app/core/config.py`
+- Modify: `/Users/ljn/Documents/demo/explore/backend/config.yaml.example`
 - Modify: `/Users/ljn/Documents/demo/explore/backend/app/api/admin_data_flywheel.py`
 - Modify: `/Users/ljn/Documents/demo/explore/backend/tests/api/test_admin_data_flywheel.py`
 
@@ -1095,6 +1107,37 @@ git commit -m "feat: wire data flywheel prelabel lifecycle"
 Append to `/Users/ljn/Documents/demo/explore/backend/tests/api/test_admin_data_flywheel.py`:
 
 ```python
+def test_prelabel_endpoint_is_disabled_by_default(client, monkeypatch):
+    class FailingJudgeClient:
+        judge_model = "should-not-run"
+        prompt_version = "data-flywheel-prelabel-v1"
+
+        def judge(self, payload):
+            raise AssertionError("disabled prelabel endpoint must not call judge")
+
+    monkeypatch.setattr(
+        admin_data_flywheel_api,
+        "build_data_flywheel_judge_client",
+        lambda: FailingJudgeClient(),
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        False,
+    )
+    sample_id = _sample_id(_seed_turn(db_session, tmp_path))
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        response = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/prelabel",
+            headers=admin_headers(),
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "LLM_PRELABEL_DISABLED"
+
+
 def test_prelabel_endpoint_creates_pending_llm_judge_prelabel(
     db_session, tmp_path, monkeypatch
 ) -> None:
@@ -1116,6 +1159,11 @@ def test_prelabel_endpoint_creates_pending_llm_judge_prelabel(
         admin_data_flywheel_api,
         "build_data_flywheel_judge_client",
         lambda: FakeApiJudgeClient(),
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
     )
     turn = _seed_turn(db_session, tmp_path)
     sample_id = _sample_id(turn)
@@ -1162,6 +1210,11 @@ def test_accept_prelabel_endpoint_supports_human_modified_labels(
         admin_data_flywheel_api,
         "build_data_flywheel_judge_client",
         lambda: FakeApiJudgeClient(),
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
     )
     turn = _seed_turn(db_session, tmp_path)
     sample_id = _sample_id(turn)
@@ -1215,6 +1268,11 @@ def test_reject_prelabel_endpoint_does_not_write_quality_labels(
         "build_data_flywheel_judge_client",
         lambda: FakeApiJudgeClient(),
     )
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
+    )
     turn = _seed_turn(db_session, tmp_path)
     sample_id = _sample_id(turn)
 
@@ -1246,7 +1304,7 @@ Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-.venv/bin/python -m pytest tests/api/test_admin_data_flywheel.py::test_prelabel_endpoint_creates_pending_llm_judge_prelabel tests/api/test_admin_data_flywheel.py::test_accept_prelabel_endpoint_supports_human_modified_labels tests/api/test_admin_data_flywheel.py::test_reject_prelabel_endpoint_does_not_write_quality_labels -q
+.venv/bin/python -m pytest tests/api/test_admin_data_flywheel.py::test_prelabel_endpoint_is_disabled_by_default tests/api/test_admin_data_flywheel.py::test_prelabel_endpoint_creates_pending_llm_judge_prelabel tests/api/test_admin_data_flywheel.py::test_accept_prelabel_endpoint_supports_human_modified_labels tests/api/test_admin_data_flywheel.py::test_reject_prelabel_endpoint_does_not_write_quality_labels -q
 ```
 
 Expected: FAIL with 404 or missing imported service functions.
@@ -1282,11 +1340,51 @@ class AcceptPrelabelRequest(BaseModel):
     comment: str | None = None
 ```
 
-- [ ] **Step 4: Add judge client factory placeholder**
+- [ ] **Step 4: Add DataFlywheel config switch**
+
+Modify `/Users/ljn/Documents/demo/explore/backend/app/core/settings/models.py`:
+
+```python
+class DataFlywheelConfig(BaseModel):
+    llm_prelabel_enabled: bool = False
+```
+
+Modify `/Users/ljn/Documents/demo/explore/backend/app/core/settings/settings.py` imports and `Settings`:
+
+```python
+from app.core.settings.models import (
+    AIConfig,
+    AppConfig,
+    AuthConfig,
+    CircuitBreakerConfig,
+    DataFlywheelConfig,
+    DatabaseConfig,
+    ...
+)
+
+class Settings(BaseSettings):
+    ...
+    data_flywheel: DataFlywheelConfig = DataFlywheelConfig()
+```
+
+Modify `/Users/ljn/Documents/demo/explore/backend/app/core/settings/__init__.py` and `/Users/ljn/Documents/demo/explore/backend/app/core/config.py` to import/export `DataFlywheelConfig`.
+
+Add to `/Users/ljn/Documents/demo/explore/backend/config.yaml.example`:
+
+```yaml
+data_flywheel:
+  # LLM 预标注默认关闭；只有管理员手动点击 AI 预判，且此开关开启时才会消耗 judge token。
+  llm_prelabel_enabled: false
+```
+
+- [ ] **Step 5: Add judge client factory placeholder**
 
 Add near module constants:
 
 ```python
+from app.core.config import settings
+
+
 def build_data_flywheel_judge_client():
     """构造 DataFlywheel judge client。
 
@@ -1297,7 +1395,7 @@ def build_data_flywheel_judge_client():
 
 This explicit failure is part of the MVP safety boundary: environments without configured judge client must return `{"code": "JUDGE_CLIENT_NOT_CONFIGURED"}` instead of silently fabricating labels.
 
-- [ ] **Step 5: Add endpoints**
+- [ ] **Step 6: Add endpoints**
 
 Add below `get_admin_data_flywheel_sample()`:
 
@@ -1310,6 +1408,8 @@ def create_admin_data_flywheel_prelabel(
 ) -> dict[str, Any]:
     """触发 LLM judge 为样本生成预标注。"""
     try:
+        if not settings.data_flywheel.llm_prelabel_enabled:
+            raise ValueError("LLM_PRELABEL_DISABLED")
         return create_sample_prelabel(
             db,
             farm_id=farm.id,
@@ -1366,7 +1466,7 @@ def reject_admin_data_flywheel_prelabel(
         raise _http_error(exc) from exc
 ```
 
-- [ ] **Step 6: Map prelabel errors**
+- [ ] **Step 7: Map prelabel errors**
 
 Modify `_http_error()`:
 
@@ -1378,22 +1478,22 @@ status_code = (
 )
 ```
 
-- [ ] **Step 7: Run API tests**
+- [ ] **Step 8: Run API tests**
 
 Run:
 
 ```bash
 cd /Users/ljn/Documents/demo/explore/backend
-.venv/bin/python -m pytest tests/api/test_admin_data_flywheel.py::test_prelabel_endpoint_creates_pending_llm_judge_prelabel tests/api/test_admin_data_flywheel.py::test_accept_prelabel_endpoint_supports_human_modified_labels tests/api/test_admin_data_flywheel.py::test_reject_prelabel_endpoint_does_not_write_quality_labels -q
+.venv/bin/python -m pytest tests/api/test_admin_data_flywheel.py::test_prelabel_endpoint_is_disabled_by_default tests/api/test_admin_data_flywheel.py::test_prelabel_endpoint_creates_pending_llm_judge_prelabel tests/api/test_admin_data_flywheel.py::test_accept_prelabel_endpoint_supports_human_modified_labels tests/api/test_admin_data_flywheel.py::test_reject_prelabel_endpoint_does_not_write_quality_labels -q
 ```
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd /Users/ljn/Documents/demo/explore
-git add backend/app/api/admin_data_flywheel.py backend/tests/api/test_admin_data_flywheel.py
+git add backend/app/core/settings/models.py backend/app/core/settings/settings.py backend/app/core/settings/__init__.py backend/app/core/config.py backend/config.yaml.example backend/app/api/admin_data_flywheel.py backend/tests/api/test_admin_data_flywheel.py
 git commit -m "feat: expose data flywheel prelabel api"
 ```
 
@@ -1668,6 +1768,15 @@ Ensure base `detail` fixture includes:
 Append tests:
 
 ```typescript
+it('加载样本详情不会自动触发 AI 预标注', async () => {
+  render(<DataFlywheel />);
+
+  await userEvent.click(await screen.findByText('王大妈工资100一天'));
+
+  expect(mockedGetDetail).toHaveBeenCalledWith(sample.sample_id);
+  expect(mockedCreatePrelabel).not.toHaveBeenCalled();
+});
+
 it('显示 AI 预判卡片并可触发预标注', async () => {
   mockedCreatePrelabel.mockResolvedValueOnce({
     id: 9,

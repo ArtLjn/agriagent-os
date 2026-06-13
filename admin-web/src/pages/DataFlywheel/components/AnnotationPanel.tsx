@@ -1,4 +1,4 @@
-import { Button, Card, Input, Radio, Space, Tag, Typography, message } from 'antd';
+import { Button, Card, Input, Radio, Select, Space, Tag, Typography, message } from 'antd';
 import {
   BranchesOutlined,
   BugOutlined,
@@ -7,10 +7,16 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   ExperimentOutlined,
+  RobotOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
 
-import type { DataFlywheelLabel, DataFlywheelLabelRecord, DataFlywheelSample } from '../../../api/dataFlywheel';
+import type {
+  DataFlywheelLabel,
+  DataFlywheelLabelRecord,
+  DataFlywheelPrelabel,
+  DataFlywheelSample,
+} from '../../../api/dataFlywheel';
 import { cardStyle, palette } from '../../../styles/theme';
 
 export interface SessionProblemItem {
@@ -23,12 +29,21 @@ interface AnnotationPanelProps {
   comment: string;
   saving: boolean;
   acting: boolean;
+  prelabels?: DataFlywheelPrelabel[];
+  canPrelabel: boolean;
+  prelabeling: boolean;
+  reviewingPrelabel: boolean;
+  selectedPrelabelLabels: DataFlywheelLabel[];
   annotationTargetLabel?: string;
   existingLabels?: DataFlywheelLabelRecord[];
   sessionProblemItems?: SessionProblemItem[];
   onLabelChange: (label: DataFlywheelLabel) => void;
   onCommentChange: (comment: string) => void;
   onSelectSessionProblem?: (sample: DataFlywheelSample) => void;
+  onSelectedPrelabelLabelsChange: (labels: DataFlywheelLabel[]) => void;
+  onCreatePrelabel: () => void;
+  onAcceptPrelabel: () => void;
+  onRejectPrelabel: () => void;
   onSave: () => void;
   onDeleteLabel: (label: DataFlywheelLabelRecord) => void;
   onResolveLabel: (label: DataFlywheelLabelRecord) => void;
@@ -44,7 +59,9 @@ const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '工具选错', value: 'wrong_tool_selection' },
   { label: 'pending 漏拦截', value: 'pending_missed' },
   { label: '幻觉执行', value: 'hallucinated_execution' },
+  { label: '工具错误被忽略', value: 'tool_error_ignored' },
   { label: '答非所问', value: 'off_topic' },
+  { label: '意图不清', value: 'unclear_intent' },
   { label: '参数/提示泄露', value: 'sensitive_info_leak' },
   { label: '工资缺失', value: 'missing_wage' },
   { label: '禁用工人', value: 'disabled_worker_used' },
@@ -62,12 +79,21 @@ export default function AnnotationPanel({
   comment,
   saving,
   acting,
+  prelabels = [],
+  canPrelabel,
+  prelabeling,
+  reviewingPrelabel,
+  selectedPrelabelLabels,
   annotationTargetLabel,
   existingLabels = [],
   sessionProblemItems = [],
   onLabelChange,
   onCommentChange,
   onSelectSessionProblem,
+  onSelectedPrelabelLabelsChange,
+  onCreatePrelabel,
+  onAcceptPrelabel,
+  onRejectPrelabel,
   onSave,
   onDeleteLabel,
   onResolveLabel,
@@ -77,6 +103,9 @@ export default function AnnotationPanel({
   onCreateRegressionCase,
 }: AnnotationPanelProps) {
   const disabled = !selectedSample;
+  const prelabelDisabled = disabled || !canPrelabel;
+  const latestPrelabel = prelabels[0] ?? selectedSample?.latest_prelabel ?? null;
+  const pendingPrelabel = latestPrelabel?.status === 'pending' ? latestPrelabel : null;
 
   const handleTraceJump = () => {
     if (!selectedSample?.request_id) {
@@ -93,6 +122,103 @@ export default function AnnotationPanel({
   return (
     <Card title="标注与动作" style={{ ...cardStyle, marginTop: 14 }} styles={{ body: { padding: 14 } }}>
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <div
+          style={{
+            border: `1px solid ${palette.borderSoft}`,
+            borderRadius: 6,
+            padding: 12,
+            background: palette.bg,
+          }}
+        >
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
+              <Space size={8}>
+                <RobotOutlined style={{ color: palette.accent }} />
+                <Typography.Text style={{ color: palette.text }}>AI 预判</Typography.Text>
+                {latestPrelabel && <Tag>{latestPrelabel.status}</Tag>}
+              </Space>
+              <Button
+                aria-label="AI 预判"
+                icon={<RobotOutlined />}
+                disabled={prelabelDisabled}
+                loading={prelabeling}
+                onClick={onCreatePrelabel}
+              >
+                AI 预判
+              </Button>
+            </Space>
+
+            {latestPrelabel && (
+              <>
+                <Space size={6} wrap>
+                  {latestPrelabel.labels.map((item) => (
+                    <Tag key={item} title={labelText[item] ?? item}>
+                      {item}
+                    </Tag>
+                  ))}
+                  <Tag color={latestPrelabel.severity === 'critical' || latestPrelabel.severity === 'high' ? 'red' : 'blue'}>
+                    {latestPrelabel.severity}
+                  </Tag>
+                  <Tag>{Math.round(latestPrelabel.confidence * 100)}%</Tag>
+                </Space>
+                {latestPrelabel.root_cause && (
+                  <Typography.Text style={{ color: palette.text }}>{latestPrelabel.root_cause}</Typography.Text>
+                )}
+                <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                  {latestPrelabel.reason}
+                </Typography.Text>
+                {latestPrelabel.recommended_fix && (
+                  <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                    {latestPrelabel.recommended_fix}
+                  </Typography.Text>
+                )}
+                <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                  {latestPrelabel.judge_model} · {latestPrelabel.prompt_version}
+                </Typography.Text>
+              </>
+            )}
+
+            {pendingPrelabel && (
+              <>
+                <Select
+                  aria-label="AI 建议标签"
+                  mode="multiple"
+                  value={selectedPrelabelLabels}
+                  options={labelOptions}
+                  disabled={prelabelDisabled}
+                  onChange={onSelectedPrelabelLabelsChange}
+                  style={{ width: '100%' }}
+                />
+                <Space wrap>
+                  <Button
+                    type="primary"
+                    disabled={prelabelDisabled}
+                    loading={reviewingPrelabel}
+                    onClick={onAcceptPrelabel}
+                  >
+                    采纳 AI 预判
+                  </Button>
+                  <Button
+                    disabled={prelabelDisabled}
+                    loading={reviewingPrelabel}
+                    onClick={onAcceptPrelabel}
+                  >
+                    修改后保存
+                  </Button>
+                  <Button
+                    danger
+                    disabled={prelabelDisabled}
+                    loading={reviewingPrelabel}
+                    onClick={onRejectPrelabel}
+                  >
+                    驳回 AI 预判
+                  </Button>
+                </Space>
+              </>
+            )}
+          </Space>
+        </div>
+
         <div>
           <Typography.Text style={{ color: palette.textMuted }}>
             质量标签{annotationTargetLabel ? ` · ${annotationTargetLabel}` : ''}

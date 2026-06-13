@@ -3,8 +3,10 @@ import { Button, Card, Checkbox, Input, Select, Space, Typography, message } fro
 import { CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
+  acceptSamplePrelabel,
   addSampleLabel,
   createCaseDraft,
+  createSamplePrelabel,
   deleteSampleLabel,
   exportSampleJsonl,
   getDataFlywheelSyncJob,
@@ -13,6 +15,7 @@ import {
   getSessionReview,
   listDataFlywheelSamples,
   markBadCase,
+  rejectSamplePrelabel,
   resolveSampleLabel,
   syncDataFlywheelSessions,
   type CaseDraft,
@@ -53,7 +56,9 @@ const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '工具选错', value: 'wrong_tool_selection' },
   { label: 'pending 漏拦截', value: 'pending_missed' },
   { label: '幻觉执行', value: 'hallucinated_execution' },
+  { label: '工具错误被忽略', value: 'tool_error_ignored' },
   { label: '答非所问', value: 'off_topic' },
+  { label: '意图不清', value: 'unclear_intent' },
   { label: '参数/提示泄露', value: 'sensitive_info_leak' },
   { label: '工资缺失', value: 'missing_wage' },
   { label: '禁用工人', value: 'disabled_worker_used' },
@@ -68,6 +73,8 @@ export default function DataFlywheel() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [acting, setActing] = useState(false);
+  const [prelabeling, setPrelabeling] = useState(false);
+  const [reviewingPrelabel, setReviewingPrelabel] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [qualityLabel, setQualityLabel] = useState<DataFlywheelLabel | undefined>();
   const [unannotatedOnly, setUnannotatedOnly] = useState(false);
@@ -82,6 +89,7 @@ export default function DataFlywheel() {
   const [sessionAnnotationCache, setSessionAnnotationCache] = useState<Record<string, DataFlywheelSessionAnnotations>>({});
   const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const [currentLabel, setCurrentLabel] = useState<DataFlywheelLabel>(DEFAULT_LABEL);
+  const [selectedPrelabelLabels, setSelectedPrelabelLabels] = useState<DataFlywheelLabel[]>([]);
   const [comment, setComment] = useState('');
   const [draft, setDraft] = useState<CaseDraft | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
@@ -208,6 +216,7 @@ export default function DataFlywheel() {
       const result = await getSampleDetail(sample.sample_id);
       if (requestSeq !== detailRequestSeq.current) return;
       setDetail(result);
+      setSelectedPrelabelLabels(result.prelabels[0]?.labels ?? []);
       setSessionAnnotations(null);
       setAnnotationTarget({ type: 'turn', sample });
       const firstLabel = result.labels[0];
@@ -229,6 +238,7 @@ export default function DataFlywheel() {
       const result = await getSessionAnnotations(sessionId);
       setSelectedSample(null);
       setDetail(null);
+      setSelectedPrelabelLabels([]);
       setSessionAnnotations(result);
       setSessionAnnotationCache((current) => ({
         ...current,
@@ -387,6 +397,59 @@ export default function DataFlywheel() {
     }
   };
 
+  const handleCreatePrelabel = async () => {
+    if (!selectedSample) return;
+    setPrelabeling(true);
+    try {
+      const result = await createSamplePrelabel(selectedSample.sample_id);
+      setSelectedPrelabelLabels(result.labels);
+      message.success('AI 预判已生成');
+      await loadDetail(selectedSample);
+      await fetchSamples(query);
+    } catch {
+      message.error('生成 AI 预判失败');
+    } finally {
+      setPrelabeling(false);
+    }
+  };
+
+  const handleAcceptPrelabel = async () => {
+    const latestPrelabel = detail?.prelabels[0];
+    if (!selectedSample || !latestPrelabel) return;
+    setReviewingPrelabel(true);
+    try {
+      await acceptSamplePrelabel(selectedSample.sample_id, latestPrelabel.id, {
+        labels: selectedPrelabelLabels,
+        comment: comment.trim() || `AI 预判采纳：${latestPrelabel.reason}`,
+      });
+      message.success('AI 预判已保存为人工标注');
+      await loadDetail(selectedSample);
+      await fetchSamples(query);
+      await refreshSessionReviewIfActive();
+    } catch {
+      message.error('采纳 AI 预判失败');
+    } finally {
+      setReviewingPrelabel(false);
+    }
+  };
+
+  const handleRejectPrelabel = async () => {
+    const latestPrelabel = detail?.prelabels[0];
+    if (!selectedSample || !latestPrelabel) return;
+    setReviewingPrelabel(true);
+    try {
+      await rejectSamplePrelabel(selectedSample.sample_id, latestPrelabel.id);
+      message.success('AI 预判已驳回');
+      await loadDetail(selectedSample);
+      await fetchSamples(query);
+      await refreshSessionReviewIfActive();
+    } catch {
+      message.error('驳回 AI 预判失败');
+    } finally {
+      setReviewingPrelabel(false);
+    }
+  };
+
   const handleSyncSessions = async () => {
     setSyncingSessions(true);
     const sessionId = isSessionArchiveActive ? activeArchiveKey : undefined;
@@ -428,6 +491,7 @@ export default function DataFlywheel() {
     setSessionAnnotations(null);
     setAnnotationTarget(null);
     setCurrentLabel(DEFAULT_LABEL);
+    setSelectedPrelabelLabels([]);
     setComment('');
     setLoadingDetail(false);
   };
@@ -545,12 +609,21 @@ export default function DataFlywheel() {
         comment={comment}
         saving={saving}
         acting={acting}
+        prelabels={detail?.prelabels ?? selectedSample?.prelabels ?? []}
+        canPrelabel={annotationTarget?.type === 'turn' && !!selectedSample}
+        prelabeling={prelabeling}
+        reviewingPrelabel={reviewingPrelabel}
+        selectedPrelabelLabels={selectedPrelabelLabels}
         annotationTargetLabel={annotationTargetLabel(annotationTarget)}
         existingLabels={annotationLabels(detail, sessionAnnotations)}
         sessionProblemItems={sessionProblemItems(samples, activeArchiveKey)}
         onLabelChange={setCurrentLabel}
         onCommentChange={setComment}
         onSelectSessionProblem={loadDetail}
+        onSelectedPrelabelLabelsChange={setSelectedPrelabelLabels}
+        onCreatePrelabel={handleCreatePrelabel}
+        onAcceptPrelabel={handleAcceptPrelabel}
+        onRejectPrelabel={handleRejectPrelabel}
         onSave={handleSave}
         onDeleteLabel={handleDeleteLabel}
         onResolveLabel={handleResolveLabel}

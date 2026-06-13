@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DataFlywheel from './index';
 import {
+  acceptSamplePrelabel,
   addSampleLabel,
   createCaseDraft,
+  createSamplePrelabel,
   getDataFlywheelSyncJob,
   getSampleDetail,
   getSessionReview,
@@ -13,11 +15,13 @@ import {
   listDataFlywheelSamples,
   markBadCase,
   deleteSampleLabel,
+  rejectSamplePrelabel,
   resolveSampleLabel,
   syncDataFlywheelSessions,
 } from '../../api/dataFlywheel';
 import type {
   DataFlywheelDetail,
+  DataFlywheelPrelabel,
   DataFlywheelSample,
   DataFlywheelSessionAnnotations,
   DataFlywheelSessionReview,
@@ -25,8 +29,10 @@ import type {
 } from '../../api/dataFlywheel';
 
 vi.mock('../../api/dataFlywheel', () => ({
+  acceptSamplePrelabel: vi.fn(),
   addSampleLabel: vi.fn(),
   createCaseDraft: vi.fn(),
+  createSamplePrelabel: vi.fn(),
   exportSampleJsonl: vi.fn(),
   getDataFlywheelSyncJob: vi.fn(),
   getSampleDetail: vi.fn(),
@@ -35,6 +41,7 @@ vi.mock('../../api/dataFlywheel', () => ({
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
   deleteSampleLabel: vi.fn(),
+  rejectSamplePrelabel: vi.fn(),
   resolveSampleLabel: vi.fn(),
   syncDataFlywheelSessions: vi.fn(),
 }));
@@ -114,6 +121,7 @@ const anotherMessages = [
 const detail: DataFlywheelDetail = {
   sample,
   quality_labels: [],
+  prelabels: [],
   labels: [
     {
       id: 1,
@@ -317,10 +325,13 @@ const mockedSessionReview = vi.mocked(getSessionReview);
 const mockedSessionAnnotations = vi.mocked(getSessionAnnotations);
 const mockedSyncSessions = vi.mocked(syncDataFlywheelSessions);
 const mockedSyncJob = vi.mocked(getDataFlywheelSyncJob);
+const mockedAcceptPrelabel = vi.mocked(acceptSamplePrelabel);
 const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateDraft = vi.mocked(createCaseDraft);
+const mockedCreatePrelabel = vi.mocked(createSamplePrelabel);
 const mockedMarkBadCase = vi.mocked(markBadCase);
 const mockedDeleteLabel = vi.mocked(deleteSampleLabel);
+const mockedRejectPrelabel = vi.mocked(rejectSamplePrelabel);
 const mockedResolveLabel = vi.mocked(resolveSampleLabel);
 
 describe('DataFlywheel 页面', () => {
@@ -842,6 +853,23 @@ describe('DataFlywheel 页面', () => {
     });
   });
 
+  it('完整会话级标注下禁用 AI 预判入口', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-a');
+    fireEvent.click(screen.getByTestId('archive-session-session-a'));
+    await screen.findByText('完整对话记录');
+    await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
+
+    const prelabelButton = screen.getByRole('button', { name: 'AI 预判' });
+    expect(prelabelButton).toBeDisabled();
+    await user.click(prelabelButton);
+
+    expect(mockedCreatePrelabel).not.toHaveBeenCalled();
+  });
+
   it('加载完整会话标注后左侧归档会显示会话级问题', async () => {
     const user = userEvent.setup();
     mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
@@ -966,5 +994,182 @@ describe('DataFlywheel 页面', () => {
       expect(mockedResolveLabel).toHaveBeenCalledWith(sample.sample_id, 1);
     });
     expect(mockedDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it('加载样本详情不会自动触发 AI 预标注', async () => {
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+
+    await waitFor(() => {
+      expect(mockedDetail).toHaveBeenCalledWith(sample.sample_id);
+    });
+    expect(mockedCreatePrelabel).not.toHaveBeenCalled();
+  });
+
+  it('点击 AI 预判后调用 createSamplePrelabel 并展示预判结果', async () => {
+    const prelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['bad_reply', 'pending_missed'],
+      root_cause: '写操作缺少 pending 确认',
+      severity: 'high',
+      confidence: 0.86,
+      reason: '回复声称已安排，但没有完整 pending lifecycle。',
+      recommended_fix: '写操作执行前必须创建 pending plan。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    mockedCreatePrelabel.mockResolvedValueOnce(prelabel);
+    mockedDetail.mockResolvedValueOnce(detail).mockResolvedValueOnce({
+      ...detail,
+      prelabels: [prelabel],
+    });
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    await userEvent.click(await screen.findByRole('button', { name: 'AI 预判' }));
+
+    expect(mockedCreatePrelabel).toHaveBeenCalledWith(sample.sample_id);
+    expect(await screen.findByText('写操作缺少 pending 确认')).toBeInTheDocument();
+    expect(screen.getByText('bad_reply')).toBeInTheDocument();
+    expect(screen.getByText('pending_missed')).toBeInTheDocument();
+  });
+
+  it('采纳 AI 预判时调用 acceptSamplePrelabel 写入建议标签', async () => {
+    const prelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['bad_reply', 'pending_missed'],
+      root_cause: '写操作缺少 pending 确认',
+      severity: 'high',
+      confidence: 0.86,
+      reason: '回复声称已安排，但没有完整 pending lifecycle。',
+      recommended_fix: '写操作执行前必须创建 pending plan。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    mockedDetail.mockResolvedValueOnce({
+      ...detail,
+      prelabels: [prelabel],
+    });
+    mockedAcceptPrelabel.mockResolvedValueOnce({
+      ...prelabel,
+      status: 'accepted',
+      accepted_label_ids: [7, 8],
+    });
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    const commentBox = await screen.findByPlaceholderText('记录判断依据、复现条件或后续处理建议');
+    await userEvent.clear(commentBox);
+    await userEvent.type(commentBox, '人工确认 pending 缺失');
+    await userEvent.click(await screen.findByRole('button', { name: '采纳 AI 预判' }));
+
+    await waitFor(() => {
+      expect(mockedAcceptPrelabel).toHaveBeenCalledWith(sample.sample_id, 9, {
+        labels: ['bad_reply', 'pending_missed'],
+        comment: '人工确认 pending 缺失',
+      });
+    });
+  });
+
+  it('修改 AI 建议标签后点击修改后保存使用修改后的标签', async () => {
+    const prelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['tool_error_ignored'],
+      root_cause: '回复不可验证',
+      severity: 'medium',
+      confidence: 0.72,
+      reason: '证据不足但回复声称完成。',
+      recommended_fix: '要求补充证据。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    mockedDetail.mockResolvedValueOnce({
+      ...detail,
+      prelabels: [prelabel],
+    });
+    mockedAcceptPrelabel.mockResolvedValueOnce({
+      ...prelabel,
+      status: 'accepted',
+      labels: ['unclear_intent'],
+      accepted_label_ids: [8],
+    });
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    const prelabelSelect = (await screen.findAllByLabelText('AI 建议标签'))[0];
+    await userEvent.click(within(prelabelSelect).getByLabelText('close'));
+    const selectInput = prelabelSelect.querySelector('.ant-select-selector');
+    expect(selectInput).not.toBeNull();
+    fireEvent.mouseDown(selectInput as Element);
+    const unclearIntentOptions = await screen.findAllByText('意图不清');
+    await userEvent.click(unclearIntentOptions[unclearIntentOptions.length - 1]);
+    await userEvent.click(await screen.findByRole('button', { name: '修改后保存' }));
+
+    await waitFor(() => {
+      expect(mockedAcceptPrelabel).toHaveBeenCalledWith(sample.sample_id, 9, {
+        labels: ['unclear_intent'],
+        comment: '初始备注',
+      });
+    });
+  });
+
+  it('点击驳回 AI 预判调用 rejectSamplePrelabel 且不保存人工标签', async () => {
+    const prelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['bad_reply'],
+      root_cause: '误判',
+      severity: 'low',
+      confidence: 0.4,
+      reason: '测试用误判。',
+      recommended_fix: '无需处理。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    mockedDetail.mockResolvedValueOnce({
+      ...detail,
+      prelabels: [prelabel],
+    });
+    mockedRejectPrelabel.mockResolvedValueOnce({
+      ...prelabel,
+      status: 'rejected',
+    });
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    await userEvent.click(await screen.findByRole('button', { name: '驳回 AI 预判' }));
+
+    await waitFor(() => {
+      expect(mockedRejectPrelabel).toHaveBeenCalledWith(sample.sample_id, 9);
+    });
+    expect(mockedAddLabel).not.toHaveBeenCalled();
   });
 });

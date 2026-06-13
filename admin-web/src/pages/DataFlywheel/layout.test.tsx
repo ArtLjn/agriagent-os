@@ -45,6 +45,7 @@ const sample: DataFlywheelSample = {
 const detail: DataFlywheelDetail = {
   sample,
   quality_labels: [],
+  prelabels: [],
   labels: [],
   messages: [
     { role: 'user', content: '我的工人' },

@@ -12,6 +12,7 @@ from app.core.settings.models import (
     AppConfig,
     AuthConfig,
     CircuitBreakerConfig,
+    DataFlywheelConfig,
     DatabaseConfig,
     LangSmithConfig,
     RateLimitConfig,
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
     token_quota: TokenQuotaConfig = TokenQuotaConfig()
     secrets: SecretsConfig = SecretsConfig()
     app: AppConfig = AppConfig()
+    data_flywheel: DataFlywheelConfig = DataFlywheelConfig()
     project_name: str = "Farm Manager API"
 
     def __init__(self, _config_path: Optional[str] = None, **kwargs):
