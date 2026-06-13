@@ -56,6 +56,34 @@ export interface TraceNodeDetail {
   end_time: string | null;
 }
 
+export interface TraceReflectionIssue {
+  code?: string;
+  severity?: string;
+  message?: string;
+  evidence?: unknown;
+}
+
+export interface TraceReflectionCheck {
+  trigger: string;
+  decision: string;
+  reason: string;
+  checks: string[];
+  issues: TraceReflectionIssue[];
+  input: Record<string, unknown>;
+}
+
+export interface TraceReflectionDiagnostic {
+  blocked: boolean;
+  decisions: string[];
+  issue_codes: string[];
+}
+
+export interface TraceDiagnostics {
+  request_id: string;
+  reflection_checks: TraceReflectionCheck[];
+  reflection_diagnostic: TraceReflectionDiagnostic;
+}
+
 export interface ListTracesParams {
   request_id?: string;
   session_id?: string;
@@ -90,6 +118,11 @@ export async function getNodeDetail(requestId: string, nodeId: string): Promise<
 
 export async function deleteTracesBefore(before: string): Promise<DeleteTracesResponse> {
   const res = await apiClient.delete<DeleteTracesResponse>('/admin/traces', { params: { before } });
+  return res.data;
+}
+
+export async function getTraceDiagnostics(requestId: string): Promise<TraceDiagnostics> {
+  const res = await apiClient.get<TraceDiagnostics>(`/admin/traces/${requestId}/diagnostics`);
   return res.data;
 }
 

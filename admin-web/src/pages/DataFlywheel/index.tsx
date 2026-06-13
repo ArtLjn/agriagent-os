@@ -3,6 +3,10 @@ import { Button, Card, Checkbox, Input, Select, Space, Typography, message } fro
 import { CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
+  getTraceDiagnostics,
+  type TraceDiagnostics,
+} from '../../api/admin';
+import {
   acceptSamplePrelabel,
   addSampleLabel,
   createCaseDraft,
@@ -96,12 +100,16 @@ export default function DataFlywheel() {
   const [activeArchiveKey, setActiveArchiveKey] = useState(ALL_ARCHIVE_KEY);
   const [sessionReview, setSessionReview] = useState<DataFlywheelSessionReview | null>(null);
   const [loadingSessionReview, setLoadingSessionReview] = useState(false);
+  const [traceDiagnosticsByRequestId, setTraceDiagnosticsByRequestId] = useState<Record<string, TraceDiagnostics>>({});
+  const [loadingTraceDiagnostics, setLoadingTraceDiagnostics] = useState<Record<string, boolean>>({});
   const [syncingSessions, setSyncingSessions] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(true);
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const sessionReviewRequestSeq = useRef(0);
+  const traceDiagnosticsLoadedRef = useRef<Set<string>>(new Set());
+  const traceDiagnosticsLoadingRef = useRef<Set<string>>(new Set());
 
   const sessionAnnotationOverlays = useMemo(
     () => mergeSessionAnnotations(Object.values(sessionAnnotationCache), sessionAnnotations),
@@ -188,6 +196,68 @@ export default function DataFlywheel() {
     fetchSamples(query);
   }, [fetchSamples, query]);
 
+  const loadTraceDiagnostics = useCallback(async (requestId: string) => {
+    if (
+      traceDiagnosticsLoadedRef.current.has(requestId) ||
+      traceDiagnosticsLoadingRef.current.has(requestId)
+    ) {
+      return;
+    }
+    traceDiagnosticsLoadingRef.current.add(requestId);
+    setLoadingTraceDiagnostics((current) => ({ ...current, [requestId]: true }));
+    try {
+      const result = await getTraceDiagnostics(requestId);
+      traceDiagnosticsLoadedRef.current.add(requestId);
+      setTraceDiagnosticsByRequestId((current) => ({ ...current, [requestId]: result }));
+    } catch {
+      traceDiagnosticsLoadedRef.current.add(requestId);
+      setTraceDiagnosticsByRequestId((current) => ({
+        ...current,
+        [requestId]: emptyTraceDiagnostics(requestId),
+      }));
+    } finally {
+      traceDiagnosticsLoadingRef.current.delete(requestId);
+      setLoadingTraceDiagnostics((current) => ({ ...current, [requestId]: false }));
+    }
+  }, []);
+
+  const loadTraceDiagnosticsForReview = useCallback(
+    async (review: DataFlywheelSessionReview) => {
+      const requestIds = Array.from(
+        new Set(
+          review.turns
+            .map((turn) => turn.sample.request_id)
+            .filter((requestId): requestId is string => Boolean(requestId))
+        )
+      );
+      await Promise.all(requestIds.map((requestId) => loadTraceDiagnostics(requestId)));
+    },
+    [loadTraceDiagnostics]
+  );
+
+  const loadSessionReview = useCallback(
+    async (sessionId: string) => {
+      const requestSeq = sessionReviewRequestSeq.current + 1;
+      sessionReviewRequestSeq.current = requestSeq;
+      setLoadingSessionReview(true);
+      try {
+        const result = await getSessionReview(sessionId);
+        if (requestSeq !== sessionReviewRequestSeq.current) return;
+        setSessionReview(result);
+        void loadTraceDiagnosticsForReview(result);
+      } catch {
+        if (requestSeq === sessionReviewRequestSeq.current) {
+          message.error('加载完整会话记录失败');
+        }
+      } finally {
+        if (requestSeq === sessionReviewRequestSeq.current) {
+          setLoadingSessionReview(false);
+        }
+      }
+    },
+    [loadTraceDiagnosticsForReview]
+  );
+
   const submitQuery = () => {
     setActiveArchiveKey(ALL_ARCHIVE_KEY);
     setSessionReview(null);
@@ -216,6 +286,9 @@ export default function DataFlywheel() {
       const result = await getSampleDetail(sample.sample_id);
       if (requestSeq !== detailRequestSeq.current) return;
       setDetail(result);
+      if (result.sample.request_id) {
+        void loadTraceDiagnostics(result.sample.request_id);
+      }
       setSelectedPrelabelLabels(result.prelabels[0]?.labels ?? []);
       setSessionAnnotations(null);
       setAnnotationTarget({ type: 'turn', sample });
@@ -502,25 +575,6 @@ export default function DataFlywheel() {
     }
   };
 
-  const loadSessionReview = useCallback(async (sessionId: string) => {
-    const requestSeq = sessionReviewRequestSeq.current + 1;
-    sessionReviewRequestSeq.current = requestSeq;
-    setLoadingSessionReview(true);
-    try {
-      const result = await getSessionReview(sessionId);
-      if (requestSeq !== sessionReviewRequestSeq.current) return;
-      setSessionReview(result);
-    } catch {
-      if (requestSeq === sessionReviewRequestSeq.current) {
-        message.error('加载完整会话记录失败');
-      }
-    } finally {
-      if (requestSeq === sessionReviewRequestSeq.current) {
-        setLoadingSessionReview(false);
-      }
-    }
-  }, []);
-
   const handleSelectArchive = (key: string) => {
     setActiveArchiveKey(key);
     clearSelection();
@@ -578,6 +632,8 @@ export default function DataFlywheel() {
       review={sessionReview}
       loading={loadingSessionReview}
       selectedSampleId={selectedSample?.sample_id}
+      traceDiagnosticsByRequestId={traceDiagnosticsByRequestId}
+      loadingTraceDiagnostics={loadingTraceDiagnostics}
       onSelectTurn={loadDetail}
       onSelectSession={() => loadSessionAnnotations(activeArchiveKey)}
     />
@@ -602,7 +658,20 @@ export default function DataFlywheel() {
   );
   const detailContent = (
     <>
-      <SampleDetailPanel detail={detail} loading={loadingDetail} />
+      <SampleDetailPanel
+        detail={detail}
+        loading={loadingDetail}
+        traceDiagnostics={
+          detail?.sample.request_id
+            ? traceDiagnosticsByRequestId[detail.sample.request_id] ?? null
+            : null
+        }
+        loadingTraceDiagnostics={
+          detail?.sample.request_id
+            ? Boolean(loadingTraceDiagnostics[detail.sample.request_id])
+            : false
+        }
+      />
       <AnnotationPanel
         selectedSample={annotationTarget ? selectedSample ?? sessionAnnotationPlaceholder(annotationTarget) : null}
         label={currentLabel}
@@ -753,6 +822,18 @@ function sessionAnnotationPlaceholder(target: AnnotationTarget): DataFlywheelSam
 
 function sessionArchiveKey(sample: DataFlywheelSample) {
   return sample.session_id ?? 'unknown-session';
+}
+
+function emptyTraceDiagnostics(requestId: string): TraceDiagnostics {
+  return {
+    request_id: requestId,
+    reflection_checks: [],
+    reflection_diagnostic: {
+      blocked: false,
+      decisions: [],
+      issue_codes: [],
+    },
+  };
 }
 
 function latestConfirmedProblemTurn(samples: DataFlywheelSample[], sessionKey: string) {

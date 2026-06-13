@@ -2,13 +2,17 @@ import { Card, Col, Descriptions, Empty, Row, Space, Spin, Tabs, Tag, Typography
 import type { CSSProperties } from 'react';
 
 import type { DataFlywheelDetail } from '../../../api/dataFlywheel';
+import type { TraceDiagnostics } from '../../../api/admin';
 import { cardStyle, palette } from '../../../styles/theme';
 import PendingLifecycleView from './PendingLifecycleView';
+import ReflectionTraceView from './ReflectionTraceView';
 import ToolComparison from './ToolComparison';
 
 interface SampleDetailPanelProps {
   detail: DataFlywheelDetail | null;
   loading: boolean;
+  traceDiagnostics?: TraceDiagnostics | null;
+  loadingTraceDiagnostics?: boolean;
 }
 
 function findMessage(detail: DataFlywheelDetail, role: string) {
@@ -19,7 +23,12 @@ function JsonBlock({ value }: { value: unknown }) {
   return <pre style={jsonBlockStyle}>{JSON.stringify(value ?? {}, null, 2)}</pre>;
 }
 
-export default function SampleDetailPanel({ detail, loading }: SampleDetailPanelProps) {
+export default function SampleDetailPanel({
+  detail,
+  loading,
+  traceDiagnostics,
+  loadingTraceDiagnostics = false,
+}: SampleDetailPanelProps) {
   if (loading) {
     return (
       <Card title="样本详情" style={cardStyle}>
@@ -89,6 +98,16 @@ export default function SampleDetailPanel({ detail, loading }: SampleDetailPanel
               key: 'pending',
               label: 'pending lifecycle',
               children: <PendingLifecycleView items={detail.pending_lifecycle} />,
+            },
+            {
+              key: 'reflection',
+              label: 'reflection',
+              children: (
+                <ReflectionTraceView
+                  diagnostics={traceDiagnostics}
+                  loading={loadingTraceDiagnostics}
+                />
+              ),
             },
             {
               key: 'router',

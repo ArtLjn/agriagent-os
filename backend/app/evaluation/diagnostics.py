@@ -113,6 +113,7 @@ class SkillDiagnosticService:
             "trigger": output_data.get("trigger") or record.node_name,
             "decision": output_data.get("decision", ""),
             "reason": output_data.get("reason", ""),
+            "checks": output_data.get("checks") or [],
             "issues": output_data.get("issues") or [],
             "input": input_data,
         }

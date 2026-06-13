@@ -7,12 +7,16 @@ import type {
   DataFlywheelSessionReview,
   DataFlywheelSessionTurnReview,
 } from '../../../api/dataFlywheel';
+import type { TraceDiagnostics } from '../../../api/admin';
 import { cardStyle, palette } from '../../../styles/theme';
+import ReflectionTraceView from './ReflectionTraceView';
 
 interface SessionConversationViewProps {
   review: DataFlywheelSessionReview | null;
   loading: boolean;
   selectedSampleId?: string;
+  traceDiagnosticsByRequestId?: Record<string, TraceDiagnostics>;
+  loadingTraceDiagnostics?: Record<string, boolean>;
   onSelectTurn: (sample: DataFlywheelSample) => void;
   onSelectSession: () => void;
 }
@@ -44,6 +48,8 @@ export default function SessionConversationView({
   review,
   loading,
   selectedSampleId,
+  traceDiagnosticsByRequestId = {},
+  loadingTraceDiagnostics = {},
   onSelectTurn,
   onSelectSession,
 }: SessionConversationViewProps) {
@@ -84,6 +90,16 @@ export default function SessionConversationView({
                 key={turn.sample.sample_id}
                 turn={turn}
                 active={turn.sample.sample_id === selectedSampleId}
+                diagnostics={
+                  turn.sample.request_id
+                    ? traceDiagnosticsByRequestId[turn.sample.request_id]
+                    : undefined
+                }
+                diagnosticsLoading={
+                  turn.sample.request_id
+                    ? loadingTraceDiagnostics[turn.sample.request_id]
+                    : false
+                }
                 setElement={(element) => {
                   turnRefs.current[turn.sample.sample_id] = element;
                 }}
@@ -100,11 +116,15 @@ export default function SessionConversationView({
 function TurnReviewCard({
   turn,
   active,
+  diagnostics,
+  diagnosticsLoading,
   setElement,
   onSelect,
 }: {
   turn: DataFlywheelSessionTurnReview;
   active: boolean;
+  diagnostics?: TraceDiagnostics;
+  diagnosticsLoading?: boolean;
   setElement: (element: HTMLElement | null) => void;
   onSelect: () => void;
 }) {
@@ -154,6 +174,8 @@ function TurnReviewCard({
           <EvidenceLine text={`tool: ${toolSummary(turn.tool_events)}`} />
           {routerReason && <EvidenceLine text={`router: ${routerReason}`} />}
         </Space>
+
+        <ReflectionTraceView diagnostics={diagnostics} loading={diagnosticsLoading} compact />
 
         {turn.sample.issue_candidates.length > 0 && (
           <Space wrap size={6}>

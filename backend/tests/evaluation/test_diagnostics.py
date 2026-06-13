@@ -224,6 +224,7 @@ def test_diagnostic_service_summarizes_reflection_checks() -> None:
                     "trigger": "pre_write_plan",
                     "decision": "ask_clarification",
                     "reason": "写操作参数不完整。",
+                    "checks": ["write_plan_consistency"],
                     "issues": [
                         {
                             "code": "empty_write_params",
@@ -242,6 +243,7 @@ def test_diagnostic_service_summarizes_reflection_checks() -> None:
                     "trigger": "pre_final_response",
                     "decision": "require_tool",
                     "reason": "最终回复缺少必要工具调用。",
+                    "checks": ["required_tool_missing"],
                     "issues": [
                         {
                             "code": "required_tool_missing",
@@ -264,6 +266,7 @@ def test_diagnostic_service_summarizes_reflection_checks() -> None:
             "trigger": "pre_write_plan",
             "decision": "ask_clarification",
             "reason": "写操作参数不完整。",
+            "checks": ["write_plan_consistency"],
             "issues": [
                 {
                     "code": "empty_write_params",
@@ -277,6 +280,7 @@ def test_diagnostic_service_summarizes_reflection_checks() -> None:
             "trigger": "pre_final_response",
             "decision": "require_tool",
             "reason": "最终回复缺少必要工具调用。",
+            "checks": ["required_tool_missing"],
             "issues": [
                 {
                     "code": "required_tool_missing",

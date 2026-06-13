@@ -178,6 +178,7 @@ class TestGetDiagnostics:
             "trigger": "pre_write_plan",
             "decision": "block_write",
             "reason": "确认文案与待执行参数不一致。",
+            "checks": ["write_plan_consistency"],
             "issues": [
                 {
                     "code": "confirmation_param_mismatch",
@@ -223,6 +224,7 @@ class TestGetDiagnostics:
                 "trigger": "pre_write_plan",
                 "decision": "block_write",
                 "reason": "确认文案与待执行参数不一致。",
+                "checks": ["write_plan_consistency"],
                 "issues": [
                     {
                         "code": "confirmation_param_mismatch",

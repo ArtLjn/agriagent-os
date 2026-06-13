@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DataFlywheel from './index';
+import { getTraceDiagnostics } from '../../api/admin';
+import type { TraceDiagnostics } from '../../api/admin';
 import {
   acceptSamplePrelabel,
   addSampleLabel,
@@ -44,6 +46,10 @@ vi.mock('../../api/dataFlywheel', () => ({
   rejectSamplePrelabel: vi.fn(),
   resolveSampleLabel: vi.fn(),
   syncDataFlywheelSessions: vi.fn(),
+}));
+
+vi.mock('../../api/admin', () => ({
+  getTraceDiagnostics: vi.fn(),
 }));
 
 const sample: DataFlywheelSample = {
@@ -333,6 +339,48 @@ const mockedMarkBadCase = vi.mocked(markBadCase);
 const mockedDeleteLabel = vi.mocked(deleteSampleLabel);
 const mockedRejectPrelabel = vi.mocked(rejectSamplePrelabel);
 const mockedResolveLabel = vi.mocked(resolveSampleLabel);
+const mockedTraceDiagnostics = vi.mocked(getTraceDiagnostics);
+
+const reflectionDiagnostics: TraceDiagnostics = {
+  request_id: 'req:abc',
+  reflection_checks: [
+    {
+      trigger: 'pre_write_plan',
+      decision: 'block_write',
+      reason: '确认文案与待执行参数不一致。',
+      checks: ['write_plan_consistency'],
+      issues: [
+        {
+          code: 'confirmation_param_mismatch',
+          severity: 'blocker',
+          message: '确认文案中的对象与工具参数不一致。',
+          evidence: { expected: '张三', actual: '李四' },
+        },
+      ],
+      input: {
+        tool_name: 'create_operation_work_order',
+        tool_call_ids: ['call-1'],
+        plan_id: 'plan-1',
+        action_id: 'action-1',
+      },
+    },
+  ],
+  reflection_diagnostic: {
+    blocked: true,
+    decisions: ['block_write'],
+    issue_codes: ['confirmation_param_mismatch'],
+  },
+};
+
+const emptyReflectionDiagnostics = (requestId: string): TraceDiagnostics => ({
+  request_id: requestId,
+  reflection_checks: [],
+  reflection_diagnostic: {
+    blocked: false,
+    decisions: [],
+    issue_codes: [],
+  },
+});
 
 describe('DataFlywheel 页面', () => {
   beforeEach(() => {
@@ -343,6 +391,13 @@ describe('DataFlywheel 页面', () => {
     });
     mockedList.mockResolvedValue({ items: [sample], total: 1 });
     mockedDetail.mockResolvedValue(detail);
+    mockedTraceDiagnostics.mockImplementation((requestId) =>
+      Promise.resolve(
+        requestId === 'req:abc'
+          ? reflectionDiagnostics
+          : emptyReflectionDiagnostics(requestId)
+      )
+    );
     mockedSessionReview.mockImplementation((sessionId) =>
       Promise.resolve(sessionId === 'session-b' ? anotherSessionReview : sessionReview)
     );
@@ -700,6 +755,43 @@ describe('DataFlywheel 页面', () => {
     await waitFor(() => {
       expect(mockedDetail).toHaveBeenCalledWith(sessionSecondSample.sample_id);
     });
+  });
+
+  it('完整会话中展示 Reflection summary、检查明细和关联 input', async () => {
+    mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-a');
+    fireEvent.click(screen.getByTestId('archive-session-session-a'));
+
+    await waitFor(() => {
+      expect(mockedTraceDiagnostics).toHaveBeenCalledWith('req:abc');
+    });
+    expect(await screen.findByText('blocked: 是')).toBeInTheDocument();
+    expect(screen.getAllByText('decision: block_write').length).toBeGreaterThan(0);
+    expect(screen.getByText('issue: confirmation_param_mismatch')).toBeInTheDocument();
+    expect(screen.getByText('trigger: pre_write_plan')).toBeInTheDocument();
+    expect(screen.getByText('check: write_plan_consistency')).toBeInTheDocument();
+    expect(screen.getByText('reason: 确认文案与待执行参数不一致。')).toBeInTheDocument();
+    expect(screen.getByText('code: confirmation_param_mismatch')).toBeInTheDocument();
+    expect(screen.getByText('message: 确认文案中的对象与工具参数不一致。')).toBeInTheDocument();
+    expect(screen.getByText('tool_name: create_operation_work_order')).toBeInTheDocument();
+    expect(screen.getByText('tool_call_ids: call-1')).toBeInTheDocument();
+    expect(screen.getByText('plan_id: plan-1')).toBeInTheDocument();
+    expect(screen.getByText('action_id: action-1')).toBeInTheDocument();
+  });
+
+  it('没有 Reflection checks 的 trace 展示空状态', async () => {
+    mockedList.mockResolvedValue({ items: [anotherSample], total: 1 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('session-b');
+    fireEvent.click(screen.getByTestId('archive-session-session-b'));
+
+    await waitFor(() => {
+      expect(mockedTraceDiagnostics).toHaveBeenCalledWith('req:def');
+    });
+    expect(await screen.findByText('暂无 Reflection 检查')).toBeInTheDocument();
   });
 
   it('可以选择工资缺失、填写备注并保存标注', async () => {
