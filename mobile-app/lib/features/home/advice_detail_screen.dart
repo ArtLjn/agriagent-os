@@ -44,11 +44,16 @@ class AdviceDetailScreen extends StatelessWidget {
                         children: [
                           _AdviceHeroCard(suggestion: suggestion),
                           const SizedBox(height: 14),
-                          _EvidenceCard(item: suggestion.item),
-                          const SizedBox(height: 14),
-                          _StepsCard(item: suggestion.item),
-                          const SizedBox(height: 14),
-                          _RelatedCard(item: suggestion.item),
+                          if (_EvidenceCard.hasContent(suggestion.item)) ...[
+                            _EvidenceCard(item: suggestion.item),
+                            const SizedBox(height: 14),
+                          ],
+                          if (_StepsCard.hasContent(suggestion.item)) ...[
+                            _StepsCard(item: suggestion.item),
+                            const SizedBox(height: 14),
+                          ],
+                          if (_RelatedCard.hasContent(suggestion.item))
+                            _RelatedCard(item: suggestion.item),
                         ],
                       ),
                     ),
@@ -133,7 +138,7 @@ class _AdviceHeroCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: SizedBox(
-          height: 248,
+          height: 270,
           child: Stack(
             children: [
               Positioned.fill(
@@ -218,7 +223,7 @@ class _AdviceHeroCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         IconBadge(
-                          icon: LucideIcons.wheat,
+                          icon: _adviceIcon(item?.compact.icon),
                           color: AppColors.blue,
                           background: AppColors.blueSoft,
                           size: 52,
@@ -233,7 +238,7 @@ class _AdviceHeroCard extends StatelessWidget {
                                 detail?.title.isNotEmpty == true
                                     ? detail!.title
                                     : suggestion.title,
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.title,
                               ),
@@ -249,9 +254,9 @@ class _AdviceHeroCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 22),
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 248),
+                      constraints: const BoxConstraints(maxWidth: 292),
                       child: Text(
                         detail?.description.isNotEmpty == true
                             ? detail!.description
@@ -260,23 +265,26 @@ class _AdviceHeroCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.body.copyWith(
                           color: AppColors.muted,
-                          fontSize: 15,
-                          height: 1.5,
+                          fontSize: 16,
+                          height: 1.46,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        for (var index = 0;
-                            index < metaChips.length;
-                            index++) ...[
-                          Expanded(child: metaChips[index]),
-                          if (index != metaChips.length - 1)
-                            const SizedBox(width: 10),
+                    if (metaChips.isNotEmpty) ...[
+                      const Spacer(),
+                      Row(
+                        children: [
+                          for (var index = 0;
+                              index < metaChips.length;
+                              index++) ...[
+                            Expanded(child: metaChips[index]),
+                            if (index != metaChips.length - 1)
+                              const SizedBox(width: 10),
+                          ],
                         ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -302,8 +310,8 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(12),
@@ -321,7 +329,7 @@ class _MetaChip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.small.copyWith(
                 color: AppColors.ink,
-                fontSize: 13,
+                fontSize: 13.5,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -343,12 +351,17 @@ class _AdviceBottomArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final actions = suggestion.item?.detailView.actions
+            .where(
+                (action) => action.type.isNotEmpty && action.label.isNotEmpty)
+            .toList() ??
+        const <AdviceAction>[];
     return Material(
       color: AppColors.surface,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _AdviceActionBar(suggestion: suggestion),
+          if (actions.isNotEmpty) _AdviceActionBar(actions: actions),
           AppBottomTabBar(
             selectedIndex: 0,
             onChanged: (index) {

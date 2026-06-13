@@ -160,6 +160,8 @@ class _WorkerListPageState extends State<WorkerListPage> {
                   cardBuilder: (record, selectionMode, selected) =>
                       WorkerListCard(
                     record: record,
+                    repository: widget.repository,
+                    onBottomTabChanged: widget.onBottomTabChanged,
                     selectionMode: selectionMode,
                     selected: selected,
                   ),
@@ -261,6 +263,7 @@ class WorkerFormPage extends StatefulWidget {
     super.key,
     required this.repository,
     this.workerId,
+    this.initialRecord,
     this.onBottomTabChanged,
   });
 
@@ -268,6 +271,7 @@ class WorkerFormPage extends StatefulWidget {
 
   final BusinessRepository repository;
   final int? workerId;
+  final ApiRecord? initialRecord;
   final ValueChanged<int>? onBottomTabChanged;
 
   @override
@@ -280,7 +284,26 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
   final _unitPrice = TextEditingController();
   final _note = TextEditingController();
   String _payType = 'daily';
+  String _status = 'active';
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateInitialRecord();
+  }
+
+  void _hydrateInitialRecord() {
+    final json = widget.initialRecord?.json;
+    if (json == null) return;
+    _name.text = _firstNonEmpty([json['name']]);
+    _phone.text = _firstNonEmpty([json['phone']]);
+    _unitPrice.text = _firstNonEmpty([json['default_unit_price']]);
+    _note.text = _firstNonEmpty([json['note']]);
+    _payType = _firstNonEmpty([json['default_pay_type']], fallback: 'daily');
+    final rawStatus = _firstNonEmpty([json['status']], fallback: 'active');
+    _status = _normalizeWorkerStatus(rawStatus);
+  }
 
   @override
   void dispose() {
@@ -303,9 +326,9 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
             'default_unit_price':
                 num.tryParse(_unitPrice.text.trim()) ?? _unitPrice.text.trim(),
             'note': _note.text.trim(),
-            'status': 'active',
+            'status': _status,
           }..removeWhere((_, value) => value == null || value == ''),
-          workerId: widget.workerId);
+          workerId: widget.workerId ?? widget.initialRecord?.id);
       _showMessage('保存工人成功');
     } catch (_) {
       _showMessage('保存失败，请稍后再试');
@@ -357,7 +380,12 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
               controller: _phone,
               hintText: '输入手机号',
             ),
-            const BusinessFormRow(label: '状态', value: '在用', chevron: true),
+            SegmentedFormRow(
+              label: '状态',
+              options: const {'active': '在用', 'inactive': '离职'},
+              value: _status,
+              onChanged: (value) => setState(() => _status = value),
+            ),
           ],
         ),
         FormRowsCard(
@@ -382,11 +410,6 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
           title: '备注与标签',
           icon: LucideIcons.tags,
           children: [
-            const BusinessFormRow(
-              label: '标签',
-              value: '未设置',
-              chevron: true,
-            ),
             BusinessFormRow(
               label: '备注',
               value: '',
@@ -404,15 +427,26 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
   }
 }
 
+String _normalizeWorkerStatus(String value) {
+  return switch (value.trim().toLowerCase()) {
+    'inactive' || 'disabled' || '离职' => 'inactive',
+    _ => 'active',
+  };
+}
+
 class WorkerListCard extends StatelessWidget {
   const WorkerListCard({
     super.key,
     required this.record,
+    required this.repository,
+    this.onBottomTabChanged,
     this.selectionMode = false,
     this.selected = false,
   });
 
   final ApiRecord record;
+  final BusinessRepository repository;
+  final ValueChanged<int>? onBottomTabChanged;
   final bool selectionMode;
   final bool selected;
 
@@ -494,19 +528,42 @@ class WorkerListCard extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                isSettled ? '结清' : '欠$unpaid元',
-                style: AppTextStyles.body.copyWith(
-                  color: isSettled ? businessGreen : AppColors.red,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                LucideIcons.chevronRight,
-                size: 18,
-                color: AppColors.subtle,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    isSettled ? '结清' : '欠$unpaid元',
+                    style: AppTextStyles.body.copyWith(
+                      color: isSettled ? businessGreen : AppColors.red,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: 76,
+                    child: FilledActionButton(
+                      label: '编辑',
+                      foreground: businessBlue,
+                      background: AppColors.blueSoft,
+                      borderColor: AppColors.blueSoft,
+                      icon: LucideIcons.pencil,
+                      height: 34,
+                      onTap: selectionMode
+                          ? null
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => WorkerFormPage(
+                                    repository: repository,
+                                    workerId: record.id,
+                                    initialRecord: record,
+                                    onBottomTabChanged: onBottomTabChanged,
+                                  ),
+                                ),
+                              ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

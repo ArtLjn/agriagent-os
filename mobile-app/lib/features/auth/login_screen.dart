@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../shared/app_identity.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../data/api/api_client.dart';
 import 'auth_widgets.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -47,9 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
         phone: phoneController.text.trim(),
         password: passwordController.text,
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => errorMessage = '登录失败，请检查账号或稍后重试');
+      setState(() => errorMessage = ApiClient.userMessageFor(error));
     } finally {
       if (mounted) setState(() => isSubmitting = false);
     }

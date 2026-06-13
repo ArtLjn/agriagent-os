@@ -29,6 +29,11 @@ class BusinessRepository {
     return ApiRecord.fromJson(response);
   }
 
+  Future<ApiRecord> createPlantingUnit(Map<String, Object?> data) async {
+    return ApiRecord.fromJson(
+        await client.postMap('/planting/units', data: data));
+  }
+
   Future<void> deleteCycle(int cycleId) async {
     await client.delete('/cycles/$cycleId');
   }

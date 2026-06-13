@@ -35,13 +35,19 @@ class _AuthFlowState extends State<AuthFlow> {
   }
 
   Future<void> _restoreSession() async {
-    final restored = await widget.dependencies.restoreSession();
-    if (!mounted) return;
-    if (!restored) {
+    try {
+      final restored = await widget.dependencies.restoreSession();
+      if (!mounted) return;
+      if (!restored) {
+        setState(() => step = AuthStep.login);
+        return;
+      }
+      await _enterAfterAuth(onFailureMessage: '登录已失效，请重新登录');
+    } catch (_) {
+      if (!mounted) return;
       setState(() => step = AuthStep.login);
-      return;
+      _showMessage('恢复登录失败，请重新登录');
     }
-    await _enterAfterAuth();
   }
 
   Future<void> _logout() async {
@@ -50,11 +56,25 @@ class _AuthFlowState extends State<AuthFlow> {
     setState(() => step = AuthStep.login);
   }
 
-  Future<void> _enterAfterAuth() async {
-    final user = await widget.dependencies.profile.getProfile();
-    final location = user.farm?.location?.trim() ?? '';
+  Future<void> _enterAfterAuth({String? onFailureMessage}) async {
+    try {
+      final user = await widget.dependencies.profile.getProfile();
+      final location = user.farm?.location?.trim() ?? '';
+      if (!mounted) return;
+      setState(() => step = location.isEmpty ? AuthStep.setup : AuthStep.app);
+    } catch (_) {
+      await widget.dependencies.logout();
+      if (!mounted) return;
+      setState(() => step = AuthStep.login);
+      _showMessage(onFailureMessage ?? '登录失败，请稍后重试');
+    }
+  }
+
+  void _showMessage(String message) {
     if (!mounted) return;
-    setState(() => step = location.isEmpty ? AuthStep.setup : AuthStep.app);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

@@ -5,32 +5,33 @@ class _EvidenceCard extends StatelessWidget {
 
   final AdviceItem? item;
 
+  static bool hasContent(AdviceItem? item) {
+    return (item?.detailView.evidence ?? const <AdviceEvidence>[]).any(
+      (entry) =>
+          entry.title.trim().isNotEmpty || entry.description.trim().isNotEmpty,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final evidence = item?.detailView.evidence ?? const <AdviceEvidence>[];
-    final rows = evidence.isEmpty
-        ? const [
-            _InfoRow(
-              icon: LucideIcons.sparkles,
-              iconColor: AppColors.blue,
-              iconBackground: AppColors.blueSoft,
-              text: '暂无更多判断依据',
-              showDivider: false,
-            )
-          ]
-        : [
-            for (var index = 0; index < evidence.length; index++)
-              _InfoRow(
-                icon: _sourceIcon(evidence[index].sourceType),
-                iconColor: _sourceColor(evidence[index].sourceType),
-                iconBackground: _sourceBackground(evidence[index].sourceType),
-                text: _joinTitleDescription(
-                  evidence[index].title,
-                  evidence[index].description,
-                ),
-                showDivider: index != evidence.length - 1,
-              )
-          ];
+    final evidence = (item?.detailView.evidence ?? const <AdviceEvidence>[])
+        .where(
+          (entry) =>
+              entry.title.trim().isNotEmpty ||
+              entry.description.trim().isNotEmpty,
+        )
+        .toList();
+    final rows = [
+      for (var index = 0; index < evidence.length; index++)
+        _InfoRow(
+          icon: _sourceIcon(evidence[index].sourceType),
+          iconColor: _sourceColor(evidence[index].sourceType),
+          iconBackground: _sourceBackground(evidence[index].sourceType),
+          title: evidence[index].title,
+          description: evidence[index].description,
+          showDivider: index != evidence.length - 1,
+        )
+    ];
     return _DetailSectionCard(
       icon: LucideIcons.sparkles,
       title: 'AI 判断依据',
@@ -44,24 +45,31 @@ class _StepsCard extends StatelessWidget {
 
   final AdviceItem? item;
 
+  static bool hasContent(AdviceItem? item) {
+    return (item?.detailView.steps ?? const <AdviceStep>[]).any(
+      (step) =>
+          step.title.trim().isNotEmpty || step.description.trim().isNotEmpty,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final steps = item?.detailView.steps ?? const <AdviceStep>[];
-    final rows = steps.isEmpty
-        ? const [
-            _StepRow(index: 1, text: '结合现场情况处理', showDivider: false),
-          ]
-        : [
-            for (var index = 0; index < steps.length; index++)
-              _StepRow(
-                index: steps[index].order > 0 ? steps[index].order : index + 1,
-                text: _joinTitleDescription(
-                  steps[index].title,
-                  steps[index].description,
-                ),
-                showDivider: index != steps.length - 1,
-              )
-          ];
+    final steps = (item?.detailView.steps ?? const <AdviceStep>[])
+        .where(
+          (step) =>
+              step.title.trim().isNotEmpty ||
+              step.description.trim().isNotEmpty,
+        )
+        .toList();
+    final rows = [
+      for (var index = 0; index < steps.length; index++)
+        _StepRow(
+          index: steps[index].order > 0 ? steps[index].order : index + 1,
+          title: steps[index].title,
+          description: steps[index].description,
+          showDivider: index != steps.length - 1,
+        )
+    ];
     return _DetailSectionCard(
       icon: LucideIcons.listChecks,
       title: '执行步骤',
@@ -75,33 +83,33 @@ class _RelatedCard extends StatelessWidget {
 
   final AdviceItem? item;
 
+  static bool hasContent(AdviceItem? item) {
+    return (item?.detailView.related ?? const <AdviceRelatedEntry>[]).any(
+      (entry) =>
+          entry.title.trim().isNotEmpty || entry.description.trim().isNotEmpty,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final related = item?.detailView.related ?? const <AdviceRelatedEntry>[];
-    final rows = related.isEmpty
-        ? const [
-            _RelatedRow(
-              icon: LucideIcons.link,
-              iconColor: AppColors.blue,
-              iconBackground: AppColors.blueSoft,
-              title: '暂无关联事项',
-              value: '可继续问问芽芽',
-              valueColor: AppColors.blue,
-              showDivider: false,
-            )
-          ]
-        : [
-            for (var index = 0; index < related.length; index++)
-              _RelatedRow(
-                icon: _sourceIcon(related[index].sourceType),
-                iconColor: _sourceColor(related[index].sourceType),
-                iconBackground: _sourceBackground(related[index].sourceType),
-                title: related[index].title,
-                value: related[index].description,
-                valueColor: AppColors.ink,
-                showDivider: index != related.length - 1,
-              )
-          ];
+    final related = (item?.detailView.related ?? const <AdviceRelatedEntry>[])
+        .where(
+          (entry) =>
+              entry.title.trim().isNotEmpty ||
+              entry.description.trim().isNotEmpty,
+        )
+        .toList();
+    final rows = [
+      for (var index = 0; index < related.length; index++)
+        _RelatedRow(
+          icon: _sourceIcon(related[index].sourceType),
+          iconColor: _sourceColor(related[index].sourceType),
+          iconBackground: _sourceBackground(related[index].sourceType),
+          title: related[index].title,
+          value: related[index].description,
+          showDivider: index != related.length - 1,
+        )
+    ];
     return _DetailSectionCard(
       icon: LucideIcons.link,
       title: '关联事项',
@@ -148,21 +156,26 @@ class _InfoRow extends StatelessWidget {
     required this.icon,
     required this.iconColor,
     required this.iconBackground,
-    required this.text,
+    required this.title,
+    required this.description,
     this.showDivider = true,
   });
 
   final IconData icon;
   final Color iconColor;
   final Color iconBackground;
-  final String text;
+  final String title;
+  final String description;
   final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
+    final cleanTitle = title.trim();
+    final cleanDescription = description.trim();
     return _DividedRow(
       showDivider: showDivider,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconBadge(
             icon: icon,
@@ -172,7 +185,12 @@ class _InfoRow extends StatelessWidget {
             iconSize: 22,
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(text, style: AppTextStyles.body)),
+          Expanded(
+            child: _TextBlock(
+              title: cleanTitle.isEmpty ? cleanDescription : cleanTitle,
+              description: cleanTitle.isEmpty ? '' : cleanDescription,
+            ),
+          ),
         ],
       ),
     );
@@ -182,19 +200,24 @@ class _InfoRow extends StatelessWidget {
 class _StepRow extends StatelessWidget {
   const _StepRow({
     required this.index,
-    required this.text,
+    required this.title,
+    required this.description,
     this.showDivider = true,
   });
 
   final int index;
-  final String text;
+  final String title;
+  final String description;
   final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
+    final cleanTitle = title.trim();
+    final cleanDescription = description.trim();
     return _DividedRow(
       showDivider: showDivider,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 28,
@@ -216,6 +239,7 @@ class _StepRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Container(
+            margin: const EdgeInsets.only(top: 3),
             width: 22,
             height: 22,
             decoration: BoxDecoration(
@@ -224,9 +248,48 @@ class _StepRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(text, style: AppTextStyles.body)),
+          Expanded(
+            child: _TextBlock(
+              title: cleanTitle.isEmpty ? cleanDescription : cleanTitle,
+              description: cleanTitle.isEmpty ? '' : cleanDescription,
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _TextBlock extends StatelessWidget {
+  const _TextBlock({required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTextStyles.listTitle.copyWith(
+            height: 1.36,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (description.trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            description,
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.muted,
+              fontSize: 13.5,
+              height: 1.46,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -238,7 +301,6 @@ class _RelatedRow extends StatelessWidget {
     required this.iconBackground,
     required this.title,
     required this.value,
-    required this.valueColor,
     this.showDivider = true,
   });
 
@@ -247,7 +309,6 @@ class _RelatedRow extends StatelessWidget {
   final Color iconBackground;
   final String title;
   final String value;
-  final Color valueColor;
   final bool showDivider;
 
   @override
@@ -268,12 +329,23 @@ class _RelatedRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTextStyles.listTitle),
-                const SizedBox(height: 2),
                 Text(
-                  value,
-                  style: AppTextStyles.listTitle.copyWith(color: valueColor),
+                  title,
+                  style: AppTextStyles.listTitle.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
+                if (value.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.muted,
+                      fontSize: 13.5,
+                      height: 1.42,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -309,16 +381,13 @@ class _DividedRow extends StatelessWidget {
 }
 
 class _AdviceActionBar extends StatelessWidget {
-  const _AdviceActionBar({required this.suggestion});
+  const _AdviceActionBar({required this.actions});
 
-  final HomeSuggestionViewModel suggestion;
+  final List<AdviceAction> actions;
 
   @override
   Widget build(BuildContext context) {
-    final actions =
-        suggestion.item?.detailView.actions ?? const <AdviceAction>[];
-    final createAction = _firstAction(actions, 'create_work_order');
-    final askAction = _firstAction(actions, 'ask_agent');
+    final visibleActions = actions.take(2).toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
       decoration: const BoxDecoration(
@@ -332,21 +401,16 @@ class _AdviceActionBar extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 430),
             child: Row(
               children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(LucideIcons.filePlus2, size: 20),
-                    label: Text(createAction?.label ?? '生成作业单'),
+                for (var index = 0; index < visibleActions.length; index++) ...[
+                  Expanded(
+                    child: _ActionButton(
+                      action: visibleActions[index],
+                      primary: index == 0,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(LucideIcons.bot, size: 20),
-                    label: Text(askAction?.label ?? '问问芽芽'),
-                  ),
-                ),
+                  if (index != visibleActions.length - 1)
+                    const SizedBox(width: 12),
+                ],
               ],
             ),
           ),
@@ -356,13 +420,37 @@ class _AdviceActionBar extends StatelessWidget {
   }
 }
 
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({required this.action, required this.primary});
+
+  final AdviceAction action;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _actionIcon(action.type);
+    final label = Text(
+      action.label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    if (primary) {
+      return FilledButton.icon(
+        onPressed: () {},
+        icon: Icon(icon, size: 20),
+        label: label,
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: () {},
+      icon: Icon(icon, size: 20),
+      label: label,
+    );
+  }
+}
+
 List<_MetaChip> _heroMeta(List<AdviceHeroBadge> badges) {
-  final visible = badges.isEmpty
-      ? const [
-          AdviceHeroBadge(label: '状态', value: '今日建议', level: 'normal'),
-        ]
-      : badges;
-  return visible
+  return badges
       .map(
         (badge) => _MetaChip(
           icon: _badgeIcon(badge.icon),
@@ -371,14 +459,6 @@ List<_MetaChip> _heroMeta(List<AdviceHeroBadge> badges) {
         ),
       )
       .toList();
-}
-
-String _joinTitleDescription(String title, String description) {
-  final cleanTitle = title.trim();
-  final cleanDescription = description.trim();
-  if (cleanTitle.isEmpty) return cleanDescription;
-  if (cleanDescription.isEmpty) return cleanTitle;
-  return '$cleanTitle：$cleanDescription';
 }
 
 String _levelText(String? level, int? priority) {
@@ -443,9 +523,17 @@ IconData _badgeIcon(String? icon) {
   return LucideIcons.info;
 }
 
-AdviceAction? _firstAction(List<AdviceAction> actions, String type) {
-  for (final action in actions) {
-    if (action.type == type) return action;
-  }
-  return null;
+IconData _actionIcon(String type) {
+  if (type == 'create_work_order') return LucideIcons.filePlus2;
+  if (type == 'ask_agent') return LucideIcons.bot;
+  return LucideIcons.circleArrowRight;
+}
+
+IconData _adviceIcon(String? icon) {
+  if (icon == 'CloudSun') return LucideIcons.cloudSun;
+  if (icon == 'ClipboardList') return LucideIcons.clipboardList;
+  if (icon == 'CircleDollarSign') return LucideIcons.circleDollarSign;
+  if (icon == 'Sprout') return LucideIcons.sprout;
+  if (icon == 'NotebookPen') return LucideIcons.notebookPen;
+  return LucideIcons.wheat;
 }

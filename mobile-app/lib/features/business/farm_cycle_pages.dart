@@ -118,6 +118,9 @@ class FarmCycleFormPage extends StatefulWidget {
     super.key,
     required this.repository,
     this.cycleId,
+    this.initialRecord,
+    this.initialTemplateId,
+    this.initialTemplateName,
     this.onBottomTabChanged,
   });
 
@@ -125,6 +128,9 @@ class FarmCycleFormPage extends StatefulWidget {
 
   final BusinessRepository repository;
   final int? cycleId;
+  final ApiRecord? initialRecord;
+  final int? initialTemplateId;
+  final String? initialTemplateName;
   final ValueChanged<int>? onBottomTabChanged;
 
   @override
@@ -133,48 +139,157 @@ class FarmCycleFormPage extends StatefulWidget {
 
 class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
   final _name = TextEditingController();
-  final _templateId = TextEditingController();
   final _startDate = TextEditingController(text: _todayText());
-  final _field = TextEditingController();
+  final _unitName = TextEditingController();
   final _area = TextEditingController();
   final _season = TextEditingController();
   final _note = TextEditingController();
+  final _unitNote = TextEditingController();
+  final _plantedDate = TextEditingController(text: _todayText());
+  late Future<PageResult<ApiRecord>> _templatesFuture;
+  ApiRecord? _selectedTemplate;
+  bool _showMore = false;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _templatesFuture = widget.repository.listCropTemplates(size: 100);
+    _hydrateInitialRecord();
+    final templateId = widget.initialTemplateId;
+    if (templateId != null && _selectedTemplate == null) {
+      final templateName = widget.initialTemplateName?.trim();
+      _selectedTemplate = ApiRecord({
+        'id': templateId,
+        'name':
+            templateName?.isNotEmpty == true ? templateName : '模板 $templateId',
+        'stages': const <Object>[],
+      });
+      if (templateName != null && templateName.isNotEmpty) {
+        _name.text = '$templateName茬口';
+      }
+    }
+  }
+
+  void _hydrateInitialRecord() {
+    final json = widget.initialRecord?.json;
+    if (json == null) return;
+    _name.text = _firstNonEmpty([json['name']]);
+    _startDate.text =
+        _firstNonEmpty([json['start_date']], fallback: _startDate.text);
+    _unitName.text = _firstNonEmpty([json['field_name']]);
+    _area.text = _firstNonEmpty([json['total_area_mu'], json['unit_area_mu']]);
+    _season.text = _firstNonEmpty([json['season']]);
+    _note.text = _firstNonEmpty([json['batch_note']]);
+    final templateId = json['crop_template_id'];
+    if (templateId is int) {
+      _selectedTemplate = ApiRecord({
+        'id': templateId,
+        'name': _firstNonEmpty([
+          json['crop_template_name'],
+          json['crop_name'],
+          json['template_name'],
+        ], fallback: '模板 $templateId'),
+        'stages': json['stages'] ?? const <Object>[],
+      });
+    }
+  }
 
   @override
   void dispose() {
     _name.dispose();
-    _templateId.dispose();
     _startDate.dispose();
-    _field.dispose();
+    _unitName.dispose();
     _area.dispose();
     _season.dispose();
     _note.dispose();
+    _unitNote.dispose();
+    _plantedDate.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (_saving) return;
+    if (!_validateBeforeSave()) return;
     setState(() => _saving = true);
     try {
-      await widget.repository.saveCycle(
+      final cycle = await widget.repository.saveCycle(
         {
           'name': _name.text.trim(),
-          'crop_template_id': int.tryParse(_templateId.text.trim()),
+          'crop_template_id': _selectedTemplate?.id,
           'start_date': _startDate.text.trim(),
-          'field_name': _field.text.trim(),
+          'field_name': _unitName.text.trim(),
           'total_area_mu': num.tryParse(_area.text.trim()) ?? _area.text.trim(),
           'season': _season.text.trim(),
           'batch_note': _note.text.trim(),
         }..removeWhere((_, value) => value == null || value == ''),
         cycleId: widget.cycleId,
       );
-      _showMessage('创建茬口成功');
+      final unitName = _unitName.text.trim();
+      if (widget.cycleId == null && unitName.isNotEmpty) {
+        await widget.repository.createPlantingUnit(
+          {
+            'cycle_id': cycle.id,
+            'name': unitName,
+            'area_mu': num.tryParse(_area.text.trim()) ?? _area.text.trim(),
+            'planted_date': _plantedDate.text.trim(),
+            'status': 'active',
+            'note': _unitNote.text.trim(),
+          }..removeWhere((_, value) => value == null || value == ''),
+        );
+      }
+      _showMessage(widget.cycleId == null ? '创建茬口成功' : '保存茬口成功');
     } catch (_) {
       _showMessage('保存失败，请稍后再试');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  bool _validateBeforeSave() {
+    if (_selectedTemplate == null) {
+      _showMessage('请选择作物模板');
+      return false;
+    }
+    if (_name.text.trim().isEmpty) {
+      _showMessage('请填写茬口名称');
+      return false;
+    }
+    if (widget.cycleId == null && _unitName.text.trim().isEmpty) {
+      _showMessage('请填写棚室或种植区域');
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _pickDate(TextEditingController controller) async {
+    final initialDate = DateTime.tryParse(controller.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      helpText: '选择日期',
+      cancelText: '取消',
+      confirmText: '确定',
+    );
+    if (picked == null) return;
+    final formatted = _dateText(picked);
+    setState(() {
+      controller.text = formatted;
+      if (controller == _startDate) {
+        _plantedDate.text = formatted;
+      }
+    });
+  }
+
+  void _selectTemplate(ApiRecord template) {
+    setState(() {
+      _selectedTemplate = template;
+      if (_name.text.trim().isEmpty) {
+        _name.text = _defaultCycleName(template);
+      }
+    });
   }
 
   void _showMessage(String message) {
@@ -191,7 +306,11 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
       trailingIcon: LucideIcons.sparkles,
       bottomBar: BottomActions(
         secondaryLabel: '保存草稿',
-        primaryLabel: _saving ? '保存中' : '创建茬口',
+        primaryLabel: _saving
+            ? '保存中'
+            : widget.cycleId == null
+                ? '创建茬口'
+                : '保存茬口',
         onPrimary: _save,
         onSecondary: () => _showMessage('草稿已保留在当前页面'),
         showTabs: true,
@@ -220,28 +339,34 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
             ),
             BusinessFormRow(
               label: '作物模板',
-              value: '',
-              controller: _templateId,
-              hintText: '输入模板 ID',
+              value: _templateDisplayName(_selectedTemplate),
+              hintText: '选择自己的作物模板',
               chevron: true,
+              onTap: () async {
+                final selected = await _showTemplatePicker(
+                  context,
+                  _templatesFuture,
+                  _selectedTemplate?.id,
+                );
+                if (selected != null) _selectTemplate(selected);
+              },
             ),
             BusinessFormRow(
               label: '开始日期',
-              value: '',
-              controller: _startDate,
-              hintText: '选择日期',
+              value: _startDate.text,
               chevron: true,
+              onTap: () => _pickDate(_startDate),
             ),
             BusinessFormRow(
-              label: '地块',
+              label: '种植区域',
               value: '',
-              controller: _field,
-              hintText: '输入地块',
+              controller: _unitName,
+              hintText: '例：东大棚 1 号、A 区',
             ),
           ],
         ),
         FormRowsCard(
-          title: '面积与季节',
+          title: '区域面积',
           icon: LucideIcons.ruler,
           children: [
             BusinessFormRow(
@@ -252,23 +377,70 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
               keyboardType: TextInputType.number,
             ),
             BusinessFormRow(
-              label: '季节',
-              value: '',
-              controller: _season,
-              hintText: '输入季节',
+              label: '定植日期',
+              value: _plantedDate.text,
+              chevron: true,
+              onTap: () => _pickDate(_plantedDate),
             ),
             BusinessFormRow(
-              label: '备注',
+              label: '区域备注',
               value: '',
-              controller: _note,
-              hintText: '补充说明',
+              controller: _unitNote,
+              hintText: '可选，例如垄数、棚号说明',
             ),
           ],
         ),
-        const StagePreviewCard(stages: []),
+        FormRowsCard(
+          title: '更多信息',
+          icon: LucideIcons.slidersHorizontal,
+          children: [
+            BusinessFormRow(
+              label: '可选信息',
+              value: _showMore ? '收起' : '填写季节和备注',
+              chevron: true,
+              onTap: () => setState(() => _showMore = !_showMore),
+            ),
+            if (_showMore) ...[
+              BusinessFormRow(
+                label: '季节',
+                value: '',
+                controller: _season,
+                hintText: '可选，如春季、秋季',
+              ),
+              BusinessFormRow(
+                label: '茬口备注',
+                value: '',
+                controller: _note,
+                hintText: '补充说明',
+              ),
+            ],
+          ],
+        ),
+        StagePreviewCard(stages: _templateStages(_selectedTemplate)),
       ],
     );
   }
+}
+
+Future<ApiRecord?> _showTemplatePicker(
+  BuildContext context,
+  Future<PageResult<ApiRecord>> templatesFuture,
+  int? selectedTemplateId,
+) {
+  return showBusinessPickerSheet<ApiRecord>(
+    context: context,
+    title: '选择作物模板',
+    subtitle: '选择后自动带出生长阶段，创建茬口更快',
+    future: templatesFuture,
+    selectedId: selectedTemplateId,
+    loadingText: '正在加载模板',
+    errorText: '模板加载失败，请稍后再试',
+    emptyText: '还没有作物模板，先新建一个模板',
+    titleFor: _templateDisplayName,
+    subtitleFor: _templateSubtitle,
+    leadingIconFor: (_) => LucideIcons.sprout,
+    accentFor: (_) => businessGreen,
+  );
 }
 
 class CycleListCard extends StatelessWidget {
@@ -429,6 +601,30 @@ class CycleListCard extends StatelessWidget {
                     color: AppColors.muted,
                     fontSize: 14,
                   ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 3,
+                child: FilledActionButton(
+                  label: '编辑',
+                  foreground: AppColors.greenDark,
+                  background: AppColors.greenSoft,
+                  borderColor: AppColors.greenSoft,
+                  icon: LucideIcons.pencil,
+                  height: 38,
+                  onTap: selectionMode
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => FarmCycleFormPage(
+                                repository: repository,
+                                cycleId: record.id,
+                                initialRecord: record,
+                                onBottomTabChanged: onBottomTabChanged,
+                              ),
+                            ),
+                          ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -668,10 +864,55 @@ class _CycleSummary {
 }
 
 String _todayText() {
-  final now = DateTime.now();
-  final month = now.month.toString().padLeft(2, '0');
-  final day = now.day.toString().padLeft(2, '0');
-  return '${now.year}-$month-$day';
+  return _dateText(DateTime.now());
+}
+
+String _dateText(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+String _templateDisplayName(ApiRecord? template) {
+  if (template == null) return '选择作物模板';
+  final json = template.json;
+  final name = _firstNonEmpty([json['name']], fallback: '未命名模板');
+  final variety = _firstNonEmpty([json['variety']]);
+  return variety.isEmpty ? name : '$name / $variety';
+}
+
+String _templateSubtitle(ApiRecord template) {
+  final stages = _templateStages(template);
+  final days = _firstNonEmpty([template.json['total_cycle_days']]);
+  final parts = <String>[
+    '${stages.length} 个阶段',
+    if (days.isNotEmpty) '周期 $days 天',
+  ];
+  return parts.join(' · ');
+}
+
+String _defaultCycleName(ApiRecord template) {
+  final start = DateTime.tryParse(_todayText()) ?? DateTime.now();
+  final season = _seasonFromMonth(start.month);
+  final name = _firstNonEmpty([template.json['name']], fallback: '新茬口');
+  return '$season$name';
+}
+
+String _seasonFromMonth(int month) {
+  if (month >= 3 && month <= 5) return '春季';
+  if (month >= 6 && month <= 8) return '夏季';
+  if (month >= 9 && month <= 11) return '秋季';
+  return '冬季';
+}
+
+List<({String name, String days})> _templateStages(ApiRecord? template) {
+  final rawStages = template?.json['stages'];
+  if (rawStages is! List) return const [];
+  return rawStages.whereType<Map>().map((stage) {
+    final name = _firstNonEmpty([stage['name']], fallback: '未命名阶段');
+    final days = _firstNonEmpty([stage['duration_days']], fallback: '-');
+    return (name: name, days: '$days天');
+  }).toList();
 }
 
 String _firstNonEmpty(List<Object?> values, {String fallback = ''}) {

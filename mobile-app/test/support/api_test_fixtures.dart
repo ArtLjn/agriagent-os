@@ -241,6 +241,33 @@ final paginatedCropTemplatesResponse = {
   'total': 1,
 };
 
+final cropTemplateFilterResponse = {
+  'items': [
+    {
+      ...cropTemplateResponse,
+      'id': 3,
+      'name': '番茄',
+      'variety': '粉果 306',
+      'category': '蔬菜',
+    },
+    {
+      ...cropTemplateResponse,
+      'id': 8,
+      'name': '西瓜',
+      'variety': '8424',
+      'category': '瓜果',
+    },
+    {
+      ...cropTemplateResponse,
+      'id': 9,
+      'name': '玉米',
+      'variety': '甜玉米',
+      'category': '粮食',
+    },
+  ],
+  'total': 3,
+};
+
 final yearlySummaryResponse = {
   'year': 2026,
   'total_cost': '200',

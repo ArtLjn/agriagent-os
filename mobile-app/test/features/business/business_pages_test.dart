@@ -5,6 +5,7 @@ import 'package:farm_manager_app/features/business/business_ui.dart';
 import 'package:farm_manager_app/features/business/business_pages.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../support/api_test_fixtures.dart';
 
@@ -20,10 +21,14 @@ void main() {
       'POST /costs': costRecordResponse,
       'POST /logs': logResponse,
       'POST /cycles': cycleResponse,
+      'PUT /cycles/7': cycleResponse,
+      'POST /planting/units': plantingUnitResponse,
       'DELETE /cycles/7': {'message': 'ok'},
       'POST /crops/templates': cropTemplateResponse,
+      'PUT /crops/templates/3': cropTemplateResponse,
       'DELETE /crops/templates/3': {'message': 'ok'},
       'POST /planting/workers': workerResponse,
+      'PUT /planting/workers/4': workerResponse,
       'DELETE /planting/workers/4': {'message': 'ok'},
       'POST /planting/labor/wages': wageResponse,
       ...overrides,
@@ -109,11 +114,39 @@ void main() {
     expect(find.text('新建茬口'), findsWidgets);
     expect(find.text('茬口名称'), findsOneWidget);
     expect(find.text('作物模板'), findsOneWidget);
-    expect(find.text('地块'), findsOneWidget);
+    expect(find.text('种植区域'), findsOneWidget);
+    expect(find.text('区域面积'), findsOneWidget);
     expect(find.text('创建茬口'), findsOneWidget);
     expect(find.text('选择作物模板后显示阶段预览。'), findsOneWidget);
     expect(find.text('播种期'), findsNothing);
     expect(find.text('苗期'), findsNothing);
+  });
+
+  testWidgets('新建茬口选择模板后创建茬口和种植区域', (tester) async {
+    await pump(tester, FarmCycleFormPage(repository: repository));
+
+    await tester.tap(find.text('作物模板'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('番茄 / 粉果 306').last);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '例：东大棚 1 号、A 区'),
+      '东大棚 1 号',
+    );
+    await tester.enterText(find.widgetWithText(TextField, '输入亩数'), '19');
+    await tester.tap(find.text('创建茬口'));
+    await tester.pumpAndSettle();
+
+    final cycleRequest = adapter.find('POST', '/cycles');
+    expect(cycleRequest.data, containsPair('crop_template_id', 3));
+    expect(cycleRequest.data, containsPair('field_name', '东大棚 1 号'));
+    expect(cycleRequest.data, containsPair('total_area_mu', 19));
+
+    final unitRequest = adapter.find('POST', '/planting/units');
+    expect(unitRequest.data, containsPair('cycle_id', 7));
+    expect(unitRequest.data, containsPair('name', '东大棚 1 号'));
+    expect(unitRequest.data, containsPair('area_mu', 19));
   });
 
   testWidgets('新建茬口页保存草稿有反馈', (tester) async {
@@ -123,6 +156,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('草稿已保留在当前页面'), findsOneWidget);
+  });
+
+  testWidgets('茬口编辑页回填基础字段并保存', (tester) async {
+    await pump(tester, FarmCycleListPage(repository: repository));
+
+    final editButton = find.widgetWithText(FilledActionButton, '编辑');
+    await tester.ensureVisible(editButton);
+    await tester.tap(editButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('编辑茬口'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '春茬'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '一号棚'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, '春茬'), '春茬更新');
+    await tester.tap(find.text('保存茬口'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('PUT', '/cycles/7');
+    expect(request.data, containsPair('name', '春茬更新'));
+    expect(request.data, containsPair('field_name', '一号棚'));
+    expect(request.data, containsPair('total_area_mu', 3.5));
   });
 
   testWidgets('作物模板列表页渲染搜索、卡片动作和底部 Tab', (tester) async {
@@ -150,6 +205,37 @@ void main() {
     expect(find.text('8424西瓜'), findsNothing);
     expect(find.text('普罗旺斯番茄'), findsNothing);
     expect(find.text('甜玉米'), findsNothing);
+  });
+
+  testWidgets('作物模板列表支持搜索和分类筛选', (tester) async {
+    setUpRepository({
+      '/crops/templates': cropTemplateFilterResponse,
+    });
+
+    await pump(tester, CropTemplateListPage(repository: repository));
+
+    await tester.enterText(find.byType(TextField), '8424');
+    await tester.pumpAndSettle();
+
+    expect(find.text('西瓜'), findsOneWidget);
+    expect(find.text('番茄'), findsNothing);
+    expect(find.text('玉米'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('蔬菜'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('番茄'), findsWidgets);
+    expect(find.text('西瓜'), findsNothing);
+    expect(find.text('玉米'), findsNothing);
+
+    await tester.tap(find.text('粮食'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('玉米'), findsOneWidget);
+    expect(find.text('番茄'), findsNothing);
+    expect(find.text('西瓜'), findsNothing);
   });
 
   testWidgets('作物模板页长按进入多选并批量删除', (tester) async {
@@ -181,6 +267,9 @@ void main() {
     await pump(tester, CropTemplateFormPage(repository: repository));
 
     expect(find.text('新建模板'), findsOneWidget);
+    expect(find.text('模板信息'), findsOneWidget);
+    expect(find.text('保存后可复用'), findsOneWidget);
+    expect(find.text('输入作物名称，生成阶段'), findsNothing);
     expect(find.text('作物名称'), findsOneWidget);
     expect(find.text('品种'), findsOneWidget);
     expect(find.text('生长阶段'), findsOneWidget);
@@ -193,6 +282,91 @@ void main() {
     expect(find.text('伸蔓期'), findsNothing);
     expect(find.text('开花坐果期'), findsNothing);
     expect(find.text('采收期'), findsNothing);
+  });
+
+  testWidgets('作物模板表单按接口字段保存且作物名称品种为输入框', (tester) async {
+    await pump(tester, CropTemplateFormPage(repository: repository));
+
+    expect(find.byIcon(LucideIcons.chevronRight), findsNothing);
+
+    await tester.enterText(find.widgetWithText(TextField, '输入作物名称'), '黄瓜');
+    await tester.enterText(find.widgetWithText(TextField, '输入品种'), '津优');
+    await tester.enterText(find.widgetWithText(TextField, '输入阶段名称'), '苗期');
+    await tester.enterText(find.widgetWithText(TextField, '输入天数'), '12');
+    await tester.enterText(find.widgetWithText(TextField, '输入关键任务'), '控水');
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -360));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加阶段'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, '输入阶段名称').last, '采收期');
+    await tester.enterText(find.widgetWithText(TextField, '输入天数').last, '28');
+    await tester.enterText(
+        find.widgetWithText(TextField, '输入关键任务').last, '分批采收');
+    await tester.tap(find.text('保存模板'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('POST', '/crops/templates');
+    expect(request.data, containsPair('name', '黄瓜'));
+    expect(request.data, containsPair('variety', '津优'));
+    expect(request.data, contains('stages'));
+    final data = request.data! as Map<String, dynamic>;
+    final stages = data['stages'] as List<dynamic>;
+    expect(stages, hasLength(2));
+    expect(stages.first, containsPair('name', '苗期'));
+    expect(stages.first, containsPair('duration_days', 12));
+    expect(stages.first, containsPair('order_index', 1));
+    expect(stages.first, containsPair('key_tasks', '控水'));
+    expect(stages.last, containsPair('name', '采收期'));
+    expect(stages.last, containsPair('duration_days', 28));
+    expect(stages.last, containsPair('order_index', 2));
+    expect(stages.last, containsPair('key_tasks', '分批采收'));
+  });
+
+  testWidgets('作物模板编辑更新当前模板', (tester) async {
+    await pump(tester, CropTemplateListPage(repository: repository));
+
+    final editButton = find.widgetWithText(FilledActionButton, '编辑');
+    await tester.ensureVisible(editButton);
+    await tester.tap(editButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('编辑模板'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '番茄'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '粉果 306'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, '番茄'), '樱桃番茄');
+    await tester.tap(find.text('保存模板'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('PUT', '/crops/templates/3');
+    expect(request.data, containsPair('name', '樱桃番茄'));
+    expect(request.data, containsPair('variety', '粉果 306'));
+  });
+
+  testWidgets('作物模板快捷新建茬口预选当前模板', (tester) async {
+    await pump(tester, CropTemplateListPage(repository: repository));
+
+    final createCycleButton = find.widgetWithText(FilledActionButton, '新建茬口');
+    await tester.ensureVisible(createCycleButton);
+    await tester.tap(createCycleButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('新建茬口'), findsWidgets);
+    expect(find.text('番茄'), findsWidgets);
+
+    await tester.enterText(find.widgetWithText(TextField, '输入茬口名称'), '番茄春茬');
+    await tester.enterText(
+      find.widgetWithText(TextField, '例：东大棚 1 号、A 区'),
+      '东大棚 1 号',
+    );
+    await tester.ensureVisible(find.text('创建茬口'));
+    await tester.tap(find.text('创建茬口'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('POST', '/cycles');
+    expect(request.data, containsPair('name', '番茄春茬'));
+    expect(request.data, containsPair('crop_template_id', 3));
   });
 
   testWidgets('作物模板表单页预览和添加阶段有反馈', (tester) async {
@@ -323,7 +497,24 @@ void main() {
     expect(find.text('手机号'), findsOneWidget);
     expect(find.text('默认计薪方式'), findsOneWidget);
     expect(find.text('保存工人'), findsOneWidget);
+    expect(find.text('在用'), findsOneWidget);
+    expect(find.text('离职'), findsOneWidget);
     expect(find.text('常用工    授粉熟练'), findsNothing);
+  });
+
+  testWidgets('工人编辑页可设置离职状态并保存', (tester) async {
+    await pump(tester, WorkerListPage(repository: repository));
+
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('离职'));
+    await tester.enterText(find.widgetWithText(TextField, '张三'), '张三丰');
+    await tester.tap(find.text('保存工人'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('PUT', '/planting/workers/4');
+    expect(request.data, containsPair('name', '张三丰'));
+    expect(request.data, containsPair('status', 'inactive'));
   });
 
   testWidgets('农事记录页渲染字段和保存按钮', (tester) async {

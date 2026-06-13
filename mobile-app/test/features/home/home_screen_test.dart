@@ -53,13 +53,65 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('建议详情'), findsOneWidget);
-    expect(find.text('傍晚补水'), findsOneWidget);
+    expect(find.text('傍晚补水'), findsWidgets);
     expect(find.text('今天高温明显，建议傍晚少量补水并观察土壤墒情。'), findsOneWidget);
     expect(find.text('AI 判断依据'), findsOneWidget);
     expect(find.text('执行步骤'), findsOneWidget);
     expect(find.text('关联事项'), findsOneWidget);
-    expect(find.text('生成作业单'), findsOneWidget);
+    expect(find.text('生成作业单'), findsNothing);
     expect(find.text('问问芽芽'), findsOneWidget);
+  });
+
+  testWidgets('详情页只展示接口返回的详情字段', (tester) async {
+    final partialAdvice = Map<String, dynamic>.from(dailyAdviceResponse);
+    partialAdvice['items'] = [
+      {
+        'id': 'operation:work_order:1',
+        'category': 'operation',
+        'level': 'urgent',
+        'source_type': 'operation_work_order',
+        'source_id': 1,
+        'title': '补做定植作业',
+        'detail': '定植和浇水作业已逾期9天，请尽快安排人员补做。',
+        'priority': 1,
+        'icon': 'ClipboardList',
+        'compact': {
+          'title': '补做定植作业',
+          'subtitle': '定植和浇水作业已逾期9天，请尽快安排人员补做。',
+          'icon': 'ClipboardList',
+          'icon_color': 'blue',
+        },
+        'detail_view': {
+          'title': '逾期作业补上',
+          'description': '定植和浇水作业已逾期9天，请尽快安排人员补做。',
+          'actions': [
+            {
+              'type': 'create_work_order',
+              'label': '生成作业单',
+              'payload': {'candidate_id': 'operation:work_order:1'},
+            },
+          ],
+        },
+      }
+    ];
+    final fake = _FakeHomeApi(dailyAdvice: partialAdvice);
+
+    await tester
+        .pumpWidget(MaterialApp(home: HomeScreen(repository: fake.repository)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('补做定植作业'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('逾期作业补上'), findsOneWidget);
+    expect(find.text('AI 判断依据'), findsNothing);
+    expect(find.text('执行步骤'), findsNothing);
+    expect(find.text('关联事项'), findsNothing);
+    expect(find.text('暂无更多判断依据'), findsNothing);
+    expect(find.text('暂无关联事项'), findsNothing);
+    expect(find.text('今日建议'), findsNothing);
+    expect(find.text('生成作业单'), findsOneWidget);
+    expect(find.text('问问芽芽'), findsNothing);
   });
 
   testWidgets('父级 rebuild 后首页不重复请求数据', (tester) async {
@@ -85,12 +137,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(fake.adapter.requests, hasLength(5));
+    expect(fake.adapter.requests, hasLength(4));
 
     await tester.tap(find.text('刷新0'));
     await tester.pumpAndSettle();
 
-    expect(fake.adapter.requests, hasLength(5));
+    expect(fake.adapter.requests, hasLength(4));
   });
 }
 
@@ -99,9 +151,9 @@ DashboardRepository _repository() {
 }
 
 class _FakeHomeApi {
-  _FakeHomeApi()
+  _FakeHomeApi({Map<String, dynamic>? dailyAdvice})
       : adapter = RecordingAdapter({
-          '/agent/daily': dailyAdviceResponse,
+          '/agent/daily': dailyAdvice ?? dailyAdviceResponse,
           '/settings': settingsResponse,
           '/weather/forecast': weatherResponse,
           '/planting/work-orders': paginatedWorkOrdersResponse,

@@ -1252,6 +1252,286 @@ class BusinessFormRow extends StatelessWidget {
   }
 }
 
+Future<T?> showBusinessPickerSheet<T extends ApiRecord>({
+  required BuildContext context,
+  required String title,
+  required Future<PageResult<T>> future,
+  required String Function(T item) titleFor,
+  required String Function(T item) subtitleFor,
+  int? selectedId,
+  String? subtitle,
+  String loadingText = '正在加载',
+  String errorText = '加载失败，请稍后再试',
+  String emptyText = '暂无可选项',
+  IconData Function(T item)? leadingIconFor,
+  Color Function(T item)? accentFor,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) {
+      return SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x1A10271D),
+                blurRadius: 26,
+                offset: Offset(0, -10),
+              ),
+            ],
+          ),
+          child: FutureBuilder<PageResult<T>>(
+            future: future,
+            builder: (context, snapshot) {
+              final items = snapshot.data?.items ?? <T>[];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.line,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: AppTextStyles.sectionTitle.copyWith(
+                                fontSize: 20,
+                                height: 26 / 20,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                subtitle,
+                                style: AppTextStyles.body.copyWith(
+                                  color: AppColors.muted,
+                                  fontSize: 13,
+                                  height: 18 / 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(LucideIcons.x, size: 20),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    _BusinessPickerMessage(
+                      text: loadingText,
+                      loading: true,
+                    )
+                  else if (snapshot.hasError)
+                    _BusinessPickerMessage(text: errorText)
+                  else if (items.isEmpty)
+                    _BusinessPickerMessage(text: emptyText)
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          final selected = item.id == selectedId;
+                          final accent = accentFor?.call(item) ?? businessGreen;
+                          return _BusinessPickerTile<T>(
+                            item: item,
+                            title: titleFor(item),
+                            subtitle: subtitleFor(item),
+                            selected: selected,
+                            accent: accent,
+                            icon:
+                                leadingIconFor?.call(item) ?? LucideIcons.leaf,
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _BusinessPickerTile<T extends ApiRecord> extends StatelessWidget {
+  const _BusinessPickerTile({
+    required this.item,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.accent,
+    required this.icon,
+  });
+
+  final T item;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final Color accent;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.of(context).pop(item),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color:
+                selected ? accent.withValues(alpha: 0.08) : AppColors.surface3,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? accent.withValues(alpha: 0.42)
+                  : AppColors.lineSoft,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: selected ? 0.16 : 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: accent, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.listTitle.copyWith(
+                        fontSize: 16,
+                        height: 22 / 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.body.copyWith(
+                          color: AppColors.muted,
+                          fontSize: 13,
+                          height: 18 / 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: selected ? accent : Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected
+                        ? accent
+                        : AppColors.subtle.withValues(alpha: 0.28),
+                  ),
+                ),
+                child: Icon(
+                  selected ? LucideIcons.check : LucideIcons.chevronRight,
+                  color: selected ? Colors.white : AppColors.subtle,
+                  size: selected ? 17 : 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessPickerMessage extends StatelessWidget {
+  const _BusinessPickerMessage({required this.text, this.loading = false});
+
+  final String text;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (loading) ...[
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2.6),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.body.copyWith(
+              color: AppColors.muted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class CyclePickerFormRow extends StatefulWidget {
   const CyclePickerFormRow({
     super.key,
@@ -1282,92 +1562,19 @@ class _CyclePickerFormRowState extends State<CyclePickerFormRow> {
   }
 
   Future<void> _showPicker() async {
-    final result = await showModalBottomSheet<ApiRecord>(
+    final result = await showBusinessPickerSheet<ApiRecord>(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Container(
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: FutureBuilder<PageResult<ApiRecord>>(
-              future: _cyclesFuture,
-              builder: (context, snapshot) {
-                final items = snapshot.data?.items ?? const <ApiRecord>[];
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '选择茬口',
-                      style: AppTextStyles.sectionTitle.copyWith(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (snapshot.connectionState == ConnectionState.waiting)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (snapshot.hasError)
-                      const _CyclePickerMessage(text: '茬口加载失败，请稍后再试')
-                    else if (items.isEmpty)
-                      const _CyclePickerMessage(text: '还没有茬口，先新建一个生产批次')
-                    else
-                      Flexible(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: items.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final item = items[index];
-                            final selected = item.id == widget.selectedCycleId;
-                            return Material(
-                              color: Colors.transparent,
-                              child: ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  _cycleDisplayName(item),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.listTitle.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  _cycleSubtitle(item),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: Icon(
-                                  selected
-                                      ? LucideIcons.circleCheck
-                                      : LucideIcons.chevronRight,
-                                  size: 20,
-                                  color: selected
-                                      ? businessGreen
-                                      : AppColors.subtle,
-                                ),
-                                onTap: () => Navigator.of(context).pop(item),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-        );
-      },
+      title: '选择茬口',
+      subtitle: '选择后自动关联农事、工资和账本记录',
+      future: _cyclesFuture,
+      selectedId: widget.selectedCycleId,
+      loadingText: '正在加载茬口',
+      errorText: '茬口加载失败，请稍后再试',
+      emptyText: '还没有茬口，先新建一个生产批次',
+      titleFor: _cycleDisplayName,
+      subtitleFor: _cycleSubtitle,
+      leadingIconFor: (_) => LucideIcons.layers,
+      accentFor: (_) => businessGreen,
     );
     if (result != null) widget.onSelected(result);
   }
@@ -1380,24 +1587,6 @@ class _CyclePickerFormRowState extends State<CyclePickerFormRow> {
       value: selectedText.isEmpty ? '选择茬口' : selectedText,
       chevron: true,
       onTap: _showPicker,
-    );
-  }
-}
-
-class _CyclePickerMessage extends StatelessWidget {
-  const _CyclePickerMessage({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: AppTextStyles.body.copyWith(color: AppColors.muted),
-      ),
     );
   }
 }
@@ -2246,7 +2435,7 @@ class AiLandscapeBanner extends StatelessWidget {
               Expanded(
                 child: Padding(
                   padding:
-                      EdgeInsets.only(right: avatarAsset == null ? 96 : 72),
+                      EdgeInsets.only(right: avatarAsset == null ? 76 : 72),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/mobile-app"
 DEVICE_ID="emulator-5554"
 EMULATOR_ID="Pixel_7"
-BACKEND_URL="${BACKEND_URL:-http://10.0.2.2:8099}"
+BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:8099}"
 
 cd "$APP_DIR"
 
@@ -34,6 +34,8 @@ if ! adb devices | grep -q "^${DEVICE_ID}[[:space:]]*device"; then
     sleep 2
   done
 fi
+
+adb -s "$DEVICE_ID" reverse tcp:8099 tcp:8099 >/dev/null
 
 echo "启动 Flutter App：$DEVICE_ID"
 echo "后端地址：$BACKEND_URL"

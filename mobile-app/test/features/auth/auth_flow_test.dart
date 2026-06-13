@@ -130,7 +130,7 @@ void main() {
 
     expect(dependencies.loginCalls, 1);
     expect(dependencies.overviewLoads, 0);
-    expect(find.text('登录失败，请检查账号或稍后重试'), findsOneWidget);
+    expect(find.text('请求失败，请稍后重试'), findsOneWidget);
     expect(find.text('首页'), findsNothing);
     expect(find.text('账本'), findsNothing);
   });
@@ -144,6 +144,28 @@ void main() {
     expect(find.text('首页'), findsWidgets);
     expect(find.text('记录'), findsWidgets);
     expect(find.text('账本'), findsWidgets);
+  });
+
+  testWidgets('启动恢复 profile 失败时清理 session 并回登录页', (tester) async {
+    final adapter = RecordingAdapter(
+      {'/settings': settingsResponse, '/api/app/version': versionResponse},
+      statusCodes: {'/auth/me': 500},
+    );
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final dependencies = FakeAppDependencies(
+      restoreResult: true,
+      profile: ProfileRepository(ApiClient(dio: dio)),
+    );
+
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    expect(dependencies.restoreCalls, 1);
+    expect(dependencies.logoutCalls, 1);
+    expect(find.text('登录已失效，请重新登录'), findsOneWidget);
+    expect(find.text('田掌柜'), findsOneWidget);
+    expect(find.text('手机号'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
   testWidgets('登录后默认农场无经营地区时进入首次设置', (tester) async {
@@ -240,7 +262,8 @@ void main() {
     await tester.tap(find.text('稍后再说'));
     await tester.pumpAndSettle();
 
-    expect(adapter.requests.where((r) => r.path == '/auth/me/farm-location'), isEmpty);
+    expect(adapter.requests.where((r) => r.path == '/auth/me/farm-location'),
+        isEmpty);
     expect(find.text('首页'), findsWidgets);
   });
 
