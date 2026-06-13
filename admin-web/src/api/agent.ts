@@ -139,6 +139,11 @@ export async function getDailyAdvice(cycleId?: number): Promise<DailyAdviceRespo
   return res.data;
 }
 
+export async function refreshDailyAdvice(cycleId?: number): Promise<DailyAdviceResponse> {
+  const res = await apiClient.post<DailyAdviceResponse>("/agent/daily/refresh", null, { params: { cycle_id: cycleId } });
+  return res.data;
+}
+
 export async function generateReport(reportType: string = 'weekly', cycleId?: number): Promise<ReportResponse> {
   const res = await apiClient.post<ReportResponse>("/agent/report", { report_type: reportType, cycle_id: cycleId });
   return res.data;

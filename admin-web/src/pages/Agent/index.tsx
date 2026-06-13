@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import {
   streamChat,
   getDailyAdvice,
+  refreshDailyAdvice,
   generateReport,
   getAdviceHistory,
   getReportHistory,
@@ -203,9 +204,10 @@ function ChatTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCycl
 }
 
 /* ── 每日建议 Tab ── */
-function AdviceTab({ cycleId }: { cycleId?: number }) {
+export function AdviceTab({ cycleId }: { cycleId?: number }) {
   const [advice, setAdvice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [fetched, setFetched] = useState(false);
 
   const fetchAdvice = async () => {
@@ -222,13 +224,32 @@ function AdviceTab({ cycleId }: { cycleId?: number }) {
     }
   };
 
+  const handleRefreshAdvice = async () => {
+    setRefreshing(true);
+    setFetched(true);
+    try {
+      const res = await refreshDailyAdvice(cycleId);
+      setAdvice(res.advice);
+      message.success('已重新获取今日建议');
+    } catch {
+      message.error('重新获取建议失败，请确认后端服务正常运行');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const busy = loading || refreshing;
+
   return (
     <div style={{ height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Button type="primary" icon={<BulbOutlined />} onClick={fetchAdvice} loading={loading} size="large">
+        <Button type="primary" icon={<BulbOutlined />} onClick={fetchAdvice} loading={loading} disabled={refreshing} size="large">
           {fetched ? '刷新建议' : '获取今日建议'}
         </Button>
-        {loading && <span style={{ color: TEXT_DIM }}>AI 正在分析天气和种植数据，请稍候...</span>}
+        <Button icon={<ReloadOutlined />} onClick={handleRefreshAdvice} loading={refreshing} disabled={loading} size="large">
+          重新获取建议
+        </Button>
+        {busy && <span style={{ color: TEXT_DIM }}>AI 正在分析天气和种植数据，请稍候...</span>}
       </div>
 
       <div style={{
