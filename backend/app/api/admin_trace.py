@@ -146,6 +146,8 @@ def get_trace_diagnostics(request_id: str, db: Session = Depends(get_db)) -> dic
         "context_dependency_diagnostic": report.context_dependency_diagnostic,
         "tool_not_called_reason": report.tool_not_called_reason,
         "pending_action_diagnostic": report.pending_action_diagnostic,
+        "reflection_checks": report.reflection_checks,
+        "reflection_diagnostic": report.reflection_diagnostic,
         "errors": report.errors,
         "final_response": report.final_response,
         "drilldown_links": report.drilldown_links,

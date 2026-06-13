@@ -159,7 +159,7 @@ class ReflectorService:
             )
             return self._record(missing_tool_result, trace_metadata=trace_metadata)
         except Exception as exc:
-            return ReflectionResult(
+            result = ReflectionResult(
                 trigger=ReflectionTrigger.POST_TOOL_RESULT,
                 decision=ReflectionDecision.PASS,
                 reason="Reflection 检查异常，只读/回复路径已降级放行。",
@@ -175,6 +175,7 @@ class ReflectorService:
                 ],
                 metadata={"reflection_error": str(exc)[:200]},
             )
+            return self._record(result, trace_metadata=trace_metadata)
 
     def _record(
         self,

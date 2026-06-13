@@ -136,7 +136,9 @@ class TestGetTimeline:
 
 
 class TestGetDiagnostics:
-    def test_diagnostics_returns_structured_pending_and_context(self, db_session) -> None:
+    def test_diagnostics_returns_structured_pending_and_context(
+        self, db_session
+    ) -> None:
         admin_user = ensure_admin_user(db_session)
         context_record = MagicMock()
         context_record.id = 1
@@ -166,8 +168,32 @@ class TestGetDiagnostics:
         pending_record.status = "success"
         pending_record.error_message = None
 
+        reflection_record = MagicMock()
+        reflection_record.id = 3
+        reflection_record.round_index = 0
+        reflection_record.node_type = "reflection_check"
+        reflection_record.node_name = "pre_write_plan"
+        reflection_record.input_data = {"skill_name": "create_cost_record"}
+        reflection_record.output_data = {
+            "trigger": "pre_write_plan",
+            "decision": "block_write",
+            "reason": "确认文案与待执行参数不一致。",
+            "issues": [
+                {
+                    "code": "confirmation_param_mismatch",
+                    "severity": "blocker",
+                }
+            ],
+        }
+        reflection_record.status = "success"
+        reflection_record.error_message = None
+
         mock_db = _mock_db(admin_user)
-        mock_db.trace_query.all.return_value = [context_record, pending_record]
+        mock_db.trace_query.all.return_value = [
+            context_record,
+            pending_record,
+            reflection_record,
+        ]
 
         with auth_override_scope(app), _db_override(mock_db):
             resp = TestClient(app).get(
@@ -192,6 +218,25 @@ class TestGetDiagnostics:
         assert data["tool_not_called_reason"] == (
             "request_bypassed_agent_or_tool_selection_missing"
         )
+        assert data["reflection_checks"] == [
+            {
+                "trigger": "pre_write_plan",
+                "decision": "block_write",
+                "reason": "确认文案与待执行参数不一致。",
+                "issues": [
+                    {
+                        "code": "confirmation_param_mismatch",
+                        "severity": "blocker",
+                    }
+                ],
+                "input": {"skill_name": "create_cost_record"},
+            }
+        ]
+        assert data["reflection_diagnostic"] == {
+            "blocked": True,
+            "decisions": ["block_write"],
+            "issue_codes": ["confirmation_param_mismatch"],
+        }
         assert "timeline" in data["drilldown_links"]
 
 

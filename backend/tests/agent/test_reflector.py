@@ -226,6 +226,43 @@ def test_reflector_service_tool_response_errors_do_not_break_reply() -> None:
     assert result.issues[0].code == "reflection_check_failed"
 
 
+def test_reflector_service_tool_response_errors_record_trace(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class BrokenPolicy(ReflectionPolicy):
+        def should_run(self, **_kwargs) -> bool:
+            raise RuntimeError("policy exploded")
+
+    class FakeCollector:
+        def __init__(self) -> None:
+            self.records = []
+
+        def record(self, **kwargs) -> None:
+            self.records.append(kwargs)
+
+    collector = FakeCollector()
+    monkeypatch.setattr(
+        "app.agent.reflector.service.get_collector",
+        lambda: collector,
+    )
+    service = ReflectorService(policy=BrokenPolicy())
+
+    result = service.check_tool_response(
+        tool_messages=[],
+        final_text="普通回复",
+        selected_tools=["get_farm_status"],
+        tool_calls=[],
+        trace_metadata={"farm_id": 1},
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+    assert collector.records[0]["node_type"] == "reflection_check"
+    assert collector.records[0]["output_data"]["issues"][0]["code"] == (
+        "reflection_check_failed"
+    )
+    assert collector.records[0]["input_data"]["farm_id"] == 1
+
+
 def test_reflector_service_trace_errors_are_best_effort(
     monkeypatch: MonkeyPatch,
 ) -> None:
