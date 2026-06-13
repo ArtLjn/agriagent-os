@@ -37,7 +37,6 @@ from app.services.daily_advice_models import (
     render_candidate_context,
 )
 from app.services.daily_advice_signals import collect_daily_advice_candidates
-from app.services import farm_context_service
 from app.services import agent_report_service
 
 logger = logging.getLogger(__name__)
@@ -48,6 +47,14 @@ _TITLE_MAX_DISPLAY = 10
 _ADVICE_ITEM_MAX = 5
 _HOMEPAGE_ADVICE_ITEM_MAX = 3
 _NON_ADVICE_RESPONSES = set(QUOTA_REJECT_MESSAGES.values())
+_LEGACY_FORBIDDEN_ADVICE_TERMS = (
+    "结算工人欠款",
+    "催收人工工资",
+    "未结人工",
+    "未付人工",
+    "欠账",
+    "欠款",
+)
 application_chat = None
 
 
@@ -135,6 +142,13 @@ def _parse_record_meta(raw: str | None) -> dict[str, Any]:
         logger.warning("建议缓存 meta 非对象，按旧缓存兼容处理")
         return {}
     return parsed
+
+
+def _is_forbidden_legacy_daily_cache(content: str, meta: dict[str, Any]) -> bool:
+    """识别信源治理上线前可能含未到期资金事项的旧每日建议缓存。"""
+    if meta.get("candidate_fingerprint"):
+        return False
+    return any(term in content for term in _LEGACY_FORBIDDEN_ADVICE_TERMS)
 
 
 def _build_notice_response(message: str, cycle_id: int | None) -> DailyAdviceResponse:
@@ -269,7 +283,12 @@ async def get_daily_advice(
         else:
             cached_meta = _parse_record_meta(cached.meta)
             cached_fingerprint = cached_meta.get("candidate_fingerprint")
-            if cached_fingerprint and cached_fingerprint != candidate_fingerprint:
+            if _is_forbidden_legacy_daily_cache(cached.content, cached_meta):
+                logger.info(
+                    "忽略旧版资金类建议缓存，重新生成 | record_id=%s",
+                    cached.id,
+                )
+            elif cached_fingerprint and cached_fingerprint != candidate_fingerprint:
                 logger.info(
                     "建议缓存候选已变化，重新生成 | record_id=%s",
                     cached.id,
@@ -284,10 +303,7 @@ async def get_daily_advice(
                     created_at=cached.created_at,
                 )
 
-    if selected_candidates:
-        context = render_candidate_context(selected_candidates)
-    else:
-        context = await farm_context_service.build_summary(db, farm_id)
+    context = render_candidate_context(selected_candidates)
 
     # 注入农场上下文，通过 PromptComposer 渲染模板
     prompt = get_composer().compose(

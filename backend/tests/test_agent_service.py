@@ -298,6 +298,40 @@ class TestGetDailyAdvice:
         assert saved_meta["candidate_fingerprint"]
 
     @pytest.mark.asyncio
+    @patch("app.services.farm_context_service.build_summary")
+    @patch("app.services.agent_service.collect_daily_advice_candidates")
+    @patch("app.services.agent_service.get_composer")
+    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    async def test_get_daily_advice_does_not_fallback_to_debt_summary(
+        self,
+        mock_invoke: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_collect_candidates: AsyncMock,
+        mock_build_summary: AsyncMock,
+    ) -> None:
+        """无候选时不能把旧摘要里的欠账/未结人工喂给今日建议。"""
+        mock_collect_candidates.return_value = []
+        mock_build_summary.return_value = (
+            "【农场现状】\n"
+            "欠账：诸葛四郎未付100元、李海未付100元、朱7未付100元"
+        )
+        mock_get_composer.return_value.compose.return_value = "daily prompt"
+        mock_invoke.return_value = (
+            '[{"title":"巡田","detail":"今日暂无明确高优先级行动，例行观察即可",'
+            '"priority":3,"icon":"📋"}]'
+        )
+        mock_db = _make_mock_db()
+
+        await get_daily_advice(mock_db, farm_id=1, cycle_id=1)
+
+        mock_build_summary.assert_not_awaited()
+        variables = mock_get_composer.return_value.compose.call_args.kwargs["variables"]
+        assert variables["farm_context"] == "今日无明确高优先级行动候选。"
+        assert "欠账" not in variables["farm_context"]
+        assert "未付" not in variables["farm_context"]
+        assert "诸葛四郎" not in variables["farm_context"]
+
+    @pytest.mark.asyncio
     @patch("app.services.agent_service.get_composer")
     @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
     async def test_get_daily_advice_returns_structured_items(

@@ -150,6 +150,33 @@ class TestDailyAdviceCache:
         assert result.items[0].title == "新建议"
 
     @pytest.mark.asyncio
+    async def test_legacy_debt_advice_cache_is_ignored(self, db, mock_composer):
+        """旧缓存里若含未结人工建议，应重新生成而不是继续命中。"""
+        today = _today_start()
+        cached = AgentRecord(
+            farm_id=1,
+            record_type="daily",
+            content=(
+                '[{"title":"结算工人欠款","detail":"诸葛四郎、李海、朱7'
+                '三人各有100元未付，建议尽快安排支付","priority":2,"icon":"💰"}]'
+            ),
+            created_at=today,
+        )
+        db.add(cached)
+        db.commit()
+
+        with patch(
+            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = _json_items_response("重新生成")
+            from app.services.agent_service import get_daily_advice
+
+            result = await get_daily_advice(db, farm_id=1)
+
+        mock_llm.assert_called_once()
+        assert result.items[0].title == "重新生成"
+
+    @pytest.mark.asyncio
     async def test_quota_reject_message_cache_is_ignored(self, db, mock_composer):
         """身份/配额拦截文案不应作为每日建议缓存复用。"""
         today = _today_start()
