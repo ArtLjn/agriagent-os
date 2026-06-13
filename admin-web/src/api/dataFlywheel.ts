@@ -207,6 +207,44 @@ export interface DataFlywheelSyncJob {
   error?: string | null;
 }
 
+export interface DataFlywheelPrelabelBatchRequest {
+  sample_type?: string;
+  label?: DataFlywheelLabel | string;
+  session_id?: string;
+  request_id?: string;
+  q?: string;
+  unannotated_only?: boolean;
+  limit?: number;
+  skip_existing?: boolean;
+  run_inline?: boolean;
+}
+
+export interface DataFlywheelPrelabelBatchResultItem {
+  sample_id: string;
+  status: 'created' | 'skipped_existing' | 'failed' | string;
+  prelabel_id?: number;
+  labels?: DataFlywheelLabel[];
+  confidence?: number;
+  error?: string;
+}
+
+export interface DataFlywheelPrelabelBatchResult {
+  total: number;
+  created: number;
+  skipped_existing: number;
+  failed: number;
+  items: DataFlywheelPrelabelBatchResultItem[];
+}
+
+export interface DataFlywheelPrelabelBatchJob {
+  job_id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | string;
+  mode: 'background' | 'inline' | string;
+  farm_id?: number;
+  result?: DataFlywheelPrelabelBatchResult | Record<string, unknown> | null;
+  error?: string | null;
+}
+
 export interface DeleteSampleLabelResponse {
   deleted: boolean;
   id: number;
@@ -325,6 +363,25 @@ export async function syncDataFlywheelSessions(body: DataFlywheelSyncRequest): P
 export async function getDataFlywheelSyncJob(jobId: string): Promise<DataFlywheelSyncJob> {
   const response = await apiClient.get<DataFlywheelSyncJob>(
     `/admin/data-flywheel/sync-sessions/${encodeURIComponent(jobId)}`
+  );
+  return response.data;
+}
+
+export async function createSamplePrelabelBatch(
+  body: DataFlywheelPrelabelBatchRequest
+): Promise<DataFlywheelPrelabelBatchJob> {
+  const response = await apiClient.post<DataFlywheelPrelabelBatchJob>(
+    '/admin/data-flywheel/prelabels/batch',
+    body
+  );
+  return response.data;
+}
+
+export async function getSamplePrelabelBatchJob(
+  jobId: string
+): Promise<DataFlywheelPrelabelBatchJob> {
+  const response = await apiClient.get<DataFlywheelPrelabelBatchJob>(
+    `/admin/data-flywheel/prelabels/batch/${encodeURIComponent(jobId)}`
   );
   return response.data;
 }

@@ -22,6 +22,35 @@ ALLOWED_JUDGE_LABELS = {
     "not_actionable",
 }
 DEFAULT_PROMPT_VERSION = "data-flywheel-prelabel-v1"
+JUDGE_SYSTEM_PROMPT = (
+    "你是 Agent 数据飞轮质量预标注 judge。"
+    "只返回 JSON，不要返回 Markdown。"
+    "所有自然语言字段必须使用简体中文，包括 root_cause、reason、recommended_fix。"
+    "不要使用英文解释。"
+)
+LABEL_DEFINITIONS = {
+    "good_reply": "好回复：回答准确、完整，工具使用和事实依据都没有明显问题。",
+    "bad_reply": "坏回复：整体回答不可接受，但无法归入更具体的问题标签。",
+    "wrong_tool_selection": "工具选错：该用工具未用、用了错误工具，或实时/外部数据问题未选择查询工具。",
+    "pending_missed": "pending 漏拦截：写操作缺少用户确认计划或确认流程。",
+    "hallucinated_execution": "幻觉执行：没有成功写操作证据却声称已经创建、安排、保存、删除等。",
+    "tool_error_ignored": "工具错误被忽略：工具失败后回复仍当作成功处理。",
+    "missing_wage": "工资缺失：涉及工人作业但缺少工资、欠款或不计工资策略。",
+    "disabled_worker_used": "禁用工人：已停用/离职工人仍被安排作业或工资。",
+    "needs_regression": "需要回归：适合沉淀为仿真或评测回放用例。",
+    "off_topic": "答非所问：回复没有回应用户主要意图。",
+    "sensitive_info_leak": "参数/提示泄露：回复泄露系统提示、密钥、模型参数等敏感信息。",
+    "unclear_intent": "意图不清：用户输入本身无法判断，应追问澄清。",
+    "not_actionable": "暂不处理：证据不足或问题不稳定，暂时不进入质量问题池。",
+}
+LABEL_SELECTION_RULES = (
+    "优先使用 issue_candidates.suggested_label。"
+    "当用户需要天气、今天、实时、外部数据或数据库查询，但 selected_tools 和 actual_tools 都为空时，"
+    "优先选择 wrong_tool_selection，不要选择 not_actionable。"
+    "只有在没有明确质量问题、也没有可执行改进方向时才选择 not_actionable。"
+    "如果回复本身失败或泛化道歉导致用户意图未解决，至少选择 bad_reply；"
+    "若根因是工具未选或选错，则同时选择 wrong_tool_selection。"
+)
 
 
 class DataFlywheelJudgeClient(Protocol):
@@ -55,10 +84,7 @@ class OpenAIDataFlywheelJudgeClient:
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "你是 Agent 数据飞轮质量预标注 judge。"
-                        "只返回 JSON，不要返回 Markdown。"
-                    ),
+                    "content": JUDGE_SYSTEM_PROMPT,
                 },
                 {
                     "role": "user",
@@ -86,6 +112,13 @@ def build_judge_input(detail: dict[str, Any]) -> dict[str, Any]:
     return {
         "task": "judge_agent_turn_quality",
         "prompt_version": DEFAULT_PROMPT_VERSION,
+        "judge_instructions": (
+            "请基于 sample 与 debug_evidence 判断该 Agent turn 的质量问题。"
+            "所有自然语言输出必须使用简体中文。"
+            "labels 只能从 label_definitions 的 key 中选择。"
+        ),
+        "label_definitions": LABEL_DEFINITIONS,
+        "label_selection_rules": LABEL_SELECTION_RULES,
         "sample": {
             "sample_id": sample.get("sample_id"),
             "sample_type": sample.get("sample_type"),

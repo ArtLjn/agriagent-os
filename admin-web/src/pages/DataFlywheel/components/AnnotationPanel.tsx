@@ -152,8 +152,8 @@ export default function AnnotationPanel({
               <>
                 <Space size={6} wrap>
                   {latestPrelabel.labels.map((item) => (
-                    <Tag key={item} title={labelText[item] ?? item}>
-                      {item}
+                    <Tag key={item} title={item}>
+                      {labelText[item] ?? item}
                     </Tag>
                   ))}
                   <Tag color={latestPrelabel.severity === 'critical' || latestPrelabel.severity === 'high' ? 'red' : 'blue'}>

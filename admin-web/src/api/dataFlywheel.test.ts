@@ -6,10 +6,12 @@ import {
   addSampleLabel,
   createCaseDraft,
   createSamplePrelabel,
+  createSamplePrelabelBatch,
   exportSampleJsonl,
   getSampleDetail,
   getSessionReview,
   getDataFlywheelSyncJob,
+  getSamplePrelabelBatchJob,
   getSessionAnnotations,
   listDataFlywheelSamples,
   markBadCase,
@@ -314,6 +316,51 @@ describe('dataFlywheel api', () => {
       '/admin/data-flywheel/samples/turn%3A1%3As%3A1/prelabel'
     );
     expect(result.source).toBe('llm_judge');
+  });
+
+  it('触发批量 LLM 预判任务', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        job_id: 'prelabel-batch-1',
+        status: 'queued',
+        mode: 'background',
+        result: null,
+        error: null,
+      },
+    });
+
+    const body = {
+      q: 'session-a',
+      unannotated_only: true,
+      limit: 50,
+      skip_existing: true,
+    };
+    const result = await createSamplePrelabelBatch(body);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/prelabels/batch',
+      body
+    );
+    expect(result.job_id).toBe('prelabel-batch-1');
+  });
+
+  it('查询批量 LLM 预判任务状态', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        job_id: 'prelabel-batch-1',
+        status: 'completed',
+        mode: 'background',
+        result: { created: 2, skipped_existing: 1, failed: 0 },
+        error: null,
+      },
+    });
+
+    const result = await getSamplePrelabelBatchJob('prelabel-batch-1');
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith(
+      '/admin/data-flywheel/prelabels/batch/prelabel-batch-1'
+    );
+    expect(result.status).toBe('completed');
   });
 
   it('采纳并可修改样本 LLM 预标注', async () => {

@@ -1,51 +1,101 @@
-# Farm Manager 后端配置文件
-# 使用方法: cp config.yaml.example config.yaml
-# 环境变量会覆盖 YAML 中的同名配置
+# Farm Manager 后端配置模板。
+#
+# 使用方式：
+# 1. 复制本文件：cp config.yaml.example config.yaml
+# 2. 按部署环境填写 config.yaml；修改后需要重启后端进程。
+# 3. 环境变量优先级高于 YAML，同名嵌套字段使用双下划线覆盖，
+#    例如 AI__API_KEY、DATABASE__URL、DATA_FLYWHEEL__LLM_PRELABEL_ENABLED。
+# 4. 本模板不放真实密钥；真实 config.yaml 不要提交到公共仓库。
 
+# HTTP 服务监听配置。
 server:
-  host: "0.0.0.0"    # 监听地址
-  port: 8000          # 监听端口
+  host: "0.0.0.0"    # 监听地址；本机调试可用 127.0.0.1，容器/局域网访问用 0.0.0.0。
+  port: 8000          # 监听端口；启动命令未显式指定端口时使用。
 
+project_name: "Farm Manager API"  # FastAPI 应用标题，会显示在 OpenAPI/Swagger。
+
+# 主业务数据库。当前代码要求 mysql+pymysql:// 格式。
 database:
-  url: "mysql+pymysql://farm_manager:password@localhost:3306/farm_manager?charset=utf8mb4"
+  url: "mysql+pymysql://farm_manager:password@localhost:3306/farm_manager?charset=utf8mb4"  # 格式：mysql+pymysql://用户:密码@主机:端口/库名?charset=utf8mb4
 
+# 默认 LLM 配置。providers.json 不可用或 fallback 时会回退到这里；
+# 数据飞轮 AI 预判也会复用这组模型配置。
 ai:
-  model: "qwen3.6-flash-2026-04-16"                        # LLM 模型名称
-  api_key: ""                                              # LLM API 密钥（必填）
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # LLM API 地址
-  enable_thinking: false                                   # 是否启用思考模式（qwen3 系列思考模式下不支持 tool_choice）
+  model: "qwen3.6-35b-a3b"                       # 模型名称；需与 base_url 对应供应商兼容。
+  api_key: ""                                    # LLM API 密钥；为空时 Agent/预判等 LLM 能力不可用。
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # OpenAI-compatible API 地址。
+  enable_thinking: false                         # qwen3 思考模式；Function Calling 场景通常保持 false。
+  parallel_tool_calls: true                      # 是否允许模型一次返回多个工具调用；旧模型不支持时改 false。
+  failover_max_retries: 3                        # LLM 节点失败后的最大重试次数；1 表示不额外重试。
 
+# 默认天气坐标。用户/农场没有精确位置时会作为兜底。
 weather:
-  latitude: 34.26    # 天气查询纬度（默认徐州）
-  longitude: 117.18  # 天气查询经度（默认徐州）
+  latitude: 34.26    # 纬度，默认徐州。
+  longitude: 117.18  # 经度，默认徐州。
 
-# 第三方 API 密钥集中管理
+# 第三方 API 密钥集中管理。
 secrets:
-  qweather_api_key: ""  # 和风天气 API key（免费版）
-  # qweather_appid: ""  # 和风天气 appid（商业版签名认证，备用）
-  # qweather_appsecret: ""  # 和风天气 appsecret（商业版签名认证，备用）
-  dashscope_api_key: ""
-  langsmith_api_key: ""
+  qweather_api_key: ""  # 和风天气新凭证 API KEY，优先使用；为空会尝试 appid/appsecret。
+  qweather_appid: ""    # 和风天气签名认证 appid，旧方案备用。
+  qweather_appsecret: "" # 和风天气签名认证 appsecret，旧方案备用。
+  dashscope_api_key: "" # DashScope 专用 key；当前默认 LLM 走 ai.api_key。
+  langsearch_api_key: "" # LangSearch 搜索 key；为空则相关搜索能力不可用。
+  searxng_url: ""       # SearXNG 地址；为空时 web_search 走降级/不可用路径。
+  langsmith_api_key: "" # 兼容旧密钥集中管理字段；未启用 LangSmith 时保持空。
 
+# Agent trace 采集与清理配置，用于 admin-web 链路追踪、数据飞轮样本证据和 token 统计。
+trace:
+  batch_size: 20          # TraceCollector 单批写库数量。
+  flush_interval: 5.0     # 后台 flush 间隔，单位秒。
+  max_queue: 1000         # 内存队列上限，过小可能丢 trace，过大占内存。
+  trace_ttl_days: 7       # trace_records 保留天数。
+  token_stats_ttl_days: 90 # token 统计保留天数。
+
+# Agent 反思/安全校验开关。主要拦截写操作计划、执行前检查和工具后回复风险。
+reflection:
+  enabled: true           # 总开关；false 会关闭以下所有反思检查。
+  pre_write_plan: true    # 写操作生成 pending plan 前检查。
+  pre_execution: true     # 用户确认后、真正执行写操作前检查。
+  post_tool_result: true  # 工具执行后、回复用户前检查。
+  fallback_guard: true    # 无法判断时启用保守保护。
+
+# Token 配额。quota_service 和 Agent runtime 会读取，防止单用户/全局成本失控。
 token_quota:
-  monthly_limit: 3000000
-  weekly_limit: 750000
-  over_quota_action: "reject"  # warn / reject
+  monthly_limit: 200000       # 默认月额度。
+  weekly_limit: 50000         # 默认周额度。
+  over_quota_action: "reject" # 超额行为：warn 只告警；reject 拒绝继续调用。
 
+# API 限流配置。用于保护后端和 LLM 额度，单位为“请求/分钟”。
 rate_limiting:
-  global_requests_per_minute: 30
-  agent_requests_per_minute: 10
+  global_requests_per_minute: 30 # 全站请求限流。
+  agent_requests_per_minute: 10  # Agent 对话接口限流。
 
+# LLM 调用熔断和底层重试配置。
+circuit_breaker:
+  failure_threshold: 3    # 连续失败达到该次数后进入熔断。
+  recovery_timeout: 30    # 熔断后等待多少秒进入半开恢复。
+  retry_max: 3            # 单次调用内部最大重试次数。
+  retry_backoff_base: 2.0 # 重试退避基数，数值越大重试间隔增长越快。
+
+# 登录与初始管理员配置。
 auth:
-  admin_phone: ""      # 初始管理员手机号，配置后启动时自动创建管理员账号
-  admin_password: ""   # 初始管理员密码，仅首次启动时使用，建议创建后删除或留空
-  jwt_expire_minutes: 10080  # JWT 过期时间（分钟），默认 7 天
+  jwt_secret: "change-me-in-production" # JWT 签名密钥；生产环境必须替换为强随机值。
+  jwt_algorithm: "HS256"                # JWT 签名算法；通常不需要改。
+  admin_phone: ""                       # 初始管理员手机号；配置后启动时自动创建管理员账号。
+  admin_password: ""                    # 初始管理员密码；仅首次启动时使用，建议创建后删除或留空。
+  jwt_expire_minutes: 10080             # JWT 过期时间，单位分钟；10080 = 7 天。
 
+# 可选观测集成。没有 LangSmith 服务时保持 enabled: false 即可；
+# 关闭后不会设置 LANGSMITH_API_KEY，也不会影响本地 trace。
 langsmith:
-  api_key: ""
-  project_name: "farm-manager"
-  enabled: false
+  api_key: ""                  # LangSmith API key；enabled 为 true 时必填。
+  project_name: "farm-manager" # LangSmith 项目名。
+  enabled: false               # 是否启用 LangSmith；没有该服务时保持 false。
 
+# App 版本与下载配置。app-release 接口会用 {version} 替换具体版本号。
+app:
+  apk_download_url: "" # 例如：http://host/app-release-v{version}.apk；为空时下载地址为空。
+
+# Agent 数据飞轮配置。
 data_flywheel:
-  # 默认关闭；只有管理员手动触发 AI 预判且开关开启时才会消耗 judge token。
-  llm_prelabel_enabled: false
+  llm_prelabel_enabled: false # 默认关闭；true 后 admin-web 可手动触发 AI 预判，会消耗 LLM token。

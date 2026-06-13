@@ -101,7 +101,7 @@ function PanelShell({
         </Typography.Text>
         <Button aria-label={buttonLabel} size="small" icon={icon} onClick={onToggle} />
       </div>
-      {children}
+      <div style={panelBodyStyle}>{children}</div>
     </div>
   );
 }
@@ -133,29 +133,35 @@ function CollapsedRail({
 function workspaceStyle(leftCollapsed: boolean, rightCollapsed: boolean): CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: `${leftCollapsed ? '52px' : '300px'} minmax(420px, 1fr) ${
-      rightCollapsed ? '52px' : 'clamp(480px, 34vw, 680px)'
+    gridTemplateColumns: `${leftCollapsed ? '48px' : 'clamp(260px, 18vw, 300px)'} minmax(520px, 1fr) ${
+      rightCollapsed ? '48px' : 'clamp(380px, 28vw, 560px)'
     }`,
     gap: 14,
-    alignItems: 'start',
+    alignItems: 'stretch',
+    height: '100%',
+    minHeight: 0,
+    overflow: 'hidden',
   };
 }
 
 const sidePanelStyle: CSSProperties = {
   minWidth: 0,
-  maxHeight: 'calc(100vh - 158px)',
-  overflow: 'auto',
-  scrollbarGutter: 'stable',
+  minHeight: 0,
+  overflow: 'hidden',
 };
 
 const mainPanelStyle: CSSProperties = {
   minWidth: 0,
+  minHeight: 0,
+  overflow: 'hidden',
 };
 
 const panelShellStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: 10,
+  height: '100%',
+  minHeight: 0,
 };
 
 const panelHeaderStyle: CSSProperties = {
@@ -164,6 +170,14 @@ const panelHeaderStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: 8,
+  flexShrink: 0,
+};
+
+const panelBodyStyle: CSSProperties = {
+  minHeight: 0,
+  flex: 1,
+  overflow: 'auto',
+  scrollbarGutter: 'stable',
 };
 
 const collapsedRailStyle: CSSProperties = {

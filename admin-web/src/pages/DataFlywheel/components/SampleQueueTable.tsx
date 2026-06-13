@@ -114,22 +114,25 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
   ];
 
   return (
-    <Table
-      rowKey="sample_id"
-      size="small"
-      loading={loading}
-      columns={columns}
-      dataSource={samples}
-      pagination={false}
-      onRow={(record) => ({
-        'data-testid': `sample-row-${record.sample_id}`,
-        onClick: () => onSelect(record),
-        style: {
-          cursor: 'pointer',
-          background: record.sample_id === selectedSampleId ? 'rgba(88, 166, 255, 0.12)' : undefined,
-        },
-      })}
-      scroll={{ x: 720 }}
-    />
+    <div style={{ height: '100%', minHeight: 0 }}>
+      <Table
+        rowKey="sample_id"
+        size="small"
+        loading={loading}
+        columns={columns}
+        dataSource={samples}
+        pagination={false}
+        sticky
+        onRow={(record) => ({
+          'data-testid': `sample-row-${record.sample_id}`,
+          onClick: () => onSelect(record),
+          style: {
+            cursor: 'pointer',
+            background: record.sample_id === selectedSampleId ? 'rgba(88, 166, 255, 0.12)' : undefined,
+          },
+        })}
+        scroll={{ x: 680, y: 'calc(100vh - 312px)' }}
+      />
+    </div>
   );
 }

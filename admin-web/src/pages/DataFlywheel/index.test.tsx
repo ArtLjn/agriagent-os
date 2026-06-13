@@ -10,7 +10,9 @@ import {
   addSampleLabel,
   createCaseDraft,
   createSamplePrelabel,
+  createSamplePrelabelBatch,
   getDataFlywheelSyncJob,
+  getSamplePrelabelBatchJob,
   getSampleDetail,
   getSessionReview,
   getSessionAnnotations,
@@ -35,8 +37,10 @@ vi.mock('../../api/dataFlywheel', () => ({
   addSampleLabel: vi.fn(),
   createCaseDraft: vi.fn(),
   createSamplePrelabel: vi.fn(),
+  createSamplePrelabelBatch: vi.fn(),
   exportSampleJsonl: vi.fn(),
   getDataFlywheelSyncJob: vi.fn(),
+  getSamplePrelabelBatchJob: vi.fn(),
   getSampleDetail: vi.fn(),
   getSessionReview: vi.fn(),
   getSessionAnnotations: vi.fn(),
@@ -331,6 +335,8 @@ const mockedSessionReview = vi.mocked(getSessionReview);
 const mockedSessionAnnotations = vi.mocked(getSessionAnnotations);
 const mockedSyncSessions = vi.mocked(syncDataFlywheelSessions);
 const mockedSyncJob = vi.mocked(getDataFlywheelSyncJob);
+const mockedPrelabelBatch = vi.mocked(createSamplePrelabelBatch);
+const mockedPrelabelBatchJob = vi.mocked(getSamplePrelabelBatchJob);
 const mockedAcceptPrelabel = vi.mocked(acceptSamplePrelabel);
 const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateDraft = vi.mocked(createCaseDraft);
@@ -418,6 +424,20 @@ describe('DataFlywheel 页面', () => {
       result: { synced_turns: 2 },
       error: null,
     } as DataFlywheelSyncJob);
+    mockedPrelabelBatch.mockResolvedValue({
+      job_id: 'prelabel-batch-1',
+      status: 'queued',
+      mode: 'background',
+      result: null,
+      error: null,
+    });
+    mockedPrelabelBatchJob.mockResolvedValue({
+      job_id: 'prelabel-batch-1',
+      status: 'completed',
+      mode: 'background',
+      result: { total: 1, created: 1, skipped_existing: 0, failed: 0 },
+      error: null,
+    });
     mockedAddLabel.mockResolvedValue({
       id: 2,
       sample_id: sample.sample_id,
@@ -474,7 +494,7 @@ describe('DataFlywheel 页面', () => {
       expect(mockedDetail).toHaveBeenCalledWith(sample.sample_id);
     });
     expect(await screen.findByText('样本详情')).toBeInTheDocument();
-    expect(screen.getByText('selected_tools')).toBeInTheDocument();
+    expect(screen.getAllByText('selected_tools').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('tab', { name: /pending lifecycle/ }));
     expect(screen.getByText('pending.plan.created')).toBeInTheDocument();
   });
@@ -705,15 +725,15 @@ describe('DataFlywheel 页面', () => {
     await act(async () => {
       resolveSecondDetail(anotherDetail);
     });
-    expect(await screen.findByText('已为李四记录今天的浇水作业。')).toBeInTheDocument();
+    expect((await screen.findAllByText('已为李四记录今天的浇水作业。')).length).toBeGreaterThan(0);
 
     await act(async () => {
       resolveFirstDetail(detail);
     });
     await waitFor(() => {
-      expect(screen.queryByText('张三本月工资记录里缺少 6 月 8 日。')).not.toBeInTheDocument();
+      expect(screen.queryAllByText('张三本月工资记录里缺少 6 月 8 日。')).toHaveLength(0);
     });
-    expect(screen.getByText('已为李四记录今天的浇水作业。')).toBeInTheDocument();
+    expect(screen.getAllByText('已为李四记录今天的浇水作业。').length).toBeGreaterThan(0);
   });
 
   it('点击会话归档会进入完整对话审阅视图', async () => {
@@ -743,7 +763,7 @@ describe('DataFlywheel 页面', () => {
     });
     expect(await screen.findByText('完整对话记录')).toBeInTheDocument();
     expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
-    expect(screen.getByText('张三本月工资记录里缺少 6 月 8 日。')).toBeInTheDocument();
+    expect(screen.getAllByText('张三本月工资记录里缺少 6 月 8 日。').length).toBeGreaterThan(0);
     expect(screen.getByText('selected: worker.search, wage.list')).toBeInTheDocument();
     expect(screen.getByText('actual: worker.search')).toBeInTheDocument();
     expect(screen.getByText('pending: 已创建')).toBeInTheDocument();
@@ -894,6 +914,63 @@ describe('DataFlywheel 页面', () => {
     expect(mockedSyncJob).toHaveBeenCalledWith('session-sync-1');
     expect(mockedList).toHaveBeenCalledTimes(2);
     expect(mockedSessionReview).toHaveBeenCalledTimes(2);
+  });
+
+  it('点击批量 AI 分析会按当前筛选创建预判任务并刷新列表', async () => {
+    const user = userEvent.setup();
+    render(<DataFlywheel />);
+
+    await screen.findByText('帮我查一下张三这个月工资有没有漏记');
+    await user.type(screen.getByPlaceholderText('Session / Request ID'), 'req:abc');
+    await user.click(screen.getByLabelText('只看未标注'));
+    await user.click(screen.getByRole('button', { name: /批量 AI 分析/ }));
+
+    await waitFor(() => {
+      expect(mockedPrelabelBatch).toHaveBeenCalledWith({
+        q: 'req:abc',
+        label: undefined,
+        unannotated_only: true,
+        limit: 50,
+        skip_existing: true,
+      });
+    });
+    expect(mockedPrelabelBatchJob).toHaveBeenCalledWith('prelabel-batch-1');
+    expect(mockedList).toHaveBeenCalledTimes(2);
+  });
+
+  it('开启隐藏 AI 判定正常后过滤高置信正常预判样本', async () => {
+    const user = userEvent.setup();
+    const normalSample: DataFlywheelSample = {
+      ...anotherSample,
+      latest_prelabel: {
+        id: 99,
+        sample_id: anotherSample.sample_id,
+        sample_type: 'session_turn',
+        session_id: anotherSample.session_id,
+        turn_id: anotherSample.turn_id,
+        request_id: anotherSample.request_id,
+        source: 'llm_judge',
+        status: 'pending',
+        labels: ['good_reply'],
+        root_cause: '回复满足用户意图',
+        severity: 'low',
+        confidence: 0.93,
+        reason: '没有明显质量问题。',
+        recommended_fix: '',
+        judge_model: 'fake-judge',
+        prompt_version: 'data-flywheel-prelabel-v1',
+      },
+      prelabels: [],
+      user_input_preview: '查询今天农场概况',
+    };
+    mockedList.mockResolvedValue({ items: [sample, normalSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('查询今天农场概况');
+    await user.click(screen.getByLabelText('隐藏 AI 判定正常'));
+
+    expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
+    expect(screen.queryByText('查询今天农场概况')).not.toBeInTheDocument();
   });
 
   it('事件 JSONL 缺失时明确提示聊天来自 MySQL 且可同步重建', async () => {
@@ -1099,6 +1176,150 @@ describe('DataFlywheel 页面', () => {
     expect(mockedCreatePrelabel).not.toHaveBeenCalled();
   });
 
+  it('点击 AI 预判队列后只显示待审核预判样本', async () => {
+    const pendingPrelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['wrong_tool_selection'],
+      root_cause: '实时查询未调用工具',
+      severity: 'high',
+      confidence: 0.91,
+      reason: '用户需要实时数据，但没有工具调用。',
+      recommended_fix: '优先调用天气或业务查询工具。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    const predictedSample: DataFlywheelSample = {
+      ...sample,
+      latest_prelabel: pendingPrelabel,
+      prelabels: [pendingPrelabel],
+    };
+    const rejectedSample: DataFlywheelSample = {
+      ...anotherSample,
+      latest_prelabel: { ...pendingPrelabel, id: 10, sample_id: anotherSample.sample_id, status: 'rejected' },
+      prelabels: [],
+    };
+    mockedList.mockResolvedValue({ items: [predictedSample, rejectedSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('archive-ai-prelabels');
+    fireEvent.click(screen.getByTestId('archive-ai-prelabels'));
+
+    expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
+    expect(screen.queryByTestId('sample-row-turn:session-b:4')).not.toBeInTheDocument();
+    expect(screen.getByText('AI 预判')).toBeInTheDocument();
+  });
+
+  it('审核 AI 预判时展示聊天内容和工具证据', async () => {
+    const prelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['wrong_tool_selection'],
+      root_cause: '实时查询未调用工具',
+      severity: 'high',
+      confidence: 0.91,
+      reason: '用户需要实时数据，但没有工具调用。',
+      recommended_fix: '优先调用天气或业务查询工具。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    const predictedSample: DataFlywheelSample = {
+      ...sample,
+      latest_prelabel: prelabel,
+      prelabels: [prelabel],
+    };
+    mockedList.mockResolvedValue({ items: [predictedSample], total: 1 });
+    mockedDetail.mockResolvedValueOnce({ ...detail, sample: predictedSample, prelabels: [prelabel] });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('archive-ai-prelabels');
+    fireEvent.click(screen.getByTestId('archive-ai-prelabels'));
+    fireEvent.click(screen.getByTestId('sample-row-turn:session-a:3'));
+
+    expect(await screen.findByText('审核证据')).toBeInTheDocument();
+    expect(screen.getByText('用户输入')).toBeInTheDocument();
+    expect(screen.getByText('助手回复')).toBeInTheDocument();
+    expect(screen.getAllByText('张三本月工资记录里缺少 6 月 8 日。').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('selected_tools').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('worker.search').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('wage.list').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('actual_tools').length).toBeGreaterThan(0);
+    expect(screen.getByText('1 个 pending 事件')).toBeInTheDocument();
+  });
+
+  it('采纳 AI 预判后预判队列移除样本并进入已标注问题', async () => {
+    const prelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['wrong_tool_selection'],
+      root_cause: '实时查询未调用工具',
+      severity: 'high',
+      confidence: 0.91,
+      reason: '用户需要实时数据，但没有工具调用。',
+      recommended_fix: '优先调用天气或业务查询工具。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    const predictedSample: DataFlywheelSample = {
+      ...sample,
+      latest_prelabel: prelabel,
+      prelabels: [prelabel],
+    };
+    const acceptedSample: DataFlywheelSample = {
+      ...sample,
+      quality_labels: ['wrong_tool_selection'],
+      annotation_status: 'labeled',
+      latest_prelabel: { ...prelabel, status: 'accepted' },
+      prelabels: [],
+    };
+    mockedList
+      .mockResolvedValueOnce({ items: [predictedSample], total: 1 })
+      .mockResolvedValueOnce({ items: [acceptedSample], total: 1 });
+    mockedDetail.mockResolvedValueOnce({ ...detail, sample: predictedSample, labels: [], prelabels: [prelabel] });
+    mockedAcceptPrelabel.mockResolvedValueOnce({
+      ...prelabel,
+      status: 'accepted',
+      accepted_label_ids: [7],
+    });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('archive-ai-prelabels');
+    fireEvent.click(screen.getByTestId('archive-ai-prelabels'));
+    fireEvent.click(screen.getByTestId('sample-row-turn:session-a:3'));
+    await userEvent.click(await screen.findByRole('button', { name: '采纳 AI 预判' }));
+
+    await waitFor(() => {
+      expect(mockedAcceptPrelabel).toHaveBeenCalledWith(sample.sample_id, 9, {
+        labels: ['wrong_tool_selection'],
+        comment: 'AI 预判采纳：用户需要实时数据，但没有工具调用。',
+      });
+    });
+    expect(mockedList).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByTestId('archive-ai-prelabels'));
+    expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
+    expect(screen.getByTestId('problem-session-session-a')).toBeInTheDocument();
+  });
+
   it('点击 AI 预判后调用 createSamplePrelabel 并展示预判结果', async () => {
     const prelabel: DataFlywheelPrelabel = {
       id: 9,
@@ -1130,8 +1351,8 @@ describe('DataFlywheel 页面', () => {
 
     expect(mockedCreatePrelabel).toHaveBeenCalledWith(sample.sample_id);
     expect(await screen.findByText('写操作缺少 pending 确认')).toBeInTheDocument();
-    expect(screen.getByText('bad_reply')).toBeInTheDocument();
-    expect(screen.getByText('pending_missed')).toBeInTheDocument();
+    expect(screen.getByTitle('bad_reply')).toHaveTextContent('坏回复');
+    expect(screen.getByTitle('pending_missed')).toHaveTextContent('pending 漏拦截');
   });
 
   it('采纳 AI 预判时调用 acceptSamplePrelabel 写入建议标签', async () => {

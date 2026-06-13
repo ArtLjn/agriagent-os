@@ -238,3 +238,23 @@ def test_detects_tool_error_ignored_with_specific_label() -> None:
         "evidence": "manage_wages",
         "suggested_label": "tool_error_ignored",
     } in candidates
+
+
+def test_detects_missing_tool_selection_for_realtime_query() -> None:
+    candidates = detect_issue_candidates(
+        user_input="今天适合做什么",
+        assistant_reply="需要先调用工具获取真实数据，请稍后重试。",
+        selected_tools=[],
+        events=[],
+        pending_lifecycle=[],
+    )
+
+    assert candidates == [
+        {
+            "type": "wrong_tool_selection",
+            "severity": "high",
+            "reason": "用户需要实时/外部数据，但 router 没有选择任何工具",
+            "evidence": "今天适合做什么",
+            "suggested_label": "wrong_tool_selection",
+        }
+    ]

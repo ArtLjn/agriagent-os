@@ -1,6 +1,7 @@
 """测试 YAML 配置加载。"""
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import yaml
@@ -86,6 +87,22 @@ class TestYamlConfig:
         settings = Settings(_config_path=str(config_file))
 
         assert settings.data_flywheel.llm_prelabel_enabled is True
+
+    def test_config_example_covers_settings_schema(self):
+        from app.core.config import Settings
+
+        config_file = Path(__file__).resolve().parents[1] / "config.yaml.example"
+        data = yaml.safe_load(config_file.read_text()) or {}
+
+        missing_sections = set(Settings.model_fields) - set(data)
+        assert missing_sections == set()
+
+        for section_name, field in Settings.model_fields.items():
+            section_model = getattr(field.annotation, "model_fields", None)
+            if not section_model:
+                continue
+            missing_keys = set(section_model) - set(data[section_name])
+            assert missing_keys == set()
 
 
 class TestAIConfig:

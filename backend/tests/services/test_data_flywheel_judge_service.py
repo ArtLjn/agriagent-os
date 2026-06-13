@@ -150,6 +150,9 @@ def test_build_judge_input_includes_sample_detail_and_debug_evidence() -> None:
         "turn_count": 2,
         "request_ids": ["req-1", "req-2"],
     }
+    assert "中文" in payload["judge_instructions"]
+    assert payload["label_definitions"]["wrong_tool_selection"].startswith("工具")
+    assert "not_actionable" in payload["label_selection_rules"]
     assert "labels" in payload["output_schema"]["required"]
 
 
@@ -297,6 +300,9 @@ def test_openai_judge_client_parses_json_completion() -> None:
     assert calls[0]["model"] == "fake-model"
     assert calls[0]["temperature"] == 0
     assert calls[0]["response_format"] == {"type": "json_object"}
+    system_prompt = calls[0]["messages"][0]["content"]
+    assert "所有自然语言字段必须使用简体中文" in system_prompt
+    assert "不要使用英文解释" in system_prompt
 
 
 def test_openai_judge_client_defaults_invalid_json_to_empty_dict() -> None:

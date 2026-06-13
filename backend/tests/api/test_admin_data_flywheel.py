@@ -454,6 +454,131 @@ def test_prelabel_endpoint_creates_pending_llm_judge_prelabel(
     assert detail["prelabels"][0]["status"] == "pending"
 
 
+def test_batch_prelabel_inline_creates_pending_prelabels_without_human_labels(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    fake_client = FakeJudgeClient()
+
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api,
+        "build_data_flywheel_judge_client",
+        lambda: fake_client,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            "/admin/data-flywheel/prelabels/batch",
+            json={"unannotated_only": True, "limit": 10, "run_inline": True},
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/samples/{sample_id}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "inline"
+    assert data["status"] == "completed"
+    assert data["result"]["total"] == 1
+    assert data["result"]["created"] == 1
+    assert data["result"]["skipped_existing"] == 0
+    assert data["result"]["failed"] == 0
+    assert data["result"]["items"][0]["sample_id"] == sample_id
+    assert data["result"]["items"][0]["status"] == "created"
+    assert len(fake_client.calls) == 1
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["quality_labels"] == []
+    assert detail["prelabels"][0]["status"] == "pending"
+
+
+def test_batch_prelabel_skips_samples_with_existing_prelabel(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    fake_client = FakeJudgeClient()
+
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
+    )
+    monkeypatch.setattr(
+        admin_data_flywheel_api,
+        "build_data_flywheel_judge_client",
+        lambda: fake_client,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        first_resp = client.post(
+            "/admin/data-flywheel/prelabels/batch",
+            json={"unannotated_only": True, "limit": 10, "run_inline": True},
+            headers=admin_headers(),
+        )
+        second_resp = client.post(
+            "/admin/data-flywheel/prelabels/batch",
+            json={"unannotated_only": True, "limit": 10, "run_inline": True},
+            headers=admin_headers(),
+        )
+
+    assert first_resp.status_code == 200
+    assert second_resp.status_code == 200
+    assert second_resp.json()["result"]["created"] == 0
+    assert second_resp.json()["result"]["skipped_existing"] == 1
+    assert second_resp.json()["result"]["items"] == [
+        {"sample_id": sample_id, "status": "skipped_existing"}
+    ]
+    assert len(fake_client.calls) == 1
+
+
+def test_batch_prelabel_schedules_background_job(db_session, monkeypatch) -> None:
+    ensure_admin_user(db_session)
+    farm = db_session.query(Farm).filter(Farm.user_id == ADMIN_USER_ID).one()
+    calls = []
+
+    def fake_run_job(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(admin_data_flywheel_api, "run_prelabel_batch_job", fake_run_job)
+    monkeypatch.setattr(
+        admin_data_flywheel_api.settings.data_flywheel,
+        "llm_prelabel_enabled",
+        True,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            "/admin/data-flywheel/prelabels/batch",
+            json={"unannotated_only": True, "q": "sess-admin", "limit": 25},
+            headers=admin_headers(),
+        )
+        status_resp = client.get(
+            f"/admin/data-flywheel/prelabels/batch/{resp.json()['job_id']}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "queued"
+    assert resp.json()["mode"] == "background"
+    assert status_resp.status_code == 200
+    assert status_resp.json()["job_id"] == resp.json()["job_id"]
+    assert calls[0]["farm_id"] == farm.id
+    assert calls[0]["q"] == "sess-admin"
+    assert calls[0]["limit"] == 25
+
+
 def test_build_prelabel_judge_client_uses_llm_manager(monkeypatch) -> None:
     class FakeManager:
         fallback_mode = False

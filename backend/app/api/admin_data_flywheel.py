@@ -42,6 +42,7 @@ router = APIRouter(
 
 AGENT_EVENT_BASE_DIR = Path("data/agent-events")
 _SYNC_JOBS: dict[str, dict[str, Any]] = {}
+_PRELABEL_BATCH_JOBS: dict[str, dict[str, Any]] = {}
 
 
 class LabelRequest(BaseModel):
@@ -75,6 +76,18 @@ class SyncSessionsRequest(BaseModel):
     session_id: str | None = None
     only_missing: bool = True
     limit: int = 100
+    run_inline: bool = False
+
+
+class BatchPrelabelRequest(BaseModel):
+    sample_type: str = SAMPLE_TYPE_SESSION_TURN
+    label: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    q: str | None = None
+    unannotated_only: bool = True
+    limit: int = 50
+    skip_existing: bool = True
     run_inline: bool = False
 
 
@@ -198,6 +211,74 @@ def get_admin_data_flywheel_sync_job(job_id: str) -> dict[str, Any]:
     return job
 
 
+@router.post("/prelabels/batch")
+def create_admin_data_flywheel_prelabel_batch(
+    background_tasks: BackgroundTasks,
+    body: BatchPrelabelRequest | None = None,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """按当前筛选批量触发 LLM 预判，不写入人工质量标签。"""
+    payload = body or BatchPrelabelRequest()
+    if not settings.data_flywheel.llm_prelabel_enabled:
+        raise _http_error(ValueError("LLM_PRELABEL_DISABLED"))
+    if payload.run_inline:
+        return {
+            "job_id": "inline",
+            "status": "completed",
+            "mode": "inline",
+            "farm_id": farm.id,
+            "result": run_prelabel_batch(
+                db,
+                farm_id=farm.id,
+                sample_type=payload.sample_type,
+                label=payload.label,
+                session_id=payload.session_id,
+                request_id=payload.request_id,
+                q=payload.q,
+                unannotated_only=payload.unannotated_only,
+                limit=payload.limit,
+                skip_existing=payload.skip_existing,
+            ),
+            "error": None,
+        }
+
+    job_id = f"prelabel-batch-{uuid.uuid4().hex[:12]}"
+    _PRELABEL_BATCH_JOBS[job_id] = {
+        "job_id": job_id,
+        "status": "queued",
+        "mode": "background",
+        "farm_id": farm.id,
+        "result": None,
+        "error": None,
+    }
+    background_tasks.add_task(
+        run_prelabel_batch_job,
+        job_id=job_id,
+        farm_id=farm.id,
+        sample_type=payload.sample_type,
+        label=payload.label,
+        session_id=payload.session_id,
+        request_id=payload.request_id,
+        q=payload.q,
+        unannotated_only=payload.unannotated_only,
+        limit=payload.limit,
+        skip_existing=payload.skip_existing,
+    )
+    return _PRELABEL_BATCH_JOBS[job_id]
+
+
+@router.get("/prelabels/batch/{job_id}")
+def get_admin_data_flywheel_prelabel_batch_job(job_id: str) -> dict[str, Any]:
+    """查询批量 AI 预判任务状态。"""
+    job = _PRELABEL_BATCH_JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404, detail={"code": "PRELABEL_BATCH_JOB_NOT_FOUND"}
+        )
+    return job
+
+
 def run_session_events_sync_job(
     *,
     job_id: str,
@@ -231,6 +312,120 @@ def run_session_events_sync_job(
     if job is not None:
         job["status"] = "completed"
         job["result"] = result
+
+
+def run_prelabel_batch_job(
+    *,
+    job_id: str,
+    farm_id: int,
+    sample_type: str,
+    label: str | None,
+    session_id: str | None,
+    request_id: str | None,
+    q: str | None,
+    unannotated_only: bool,
+    limit: int,
+    skip_existing: bool,
+) -> None:
+    """后台执行批量 LLM 预判任务。"""
+    job = _PRELABEL_BATCH_JOBS.get(job_id)
+    if job is not None:
+        job["status"] = "running"
+    db = SessionLocal()
+    try:
+        result = run_prelabel_batch(
+            db,
+            farm_id=farm_id,
+            sample_type=sample_type,
+            label=label,
+            session_id=session_id,
+            request_id=request_id,
+            q=q,
+            unannotated_only=unannotated_only,
+            limit=limit,
+            skip_existing=skip_existing,
+        )
+    except Exception as exc:
+        if job is not None:
+            job["status"] = "failed"
+            job["error"] = str(exc)
+        raise
+    finally:
+        db.close()
+    if job is not None:
+        job["status"] = "completed"
+        job["result"] = result
+
+
+def run_prelabel_batch(
+    db: Session,
+    *,
+    farm_id: int,
+    sample_type: str,
+    label: str | None,
+    session_id: str | None,
+    request_id: str | None,
+    q: str | None,
+    unannotated_only: bool,
+    limit: int,
+    skip_existing: bool,
+) -> dict[str, Any]:
+    """同步执行一批样本的 LLM 预判，只创建 prelabel，不写人工标签。"""
+    judge_client = build_data_flywheel_judge_client()
+    listed = list_samples(
+        db,
+        farm_id=farm_id,
+        sample_type=sample_type or SAMPLE_TYPE_SESSION_TURN,
+        label=label,
+        session_id=session_id,
+        request_id=request_id,
+        q=q,
+        unannotated_only=unannotated_only,
+        limit=limit,
+        offset=0,
+    )
+    items: list[dict[str, Any]] = []
+    created = 0
+    skipped_existing = 0
+    failed = 0
+
+    for sample in listed["items"]:
+        sample_id = str(sample["sample_id"])
+        if skip_existing and sample.get("latest_prelabel"):
+            skipped_existing += 1
+            items.append({"sample_id": sample_id, "status": "skipped_existing"})
+            continue
+        try:
+            prelabel = create_sample_prelabel(
+                db,
+                farm_id=farm_id,
+                sample_id=sample_id,
+                judge_client=judge_client,
+            )
+        except Exception as exc:
+            failed += 1
+            items.append(
+                {"sample_id": sample_id, "status": "failed", "error": str(exc)}
+            )
+            continue
+        created += 1
+        items.append(
+            {
+                "sample_id": sample_id,
+                "status": "created",
+                "prelabel_id": prelabel["id"],
+                "labels": prelabel["labels"],
+                "confidence": prelabel["confidence"],
+            }
+        )
+
+    return {
+        "total": len(listed["items"]),
+        "created": created,
+        "skipped_existing": skipped_existing,
+        "failed": failed,
+        "items": items,
+    }
 
 
 @router.post("/samples/{sample_id}/labels")

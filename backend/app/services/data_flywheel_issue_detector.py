@@ -23,6 +23,19 @@ EXECUTION_CLAIMS = (
     "已结清",
 )
 QUESTION_TERMS = ("？", "?", "吗", "如何", "怎么", "哪些", "有没有", "查询", "查一下")
+EXTERNAL_DATA_TERMS = (
+    "今天",
+    "天气",
+    "气温",
+    "降雨",
+    "下雨",
+    "适合",
+    "实时",
+    "现在",
+    "当前",
+    "查一下",
+    "查询",
+)
 WRITE_TOOL_TERMS = (
     "create",
     "update",
@@ -82,6 +95,21 @@ def detect_issue_candidates(
     write_successful = [tool for tool in successful_tools if _is_write_tool(tool)]
     pending_tools = _pending_tools(pending_lifecycle)
 
+    if (
+        _needs_external_data(user_input)
+        and not selected_tools
+        and not successful_tools
+        and not failed_tools
+    ):
+        candidates.append(
+            _candidate(
+                "wrong_tool_selection",
+                "high",
+                "用户需要实时/外部数据，但 router 没有选择任何工具",
+                _evidence_text(user_input),
+                "wrong_tool_selection",
+            )
+        )
     if _claims_execution(assistant_reply) and not write_successful:
         candidates.append(
             _candidate(
@@ -226,6 +254,15 @@ def _claims_execution(reply: str | None) -> bool:
 
 def _is_question(user_input: str | None) -> bool:
     return bool(user_input and any(term in user_input for term in QUESTION_TERMS))
+
+
+def _needs_external_data(user_input: str | None) -> bool:
+    return bool(user_input and any(term in user_input for term in EXTERNAL_DATA_TERMS))
+
+
+def _evidence_text(value: str | None) -> str:
+    text = (value or "").strip()
+    return text[:80] if text else "no user input"
 
 
 def _sensitive_hit(reply: str | None) -> str | None:

@@ -19,10 +19,12 @@ interface SessionArchivePanelProps {
   groups: SessionArchiveItem[];
   total: number;
   issueCount: number;
+  aiPrelabelCount: number;
   confirmedIssueCount: number;
   activeKey: string;
   allKey: string;
   issueKey: string;
+  aiPrelabelKey: string;
   confirmedIssueKey: string;
   showBuckets?: boolean;
   testIdPrefix?: string;
@@ -34,17 +36,23 @@ export default function SessionArchivePanel({
   groups,
   total,
   issueCount,
+  aiPrelabelCount,
   confirmedIssueCount,
   activeKey,
   allKey,
   issueKey,
+  aiPrelabelKey,
   confirmedIssueKey,
   showBuckets = true,
   testIdPrefix = 'archive-session',
   onSelect,
 }: SessionArchivePanelProps) {
   return (
-    <Card title={title} style={cardStyle} styles={{ body: { padding: 12 } }}>
+    <Card
+      title={title}
+      style={archiveCardStyle}
+      styles={{ body: { padding: 12, minHeight: 0, flex: 1, overflow: 'auto', scrollbarGutter: 'stable' } }}
+    >
       <Space direction="vertical" size={10} style={{ width: '100%' }}>
         {showBuckets && (
           <>
@@ -76,6 +84,21 @@ export default function SessionArchivePanel({
                 </Typography.Text>
               </span>
               <Badge count={issueCount} color={palette.danger} />
+            </button>
+
+            <button
+              type="button"
+              data-testid="archive-ai-prelabels"
+              onClick={() => onSelect(aiPrelabelKey)}
+              style={archiveButtonStyle(activeKey === aiPrelabelKey)}
+            >
+              <span>
+                <Typography.Text style={{ color: palette.text }}>AI 预判</Typography.Text>
+                <Typography.Text style={{ display: 'block', color: palette.textMuted, fontSize: 12 }}>
+                  待人工采纳或驳回
+                </Typography.Text>
+              </span>
+              <Badge count={aiPrelabelCount} color={palette.accentStrong} />
             </button>
 
             <button
@@ -147,3 +170,11 @@ function archiveButtonStyle(active: boolean): CSSProperties {
     textAlign: 'left',
   };
 }
+
+const archiveCardStyle: CSSProperties = {
+  ...cardStyle,
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
+};

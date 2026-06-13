@@ -77,8 +77,8 @@ export default function SessionConversationView({
           )}
         </Space>
       }
-      style={cardStyle}
-      styles={{ body: { padding: 12, maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' } }}
+      style={conversationCardStyle}
+      styles={{ body: { padding: 12, minHeight: 0, flex: 1, overflowY: 'auto', scrollbarGutter: 'stable' } }}
     >
       <Spin spinning={loading}>
         {!review || review.turns.length === 0 ? (
@@ -297,3 +297,11 @@ function eventLogStatusColor(status?: string) {
   if (status === 'unbound') return 'default';
   return 'default';
 }
+
+const conversationCardStyle = {
+  ...cardStyle,
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  minHeight: 0,
+};

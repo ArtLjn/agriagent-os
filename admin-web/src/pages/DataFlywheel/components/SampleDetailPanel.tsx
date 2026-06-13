@@ -31,7 +31,7 @@ export default function SampleDetailPanel({
 }: SampleDetailPanelProps) {
   if (loading) {
     return (
-      <Card title="样本详情" style={cardStyle}>
+      <Card title="样本详情" style={compactCardStyle}>
         <Spin />
       </Card>
     );
@@ -39,7 +39,7 @@ export default function SampleDetailPanel({
 
   if (!detail) {
     return (
-      <Card title="样本详情" style={cardStyle}>
+      <Card title="样本详情" style={compactCardStyle}>
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择左侧样本查看详情" />
       </Card>
     );
@@ -51,7 +51,7 @@ export default function SampleDetailPanel({
   return (
     <Space direction="vertical" size={12} style={detailStackStyle}>
       {detail.issue_candidates.length > 0 && (
-        <Card title="问题定位" style={cardStyle} styles={{ body: { padding: 14 } }}>
+        <Card title="问题定位" style={compactCardStyle} styles={{ body: { padding: 14 } }}>
           <Space direction="vertical" size={10} style={{ width: '100%' }}>
             {detail.issue_candidates.map((issue) => (
               <div key={`${issue.type}-${issue.evidence}`} style={issueStyle}>
@@ -71,22 +71,22 @@ export default function SampleDetailPanel({
         </Card>
       )}
 
-      <Card title="样本详情" style={cardStyle} styles={{ body: { padding: 14 } }}>
+      <Card title="样本详情" style={compactCardStyle} styles={{ body: { padding: 14 } }}>
         <Row gutter={[12, 12]} align="stretch">
           <Col xs={24} lg={12}>
-            <Section title="user input" height={180}>
+            <Section title="user input" height={132}>
               <Typography.Paragraph style={paragraphStyle}>{userInput || '无用户输入'}</Typography.Paragraph>
             </Section>
           </Col>
           <Col xs={24} lg={12}>
-            <Section title="assistant reply" height={360}>
+            <Section title="assistant reply" height={196}>
               <Typography.Paragraph style={paragraphStyle}>{assistantReply || '无助手回复'}</Typography.Paragraph>
             </Section>
           </Col>
         </Row>
       </Card>
 
-      <Card title="调试上下文" style={cardStyle} styles={{ body: { padding: '4px 14px 14px' } }}>
+      <Card title="调试上下文" style={compactCardStyle} styles={{ body: { padding: '4px 14px 14px' } }}>
         <Tabs
           items={[
             {
@@ -128,7 +128,7 @@ export default function SampleDetailPanel({
         />
       </Card>
 
-      <Card title="样本元信息" style={cardStyle} styles={{ body: { padding: 14 } }}>
+      <Card title="样本元信息" style={compactCardStyle} styles={{ body: { padding: 14 } }}>
         <Descriptions
           size="small"
           column={2}
@@ -207,7 +207,11 @@ function Section({
 
 const detailStackStyle: CSSProperties = {
   width: '100%',
-  paddingRight: 2,
+};
+
+const compactCardStyle: CSSProperties = {
+  ...cardStyle,
+  flexShrink: 0,
 };
 
 const sectionStyle: CSSProperties = {

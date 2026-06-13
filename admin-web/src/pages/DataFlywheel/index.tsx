@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Card, Checkbox, Input, Select, Space, Typography, message } from 'antd';
 import { CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
@@ -11,10 +11,12 @@ import {
   addSampleLabel,
   createCaseDraft,
   createSamplePrelabel,
+  createSamplePrelabelBatch,
   deleteSampleLabel,
   exportSampleJsonl,
   getDataFlywheelSyncJob,
   getSampleDetail,
+  getSamplePrelabelBatchJob,
   getSessionAnnotations,
   getSessionReview,
   listDataFlywheelSamples,
@@ -38,10 +40,12 @@ import SampleDetailPanel from './components/SampleDetailPanel';
 import SampleQueueTable from './components/SampleQueueTable';
 import SessionConversationView from './components/SessionConversationView';
 import SessionArchivePanel, { type SessionArchiveItem } from './components/SessionArchivePanel';
+import ReviewEvidencePanel from './components/ReviewEvidencePanel';
 
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
 const ALL_ARCHIVE_KEY = '__all__';
 const ISSUE_ARCHIVE_KEY = '__issues__';
+const AI_PRELABEL_ARCHIVE_KEY = '__ai_prelabels__';
 const CONFIRMED_ISSUE_ARCHIVE_KEY = '__confirmed_issues__';
 
 interface SampleQuery {
@@ -82,6 +86,7 @@ export default function DataFlywheel() {
   const [searchText, setSearchText] = useState('');
   const [qualityLabel, setQualityLabel] = useState<DataFlywheelLabel | undefined>();
   const [unannotatedOnly, setUnannotatedOnly] = useState(false);
+  const [hideAiNormal, setHideAiNormal] = useState(false);
   const [query, setQuery] = useState<SampleQuery>({
     searchText: '',
     qualityLabel: undefined,
@@ -103,6 +108,7 @@ export default function DataFlywheel() {
   const [traceDiagnosticsByRequestId, setTraceDiagnosticsByRequestId] = useState<Record<string, TraceDiagnostics>>({});
   const [loadingTraceDiagnostics, setLoadingTraceDiagnostics] = useState<Record<string, boolean>>({});
   const [syncingSessions, setSyncingSessions] = useState(false);
+  const [batchPrelabeling, setBatchPrelabeling] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(true);
   const listRequestSeq = useRef(0);
@@ -127,29 +133,39 @@ export default function DataFlywheel() {
     () => samples.filter((sample) => sample.issue_candidates.length > 0).length,
     [samples]
   );
+  const aiPrelabelCount = useMemo(
+    () => samples.filter(hasPendingAiPrelabel).length,
+    [samples]
+  );
   const confirmedIssueCount = useMemo(
     () => confirmedIssueTotal(samples, sessionAnnotationOverlays),
     [samples, sessionAnnotationOverlays]
   );
   const visibleSamples = useMemo(() => {
-    if (activeArchiveKey === ALL_ARCHIVE_KEY) return samples;
+    const baseSamples = hideAiNormal ? samples.filter((sample) => !isAiNormalSample(sample)) : samples;
+    if (activeArchiveKey === ALL_ARCHIVE_KEY) return baseSamples;
     if (activeArchiveKey === ISSUE_ARCHIVE_KEY) {
-      return samples.filter((sample) => sample.issue_candidates.length > 0);
+      return baseSamples.filter((sample) => sample.issue_candidates.length > 0);
+    }
+    if (activeArchiveKey === AI_PRELABEL_ARCHIVE_KEY) {
+      return baseSamples.filter(hasPendingAiPrelabel);
     }
     if (activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY) {
       return [];
     }
-    return samples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
-  }, [activeArchiveKey, samples]);
+    return baseSamples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
+  }, [activeArchiveKey, hideAiNormal, samples]);
   const isSessionArchiveActive =
     activeArchiveKey !== ALL_ARCHIVE_KEY &&
     activeArchiveKey !== ISSUE_ARCHIVE_KEY &&
+    activeArchiveKey !== AI_PRELABEL_ARCHIVE_KEY &&
     activeArchiveKey !== CONFIRMED_ISSUE_ARCHIVE_KEY;
 
   useEffect(() => {
     if (
       activeArchiveKey === ALL_ARCHIVE_KEY ||
       activeArchiveKey === ISSUE_ARCHIVE_KEY ||
+      activeArchiveKey === AI_PRELABEL_ARCHIVE_KEY ||
       activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY
     ) {
       return;
@@ -557,6 +573,43 @@ export default function DataFlywheel() {
     }
   };
 
+  const handleBatchPrelabel = async () => {
+    setBatchPrelabeling(true);
+    try {
+      const trimmed = searchText.trim();
+      const job = await createSamplePrelabelBatch({
+        q: trimmed || undefined,
+        label: qualityLabel,
+        unannotated_only: unannotatedOnly,
+        limit: 50,
+        skip_existing: true,
+      });
+      message.success('批量 AI 分析任务已提交');
+      const result = await waitForPrelabelBatchJob(job.job_id);
+      await fetchSamples(query);
+      const created = Number(result?.created ?? 0);
+      const skipped = Number(result?.skipped_existing ?? 0);
+      const failed = Number(result?.failed ?? 0);
+      message.success(`批量 AI 分析完成：新增 ${created}，跳过 ${skipped}，失败 ${failed}`);
+    } catch {
+      message.error('批量 AI 分析失败');
+    } finally {
+      setBatchPrelabeling(false);
+    }
+  };
+
+  const waitForPrelabelBatchJob = async (jobId: string) => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const job = await getSamplePrelabelBatchJob(jobId);
+      if (job.status === 'completed') return job.result ?? null;
+      if (job.status === 'failed') {
+        throw new Error(job.error || 'PRELABEL_BATCH_JOB_FAILED');
+      }
+      await sleep(1000);
+    }
+    return null;
+  };
+
   const clearSelection = () => {
     detailRequestSeq.current += 1;
     setSelectedSample(null);
@@ -578,7 +631,12 @@ export default function DataFlywheel() {
   const handleSelectArchive = (key: string) => {
     setActiveArchiveKey(key);
     clearSelection();
-    if (key === ALL_ARCHIVE_KEY || key === ISSUE_ARCHIVE_KEY || key === CONFIRMED_ISSUE_ARCHIVE_KEY) {
+    if (
+      key === ALL_ARCHIVE_KEY ||
+      key === ISSUE_ARCHIVE_KEY ||
+      key === AI_PRELABEL_ARCHIVE_KEY ||
+      key === CONFIRMED_ISSUE_ARCHIVE_KEY
+    ) {
       sessionReviewRequestSeq.current += 1;
       setSessionReview(null);
       setLoadingSessionReview(false);
@@ -604,10 +662,12 @@ export default function DataFlywheel() {
       groups={archiveGroups}
       total={samples.length}
       issueCount={issueCount}
+      aiPrelabelCount={aiPrelabelCount}
       confirmedIssueCount={confirmedIssueCount}
       activeKey={activeArchiveKey}
       allKey={ALL_ARCHIVE_KEY}
       issueKey={ISSUE_ARCHIVE_KEY}
+      aiPrelabelKey={AI_PRELABEL_ARCHIVE_KEY}
       confirmedIssueKey={CONFIRMED_ISSUE_ARCHIVE_KEY}
       onSelect={handleSelectArchive}
     />
@@ -618,10 +678,12 @@ export default function DataFlywheel() {
       groups={confirmedIssueGroups}
       total={confirmedIssueGroups.reduce((sum, group) => sum + group.total, 0)}
       issueCount={0}
+      aiPrelabelCount={0}
       confirmedIssueCount={confirmedIssueCount}
       activeKey=""
       allKey={ALL_ARCHIVE_KEY}
       issueKey={ISSUE_ARCHIVE_KEY}
+      aiPrelabelKey={AI_PRELABEL_ARCHIVE_KEY}
       confirmedIssueKey={CONFIRMED_ISSUE_ARCHIVE_KEY}
       showBuckets={false}
       testIdPrefix="problem-session"
@@ -645,8 +707,8 @@ export default function DataFlywheel() {
           会话 turn：{visibleSamples.length} 条
         </Typography.Text>
       }
-      style={cardStyle}
-      styles={{ body: { padding: 0 } }}
+      style={workspaceCardStyle}
+      styles={{ body: { padding: 0, minHeight: 0, flex: 1, overflow: 'hidden' } }}
     >
       <SampleQueueTable
         samples={visibleSamples}
@@ -657,7 +719,8 @@ export default function DataFlywheel() {
     </Card>
   );
   const detailContent = (
-    <>
+    <div style={detailRailStyle}>
+      <ReviewEvidencePanel detail={detail} />
       <SampleDetailPanel
         detail={detail}
         loading={loadingDetail}
@@ -701,12 +764,12 @@ export default function DataFlywheel() {
         onMarkBadCase={handleMarkBadCase}
         onCreateRegressionCase={handleCreateRegressionCase}
       />
-    </>
+    </div>
   );
 
   return (
-    <div style={{ color: palette.text }}>
-      <Space direction="vertical" size={4} style={{ marginBottom: 16 }}>
+    <div style={pageShellStyle}>
+      <Space direction="vertical" size={4} style={{ flexShrink: 0 }}>
         <Typography.Title level={4} style={{ color: palette.text, margin: 0 }}>
           Agent 数据飞轮
         </Typography.Title>
@@ -715,7 +778,7 @@ export default function DataFlywheel() {
         </Typography.Text>
       </Space>
 
-      <Card size="small" style={{ ...cardStyle, marginBottom: 14 }} styles={{ body: { padding: 12 } }}>
+      <Card size="small" style={filterCardStyle} styles={{ body: { padding: 12 } }}>
         <Space wrap>
           <Input
             allowClear
@@ -736,6 +799,9 @@ export default function DataFlywheel() {
           <Checkbox checked={unannotatedOnly} onChange={(event) => setUnannotatedOnly(event.target.checked)}>
             只看未标注
           </Checkbox>
+          <Checkbox checked={hideAiNormal} onChange={(event) => setHideAiNormal(event.target.checked)}>
+            隐藏 AI 判定正常
+          </Checkbox>
           <Button type="primary" icon={<SearchOutlined />} loading={loadingList} onClick={submitQuery}>
             查询
           </Button>
@@ -744,6 +810,14 @@ export default function DataFlywheel() {
           </Button>
           <Button icon={<CloudSyncOutlined />} loading={syncingSessions} onClick={handleSyncSessions}>
             同步会话
+          </Button>
+          <Button
+            icon={<CloudSyncOutlined />}
+            loading={batchPrelabeling}
+            disabled={loadingList}
+            onClick={handleBatchPrelabel}
+          >
+            批量 AI 分析
           </Button>
           <Typography.Text style={{ color: palette.textMuted }}>共 {total} 条</Typography.Text>
         </Space>
@@ -764,10 +838,59 @@ export default function DataFlywheel() {
   );
 }
 
+const pageShellStyle: CSSProperties = {
+  color: palette.text,
+  height: 'calc(100vh - 134px)',
+  minHeight: 620,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 14,
+  overflow: 'hidden',
+};
+
+const filterCardStyle: CSSProperties = {
+  ...cardStyle,
+  flexShrink: 0,
+};
+
+const workspaceCardStyle: CSSProperties = {
+  ...cardStyle,
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
+};
+
+const detailRailStyle: CSSProperties = {
+  height: '100%',
+  minHeight: 0,
+  overflow: 'auto',
+  paddingRight: 2,
+  scrollbarGutter: 'stable',
+};
+
 function sleep(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function isAiNormalSample(sample: DataFlywheelSample) {
+  const prelabel = latestAiPrelabel(sample);
+  if (!prelabel || !hasPendingAiPrelabel(sample)) return false;
+  if (prelabel.confidence < 0.85) return false;
+  const labels = new Set(prelabel.labels);
+  const normalLabel = labels.has('good_reply') || labels.has('not_actionable');
+  const lowRiskSeverity = prelabel.severity === 'low' || prelabel.severity === 'medium';
+  return normalLabel && lowRiskSeverity;
+}
+
+function hasPendingAiPrelabel(sample: DataFlywheelSample) {
+  return latestAiPrelabel(sample)?.status === 'pending';
+}
+
+function latestAiPrelabel(sample: DataFlywheelSample) {
+  return sample.latest_prelabel ?? sample.prelabels?.[0] ?? null;
 }
 
 function annotationSampleId(target: AnnotationTarget) {
