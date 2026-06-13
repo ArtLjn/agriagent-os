@@ -125,9 +125,7 @@ async def test_pending_plan_reflection_blocks_storage_and_returns_tool_messages(
             ],
         ),
         patch("app.agent.runtime.tool_executor.get_collector"),
-        patch(
-            "app.agent.runtime.tool_executor.ReflectorService"
-        ) as reflector_cls,
+        patch("app.agent.runtime.tool_executor.ReflectorService") as reflector_cls,
     ):
         reflector_cls.return_value.check_pending_plan.return_value = _blocked_result(
             ReflectionTrigger.PRE_WRITE_PLAN
@@ -142,7 +140,9 @@ async def test_pending_plan_reflection_blocks_storage_and_returns_tool_messages(
         "tc-worker",
         "tc-work-order",
     }
-    assert all("Reflection 拦截了风险写操作。" in msg.content for msg in returned_messages)
+    assert all(
+        "Reflection 拦截了风险写操作。" in msg.content for msg in returned_messages
+    )
     reflector_cls.return_value.check_pending_plan.assert_called_once()
 
 
@@ -175,9 +175,7 @@ async def test_pending_action_reflection_blocks_storage_and_returns_tool_message
             return_value=[create_cost_record],
         ),
         patch("app.agent.runtime.tool_executor.get_collector"),
-        patch(
-            "app.agent.runtime.tool_executor.ReflectorService"
-        ) as reflector_cls,
+        patch("app.agent.runtime.tool_executor.ReflectorService") as reflector_cls,
     ):
         reflector_cls.return_value.check_write_plan.return_value = _blocked_result(
             ReflectionTrigger.PRE_WRITE_PLAN
@@ -208,9 +206,7 @@ async def test_confirmed_pending_action_reflection_blocks_execution():
             "app.agent.executor.pending_actions._execute_write_skill",
             new_callable=AsyncMock,
         ) as mock_execute,
-        patch(
-            "app.agent.executor.pending_actions.ReflectorService"
-        ) as reflector_cls,
+        patch("app.agent.executor.pending_actions.ReflectorService") as reflector_cls,
     ):
         reflector_cls.return_value.check_write_plan.return_value = _blocked_result(
             ReflectionTrigger.PRE_EXECUTION
@@ -281,9 +277,7 @@ async def test_confirmed_pending_plan_reflection_blocks_execution():
             "app.agent.executor.pending_actions._execute_write_skill",
             new_callable=AsyncMock,
         ) as mock_execute,
-        patch(
-            "app.agent.executor.pending_actions.ReflectorService"
-        ) as reflector_cls,
+        patch("app.agent.executor.pending_actions.ReflectorService") as reflector_cls,
     ):
         reflector_cls.return_value.check_pending_plan.return_value = _blocked_result(
             ReflectionTrigger.PRE_EXECUTION

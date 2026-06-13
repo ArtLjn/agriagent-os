@@ -57,7 +57,9 @@ class ReflectionResult(BaseModel):
 
     @property
     def has_blocker(self) -> bool:
-        return any(issue.severity == ReflectionSeverity.BLOCKER for issue in self.issues)
+        return any(
+            issue.severity == ReflectionSeverity.BLOCKER for issue in self.issues
+        )
 
     @classmethod
     def passed(
