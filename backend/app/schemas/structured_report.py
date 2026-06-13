@@ -4,6 +4,7 @@
 """
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -59,18 +60,83 @@ class ReportAdviceItem(BaseModel):
     priority: int = Field(..., ge=1, le=3)
 
 
+class ReportPeriod(BaseModel):
+    """报告自然周期。"""
+
+    granularity: str = Field(..., pattern="^(week|month)$")
+    start: date
+    end: date
+    label: str | None = None
+
+
+class ReportSummary(BaseModel):
+    """报告摘要文案。"""
+
+    title: str = ""
+    text: str = ""
+    highlights: list[str] = Field(default_factory=list)
+
+
+class ReportMetricItem(BaseModel):
+    """A2UI 指标项。"""
+
+    label: str
+    value: str
+    unit: str | None = None
+    trend: str | None = None
+    helper_text: str | None = None
+
+
+class ReportSection(BaseModel):
+    """A2UI 渲染 section 约定。"""
+
+    type: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1)
+    subtitle: str | None = None
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    data: dict[str, Any] | None = None
+    source_ref_ids: list[str] = Field(default_factory=list)
+
+
+class ReportSourceRef(BaseModel):
+    """报告信源引用。"""
+
+    id: str = Field(..., min_length=1)
+    source_type: str = Field(..., min_length=1)
+    source_id: str | int | None = None
+    label: str = Field(..., min_length=1)
+    occurred_on: date | None = None
+
+
+class ReportSourceSummaryItem(BaseModel):
+    """报告信源摘要项。"""
+
+    source_type: str
+    count: int = Field(..., ge=0)
+
+
 class StructuredReportData(BaseModel):
     """完整的结构化报告数据。"""
 
     report_type: str = Field(..., pattern="^(weekly|monthly)$")
-    period_start: date
-    period_end: date
-    overview: ReportOverviewMetrics
-    cycles: list[ReportCycleItem]
-    costs: list[ReportCostItem]
-    logs: list[ReportLogItem]
-    advice: list[ReportAdviceItem]
-    summary: str = Field(..., max_length=200, description="AI 生成的简短总结")
+    period: ReportPeriod
+    summary: str | ReportSummary = Field(
+        ..., description="兼容旧字符串摘要，也支持新摘要对象"
+    )
+    metrics: list[ReportMetricItem]
+    sections: list[ReportSection]
+    recommendations: list[ReportAdviceItem]
+    source_summary: list[ReportSourceSummaryItem]
+    source_refs: list[ReportSourceRef]
+
+    # 以下字段保留旧报告生成链路兼容性。
+    period_start: date | None = None
+    period_end: date | None = None
+    overview: ReportOverviewMetrics | None = None
+    cycles: list[ReportCycleItem] = Field(default_factory=list)
+    costs: list[ReportCostItem] = Field(default_factory=list)
+    logs: list[ReportLogItem] = Field(default_factory=list)
+    advice: list[ReportAdviceItem] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
