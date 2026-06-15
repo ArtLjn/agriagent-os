@@ -20,6 +20,12 @@ GoRouter createAppRouter({AppDependencies? dependencies}) {
             LedgerManualCreatePage(repository: resolvedDependencies.business),
       ),
       GoRoute(
+        path: LedgerCategoryManagementPage.routePath,
+        builder: (context, state) => LedgerCategoryManagementPage(
+          repository: resolvedDependencies.business,
+        ),
+      ),
+      GoRoute(
         path: FarmCycleListPage.routePath,
         builder: (context, state) =>
             FarmCycleListPage(repository: resolvedDependencies.business),

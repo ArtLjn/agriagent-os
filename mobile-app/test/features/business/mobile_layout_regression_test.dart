@@ -20,6 +20,7 @@ void main() {
     adapter = RecordingAdapter({
       '/smart-fill/parse': smartFillParseResponse,
       'POST /costs': costRecordResponse,
+      '/cost-categories': [categoryResponse],
       '/cycles': paginatedCyclesResponse,
       'POST /cycles': cycleResponse,
       '/crops/templates': paginatedCropTemplatesResponse,
@@ -70,9 +71,8 @@ void main() {
     );
 
     expect(find.text('记账'), findsWidgets);
-    expect(find.text('今日'), findsOneWidget);
-    expect(find.text('可追溯'), findsOneWidget);
-    expect(find.text('按茬口归集'), findsOneWidget);
+    expect(find.text('农场记账'), findsOneWidget);
+    expect(find.text('今天随手记一笔'), findsOneWidget);
     expect(find.text('保存记录'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

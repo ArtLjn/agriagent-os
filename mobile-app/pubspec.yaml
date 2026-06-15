@@ -20,6 +20,7 @@ dependencies:
   flutter_markdown: ^0.7.7+1
   geolocator: ^14.0.2
   package_info_plus: ^10.1.0
+  dropdown_search: ^7.0.0
 
 dev_dependencies:
   flutter_test:

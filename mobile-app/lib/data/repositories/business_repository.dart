@@ -10,6 +10,31 @@ class BusinessRepository {
     return ApiRecord.fromJson(await client.postMap('/costs', data: data));
   }
 
+  Future<PageResult<ApiRecord>> listCostCategories({
+    int page = 1,
+    int size = 100,
+  }) async {
+    final data = await client.getList('/cost-categories');
+    final records = data
+        .map((item) =>
+            ApiRecord.fromJson(Map<String, dynamic>.from(item as Map)))
+        .toList();
+    return PageResult(
+      items: records,
+      total: records.length,
+    );
+  }
+
+  Future<ApiRecord> createCostCategory(Map<String, Object?> data) async {
+    return ApiRecord.fromJson(
+      await client.postMap('/cost-categories', data: data),
+    );
+  }
+
+  Future<void> deleteCostCategory(int categoryId) async {
+    await client.delete('/cost-categories/$categoryId');
+  }
+
   Future<PageResult<ApiRecord>> listCycles(
       {int page = 1, int size = 20}) async {
     final data = await client.getMap('/cycles', query: {

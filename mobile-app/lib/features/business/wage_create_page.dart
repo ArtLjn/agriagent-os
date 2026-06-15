@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
 import '../../shared/assets/app_assets.dart';
 import '../../theme/app_colors.dart';
@@ -81,6 +82,46 @@ class _WageCreatePageState extends State<WageCreatePage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _showWorkerPicker() async {
+    final selected = await showBusinessPickerSheet<ApiRecord>(
+      context: context,
+      title: '选择工人',
+      future: widget.repository.listWorkerSummaries(activeOnly: true),
+      titleFor: (worker) => _workerNameText(worker.json),
+      subtitleFor: (worker) => _workerSubtitle(worker.json),
+      emptyText: '还没有工人档案，可先到工人管理中新增。',
+    );
+    if (selected == null) return;
+    final json = selected.json;
+    setState(() {
+      _workerName.text = _workerNameText(json);
+      final payType = json['default_pay_type']?.toString();
+      if (payType == 'daily' || payType == 'piece') {
+        _payType = payType!;
+      }
+      final unitPrice = json['default_unit_price']?.toString() ?? '';
+      if (unitPrice.isNotEmpty && _unitPrice.text.trim().isEmpty) {
+        _unitPrice.text = unitPrice;
+      }
+    });
+  }
+
+  Future<void> _pickWorkDate() async {
+    final initialDate =
+        DateTime.tryParse(_workDate.text.trim()) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      helpText: '选择作业日期',
+      cancelText: '取消',
+      confirmText: '确定',
+    );
+    if (picked == null) return;
+    setState(() => _workDate.text = _dateText(picked));
+  }
+
   @override
   Widget build(BuildContext context) {
     return BusinessPageFrame(
@@ -120,6 +161,7 @@ class _WageCreatePageState extends State<WageCreatePage> {
               controller: _workerName,
               hintText: '输入或选择工人',
               chevron: true,
+              onTap: _showWorkerPicker,
             ),
             BusinessFormRow(
               label: '作业类型',
@@ -133,6 +175,8 @@ class _WageCreatePageState extends State<WageCreatePage> {
               controller: _workDate,
               hintText: '选择日期',
               chevron: true,
+              onTap: _pickWorkDate,
+              readOnly: true,
             ),
           ],
         ),
@@ -185,8 +229,25 @@ class _WageCreatePageState extends State<WageCreatePage> {
 }
 
 String _todayText() {
-  final now = DateTime.now();
-  final month = now.month.toString().padLeft(2, '0');
-  final day = now.day.toString().padLeft(2, '0');
-  return '${now.year}-$month-$day';
+  return _dateText(DateTime.now());
+}
+
+String _dateText(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+String _workerNameText(Map<String, dynamic> json) {
+  return json['name']?.toString() ?? '未命名工人';
+}
+
+String _workerSubtitle(Map<String, dynamic> json) {
+  final payType = switch (json['default_pay_type']?.toString()) {
+    'piece' => '计件',
+    _ => '按天',
+  };
+  final price = json['default_unit_price']?.toString();
+  if (price == null || price.isEmpty) return payType;
+  return '$payType · 默认单价 $price';
 }

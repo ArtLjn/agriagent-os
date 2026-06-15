@@ -15,6 +15,7 @@ import 'api_test_fixtures.dart'
         RecordingAdapter,
         conversationResponse,
         costRecordResponse,
+        categoryResponse,
         dailyAdviceResponse,
         debtsResponse,
         logResponse,
@@ -162,6 +163,7 @@ BusinessRepository _fakeBusinessRepository() {
     'POST /planting/labor/wages': wageResponse,
     'POST /planting/work-orders': workOrderResponse,
     'POST /costs': costRecordResponse,
+    '/cost-categories': [categoryResponse],
     '/smart-fill/parse': smartFillParseResponse,
   });
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));

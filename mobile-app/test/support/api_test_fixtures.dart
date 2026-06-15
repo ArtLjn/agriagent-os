@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -41,7 +42,8 @@ class RecordingAdapter implements HttpClientAdapter {
       ),
     );
     final key = '${options.method} ${options.path}';
-    final response = responses[key] ?? responses[options.path];
+    final response =
+        await _responseFor(key) ?? await _responseFor(options.path);
     if (response == null && options.method != 'GET') {
       return ResponseBody.fromString(
         jsonEncode({'message': '未配置测试接口 ${options.method} ${options.path}'}),
@@ -58,6 +60,19 @@ class RecordingAdapter implements HttpClientAdapter {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },
     );
+  }
+
+  Future<Object?> _responseFor(String key) async {
+    final response = responses[key];
+    if (response is ListQueue<Object?>) {
+      if (response.isEmpty) return null;
+      final queued =
+          response.length == 1 ? response.first : response.removeFirst();
+      if (queued is Future<Object?>) return queued;
+      return queued;
+    }
+    if (response is Future<Object?>) return response;
+    return response;
   }
 }
 
@@ -310,6 +325,26 @@ final categoryResponse = {
   'icon': 'leaf',
   'sort_order': 1,
   'is_default': true,
+};
+
+final customCategoryResponse = {
+  'id': 2,
+  'farm_id': 1,
+  'name': '人工工资',
+  'type': 'cost',
+  'icon': 'users',
+  'sort_order': 2,
+  'is_default': false,
+};
+
+final waterElectricCategoryResponse = {
+  'id': 3,
+  'farm_id': 1,
+  'name': '水电',
+  'type': 'cost',
+  'icon': 'droplet',
+  'sort_order': 3,
+  'is_default': false,
 };
 
 final debtsResponse = {

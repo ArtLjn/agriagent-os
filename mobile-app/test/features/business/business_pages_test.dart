@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:dio/dio.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/repositories/business_repository.dart';
@@ -16,9 +19,12 @@ void main() {
   void setUpRepository(Map<String, Object?> overrides) {
     adapter = RecordingAdapter({
       '/cycles': paginatedCyclesResponse,
+      '/cost-categories': [categoryResponse, customCategoryResponse],
       '/crops/templates': paginatedCropTemplatesResponse,
       '/planting/workers/summary': paginatedWorkerSummariesResponse,
       'POST /costs': costRecordResponse,
+      'POST /cost-categories': customCategoryResponse,
+      'DELETE /cost-categories/2': {'message': 'ok'},
       'POST /logs': logResponse,
       'POST /cycles': cycleResponse,
       'PUT /cycles/7': cycleResponse,
@@ -47,6 +53,23 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Finder rowFor(String label) {
+    return find.ancestor(
+      of: find.text(label),
+      matching: find.byType(InkWell),
+    );
+  }
+
+  void expectRowChevron(String label, Matcher matcher) {
+    expect(
+      find.descendant(
+        of: rowFor(label),
+        matching: find.byIcon(LucideIcons.chevronRight),
+      ),
+      matcher,
+    );
+  }
+
   testWidgets('记账手动填写页渲染表单字段和保存按钮', (tester) async {
     await pump(tester, LedgerManualCreatePage(repository: repository));
 
@@ -54,8 +77,155 @@ void main() {
     expect(find.text('收入'), findsOneWidget);
     expect(find.text('支出'), findsOneWidget);
     expect(find.text('金额'), findsOneWidget);
-    expect(find.text('关联茬口'), findsOneWidget);
+    expect(find.text('日期'), findsOneWidget);
+    expect(find.text('备注'), findsOneWidget);
+    expect(find.text('关联茬口'), findsNothing);
+    expect(find.text('交易对象'), findsNothing);
     expect(find.text('保存记录'), findsOneWidget);
+  });
+
+  testWidgets('记账页使用分类下拉并按后端账务字段保存', (tester) async {
+    await pump(tester, LedgerManualCreatePage(repository: repository));
+
+    await tester.tap(find.byKey(const Key('ledger-category-dropdown-search')));
+    await tester.pumpAndSettle();
+    final categoryOption = find.byKey(const Key('ledger-category-option-肥料'));
+    await tester
+        .tapAt(tester.getTopLeft(categoryOption) + const Offset(24, 24));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, '输入金额'), '200');
+    await tester.tap(find.text('保存记录'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('POST', '/costs');
+    final data = request.data! as Map<String, dynamic>;
+    expect(data, containsPair('record_type', 'cost'));
+    expect(data, containsPair('category', '肥料'));
+    expect(data, containsPair('amount', 200));
+    expect(data, containsPair('settled_amount', 200));
+    expect(data, containsPair('record_date', _todayTextForTest()));
+    expect('${data['recorded_at']}', startsWith(_todayTextForTest()));
+    expect(data, isNot(contains('cycle_id')));
+    expect(data, isNot(contains('counterparty')));
+    expect(data, isNot(contains('source_type')));
+    expect(data, isNot(contains('parent_record_id')));
+    expect(data, isNot(contains('due_date')));
+    expect(find.widgetWithText(TextField, '输入金额'), findsOneWidget);
+    expect(find.text('200'), findsNothing);
+    expect(find.text('保存记录成功'), findsOneWidget);
+  });
+
+  testWidgets('记账页保存中禁用按钮防止重复提交', (tester) async {
+    final completer = Completer<Object?>();
+    setUpRepository({
+      'POST /costs': completer.future,
+    });
+    await pump(tester, LedgerManualCreatePage(repository: repository));
+
+    await tester.tap(find.byKey(const Key('ledger-category-dropdown-search')));
+    await tester.pumpAndSettle();
+    final categoryOption = find.byKey(const Key('ledger-category-option-肥料'));
+    await tester
+        .tapAt(tester.getTopLeft(categoryOption) + const Offset(24, 24));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '输入金额'), '200');
+
+    await tester.tap(find.text('保存记录'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    final requestCountAfterFirstTap = adapter.requests
+        .where(
+            (request) => request.method == 'POST' && request.path == '/costs')
+        .length;
+    await tester.tap(find.text('保存中'), warnIfMissed: false);
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(requestCountAfterFirstTap, 1);
+    expect(
+      adapter.requests
+          .where(
+              (request) => request.method == 'POST' && request.path == '/costs')
+          .length,
+      1,
+    );
+
+    completer.complete(costRecordResponse);
+    await tester.pumpAndSettle();
+
+    expect(find.text('保存记录'), findsOneWidget);
+  });
+
+  testWidgets('记账页可进入分类管理页', (tester) async {
+    await pump(tester, LedgerManualCreatePage(repository: repository));
+
+    await tester.tap(find.text('管理'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('分类管理'), findsWidgets);
+    expect(find.text('分类列表'), findsOneWidget);
+  });
+
+  testWidgets('分类管理页支持新增自定义分类', (tester) async {
+    await pump(tester, LedgerCategoryManagementPage(repository: repository));
+
+    expect(find.text('肥料'), findsOneWidget);
+    expect(find.text('人工工资'), findsOneWidget);
+
+    await tester.tap(find.text('新增分类').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '输入分类名称'), '水电');
+    await tester.tap(find.text('保存分类'));
+    await tester.pumpAndSettle();
+
+    final request = adapter.find('POST', '/cost-categories');
+    final data = request.data! as Map<String, dynamic>;
+    expect(data, containsPair('name', '水电'));
+    expect(data, containsPair('type', 'cost'));
+  });
+
+  testWidgets('记账页从分类管理返回后刷新分类下拉', (tester) async {
+    setUpRepository({
+      '/cost-categories': ListQueue<Object?>.from([
+        [categoryResponse],
+        [categoryResponse],
+        [categoryResponse, waterElectricCategoryResponse],
+      ]),
+    });
+    await pump(tester, LedgerManualCreatePage(repository: repository));
+
+    await tester.tap(find.text('管理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新增分类').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '输入分类名称'), '水电');
+    await tester.tap(find.text('保存分类'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('返回'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ledger-category-dropdown-search')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('ledger-category-option-水电')), findsOneWidget);
+  });
+
+  testWidgets('记账页日期行使用日期时间选择器', (tester) async {
+    await pump(tester, LedgerManualCreatePage(repository: repository));
+
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('ledger-datetime-row')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('ledger-datetime-row')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+
+    await tester.tap(find.text('下一步'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TimePickerDialog), findsOneWidget);
   });
 
   testWidgets('茬口管理列表页渲染底部 Tab 且记录选中', (tester) async {
@@ -524,8 +694,31 @@ void main() {
     expect(find.text('选择茬口'), findsOneWidget);
     expect(find.text('输入茬口 ID'), findsNothing);
     expect(find.text('作业类型'), findsOneWidget);
-    expect(find.text('作业日期'), findsOneWidget);
+    expect(find.text('作业时间'), findsOneWidget);
+    expect(find.text('作业日期'), findsNothing);
+    expect(find.text('图片链接'), findsNothing);
     expect(find.text('保存农事'), findsOneWidget);
+  });
+
+  testWidgets('农事记录页只展示核心字段且选择型字段有箭头', (tester) async {
+    await pump(tester, FarmLogCreatePage(repository: repository));
+
+    expect(find.text('关联茬口'), findsOneWidget);
+    expect(find.text('作业类型'), findsOneWidget);
+    expect(find.text('作业时间'), findsOneWidget);
+    expect(find.text('备注'), findsOneWidget);
+    expect(find.text('作业日期'), findsNothing);
+    expect(find.text('图片链接'), findsNothing);
+
+    expectRowChevron('关联茬口', findsOneWidget);
+    expectRowChevron('作业类型', findsNothing);
+    expectRowChevron('备注', findsNothing);
+    expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('farm-log-datetime-card')),
+          matching: find.byIcon(LucideIcons.chevronRight),
+        ),
+        findsOneWidget);
   });
 
   testWidgets('农事记录页保存到后端', (tester) async {
@@ -536,8 +729,19 @@ void main() {
     await tester.tap(find.text('春茬').last);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '浇水');
-    await tester.enterText(find.byType(TextField).at(1), '2026-06-10');
-    await tester.enterText(find.byType(TextField).at(2), '东棚少量浇水');
+    final selectedDateText =
+        tester.widget<Text>(find.byKey(const ValueKey('farm-log-date-text')));
+    final selectedTimeText =
+        tester.widget<Text>(find.byKey(const ValueKey('farm-log-time-text')));
+    final dateText = selectedDateText.data!;
+    final timeText = selectedTimeText.data!;
+    await tester.ensureVisible(find.text('作业时间'));
+    await tester.tap(find.text('作业时间'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择作业日期'), findsOneWidget);
+    await tester.tap(find.text('取消').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(1), '东棚少量浇水');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存农事'));
@@ -546,7 +750,8 @@ void main() {
     expect(adapter.find('POST', '/logs').data, {
       'cycle_id': 7,
       'operation_type': '浇水',
-      'operation_date': '2026-06-10',
+      'operation_date': dateText,
+      'operation_time': '${dateText}T$timeText:00',
       'note': '东棚少量浇水',
     });
     expect(find.text('保存农事成功'), findsOneWidget);
@@ -563,6 +768,23 @@ void main() {
     expect(find.text('保存工资'), findsOneWidget);
   });
 
+  testWidgets('工资记录页工人和日期字段都有具体选择器', (tester) async {
+    await pump(tester, WageCreatePage(repository: repository));
+
+    await tester.tap(find.text('工人姓名'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择工人'), findsOneWidget);
+    await tester.tap(find.text('张三').last);
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.widgetWithText(TextField, '张三'), findsOneWidget);
+
+    await pump(tester, WageCreatePage(repository: repository));
+    final dateField = tester.widget<TextField>(find.byType(TextField).at(2));
+    expect(dateField.readOnly, isTrue);
+    expectRowChevron('作业日期', findsOneWidget);
+  });
+
   testWidgets('工资记录页保存到后端', (tester) async {
     await pump(tester, WageCreatePage(repository: repository));
 
@@ -572,7 +794,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '张三');
     await tester.enterText(find.byType(TextField).at(1), '浇水');
-    await tester.enterText(find.byType(TextField).at(2), '2026-06-10');
+    final workDate = (tester.widget(find.byType(TextField).at(2)) as TextField)
+        .controller!
+        .text;
     await tester.enterText(find.byType(TextField).at(3), '1');
     await tester.enterText(find.byType(TextField).at(4), '200');
     await tester.enterText(find.byType(TextField).at(5), '0');
@@ -586,7 +810,7 @@ void main() {
     expect(request.data, containsPair('cycle_id', 7));
     expect(request.data, containsPair('worker_name', '张三'));
     expect(request.data, containsPair('operation_type', '浇水'));
-    expect(request.data, containsPair('work_date', '2026-06-10'));
+    expect(request.data, containsPair('work_date', workDate));
     expect(request.data, containsPair('quantity', 1));
     expect(request.data, containsPair('unit_price', 200));
     expect(request.data, containsPair('paid_amount', 0));
@@ -678,4 +902,11 @@ void _expectBottomTabs() {
   expect(find.text('芽芽'), findsOneWidget);
   expect(find.text('账本'), findsOneWidget);
   expect(find.text('我的'), findsOneWidget);
+}
+
+String _todayTextForTest() {
+  final now = DateTime.now();
+  final month = now.month.toString().padLeft(2, '0');
+  final day = now.day.toString().padLeft(2, '0');
+  return '${now.year}-$month-$day';
 }

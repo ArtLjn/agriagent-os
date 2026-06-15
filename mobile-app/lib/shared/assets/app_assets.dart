@@ -8,10 +8,14 @@ class AppAssets {
       'assets/images/business/banner-ledger-illustration.png';
   static const businessLedgerBlueBanner =
       'assets/images/business/banner-ledger-blue-illustration.png';
+  static const businessLedgerFarmBanner =
+      'assets/images/business/banner-ledger-farm-bg.png';
   static const businessCycleBanner =
       'assets/images/business/banner-cycle-illustration.png';
   static const businessCycleWideBanner =
       'assets/images/business/banner-cycle-wide-bg.png';
+  static const businessFarmLogBanner =
+      'assets/images/business/banner-farm-log-bg.png';
   static const businessTemplateBanner =
       'assets/images/business/banner-template-illustration.png';
   static const businessTemplateOpenBookBanner =

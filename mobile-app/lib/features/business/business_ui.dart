@@ -1162,6 +1162,7 @@ class BusinessFormRow extends StatelessWidget {
     this.keyboardType,
     this.onTap,
     this.hintText,
+    this.readOnly = false,
   });
 
   final String label;
@@ -1172,6 +1173,7 @@ class BusinessFormRow extends StatelessWidget {
   final TextInputType? keyboardType;
   final VoidCallback? onTap;
   final String? hintText;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1192,6 +1194,8 @@ class BusinessFormRow extends StatelessWidget {
         : TextField(
             controller: controller,
             keyboardType: keyboardType,
+            readOnly: readOnly,
+            onTap: readOnly ? onTap : null,
             textAlign: TextAlign.right,
             style: TextStyle(
               color: AppColors.ink,
@@ -1765,6 +1769,8 @@ class BottomActions extends StatelessWidget {
     required this.primaryLabel,
     required this.onPrimary,
     this.onSecondary,
+    this.primaryEnabled = true,
+    this.primaryLoading = false,
     this.showTabs = false,
     this.onBottomTabChanged,
   });
@@ -1773,6 +1779,8 @@ class BottomActions extends StatelessWidget {
   final String primaryLabel;
   final VoidCallback onPrimary;
   final VoidCallback? onSecondary;
+  final bool primaryEnabled;
+  final bool primaryLoading;
   final bool showTabs;
   final ValueChanged<int>? onBottomTabChanged;
 
@@ -1800,9 +1808,10 @@ class BottomActions extends StatelessWidget {
             child: FilledActionButton(
               label: primaryLabel,
               foreground: Colors.white,
-              background: businessBlue,
-              borderColor: businessBlue,
-              onTap: onPrimary,
+              background: primaryEnabled ? businessBlue : AppColors.subtle,
+              borderColor: primaryEnabled ? businessBlue : AppColors.subtle,
+              onTap: primaryEnabled && !primaryLoading ? onPrimary : null,
+              loading: primaryLoading,
             ),
           ),
         ],
@@ -1832,6 +1841,7 @@ class FilledActionButton extends StatelessWidget {
     required this.borderColor,
     this.onTap,
     this.icon,
+    this.loading = false,
     this.height = 52,
   });
 
@@ -1841,6 +1851,7 @@ class FilledActionButton extends StatelessWidget {
   final Color borderColor;
   final VoidCallback? onTap;
   final IconData? icon;
+  final bool loading;
   final double height;
 
   @override
@@ -1868,7 +1879,17 @@ class FilledActionButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (icon != null) ...[
+            if (loading) ...[
+              SizedBox(
+                width: height < 44 ? 17 : 19,
+                height: height < 44 ? 17 : 19,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(foreground),
+                ),
+              ),
+              SizedBox(width: height < 44 ? 6 : 8),
+            ] else if (icon != null) ...[
               Icon(icon, color: foreground, size: height < 44 ? 19 : 21),
               SizedBox(width: height < 44 ? 6 : 8),
             ],
