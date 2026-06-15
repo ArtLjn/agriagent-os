@@ -1,15 +1,27 @@
 #!/usr/bin/env bash
-# 日常同步 — 快速同步后端代码到阿里云并重启服务
+# 日常同步 — 快速同步后端代码到远程服务器并重启服务
 # 用法: bash deploy/server-sync.sh
 set -euo pipefail
 
-SERVER="root@47.98.253.236"
+# --- 服务器配置 ---
+SERVER_USER="root"
+SERVER_HOST="43.155.217.74"
+SERVER="${SERVER_USER}@${SERVER_HOST}"
 REMOTE_DIR="/root/workspace/farm-manager/backend"
+SERVICE_NAME="farm-manager"
+APP_PORT=8000
+
 PROJECT_ROOT="$(cd "$(dirname "$0")"/.. && pwd)"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 die()  { log "ERROR: $*"; exit 1; }
+
+# --- 0. 预检 SSH 连接 ---
+log "预检 SSH 连接 ${SERVER}..."
+if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "${SERVER}" "true" 2>/dev/null; then
+    die "无法免密登录 ${SERVER}。请先配置: ssh-copy-id ${SERVER}"
+fi
 
 # --- 1. 本地打包 ---
 log "打包后端代码..."
@@ -38,16 +50,21 @@ COPYFILE_DISABLE=1 tar czf /tmp/farm-backend-sync.tar.gz \
     backend/prompts
 
 log "上传到服务器..."
+# 清理可能残留的旧包（sticky bit 下 scp 无法覆盖非当前用户拥有的文件）
+ssh -o ConnectTimeout=5 "${SERVER}" "rm -f /tmp/farm-backend-sync.tar.gz" 2>/dev/null || true
 scp -q /tmp/farm-backend-sync.tar.gz "${SERVER}:/tmp/farm-backend-sync.tar.gz"
 
 # --- 2. 远程部署 ---
 log "远程部署..."
-ssh "${SERVER}" "TIMESTAMP='${TIMESTAMP}' REMOTE_DIR='${REMOTE_DIR}' bash -s" <<'REMOTE_SCRIPT'
+ssh "${SERVER}" \
+    "TIMESTAMP='${TIMESTAMP}' REMOTE_DIR='${REMOTE_DIR}' SERVICE_NAME='${SERVICE_NAME}' APP_PORT='${APP_PORT}' SERVER_HOST='${SERVER_HOST}' bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 rlog()  { echo "  [$(date '+%H:%M:%S')] $*"; }
 rdie()  { rlog "ERROR: $*"; exit 1; }
 
+# --- 确保部署目录存在 ---
+mkdir -p "${REMOTE_DIR}"
 cd "${REMOTE_DIR}" || rdie "无法进入 ${REMOTE_DIR}"
 
 # --- 并发锁 ---
@@ -80,6 +97,20 @@ done
 [ -f requirements.txt ] && cp requirements.txt "${BACKUP_DIR}/"
 rlog "备份已保存到 ${BACKUP_DIR}"
 
+# --- 自动回滚函数（建表或启动失败时调用）---
+rollback() {
+    rlog "执行自动回滚..."
+    for d in app alembic skillify-sdk prompts; do
+        [ -d "${BACKUP_DIR}/$d" ] && rm -rf "$d" && cp -a "${BACKUP_DIR}/$d" .
+    done
+    [ -f "${BACKUP_DIR}/alembic.ini" ] && cp "${BACKUP_DIR}/alembic.ini" .
+    [ -f "${BACKUP_DIR}/config.yaml" ] && cp "${BACKUP_DIR}/config.yaml" .
+    [ -f "${BACKUP_DIR}/providers.json" ] && cp "${BACKUP_DIR}/providers.json" .
+    [ -f "${BACKUP_DIR}/requirements.txt" ] && cp "${BACKUP_DIR}/requirements.txt" .
+    systemctl restart "${SERVICE_NAME}" 2>/dev/null || true
+    rlog "已回滚到 ${BACKUP_DIR}"
+}
+
 # --- 覆盖代码 ---
 rlog "覆盖代码..."
 rm -rf app alembic skillify-sdk prompts
@@ -111,19 +142,25 @@ if [ ! -f config.yaml ]; then
     cp config.yaml.example config.yaml
 fi
 
-# --- 虚拟环境 ---
+# --- 虚拟环境（Python 3.12）---
 rlog "检查虚拟环境..."
-if [ ! -d .venv ]; then
-    python3 -m venv .venv
-    rlog "已创建虚拟环境"
+if [ ! -x .venv/bin/python ]; then
+    rm -rf .venv
+    python3.12 -m venv .venv
+    # 兜底：deadsnakes Python 3.12 在 Ubuntu 22.04 上有时不创建 python 软链接
+    [ -e .venv/bin/python ]    || ln -s /usr/bin/python3.12 .venv/bin/python
+    [ -e .venv/bin/python3 ]   || ln -s /usr/bin/python3.12 .venv/bin/python3
+    [ -e .venv/bin/python3.12 ] || ln -s /usr/bin/python3.12 .venv/bin/python3.12
+    rlog "已创建虚拟环境 (Python 3.12)"
 fi
 source .venv/bin/activate
+hash -r
 
 # --- 安装依赖 ---
 rlog "安装依赖..."
 pip install -q --upgrade pip || rdie "pip 升级失败"
 rlog "  安装 skillify-sdk..."
-pip install -q -e ./skillify-sdk 2>&1 || pip install -q ./skillify-sdk 2>&1 || rdie "skillify-sdk 安装失败"
+pip install -q -e ./skillify-sdk 2>&1 || pip install -q ./skillify-sdk 2>&1 || { rollback; rdie "skillify-sdk 安装失败，已回滚"; }
 rlog "  安装其他依赖..."
 grep -v "^skillify" requirements.txt > /tmp/requirements-no-skillify.txt
 if ! pip install -q -r /tmp/requirements-no-skillify.txt 2>&1; then
@@ -145,30 +182,59 @@ from app.core.database import engine, Base
 import app.models
 Base.metadata.create_all(bind=engine)
 print('  数据库表已同步')
-" || rdie "建表失败，请检查数据库配置"
+" || { rollback; rdie "建表失败，已回滚"; }
+
+# --- 注册 systemd unit（首次部署或 unit 缺失时）---
+SYSTEMD_UNIT="/etc/systemd/system/${SERVICE_NAME}.service"
+if ! systemctl list-unit-files --no-pager 2>/dev/null | grep -q "^${SERVICE_NAME}\.service"; then
+    rlog "首次部署：注册 systemd unit..."
+    cat > "${SYSTEMD_UNIT}" <<UNIT_EOF
+[Unit]
+Description=Farm Manager API (FastAPI + Uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${REMOTE_DIR}
+ExecStart=${REMOTE_DIR}/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT}
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=${REMOTE_DIR}
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+UNIT_EOF
+    systemctl daemon-reload
+    systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1 || true
+    rlog "systemd unit 已注册并 enable"
+fi
 
 # --- 重启服务 ---
 rlog "重启服务 (systemctl)..."
-systemctl restart farm-manager
+systemctl restart "${SERVICE_NAME}"
 
 # --- 健康检查 ---
 rlog "等待启动..."
 for i in $(seq 1 20); do
     # 优先尝试 /api/v1/health，fallback 到 /docs
-    if curl -sf http://localhost:8000/api/v1/health > /dev/null 2>&1; then
+    if curl -sf "http://localhost:${APP_PORT}/api/v1/health" > /dev/null 2>&1; then
         echo "  部署成功！"
-        echo "  API:    http://47.98.253.236:8000"
-        echo "  文档:   http://47.98.253.236:8000/docs"
-        echo "  日志:   journalctl -u farm-manager -f"
-        echo "  回滚:   cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart farm-manager"
+        echo "  API:    http://${SERVER_HOST}:${APP_PORT}"
+        echo "  文档:   http://${SERVER_HOST}:${APP_PORT}/docs"
+        echo "  日志:   journalctl -u ${SERVICE_NAME} -f"
+        echo "  回滚:   cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart ${SERVICE_NAME}"
         exit 0
     fi
     # 也可用 /docs 作为备选健康检查
-    if curl -sf http://localhost:8000/docs > /dev/null 2>&1; then
+    if curl -sf "http://localhost:${APP_PORT}/docs" > /dev/null 2>&1; then
         echo "  部署成功！（/docs）"
-        echo "  API:    http://47.98.253.236:8000"
-        echo "  日志:   journalctl -u farm-manager -f"
-        echo "  回滚:   cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart farm-manager"
+        echo "  API:    http://${SERVER_HOST}:${APP_PORT}"
+        echo "  日志:   journalctl -u ${SERVICE_NAME} -f"
+        echo "  回滚:   cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart ${SERVICE_NAME}"
         exit 0
     fi
     # 每 4 秒打印进度
@@ -180,13 +246,17 @@ done
 
 # --- 失败处理 ---
 echo "  启动超时，最近日志："
-journalctl -u farm-manager -n 50 --no-pager
+journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
 echo ""
 echo "  尝试 import 测试..."
 source .venv/bin/activate
 python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app; print('Import OK')" 2>&1
+
+# --- 自动回滚（启动失败时）---
 echo ""
-echo "  回滚命令: cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart farm-manager"
+echo "  健康检查失败，执行自动回滚..."
+rollback
+echo "  回滚命令（手动）: cp -a ${BACKUP_DIR}/* ${REMOTE_DIR}/ && systemctl restart ${SERVICE_NAME}"
 exit 1
 REMOTE_SCRIPT
 

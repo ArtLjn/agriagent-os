@@ -10,7 +10,7 @@
 #   bash deploy/server-ctl.sh tail     # 实时跟踪日志
 set -euo pipefail
 
-SERVER="root@47.98.253.236"
+SERVER="root@43.155.217.74"
 SERVICE="farm-manager"
 ACTION="${1:-status}"
 

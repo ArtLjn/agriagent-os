@@ -12,7 +12,7 @@ APP_NAME="FarmManager"
 GRADLE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}/farm-manager/gradle"
 
 # 默认 API 地址
-PROD_API_URL="http://47.98.253.236:8000"
+PROD_API_URL="https://api.farm.lllcnm.cn"
 COMPANY_API_URL="http://172.16.57.244:8099"
 HOME_API_URL="http://10.167.110.141:8099"
 API_URL="$PROD_API_URL"

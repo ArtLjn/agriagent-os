@@ -6,9 +6,9 @@
 set -e
 
 # 服务器配置（按需修改）
-SERVER_IP="47.98.253.236"
+SERVER_IP="43.155.217.74"
 SERVER_USER="root"
-REMOTE_DIR="/var/www/apk"
+REMOTE_DIR="/root/workspace/farm-apk"
 DOWNLOAD_URL="http://${SERVER_IP}:8098"
 
 APK_PATH="${1:-}"

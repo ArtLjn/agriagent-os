@@ -20,3 +20,14 @@ def test_release_manifest_allows_backend_network_requests() -> None:
     assert "android.permission.INTERNET" in permissions
     assert application is not None
     assert application.attrib.get(f"{{{ANDROID_NS}}}usesCleartextTraffic") == "true"
+
+
+def test_release_manifest_declares_android_location_permissions() -> None:
+    root = ET.parse(MANIFEST).getroot()
+    permissions = {
+        item.attrib.get(f"{{{ANDROID_NS}}}name")
+        for item in root.findall("uses-permission")
+    }
+
+    assert "android.permission.ACCESS_COARSE_LOCATION" in permissions
+    assert "android.permission.ACCESS_FINE_LOCATION" in permissions
