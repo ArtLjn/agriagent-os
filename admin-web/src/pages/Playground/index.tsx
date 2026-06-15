@@ -15,6 +15,7 @@ import { usersApi, type CurrentUser } from '../../api/users';
 import { chooseDefaultUserId } from './currentUser';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
 import { canConfirmAssistantMessage } from './pendingPlanControls';
+import { buildPlaygroundTraceMetrics, hasAutomaticCompression } from './traceMetrics';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -99,6 +100,25 @@ function ExecutionStatus({ skills, pendingAction, pendingPlan }: { skills?: stri
       padding: '2px 8px', borderRadius: 4, border: `1px solid ${TEXT_DIM}`,
     }}>
       💬 纯文本生成
+    </span>
+  );
+}
+
+function formatMetricNumber(value: number | null): string {
+  if (value === null) return '-';
+  return value.toLocaleString('zh-CN');
+}
+
+function TraceMetricPill({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <span style={{
+      color: TEXT_DIM,
+      fontSize: 13,
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+    }}>
+      {label}: <span style={{ color: accent ?? TEXT, fontFamily: 'monospace' }}>{value}</span>
     </span>
   );
 }
@@ -253,6 +273,8 @@ export default function Playground() {
   const loading = activeSession.loading;
   const traceLoading = activeSession.traceLoading;
   const timeline = activeSession.timeline;
+  const traceMetrics = buildPlaygroundTraceMetrics(timeline);
+  const compressed = hasAutomaticCompression(traceMetrics);
   const conversationRows = buildConversationRows(sessions, conversations);
 
   const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
@@ -675,15 +697,39 @@ export default function Playground() {
                 <span style={{ color: TEXT_DIM, fontSize: 13 }}>加载中...</span>
               ) : timeline && timeline.rounds ? (
                 <>
-                  <span style={{ color: TEXT_DIM, fontSize: 13 }}>
-                    节点: <span style={{ color: TEXT }}>{timeline.rounds.reduce((s, r) => s + r.nodes.length, 0)}</span>
-                  </span>
-                  <span style={{ color: TEXT_DIM, fontSize: 13 }}>
-                    轮次: <span style={{ color: TEXT }}>{timeline.rounds.length}</span>
-                  </span>
-                  <span style={{ color: TEXT_DIM, fontSize: 13 }}>
-                    耗时: <span style={{ color: TEXT }}>{timeline.rounds.reduce((s, r) => s + r.nodes.reduce((ns, n) => ns + (n.duration_ms || 0), 0), 0)}ms</span>
-                  </span>
+                  <TraceMetricPill
+                    label="节点"
+                    value={formatMetricNumber(timeline.rounds.reduce((s, r) => s + r.nodes.length, 0))}
+                  />
+                  <TraceMetricPill label="轮次" value={formatMetricNumber(timeline.rounds.length)} />
+                  <TraceMetricPill
+                    label="耗时"
+                    value={`${formatMetricNumber(timeline.rounds.reduce((s, r) => s + r.nodes.reduce((ns, n) => ns + (n.duration_ms || 0), 0), 0))}ms`}
+                  />
+                  <TraceMetricPill
+                    label="上下文"
+                    value={`${formatMetricNumber(traceMetrics.contextTokens)} / ${formatMetricNumber(traceMetrics.contextBudget)}`}
+                  />
+                  <TraceMetricPill
+                    label="最终 Prompt"
+                    value={`${formatMetricNumber(traceMetrics.promptTokens)} / ${formatMetricNumber(traceMetrics.promptMaxTokens)}`}
+                  />
+                  <TraceMetricPill
+                    label="模型 Token"
+                    value={formatMetricNumber(traceMetrics.llmTotalTokens)}
+                  />
+                  <TraceMetricPill
+                    label="压缩/丢弃"
+                    value={`${traceMetrics.contextCompressedCount} / ${traceMetrics.contextDroppedCount}`}
+                    accent={compressed ? '#faad14' : TEXT}
+                  />
+                  {compressed && (
+                    <Tooltip title={traceMetrics.promptActions.length > 0 ? `最终 Prompt 动作：${traceMetrics.promptActions.join(', ')}` : '上下文预算触发了压缩或丢弃'}>
+                      <Tag color="warning" style={{ fontSize: 11, margin: 0 }}>
+                        自动压缩已触发
+                      </Tag>
+                    </Tooltip>
+                  )}
                   {/* Skill 标签 */}
                   <div style={{ display: 'flex', gap: 6 }}>
                     {(() => {
