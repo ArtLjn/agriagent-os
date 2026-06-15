@@ -21,6 +21,7 @@ Thumbs.db
 # Env
 .env
 .env.local
+.env.*
 
 # Build
 *.apk
@@ -58,3 +59,5 @@ bug.todo.md
 
 .github/workflows/
 .worktrees/
+
+farm-index/app/node_modules/
