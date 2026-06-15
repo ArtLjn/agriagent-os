@@ -44,7 +44,10 @@ void main() {
   );
 
   testWidgets('AI 确认页展示后端解析字段并保存到成功页', (tester) async {
-    final adapter = RecordingAdapter({'POST /costs': costRecordResponse});
+    final adapter = RecordingAdapter({
+      'POST /costs': costRecordResponse,
+      '/cost-categories': [categoryResponse],
+    });
     await pumpFlow(
       tester,
       RecordAiConfirmScreen(controller: controllerFor(adapter), draft: draft),
@@ -68,7 +71,10 @@ void main() {
   });
 
   testWidgets('缺字段确认页保留在当前页提示补充', (tester) async {
-    final adapter = RecordingAdapter({'POST /costs': costRecordResponse});
+    final adapter = RecordingAdapter({
+      'POST /costs': costRecordResponse,
+      '/cost-categories': [categoryResponse],
+    });
     await pumpFlow(
       tester,
       RecordAiConfirmScreen(
@@ -92,7 +98,10 @@ void main() {
   });
 
   testWidgets('手动校正页补齐字段后可保存', (tester) async {
-    final adapter = RecordingAdapter({'POST /costs': costRecordResponse});
+    final adapter = RecordingAdapter({
+      'POST /costs': costRecordResponse,
+      '/cost-categories': [categoryResponse],
+    });
     await pumpFlow(
       tester,
       RecordManualEditScreen(
@@ -167,7 +176,10 @@ void main() {
   });
 
   testWidgets('自己填手动记账可保存', (tester) async {
-    final adapter = RecordingAdapter({'POST /costs': costRecordResponse});
+    final adapter = RecordingAdapter({
+      'POST /costs': costRecordResponse,
+      '/cost-categories': [categoryResponse],
+    });
     final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
     dio.httpClientAdapter = adapter;
     await pumpFlow(
@@ -178,7 +190,7 @@ void main() {
 
     expect(find.text('记账'), findsWidgets);
     expect(find.text('保存记录'), findsOneWidget);
-    expect(find.text('关联茬口'), findsOneWidget);
+    expect(find.text('金额'), findsOneWidget);
     expect(find.textContaining('/'), findsNothing);
 
     await tester.enterText(find.byType(TextField).at(1), '200');

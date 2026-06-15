@@ -5,6 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/api/api_models.dart';
+import '../../data/repositories/profile_repository.dart';
 import '../../data/repositories/yaya_repository.dart';
 import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/reference_page.dart';
@@ -16,9 +17,14 @@ part 'yaya_panel_widgets.dart';
 part 'yaya_robot_widgets.dart';
 
 class YayaScreen extends StatefulWidget {
-  const YayaScreen({super.key, required this.repository});
+  const YayaScreen({
+    super.key,
+    required this.repository,
+    this.profileRepository,
+  });
 
   final YayaRepository repository;
+  final ProfileRepository? profileRepository;
 
   @override
   State<YayaScreen> createState() => _YayaScreenState();
@@ -28,6 +34,7 @@ class _YayaScreenState extends State<YayaScreen> {
   late final YayaController controller =
       YayaController(repository: widget.repository);
   bool drawerOpen = false;
+  String userNickname = '农友';
 
   void _openDrawer() => setState(() => drawerOpen = true);
 
@@ -51,6 +58,20 @@ class _YayaScreenState extends State<YayaScreen> {
   void initState() {
     super.initState();
     controller.loadConversations().catchError((Object _) {});
+    _loadUserNickname();
+  }
+
+  Future<void> _loadUserNickname() async {
+    final profileRepository = widget.profileRepository;
+    if (profileRepository == null) return;
+    try {
+      final user = await profileRepository.getProfile();
+      final nickname = user.nickname.trim();
+      if (!mounted || nickname.isEmpty) return;
+      setState(() => userNickname = nickname);
+    } catch (_) {
+      // 芽芽页不能因为资料接口失败影响聊天主流程。
+    }
   }
 
   @override
@@ -112,6 +133,7 @@ class _YayaScreenState extends State<YayaScreen> {
                       onClose: _closeDrawer,
                       onSkillsPressed: _openSkills,
                       conversations: controller.conversations,
+                      userNickname: userNickname,
                       onConversationTap: (sessionId) {
                         _closeDrawer();
                         controller.openConversation(sessionId);
@@ -186,7 +208,7 @@ class _YayaHomePage extends StatelessWidget {
           bottom: 0,
           child: Container(
             color: AppColors.background,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -989,6 +1011,7 @@ class YayaHistoryDrawer extends StatelessWidget {
     required this.onClose,
     required this.onSkillsPressed,
     required this.conversations,
+    required this.userNickname,
     required this.onConversationTap,
     required this.onNewConversationTap,
   });
@@ -996,6 +1019,7 @@ class YayaHistoryDrawer extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onSkillsPressed;
   final List<ConversationSummary> conversations;
+  final String userNickname;
   final ValueChanged<String> onConversationTap;
   final VoidCallback onNewConversationTap;
 
@@ -1003,68 +1027,58 @@ class YayaHistoryDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: Container(
+      child: DecoratedBox(
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.only(
-            topRight: Radius.circular(28),
-            bottomRight: Radius.circular(28),
-          ),
           boxShadow: [
             BoxShadow(
-              color: Color(0x1A111827),
-              blurRadius: 28,
-              offset: Offset(10, 0),
+              color: Color(0x21111827),
+              blurRadius: 30,
+              offset: Offset(12, 0),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            topRight: Radius.circular(28),
-            bottomRight: Radius.circular(28),
-          ),
-          child: Column(
-            children: [
-              _DrawerHeader(
-                onClose: onClose,
-                onNewConversationTap: onNewConversationTap,
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _NewChatCard(onTap: onNewConversationTap),
-                      const SizedBox(height: 12),
-                      _DrawerSkillEntry(onTap: onSkillsPressed),
-                      const SizedBox(height: 22),
-                      const _RecentChatHeader(),
-                      const SizedBox(height: 14),
-                      if (conversations.isEmpty)
-                        const _EmptyHistory()
-                      else
-                        _ChatSection(
-                          title: '7天内',
-                          items: [
-                            for (final item in conversations)
-                              _ChatItemSpec(
-                                item.title.isEmpty ? '芽芽对话' : item.title,
-                                item.preview,
-                                item.category,
-                                false,
-                                item.sessionId,
-                              ),
-                          ],
-                          onTap: onConversationTap,
-                        ),
-                    ],
-                  ),
+        child: Column(
+          children: [
+            _DrawerHeader(
+              onClose: onClose,
+              onNewConversationTap: onNewConversationTap,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _NewChatCard(onTap: onNewConversationTap),
+                    const SizedBox(height: 12),
+                    _DrawerSkillEntry(onTap: onSkillsPressed),
+                    const SizedBox(height: 22),
+                    const _RecentChatHeader(),
+                    const SizedBox(height: 14),
+                    if (conversations.isEmpty)
+                      const _EmptyHistory()
+                    else
+                      _ChatSection(
+                        title: '7天内',
+                        items: [
+                          for (final item in conversations)
+                            _ChatItemSpec(
+                              item.title.isEmpty ? '芽芽对话' : item.title,
+                              item.preview,
+                              item.category,
+                              false,
+                              item.sessionId,
+                            ),
+                        ],
+                        onTap: onConversationTap,
+                      ),
+                  ],
                 ),
               ),
-              const _DrawerUserBar(),
-            ],
-          ),
+            ),
+            _DrawerUserBar(nickname: userNickname),
+          ],
         ),
       ),
     );
@@ -1154,14 +1168,19 @@ class _NewChatCard extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF1473FF), Color(0xFF35C879)],
+            stops: [0, 0.58, 1],
+            colors: [
+              Color(0xFF1677FF),
+              Color(0xFF06B6D4),
+              Color(0xFF10B981),
+            ],
           ),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x1A1473FF),
-              blurRadius: 22,
-              offset: Offset(0, 10),
+              color: Color(0x331677FF),
+              blurRadius: 28,
+              offset: Offset(0, 14),
             ),
           ],
         ),
@@ -1171,8 +1190,11 @@ class _NewChatCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(16),
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.14),
+                ),
               ),
               child:
                   const Icon(LucideIcons.plus, color: Colors.white, size: 24),

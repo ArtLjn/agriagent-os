@@ -30,6 +30,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late int selectedIndex = widget.initialIndex;
+  int billingRefreshKey = 0;
   late final recordFlowController = RecordFlowController(
     workbench: widget.dependencies.workbench,
     billing: widget.dependencies.billing,
@@ -42,6 +43,10 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _selectTab(int index) => setState(() => selectedIndex = index);
+
+  void _refreshBilling() {
+    setState(() => billingRefreshKey += 1);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,9 +76,16 @@ class _AppShellState extends State<AppShell> {
               onGoYaya: () => _selectTab(2),
               onGoProfile: () => _selectTab(4),
               onRecordAgain: () => _selectTab(1),
+              onLedgerSaved: _refreshBilling,
             ),
-            YayaScreen(repository: widget.dependencies.yaya),
-            BillingScreen(repository: widget.dependencies.billing),
+            YayaScreen(
+              repository: widget.dependencies.yaya,
+              profileRepository: widget.dependencies.profile,
+            ),
+            BillingScreen(
+              repository: widget.dependencies.billing,
+              refreshKey: billingRefreshKey,
+            ),
             ProfileScreen(
               repository: widget.dependencies.profile,
               onLogout: widget.onLogout,

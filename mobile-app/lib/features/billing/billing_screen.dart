@@ -13,17 +13,34 @@ import 'billing_controller.dart';
 part 'billing_summary_widgets.dart';
 
 class BillingScreen extends StatefulWidget {
-  const BillingScreen({super.key, required this.repository});
+  const BillingScreen({
+    super.key,
+    required this.repository,
+    this.refreshKey = 0,
+  });
 
   final BillingRepository repository;
+  final int refreshKey;
 
   @override
   State<BillingScreen> createState() => _BillingScreenState();
 }
 
 class _BillingScreenState extends State<BillingScreen> {
-  late final Future<BillingViewModel> _future =
-      BillingController(repository: widget.repository).load();
+  late Future<BillingViewModel> _future = _load();
+
+  @override
+  void didUpdateWidget(covariant BillingScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshKey != widget.refreshKey ||
+        oldWidget.repository != widget.repository) {
+      _future = _load();
+    }
+  }
+
+  Future<BillingViewModel> _load() {
+    return BillingController(repository: widget.repository).load();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/api/api_models.dart';
+import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
 import 'package:farm_manager_app/features/yaya/yaya_screen.dart';
 import 'package:farm_manager_app/shared/assets/app_assets.dart';
@@ -7,6 +9,8 @@ import 'package:farm_manager_app/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+import '../../support/api_test_fixtures.dart';
 
 void main() {
   final repository = _YayaCopyRepository();
@@ -44,6 +48,17 @@ void main() {
     expect(find.text('生成报告'), findsOneWidget);
     expect(find.text('全部技能'), findsOneWidget);
     expect(find.text('发消息或按住说话...'), findsOneWidget);
+  });
+
+  testWidgets('底部输入框在真机宽度下接近占满可用宽度', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(yayaScreen());
+
+    final inputBar = find.byType(AssistantInputBar);
+    expect(inputBar, findsOneWidget);
+    expect(tester.getSize(inputBar).width, greaterThanOrEqualTo(355));
   });
 
   testWidgets('点击快捷提示词会直接发送问题', (tester) async {
@@ -90,6 +105,44 @@ void main() {
     expect(find.textContaining('检测到工具调用格式异常'), findsOneWidget);
     expect(find.text('对话'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('历史聊天抽屉关闭和卸载不会触发生命周期断言', (tester) async {
+    await tester.pumpWidget(yayaScreen());
+    await tester.pump();
+
+    await tester.tap(find.byIcon(LucideIcons.menu));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(360, 260));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('历史聊天抽屉底部展示用户昵称', (tester) async {
+    final adapter = RecordingAdapter({
+      '/auth/me': {...userResponse, 'nickname': '李伟刚'},
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: YayaScreen(
+          repository: _YayaCopyRepository(),
+          profileRepository: ProfileRepository(ApiClient(dio: dio)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.menu));
+    await tester.pumpAndSettle();
+
+    expect(find.text('李伟刚'), findsOneWidget);
+    expect(find.text('农友'), findsNothing);
   });
 
   testWidgets('点击新对话入口会清空当前聊天内容', (tester) async {

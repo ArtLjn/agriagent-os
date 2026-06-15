@@ -21,6 +21,7 @@ class WorkbenchScreen extends StatefulWidget {
     this.onGoYaya,
     this.onGoProfile,
     this.onRecordAgain,
+    this.onLedgerSaved,
   });
 
   final BusinessRepository businessRepository;
@@ -30,6 +31,7 @@ class WorkbenchScreen extends StatefulWidget {
   final VoidCallback? onGoYaya;
   final VoidCallback? onGoProfile;
   final VoidCallback? onRecordAgain;
+  final VoidCallback? onLedgerSaved;
 
   @override
   State<WorkbenchScreen> createState() => _WorkbenchScreenState();
@@ -85,6 +87,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> {
       MaterialPageRoute(
         builder: (_) => LedgerManualCreatePage(
           repository: widget.businessRepository,
+          onSaved: widget.onLedgerSaved,
           onBottomTabChanged: (index) => _handleBusinessBottomTab(
             context,
             index,
@@ -143,6 +146,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> {
             context,
             LedgerManualCreatePage(
               repository: widget.businessRepository,
+              onSaved: widget.onLedgerSaved,
               onBottomTabChanged: (index) =>
                   _handleBusinessBottomTab(context, index),
             ),

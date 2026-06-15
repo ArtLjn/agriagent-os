@@ -80,26 +80,33 @@ class FarmBrandLockup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = height * 3.5;
     return Align(
       alignment: Alignment.centerLeft,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            AppAssets.brandLogo,
+      child: Semantics(
+        label: AppIdentity.displayName,
+        image: true,
+        child: ExcludeSemantics(
+          child: Image.asset(
+            AppAssets.brandLockup,
+            width: width,
             height: height,
             fit: BoxFit.contain,
-            excludeFromSemantics: true,
-            errorBuilder: (_, __, ___) => FarmBrandMark(size: height),
+            errorBuilder: (_, __, ___) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FarmBrandMark(size: height),
+                const SizedBox(width: 10),
+                const Text(
+                  AppIdentity.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.title,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 10),
-          const Text(
-            AppIdentity.displayName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.title,
-          ),
-        ],
+        ),
       ),
     );
   }

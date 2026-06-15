@@ -71,6 +71,42 @@ void main() {
     expect(fake.adapter.requests, hasLength(3));
   });
 
+  testWidgets('账本 refreshKey 变化后重新请求数据', (tester) async {
+    final fake = _FakeBillingApi();
+    var refreshKey = 0;
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          return MaterialApp(
+            home: Column(
+              children: [
+                TextButton(
+                  onPressed: () => setState(() => refreshKey += 1),
+                  child: const Text('刷新账本'),
+                ),
+                Expanded(
+                  child: BillingScreen(
+                    repository: fake.repository,
+                    refreshKey: refreshKey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(fake.adapter.requests, hasLength(3));
+
+    await tester.tap(find.text('刷新账本'));
+    await tester.pumpAndSettle();
+
+    expect(fake.adapter.requests, hasLength(6));
+  });
+
   testWidgets('账本大金额交易可以渲染', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

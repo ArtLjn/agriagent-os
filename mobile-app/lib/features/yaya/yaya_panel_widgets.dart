@@ -272,7 +272,7 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
+      padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(28),
@@ -288,7 +288,7 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
       child: Row(
         children: [
           const YayaMascot(size: 30),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Material(
               color: Colors.transparent,
@@ -316,13 +316,13 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
               ),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
           _RoundActionButton(
             icon: widget.sending ? LucideIcons.loaderCircle : LucideIcons.send,
             filled: true,
             onTap: widget.sending ? null : _submit,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           _RoundActionButton(
             icon: LucideIcons.plus,
             onTap: widget.sending ? null : () {},
@@ -622,10 +622,13 @@ class _EmptyHistory extends StatelessWidget {
 }
 
 class _DrawerUserBar extends StatelessWidget {
-  const _DrawerUserBar();
+  const _DrawerUserBar({required this.nickname});
+
+  final String nickname;
 
   @override
   Widget build(BuildContext context) {
+    final displayName = nickname.trim().isEmpty ? '农友' : nickname.trim();
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
       decoration: const BoxDecoration(
@@ -643,7 +646,7 @@ class _DrawerUserBar extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(
-              '农',
+              displayName.characters.first,
               style: AppTextStyles.sectionTitle.copyWith(
                 color: AppColors.blue,
               ),
@@ -654,7 +657,12 @@ class _DrawerUserBar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('农友', style: AppTextStyles.listTitle),
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.listTitle,
+                ),
                 const SizedBox(height: 2),
                 Text(
                   '农场负责人',

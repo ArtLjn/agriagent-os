@@ -15,6 +15,7 @@ void main() {
     final adapter = RecordingAdapter({
       '/smart-fill/parse': smartFillParseResponse,
       'POST /costs': costRecordResponse,
+      '/cost-categories': [categoryResponse],
       '/cycles': paginatedCyclesResponse,
       'POST /cycles': cycleResponse,
       '/crops/templates': paginatedCropTemplatesResponse,
@@ -53,10 +54,12 @@ void main() {
     VoidCallback? onGoYaya,
     VoidCallback? onGoProfile,
     VoidCallback? onRecordAgain,
+    VoidCallback? onLedgerSaved,
   }) {
     final adapter = RecordingAdapter({
       '/smart-fill/parse': smartFillParseResponse,
       'POST /costs': costRecordResponse,
+      '/cost-categories': [categoryResponse],
       '/cycles': paginatedCyclesResponse,
       'POST /cycles': cycleResponse,
       '/crops/templates': paginatedCropTemplatesResponse,
@@ -78,6 +81,7 @@ void main() {
       onGoYaya: onGoYaya,
       onGoProfile: onGoProfile,
       onRecordAgain: onRecordAgain,
+      onLedgerSaved: onLedgerSaved,
     );
   }
 
@@ -128,7 +132,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('保存记录'), findsOneWidget);
-    expect(find.text('关联茬口'), findsOneWidget);
+    expect(find.text('金额'), findsOneWidget);
   });
 
   testWidgets('自己填入口进入手动记账页', (tester) async {
@@ -138,7 +142,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('保存记录'), findsOneWidget);
-    expect(find.text('关联茬口'), findsOneWidget);
+    expect(find.text('金额'), findsOneWidget);
   });
 
   testWidgets('记农事入口进入农事记录页', (tester) async {
@@ -180,5 +184,25 @@ void main() {
 
     expect(selectedIndex, 3);
     expect(find.text('保存记录'), findsNothing);
+  });
+
+  testWidgets('手动记账保存成功后通知账本刷新', (tester) async {
+    var saveNotifications = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: screenWithNavigation(
+          onLedgerSaved: () => saveNotifications += 1,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('记账').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '输入金额'), '200');
+    await tester.tap(find.text('保存记录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('保存记录成功'), findsOneWidget);
+    expect(saveNotifications, 1);
   });
 }
