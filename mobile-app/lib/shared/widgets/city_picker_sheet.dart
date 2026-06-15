@@ -10,12 +10,24 @@ part 'city_picker_sheet_models.dart';
 
 const _municipalities = {'北京市', '上海市', '天津市', '重庆市'};
 
-Future<String?> showCityPickerSheet({
+class CityPickerResult {
+  const CityPickerResult({
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String name;
+  final double latitude;
+  final double longitude;
+}
+
+Future<CityPickerResult?> showCityPickerSheet({
   required BuildContext context,
   required String selectedCity,
-  Future<String?> Function()? onUseCurrentLocation,
+  Future<CityPickerResult?> Function()? onUseCurrentLocation,
 }) {
-  return showModalBottomSheet<String>(
+  return showModalBottomSheet<CityPickerResult>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -36,7 +48,7 @@ class _CityPickerSheet extends StatefulWidget {
   });
 
   final String selectedCity;
-  final Future<String?> Function()? onUseCurrentLocation;
+  final Future<CityPickerResult?> Function()? onUseCurrentLocation;
 
   @override
   State<_CityPickerSheet> createState() => _CityPickerSheetState();
@@ -296,7 +308,7 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
       case _PickerKind.city:
         final city = item.city!;
         if (_municipalities.contains(item.provinceName) || city.areas.isEmpty) {
-          Navigator.of(context).pop(city.name);
+          Navigator.of(context).pop(city.toPickerResult());
           return;
         }
         setState(() {
@@ -304,9 +316,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
           _level = _PickerLevel.area;
         });
       case _PickerKind.area:
-        Navigator.of(context).pop(item.area!.name);
+        Navigator.of(context).pop(item.area!.toPickerResult());
       case _PickerKind.search:
-        Navigator.of(context).pop(item.search!.name);
+        Navigator.of(context).pop(item.search!.toPickerResult());
     }
   }
 
@@ -330,7 +342,7 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
     });
     final location = await callback();
     if (!mounted) return;
-    if (location == null || location.isEmpty) {
+    if (location == null) {
       setState(() {
         _locating = false;
         _message = '无法获取当前位置';

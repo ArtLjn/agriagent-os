@@ -24,6 +24,8 @@ class ProfileRepository {
 
   Future<AppUser> updateFarmLocation({
     required String location,
+    double? latitude,
+    double? longitude,
     int? farmId,
   }) async {
     return AppUser.fromJson(
@@ -31,6 +33,8 @@ class ProfileRepository {
         '/auth/me/farm-location',
         data: {
           'location': location,
+          if (latitude != null) 'lat': latitude,
+          if (longitude != null) 'lon': longitude,
           if (farmId != null) 'farm_id': farmId,
         },
       ),

@@ -46,6 +46,8 @@ def update_default_farm_location(
     *,
     user_id: str,
     location: str,
+    lat: float | None = None,
+    lon: float | None = None,
     farm_id: int | None = None,
 ) -> Farm:
     """更新当前用户默认农场经营地区，并失效相关缓存。"""
@@ -62,7 +64,9 @@ def update_default_farm_location(
         )
 
     farm.location = location.strip()
-    sync_user_default_city(db, user_id=user_id, location=farm.location)
+    sync_user_default_city(
+        db, user_id=user_id, location=farm.location, lat=lat, lon=lon
+    )
     deleted_daily_records = clear_daily_advice_cache(db, farm.id)
     db.commit()
     db.refresh(farm)
@@ -70,15 +74,22 @@ def update_default_farm_location(
     return farm
 
 
-def sync_user_default_city(db: Session, *, user_id: str, location: str) -> UserSetting:
+def sync_user_default_city(
+    db: Session,
+    *,
+    user_id: str,
+    location: str,
+    lat: float | None = None,
+    lon: float | None = None,
+) -> UserSetting:
     """同步旧用户设置默认城市，避免上下文仍读取旧经营地区。"""
     setting = db.query(UserSetting).filter(UserSetting.user_id == user_id).first()
     if setting is None:
         setting = UserSetting(user_id=user_id)
         db.add(setting)
     setting.default_city = location.strip()
-    setting.default_lat = None
-    setting.default_lon = None
+    setting.default_lat = lat
+    setting.default_lon = lon
     return setting
 
 

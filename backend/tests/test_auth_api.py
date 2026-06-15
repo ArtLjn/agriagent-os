@@ -298,7 +298,7 @@ class TestAuthFarmLocation:
         resp = client.put(
             "/auth/me/farm-location",
             headers={"Authorization": f"Bearer {token}"},
-            json={"location": "邳州市"},
+            json={"location": "邳州市", "lat": 34.3142, "lon": 117.9586},
         )
 
         assert resp.status_code == 200
@@ -344,7 +344,7 @@ class TestAuthFarmLocation:
         resp = client.put(
             "/auth/me/farm-location",
             headers={"Authorization": f"Bearer {token}"},
-            json={"location": "邳州市"},
+            json={"location": "邳州市", "lat": 34.3142, "lon": 117.9586},
         )
 
         assert resp.status_code == 200

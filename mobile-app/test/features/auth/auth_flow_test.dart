@@ -322,6 +322,8 @@ void main() {
 
     expect(adapter.find('PUT', '/auth/me/farm-location').data, {
       'location': '睢宁县',
+      'lat': 34.20442,
+      'lon': 117.28386,
     });
     expect(find.text('首页'), findsWidgets);
   });

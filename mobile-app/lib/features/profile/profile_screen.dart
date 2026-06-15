@@ -133,11 +133,24 @@ class _LocationWeatherCard extends StatelessWidget {
           : () async {
               final suggestion =
                   await this.location!.requestCurrentFarmLocation();
-              return suggestion?.city;
+              if (suggestion == null ||
+                  suggestion.latitude == null ||
+                  suggestion.longitude == null) {
+                return null;
+              }
+              return CityPickerResult(
+                name: suggestion.city,
+                latitude: suggestion.latitude!,
+                longitude: suggestion.longitude!,
+              );
             },
     );
-    if (location == null || location.isEmpty) return;
-    await repository.updateFarmLocation(location: location);
+    if (location == null) return;
+    await repository.updateFarmLocation(
+      location: location.name,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    );
     onUpdated();
   }
 }

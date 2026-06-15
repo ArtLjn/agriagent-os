@@ -29,6 +29,8 @@ class OnboardingSetupScreen extends StatefulWidget {
 class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
   final TextEditingController _farmController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
+  FarmLocationSuggestion? _locationSuggestion;
+  CityPickerResult? _selectedLocation;
   bool _locating = false;
   bool _saving = false;
   String? _message;
@@ -62,6 +64,8 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
       return;
     }
     _locationController.text = suggestion.city;
+    _locationSuggestion = suggestion;
+    _selectedLocation = null;
     setState(() => _locating = false);
   }
 
@@ -76,7 +80,12 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
       _message = null;
     });
     try {
-      await widget.profile.updateFarmLocation(location: location);
+      await widget.profile.updateFarmLocation(
+        location: location,
+        latitude: _selectedLocation?.latitude ?? _locationSuggestion?.latitude,
+        longitude:
+            _selectedLocation?.longitude ?? _locationSuggestion?.longitude,
+      );
       if (mounted) widget.onStart();
     } catch (_) {
       if (!mounted) return;
@@ -92,8 +101,10 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
       context: context,
       selectedCity: _locationController.text.trim(),
     );
-    if (location == null || location.isEmpty || !mounted) return;
-    _locationController.text = location;
+    if (location == null || !mounted) return;
+    _locationController.text = location.name;
+    _selectedLocation = location;
+    _locationSuggestion = null;
     setState(() => _message = null);
   }
 

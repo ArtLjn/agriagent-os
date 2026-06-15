@@ -77,4 +77,6 @@ class UpdateFarmLocationRequest(BaseModel):
     """更新默认农场经营地区请求。"""
 
     location: str = Field(..., min_length=1, max_length=200)
+    lat: float | None = None
+    lon: float | None = None
     farm_id: int | None = None

@@ -61,11 +61,21 @@ class _SearchCityItem {
     required this.name,
     required this.provinceName,
     required this.cityName,
+    required this.latitude,
+    required this.longitude,
   });
 
   final String name;
   final String provinceName;
   final String cityName;
+  final double latitude;
+  final double longitude;
+
+  CityPickerResult toPickerResult() => CityPickerResult(
+        name: name,
+        latitude: latitude,
+        longitude: longitude,
+      );
 }
 
 List<_SearchCityItem> _buildSearchIndex() {
@@ -77,6 +87,8 @@ List<_SearchCityItem> _buildSearchIndex() {
           name: city.name,
           provinceName: province.name,
           cityName: city.name,
+          latitude: city.latitude,
+          longitude: city.longitude,
         ),
       );
       for (final area in city.areas) {
@@ -85,12 +97,30 @@ List<_SearchCityItem> _buildSearchIndex() {
             name: area.name,
             provinceName: province.name,
             cityName: city.name,
+            latitude: area.latitude,
+            longitude: area.longitude,
           ),
         );
       }
     }
   }
   return items;
+}
+
+extension _CityEntryPickerResult on CityEntry {
+  CityPickerResult toPickerResult() => CityPickerResult(
+        name: name,
+        latitude: latitude,
+        longitude: longitude,
+      );
+}
+
+extension _CityAreaPickerResult on CityArea {
+  CityPickerResult toPickerResult() => CityPickerResult(
+        name: name,
+        latitude: latitude,
+        longitude: longitude,
+      );
 }
 
 String _shortName(String name) {

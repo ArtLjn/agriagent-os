@@ -102,6 +102,8 @@ def update_me_farm_location(
         db,
         user_id=user.id,
         location=req.location,
+        lat=req.lat,
+        lon=req.lon,
         farm_id=req.farm_id,
     )
     db.refresh(user)
