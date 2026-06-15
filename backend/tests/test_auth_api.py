@@ -272,11 +272,49 @@ class TestAuthFarmLocation:
         resp = client.put(
             "/auth/me/farm-location",
             headers={"Authorization": f"Bearer {token}"},
-            json={"location": "邳州市"},
+            json={"location": "邳州市", "lat": 34.3142, "lon": 117.9586},
         )
 
         assert resp.status_code == 200
         assert resp.json()["farm"]["location"] == "邳州市"
+
+    def test_update_farm_location_syncs_user_default_city(self, client, clean_db):
+        """更新经营地区时同步旧用户设置默认城市，确保相关上下文读到新城市。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138018", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+        from app.api.deps import get_db
+
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            user = db.query(User).filter(User.phone == "13800138018").first()
+            db.add(UserSetting(user_id=user.id, default_city="睢宁县"))
+            db.commit()
+        finally:
+            db.close()
+
+        resp = client.put(
+            "/auth/me/farm-location",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"location": "邳州市"},
+        )
+
+        assert resp.status_code == 200
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            user = db.query(User).filter(User.phone == "13800138018").first()
+            farm = db.query(Farm).filter(Farm.user_id == user.id).first()
+            setting = (
+                db.query(UserSetting).filter(UserSetting.user_id == user.id).first()
+            )
+            assert farm.location == "邳州市"
+            assert setting.default_city == "邳州市"
+            assert setting.default_lat == 34.3142
+            assert setting.default_lon == 117.9586
+        finally:
+            db.close()
 
     def test_update_farm_location_deletes_daily_advice_cache(self, client, clean_db):
         """更新经营地区后删除该农场每日建议缓存。"""

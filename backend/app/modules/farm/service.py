@@ -62,11 +62,24 @@ def update_default_farm_location(
         )
 
     farm.location = location.strip()
+    sync_user_default_city(db, user_id=user_id, location=farm.location)
     deleted_daily_records = clear_daily_advice_cache(db, farm.id)
     db.commit()
     db.refresh(farm)
     invalidate_farm_location_caches(farm.id, deleted_daily_records)
     return farm
+
+
+def sync_user_default_city(db: Session, *, user_id: str, location: str) -> UserSetting:
+    """同步旧用户设置默认城市，避免上下文仍读取旧经营地区。"""
+    setting = db.query(UserSetting).filter(UserSetting.user_id == user_id).first()
+    if setting is None:
+        setting = UserSetting(user_id=user_id)
+        db.add(setting)
+    setting.default_city = location.strip()
+    setting.default_lat = None
+    setting.default_lon = None
+    return setting
 
 
 def invalidate_farm_location_caches(
