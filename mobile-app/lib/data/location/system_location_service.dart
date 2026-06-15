@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:geolocator/geolocator.dart';
 
+import 'cities.dart';
 import 'location_service.dart';
 
 class SystemLocationService implements LocationService {
@@ -46,7 +47,7 @@ String? nearestSupportedCity({
 }) {
   _CityCenter? nearest;
   var distance = double.infinity;
-  for (final city in _cityCenters) {
+  for (final city in _supportedCityCenters) {
     final current = _distanceKm(
       latitude,
       longitude,
@@ -112,3 +113,10 @@ const _cityCenters = [
   _CityCenter('南宁市', 22.817, 108.3669),
   _CityCenter('海口市', 20.0442, 110.1999),
 ];
+
+List<_CityCenter> get _supportedCityCenters => [
+      ..._cityCenters,
+      for (final province in provinces)
+        for (final city in province.cities)
+          _CityCenter(city.name, city.latitude, city.longitude),
+    ];

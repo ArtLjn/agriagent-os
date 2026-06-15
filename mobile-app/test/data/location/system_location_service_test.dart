@@ -11,6 +11,15 @@ void main() {
     expect(city, '邳州市');
   });
 
+  test('最近城市匹配可使用完整省市区县坐标集合', () {
+    final city = nearestSupportedCity(
+      latitude: 38.04139,
+      longitude: 114.47861,
+    );
+
+    expect(city, '石家庄市');
+  });
+
   test('距离支持城市过远时不自动猜测经营地区', () {
     final city = nearestSupportedCity(
       latitude: 0,

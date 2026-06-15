@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/location/location_service.dart';
 import '../../data/repositories/profile_repository.dart';
+import '../../shared/widgets/city_picker_sheet.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'auth_widgets.dart';
@@ -86,6 +87,16 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
     }
   }
 
+  Future<void> _selectLocation() async {
+    final location = await showCityPickerSheet(
+      context: context,
+      selectedCity: _locationController.text.trim(),
+    );
+    if (location == null || location.isEmpty || !mounted) return;
+    _locationController.text = location;
+    setState(() => _message = null);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AuthPage(
@@ -110,16 +121,18 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
               placeholder: '请选择经营地区',
               icon: LucideIcons.mapPin,
               controller: _locationController,
+              readOnly: true,
+              onTap: _selectLocation,
               height: 48,
               labelGap: 8,
               labelFontSize: 14,
               trailing: IconButton(
-                tooltip: '使用当前位置',
-                onPressed: _locating ? null : _useCurrentLocation,
+                tooltip: '选择经营地区',
+                onPressed: _selectLocation,
                 icon: Icon(
-                  _locating ? LucideIcons.loaderCircle : LucideIcons.locateFixed,
+                  LucideIcons.chevronDown,
                   size: 21,
-                  color: _locating ? AppColors.subtle : AppColors.blue,
+                  color: AppColors.subtle,
                 ),
               ),
             ),
@@ -153,7 +166,8 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
               ),
             ],
             const SizedBox(height: 18),
-            AuthPrimaryButton(label: _saving ? '保存中...' : '开始使用', onTap: _start),
+            AuthPrimaryButton(
+                label: _saving ? '保存中...' : '开始使用', onTap: _start),
             const SizedBox(height: 10),
             GestureDetector(
               behavior: HitTestBehavior.opaque,

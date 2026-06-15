@@ -267,6 +267,65 @@ void main() {
     expect(find.text('首页'), findsWidgets);
   });
 
+  testWidgets('首次设置可通过城市选择器保存经营地区', (tester) async {
+    final location = FakeLocationService();
+    final adapter = RecordingAdapter({
+      '/auth/me': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': null,
+        },
+      },
+      'PUT /auth/me/farm-location': {
+        ...userResponse,
+        'farm': {
+          'id': 1,
+          'name': '农友的农场',
+          'location': '睢宁县',
+        },
+      },
+      '/settings': settingsResponse,
+      '/api/app/version': versionResponse,
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+    final dependencies = FakeAppDependencies(
+      profile: ProfileRepository(ApiClient(dio: dio)),
+      location: location,
+    );
+
+    await pumpAuthFlow(tester, dependencies: dependencies);
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == '请选择经营地区',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == '搜索城市或区县',
+      ),
+      '睢宁',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('睢宁县'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始使用'));
+    await tester.pumpAndSettle();
+
+    expect(adapter.find('PUT', '/auth/me/farm-location').data, {
+      'location': '睢宁县',
+    });
+    expect(find.text('首页'), findsWidgets);
+  });
+
   testWidgets('退出登录后清理 session 并回到登录页', (tester) async {
     final dependencies = FakeAppDependencies(restoreResult: true);
     await pumpAuthFlow(tester, dependencies: dependencies);

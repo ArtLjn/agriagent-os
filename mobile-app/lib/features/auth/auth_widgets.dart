@@ -286,6 +286,8 @@ class AuthInputField extends StatelessWidget {
     required this.icon,
     this.controller,
     this.trailing,
+    this.readOnly = false,
+    this.onTap,
     this.height = 52,
     this.labelGap = 10,
     this.labelFontSize = 15,
@@ -297,6 +299,8 @@ class AuthInputField extends StatelessWidget {
   final IconData icon;
   final TextEditingController? controller;
   final Widget? trailing;
+  final bool readOnly;
+  final VoidCallback? onTap;
   final double height;
   final double labelGap;
   final double labelFontSize;
@@ -329,6 +333,8 @@ class AuthInputField extends StatelessWidget {
                   label: label,
                   child: TextField(
                     controller: controller,
+                    readOnly: readOnly,
+                    onTap: onTap,
                     obscureText: obscureText,
                     maxLines: 1,
                     style: AppTextStyles.body.copyWith(

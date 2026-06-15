@@ -4,8 +4,11 @@ import 'package:farm_manager_app/features/auth/register_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:golden_toolkit/golden_toolkit.dart';
 
+import '../support/fake_app_dependencies.dart';
+
 void main() {
   testGoldens('认证页面在 390x844 下稳定渲染', (tester) async {
+    final dependencies = FakeAppDependencies();
     final builder = DeviceBuilder()
       ..overrideDevicesForAllScenarios(
         devices: [const Device(name: 'mobile-390', size: Size(390, 844))],
@@ -29,7 +32,12 @@ void main() {
         name: 'register',
       )
       ..addScenario(
-        widget: OnboardingSetupScreen(onStart: () {}, onSkip: () {}),
+        widget: OnboardingSetupScreen(
+          onStart: () {},
+          onSkip: () {},
+          profile: dependencies.profile,
+          location: dependencies.location,
+        ),
         name: 'setup',
       );
 

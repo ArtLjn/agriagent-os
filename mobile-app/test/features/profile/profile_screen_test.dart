@@ -23,7 +23,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('田掌柜'), findsOneWidget);
+    expect(find.bySemanticsLabel('田掌柜'), findsOneWidget);
     expect(find.text('农友'), findsOneWidget);
     expect(find.text('13800138000 · 用户'), findsOneWidget);
     expect(find.text('睢宁县'), findsNWidgets(2));
@@ -134,7 +134,7 @@ void main() {
     expect(logoutCalls, 1);
   });
 
-  testWidgets('点击经营地区可手动保存新地区', (tester) async {
+  testWidgets('点击经营地区可通过城市选择器保存新地区', (tester) async {
     setMockAppPackageInfo(version: '0.1.0', buildNumber: '1');
     final adapter = RecordingAdapter({
       '/auth/me': userResponse,
@@ -165,19 +165,26 @@ void main() {
 
     await tester.tap(find.text('经营地区'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '邳州市');
-    await tester.tap(find.text('保存'));
+    await tester.enterText(find.byType(TextField), '邳州');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('邳州市'));
     await tester.pumpAndSettle();
 
     expect(adapter.find('PUT', '/auth/me/farm-location').data, {
       'location': '邳州市',
+      'lat': 34.20442,
+      'lon': 117.28386,
     });
   });
 
   testWidgets('资料页可用重新定位更新经营地区', (tester) async {
     setMockAppPackageInfo(version: '0.1.0', buildNumber: '1');
     final location = FakeLocationService(
-      suggestion: const FarmLocationSuggestion(city: '邳州市'),
+      suggestion: const FarmLocationSuggestion(
+        city: '邳州市',
+        latitude: 34.3142,
+        longitude: 117.9586,
+      ),
     );
     final adapter = RecordingAdapter({
       '/auth/me': userResponse,
@@ -215,6 +222,8 @@ void main() {
     expect(location.requestCalls, 1);
     expect(adapter.find('PUT', '/auth/me/farm-location').data, {
       'location': '邳州市',
+      'lat': 34.3142,
+      'lon': 117.9586,
     });
   });
 }
