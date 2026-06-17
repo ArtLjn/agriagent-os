@@ -120,7 +120,7 @@ export default function AnnotationPanel({
   };
 
   return (
-    <Card title="标注与动作" style={{ ...cardStyle, marginTop: 14 }} styles={{ body: { padding: 14 } }}>
+    <Card title="标注与动作" style={cardStyle} styles={{ body: { padding: 14 } }}>
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <div
           style={{

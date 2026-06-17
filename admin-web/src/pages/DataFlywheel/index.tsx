@@ -110,7 +110,7 @@ export default function DataFlywheel() {
   const [syncingSessions, setSyncingSessions] = useState(false);
   const [batchPrelabeling, setBatchPrelabeling] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(true);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const sessionReviewRequestSeq = useRef(0);
@@ -659,6 +659,8 @@ export default function DataFlywheel() {
 
   const archiveContent = (
     <SessionArchivePanel
+      title={null}
+      orientation="horizontal"
       groups={archiveGroups}
       total={samples.length}
       issueCount={issueCount}
@@ -840,12 +842,11 @@ export default function DataFlywheel() {
 
 const pageShellStyle: CSSProperties = {
   color: palette.text,
-  height: 'calc(100vh - 134px)',
-  minHeight: 620,
+  minHeight: 'calc(100vh - 134px)',
   display: 'flex',
   flexDirection: 'column',
   gap: 14,
-  overflow: 'hidden',
+  overflow: 'visible',
 };
 
 const filterCardStyle: CSSProperties = {

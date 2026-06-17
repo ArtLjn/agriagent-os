@@ -122,6 +122,14 @@ select {
   background: transparent;
 }
 
+.data-flywheel-session-row {
+  scrollbar-width: none;
+}
+
+.data-flywheel-session-row::-webkit-scrollbar {
+  display: none;
+}
+
 .ant-card {
   border-radius: 8px;
 }

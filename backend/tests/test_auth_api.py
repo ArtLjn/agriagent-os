@@ -316,6 +316,36 @@ class TestAuthFarmLocation:
         finally:
             db.close()
 
+    def test_update_farm_location_resolves_coords_when_client_omits_them(
+        self, client, clean_db
+    ):
+        """旧客户端只传城市名时，后端用内置城市集合补齐坐标。"""
+        reg = client.post(
+            "/auth/register",
+            json={"phone": "13800138019", "password": "password123"},
+        )
+        token = reg.json()["access_token"]
+        from app.api.deps import get_db
+
+        resp = client.put(
+            "/auth/me/farm-location",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"location": "阿鲁科尔沁旗"},
+        )
+
+        assert resp.status_code == 200
+        db = next(app.dependency_overrides[get_db]())
+        try:
+            user = db.query(User).filter(User.phone == "13800138019").first()
+            setting = (
+                db.query(UserSetting).filter(UserSetting.user_id == user.id).first()
+            )
+            assert setting.default_city == "阿鲁科尔沁旗"
+            assert setting.default_lat == 42.26833
+            assert setting.default_lon == 118.96361
+        finally:
+            db.close()
+
     def test_update_farm_location_deletes_daily_advice_cache(self, client, clean_db):
         """更新经营地区后删除该农场每日建议缓存。"""
         reg = client.post(

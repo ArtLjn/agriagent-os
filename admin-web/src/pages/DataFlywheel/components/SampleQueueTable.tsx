@@ -45,17 +45,22 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
     {
       title: '状态',
       dataIndex: 'annotation_status',
-      width: 106,
+      width: 160,
       render: (status: string, record) => (
-        <div>
-          <Tag color={labelColor(status)}>{status}</Tag>
+        <div style={statusStackStyle}>
+          <Tag color={labelColor(status)} style={statusTagStyle}>{status}</Tag>
           {record.quality_labels.slice(0, 1).map((label) => (
-            <Tag key={label} color="blue" style={{ marginTop: 4 }}>
+            <Tag key={label} color="blue" style={statusTagStyle} title={labelText[label] ?? label}>
               {labelText[label] ?? label}
             </Tag>
           ))}
           {record.issue_candidates.slice(0, 1).map((issue) => (
-            <Tag key={issue.type} color={issue.severity === 'critical' ? 'red' : 'orange'} style={{ marginTop: 4 }}>
+            <Tag
+              key={issue.type}
+              color={issue.severity === 'critical' ? 'red' : 'orange'}
+              style={statusTagStyle}
+              title={`规则：${issueText[issue.type] ?? issue.type}`}
+            >
               规则：{issueText[issue.type] ?? issue.type}
             </Tag>
           ))}
@@ -131,8 +136,25 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
             background: record.sample_id === selectedSampleId ? 'rgba(88, 166, 255, 0.12)' : undefined,
           },
         })}
-        scroll={{ x: 680, y: 'calc(100vh - 312px)' }}
+        scroll={{ x: 760, y: 'calc(100vh - 312px)' }}
       />
     </div>
   );
 }
+
+const statusStackStyle: React.CSSProperties = {
+  width: 136,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: 6,
+  minWidth: 0,
+};
+
+const statusTagStyle: React.CSSProperties = {
+  maxWidth: '100%',
+  marginInlineEnd: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};

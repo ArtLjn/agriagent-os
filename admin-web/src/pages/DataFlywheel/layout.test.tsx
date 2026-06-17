@@ -86,7 +86,7 @@ describe('DataFlywheel 可折叠布局', () => {
     vi.mocked(getSampleDetail).mockResolvedValue(detail);
   });
 
-  it('左右功能区可以收起，让中间完整对话作为主体区域', async () => {
+  it('顶部归档和右侧详情可以收起，让会话 turn 与详情形成两栏主体', async () => {
     render(<DataFlywheel />);
 
     await screen.findByText('Agent 数据飞轮');
@@ -96,26 +96,41 @@ describe('DataFlywheel 可折叠布局', () => {
     );
     expect(screen.getByTestId('data-flywheel-workspace')).toHaveAttribute(
       'data-right-collapsed',
-      'true'
+      'false'
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '收起归档区' }));
+    fireEvent.click(screen.getByRole('button', { name: '收起顶部归档区' }));
     expect(screen.getByTestId('data-flywheel-workspace')).toHaveAttribute(
       'data-left-collapsed',
       'true'
     );
-    expect(screen.getByRole('button', { name: '展开归档区' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展开顶部归档区' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '展开详情区' }));
-    expect(screen.getByTestId('data-flywheel-workspace')).toHaveAttribute(
-      'data-right-collapsed',
-      'false'
-    );
     fireEvent.click(screen.getByRole('button', { name: '收起详情区' }));
     expect(screen.getByTestId('data-flywheel-workspace')).toHaveAttribute(
       'data-right-collapsed',
       'true'
     );
+    fireEvent.click(screen.getByRole('button', { name: '展开详情区' }));
+    expect(screen.getByTestId('data-flywheel-workspace')).toHaveAttribute(
+      'data-right-collapsed',
+      'false'
+    );
+  });
+
+  it('顶部归档将四个固定筛选桶与会话记录滚动行分开', async () => {
+    render(<DataFlywheel />);
+
+    await screen.findByText('Agent 数据飞轮');
+
+    const bucketRow = screen.getByTestId('archive-session-all').parentElement;
+    expect(bucketRow).toContainElement(screen.getByTestId('archive-issues'));
+    expect(bucketRow).toContainElement(screen.getByTestId('archive-ai-prelabels'));
+    expect(bucketRow).toContainElement(screen.getByTestId('archive-confirmed-issues'));
+    expect(bucketRow).not.toContainElement(screen.getByTestId('archive-session-session-a'));
+
+    const sessionRow = screen.getByTestId('archive-session-session-a').parentElement;
+    expect(sessionRow).not.toBe(bucketRow);
   });
 
   it('在完整会话里选择 turn 后自动展开右侧详情区', async () => {
@@ -127,7 +142,7 @@ describe('DataFlywheel 可折叠布局', () => {
 
     expect(screen.getByTestId('data-flywheel-workspace')).toHaveAttribute(
       'data-right-collapsed',
-      'true'
+      'false'
     );
     fireEvent.click(screen.getByTestId('review-select-turn:session-a:3'));
 

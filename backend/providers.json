@@ -3,7 +3,7 @@
   "providers": [
      {
       "name": "local",
-      "base_url": "http://47.98.253.236:9000/v1",
+      "base_url": "http://43.155.217.74:9000/v1",
       "api_keys": [
         "ZoY4ZGyMtXjX_ue-OZJiH6wFpoVS6jDVa_PbSc6iDIU"
       ],

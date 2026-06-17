@@ -8,6 +8,7 @@ from app.infra.skill_cache import clear_cache as clear_skill_cache
 from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 from app.models.user_setting import UserSetting
+from app.modules.farm.city_coords import resolve_city_coords
 from app.services.farm_context_service import clear_context_cache
 from app.services.weather.cache import weather_cache
 
@@ -88,6 +89,10 @@ def sync_user_default_city(
         setting = UserSetting(user_id=user_id)
         db.add(setting)
     setting.default_city = location.strip()
+    if (lat is None or lon is None) and setting.default_city:
+        coords = resolve_city_coords(setting.default_city)
+        if coords is not None:
+            lat, lon = coords
     setting.default_lat = lat
     setting.default_lon = lon
     return setting

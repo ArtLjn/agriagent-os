@@ -1213,7 +1213,7 @@ describe('DataFlywheel 页面', () => {
 
     expect(screen.getByTestId('sample-row-turn:session-a:3')).toBeInTheDocument();
     expect(screen.queryByTestId('sample-row-turn:session-b:4')).not.toBeInTheDocument();
-    expect(screen.getByText('AI 预判')).toBeInTheDocument();
+    expect(screen.getByTestId('archive-ai-prelabels')).toBeInTheDocument();
   });
 
   it('审核 AI 预判时展示聊天内容和工具证据', async () => {
