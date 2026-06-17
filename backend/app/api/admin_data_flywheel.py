@@ -620,10 +620,19 @@ def build_admin_data_flywheel_case_draft(
 
 
 def _http_error(exc: ValueError) -> HTTPException:
+    if exc.args and isinstance(exc.args[0], dict):
+        payload = exc.args[0]
+        return HTTPException(status_code=400, detail=payload)
     code = str(exc)
     status_code = (
         404
-        if code in {"SAMPLE_NOT_FOUND", "LABEL_NOT_FOUND", "PRELABEL_NOT_FOUND"}
+        if code
+        in {
+            "SAMPLE_NOT_FOUND",
+            "LABEL_NOT_FOUND",
+            "PRELABEL_NOT_FOUND",
+            "REPAIR_PACK_NOT_FOUND",
+        }
         else 400
     )
     return HTTPException(status_code=status_code, detail={"code": code})

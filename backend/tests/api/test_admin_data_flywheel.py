@@ -378,6 +378,264 @@ def test_build_case_draft_api_returns_issue_candidate_assertions(
     ]
 
 
+def test_list_repair_candidates_returns_fix_target(db_session, tmp_path) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels",
+            json={"label": "pending_missed"},
+            headers=admin_headers(),
+        )
+        resp = client.get(
+            "/admin/data-flywheel/repair-candidates?label=pending_missed",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["sample_id"] == sample_id
+    assert data["items"][0]["fix_target"] == "pending_plan"
+    assert data["items"][0]["priority"] == 90
+    assert data["items"][0]["verification_commands"]
+
+
+def test_list_repair_candidates_accepts_explicit_sample_ids(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels",
+            json={"label": "sensitive_info_leak"},
+            headers=admin_headers(),
+        )
+        resp = client.get(
+            "/admin/data-flywheel/repair-candidates",
+            params={"sample_ids": sample_id},
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["sample_id"] == sample_id
+    assert data["items"][0]["fix_target"] == "guardrail"
+
+
+def test_list_repair_candidates_filters_by_min_priority(db_session, tmp_path) -> None:
+    first = _seed_turn(db_session, tmp_path)
+    second = _seed_turn(db_session, tmp_path)
+    second.session_id = "sess-admin-flywheel-2"
+    second.request_id = "adminfly2"
+    db_session.commit()
+    first_id = _sample_id(first)
+    second_id = f"turn:{second.farm_id}:sess-admin-flywheel-2:{second.id}"
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{first_id}/labels",
+            json={"label": "bad_reply"},
+            headers=admin_headers(),
+        )
+        client.post(
+            f"/admin/data-flywheel/samples/{second_id}/labels",
+            json={"label": "sensitive_info_leak"},
+            headers=admin_headers(),
+        )
+        resp = client.get(
+            "/admin/data-flywheel/repair-candidates?min_priority=95",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["sample_id"] == second_id
+    assert data["items"][0]["priority"] == 100
+
+
+def test_create_repair_pack_returns_payload_and_metadata(db_session, tmp_path) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels",
+            json={"label": "pending_missed"},
+            headers=admin_headers(),
+        )
+        resp = client.post(
+            "/admin/data-flywheel/repair-packs",
+            json={"sample_ids": [sample_id]},
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/repair-packs/{resp.json()['pack_id']}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "exported"
+    assert data["created_by"] == ADMIN_USER_ID
+    assert data["fix_target"] == "pending_plan"
+    assert data["source_sample_ids"] == [sample_id]
+    assert data["source_label_ids"]
+    assert data["payload"]["manifest"]["pack_id"] == data["pack_id"]
+    assert data["payload"]["cases_jsonl"][0]["source_debug_json"].startswith("debug/")
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()["manifest"]["source_sample_ids"] == [sample_id]
+
+
+def test_create_repair_pack_rejects_mixed_fix_targets(
+    db_session, tmp_path
+) -> None:
+    first = _seed_turn(db_session, tmp_path)
+    second = _seed_turn(db_session, tmp_path)
+    second.session_id = "sess-admin-flywheel-2"
+    second.request_id = "adminfly2"
+    db_session.commit()
+    first_id = _sample_id(first)
+    second_id = f"turn:{second.farm_id}:sess-admin-flywheel-2:{second.id}"
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{first_id}/labels",
+            json={"label": "pending_missed"},
+            headers=admin_headers(),
+        )
+        client.post(
+            f"/admin/data-flywheel/samples/{second_id}/labels",
+            json={"label": "sensitive_info_leak"},
+            headers=admin_headers(),
+        )
+        resp = client.post(
+            "/admin/data-flywheel/repair-packs",
+            json={"sample_ids": [first_id, second_id]},
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "MIXED_FIX_TARGETS"
+    assert sorted(resp.json()["detail"]["groups"]) == ["guardrail", "pending_plan"]
+
+
+def test_create_repair_pack_accepts_manual_fix_target_override(
+    db_session, tmp_path
+) -> None:
+    first = _seed_turn(db_session, tmp_path)
+    second = _seed_turn(db_session, tmp_path)
+    second.session_id = "sess-admin-flywheel-2"
+    second.request_id = "adminfly2"
+    db_session.commit()
+    first_id = _sample_id(first)
+    second_id = f"turn:{second.farm_id}:sess-admin-flywheel-2:{second.id}"
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{first_id}/labels",
+            json={"label": "pending_missed"},
+            headers=admin_headers(),
+        )
+        client.post(
+            f"/admin/data-flywheel/samples/{second_id}/labels",
+            json={"label": "sensitive_info_leak"},
+            headers=admin_headers(),
+        )
+        resp = client.post(
+            "/admin/data-flywheel/repair-packs",
+            json={
+                "sample_ids": [first_id, second_id],
+                "fix_target_override": "router",
+            },
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["fix_target"] == "router"
+    assert data["pack_id"].startswith("repair-router-")
+    assert {case["fix_target"] for case in data["payload"]["cases_jsonl"]} == {
+        "router"
+    }
+
+
+def test_resolve_repair_pack_marks_labels_resolved(db_session, tmp_path) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels",
+            json={"label": "pending_missed"},
+            headers=admin_headers(),
+        )
+        pack_resp = client.post(
+            "/admin/data-flywheel/repair-packs",
+            json={"sample_ids": [sample_id]},
+            headers=admin_headers(),
+        )
+        resolve_resp = client.post(
+            f"/admin/data-flywheel/repair-packs/{pack_resp.json()['pack_id']}/resolve",
+            json={
+                "repair_note": "已修复 pending plan",
+                "verification_summary": {"passed": True},
+            },
+            headers=admin_headers(),
+        )
+        sample_resp = client.get(
+            f"/admin/data-flywheel/samples/{sample_id}",
+            headers=admin_headers(),
+        )
+
+    assert resolve_resp.status_code == 200
+    assert resolve_resp.json()["status"] == "resolved"
+    assert resolve_resp.json()["resolved_by"] == ADMIN_USER_ID
+    assert sample_resp.json()["quality_labels"] == []
+    assert sample_resp.json()["labels"][0]["status"] == "resolved"
+
+
+def test_verification_failure_keeps_repair_pack_labels_open(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/labels",
+            json={"label": "pending_missed"},
+            headers=admin_headers(),
+        )
+        pack_resp = client.post(
+            "/admin/data-flywheel/repair-packs",
+            json={"sample_ids": [sample_id]},
+            headers=admin_headers(),
+        )
+        fail_resp = client.post(
+            "/admin/data-flywheel/repair-packs/"
+            f"{pack_resp.json()['pack_id']}/verification-failed",
+            json={"verification_summary": {"passed": False}},
+            headers=admin_headers(),
+        )
+        sample_resp = client.get(
+            f"/admin/data-flywheel/samples/{sample_id}",
+            headers=admin_headers(),
+        )
+
+    assert fail_resp.status_code == 200
+    assert fail_resp.json()["status"] == "verification_failed"
+    assert sample_resp.json()["quality_labels"] == ["pending_missed"]
+
+
 def test_prelabel_endpoint_is_disabled_by_default(
     db_session, tmp_path, monkeypatch
 ) -> None:

@@ -16,6 +16,7 @@ import {
   getSampleDetail,
   getSessionReview,
   getSessionAnnotations,
+  listRepairPackCandidates,
   listDataFlywheelSamples,
   markBadCase,
   deleteSampleLabel,
@@ -44,6 +45,7 @@ vi.mock('../../api/dataFlywheel', () => ({
   getSampleDetail: vi.fn(),
   getSessionReview: vi.fn(),
   getSessionAnnotations: vi.fn(),
+  listRepairPackCandidates: vi.fn(),
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
   deleteSampleLabel: vi.fn(),
@@ -331,6 +333,7 @@ const sessionAnnotations: DataFlywheelSessionAnnotations = {
 
 const mockedList = vi.mocked(listDataFlywheelSamples);
 const mockedDetail = vi.mocked(getSampleDetail);
+const mockedRepairCandidates = vi.mocked(listRepairPackCandidates);
 const mockedSessionReview = vi.mocked(getSessionReview);
 const mockedSessionAnnotations = vi.mocked(getSessionAnnotations);
 const mockedSyncSessions = vi.mocked(syncDataFlywheelSessions);
@@ -397,6 +400,24 @@ describe('DataFlywheel 页面', () => {
     });
     mockedList.mockResolvedValue({ items: [sample], total: 1 });
     mockedDetail.mockResolvedValue(detail);
+    mockedRepairCandidates.mockResolvedValue({
+      items: [
+        {
+          sample_id: sample.sample_id,
+          session_id: sample.session_id,
+          turn_id: sample.turn_id,
+          request_id: sample.request_id,
+          labels: ['sensitive_info_leak'],
+          fix_target: 'guardrail',
+          priority: 100,
+          suggested_action: '修复敏感信息输出拦截、回复审查和安全边界测试。',
+          regression_ready: true,
+          verification_commands: ['pytest tests/services/test_data_flywheel_issue_detector.py -q'],
+          secondary_targets: [],
+        },
+      ],
+      total: 1,
+    });
     mockedTraceDiagnostics.mockImplementation((requestId) =>
       Promise.resolve(
         requestId === 'req:abc'
@@ -493,7 +514,15 @@ describe('DataFlywheel 页面', () => {
     await waitFor(() => {
       expect(mockedDetail).toHaveBeenCalledWith(sample.sample_id);
     });
+    expect(mockedRepairCandidates).toHaveBeenCalledWith({
+      sample_ids: [sample.sample_id],
+      limit: 1,
+    });
     expect(await screen.findByText('样本详情')).toBeInTheDocument();
+    expect(screen.getByText('修复候选')).toBeInTheDocument();
+    expect(screen.getByText('guardrail')).toBeInTheDocument();
+    expect(screen.getByText('优先级 100')).toBeInTheDocument();
+    expect(screen.getByText('可回归')).toBeInTheDocument();
     expect(screen.getAllByText('selected_tools').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('tab', { name: /pending lifecycle/ }));
     expect(screen.getByText('pending.plan.created')).toBeInTheDocument();

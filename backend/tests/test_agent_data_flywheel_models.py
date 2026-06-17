@@ -9,6 +9,7 @@ from app.models.data_flywheel import (
     AgentCaseDraft,
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,
+    AgentRepairPack,
 )
 from app.models.farm import Farm
 
@@ -140,6 +141,39 @@ def test_agent_data_flywheel_prelabel_round_trip():
     assert loaded.accepted_label_ids is None
     assert loaded.reviewed_by is None
     assert loaded.reviewed_at is None
+    assert loaded.created_at is not None
+    assert loaded.updated_at is not None
+    db.close()
+
+
+def test_agent_repair_pack_round_trip():
+    db = Session()
+    pack = AgentRepairPack(
+        farm_id=1,
+        pack_id="repair-pending-plan-abc123",
+        fix_target="pending_plan",
+        labels=["pending_missed", "needs_regression"],
+        source_sample_ids=["turn:1:sess-1:12"],
+        source_label_ids=[1, 2],
+        status="draft",
+        export_path="data/repair-packs/repair-pending-plan-abc123",
+        manifest_json={"goal": "写操作必须先创建 pending plan"},
+        export_error=None,
+        created_by="admin-1",
+    )
+    db.add(pack)
+    db.commit()
+    db.refresh(pack)
+
+    loaded = db.query(AgentRepairPack).filter_by(pack_id=pack.pack_id).one()
+
+    assert loaded.id is not None
+    assert loaded.fix_target == "pending_plan"
+    assert loaded.labels == ["pending_missed", "needs_regression"]
+    assert loaded.source_label_ids == [1, 2]
+    assert loaded.source_sample_ids == ["turn:1:sess-1:12"]
+    assert loaded.status == "draft"
+    assert loaded.manifest_json["goal"] == "写操作必须先创建 pending plan"
     assert loaded.created_at is not None
     assert loaded.updated_at is not None
     db.close()

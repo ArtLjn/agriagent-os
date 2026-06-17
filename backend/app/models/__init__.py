@@ -20,6 +20,7 @@ from app.models.data_flywheel import (
     AgentCaseDraft,
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,
+    AgentRepairPack,
 )
 from app.models.feedback import FeedbackRecord
 from app.models.user_setting import UserSetting
@@ -55,6 +56,7 @@ __all__ = [
     "AgentCaseDraft",
     "AgentDataFlywheelLabel",
     "AgentDataFlywheelPrelabel",
+    "AgentRepairPack",
     "FeedbackRecord",
     "UserSetting",
     "SimulationRun",
