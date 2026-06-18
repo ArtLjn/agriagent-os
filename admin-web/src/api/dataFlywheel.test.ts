@@ -5,16 +5,21 @@ import {
   acceptSamplePrelabel,
   addSampleLabel,
   createCaseDraft,
+  createRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
   exportSampleJsonl,
   getSampleDetail,
+  getRepairPack,
   getSessionReview,
   getDataFlywheelSyncJob,
   getSamplePrelabelBatchJob,
   getSessionAnnotations,
   listDataFlywheelSamples,
+  listRepairPackCandidates,
   markBadCase,
+  markRepairPackResolved,
+  recordRepairPackVerificationFailure,
   deleteSampleLabel,
   rejectSamplePrelabel,
   resolveSampleLabel,
@@ -72,6 +77,45 @@ describe('dataFlywheel api', () => {
 
     expect(mockedApiClient.get).toHaveBeenCalledWith('/admin/data-flywheel/samples', { params });
     expect(result.items[0].sample_id).toBe('turn:1:s:1');
+  });
+
+  it('传递筛选参数读取 repair pack 修复候选', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            sample_id: 'turn:1:s:1',
+            session_id: 's:1',
+            turn_id: 1,
+            request_id: 'req:1',
+            labels: ['pending_missed'],
+            fix_target: 'pending_plan',
+            priority: 90,
+            suggested_action: '修复 pending lifecycle',
+            regression_ready: true,
+            verification_commands: ['pytest tests/services/test_pending_plan.py'],
+            secondary_targets: [],
+          },
+        ],
+        total: 1,
+      },
+    });
+
+    const params = {
+      label: 'pending_missed',
+      fix_target: 'pending_plan',
+      regression_ready: true,
+      min_priority: 80,
+      q: 's:1',
+      limit: 10,
+    };
+    const result = await listRepairPackCandidates(params);
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith(
+      '/admin/data-flywheel/repair-candidates',
+      { params, paramsSerializer: { indexes: null } }
+    );
+    expect(result.items[0].fix_target).toBe('pending_plan');
   });
 
   it('编码 sample_id 后读取样本详情', async () => {
@@ -249,6 +293,116 @@ describe('dataFlywheel api', () => {
       target_type: 'evaluation_replay',
     });
     expect(result.draft_id).toBe('draft:1');
+  });
+
+  it('按样本集合生成 repair pack', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 1,
+        pack_id: 'repair-pending-plan-abc',
+        fix_target: 'pending_plan',
+        labels: ['pending_missed'],
+        source_sample_ids: ['turn:1:s:1'],
+        status: 'exported',
+        export_path: 'data/repair-packs/repair-pending-plan-abc',
+        manifest: { pack_id: 'repair-pending-plan-abc' },
+        payload: {
+          manifest: { pack_id: 'repair-pending-plan-abc' },
+          cases_jsonl: [],
+          readme: '# Repair Pack',
+          debug_files: {},
+          regression_drafts: {},
+        },
+      },
+    });
+
+    const body = {
+      sample_ids: ['turn:1:s:1'],
+      fix_target: 'pending_plan',
+      limit: 5,
+    };
+    const result = await createRepairPack(body);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/repair-packs',
+      body
+    );
+    expect(result.pack_id).toBe('repair-pending-plan-abc');
+  });
+
+  it('编码 pack_id 后读取 repair pack 详情', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        id: 1,
+        pack_id: 'repair:1',
+        fix_target: 'pending_plan',
+        labels: [],
+        source_sample_ids: [],
+        status: 'exported',
+        export_path: null,
+        manifest: {},
+      },
+    });
+
+    const result = await getRepairPack('repair:1');
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith(
+      '/admin/data-flywheel/repair-packs/repair%3A1'
+    );
+    expect(result.pack_id).toBe('repair:1');
+  });
+
+  it('标记 repair pack 已修复', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 1,
+        pack_id: 'repair-1',
+        fix_target: 'pending_plan',
+        labels: ['pending_missed'],
+        source_sample_ids: ['turn:1:s:1'],
+        status: 'resolved',
+        export_path: null,
+        manifest: {},
+        repair_note: '已修复',
+      },
+    });
+
+    const body = {
+      repair_note: '已修复',
+      verification_summary: { passed: true },
+    };
+    const result = await markRepairPackResolved('repair-1', body);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/repair-packs/repair-1/resolve',
+      body
+    );
+    expect(result.status).toBe('resolved');
+  });
+
+  it('记录 repair pack 验证失败', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 1,
+        pack_id: 'repair-1',
+        fix_target: 'pending_plan',
+        labels: ['pending_missed'],
+        source_sample_ids: ['turn:1:s:1'],
+        status: 'verification_failed',
+        export_path: null,
+        manifest: {},
+        verification_summary: { passed: false },
+      },
+    });
+
+    const body = { verification_summary: { passed: false } };
+    const result = await recordRepairPackVerificationFailure('repair-1', body);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/repair-packs/repair-1/verification-failed',
+      body
+    );
+    expect(result.status).toBe('verification_failed');
   });
 
   it('提交后台同步会话任务', async () => {

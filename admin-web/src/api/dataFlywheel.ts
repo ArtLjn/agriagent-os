@@ -92,6 +92,35 @@ export interface DataFlywheelSampleListResponse {
   total: number;
 }
 
+export interface DataFlywheelRepairCandidate {
+  sample_id: string;
+  session_id: string | null;
+  turn_id: number | null;
+  request_id: string | null;
+  labels: DataFlywheelLabel[] | string[];
+  fix_target: string;
+  priority: number;
+  suggested_action: string;
+  regression_ready: boolean;
+  verification_commands: string[];
+  secondary_targets: Array<{
+    label: DataFlywheelLabel | string;
+    fix_target: string;
+    priority: number;
+  }>;
+}
+
+export interface DataFlywheelRepairCandidateListParams extends DataFlywheelSampleListParams {
+  sample_ids?: string[];
+  fix_target?: string;
+  regression_ready?: boolean;
+}
+
+export interface DataFlywheelRepairCandidateListResponse {
+  items: DataFlywheelRepairCandidate[];
+  total: number;
+}
+
 export interface DataFlywheelLabelRecord {
   id: number;
   sample_id: string;
@@ -250,12 +279,65 @@ export interface DeleteSampleLabelResponse {
   id: number;
 }
 
+export interface DataFlywheelRepairPack {
+  id: number;
+  pack_id: string;
+  fix_target: string;
+  labels: string[];
+  source_sample_ids: string[];
+  source_label_ids?: number[];
+  status: string;
+  export_path: string | null;
+  manifest: Record<string, unknown>;
+  export_error?: string | null;
+  repair_note?: string | null;
+  verification_summary?: Record<string, unknown> | null;
+  created_by?: string | null;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  payload?: {
+    manifest: Record<string, unknown>;
+    cases_jsonl: Array<Record<string, unknown>>;
+    readme: string;
+    debug_files: Record<string, unknown>;
+    regression_drafts: Record<string, unknown>;
+  };
+}
+
+export interface CreateRepairPackRequest extends DataFlywheelRepairCandidateListParams {
+  sample_ids?: string[];
+  fix_target_override?: string;
+  min_priority?: number;
+  limit?: number;
+}
+
+export interface ResolveRepairPackRequest {
+  repair_note?: string | null;
+  verification_summary?: Record<string, unknown> | null;
+}
+
+export interface VerificationFailureRequest {
+  verification_summary: Record<string, unknown>;
+}
+
 const samplePath = (sampleId: string) => `/admin/data-flywheel/samples/${encodeURIComponent(sampleId)}`;
 
 export async function listDataFlywheelSamples(
   params?: DataFlywheelSampleListParams
 ): Promise<DataFlywheelSampleListResponse> {
   const response = await apiClient.get<DataFlywheelSampleListResponse>('/admin/data-flywheel/samples', { params });
+  return response.data;
+}
+
+export async function listRepairPackCandidates(
+  params?: DataFlywheelRepairCandidateListParams
+): Promise<DataFlywheelRepairCandidateListResponse> {
+  const response = await apiClient.get<DataFlywheelRepairCandidateListResponse>(
+    '/admin/data-flywheel/repair-candidates',
+    { params, paramsSerializer: { indexes: null } }
+  );
   return response.data;
 }
 
@@ -382,6 +464,45 @@ export async function getSamplePrelabelBatchJob(
 ): Promise<DataFlywheelPrelabelBatchJob> {
   const response = await apiClient.get<DataFlywheelPrelabelBatchJob>(
     `/admin/data-flywheel/prelabels/batch/${encodeURIComponent(jobId)}`
+  );
+  return response.data;
+}
+
+export async function createRepairPack(
+  body: CreateRepairPackRequest
+): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.post<DataFlywheelRepairPack>(
+    '/admin/data-flywheel/repair-packs',
+    body
+  );
+  return response.data;
+}
+
+export async function getRepairPack(packId: string): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.get<DataFlywheelRepairPack>(
+    `/admin/data-flywheel/repair-packs/${encodeURIComponent(packId)}`
+  );
+  return response.data;
+}
+
+export async function markRepairPackResolved(
+  packId: string,
+  body: ResolveRepairPackRequest
+): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.post<DataFlywheelRepairPack>(
+    `/admin/data-flywheel/repair-packs/${encodeURIComponent(packId)}/resolve`,
+    body
+  );
+  return response.data;
+}
+
+export async function recordRepairPackVerificationFailure(
+  packId: string,
+  body: VerificationFailureRequest
+): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.post<DataFlywheelRepairPack>(
+    `/admin/data-flywheel/repair-packs/${encodeURIComponent(packId)}/verification-failed`,
+    body
   );
   return response.data;
 }

@@ -7,6 +7,7 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   ExperimentOutlined,
+  FileZipOutlined,
   RobotOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
@@ -15,6 +16,7 @@ import type {
   DataFlywheelLabel,
   DataFlywheelLabelRecord,
   DataFlywheelPrelabel,
+  DataFlywheelRepairCandidate,
   DataFlywheelSample,
 } from '../../../api/dataFlywheel';
 import { cardStyle, palette } from '../../../styles/theme';
@@ -33,6 +35,7 @@ interface AnnotationPanelProps {
   canPrelabel: boolean;
   prelabeling: boolean;
   reviewingPrelabel: boolean;
+  repairCandidate?: DataFlywheelRepairCandidate | null;
   selectedPrelabelLabels: DataFlywheelLabel[];
   annotationTargetLabel?: string;
   existingLabels?: DataFlywheelLabelRecord[];
@@ -51,6 +54,7 @@ interface AnnotationPanelProps {
   onExportJsonl: () => void;
   onMarkBadCase: () => void;
   onCreateRegressionCase: () => void;
+  onCreateRepairPack: () => void;
 }
 
 const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
@@ -83,6 +87,7 @@ export default function AnnotationPanel({
   canPrelabel,
   prelabeling,
   reviewingPrelabel,
+  repairCandidate,
   selectedPrelabelLabels,
   annotationTargetLabel,
   existingLabels = [],
@@ -101,6 +106,7 @@ export default function AnnotationPanel({
   onExportJsonl,
   onMarkBadCase,
   onCreateRegressionCase,
+  onCreateRepairPack,
 }: AnnotationPanelProps) {
   const disabled = !selectedSample;
   const prelabelDisabled = disabled || !canPrelabel;
@@ -218,6 +224,31 @@ export default function AnnotationPanel({
             )}
           </Space>
         </div>
+
+        {repairCandidate && (
+          <div
+            style={{
+              border: `1px solid ${palette.borderSoft}`,
+              borderRadius: 6,
+              padding: 12,
+              background: palette.bg,
+            }}
+          >
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Space size={8} wrap>
+                <Typography.Text style={{ color: palette.text }}>修复候选</Typography.Text>
+                <Tag color="blue">{repairCandidate.fix_target}</Tag>
+                <Tag>优先级 {repairCandidate.priority}</Tag>
+                <Tag color={repairCandidate.regression_ready ? 'green' : 'orange'}>
+                  {repairCandidate.regression_ready ? '可回归' : '需补证据'}
+                </Tag>
+              </Space>
+              <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                {repairCandidate.suggested_action}
+              </Typography.Text>
+            </Space>
+          </div>
+        )}
 
         <div>
           <Typography.Text style={{ color: palette.textMuted }}>
@@ -342,6 +373,9 @@ export default function AnnotationPanel({
           </Button>
           <Button icon={<ExperimentOutlined />} disabled={disabled} loading={acting} onClick={onCreateRegressionCase}>
             生成 regression case
+          </Button>
+          <Button icon={<FileZipOutlined />} disabled={disabled} loading={acting} onClick={onCreateRepairPack}>
+            生成修复包
           </Button>
           <Button icon={<BranchesOutlined />} disabled={disabled} onClick={handleTraceJump}>
             跳转 TraceMonitor

@@ -16,11 +16,15 @@ import type {
 vi.mock('../../api/dataFlywheel', () => ({
   addSampleLabel: vi.fn(),
   createCaseDraft: vi.fn(),
+  createRepairPack: vi.fn(),
   exportSampleJsonl: vi.fn(),
   getSampleDetail: vi.fn(),
   getSessionReview: vi.fn(),
+  listRepairPackCandidates: vi.fn(),
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
+  markRepairPackResolved: vi.fn(),
+  recordRepairPackVerificationFailure: vi.fn(),
 }));
 
 const sample: DataFlywheelSample = {

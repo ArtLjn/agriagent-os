@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Button, Card, Checkbox, Input, Select, Space, Typography, message } from 'antd';
+import { Button, Card, Checkbox, Input, Modal, Select, Space, Typography, message } from 'antd';
 import { CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
@@ -10,6 +10,7 @@ import {
   acceptSamplePrelabel,
   addSampleLabel,
   createCaseDraft,
+  createRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
   deleteSampleLabel,
@@ -20,7 +21,10 @@ import {
   getSessionAnnotations,
   getSessionReview,
   listDataFlywheelSamples,
+  listRepairPackCandidates,
   markBadCase,
+  markRepairPackResolved,
+  recordRepairPackVerificationFailure,
   rejectSamplePrelabel,
   resolveSampleLabel,
   syncDataFlywheelSessions,
@@ -28,6 +32,8 @@ import {
   type DataFlywheelDetail,
   type DataFlywheelLabel,
   type DataFlywheelLabelRecord,
+  type DataFlywheelRepairCandidate,
+  type DataFlywheelRepairPack,
   type DataFlywheelSample,
   type DataFlywheelSessionAnnotations,
   type DataFlywheelSessionReview,
@@ -41,6 +47,7 @@ import SampleQueueTable from './components/SampleQueueTable';
 import SessionConversationView from './components/SessionConversationView';
 import SessionArchivePanel, { type SessionArchiveItem } from './components/SessionArchivePanel';
 import ReviewEvidencePanel from './components/ReviewEvidencePanel';
+import RepairPackPreview from './components/RepairPackPreview';
 
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
 const ALL_ARCHIVE_KEY = '__all__';
@@ -102,6 +109,9 @@ export default function DataFlywheel() {
   const [comment, setComment] = useState('');
   const [draft, setDraft] = useState<CaseDraft | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
+  const [repairPack, setRepairPack] = useState<DataFlywheelRepairPack | null>(null);
+  const [repairPackOpen, setRepairPackOpen] = useState(false);
+  const [repairCandidate, setRepairCandidate] = useState<DataFlywheelRepairCandidate | null>(null);
   const [activeArchiveKey, setActiveArchiveKey] = useState(ALL_ARCHIVE_KEY);
   const [sessionReview, setSessionReview] = useState<DataFlywheelSessionReview | null>(null);
   const [loadingSessionReview, setLoadingSessionReview] = useState(false);
@@ -302,6 +312,7 @@ export default function DataFlywheel() {
       const result = await getSampleDetail(sample.sample_id);
       if (requestSeq !== detailRequestSeq.current) return;
       setDetail(result);
+      void loadRepairCandidate(sample.sample_id);
       if (result.sample.request_id) {
         void loadTraceDiagnostics(result.sample.request_id);
       }
@@ -327,6 +338,7 @@ export default function DataFlywheel() {
       const result = await getSessionAnnotations(sessionId);
       setSelectedSample(null);
       setDetail(null);
+      setRepairCandidate(null);
       setSelectedPrelabelLabels([]);
       setSessionAnnotations(result);
       setSessionAnnotationCache((current) => ({
@@ -426,6 +438,18 @@ export default function DataFlywheel() {
     await loadDetail(target.sample);
   };
 
+  const loadRepairCandidate = async (sampleId: string) => {
+    try {
+      const result = await listRepairPackCandidates({
+        sample_ids: [sampleId],
+        limit: 1,
+      });
+      setRepairCandidate(result.items[0] ?? null);
+    } catch {
+      setRepairCandidate(null);
+    }
+  };
+
   const handleCopyDebug = async () => {
     if (!detail?.debug_export) {
       message.warning('当前样本没有 debug_export');
@@ -484,6 +508,71 @@ export default function DataFlywheel() {
     } finally {
       setActing(false);
     }
+  };
+
+  const handleCreateRepairPack = async () => {
+    if (!selectedSample) return;
+    setActing(true);
+    try {
+      const result = await createRepairPack({
+        sample_ids: [selectedSample.sample_id],
+        limit: 1,
+      });
+      setRepairPack(result);
+      setRepairPackOpen(true);
+      message.success('已生成失败案例修复包');
+    } catch {
+      message.error('生成修复包失败');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleResolveRepairPack = async () => {
+    if (!repairPack) return;
+    setActing(true);
+    try {
+      const result = await markRepairPackResolved(repairPack.pack_id, {
+        repair_note: 'vibecoding 修复完成并通过验证',
+        verification_summary: { passed: true },
+      });
+      setRepairPack(result);
+      message.success('修复包已标记为已修复');
+      await fetchSamples(query);
+      if (selectedSample) {
+        await loadDetail(selectedSample);
+      }
+      await refreshSessionReviewIfActive();
+    } catch {
+      message.error('标记修复包失败');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleFailRepairPackVerification = async () => {
+    if (!repairPack) return;
+    Modal.confirm({
+      title: '记录验证失败',
+      content: '这会保留关联 bad labels 为 open，方便继续修复。',
+      okText: '记录失败',
+      cancelText: '取消',
+      onOk: async () => {
+        setActing(true);
+        try {
+          const result = await recordRepairPackVerificationFailure(repairPack.pack_id, {
+            verification_summary: { passed: false },
+          });
+          setRepairPack(result);
+          message.warning('已记录验证失败，标签保持未解决');
+          await fetchSamples(query);
+        } catch {
+          message.error('记录验证失败失败');
+        } finally {
+          setActing(false);
+        }
+      },
+    });
   };
 
   const handleCreatePrelabel = async () => {
@@ -616,6 +705,7 @@ export default function DataFlywheel() {
     setDetail(null);
     setSessionAnnotations(null);
     setAnnotationTarget(null);
+    setRepairCandidate(null);
     setCurrentLabel(DEFAULT_LABEL);
     setSelectedPrelabelLabels([]);
     setComment('');
@@ -747,6 +837,7 @@ export default function DataFlywheel() {
         canPrelabel={annotationTarget?.type === 'turn' && !!selectedSample}
         prelabeling={prelabeling}
         reviewingPrelabel={reviewingPrelabel}
+        repairCandidate={repairCandidate}
         selectedPrelabelLabels={selectedPrelabelLabels}
         annotationTargetLabel={annotationTargetLabel(annotationTarget)}
         existingLabels={annotationLabels(detail, sessionAnnotations)}
@@ -765,6 +856,7 @@ export default function DataFlywheel() {
         onExportJsonl={handleExportJsonl}
         onMarkBadCase={handleMarkBadCase}
         onCreateRegressionCase={handleCreateRegressionCase}
+        onCreateRepairPack={handleCreateRepairPack}
       />
     </div>
   );
@@ -836,6 +928,14 @@ export default function DataFlywheel() {
       />
 
       <CaseDraftPreview draft={draft} open={draftOpen} onClose={() => setDraftOpen(false)} />
+      <RepairPackPreview
+        pack={repairPack}
+        open={repairPackOpen}
+        acting={acting}
+        onClose={() => setRepairPackOpen(false)}
+        onResolve={handleResolveRepairPack}
+        onVerificationFailed={handleFailRepairPackVerification}
+      />
     </div>
   );
 }

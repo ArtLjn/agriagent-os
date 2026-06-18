@@ -52,6 +52,7 @@ backend/app/
 
 更细的后端结构、请求链路和分图见 [backend-architecture.md](/Users/ljn/Documents/demo/explore/docs/architecture/backend-architecture.md)。
 Agent 数据飞轮的工业级完成态、AI 预标注边界和分阶段闭环路线见 [agent-data-flywheel-industrial-roadmap.md](/Users/ljn/Documents/demo/explore/docs/architecture/agent-data-flywheel-industrial-roadmap.md)。
+Data Flywheel 失败样本导出为 vibecoding repair pack 的闭环流程见 [data-flywheel-repair-pack-workflow.md](/Users/ljn/Documents/demo/explore/docs/architecture/data-flywheel-repair-pack-workflow.md)。
 
 ## Agent 平台边界
 
