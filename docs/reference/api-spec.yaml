@@ -1,0 +1,167 @@
+openapi: 3.0.3
+info:
+  title: Farm Manager API Reference
+  version: 0.1.0
+  description: Farm Manager 后端 API 摘要，当前记录作物模板系统库相关契约。
+servers:
+  - url: /api/v1
+paths:
+  /crops/templates:
+    post:
+      tags:
+        - crops
+      summary: 创建作物模板
+      description: >
+        创建当前农场的作物模板。服务端会先执行 name、variety 与 stages 的精确查重；
+        如果已存在字面完全相同的模板，则不新建记录，返回已有模板并标记 already_exists。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CropTemplateCreate'
+      responses:
+        '201':
+          description: 创建成功。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CropTemplateResponse'
+        '200':
+          description: 已存在完全相同模板，返回已有模板。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CropTemplateResponse'
+  /crops/templates/system:
+    get:
+      tags:
+        - crops
+      summary: 获取系统作物模板库
+      description: 返回 farm_id 为空的系统模板，支持按作物分类筛选。
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 作物分类，例如粮食、蔬菜、水果。
+      responses:
+        '200':
+          description: 系统作物模板列表。
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CropTemplateResponse'
+  /crops/templates/system/{template_id}/import:
+    post:
+      tags:
+        - crops
+      summary: 导入系统作物模板
+      description: >
+        将指定系统模板深拷贝到当前农场。导入前复用精确查重；
+        如当前农场已有完全相同模板，则返回已有模板 ID 并标记 already_exists。
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 系统模板 ID。
+      responses:
+        '201':
+          description: 导入成功，已创建当前农场的模板副本。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CropTemplateImportResponse'
+        '200':
+          description: 当前农场已存在完全相同模板，未重复导入。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CropTemplateImportResponse'
+        '404':
+          description: 系统模板不存在。
+components:
+  schemas:
+    GrowthStageCreate:
+      type: object
+      required:
+        - name
+        - duration_days
+        - order_index
+      properties:
+        name:
+          type: string
+        duration_days:
+          type: integer
+        order_index:
+          type: integer
+        key_tasks:
+          type: string
+          nullable: true
+    GrowthStageResponse:
+      allOf:
+        - $ref: '#/components/schemas/GrowthStageCreate'
+        - type: object
+          required:
+            - id
+            - crop_template_id
+          properties:
+            id:
+              type: integer
+            crop_template_id:
+              type: integer
+    CropTemplateCreate:
+      type: object
+      required:
+        - name
+        - stages
+      properties:
+        name:
+          type: string
+        variety:
+          type: string
+          nullable: true
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrowthStageCreate'
+    CropTemplateResponse:
+      type: object
+      required:
+        - id
+        - name
+        - already_exists
+        - stages
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        variety:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        already_exists:
+          type: boolean
+          default: false
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrowthStageResponse'
+    CropTemplateImportResponse:
+      type: object
+      required:
+        - id
+        - already_exists
+      properties:
+        id:
+          type: integer
+        already_exists:
+          type: boolean

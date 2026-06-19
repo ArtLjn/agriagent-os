@@ -54,6 +54,12 @@ backend/app/
 Agent 数据飞轮的工业级完成态、AI 预标注边界和分阶段闭环路线见 [agent-data-flywheel-industrial-roadmap.md](/Users/ljn/Documents/demo/explore/docs/architecture/agent-data-flywheel-industrial-roadmap.md)。
 Data Flywheel 失败样本导出为 vibecoding repair pack 的闭环流程见 [data-flywheel-repair-pack-workflow.md](/Users/ljn/Documents/demo/explore/docs/architecture/data-flywheel-repair-pack-workflow.md)。
 
+## 作物模板边界
+
+作物模板当前仍位于迁移期目录：SQLAlchemy 模型在 `models/crop.py`，业务逻辑在 `services/crop_service.py`，HTTP 路由在 `api/crop.py`。系统作物模板库使用 `CropTemplate.farm_id IS NULL` 表示平台预置模板；用户私有模板仍使用具体 `farm_id`。因此用户模板查询必须显式过滤 `farm_id = 当前农场`，系统模板查询必须显式过滤 `farm_id IS NULL`，避免系统模板泄漏到用户私有列表。
+
+系统模板采用导入即副本模式：`POST /crops/templates/system/{id}/import` 会把系统模板及其生长阶段复制到当前农场，复制后用户可自由编辑，原系统模板保持只读。创建和导入路径统一调用 `crop_service.find_exact_duplicate`，用 name、variety 与规范化 stages 做精确查重，避免 API、前端和 Skill 出现不一致的重复模板判断。
+
 ## Agent 平台边界
 
 Agent 平台由 `agent/`、`prompt/`、`context/`、`memory/`、`evaluation/`、`observability/` 共同组成；Skill 实现当前仍在 `agent/skills/`，后续若拆为平台级 `skills/`，必须同步迁移注册、权限、schema 和执行适配，而不是先建空目录。
