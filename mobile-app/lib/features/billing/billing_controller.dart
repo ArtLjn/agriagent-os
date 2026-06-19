@@ -39,6 +39,7 @@ class BillingController {
     final amount = _number(json['amount']);
     final type = '${json['record_type'] ?? ''}';
     final isIncome = type == 'income';
+    final isDebt = type == 'debt' || type == 'receivable';
     final title = _firstNonEmpty([
       json['category'],
       json['record_subtype'],
@@ -47,6 +48,12 @@ class BillingController {
     ], fallback: '未分类交易');
     final date = _firstNonEmpty([json['record_date'], json['created_at']]);
     final counterparty = _firstNonEmpty([json['counterparty']], fallback: '');
+    final sourceLabel = _firstNonEmpty([
+      json['source_label'],
+      json['source_type'],
+      json['source'],
+    ], fallback: isIncome ? '收入记录' : '手动记账');
+    final note = _firstNonEmpty([json['note'], json['description']]);
     final subtitle = isIncome
         ? [date, if (counterparty.isNotEmpty) counterparty]
             .where((item) => item.isNotEmpty)
@@ -61,6 +68,12 @@ class BillingController {
       isIncome: isIncome,
       recordType: type,
       recordDate: _parseDate(date),
+      dateText: _dateText(date),
+      categoryText: title,
+      typeText: isDebt ? '欠款' : (isIncome ? '收入' : '支出'),
+      counterpartyText: counterparty.isEmpty ? '未填写对象' : counterparty,
+      sourceText: sourceLabel,
+      noteText: note.isEmpty ? '暂无备注' : note,
       amount: amount.abs(),
     );
   }
@@ -133,6 +146,12 @@ class BillingTransactionViewModel {
     required this.isIncome,
     required this.recordType,
     required this.recordDate,
+    required this.dateText,
+    required this.categoryText,
+    required this.typeText,
+    required this.counterpartyText,
+    required this.sourceText,
+    required this.noteText,
     required this.amount,
   });
 
@@ -142,6 +161,12 @@ class BillingTransactionViewModel {
   final bool isIncome;
   final String recordType;
   final DateTime? recordDate;
+  final String dateText;
+  final String categoryText;
+  final String typeText;
+  final String counterpartyText;
+  final String sourceText;
+  final String noteText;
   final num amount;
 
   bool get isDebt => recordType == 'debt' || recordType == 'receivable';
@@ -183,6 +208,11 @@ DateTime? _parseDate(String value) {
   final day = int.tryParse(parts[2]);
   if (year == null || month == null || day == null) return null;
   return DateTime(year, month, day);
+}
+
+String _dateText(String value) {
+  if (value.isEmpty) return '未填写日期';
+  return value.length >= 10 ? value.substring(0, 10) : value;
 }
 
 String _money(num value) {
