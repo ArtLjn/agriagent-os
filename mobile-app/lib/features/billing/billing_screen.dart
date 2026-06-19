@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/repositories/billing_repository.dart';
-import '../../shared/assets/app_assets.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/date_filter_sheet.dart';
 import '../../shared/widgets/reference_page.dart';
@@ -11,6 +10,117 @@ import '../../theme/app_text_styles.dart';
 import 'billing_controller.dart';
 
 part 'billing_summary_widgets.dart';
+
+class _LedgerColors {
+  const _LedgerColors._();
+
+  static const ink = Color(0xFF132238);
+  static const primary = AppColors.blue;
+  static const primaryDark = AppColors.blueDark;
+  static const income = AppColors.greenDark;
+  static const expense = AppColors.amber;
+  static const debt = AppColors.blue;
+  static const negative = AppColors.red;
+  static const background = AppColors.background;
+  static const surfaceTint = Color(0xFFFFFFFF);
+  static const surfaceWarm = AppColors.surface3;
+  static const line = AppColors.line;
+  static const lineSoft = AppColors.lineSoft;
+  static const amberSoft = AppColors.amberSoft;
+  static const blueSoft = AppColors.blueSoft;
+  static const greenSoft = AppColors.greenSoft;
+  static const muted = AppColors.muted;
+}
+
+IconData _transactionIcon(BillingTransactionViewModel transaction) {
+  if (transaction.isIncome) return LucideIcons.badgeDollarSign;
+  if (transaction.isDebt) return LucideIcons.userRoundCheck;
+  final text = '${transaction.title}${transaction.subtitle}';
+  if (text.contains('人工') || text.contains('工资')) return LucideIcons.users;
+  if (text.contains('肥') || text.contains('农资')) return LucideIcons.wheat;
+  if (text.contains('其他')) return LucideIcons.receiptText;
+  return LucideIcons.walletCards;
+}
+
+Color _transactionIconColor(BillingTransactionViewModel transaction) {
+  if (transaction.isIncome) return _LedgerColors.income;
+  if (transaction.isDebt) return _LedgerColors.debt;
+  return _LedgerColors.expense;
+}
+
+Color _transactionIconBackground(BillingTransactionViewModel transaction) {
+  if (transaction.isIncome) return _LedgerColors.greenSoft;
+  if (transaction.isDebt) return _LedgerColors.blueSoft;
+  return const Color(0xFFFFF7EC);
+}
+
+class _LedgerSectionCard extends StatelessWidget {
+  const _LedgerSectionCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(18),
+    this.radius = 22,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _LedgerColors.surfaceTint,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _LedgerColors.line),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 18,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class _LedgerRoundIcon extends StatelessWidget {
+  const _LedgerRoundIcon({
+    required this.icon,
+    required this.color,
+    required this.background,
+    this.size = 42,
+    this.iconSize = 19,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: background,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.76)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x081473FF),
+            blurRadius: 12,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Icon(icon, size: iconSize, color: color),
+    );
+  }
+}
 
 class BillingScreen extends StatefulWidget {
   const BillingScreen({
@@ -61,9 +171,9 @@ class _BillingScreenState extends State<BillingScreen> {
               const _BillingStateCard(text: '数据加载失败，请稍后重试')
             else ...[
               LedgerSummaryCard(model: model!),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               AiFinanceInsightCard(model: model),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               TransactionListCard(
                 transactions: model.transactions,
                 onViewAll: model.transactions.length > 5
@@ -76,9 +186,9 @@ class _BillingScreenState extends State<BillingScreen> {
                       }
                     : null,
               ),
-              const SizedBox(height: 12),
-              ReceivableReminderCard(receivables: model.receivables),
               const SizedBox(height: 14),
+              ReceivableReminderCard(receivables: model.receivables),
+              const SizedBox(height: 16),
               const _ManualLedgerButton(),
             ],
           ],
@@ -119,37 +229,56 @@ class TransactionListCard extends StatelessWidget {
     final visibleTransactions = previewLimit == null
         ? transactions
         : transactions.take(previewLimit!).toList();
-    return CardPanel(
-      radius: 18,
-      borderColor: AppColors.line,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+    return _LedgerSectionCard(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(
-                child: Text('最近交易', style: AppTextStyles.dateTitle),
+              Expanded(
+                child: Text(
+                  '最近交易',
+                  style: AppTextStyles.dateTitle.copyWith(
+                    color: _LedgerColors.ink,
+                    fontSize: 19,
+                  ),
+                ),
               ),
               if (onViewAll != null)
-                TextButton(
-                  onPressed: onViewAll,
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(0, 36),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    '查看全部',
-                    style: AppTextStyles.small.copyWith(
-                      color: AppColors.blue,
-                      fontWeight: FontWeight.w800,
+                GestureDetector(
+                  onTap: onViewAll,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.only(left: 12, right: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface3,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: _LedgerColors.line),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          '查看全部',
+                          style: AppTextStyles.small.copyWith(
+                            color: _LedgerColors.ink,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          LucideIcons.chevronRight,
+                          size: 15,
+                          color: _LedgerColors.muted,
+                        ),
+                      ],
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           if (transactions.isEmpty)
             const _EmptyLine(text: '暂无交易')
           else
@@ -157,21 +286,16 @@ class TransactionListCard extends StatelessWidget {
                 index < visibleTransactions.length;
                 index++) ...[
               TransactionRow(
-                icon: visibleTransactions[index].isIncome
-                    ? LucideIcons.badgeDollarSign
-                    : LucideIcons.shoppingCart,
-                iconColor: visibleTransactions[index].isIncome
-                    ? const Color(0xFF08A66A)
-                    : const Color(0xFFF97316),
-                iconBackground: visibleTransactions[index].isIncome
-                    ? const Color(0xFFE9F8F0)
-                    : const Color(0xFFFFF3E8),
+                icon: _transactionIcon(visibleTransactions[index]),
+                iconColor: _transactionIconColor(visibleTransactions[index]),
+                iconBackground:
+                    _transactionIconBackground(visibleTransactions[index]),
                 title: visibleTransactions[index].title,
                 subtitle: visibleTransactions[index].subtitle,
                 amount: visibleTransactions[index].amountText,
                 amountColor: visibleTransactions[index].isIncome
-                    ? const Color(0xFF08A66A)
-                    : const Color(0xFFF04438),
+                    ? _LedgerColors.income
+                    : _LedgerColors.negative,
               ),
               if (index != visibleTransactions.length - 1)
                 const _IndentedDivider(),
@@ -205,17 +329,17 @@ class TransactionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 68,
+      height: 70,
       child: Row(
         children: [
-          IconBadge(
+          _LedgerRoundIcon(
             icon: icon,
             color: iconColor,
             background: iconBackground,
-            size: 44,
-            iconSize: 22,
+            size: 42,
+            iconSize: 19,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -226,7 +350,9 @@ class TransactionRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.listTitle.copyWith(
-                    fontWeight: FontWeight.w700,
+                    color: _LedgerColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -235,7 +361,8 @@ class TransactionRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.small.copyWith(
-                    color: AppColors.subtle,
+                    color: _LedgerColors.muted,
+                    fontSize: 12.5,
                   ),
                 ),
               ],
@@ -390,7 +517,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget build(BuildContext context) {
     final transactions = _transactions;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _LedgerColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 118),
@@ -478,7 +605,7 @@ class _AllTransactionsHeader extends StatelessWidget {
               key: const Key('transaction-date-filter'),
               onPressed: onPickDate,
               icon: const Icon(LucideIcons.calendarDays),
-              color: AppColors.blue,
+              color: AppColors.ink,
               iconSize: 24,
               padding: EdgeInsets.zero,
             ),
@@ -502,76 +629,80 @@ class _TransactionSummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CardPanel(
-      radius: 18,
-      borderColor: AppColors.line,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SummaryMetricChip(
+    return _LedgerSectionCard(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      radius: 20,
+      child: SizedBox(
+        height: 66,
+        child: Row(
+          children: [
+            _LedgerRoundIcon(
               icon: LucideIcons.calendarDays,
-              label: periodLabel,
-              value: '',
               color: AppColors.blue,
-              background: const Color(0xFFEAF3FF),
+              background: AppColors.blueSoft,
+              size: 42,
+              iconSize: 20,
             ),
-          ),
-          const _MetricDivider(),
-          Expanded(
-            child: _SummaryMetricChip(
-              icon: LucideIcons.walletCards,
-              label: '支出',
-              value: expenseText,
-              color: const Color(0xFFF05A24),
-              background: const Color(0xFFFFF3E8),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 58,
+              child: Text(
+                periodLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.body.copyWith(
+                  color: _LedgerColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
-          ),
-          const _MetricDivider(),
-          Expanded(
-            child: _SummaryMetricChip(
-              icon: LucideIcons.badgeDollarSign,
-              label: '收入',
-              value: incomeText,
-              color: const Color(0xFF08A66A),
-              background: const Color(0xFFE9F8F0),
+            const _MetricDivider(height: 42),
+            Expanded(
+              child: _SummaryCompactMetric(
+                label: '支出',
+                value: expenseText,
+                icon: LucideIcons.arrowDownToLine,
+                color: _LedgerColors.expense,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SummaryCompactMetric(
+                label: '收入',
+                value: incomeText,
+                icon: LucideIcons.badgeDollarSign,
+                color: _LedgerColors.income,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _SummaryMetricChip extends StatelessWidget {
-  const _SummaryMetricChip({
-    required this.icon,
+class _SummaryCompactMetric extends StatelessWidget {
+  const _SummaryCompactMetric({
     required this.label,
     required this.value,
+    required this.icon,
     required this.color,
-    required this.background,
   });
 
-  final IconData icon;
   final String label;
   final String value;
+  final IconData icon;
   final Color color;
-  final Color background;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        IconBadge(
-          icon: icon,
-          color: color,
-          background: background,
-          size: 38,
-          iconSize: 20,
-        ),
-        const SizedBox(width: 10),
-        Flexible(
+        Icon(icon, size: 17, color: color),
+        const SizedBox(width: 7),
+        Expanded(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -580,24 +711,24 @@ class _SummaryMetricChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.small.copyWith(
                   color: AppColors.muted,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              if (value.isNotEmpty)
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: AppTextStyles.listTitle.copyWith(
-                      color: color,
-                      fontSize: 17,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    color: color,
+                    fontSize: 18,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
+              ),
             ],
           ),
         ),
@@ -618,9 +749,11 @@ class _TransactionFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CardPanel(
-      radius: 18,
-      borderColor: AppColors.line,
-      padding: const EdgeInsets.all(6),
+      radius: 16,
+      borderColor: _LedgerColors.line,
+      background: _LedgerColors.surfaceWarm,
+      shadow: true,
+      padding: const EdgeInsets.all(5),
       child: Row(
         children: [
           Expanded(
@@ -682,13 +815,13 @@ class _FilterChipLabel extends StatelessWidget {
         height: 42,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF3FF) : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+          color: selected ? _LedgerColors.primaryDark : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           text,
           style: AppTextStyles.body.copyWith(
-            color: selected ? AppColors.blue : AppColors.muted,
+            color: selected ? Colors.white : AppColors.muted,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -723,55 +856,316 @@ class _AllTransactionsListCardState extends State<_AllTransactionsListCard> {
   @override
   Widget build(BuildContext context) {
     const listHeight = 430.0;
-    return CardPanel(
-      radius: 18,
-      borderColor: AppColors.line,
-      padding: const EdgeInsets.fromLTRB(16, 16, 10, 12),
+    return _LedgerSectionCard(
+      radius: 20,
+      padding: const EdgeInsets.fromLTRB(16, 16, 10, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: Text(widget.title, style: AppTextStyles.dateTitle),
+            padding: const EdgeInsets.only(right: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: AppTextStyles.dateTitle.copyWith(
+                      color: _LedgerColors.ink,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${widget.transactions.length} 笔',
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.muted,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              '点按查看账单详情',
+              style: AppTextStyles.small.copyWith(
+                color: AppColors.subtle,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           if (widget.transactions.isEmpty)
             const _EmptyLine(text: '暂无交易')
+          else if (widget.transactions.length <= 6)
+            Column(
+              children: [
+                for (var index = 0;
+                    index < widget.transactions.length;
+                    index++) ...[
+                  _TransactionDetailRow(
+                    transaction: widget.transactions[index],
+                    onTap: () => _showTransactionDetail(
+                      context,
+                      widget.transactions[index],
+                    ),
+                  ),
+                  if (index != widget.transactions.length - 1)
+                    const SizedBox(height: 8),
+                ],
+              ],
+            )
           else
             SizedBox(
               height: listHeight,
               child: Scrollbar(
                 controller: _controller,
-                thumbVisibility: widget.transactions.length > 6,
+                thumbVisibility: true,
                 child: ListView.separated(
                   controller: _controller,
                   padding: EdgeInsets.zero,
                   itemCount: widget.transactions.length,
                   itemBuilder: (context, index) {
                     final transaction = widget.transactions[index];
-                    return TransactionRow(
-                      icon: transaction.isIncome
-                          ? LucideIcons.badgeDollarSign
-                          : LucideIcons.shoppingCart,
-                      iconColor: transaction.isIncome
-                          ? const Color(0xFF08A66A)
-                          : const Color(0xFFF97316),
-                      iconBackground: transaction.isIncome
-                          ? const Color(0xFFE9F8F0)
-                          : const Color(0xFFFFF3E8),
-                      title: transaction.title,
-                      subtitle: transaction.subtitle,
-                      amount: transaction.amountText,
-                      amountColor: transaction.isIncome
-                          ? const Color(0xFF08A66A)
-                          : const Color(0xFFF04438),
+                    return _TransactionDetailRow(
+                      transaction: transaction,
+                      onTap: () => _showTransactionDetail(context, transaction),
                     );
                   },
-                  separatorBuilder: (context, index) =>
-                      const _IndentedDivider(),
+                  separatorBuilder: (context, index) => const SizedBox(
+                    height: 8,
+                  ),
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransactionDetailRow extends StatelessWidget {
+  const _TransactionDetailRow({
+    required this.transaction,
+    required this.onTap,
+  });
+
+  final BillingTransactionViewModel transaction;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final amountColor =
+        transaction.isIncome ? _LedgerColors.income : _LedgerColors.negative;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.lineSoft),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _LedgerRoundIcon(
+              icon: _transactionIcon(transaction),
+              color: _transactionIconColor(transaction),
+              background: _transactionIconBackground(transaction),
+              size: 38,
+              iconSize: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          transaction.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.sectionTitle.copyWith(
+                            color: _LedgerColors.ink,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 116),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            transaction.amountText,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: AppTextStyles.sectionTitle.copyWith(
+                              color: amountColor,
+                              fontSize: 17,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${transaction.dateText} · ${transaction.typeText} · ${transaction.counterpartyText}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '来源：${transaction.sourceText}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.small.copyWith(
+                            color: AppColors.subtle,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        LucideIcons.chevronRight,
+                        size: 15,
+                        color: AppColors.subtle,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+void _showTransactionDetail(
+  BuildContext context,
+  BillingTransactionViewModel transaction,
+) {
+  final amountColor =
+      transaction.isIncome ? _LedgerColors.income : _LedgerColors.negative;
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (context) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _LedgerRoundIcon(
+                    icon: _transactionIcon(transaction),
+                    color: _transactionIconColor(transaction),
+                    background: _transactionIconBackground(transaction),
+                    size: 46,
+                    iconSize: 21,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      transaction.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.dateTitle.copyWith(
+                        color: _LedgerColors.ink,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    transaction.amountText,
+                    style: AppTextStyles.dateTitle.copyWith(
+                      color: amountColor,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _DetailField(label: '账单类型', value: transaction.typeText),
+              _DetailField(label: '发生日期', value: transaction.dateText),
+              _DetailField(label: '分类', value: transaction.categoryText),
+              _DetailField(label: '对象', value: transaction.counterpartyText),
+              _DetailField(label: '来源', value: transaction.sourceText),
+              _DetailField(label: '备注', value: transaction.noteText),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _DetailField extends StatelessWidget {
+  const _DetailField({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 76,
+            child: Text(
+              label,
+              style: AppTextStyles.body.copyWith(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTextStyles.body.copyWith(
+                color: _LedgerColors.ink,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -801,41 +1195,44 @@ class ReceivableReminderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final receivable = receivables.isEmpty ? null : receivables.first;
-    return CardPanel(
-      radius: 18,
-      borderColor: AppColors.line,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+    return _LedgerSectionCard(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Row(
         children: [
-          const IconBadge(
+          const _LedgerRoundIcon(
             icon: LucideIcons.userRound,
-            color: Color(0xFF08A66A),
-            background: Color(0xFFE9F8F0),
+            color: _LedgerColors.primary,
+            background: _LedgerColors.blueSoft,
             size: 44,
-            iconSize: 22,
+            iconSize: 21,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('待收款提醒', style: AppTextStyles.sectionTitle),
-                const SizedBox(height: 5),
+                Text(
+                  '待收款提醒',
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    color: _LedgerColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text(
                   receivable?.counterparty ?? '暂无待收款',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.body.copyWith(
                     color: AppColors.ink2,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 1),
                 Text(
                   receivable?.amountText ?? '¥0',
                   style: AppTextStyles.sectionTitle.copyWith(
-                    color: const Color(0xFFF05A24),
-                    fontSize: 20,
+                    color: _LedgerColors.expense,
+                    fontSize: 21,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -847,19 +1244,22 @@ class ReceivableReminderCard extends StatelessWidget {
               height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 17),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: AppColors.surface3,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: const Color(0xFFD8E2EC)),
+                border: Border.all(color: _LedgerColors.line),
               ),
               child: Row(
                 children: [
-                  const Icon(LucideIcons.phone,
-                      size: 18, color: Color(0xFF08A66A)),
+                  const Icon(
+                    LucideIcons.phone,
+                    size: 18,
+                    color: AppColors.blue,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     '拨打',
                     style: AppTextStyles.body.copyWith(
-                      color: const Color(0xFF08A66A),
+                      color: AppColors.blue,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -898,27 +1298,30 @@ class _ManualLedgerButton extends StatelessWidget {
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Color(0xFF12B886), Color(0xFF1473FF)],
-        ),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.blue,
+        borderRadius: BorderRadius.circular(18),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1A18A679),
-            blurRadius: 16,
-            offset: Offset(0, 7),
+            color: Color(0x241473FF),
+            blurRadius: 22,
+            offset: Offset(0, 10),
           ),
         ],
       ),
       child: Center(
-        child: Text(
-          '手动记一笔',
-          style: AppTextStyles.sectionTitle.copyWith(
-            color: Colors.white,
-            fontSize: 18,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(LucideIcons.penLine, size: 19, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(
+              '手动记一笔',
+              style: AppTextStyles.sectionTitle.copyWith(
+                color: Colors.white,
+                fontSize: 17,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -932,7 +1335,7 @@ class _IndentedDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.only(left: 58),
-      child: Divider(height: 1, color: AppColors.lineSoft),
+      child: Divider(height: 1, color: _LedgerColors.lineSoft),
     );
   }
 }
