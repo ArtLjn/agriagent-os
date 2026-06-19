@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from langchain_core.messages import HumanMessage
@@ -10,6 +10,7 @@ from app.models.farm import Farm
 from app.schemas.common import PaginatedResponse
 from app.schemas.crop import (
     CropTemplateCreate,
+    CropTemplateImportResponse,
     CropTemplateParseRequest,
     CropTemplateParseResponse,
     CropTemplateResponse,
@@ -21,14 +22,33 @@ from app.agent.application.smart_fill import parse_smart_fill
 router = APIRouter(prefix="/crops", tags=["crops"])
 
 
-@router.post("/templates", response_model=CropTemplateResponse)
+@router.post(
+    "/templates",
+    response_model=CropTemplateResponse,
+    status_code=201,
+)
 def create_template(
     template: CropTemplateCreate,
+    response: Response,
     db: Session = Depends(get_db),
     farm: Farm = Depends(get_current_farm),
 ):
     """创建作物模板。"""
-    return crop_service.create_crop_template(db, template, farm_id=farm.id)
+    duplicate = crop_service.find_exact_duplicate(
+        db,
+        farm_id=farm.id,
+        name=template.name,
+        variety=template.variety,
+        stages=template.stages,
+    )
+    if duplicate is not None:
+        response.status_code = 200
+        duplicate.already_exists = True
+        return duplicate
+
+    created = crop_service.create_crop_template(db, template, farm_id=farm.id)
+    created.already_exists = False
+    return created
 
 
 @router.get("/templates", response_model=PaginatedResponse[CropTemplateResponse])
@@ -43,6 +63,43 @@ def list_templates(
     items = crop_service.get_crop_templates(db, farm_id=farm.id, skip=skip, limit=size)
     total = crop_service.count_crop_templates(db, farm_id=farm.id)
     return {"items": items, "total": total}
+
+
+@router.get("/templates/system", response_model=list[CropTemplateResponse])
+def list_system_templates(
+    category: str | None = Query(None),
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """获取系统作物模板列表。"""
+    del farm
+    return crop_service.list_system_templates(db, category=category)
+
+
+@router.post(
+    "/templates/system/{template_id}/import",
+    response_model=CropTemplateImportResponse,
+    status_code=201,
+)
+def import_system_template(
+    template_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+):
+    """导入系统作物模板到当前农场。"""
+    try:
+        result = crop_service.import_system_template(
+            db,
+            system_template_id=template_id,
+            farm_id=farm.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    if result.already_exists:
+        response.status_code = 200
+    return {"id": result.template_id, "already_exists": result.already_exists}
 
 
 @router.get("/templates/{template_id}", response_model=CropTemplateResponse)
@@ -66,6 +123,8 @@ def update_template(
     farm: Farm = Depends(get_current_farm),
 ):
     """更新作物模板。"""
+    if crop_service.get_system_template(db, template_id) is not None:
+        raise HTTPException(status_code=403, detail="系统模板不允许修改")
     try:
         return crop_service.update_crop_template(
             db, template_id, template, farm_id=farm.id
@@ -81,6 +140,8 @@ def delete_template(
     farm: Farm = Depends(get_current_farm),
 ):
     """删除作物模板。"""
+    if crop_service.get_system_template(db, template_id) is not None:
+        raise HTTPException(status_code=403, detail="系统模板不允许删除")
     try:
         crop_service.delete_crop_template(db, template_id, farm_id=farm.id)
         return {"message": "删除成功"}

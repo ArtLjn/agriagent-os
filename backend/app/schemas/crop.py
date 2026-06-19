@@ -41,8 +41,17 @@ class CropTemplateResponse(CropTemplateBase):
     """作物模板响应 Schema，包含完整的生长阶段信息。"""
 
     id: int
+    category: str | None = None
+    already_exists: bool = False
     stages: list[GrowthStageResponse]
     model_config = ConfigDict(from_attributes=True)
+
+
+class CropTemplateImportResponse(BaseModel):
+    """系统模板导入响应 Schema。"""
+
+    id: int
+    already_exists: bool
 
 
 class CropTemplateParseRequest(BaseModel):

@@ -1,3 +1,8 @@
+import re
+from collections import Counter
+from dataclasses import dataclass
+from typing import Iterable, Protocol
+
 from sqlalchemy.orm import Session
 
 from app.models.agent_record import AgentRecord
@@ -6,6 +11,65 @@ from app.models.crop import CropTemplate, GrowthStage
 from app.models.cycle import CropCycle
 from app.models.log import FarmLog
 from app.schemas.crop import CropTemplateCreate
+
+
+class _ComparableStage(Protocol):
+    name: str
+    duration_days: int
+    key_tasks: str | None
+
+
+@dataclass(frozen=True)
+class ImportSystemTemplateResult:
+    """系统模板导入结果。"""
+
+    template_id: int
+    already_exists: bool
+
+
+def _normalize_key_tasks(key_tasks: str | None) -> str | None:
+    if key_tasks is None:
+        return None
+    return re.sub(r"\s+", " ", key_tasks.strip())
+
+
+def _normalize_stages_for_compare(
+    stages: Iterable[_ComparableStage],
+) -> tuple[tuple[str, int, str | None], ...]:
+    """规范化阶段内容，顺序无关但保留重复阶段数量。"""
+    stage_counts = Counter(
+        (
+            stage.name,
+            stage.duration_days,
+            _normalize_key_tasks(stage.key_tasks),
+        )
+        for stage in stages
+    )
+    return tuple(sorted(stage_counts.elements()))
+
+
+def find_exact_duplicate(
+    db: Session,
+    farm_id: int,
+    name: str,
+    variety: str | None,
+    stages: Iterable[_ComparableStage],
+) -> CropTemplate | None:
+    """按 name、variety 和规范化 stages 查找完全重复的用户模板。"""
+    query = db.query(CropTemplate).filter(
+        CropTemplate.farm_id == farm_id,
+        CropTemplate.name == name,
+    )
+    if variety is None:
+        query = query.filter(CropTemplate.variety.is_(None))
+    else:
+        query = query.filter(CropTemplate.variety == variety)
+
+    expected_stages = _normalize_stages_for_compare(stages)
+    for candidate in query.all():
+        if _normalize_stages_for_compare(candidate.stages) == expected_stages:
+            return candidate
+    return None
 
 
 def find_template_by_name(
@@ -80,10 +144,107 @@ def get_crop_template(
     )
 
 
+def list_system_templates(
+    db: Session, category: str | None = None
+) -> list[CropTemplate]:
+    """获取系统作物模板，可按分类筛选。"""
+    query = db.query(CropTemplate).filter(CropTemplate.farm_id.is_(None))
+    if category is not None:
+        query = query.filter(CropTemplate.category == category)
+    return query.all()
+
+
+def get_system_template(db: Session, template_id: int) -> CropTemplate | None:
+    """根据 ID 获取系统模板。"""
+    return _system_template_query(db, template_id).first()
+
+
+def find_system_template_match(
+    db: Session, name: str, variety: str | None
+) -> CropTemplate | None:
+    """按 name 和 variety 精确匹配系统模板。"""
+    query = db.query(CropTemplate).filter(
+        CropTemplate.farm_id.is_(None),
+        CropTemplate.name == name,
+    )
+    if variety is None:
+        query = query.filter(CropTemplate.variety.is_(None))
+    else:
+        query = query.filter(CropTemplate.variety == variety)
+    return query.first()
+
+
+def import_system_template(
+    db: Session, system_template_id: int, farm_id: int
+) -> ImportSystemTemplateResult:
+    """将系统模板深拷贝到指定农场，重复时返回已有模板 ID。"""
+    system_template = (
+        _system_template_query(db, system_template_id).with_for_update().first()
+    )
+    if system_template is None:
+        raise ValueError(f"系统模板 {system_template_id} 不存在")
+
+    duplicate = find_exact_duplicate(
+        db,
+        farm_id=farm_id,
+        name=system_template.name,
+        variety=system_template.variety,
+        stages=system_template.stages,
+    )
+    if duplicate is not None:
+        return ImportSystemTemplateResult(template_id=duplicate.id, already_exists=True)
+
+    imported = CropTemplate(
+        farm_id=farm_id,
+        name=system_template.name,
+        variety=system_template.variety,
+        category=system_template.category,
+    )
+    db.add(imported)
+    db.flush()
+
+    for stage in system_template.stages:
+        db.add(
+            GrowthStage(
+                crop_template_id=imported.id,
+                name=stage.name,
+                duration_days=stage.duration_days,
+                order_index=stage.order_index,
+                key_tasks=stage.key_tasks,
+            )
+        )
+
+    try:
+        db.commit()
+        db.refresh(imported)
+    except Exception:
+        db.rollback()
+        raise
+    return ImportSystemTemplateResult(template_id=imported.id, already_exists=False)
+
+
+def _system_template_query(db: Session, template_id: int):
+    return db.query(CropTemplate).filter(
+        CropTemplate.id == template_id,
+        CropTemplate.farm_id.is_(None),
+    )
+
+
+def _get_any_crop_template(db: Session, template_id: int) -> CropTemplate | None:
+    return db.query(CropTemplate).filter(CropTemplate.id == template_id).first()
+
+
+def _raise_if_system_template(db: Session, template_id: int) -> None:
+    template = _get_any_crop_template(db, template_id)
+    if template is not None and template.farm_id is None:
+        raise ValueError(f"系统模板 {template_id} 不允许修改")
+
+
 def update_crop_template(
     db: Session, template_id: int, update: CropTemplateCreate, farm_id: int
 ) -> CropTemplate:
     """更新作物模板及其生长阶段。"""
+    _raise_if_system_template(db, template_id)
     template = get_crop_template(db, template_id, farm_id)
     if not template:
         raise ValueError(f"模板 {template_id} 不存在")
@@ -115,6 +276,7 @@ def update_crop_template(
 
 def delete_crop_template(db: Session, template_id: int, farm_id: int) -> None:
     """删除作物模板及其关联的阶段、茬口、农事日志、成本记录和Agent记录。"""
+    _raise_if_system_template(db, template_id)
     template = get_crop_template(db, template_id, farm_id)
     if not template:
         raise ValueError(f"模板 {template_id} 不存在")
@@ -156,4 +318,11 @@ __all__ = [
     "update_crop_template",
     "delete_crop_template",
     "find_template_by_name",
+    "find_exact_duplicate",
+    "_normalize_stages_for_compare",
+    "list_system_templates",
+    "get_system_template",
+    "import_system_template",
+    "find_system_template_match",
+    "ImportSystemTemplateResult",
 ]

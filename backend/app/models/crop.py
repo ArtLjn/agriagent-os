@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -8,11 +8,17 @@ class CropTemplate(Base):
     """作物模板模型，定义一种作物的基本信息及其生长阶段。"""
 
     __tablename__ = "crop_templates"
+    __table_args__ = (
+        Index("ix_crop_templates_farm_name_variety", "farm_id", "name", "variety"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, default=1)
+    farm_id = Column(
+        Integer().evaluates_none(), ForeignKey("farms.id"), nullable=True, default=1
+    )
     name = Column(String(100), nullable=False)
     variety = Column(String(100), nullable=True)
+    category = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     stages = relationship(
