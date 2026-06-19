@@ -39,7 +39,8 @@ parameters:
 ## 缺参策略
 - 缺少作物名称时必须追问。
 - 缺少品种时可以不传。
-- 作物模板已存在时，应返回已存在，不重复创建。
+- 系统模板库有精确匹配时，应返回 `NEED_CLARIFY` 推荐导入，不直接创建。
+- 生成阶段后发现农场内已有完全相同模板时，应返回已存在，不重复创建。
 
 ## 多工具协作
 如果这是创建茬口过程中的补充动作，模板创建成功后应继续执行原来的 `create_crop_cycle`。
@@ -49,10 +50,19 @@ parameters:
 - direct_call: false
 - direct_return: false
 - cache: none；写入成功后使作物模板和茬口创建候选相关缓存失效。
+- 查找系统模板时使用 `crop_service.find_system_template_match(db, crop_name, variety)`，只做 `name + variety` 精确匹配，不使用 `find_template_by_name` 或 `ilike` 模糊匹配。
+- 命中系统模板时返回 `ResultStatus.NEED_CLARIFY`，回复“系统库已有 {crop_name} 的成熟模版（阶段：...），要导入吗？”，不调用 LLM、不写入数据库。
+- 未命中系统模板后再调用 LLM 生成 stages；LLM 不可用或输出不可解析时使用内置 fallback stages，保证仍可进入创建流程。
+- 生成 stages 后调用 `crop_service.find_exact_duplicate(db, farm_id, crop_name, variety, stages)` 做完全相同模板查重；命中则返回 `SUCCESS`，回复包含已有模板 ID 与阶段链，不新建。
+- 精确查重未命中时才调用 `crop_service.create_crop_template(...)` 创建用户农场模板。
+- 由于运行初始尚无 stages，无法先做“完全相同”精确查重；本 Skill 实际顺序为“系统模板精确匹配 → LLM/fallback 生成 stages → 完全相同精确查重 → 创建”。这与设计文档中的“精确查重 → 系统模板库匹配 → LLM”顺序略有差异，用于避免无 stages 时伪精确查重。
 
 ## 失败处理
 - 作物名称不明确时，用中文追问必要信息。
-- 创建失败时返回中文说明和可重试建议，不暴露内部异常。
+- 缺少农场上下文时拒绝执行，返回中文失败说明，不打开数据库连接。
+- 系统模板推荐属于澄清态，必须等待用户确认导入；本 Skill 不直接导入系统模板。
+- LLM 生成失败时记录日志并使用 fallback stages；fallback 仍失败或无阶段时返回失败说明。
+- 创建失败时返回中文说明和可重试建议，不暴露敏感信息。
 
 ## 示例
 - 用户：“帮我创建番茄模板” -> `create_crop_template(crop_name="番茄")`

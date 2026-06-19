@@ -3,6 +3,7 @@ import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import AdminLayout from './layouts/AdminLayout';
 import Crops from './pages/Crops';
+import SystemLibrary from './pages/CropTemplates/SystemLibrary';
 import Cycles from './pages/Cycles';
 import CycleDetail from './pages/Cycles/Detail';
 import Logs from './pages/Logs';
@@ -80,6 +81,7 @@ export default function App() {
           <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
           <Route path="/operations" element={<AuthGuard><Operations /></AuthGuard>} />
           <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
+          <Route path="/crops/system" element={<AuthGuard><SystemLibrary /></AuthGuard>} />
           <Route path="/cycles" element={<AuthGuard><Cycles /></AuthGuard>} />
           <Route path="/cycles/:id" element={<AuthGuard><CycleDetail /></AuthGuard>} />
           <Route path="/logs" element={<AuthGuard><Logs /></AuthGuard>} />

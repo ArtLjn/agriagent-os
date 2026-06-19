@@ -66,14 +66,17 @@ class CreateCropTemplateSkill(Skill):
 
         db = SessionLocal()
         try:
-            existing = crop_service.find_template_by_name(db, crop_name, farm_id)
-            if existing:
-                stage_names = "→".join(
-                    s.name for s in sorted(existing.stages, key=lambda s: s.order_index)
-                )
+            system_template = crop_service.find_system_template_match(
+                db, crop_name, variety
+            )
+            if system_template:
+                stage_names = _format_stage_chain(system_template.stages)
                 return SkillResult(
-                    status=ResultStatus.SUCCESS,
-                    reply=f"📋 {crop_name}模板已存在，阶段：{stage_names}。可以直接建茬口了。",
+                    status=ResultStatus.NEED_CLARIFY,
+                    reply=(
+                        f"系统库已有 {crop_name} 的成熟模版"
+                        f"（阶段：{stage_names}），要导入吗？"
+                    ),
                 )
 
             stages = await self._generate_stages(context, crop_name)
@@ -81,6 +84,23 @@ class CreateCropTemplateSkill(Skill):
                 return SkillResult(
                     status=ResultStatus.FAILED,
                     reply=f"生成{crop_name}生长阶段失败，请稍后再试。",
+                )
+
+            existing = crop_service.find_exact_duplicate(
+                db,
+                farm_id=farm_id,
+                name=crop_name,
+                variety=variety,
+                stages=stages,
+            )
+            if existing:
+                stage_names = _format_stage_chain(existing.stages)
+                return SkillResult(
+                    status=ResultStatus.SUCCESS,
+                    reply=(
+                        f"📋 已有完全相同的模版 #{existing.id}，"
+                        f"阶段：{stage_names}。可以直接建茬口了。"
+                    ),
                 )
 
             template_create = CropTemplateCreate(
@@ -168,3 +188,7 @@ class CreateCropTemplateSkill(Skill):
                 name="采收期", duration_days=20, order_index=3, key_tasks="采收"
             ),
         ]
+
+
+def _format_stage_chain(stages) -> str:
+    return "→".join(s.name for s in sorted(stages, key=lambda s: s.order_index))

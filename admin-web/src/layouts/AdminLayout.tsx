@@ -6,7 +6,6 @@ import {
   BranchesOutlined,
   BarChartOutlined,
   MessageOutlined,
-  AppstoreOutlined,
   FileSearchOutlined,
   SettingOutlined,
   TeamOutlined,
@@ -26,62 +25,46 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authStore } from '../stores/authStore';
 import { layout, palette } from '../styles/theme';
+import { menuGroups, type AdminMenuIcon } from './adminMenu';
 
 const { Sider, Content, Header } = Layout;
 
-const menuGroups = [
-  {
-    key: 'user-ops',
-    icon: <TeamOutlined />,
-    label: '业务运营',
-    children: [
-      { key: '/dashboard', icon: <HomeOutlined />, label: '仪表盘' },
-      { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
-      { key: '/crops', icon: <ReadOutlined />, label: '作物模板' },
-      { key: '/cycles', icon: <FieldTimeOutlined />, label: '种植周期' },
-      { key: '/logs', icon: <FormOutlined />, label: '农事日志' },
-      { key: '/costs', icon: <DollarOutlined />, label: '成本记账' },
-      { key: '/weather', icon: <CloudOutlined />, label: '天气预报' },
-    ],
-  },
-  {
-    key: 'assistant-workbench',
-    icon: <ControlOutlined />,
-    label: '业务调试',
-    children: [
-      { key: '/operations', icon: <ControlOutlined />, label: '业务调试中心' },
-      { key: '/agent', icon: <RobotOutlined />, label: 'AI 助手' },
-    ],
-  },
-  {
-    key: 'agent-platform',
-    icon: <ToolOutlined />,
-    label: 'Agent 平台',
-    children: [
-      { key: '/dev/traces', icon: <BranchesOutlined />, label: '链路追踪' },
-      { key: '/dev/tokens', icon: <BarChartOutlined />, label: 'Token 看板' },
-      { key: '/dev/playground', icon: <MessageOutlined />, label: 'Playground' },
-      { key: '/dev/data-flywheel', icon: <DatabaseOutlined />, label: '数据飞轮' },
-      { key: '/dev/skills', icon: <AppstoreOutlined />, label: 'Skill 注册表' },
-      { key: '/dev/prompts', icon: <FileSearchOutlined />, label: 'Prompt 检查器' },
-      { key: '/dev/simulation', icon: <ExperimentOutlined />, label: '仿真测试' },
-      { key: '/dev/config', icon: <SettingOutlined />, label: '配置管理' },
-    ],
-  },
-];
+const iconByName: Record<AdminMenuIcon, React.ReactNode> = {
+  agent: <RobotOutlined />,
+  branches: <BranchesOutlined />,
+  chart: <BarChartOutlined />,
+  cloud: <CloudOutlined />,
+  control: <ControlOutlined />,
+  database: <DatabaseOutlined />,
+  dollar: <DollarOutlined />,
+  experiment: <ExperimentOutlined />,
+  fieldTime: <FieldTimeOutlined />,
+  fileSearch: <FileSearchOutlined />,
+  form: <FormOutlined />,
+  home: <HomeOutlined />,
+  message: <MessageOutlined />,
+  read: <ReadOutlined />,
+  setting: <SettingOutlined />,
+  team: <TeamOutlined />,
+  tool: <ToolOutlined />,
+};
 
 const menuItems = [
   ...menuGroups.map((group) => ({
     key: group.key,
-    icon: group.icon,
+    icon: iconByName[group.icon],
     label: group.label,
-    children: group.children,
+    children: group.children.map((item) => ({
+      ...item,
+      icon: iconByName[item.icon],
+    })),
   })),
 ];
 
 const pageTitles: Record<string, string> = {
   '/dashboard': '仪表盘',
   '/crops': '作物模板',
+  '/crops/system': '系统模板',
   '/cycles': '种植周期',
   '/logs': '农事日志',
   '/costs': '成本记账',
@@ -108,6 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const currentTitle = pageTitles[location.pathname] || 'Farm Manager';
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/cycles/')) return '/cycles';
+    if (location.pathname.startsWith('/crops/system')) return '/crops/system';
     return location.pathname;
   }, [location.pathname]);
   const activeParentKey = useMemo(() => (

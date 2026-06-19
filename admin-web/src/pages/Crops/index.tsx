@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider, Popconfirm, Tag, Card, Alert } from 'antd';
 import { PlusOutlined, MinusCircleOutlined, BugOutlined, EditOutlined, DeleteOutlined, ReadOutlined, RobotOutlined } from '@ant-design/icons';
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate, parseTemplate, type CropTemplate, type CropTemplateParseResponse } from '../../api/crops';
@@ -14,6 +15,7 @@ type StageFormValue = {
 };
 
 export default function Crops() {
+  const navigate = useNavigate();
   const [data, setData] = useState<CropTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -51,8 +53,12 @@ export default function Crops() {
       })),
     };
     try {
-      await createTemplate(payload);
-      message.success('创建成功');
+      const created = await createTemplate(payload);
+      if (created.already_exists) {
+        message.info('已有相同模版，已为你定位');
+      } else {
+        message.success('创建成功');
+      }
       setModalOpen(false);
       form.resetFields();
       fetchData(pagination.current, pagination.pageSize);
@@ -78,11 +84,20 @@ export default function Crops() {
   };
 
   const openCreate = () => {
-    setEditingId(null);
-    setSmartText('');
-    setSmartResult(null);
-    form.resetFields();
-    setModalOpen(true);
+    Modal.confirm({
+      title: '是否从系统模版库选择？',
+      content: '系统模版可一键导入为当前农场的可编辑副本，也可以继续手填新模版。',
+      okText: '去系统库',
+      cancelText: '继续手填',
+      onOk: () => navigate('/crops/system'),
+      onCancel: () => {
+        setEditingId(null);
+        setSmartText('');
+        setSmartResult(null);
+        form.resetFields();
+        setModalOpen(true);
+      },
+    });
   };
 
   const handleSmartParse = async () => {

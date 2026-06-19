@@ -1,6 +1,8 @@
 import apiClient from './client';
 
 export interface GrowthStage {
+  id?: number;
+  crop_template_id?: number;
   name: string;
   duration_days: number;
   order_index: number;
@@ -11,7 +13,14 @@ export interface CropTemplate {
   id: number;
   name: string;
   variety?: string;
+  category?: string | null;
+  already_exists?: boolean;
   stages: GrowthStage[];
+}
+
+export interface CropTemplateImportResponse {
+  id: number;
+  already_exists: boolean;
 }
 
 export interface CropTemplateParseResponse {
@@ -37,6 +46,18 @@ export async function getTemplate(id: number): Promise<CropTemplate> {
 
 export async function createTemplate(data: { name: string; variety?: string; stages: GrowthStage[] }): Promise<CropTemplate> {
   const res = await apiClient.post<CropTemplate>('/crops/templates', data);
+  return res.data;
+}
+
+export async function listSystemCropTemplates(category?: string): Promise<CropTemplate[]> {
+  const res = await apiClient.get<CropTemplate[]>('/crops/templates/system', {
+    params: category ? { category } : undefined,
+  });
+  return res.data;
+}
+
+export async function importSystemCropTemplate(id: number): Promise<CropTemplateImportResponse> {
+  const res = await apiClient.post<CropTemplateImportResponse>(`/crops/templates/system/${id}/import`);
   return res.data;
 }
 
