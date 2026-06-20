@@ -26,6 +26,9 @@ def test_agent_skills_returns_app_safe_skill_cards(db_session) -> None:
         "key",
         "title",
         "description",
+        "summary",
+        "details",
+        "examples",
         "category",
         "icon",
         "icon_color",
@@ -34,6 +37,13 @@ def test_agent_skills_returns_app_safe_skill_cards(db_session) -> None:
     } <= set(first)
     assert "parameters_schema" not in first
     assert "metadata" not in first
+
+    farm_status = next(
+        item for item in data["items"] if item["key"] == "get_farm_status"
+    )
+    assert farm_status["summary"] == "汇总待办、近期农事、花费和天气。"
+    assert "当前农场综合状态" in farm_status["details"]
+    assert "今天农场怎么样" in farm_status["examples"]
 
 
 def test_agent_skills_only_returns_app_level_capabilities(db_session) -> None:

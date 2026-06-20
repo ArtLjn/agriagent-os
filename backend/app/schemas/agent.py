@@ -225,7 +225,9 @@ class AdviceItem(BaseModel):
 
         values = dict(data)
         compact = values.get("compact")
-        compact_data = compact.model_dump() if isinstance(compact, BaseModel) else compact
+        compact_data = (
+            compact.model_dump() if isinstance(compact, BaseModel) else compact
+        )
         if isinstance(compact_data, dict):
             values["title"] = compact_data.get("title", "今日建议")
             values["detail"] = compact_data.get("subtitle", "")
@@ -351,6 +353,9 @@ class AppSkillItem(BaseModel):
     key: str
     title: str
     description: str
+    summary: str
+    details: str
+    examples: list[str] = []
     category: str
     icon: str
     icon_color: str

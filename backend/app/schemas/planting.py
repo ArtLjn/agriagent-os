@@ -108,6 +108,7 @@ class WageSaveRequest(BaseModel):
     paid_amount: Decimal = Field(Decimal("0"), ge=0, le=10000000)
     note: str | None = Field(None, max_length=500)
     work_date: date
+    recorded_at: datetime | None = None
     client_request_id: str = Field(..., min_length=1, max_length=100)
 
     @field_validator("worker_name")
@@ -142,6 +143,7 @@ class WageUpdateRequest(BaseModel):
     paid_amount: Decimal | None = Field(None, ge=0, le=10000000)
     note: str | None = Field(None, max_length=500)
     work_date: date | None = None
+    recorded_at: datetime | None = None
 
     @field_validator("worker_name")
     @classmethod

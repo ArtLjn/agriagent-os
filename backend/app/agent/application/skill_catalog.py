@@ -16,6 +16,9 @@ class SkillDisplay:
     category: str
     icon: str
     icon_color: str
+    summary: str
+    details: str
+    examples: tuple[str, ...] = ()
     recommended: bool = False
 
 
@@ -31,20 +34,85 @@ _APP_SKILL_ORDER = [
 ]
 
 _DISPLAY_BY_SKILL: dict[str, SkillDisplay] = {
-    "get_farm_status": SkillDisplay("今日简报", "推荐", "clipboard-list", "blue", True),
+    "get_farm_status": SkillDisplay(
+        title="今日简报",
+        category="推荐",
+        icon="clipboard-list",
+        icon_color="blue",
+        summary="汇总待办、近期农事、花费和天气。",
+        details="获取当前农场综合状态，帮助你快速了解今天要关注的种植进度、农事记录、花费变化和天气风险。",
+        examples=("今天农场怎么样", "最近有什么风险", "帮我看下今日待办"),
+        recommended=True,
+    ),
     "create_cost_record": SkillDisplay(
-        "智能记账", "记录", "receipt-yuan", "green", True
+        title="智能记账",
+        category="记录",
+        icon="receipt-yuan",
+        icon_color="green",
+        summary="一句话记录支出、收入和赊账。",
+        details="把买肥料、卖货收款、农资赊账等口语描述整理成账本记录，执行前会让你确认关键信息。",
+        examples=("买化肥花了200元", "今天卖西瓜收入3000", "赊了老王农资500"),
+        recommended=True,
     ),
-    "log_farm_activity": SkillDisplay("农事记录", "记录", "file-pen", "purple", True),
-    "manage_wages": SkillDisplay("工资结算", "记录", "user-round", "orange", True),
     "create_crop_cycle": SkillDisplay(
-        "批次管理", "生产", "layout-grid", "purple", True
+        title="批次管理",
+        category="生产",
+        icon="layout-grid",
+        icon_color="purple",
+        summary="创建新的种植茬口或批次。",
+        details="根据作物、季节、面积和地块信息创建种植批次，方便后续关联农事、账本和工人投入。",
+        examples=("春茬种西瓜", "帮我建一个黄瓜批次", "6号棚开始种番茄"),
+        recommended=True,
     ),
-    "get_cost_analytics": SkillDisplay("成本分析", "经营", "pie-chart", "blue", True),
+    "get_cost_analytics": SkillDisplay(
+        title="成本分析",
+        category="经营",
+        icon="pie-chart",
+        icon_color="blue",
+        summary="查看收支趋势、利润和成本结构。",
+        details="分析农场收入、支出、利润和分类占比，帮助你判断哪个环节花费高、哪段时间收益更好。",
+        examples=("本月成本怎么看", "今年利润怎么样", "人工和肥料哪个花得多"),
+        recommended=True,
+    ),
     "get_weather_forecast": SkillDisplay(
-        "天气提醒", "推荐", "cloud-sun", "amber", True
+        title="天气提醒",
+        category="推荐",
+        icon="cloud-sun",
+        icon_color="amber",
+        summary="查看7天天气和农事风险。",
+        details="获取未来天气预报和灾害预警，用于安排浇水、打药、采收、覆膜等对天气敏感的农事。",
+        examples=("明天适合打药吗", "最近有雨吗", "未来一周天气怎么样"),
+        recommended=True,
     ),
-    "manage_user_settings": SkillDisplay("偏好设置", "设置", "settings", "gray"),
+    "log_farm_activity": SkillDisplay(
+        title="农事记录",
+        category="记录",
+        icon="file-pen",
+        icon_color="purple",
+        summary="记录浇水、施肥、打药等操作。",
+        details="把日常农活记录到对应茬口里，后续复盘生产过程、生成报告和分析投入时都能引用。",
+        examples=("今天6号棚浇水了", "下午给西瓜施肥", "记录一次打药"),
+        recommended=True,
+    ),
+    "manage_wages": SkillDisplay(
+        title="工资结算",
+        category="记录",
+        icon="user-round",
+        icon_color="orange",
+        summary="记录工人工资、欠款和结算。",
+        details="保存或更新独立工资记录，支持按工人、农活和金额管理未结清工资，减少漏记和重复结算。",
+        examples=("张三今天工资120", "结清李四200元", "看看还有谁工资没付"),
+        recommended=True,
+    ),
+    "manage_user_settings": SkillDisplay(
+        title="偏好设置",
+        category="设置",
+        icon="settings",
+        icon_color="gray",
+        summary="更新昵称、默认城市和显示偏好。",
+        details="管理芽芽使用时需要记住的基础偏好，比如你的显示名称、常用天气城市和默认农场设置。",
+        examples=("把默认城市改成苏州", "以后叫我老李", "查看我的偏好设置"),
+    ),
 }
 
 _CATEGORY_BY_TAG = {
@@ -98,7 +166,10 @@ def _build_app_skill_item(skill: Any, metadata: dict[str, Any]) -> AppSkillItem:
     return AppSkillItem(
         key=name,
         title=display.title if display else _fallback_title(name),
-        description=_short_description(skill.description()),
+        description=display.details if display else skill.description().strip(),
+        summary=display.summary if display else _short_description(skill.description()),
+        details=display.details if display else skill.description().strip(),
+        examples=list(display.examples) if display else [],
         category=category,
         icon=display.icon if display else icon,
         icon_color=display.icon_color if display else icon_color,

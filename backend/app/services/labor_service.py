@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
+from app.core.timezone import ensure_beijing_timezone
 from app.models.cost import CostRecord
 from app.models.cost_category import CostCategory
 from app.models.cycle import CropCycle
@@ -69,6 +70,7 @@ def save_wage_entry(
             cycle.id,
             data.operation_type,
             data.work_date,
+            data.recorded_at,
             data.worker_name,
             farm_id,
         )
@@ -121,6 +123,7 @@ def update_wage_entry(
         cycle.id,
         work_order.operation_type,
         work_order.operation_date,
+        data.recorded_at,
         worker.name,
         farm_id,
     )
@@ -175,6 +178,7 @@ def sync_work_order_labor_cost_record(
         amount=total_payable,
         settled_amount=settled_amount,
         record_date=work_order.operation_date,
+        recorded_at=None,
         note=note,
         subtype="作业单人工",
     )
@@ -190,6 +194,7 @@ def sync_labor_entry_cost_record(
     cycle_id: int,
     operation_type: str,
     record_date,
+    recorded_at,
     worker_name_hint: str | None,
     farm_id: int,
 ) -> int | None:
@@ -217,6 +222,7 @@ def sync_labor_entry_cost_record(
         amount=entry.payable_amount,
         settled_amount=min(entry.paid_amount, entry.payable_amount),
         record_date=record_date,
+        recorded_at=recorded_at,
         note=f"{worker_name}{operation_type}工资",
         subtype="工资记录人工",
     )
@@ -419,6 +425,7 @@ def _apply_labor_cost_record(
     amount: Decimal,
     settled_amount: Decimal,
     record_date,
+    recorded_at,
     note: str,
     subtype: str,
 ) -> None:
@@ -431,6 +438,8 @@ def _apply_labor_cost_record(
     record.settled_amount = settled_amount
     record.settlement_status = settlement_status_for(amount, settled_amount)
     record.record_date = record_date
+    if recorded_at is not None:
+        record.recorded_at = ensure_beijing_timezone(recorded_at)
     record.note = note
     record.record_subtype = subtype
     record.source_active_key = ACTIVE_SOURCE_KEY

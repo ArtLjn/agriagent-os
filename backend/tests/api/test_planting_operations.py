@@ -29,7 +29,7 @@ def _create_watermelon_template(client) -> int:
             ],
         },
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     return response.json()["id"]
 
 
@@ -81,7 +81,7 @@ def _create_cycle(client, crop_name: str, cycle_name: str) -> int:
             ],
         },
     )
-    assert response.status_code == 200
+    assert response.status_code == 201
     template_id = response.json()["id"]
     response = client.post(
         "/cycles",
@@ -298,6 +298,7 @@ def test_save_wage_generates_single_traceable_labor_cost(client, db_session):
             "paid_amount": "100.00",
             "note": "两天工资，先付 100",
             "work_date": "2026-04-02",
+            "recorded_at": "2026-04-02T09:35:00+08:00",
             "client_request_id": "整枝打杈-老王-20260402",
         },
     )
@@ -322,6 +323,7 @@ def test_save_wage_generates_single_traceable_labor_cost(client, db_session):
     assert cost["source_type"] == "labor_entry"
     assert cost["source_id"] == wage["id"]
     assert cost["source_label"] == "来自工资记录"
+    assert cost["recorded_at"] == "2026-04-02T09:35:00+08:00"
 
     overpaid_response = client.post(
         "/planting/labor/wages",
