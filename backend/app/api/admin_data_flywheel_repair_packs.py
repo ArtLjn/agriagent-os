@@ -15,6 +15,9 @@ from app.services.data_flywheel_repair_pack_repository import (
     create_repair_pack,
     get_repair_pack,
     list_repair_candidates,
+    list_repair_packs,
+    mark_repair_pack_discarded,
+    mark_repair_pack_exported,
     mark_repair_pack_resolved,
     record_repair_pack_verification_failure,
 )
@@ -50,6 +53,10 @@ class ResolveRepairPackRequest(BaseModel):
 
 class VerificationFailureRequest(BaseModel):
     verification_summary: dict[str, Any]
+
+
+class DiscardRepairPackRequest(BaseModel):
+    reason: str | None = None
 
 
 @router.get("/repair-candidates")
@@ -122,6 +129,28 @@ def create_admin_data_flywheel_repair_pack(
         raise _http_error(exc) from exc
 
 
+@router.get("/repair-packs")
+def list_admin_data_flywheel_repair_packs(
+    status: str | None = Query(None),
+    fix_target: str | None = Query(None),
+    include_discarded: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """分页列出已导出的 repair pack，默认不含已废弃。"""
+    return list_repair_packs(
+        db,
+        farm_id=farm.id,
+        status=status,
+        fix_target=fix_target,
+        include_discarded=include_discarded,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.get("/repair-packs/{pack_id}")
 def get_admin_data_flywheel_repair_pack(
     pack_id: str,
@@ -173,6 +202,41 @@ def fail_admin_data_flywheel_repair_pack_verification(
             pack_id=pack_id,
             verification_summary=body.verification_summary,
         )
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/repair-packs/{pack_id}/discard")
+def discard_admin_data_flywheel_repair_pack(
+    pack_id: str,
+    body: DiscardRepairPackRequest | None = None,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+    user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """标记 repair pack 为已废弃（软删除），不删 DB 行和磁盘文件。"""
+    payload = body or DiscardRepairPackRequest()
+    try:
+        return mark_repair_pack_discarded(
+            db,
+            farm_id=farm.id,
+            pack_id=pack_id,
+            resolved_by=user.id,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/repair-packs/{pack_id}/reopen")
+def reopen_admin_data_flywheel_repair_pack(
+    pack_id: str,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """把 repair pack 状态重置为 exported（撤销已修复 / 恢复已废弃）。"""
+    try:
+        return mark_repair_pack_exported(db, farm_id=farm.id, pack_id=pack_id)
     except ValueError as exc:
         raise _http_error(exc) from exc
 

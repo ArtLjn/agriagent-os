@@ -279,6 +279,39 @@ export interface DeleteSampleLabelResponse {
   id: number;
 }
 
+export const REPAIR_PACK_STATUS = {
+  DRAFT: 'draft',
+  EXPORTED: 'exported',
+  EXPORT_FAILED: 'export_failed',
+  VERIFICATION_FAILED: 'verification_failed',
+  RESOLVED: 'resolved',
+  DISCARDED: 'discarded',
+} as const;
+export type RepairPackStatus =
+  | 'draft'
+  | 'exported'
+  | 'export_failed'
+  | 'verification_failed'
+  | 'resolved'
+  | 'discarded';
+
+export interface RepairPackCase {
+  sample_id?: string | null;
+  session_id?: string | null;
+  turn_id?: number | null;
+  request_id?: string | null;
+  labels?: string[];
+  fix_target?: string;
+  priority?: number;
+  suggested_action?: string | null;
+  regression_ready?: boolean;
+  observed_failure?: string | null;
+  expected_behavior?: string | null;
+  evidence?: string | null;
+  source_debug_json?: string | null;
+  regression_draft?: string | null;
+}
+
 export interface DataFlywheelRepairPack {
   id: number;
   pack_id: string;
@@ -286,9 +319,11 @@ export interface DataFlywheelRepairPack {
   labels: string[];
   source_sample_ids: string[];
   source_label_ids?: number[];
-  status: string;
+  dedup_key?: string | null;
+  status: RepairPackStatus;
   export_path: string | null;
   manifest: Record<string, unknown>;
+  cases?: RepairPackCase[];
   export_error?: string | null;
   repair_note?: string | null;
   verification_summary?: Record<string, unknown> | null;
@@ -297,13 +332,34 @@ export interface DataFlywheelRepairPack {
   resolved_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  deduplicated?: boolean;
+  dedup_existing_pack_id?: string;
   payload?: {
     manifest: Record<string, unknown>;
-    cases_jsonl: Array<Record<string, unknown>>;
+    cases_jsonl: RepairPackCase[];
     readme: string;
     debug_files: Record<string, unknown>;
     regression_drafts: Record<string, unknown>;
   };
+}
+
+export interface RepairPackListParams {
+  status?: RepairPackStatus;
+  fix_target?: string;
+  include_discarded?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface RepairPackListResponse {
+  items: DataFlywheelRepairPack[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface DiscardRepairPackRequest {
+  reason?: string | null;
 }
 
 export interface CreateRepairPackRequest extends DataFlywheelRepairCandidateListParams {
@@ -503,6 +559,34 @@ export async function recordRepairPackVerificationFailure(
   const response = await apiClient.post<DataFlywheelRepairPack>(
     `/admin/data-flywheel/repair-packs/${encodeURIComponent(packId)}/verification-failed`,
     body
+  );
+  return response.data;
+}
+
+export async function listRepairPacks(
+  params?: RepairPackListParams
+): Promise<RepairPackListResponse> {
+  const response = await apiClient.get<RepairPackListResponse>(
+    '/admin/data-flywheel/repair-packs',
+    { params }
+  );
+  return response.data;
+}
+
+export async function discardRepairPack(
+  packId: string,
+  body?: DiscardRepairPackRequest
+): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.post<DataFlywheelRepairPack>(
+    `/admin/data-flywheel/repair-packs/${encodeURIComponent(packId)}/discard`,
+    body ?? {}
+  );
+  return response.data;
+}
+
+export async function reopenRepairPack(packId: string): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.post<DataFlywheelRepairPack>(
+    `/admin/data-flywheel/repair-packs/${encodeURIComponent(packId)}/reopen`
   );
   return response.data;
 }

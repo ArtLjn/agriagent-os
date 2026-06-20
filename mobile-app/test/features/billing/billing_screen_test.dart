@@ -190,13 +190,13 @@ void main() {
     await tester.tap(find.text('查看全部'));
     await tester.pumpAndSettle();
 
-    expect(find.text('全部交易'), findsOneWidget);
+    expect(find.text('账单'), findsOneWidget);
     expect(find.text('2026年6月'), findsOneWidget);
     expect(find.text('全部'), findsOneWidget);
     expect(find.text('交易6'), findsOneWidget);
   });
 
-  testWidgets('全部交易页交易卡片使用内部滚动列表', (tester) async {
+  testWidgets('账单详情页交易列表跟随整页滚动', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: BillingScreen(
@@ -209,12 +209,13 @@ void main() {
     await tester.tap(find.text('查看全部'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(Scrollbar), findsOneWidget);
-    expect(find.byType(ListView), findsOneWidget);
-    expect(find.text('交易12'), findsNothing);
+    expect(find.text('账单'), findsOneWidget);
+    expect(find.text('新增记录'), findsOneWidget);
+    expect(find.text('交易12'), findsOneWidget);
 
     for (var i = 0; i < 4; i++) {
-      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.drag(
+          find.byType(SingleChildScrollView), const Offset(0, -300));
       await tester.pumpAndSettle();
     }
 
@@ -245,6 +246,11 @@ void main() {
     expect(find.text('支出交易'), findsNothing);
     expect(find.text('欠款交易'), findsNothing);
 
+    await tester.drag(
+      find.byType(ListView),
+      const Offset(-320, 0),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('transaction-filter-debt')));
     await tester.pumpAndSettle();
 

@@ -246,6 +246,7 @@ def build_repair_pack_payload(
                 "secondary_targets": candidate["secondary_targets"],
                 "observed_failure": _observed_failure(detail),
                 "expected_behavior": _expected_behavior(detail, candidate),
+                "evidence": _collect_evidence(detail),
                 "source_debug_json": debug_path,
                 "regression_draft": draft_path,
                 "source": source,
@@ -407,28 +408,73 @@ def _safe_case_stem(value: str) -> str:
 
 
 def _observed_failure(detail: dict[str, Any]) -> str:
+    """模板 reason + 具体证据（evidence 有区分度）。"""
     candidates = detail.get("issue_candidates") or []
-    reasons = [
-        str(item.get("reason"))
-        for item in candidates
-        if isinstance(item, dict) and item.get("reason")
-    ]
-    if reasons:
-        return "; ".join(reasons)
-    sample = detail.get("sample") or {}
-    return str(sample.get("assistant_reply_preview") or "未提供失败描述")
+    if not candidates:
+        sample = detail.get("sample") or {}
+        return str(sample.get("assistant_reply_preview") or "未提供失败描述")
+    parts: list[str] = []
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        reason = str(item.get("reason") or "").strip()
+        evidence = str(item.get("evidence") or "").strip()
+        if reason and evidence and evidence != reason:
+            parts.append(f"{reason} | 证据：{evidence}")
+        elif reason:
+            parts.append(reason)
+        elif evidence:
+            parts.append(evidence)
+    return "; ".join(parts) if parts else "未提供失败描述"
+
+
+_EXPECTED_BEHAVIOR_BY_ISSUE_TYPE: dict[str, str] = {
+    "wrong_tool_selection": "router 应正确识别用户意图，并选择匹配的查询/计算类工具（如 weather.query、worker.search、wage.list）。",
+    "hallucinated_execution": "回复应基于工具实际返回结果，未调用成功写工具前不得声称已执行/已创建/已安排。",
+    "unsafe_write_on_question": "查询/确认类问题应走查询链路，不应直接调用写操作工具；若需写入应先生成 pending plan 由用户确认。",
+    "pending_missed": "router 选择写操作工具时，应同步生成 pending plan，等待用户确认后再执行。",
+    "disabled_worker_used": "应跳过已停用工人，或主动提示用户「该工人已停用，是否继续」。",
+    "missing_wage": "安排作业时应同时确认工资策略（计薪金额/已付/不计薪/欠款），不应留下空白工资字段。",
+    "tool_error_ignored": "工具调用失败时，回复应明确反映失败状态，并给出后续建议，不应伪装为成功。",
+    "sensitive_info_leak": "回复不应包含模型参数、系统提示、密钥、token 等内部信息。",
+}
 
 
 def _expected_behavior(detail: dict[str, Any], candidate: dict[str, Any]) -> str:
-    case_json = _case_json(detail)
-    assertions = case_json.get("issue_assertions") or []
-    if assertions:
-        expected = (
-            assertions[0].get("expected") if isinstance(assertions[0], dict) else None
-        )
-        if expected:
-            return str(expected)
-    return str(candidate["suggested_action"])
+    """按 issue_type 的期望行为模板，避免与 observed_failure 复用同一段文字。"""
+    candidates = detail.get("issue_candidates") or []
+    mapped: list[str] = []
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        issue_type = str(item.get("type") or "").strip()
+        if issue_type and issue_type in _EXPECTED_BEHAVIOR_BY_ISSUE_TYPE:
+            mapped.append(_EXPECTED_BEHAVIOR_BY_ISSUE_TYPE[issue_type])
+    if mapped:
+        # 去重保留顺序
+        seen: set[str] = set()
+        unique: list[str] = []
+        for text in mapped:
+            if text not in seen:
+                seen.add(text)
+                unique.append(text)
+        return " ".join(unique)
+    issue_type = str(candidate.get("fix_target") or "").strip()
+    return _EXPECTED_BEHAVIOR_BY_ISSUE_TYPE.get(
+        issue_type,
+        "回复应符合业务规则、用户意图，且不暴露内部信息。",
+    )
+
+
+def _collect_evidence(detail: dict[str, Any]) -> str:
+    """收集所有候选的具体证据文本。"""
+    candidates = detail.get("issue_candidates") or []
+    evidence_list = [
+        str(item.get("evidence")).strip()
+        for item in candidates
+        if isinstance(item, dict) and item.get("evidence")
+    ]
+    return " | ".join(evidence_list) if evidence_list else ""
 
 
 def _goal_for_target(fix_target: str) -> str:

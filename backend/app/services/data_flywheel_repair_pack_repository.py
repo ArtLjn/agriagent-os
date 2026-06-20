@@ -1,11 +1,13 @@
 """数据飞轮 repair pack 数据库编排服务。"""
 
+import hashlib
 import json
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.models.data_flywheel import AgentDataFlywheelLabel, AgentRepairPack
@@ -21,7 +23,10 @@ REPAIR_PACK_STATUS_EXPORTED = "exported"
 REPAIR_PACK_STATUS_EXPORT_FAILED = "export_failed"
 REPAIR_PACK_STATUS_VERIFICATION_FAILED = "verification_failed"
 REPAIR_PACK_STATUS_RESOLVED = "resolved"
+REPAIR_PACK_STATUS_DISCARDED = "discarded"
 MAX_REPAIR_PACK_SCAN_LIMIT = 500
+DEFAULT_REPAIR_PACK_PAGE_SIZE = 20
+MAX_REPAIR_PACK_PAGE_SIZE = 100
 
 
 def list_repair_candidates(
@@ -154,6 +159,26 @@ def create_repair_pack(
         raise
 
     manifest = payload["manifest"]
+    dedup_key = _compute_dedup_key(
+        farm_id=farm_id,
+        fix_target=str(manifest["fix_target"]),
+        source_sample_ids=list(manifest["source_sample_ids"]),
+        labels=list(manifest["labels"]),
+    )
+    existing = _find_existing_active_pack(db, farm_id=farm_id, dedup_key=dedup_key)
+    if existing is not None:
+        return {
+            **_pack_to_dict(existing),
+            "deduplicated": True,
+            "dedup_existing_pack_id": existing.pack_id,
+        }
+    manifest["dedup_key"] = dedup_key
+    manifest["dedup_inputs"] = {
+        "farm_id": farm_id,
+        "fix_target": str(manifest["fix_target"]),
+        "sample_ids": sorted(set(map(str, manifest["source_sample_ids"]))),
+        "labels": sorted(set(manifest["labels"] or [])),
+    }
     source_label_ids = _open_label_ids_for_samples(
         db,
         farm_id=farm_id,
@@ -171,6 +196,7 @@ def create_repair_pack(
             labels=list(manifest["labels"]),
             source_sample_ids=list(manifest["source_sample_ids"]),
             source_label_ids=source_label_ids,
+            dedup_key=dedup_key,
             export_path=export_path,
             manifest=manifest,
             export_error=str(exc),
@@ -184,6 +210,7 @@ def create_repair_pack(
         labels=list(manifest["labels"]),
         source_sample_ids=list(manifest["source_sample_ids"]),
         source_label_ids=source_label_ids,
+        dedup_key=dedup_key,
         status=REPAIR_PACK_STATUS_EXPORTED,
         export_path=export_path,
         manifest_json=manifest,
@@ -193,13 +220,37 @@ def create_repair_pack(
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {**_pack_to_dict(row), "payload": payload}
+    return {**_pack_to_dict(row), "cases": payload.get("cases_jsonl", []), "payload": payload}
 
 
 def get_repair_pack(db: Session, *, farm_id: int, pack_id: str) -> dict[str, Any]:
-    """获取 repair pack 元数据。"""
+    """获取 repair pack 元数据，并尝试从磁盘加载失败案例详情。"""
     row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
-    return _pack_to_dict(row)
+    data = _pack_to_dict(row)
+    data["cases"] = _load_cases_from_disk(row.export_path)
+    return data
+
+
+def _load_cases_from_disk(export_path: str | None) -> list[dict[str, Any]]:
+    """从 export_path/cases.jsonl 读失败案例；失败返回空列表。"""
+    if not export_path:
+        return []
+    cases_path = Path(export_path) / "cases.jsonl"
+    if not cases_path.exists():
+        return []
+    cases: list[dict[str, Any]] = []
+    try:
+        for line in cases_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                cases.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    except OSError:
+        return []
+    return cases
 
 
 def mark_repair_pack_resolved(
@@ -235,6 +286,80 @@ def record_repair_pack_verification_failure(
     row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
     row.status = REPAIR_PACK_STATUS_VERIFICATION_FAILED
     row.verification_summary = verification_summary
+    db.commit()
+    db.refresh(row)
+    return _pack_to_dict(row)
+
+
+def list_repair_packs(
+    db: Session,
+    *,
+    farm_id: int,
+    status: str | None = None,
+    fix_target: str | None = None,
+    include_discarded: bool = False,
+    page: int = 1,
+    page_size: int = DEFAULT_REPAIR_PACK_PAGE_SIZE,
+) -> dict[str, Any]:
+    """分页列出 repair pack，默认不展示已废弃。"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = DEFAULT_REPAIR_PACK_PAGE_SIZE
+    if page_size > MAX_REPAIR_PACK_PAGE_SIZE:
+        page_size = MAX_REPAIR_PACK_PAGE_SIZE
+    query = db.query(AgentRepairPack).filter(AgentRepairPack.farm_id == farm_id)
+    if status:
+        query = query.filter(AgentRepairPack.status == status)
+    elif not include_discarded:
+        query = query.filter(AgentRepairPack.status != REPAIR_PACK_STATUS_DISCARDED)
+    if fix_target:
+        query = query.filter(AgentRepairPack.fix_target == fix_target)
+    total = query.count()
+    offset = (page - 1) * page_size
+    rows = (
+        query.order_by(desc(AgentRepairPack.created_at))
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "items": [_pack_to_dict(row) for row in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+def mark_repair_pack_discarded(
+    db: Session,
+    *,
+    farm_id: int,
+    pack_id: str,
+    resolved_by: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """标记 repair pack 为已废弃（软删除），不删 DB 行和磁盘文件。"""
+    row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
+    row.status = REPAIR_PACK_STATUS_DISCARDED
+    if reason:
+        row.repair_note = reason if not row.repair_note else f"{row.repair_note}\n{reason}"
+    row.resolved_by = resolved_by
+    row.resolved_at = datetime.now()
+    db.commit()
+    db.refresh(row)
+    return _pack_to_dict(row)
+
+
+def mark_repair_pack_exported(
+    db: Session,
+    *,
+    farm_id: int,
+    pack_id: str,
+) -> dict[str, Any]:
+    """把 repair pack 状态重置为 exported（撤销已修复 / 恢复已废弃）。"""
+    row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
+    row.status = REPAIR_PACK_STATUS_EXPORTED
     db.commit()
     db.refresh(row)
     return _pack_to_dict(row)
@@ -330,9 +455,11 @@ def _pack_to_dict(row: AgentRepairPack) -> dict[str, Any]:
         "labels": row.labels or [],
         "source_sample_ids": row.source_sample_ids or [],
         "source_label_ids": row.source_label_ids or [],
+        "dedup_key": row.dedup_key,
         "status": row.status,
         "export_path": row.export_path,
         "manifest": row.manifest_json or {},
+        "cases": [],
         "export_error": row.export_error,
         "repair_note": row.repair_note,
         "verification_summary": row.verification_summary,
@@ -346,6 +473,40 @@ def _pack_to_dict(row: AgentRepairPack) -> dict[str, Any]:
 
 def _pack_id(fix_target: str) -> str:
     return f"repair-{fix_target}-{uuid.uuid4().hex[:12]}"
+
+
+def _compute_dedup_key(
+    *,
+    farm_id: int,
+    fix_target: str,
+    source_sample_ids: list[str],
+    labels: list[str],
+) -> str:
+    """对修复包的业务身份做确定性 hash，用于去重。"""
+    payload = {
+        "farm_id": farm_id,
+        "fix_target": (fix_target or "").strip().lower(),
+        "sample_ids": sorted(set(map(str, source_sample_ids or []))),
+        "labels": sorted(set(labels or [])),
+    }
+    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(serialized.encode("utf-8")).hexdigest()[:16]
+
+
+def _find_existing_active_pack(
+    db: Session, *, farm_id: int, dedup_key: str
+) -> AgentRepairPack | None:
+    """查找同 dedup_key 的非废弃 pack，命中则复用而非重复导出。"""
+    return (
+        db.query(AgentRepairPack)
+        .filter(
+            AgentRepairPack.farm_id == farm_id,
+            AgentRepairPack.dedup_key == dedup_key,
+            AgentRepairPack.status != REPAIR_PACK_STATUS_DISCARDED,
+        )
+        .order_by(desc(AgentRepairPack.created_at))
+        .first()
+    )
 
 
 def _group_suggestions(samples: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -371,6 +532,7 @@ def _record_export_failed_pack(
     manifest: dict[str, Any],
     export_error: str,
     created_by: str | None,
+    dedup_key: str | None = None,
 ) -> None:
     row = AgentRepairPack(
         farm_id=farm_id,
@@ -379,6 +541,7 @@ def _record_export_failed_pack(
         labels=labels,
         source_sample_ids=source_sample_ids,
         source_label_ids=source_label_ids,
+        dedup_key=dedup_key,
         status=REPAIR_PACK_STATUS_EXPORT_FAILED,
         export_path=export_path,
         manifest_json=manifest,

@@ -10,9 +10,13 @@ from app.models import AgentDataFlywheelLabel, AgentRepairPack, Farm
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
 from app.services.data_flywheel_repair_pack_repository import (
+    _compute_dedup_key,
     create_repair_pack,
     get_repair_pack,
     list_repair_candidates,
+    list_repair_packs,
+    mark_repair_pack_discarded,
+    mark_repair_pack_exported,
     mark_repair_pack_resolved,
     record_repair_pack_verification_failure,
 )
@@ -347,4 +351,182 @@ def test_create_repair_pack_records_export_failed_metadata(tmp_path, monkeypatch
     assert row.export_error == "disk full"
     assert row.source_sample_ids == [sample_id]
     assert row.source_label_ids
+    db.close()
+
+
+def test_compute_dedup_key_is_deterministic():
+    kwargs = {
+        "farm_id": 1,
+        "fix_target": "router",
+        "source_sample_ids": ["turn:1:sess-a:1", "turn:1:sess-b:2"],
+        "labels": ["bad_reply", "sensitive_info_leak"],
+    }
+    assert _compute_dedup_key(**kwargs) == _compute_dedup_key(**kwargs)
+
+
+def test_compute_dedup_key_ignores_input_order():
+    first = _compute_dedup_key(
+        farm_id=1,
+        fix_target="router",
+        source_sample_ids=["a", "b"],
+        labels=["x", "y"],
+    )
+    second = _compute_dedup_key(
+        farm_id=1,
+        fix_target="router",
+        source_sample_ids=["b", "a"],
+        labels=["y", "x"],
+    )
+    assert first == second
+
+
+def test_compute_dedup_key_normalizes_fix_target():
+    upper = _compute_dedup_key(
+        farm_id=1,
+        fix_target="Router ",
+        source_sample_ids=["a"],
+        labels=[],
+    )
+    lower = _compute_dedup_key(
+        farm_id=1,
+        fix_target="router",
+        source_sample_ids=["a"],
+        labels=[],
+    )
+    assert upper == lower
+
+
+def test_create_repair_pack_returns_existing_on_duplicate(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="pending_missed")
+
+    first = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=tmp_path / "repair-packs",
+    )
+    second = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=tmp_path / "repair-packs",
+    )
+
+    assert second["pack_id"] == first["pack_id"]
+    assert second.get("deduplicated") is True
+    assert second.get("dedup_existing_pack_id") == first["pack_id"]
+    assert db.query(AgentRepairPack).count() == 1
+    db.close()
+
+
+def test_create_repair_pack_rebuilds_after_discard(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="pending_missed")
+
+    first = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=tmp_path / "repair-packs",
+    )
+    mark_repair_pack_discarded(
+        db,
+        farm_id=1,
+        pack_id=first["pack_id"],
+        resolved_by="admin-1",
+        reason="duplicate",
+    )
+    rebuilt = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=tmp_path / "repair-packs",
+    )
+
+    assert rebuilt["pack_id"] != first["pack_id"]
+    assert rebuilt.get("deduplicated") is not True
+    rows = db.query(AgentRepairPack).order_by(AgentRepairPack.id.asc()).all()
+    assert [row.status for row in rows] == ["discarded", "exported"]
+    db.close()
+
+
+def test_list_repair_packs_filters_discarded_by_default(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="pending_missed")
+    pack = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=tmp_path / "repair-packs",
+    )
+    mark_repair_pack_discarded(db, farm_id=1, pack_id=pack["pack_id"])
+
+    default_result = list_repair_packs(db, farm_id=1)
+    include_result = list_repair_packs(db, farm_id=1, include_discarded=True)
+
+    assert default_result["total"] == 0
+    assert default_result["items"] == []
+    assert include_result["total"] == 1
+    assert include_result["items"][0]["pack_id"] == pack["pack_id"]
+    db.close()
+
+
+def test_list_repair_packs_pagination_and_status_filter(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="pending_missed")
+    pack = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=tmp_path / "repair-packs",
+    )
+    mark_repair_pack_resolved(
+        db,
+        farm_id=1,
+        pack_id=pack["pack_id"],
+        resolved_by="admin-1",
+        repair_note="ok",
+    )
+
+    page1 = list_repair_packs(db, farm_id=1, page=1, page_size=10)
+    filtered = list_repair_packs(db, farm_id=1, status="resolved")
+    empty = list_repair_packs(db, farm_id=1, status="exported")
+
+    assert page1["total"] == 1
+    assert page1["page"] == 1
+    assert page1["page_size"] == 10
+    assert filtered["total"] == 1
+    assert empty["total"] == 0
+    db.close()
+
+
+def test_mark_repair_pack_exported_restores_status(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="pending_missed")
+    pack = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=tmp_path / "repair-packs",
+    )
+    mark_repair_pack_resolved(
+        db,
+        farm_id=1,
+        pack_id=pack["pack_id"],
+        resolved_by="admin-1",
+    )
+    reopened = mark_repair_pack_exported(db, farm_id=1, pack_id=pack["pack_id"])
+
+    assert reopened["status"] == "exported"
     db.close()

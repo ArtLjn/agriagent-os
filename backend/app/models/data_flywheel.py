@@ -98,6 +98,7 @@ class AgentRepairPack(Base):
     labels = Column(JSON, nullable=False)
     source_sample_ids = Column(JSON, nullable=False)
     source_label_ids = Column(JSON, nullable=False, default=list)
+    dedup_key = Column(String(40), nullable=True, index=True)
     status = Column(String(20), nullable=False, default="draft", index=True)
     export_path = Column(Text, nullable=True)
     manifest_json = Column(JSON, nullable=True)

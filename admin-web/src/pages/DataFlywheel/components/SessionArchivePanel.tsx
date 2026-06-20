@@ -140,6 +140,28 @@ export default function SessionArchivePanel({
       <Badge count={item.count} color={item.color} />
     </button>
   ));
+  const allGroupKeys = groups.map((group) => group.key);
+  const selectedGroupKeys = selectedKeys.filter((key) => allGroupKeys.includes(key));
+  const allGroupsSelected = groups.length > 0 && selectedGroupKeys.length === groups.length;
+  const partialGroupsSelected = selectedGroupKeys.length > 0 && selectedGroupKeys.length < groups.length;
+  const selectionToolbar = onSelectedKeysChange ? (
+    <div style={selectionToolbarStyle}>
+      <Checkbox
+        aria-label="全选问题会话"
+        checked={allGroupsSelected}
+        indeterminate={partialGroupsSelected}
+        disabled={groups.length === 0}
+        onChange={(event) => {
+          onSelectedKeysChange(event.target.checked ? allGroupKeys : []);
+        }}
+      >
+        全选
+      </Checkbox>
+      <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+        已选 {selectedGroupKeys.length} / {groups.length}
+      </Typography.Text>
+    </div>
+  ) : null;
 
   const groupButtons = groups.map((group) => {
     const selected = selectedKeys.includes(group.key);
@@ -226,6 +248,7 @@ export default function SessionArchivePanel({
           </>
         ) : (
           <>
+            {selectionToolbar}
             {bucketButtons}
             {groups.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可归档会话" />
@@ -310,6 +333,15 @@ const customScrollbarThumbStyle: CSSProperties = {
 const archiveCheckboxStyle: CSSProperties = {
   flexShrink: 0,
   marginTop: 2,
+};
+
+const selectionToolbarStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  padding: '0 2px 2px',
+  flexShrink: 0,
 };
 
 const archiveCardStyle: CSSProperties = {

@@ -12,14 +12,19 @@ import {
   createRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
+  discardRepairPack,
   getDataFlywheelSyncJob,
   getSamplePrelabelBatchJob,
   getSampleDetail,
   getSessionReview,
   getSessionAnnotations,
+  listRepairPacks,
   listRepairPackCandidates,
   listDataFlywheelSamples,
   markBadCase,
+  markRepairPackResolved,
+  recordRepairPackVerificationFailure,
+  reopenRepairPack,
   deleteSampleLabel,
   rejectSamplePrelabel,
   resolveSampleLabel,
@@ -42,15 +47,20 @@ vi.mock('../../api/dataFlywheel', () => ({
   createRepairPack: vi.fn(),
   createSamplePrelabel: vi.fn(),
   createSamplePrelabelBatch: vi.fn(),
+  discardRepairPack: vi.fn(),
   exportSampleJsonl: vi.fn(),
   getDataFlywheelSyncJob: vi.fn(),
   getSamplePrelabelBatchJob: vi.fn(),
   getSampleDetail: vi.fn(),
   getSessionReview: vi.fn(),
   getSessionAnnotations: vi.fn(),
+  listRepairPacks: vi.fn(),
   listRepairPackCandidates: vi.fn(),
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
+  markRepairPackResolved: vi.fn(),
+  recordRepairPackVerificationFailure: vi.fn(),
+  reopenRepairPack: vi.fn(),
   deleteSampleLabel: vi.fn(),
   rejectSamplePrelabel: vi.fn(),
   resolveSampleLabel: vi.fn(),
@@ -612,6 +622,39 @@ describe('DataFlywheel 页面', () => {
       expect(mockedCreateRepairPack).toHaveBeenCalledWith({
         sample_ids: [confirmedBadSample.sample_id],
         limit: 1,
+      });
+    });
+  });
+
+  it('已标注问题列表支持全选问题会话后批量导出', async () => {
+    const user = userEvent.setup();
+    const firstProblemSample: DataFlywheelSample = {
+      ...sample,
+      quality_labels: ['bad_reply'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    const secondProblemSample: DataFlywheelSample = {
+      ...anotherSample,
+      quality_labels: ['wrong_tool_selection'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [firstProblemSample, secondProblemSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    await user.click(screen.getByTestId('archive-confirmed-issues'));
+
+    await user.click(screen.getByRole('checkbox', { name: '全选问题会话' }));
+    const exportButton = screen.getByRole('button', { name: '批量导出修复包' });
+    expect(exportButton).toHaveTextContent('批量导出修复包 2');
+    await user.click(exportButton);
+
+    await waitFor(() => {
+      expect(mockedCreateRepairPack).toHaveBeenCalledWith({
+        sample_ids: [firstProblemSample.sample_id, secondProblemSample.sample_id],
+        limit: 2,
       });
     });
   });

@@ -113,6 +113,7 @@ class _AppShellState extends State<AppShell> {
             BillingScreen(
               repository: widget.dependencies.billing,
               refreshKey: billingRefreshKey,
+              onCreateRecord: () => _openLedgerCreate(context),
             ),
             ProfileScreen(
               repository: widget.dependencies.profile,

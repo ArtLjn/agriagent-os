@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Button, Card, Checkbox, Input, Modal, Select, Space, Typography, message } from 'antd';
-import { CloudDownloadOutlined, CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { Button, Card, Checkbox, Input, Modal, Select, Space, Tabs, Typography, message } from 'antd';
+import { CloudDownloadOutlined, CloudSyncOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
   getTraceDiagnostics,
@@ -46,6 +46,7 @@ import SampleDetailPanel from './components/SampleDetailPanel';
 import SampleQueueTable from './components/SampleQueueTable';
 import SessionConversationView from './components/SessionConversationView';
 import SessionArchivePanel, { type SessionArchiveItem } from './components/SessionArchivePanel';
+import RepairPackListPanel from './components/RepairPackListPanel';
 import ReviewEvidencePanel from './components/ReviewEvidencePanel';
 import RepairPackPreview from './components/RepairPackPreview';
 
@@ -122,6 +123,7 @@ export default function DataFlywheel() {
   const [batchPrelabeling, setBatchPrelabeling] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<'workbench' | 'repair-packs'>('workbench');
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const sessionReviewRequestSeq = useRef(0);
@@ -533,7 +535,11 @@ export default function DataFlywheel() {
       });
       setRepairPack(result);
       setRepairPackOpen(true);
-      message.success('已生成失败案例修复包');
+      if (result.deduplicated) {
+        message.info(`检测到重复，已复用 pack ${result.pack_id}`);
+      } else {
+        message.success('已生成失败案例修复包');
+      }
     } catch {
       message.error('生成修复包失败');
     } finally {
@@ -551,13 +557,22 @@ export default function DataFlywheel() {
       });
       setRepairPack(result);
       setRepairPackOpen(true);
-      message.success(`已生成 ${selectedRepairSampleIds.length} 条失败案例修复包`);
+      if (result.deduplicated) {
+        message.info(`检测到重复，已复用 pack ${result.pack_id}`);
+      } else {
+        message.success(`已生成 ${selectedRepairSampleIds.length} 条失败案例修复包`);
+      }
     } catch {
       message.error('批量生成修复包失败，请按修复目标分组后重试');
     } finally {
       setActing(false);
     }
   };
+
+  const handleOpenRepairPackDetail = useCallback((pack: DataFlywheelRepairPack) => {
+    setRepairPack(pack);
+    setRepairPackOpen(true);
+  }, []);
 
   const handleResolveRepairPack = async () => {
     if (!repairPack) return;
@@ -894,8 +909,8 @@ export default function DataFlywheel() {
     </div>
   );
 
-  return (
-    <div style={pageShellStyle}>
+  const workbenchContent = (
+    <>
       <Space direction="vertical" size={4} style={{ flexShrink: 0 }}>
         <Typography.Title level={4} style={{ color: palette.text, margin: 0 }}>
           Agent 数据飞轮
@@ -969,6 +984,35 @@ export default function DataFlywheel() {
         left={archiveContent}
         main={mainContent}
         right={detailContent}
+      />
+    </>
+  );
+
+  return (
+    <div style={pageShellStyle}>
+      <Tabs
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as 'workbench' | 'repair-packs')}
+        items={[
+          {
+            key: 'workbench',
+            label: (
+              <span>
+                <EditOutlined /> 样本标注
+              </span>
+            ),
+            children: workbenchContent,
+          },
+          {
+            key: 'repair-packs',
+            label: (
+              <span>
+                <FolderOpenOutlined /> 修复包
+              </span>
+            ),
+            children: <RepairPackListPanel onOpenDetail={handleOpenRepairPackDetail} />,
+          },
+        ]}
       />
 
       <CaseDraftPreview draft={draft} open={draftOpen} onClose={() => setDraftOpen(false)} />

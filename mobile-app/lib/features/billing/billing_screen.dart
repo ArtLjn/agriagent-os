@@ -20,9 +20,7 @@ class _LedgerColors {
   static const expense = AppColors.amber;
   static const debt = AppColors.blue;
   static const negative = AppColors.red;
-  static const background = AppColors.background;
   static const surfaceTint = Color(0xFFFFFFFF);
-  static const surfaceWarm = AppColors.surface3;
   static const line = AppColors.line;
   static const lineSoft = AppColors.lineSoft;
   static const amberSoft = AppColors.amberSoft;
@@ -138,10 +136,12 @@ class BillingScreen extends StatefulWidget {
     super.key,
     required this.repository,
     this.refreshKey = 0,
+    this.onCreateRecord,
   });
 
   final BillingRepository repository;
   final int refreshKey;
+  final VoidCallback? onCreateRecord;
 
   @override
   State<BillingScreen> createState() => _BillingScreenState();
@@ -191,7 +191,10 @@ class _BillingScreenState extends State<BillingScreen> {
                     ? () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => AllTransactionsScreen(model: model),
+                            builder: (_) => AllTransactionsScreen(
+                              model: model,
+                              onCreateRecord: widget.onCreateRecord,
+                            ),
                           ),
                         );
                       }
@@ -458,9 +461,14 @@ enum _TransactionTab {
 }
 
 class AllTransactionsScreen extends StatefulWidget {
-  const AllTransactionsScreen({super.key, required this.model});
+  const AllTransactionsScreen({
+    super.key,
+    required this.model,
+    this.onCreateRecord,
+  });
 
   final BillingViewModel model;
+  final VoidCallback? onCreateRecord;
 
   @override
   State<AllTransactionsScreen> createState() => _AllTransactionsScreenState();
@@ -580,11 +588,28 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     return _dateFilter.label;
   }
 
-  String get _periodLabel {
-    if (_dateFilter == DateRangePreset.custom && _hasCustomRange) {
-      return _customRangeShort;
+  String get _monthLabel {
+    if (_dateFilter == DateRangePreset.currentMonth ||
+        _dateFilter == DateRangePreset.previousMonth) {
+      return '${_baseMonth.year}年${_baseMonth.month}月';
     }
-    return _dateFilter.label;
+    return _periodTitle;
+  }
+
+  String get _dateGroupLabel {
+    final dated = _transactions
+        .map((transaction) => transaction.recordDate)
+        .whereType<DateTime>()
+        .toList();
+    if (dated.isEmpty) return '暂无日期';
+    dated.sort((a, b) => b.compareTo(a));
+    final latest = dated.first;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(latest.year, latest.month, latest.day);
+    final prefix = today == target ? '今天' : _ledgerRelativeDate(latest);
+    const weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+    return '$prefix  ${latest.month}月${latest.day}日  ${weekdays[latest.weekday - 1]}';
   }
 
   bool get _hasCustomRange => _customStart != null && _customEnd != null;
@@ -608,39 +633,23 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     return '${_fmtFull(_customStart!)} - ${_customEnd!.day.toString().padLeft(2, '0')}';
   }
 
-  /// 紧凑日期范围，用于小卡片"时间范围"列（节省空间）
-  String get _customRangeShort {
-    if (_customStart == null || _customEnd == null) return '自定义';
-    final days = _customEnd!.difference(_customStart!).inDays.abs() + 1;
-    if (_sameDate(_customStart!, _customEnd!)) {
-      return _fmtMonthDay(_customStart!);
-    }
-    // 同年同月：MM.DD-DD
-    if (_customStart!.year == _customEnd!.year &&
-        _customStart!.month == _customEnd!.month) {
-      return '${_fmtMonthDay(_customStart!)}-${_customEnd!.day.toString().padLeft(2, '0')}';
-    }
-    // 同年跨月：MM.DD-MM.DD
-    if (_customStart!.year == _customEnd!.year) {
-      return '${_fmtMonthDay(_customStart!)} - ${_fmtMonthDay(_customEnd!)}';
-    }
-    // 跨年：YY.MM.DD - YY.MM.DD
-    return '${_customStart!.year.toString().substring(2)}.${_fmtMonthDay(_customStart!)} - '
-        '${_customEnd!.year.toString().substring(2)}.${_fmtMonthDay(_customEnd!)}'
-        ' · $days 天';
-  }
-
   bool _sameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
     final transactions = _transactions;
+    final incomeCount =
+        transactions.where((transaction) => transaction.isIncome).length;
+    final expenseCount = transactions
+        .where((transaction) => !transaction.isIncome && !transaction.isDebt)
+        .length;
     return Scaffold(
-      backgroundColor: _LedgerColors.background,
+      backgroundColor: const Color(0xFFF8FAFD),
+      bottomNavigationBar: _CreateRecordDock(onTap: widget.onCreateRecord),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 118),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
@@ -651,17 +660,36 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     onBack: Navigator.of(context).pop,
                     onPickDate: _pickDateFilter,
                   ),
-                  const SizedBox(height: 16),
-                  _TransactionSummaryStrip(
-                    periodLabel: _periodLabel,
-                    incomeText: _sumText(transactions, income: true),
-                    expenseText: _sumText(transactions, income: false),
+                  const SizedBox(height: 22),
+                  _LedgerPeriodTitle(
+                    title: _monthLabel,
+                    countText: '共${transactions.length}笔交易',
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  _MonthlyBalanceCard(
+                    balanceText: _ledgerMoney(
+                      _sumAmount(transactions, income: true) -
+                          _sumAmount(transactions, income: false),
+                      round: true,
+                    ),
+                    incomeText: _sumText(transactions, income: true),
+                    incomeCount: incomeCount,
+                    expenseText: _sumText(transactions, income: false),
+                    expenseCount: expenseCount,
+                    trendData: _monthlyTrendValues(transactions),
+                  ),
+                  const SizedBox(height: 14),
                   _TransactionFilterBar(selected: _tab, onChanged: _setTab),
                   const SizedBox(height: 12),
+                  _TransactionListToolbar(
+                    incomeCount: incomeCount,
+                    expenseCount: expenseCount,
+                    onFilter: _pickDateFilter,
+                  ),
+                  const SizedBox(height: 12),
+                  _DateGroupHeader(text: _dateGroupLabel),
+                  const SizedBox(height: 8),
                   _AllTransactionsListCard(
-                    title: _periodTitle,
                     transactions: transactions,
                   ),
                 ],
@@ -682,7 +710,33 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             ? transaction.isIncome
             : !transaction.isIncome && !transaction.isDebt)
         .fold<num>(0, (sum, transaction) => sum + transaction.amount);
-    return _compactTransactionMoney(total);
+    return _ledgerMoney(total, round: true);
+  }
+
+  num _sumAmount(
+    List<BillingTransactionViewModel> transactions, {
+    required bool income,
+  }) {
+    return transactions
+        .where((transaction) => income
+            ? transaction.isIncome
+            : !transaction.isIncome && !transaction.isDebt)
+        .fold<num>(0, (sum, transaction) => sum + transaction.amount);
+  }
+
+  List<double> _monthlyTrendValues(List<BillingTransactionViewModel> source) {
+    final sorted = source
+        .where((transaction) => transaction.recordDate != null)
+        .toList()
+      ..sort((a, b) => a.recordDate!.compareTo(b.recordDate!));
+    if (sorted.isEmpty) return widget.model.monthlyTrend;
+    var running = 0.0;
+    return sorted.map((transaction) {
+      final delta =
+          transaction.isIncome ? transaction.amount : -transaction.amount;
+      running += delta.toDouble();
+      return running;
+    }).toList();
   }
 }
 
@@ -698,7 +752,7 @@ class _AllTransactionsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 56,
       child: Row(
         children: [
           SizedBox(
@@ -708,13 +762,13 @@ class _AllTransactionsHeader extends StatelessWidget {
               onPressed: onBack,
               icon: const Icon(LucideIcons.chevronLeft),
               color: AppColors.ink,
-              iconSize: 24,
+              iconSize: 28,
               padding: EdgeInsets.zero,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 16),
           const Expanded(
-            child: Text('全部交易', style: AppTextStyles.title),
+            child: Text('账单', style: AppTextStyles.title),
           ),
           SizedBox(
             width: 44,
@@ -724,7 +778,7 @@ class _AllTransactionsHeader extends StatelessWidget {
               onPressed: onPickDate,
               icon: const Icon(LucideIcons.calendarDays),
               color: AppColors.ink,
-              iconSize: 24,
+              iconSize: 26,
               padding: EdgeInsets.zero,
             ),
           ),
@@ -734,47 +788,156 @@ class _AllTransactionsHeader extends StatelessWidget {
   }
 }
 
-class _TransactionSummaryStrip extends StatelessWidget {
-  const _TransactionSummaryStrip({
-    required this.periodLabel,
-    required this.expenseText,
-    required this.incomeText,
+class _LedgerPeriodTitle extends StatelessWidget {
+  const _LedgerPeriodTitle({
+    required this.title,
+    required this.countText,
   });
 
-  final String periodLabel;
-  final String expenseText;
-  final String incomeText;
+  final String title;
+  final String countText;
 
   @override
   Widget build(BuildContext context) {
-    return _LedgerSectionCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-      radius: 20,
-      child: IntrinsicHeight(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: AppTextStyles.metric.copyWith(
+                color: _LedgerColors.ink,
+                fontSize: 31,
+                height: 1.08,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              LucideIcons.chevronDown,
+              size: 20,
+              color: AppColors.muted,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          countText,
+          style: AppTextStyles.body.copyWith(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthlyBalanceCard extends StatelessWidget {
+  const _MonthlyBalanceCard({
+    required this.balanceText,
+    required this.incomeText,
+    required this.incomeCount,
+    required this.expenseText,
+    required this.expenseCount,
+    required this.trendData,
+  });
+
+  final String balanceText;
+  final String incomeText;
+  final int incomeCount;
+  final String expenseText;
+  final int expenseCount;
+  final List<double> trendData;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A14365F),
+            blurRadius: 28,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Row(
           children: [
             Expanded(
-              child: _SummaryMetricCell(
-                label: '时间范围',
-                value: periodLabel,
-                valueColor: _LedgerColors.ink,
-                fontSize: 15,
+              flex: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '本月结余',
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      balanceText,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: AppTextStyles.metric.copyWith(
+                        color: _LedgerColors.ink,
+                        fontSize: 38,
+                        height: 1,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 32,
+                    child: CustomPaint(
+                      painter: _LedgerSparklinePainter(
+                        data: _sparklineData(trendData),
+                        lineColor: const Color(0xFF34C986),
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const _MetricDivider(height: 38),
+            const SizedBox(width: 16),
+            const _MetricDivider(height: 96),
+            const SizedBox(width: 18),
             Expanded(
-              child: _SummaryMetricCell(
-                label: '支出',
-                value: expenseText,
-                valueColor: _LedgerColors.expense,
-              ),
-            ),
-            const _MetricDivider(height: 38),
-            Expanded(
-              child: _SummaryMetricCell(
-                label: '收入',
-                value: incomeText,
-                valueColor: _LedgerColors.income,
+              flex: 8,
+              child: Column(
+                children: [
+                  _BalanceSideMetric(
+                    label: '收入',
+                    value: incomeText,
+                    countText: '$incomeCount笔',
+                    color: _LedgerColors.income,
+                    icon: LucideIcons.arrowUpRight,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 9),
+                    child: Divider(height: 1, color: AppColors.lineSoft),
+                  ),
+                  _BalanceSideMetric(
+                    label: '支出',
+                    value: expenseText,
+                    countText: '$expenseCount笔',
+                    color: _LedgerColors.ink,
+                    icon: LucideIcons.arrowDownRight,
+                  ),
+                ],
               ),
             ),
           ],
@@ -784,56 +947,81 @@ class _TransactionSummaryStrip extends StatelessWidget {
   }
 }
 
-class _SummaryMetricCell extends StatelessWidget {
-  const _SummaryMetricCell({
+List<double> _sparklineData(List<double> source) {
+  if (source.length >= 3) return source;
+  if (source.isEmpty) return const [0, 1, 0.4, 1.2, 0.9, 1.5, 1.1];
+  if (source.length == 1) {
+    final value = source.first;
+    return [value - 1, value, value + 0.6, value + 0.2, value + 1.1];
+  }
+  final first = source.first;
+  final last = source.last;
+  final mid = (first + last) / 2;
+  return [first, mid + 0.4, mid - 0.2, last, last + 0.3];
+}
+
+class _BalanceSideMetric extends StatelessWidget {
+  const _BalanceSideMetric({
     required this.label,
     required this.value,
-    required this.valueColor,
-    this.fontSize = 17,
+    required this.countText,
+    required this.color,
+    required this.icon,
   });
 
   final String label;
   final String value;
-  final Color valueColor;
-  final double fontSize;
+  final String countText;
+  final Color color;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.small.copyWith(
-            color: AppColors.muted,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-          ),
-        ),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.center,
-          child: Text(
-            value,
-            maxLines: 1,
-            softWrap: false,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.sectionTitle.copyWith(
-              color: valueColor,
-              fontSize: fontSize,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.muted,
               fontWeight: FontWeight.w800,
-              fontFeatures: const [FontFeature.tabularFigures()],
-              letterSpacing: -0.2,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    color: color,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(icon, size: 17, color: color),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            countText,
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.muted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -849,45 +1037,56 @@ class _TransactionFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CardPanel(
-      radius: 16,
-      borderColor: _LedgerColors.line,
-      background: _LedgerColors.surfaceWarm,
-      shadow: true,
-      padding: const EdgeInsets.all(5),
-      child: Row(
+    return SizedBox(
+      height: 42,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
         children: [
-          Expanded(
-            child: _FilterChipLabel(
-              key: const Key('transaction-filter-all'),
-              text: '全部',
-              selected: selected == _TransactionTab.all,
-              onTap: () => onChanged(_TransactionTab.all),
-            ),
+          _FilterChipLabel(
+            key: const Key('transaction-filter-all'),
+            text: '全部',
+            selected: selected == _TransactionTab.all,
+            onTap: () => onChanged(_TransactionTab.all),
           ),
-          Expanded(
-            child: _FilterChipLabel(
-              key: const Key('transaction-filter-expense'),
-              text: '支出',
-              selected: selected == _TransactionTab.expense,
-              onTap: () => onChanged(_TransactionTab.expense),
-            ),
+          const SizedBox(width: 10),
+          _FilterChipLabel(
+            key: const Key('transaction-filter-income'),
+            text: '收入',
+            selected: selected == _TransactionTab.income,
+            onTap: () => onChanged(_TransactionTab.income),
           ),
-          Expanded(
-            child: _FilterChipLabel(
-              key: const Key('transaction-filter-income'),
-              text: '收入',
-              selected: selected == _TransactionTab.income,
-              onTap: () => onChanged(_TransactionTab.income),
-            ),
+          const SizedBox(width: 10),
+          _FilterChipLabel(
+            key: const Key('transaction-filter-expense'),
+            text: '支出',
+            selected: selected == _TransactionTab.expense,
+            onTap: () => onChanged(_TransactionTab.expense),
           ),
-          Expanded(
-            child: _FilterChipLabel(
-              key: const Key('transaction-filter-debt'),
-              text: '欠款',
-              selected: selected == _TransactionTab.debt,
-              onTap: () => onChanged(_TransactionTab.debt),
-            ),
+          const SizedBox(width: 10),
+          _FilterChipLabel(
+            text: '工资',
+            selected: false,
+            onTap: () => onChanged(_TransactionTab.expense),
+          ),
+          const SizedBox(width: 10),
+          _FilterChipLabel(
+            text: '材料',
+            selected: false,
+            onTap: () => onChanged(_TransactionTab.expense),
+          ),
+          const SizedBox(width: 10),
+          _FilterChipLabel(
+            text: '运费',
+            selected: false,
+            onTap: () => onChanged(_TransactionTab.expense),
+          ),
+          const SizedBox(width: 10),
+          _FilterChipLabel(
+            key: const Key('transaction-filter-debt'),
+            text: '借贷',
+            selected: selected == _TransactionTab.debt,
+            onTap: () => onChanged(_TransactionTab.debt),
           ),
         ],
       ),
@@ -911,13 +1110,19 @@ class _FilterChipLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(999),
       child: Container(
-        height: 42,
+        height: 38,
+        constraints: const BoxConstraints(minWidth: 72),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? _LedgerColors.primaryDark : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color:
+                selected ? _LedgerColors.primaryDark : const Color(0xFFD3DCE8),
+          ),
         ),
         child: Text(
           text,
@@ -931,115 +1136,118 @@ class _FilterChipLabel extends StatelessWidget {
   }
 }
 
-class _AllTransactionsListCard extends StatefulWidget {
-  const _AllTransactionsListCard({
-    required this.title,
-    required this.transactions,
+class _TransactionListToolbar extends StatelessWidget {
+  const _TransactionListToolbar({
+    required this.incomeCount,
+    required this.expenseCount,
+    required this.onFilter,
   });
 
-  final String title;
-  final List<BillingTransactionViewModel> transactions;
-
-  @override
-  State<_AllTransactionsListCard> createState() =>
-      _AllTransactionsListCardState();
-}
-
-class _AllTransactionsListCardState extends State<_AllTransactionsListCard> {
-  final ScrollController _controller = ScrollController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final int incomeCount;
+  final int expenseCount;
+  final VoidCallback onFilter;
 
   @override
   Widget build(BuildContext context) {
-    const listHeight = 430.0;
-    return _LedgerSectionCard(
-      radius: 20,
-      padding: const EdgeInsets.fromLTRB(16, 16, 10, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
+    return Row(
+      children: [
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: AppTextStyles.body.copyWith(
+                color: _LedgerColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+              children: [
+                TextSpan(
+                  text: '收入 $incomeCount笔',
+                  style: const TextStyle(color: _LedgerColors.income),
+                ),
+                const TextSpan(text: ' · '),
+                TextSpan(text: '支出 $expenseCount笔'),
+              ],
+            ),
+          ),
+        ),
+        InkWell(
+          key: const Key('transaction-toolbar-filter'),
+          onTap: onFilter,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: AppTextStyles.dateTitle.copyWith(
-                      color: _LedgerColors.ink,
-                      fontSize: 20,
-                    ),
-                  ),
-                ),
                 Text(
-                  '${widget.transactions.length} 笔',
-                  style: AppTextStyles.small.copyWith(
-                    color: AppColors.muted,
+                  '筛选',
+                  style: AppTextStyles.body.copyWith(
+                    color: _LedgerColors.ink,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+                const SizedBox(width: 6),
+                const Icon(
+                  LucideIcons.funnel,
+                  size: 20,
+                  color: _LedgerColors.ink,
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Text(
-              '点按查看账单详情',
-              style: AppTextStyles.small.copyWith(
-                color: AppColors.subtle,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (widget.transactions.isEmpty)
+        ),
+      ],
+    );
+  }
+}
+
+class _DateGroupHeader extends StatelessWidget {
+  const _DateGroupHeader({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: AppTextStyles.body.copyWith(
+        color: AppColors.muted,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
+class _AllTransactionsListCard extends StatelessWidget {
+  const _AllTransactionsListCard({
+    required this.transactions,
+  });
+
+  final List<BillingTransactionViewModel> transactions;
+
+  @override
+  Widget build(BuildContext context) {
+    return _LedgerSectionCard(
+      radius: 22,
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (transactions.isEmpty)
             const _EmptyLine(text: '暂无交易')
-          else if (widget.transactions.length <= 6)
+          else
             Column(
               children: [
-                for (var index = 0;
-                    index < widget.transactions.length;
-                    index++) ...[
+                for (var index = 0; index < transactions.length; index++) ...[
                   _TransactionDetailRow(
-                    transaction: widget.transactions[index],
+                    transaction: transactions[index],
                     onTap: () => _showTransactionDetail(
                       context,
-                      widget.transactions[index],
+                      transactions[index],
                     ),
                   ),
-                  if (index != widget.transactions.length - 1)
-                    const SizedBox(height: 8),
+                  if (index != transactions.length - 1)
+                    const _IndentedDivider(indent: 58),
                 ],
               ],
-            )
-          else
-            SizedBox(
-              height: listHeight,
-              child: Scrollbar(
-                controller: _controller,
-                thumbVisibility: true,
-                child: ListView.separated(
-                  controller: _controller,
-                  padding: EdgeInsets.zero,
-                  itemCount: widget.transactions.length,
-                  itemBuilder: (context, index) {
-                    final transaction = widget.transactions[index];
-                    return _TransactionDetailRow(
-                      transaction: transaction,
-                      onTap: () => _showTransactionDetail(context, transaction),
-                    );
-                  },
-                  separatorBuilder: (context, index) => const SizedBox(
-                    height: 8,
-                  ),
-                ),
-              ),
             ),
         ],
       ),
@@ -1059,17 +1267,20 @@ class _TransactionDetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final amountColor =
-        transaction.isIncome ? _LedgerColors.income : _LedgerColors.negative;
+        transaction.isIncome ? _LedgerColors.income : _LedgerColors.ink;
+    final hasCounterparty = transaction.counterpartyText.isNotEmpty &&
+        transaction.counterpartyText != '未填写对象';
+    final detailText =
+        hasCounterparty ? transaction.counterpartyText : transaction.sourceText;
+    final timeText = transaction.subtitle.isEmpty
+        ? transaction.dateText
+        : transaction.subtitle.split(' · ').first;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.lineSoft),
-        ),
+      child: SizedBox(
+        height: 78,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -1077,88 +1288,131 @@ class _TransactionDetailRow extends StatelessWidget {
               icon: _transactionIcon(transaction),
               color: _transactionIconColor(transaction),
               background: _transactionIconBackground(transaction),
-              size: 38,
-              iconSize: 18,
+              size: 44,
+              iconSize: 20,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          transaction.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.sectionTitle.copyWith(
-                            color: _LedgerColors.ink,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 116),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            transaction.amountText,
-                            maxLines: 1,
-                            softWrap: false,
-                            style: AppTextStyles.sectionTitle.copyWith(
-                              color: amountColor,
-                              fontSize: 17,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    transaction.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.sectionTitle.copyWith(
+                      color: _LedgerColors.ink,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${transaction.dateText} · ${transaction.typeText} · ${transaction.counterpartyText}',
+                    detailText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    transaction.subtitle.isEmpty ? timeText : timeText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.small.copyWith(
                       color: AppColors.muted,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '来源：${transaction.sourceText}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.small.copyWith(
-                            color: AppColors.subtle,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(
-                        LucideIcons.chevronRight,
-                        size: 15,
-                        color: AppColors.subtle,
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 126),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  transaction.isIncome
+                      ? _ledgerMoney(transaction.amount, explicitPositive: true)
+                      : _ledgerMoney(-transaction.amount),
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    color: amountColor,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateRecordDock extends StatelessWidget {
+  const _CreateRecordDock({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFD),
+          border: Border(top: BorderSide(color: Color(0x00F8FAFD))),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+          child: Center(
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(999),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: _LedgerColors.primaryDark,
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x2608223F),
+                          blurRadius: 18,
+                          offset: Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      LucideIcons.plus,
+                      size: 34,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '新增记录',
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1273,6 +1527,39 @@ class _DetailField extends StatelessWidget {
   }
 }
 
+String _ledgerMoney(
+  num value, {
+  bool round = false,
+  bool explicitPositive = false,
+}) {
+  final sign = value < 0 ? '-' : (explicitPositive && value > 0 ? '+' : '');
+  final abs = value.abs();
+  final normalized = round ? abs.roundToDouble() : abs.toDouble();
+  final integer = normalized.truncate();
+  final hasDecimal = !round && (normalized - integer).abs() > 0.001;
+  final integerText = _thousandSeparated(integer);
+  final decimalText = hasDecimal
+      ? normalized.toStringAsFixed(2).split('.').last.replaceFirst(
+            RegExp(r'0+$'),
+            '',
+          )
+      : '';
+  return '$sign¥$integerText${decimalText.isEmpty ? '' : '.$decimalText'}';
+}
+
+String _thousandSeparated(int value) {
+  final text = value.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < text.length; i++) {
+    final positionFromEnd = text.length - i;
+    buffer.write(text[i]);
+    if (positionFromEnd > 1 && positionFromEnd % 3 == 1) {
+      buffer.write(',');
+    }
+  }
+  return buffer.toString();
+}
+
 String _compactTransactionMoney(num value) {
   final abs = value.abs();
   final prefix = value < 0 ? '-¥' : '¥';
@@ -1286,6 +1573,19 @@ String _compactTransactionMoney(num value) {
   final text =
       fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
   return '$prefix$text$unit';
+}
+
+String _ledgerRelativeDate(DateTime date) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(date.year, date.month, date.day);
+  final diffDays = today.difference(target).inDays;
+  if (diffDays <= 0) return '今天';
+  if (diffDays == 1) return '昨天';
+  if (diffDays < 7) return '$diffDays天前';
+  if (diffDays < 14) return '上周';
+  if (target.year == today.year) return '${target.month}月${target.day}日';
+  return '${target.year}年${target.month}月${target.day}日';
 }
 
 class _EmptyLine extends StatelessWidget {
@@ -1307,13 +1607,15 @@ class _EmptyLine extends StatelessWidget {
 }
 
 class _IndentedDivider extends StatelessWidget {
-  const _IndentedDivider();
+  const _IndentedDivider({this.indent = 58});
+
+  final double indent;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(left: 58),
-      child: Divider(height: 1, color: _LedgerColors.lineSoft),
+    return Padding(
+      padding: EdgeInsets.only(left: indent),
+      child: const Divider(height: 1, color: _LedgerColors.lineSoft),
     );
   }
 }
