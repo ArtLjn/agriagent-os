@@ -1,7 +1,7 @@
 """add dedup_key to agent repair packs
 
 Revision ID: 20260620_agent_repair_packs_dedup_key
-Revises: 20260619_seed_system_crop_templates
+Revises: 20260620_add_risk_score_to_agent_turns
 Create Date: 2026-06-20 14:00:00.000000
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy import inspect
 
 
 revision: str = "20260620_agent_repair_packs_dedup_key"
-down_revision: Union[str, None] = "20260619_seed_system_crop_templates"
+down_revision: Union[str, None] = "20260620_add_risk_score_to_agent_turns"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
