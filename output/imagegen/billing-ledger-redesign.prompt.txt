@@ -1,0 +1,83 @@
+Use case: ui-mockup
+Canvas: 1024x2224px, mobile app, flat front-on screenshot, UI fills canvas.
+Product: 田掌柜 farm management finance ledger app.
+Screen: ledger home and all transactions redesign for a production Flutter mobile app.
+
+Primary request:
+Redesign the current ledger pages so they no longer feel low-end, demo-like, or AI-gradient-heavy. Preserve the current product identity: farm management, green/blue system theme, clean white surfaces, strong Chinese typography. Make it feel like a trustworthy farm operations finance ledger.
+
+Visual direction:
+- Premium operational ledger, calm, credible, business-focused.
+- Dense but breathable information layout.
+- Use restrained farm green, deep ledger green, finance blue, warm amber for expenses, red only for negative amount.
+- Avoid shiny AI pill buttons, purple-blue glow, cartoon finance logo, repeated shopping-cart icons, generic demo cards, oversized illustrations.
+
+Layout:
+- Logical mobile width: 430px, base grid 8px, page padding 20px.
+- Header: 52px, brand lockup 田掌柜 and calendar icon.
+- Ledger home: top financial command card about 204px high with deep ledger-green surface, title 资金概览, period chip 本年, subtle 智能复盘 chip, annual net profit, and three metric tiles for income/expense/debt.
+- AI insight: compact white or tinted row, title AI财务洞察 with small 智能复盘 tag, 48px icon tile, two-line recommendation text.
+- Recent transactions: white list card, section title 最近交易, subtle 查看全部 pill, five dense rows with semantic icons: users for labor, wheat/receipt for farm inputs, user/check for debt, dollar badge for income.
+- Receivable reminder: compact business reminder strip, not a decorative floating card.
+- Primary CTA: fixed 56px solid green button with pen icon and text 手动记一笔, no blue-green full gradient.
+- All transactions: app bar title 全部交易, calendar icon; summary toolbar for 本月/支出/收入; segmented filter 全部/支出/收入/欠款; grouped transaction list card with title 2026年6月.
+
+Design tokens:
+- Background: #F5F7F4
+- Surface: #FFFFFF
+- Tinted surface: #FAFCF9
+- Deep ledger: #0B2B26
+- Deep ledger secondary: #15483D
+- Primary green: #12A66A
+- Finance blue: #1F6FEB
+- Income green: #079455
+- Expense amber: #E76F21
+- Negative red: #D92D20
+- Text primary: #101828
+- Text secondary: #667085
+- Border: #E3E8EF
+
+Typography:
+- Font family: system Chinese sans-serif.
+- Page title: 22px, weight 800, line-height 28px.
+- Section title: 18px, weight 800, line-height 26px.
+- List title: 15px, weight 700, line-height 22px.
+- Body: 14px, weight 600, line-height 21px.
+- Caption: 12px, weight 600, line-height 16px.
+- Money figures use tabular numerals.
+
+Exact visible text:
+- 田掌柜
+- 资金概览
+- 本年
+- 智能复盘
+- -¥12万
+- 年度净收益
+- 收入 ¥5500
+- 支出 ¥12.6万
+- 欠款 ¥430
+- AI财务洞察
+- 本年支出高于收入，先核对人工与大额农资。
+- 最近交易
+- 查看全部
+- 人工工资
+- 肥料采购
+- 张三待收款
+- 待收款提醒
+- 全部交易
+- 2026年6月
+- 本月
+- 支出 ¥4848.99
+- 收入 ¥0
+- 全部
+- 支出
+- 收入
+- 欠款
+- 手动记一笔
+
+Constraints:
+- Flat front-on UI screenshot only.
+- No phone frame, no bezel, no notch, no dynamic island, no hands, no desk, no perspective.
+- No lorem ipsum, no watermark, no unreadable placeholder text.
+- Keep all text legible and aligned to the 8px grid.
+- Must look like a polished production mobile app, not a marketing mockup.
