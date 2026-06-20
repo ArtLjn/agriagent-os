@@ -46,7 +46,7 @@ def test_detects_disabled_worker_used_from_tool_result() -> None:
         {
             "type": "disabled_worker_used",
             "severity": "high",
-            "reason": "已停用工人仍被安排到作业或工资记录中",
+            "reason": "已停用工人「李一凡」仍被安排到作业或工资记录中",
             "evidence": "李一凡",
             "suggested_label": "disabled_worker_used",
         }
@@ -85,7 +85,7 @@ def test_detects_missing_wage_when_work_order_has_workers_without_wage_policy() 
         {
             "type": "missing_wage",
             "severity": "high",
-            "reason": "作业包含工人，但没有工资单价、已付金额、不计工资或欠款策略",
+            "reason": "作业包含工人「王大妈」，但没有工资单价、已付金额、不计工资或欠款策略",
             "evidence": "王大妈",
             "suggested_label": "missing_wage",
         }
@@ -124,7 +124,7 @@ def test_detects_missing_wage_when_work_order_only_has_quantity() -> None:
     assert {
         "type": "missing_wage",
         "severity": "high",
-        "reason": "作业包含工人，但没有工资单价、已付金额、不计工资或欠款策略",
+        "reason": "作业包含工人「王大妈」，但没有工资单价、已付金额、不计工资或欠款策略",
         "evidence": "王大妈",
         "suggested_label": "missing_wage",
     } in candidates
@@ -202,7 +202,7 @@ def test_detects_pending_missed_for_each_uncovered_write_tool() -> None:
         {
             "type": "pending_missed",
             "severity": "high",
-            "reason": "router 选择了写操作工具，但 pending lifecycle 中没有对应的确认计划",
+            "reason": "router 选择了写操作工具「create_operation_work_order」，但 pending lifecycle 中没有对应的确认计划",
             "evidence": "create_operation_work_order",
             "suggested_label": "pending_missed",
         }
@@ -234,7 +234,7 @@ def test_detects_tool_error_ignored_with_specific_label() -> None:
     assert {
         "type": "tool_error_ignored",
         "severity": "medium",
-        "reason": "工具调用失败后，回复仍呈现为已完成",
+        "reason": "工具「manage_wages」调用失败后，回复仍呈现为已完成",
         "evidence": "manage_wages",
         "suggested_label": "tool_error_ignored",
     } in candidates
@@ -253,7 +253,7 @@ def test_detects_missing_tool_selection_for_realtime_query() -> None:
         {
             "type": "wrong_tool_selection",
             "severity": "high",
-            "reason": "用户需要实时/外部数据，但 router 没有选择任何工具",
+            "reason": "用户输入「今天适合做什么」需要实时/外部数据，但 router 没有选择任何工具",
             "evidence": "今天适合做什么",
             "suggested_label": "wrong_tool_selection",
         }
