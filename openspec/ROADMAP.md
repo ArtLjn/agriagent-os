@@ -14,85 +14,56 @@
 
 ## 待实施（按优先级排序）
 
-**为什么先做**: 当前模型 `qwen-flash-character` 不支持 Function Calling，LangGraph 的 skill 执行机制完全失效。已实现的 6 个写操作 Skill 全部静默失败——没有 FC，后面所有 skill 改造都没有意义。
+共 6 个未归档提案。优先级按「用户痛点 × 阻塞性 × ROI」综合排序：
 
-**核心改动**:
-- 切换模型 `qwen-flash-character` → `qwen3.6-flash` + `enable_thinking=false`
-- `AIConfig` 新增 `enable_thinking: bool = False`
-- `get_llm()` 传递 `model_kwargs`
-- `base.j2` 新增 FC 硬约束（禁止编造实时数据）
-- 不使用 `tool_choice="required"`（破坏闲聊）
+| 优先级 | Change | 痛点 | 工作量 | 依赖 |
+|--------|--------|------|--------|------|
+| **P0** | [add-running-summary-compaction](changes/add-running-summary-compaction/proposal.md) | 多轮失忆（高频终端用户痛点） | 中 | 无 |
+| **P1** | [smart-fill-hybrid-scene-router](changes/smart-fill-hybrid-scene-router/proposal.md) | 场景路由错（mobile-app 写死 + admin-web 正则不全） | 中 | 无 |
+| **P1** | [crop-template-system-library](changes/crop-template-system-library/proposal.md) | 新用户冷启动 + 模板查重不一致 | 中 | 无 |
+| **P2** | [extend-crop-template-with-region-tag](changes/extend-crop-template-with-region-tag/proposal.md) | 作物模板不分地域 | 低（delta） | crop-template-system-library |
+| **P2** | [add-dataflywheel-discovery-layer](changes/add-dataflywheel-discovery-layer/proposal.md) | 标注员效率低（不影响终端用户） | **低（4.5 人日）** | 无 |
+| **P3** | [add-ai-assisted-password-recovery](changes/add-ai-assisted-password-recovery/proposal.md) | 忘记密码恢复（小范围熟人） | 低 | 无 |
 
-**依赖**: 无
+详细方案见各 `proposal.md`。
 
----
+### 排序理由
 
-### P1: farm-context-aware-agent（结构化赊账 + 作物模板 + 多作物建议）
-
-**为什么第二个**: `farmer-first-agent` 已完成 Agent 层的"对话式赊账"（通过 note 文本识别）和上下文注入。但父母需要的是**结构化数据层**和**独立管理页面**：能独立查看"我欠谁多少钱"、能自己添加辣椒/小瓜模板、记账时能选"赊账"类型。这些是农场 app 的核心功能缺失。
-
-**核心改动**:
-- 结构化赊账：`cost_records` 新增 `record_subtype`/`counterparty`/`due_date`/`settled_at`/`parent_record_id` 字段，替代 note 文本识别方案
-- 赊账 API：新增 `/debts` 系列端点（查询、统计、还款）
-- 作物模板自定义：`POST/PUT/DELETE /crops/templates`，用户可自由创建（替代硬编码西瓜+豆角）
-- 多茬口建议完善：确认 `/agent/daily` 在无 `cycle_id` 时按 active 茬口分别生成建议，缓存键包含茬口列表
-- 移动端：记账页增加"赊账"类型、新增"赊账管理"页、新增"作物模板"页
-
-**依赖**: enable-function-calling（FC 跑通后现有 Skill 才能执行）; farmer-first-agent（Agent 层已完成，本 change 专注数据层+展示层）
-
----
-
-### P2: session-management-and-context-injection
-
-**为什么第三个**: 核心功能（记账、建茬口、赊账）就位后，用户体验的下一个瓶颈是多轮对话——用户无法追问（如"后天呢"）。同时 `<user_context>` 注入让天气 skill 获得城市信息，为 P3 天气 provider 铺路。
-
-**核心改动**:
-- 新增 `Conversation` + `ConversationMessage` 数据模型
-- `ChatRequest` 新增 `session_id`
-- 单会话模式（24h 自动过期，10 轮历史注入）
-- `base.j2` 新增 `<user_context>` XML 段（城市/称呼/季节）
-- 前端生成 session_id，后端 lazy creation
-
-**依赖**: enable-function-calling
-
----
-
-### P3: dual-weather-provider
-
-**为什么最后**: 多轮对话 + 用户上下文就位后，天气 skill 才能根据 `<user_context>` 中的城市正确路由 provider。SecretsConfig 统一密钥管理可复用 P1/P2 的配置体系。
-
-**核心改动**:
-- `SecretsConfig` 统一 API key 管理（dashscope/qweather/langsmith）
-- Weather Provider Strategy（和风天气 + Open-Meteo + 自动兜底）
-- 中国天气网预警爬虫（免费，不消耗和风配额）
-- 新增 `get_air_quality` skill
-- 和风天气：预报 + 生活指数 + AQI
-- Open-Meteo：全球预报 + 空气质量兜底
-
-**依赖**: session-management-and-context-injection（`<user_context>` 提供城市信息）
-
----
+- **P0 `add-running-summary-compaction`**：终端用户高频痛点。spec（`short-term-memory-policy` / `conversation-management`）早已声明，但代码侧 `MemoryService.set_session_summary()` 是死接口、`memory/long_term/` 空实现。一个 LLM 调用同时输出 summary + observations，成本低收益高。
+- **P1 `smart-fill-hybrid-scene-router`**：mobile-app 工作台场景写死 `scene="ledger.record"`，admin-web 正则不全，直接影响记账/招工体验。引入 LLM 兜底识别统一两端路由。
+- **P1 `crop-template-system-library`**：新用户冷启动 + 现有查重逻辑分散且错误（API 层不查重，Skill 层 ilike 模糊匹配）。也是 P2 `extend-crop-template-with-region-tag` 的前置。
+- **P2 `extend-crop-template-with-region-tag`**：在 P1 之上加 `region_tag` 字段，让徐州西瓜和海南西瓜拿到不同阶段天数。作为 delta 提案，紧随 P1 之后做。
+- **P2 `add-dataflywheel-discovery-layer`**：不影响终端用户，但是数据飞轮从「能跑」到「能转」的关键升级。**工作量小（4.5 人日），适合作为 P0/P1 之间的"穿插任务"**。详细设计见 [design-spec 01.06 § 9](../farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md)。
+- **P3 `add-ai-assisted-password-recovery`**：用户群小、密码恢复事件少。工作量低，可随时穿插。
 
 ## 依赖关系
 
 ```
-enable-function-calling (P0)
+add-running-summary-compaction (P0, 独立)
         │
-        ├──────────────────┐
-        ▼                  ▼
-farm-context-aware-agent (P1)    session-management (P2)
-                                     │
-                                     ▼
-                              dual-weather-provider (P3)
+        ▼
+smart-fill-hybrid-scene-router (P1, 独立)
+        │
+        ├────────────────────┐
+        ▼                    ▼
+crop-template-system-library (P1, 独立)
+        │
+        ▼
+extend-crop-template-with-region-tag (P2)
+
+add-dataflywheel-discovery-layer (P2, 穿插, 独立)
+add-ai-assisted-password-recovery (P3, 穿插, 独立)
 ```
 
-P1 和 P2 可以并行实施（无互相依赖），但都依赖 P0。P3 依赖 P2。
+P0 完成后 P1 两项可并行；P2 region 依赖 P1 system-library；P2 discovery 与 P3 password 可在任意间隙穿插，不阻塞主路径。
 
 ## 各 Change 规模估算
 
 | Change | 改动文件数 | 核心模块 | 风险 |
 |--------|-----------|---------|------|
-| enable-function-calling | ~5 | config.py, llm.py, graph.py, base.j2 | 低（模型切换） |
-| farm-context-aware-agent | ~15 | DB迁移, /debts API, /crops/templates, 赊账管理页, 作物模板页 | 中（数据模型变更） |
-| session-management-and-context-injection | ~10 | 新增2模型, advisor.py, graph.py, base.j2 | 中（DB迁移） |
-| dual-weather-provider | ~12 | weather_service拆分, 新provider, config重构 | 中（密钥迁移） |
+| add-running-summary-compaction | ~8 | MemoryService, conversations 表写入, summary+observations 触发 | 中（DB 字段已存在但未启用） |
+| smart-fill-hybrid-scene-router | ~6 | mobile-app record_flow, admin-web smartCreateModel, 后端场景路由 | 中（两端协议统一） |
+| crop-template-system-library | ~10 | DB 迁移 + system templates seed, /crops/templates 查重, Skill 查重逻辑 | 中（数据迁移） |
+| extend-crop-template-with-region-tag | ~4 | crop_templates 加 region_tag, region 匹配, LLM prompt | 低（delta） |
+| add-dataflywheel-discovery-layer | ~8 | agent_turns 加字段, rule engine, judge worker, 工作台前端 | 低（不引入新基础设施） |
+| add-ai-assisted-password-recovery | ~5 | auth API, 密码恢复 token, admin 审批 | 低（独立模块） |

@@ -4,45 +4,49 @@
 TBD - created by archiving change compact-daily-advice-preview. Update Purpose after archive.
 ## Requirements
 ### Requirement: 首页显示紧凑预览卡片
-`HomeScreen` SHALL 在 `WeatherCardV2` 下方展示 `CompactAdviceCard`，高度不超过 110px，不显示完整建议列表。
+`HomeScreen` SHALL 在经营态势卡下方展示 `AI 今日建议` 列表，最多显示 `DailyAdviceResponse.items` 的前三条 `compact` 信息，不显示完整详情字段。
 
 #### Scenario: 有建议数据
-- **WHEN** `dailyAdvice` 返回 `{preview: "今日有雨，注意防涝", items: [...]}`
-- **THEN** 首页显示预览卡片，左侧灵宠 Emoji，右侧显示 "今日有雨，注意防涝" 和 "3 条农事建议"
+- **WHEN** `GET /agent/daily` 返回 3 条 items
+- **THEN** 首页显示 3 条建议，每条使用 `compact.icon`、`compact.title` 和 `compact.subtitle`
 
 #### Scenario: 无建议数据
-- **WHEN** `dailyAdvice` 为 null 或 items 为空
-- **THEN** 预览卡片显示 "暂无今日建议"，点击无反应或提示稍后重试
+- **WHEN** `GET /agent/daily` 返回 empty 模式响应
+- **THEN** 首页显示一条“暂无紧急建议”类 compact 建议，点击可进入详情页查看解释和可执行步骤
 
-#### Scenario: 旧数据无 preview 字段
-- **WHEN** `dailyAdvice.preview` 为空字符串
-- **THEN** 预览卡片根据 `weatherCondition` 显示默认文案（如 "天气晴好，适合农作"）
+#### Scenario: 旧数据无 compact 字段
+- **WHEN** 客户端收到旧格式 `{title, detail, priority, icon}`
+- **THEN** 首页使用旧字段构造兼容 compact 展示，其中旧 `detail` 是字符串说明
 
 ### Requirement: 预览卡片点击进入详情页
-点击 `CompactAdviceCard` SHALL 导航到 `AdviceDetailScreen`。
+点击首页任一 `AI 今日建议` 行 SHALL 导航到 `AdviceDetailScreen`，并传递同一接口响应中的 item 数据，不发起单条建议详情请求。
 
 #### Scenario: 正常跳转
-- **WHEN** 用户点击预览卡片
-- **THEN** 导航到 `AdviceDetailScreen`，传递 `items`、`preview`、`weatherCondition` 参数
+- **WHEN** 用户点击首页第一条建议箭头
+- **THEN** App 导航到 `AdviceDetailScreen`，并传入 `DailyAdviceResponse.items[0]`
 
-#### Scenario: 详情页数据加载
-- **WHEN** 用户通过外部链接或深层导航进入 `AdviceDetailScreen` 无参数
-- **THEN** 页面内部调用 `fetchDailyAdvice()` 获取数据，避免空白页
+#### Scenario: 不二次请求
+- **WHEN** 详情页由首页点击进入
+- **THEN** 详情页 SHALL 直接使用传入 item 的 `detail_view` 渲染，不调用 `/agent/daily/items/{id}`
+
+#### Scenario: 深层导航兜底
+- **WHEN** 用户通过深层导航进入详情页但没有传入 item
+- **THEN** 页面可调用 `GET /agent/daily` 获取当天响应，并默认展示第一条 item
 
 ### Requirement: 详情页展示完整建议列表
-`AdviceDetailScreen` SHALL 展示所有建议条目，包含天气氛围 Header 和建议列表。
+`AdviceDetailScreen` SHALL 展示单条建议的完整详情，包含顶部卡片、AI 判断依据、执行步骤、关联事项和底部动作。
 
-#### Scenario: 展示多条建议
-- **WHEN** `items` 有 3 条建议
-- **THEN** 详情页显示 Header（灵宠 + preview + 日期）和 3 条建议卡片，按 priority 排序
+#### Scenario: 展示单条建议详情
+- **WHEN** 详情页收到一个包含 `detail_view` 的 item
+- **THEN** 顶部卡片使用 `detail_view.title`、`detail_view.description` 和 `detail_view.hero_badges`，判断依据使用 `detail_view.evidence`，执行步骤使用 `detail_view.steps`
 
-#### Scenario: 建议条目展示
-- **WHEN** 展示单条建议 `{title: "关风口", detail: "明早12°", priority: 1, icon: "🌡️"}`
-- **THEN** 显示红色优先级竖条、标题 "关风口"、详情 "明早12°"、右侧 Emoji "🌡️"
+#### Scenario: 关联事项为空
+- **WHEN** `detail_view.related` 为空数组
+- **THEN** 详情页不显示空白关联事项列表，或显示“暂无关联事项”的轻量空状态
 
-#### Scenario: 空状态
-- **WHEN** `items` 为空数组
-- **THEN** 详情页显示 "暂无今日建议" 插图和 "咨询顾问" 按钮
+#### Scenario: 操作按钮
+- **WHEN** `detail_view.actions` 包含 `create_work_order` 和 `ask_agent`
+- **THEN** 底部区域展示“生成作业单”和“问问芽芽”两个操作入口
 
 ### Requirement: 详情页底部咨询入口
 `AdviceDetailScreen` SHALL 在底部提供跳转到 `AgentChatScreen` 的入口。
