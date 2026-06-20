@@ -210,6 +210,9 @@ def list_samples(
     request_id: str | None = None,
     q: str | None = None,
     unannotated_only: bool = False,
+    sort_by: str = "risk",
+    min_risk: float = 0.0,
+    severity: str = "all",
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -218,6 +221,10 @@ def list_samples(
         return {"items": [], "total": 0}
     if label is not None and label not in ALLOWED_LABELS:
         raise ValueError("INVALID_LABEL")
+    if sort_by not in {"risk", "time"}:
+        raise ValueError("INVALID_SORT_BY")
+    if severity not in {"P0", "P1", "all"}:
+        raise ValueError("INVALID_SEVERITY")
 
     query = db.query(AgentTurn).filter(AgentTurn.farm_id == farm_id)
     if session_id:
@@ -252,10 +259,23 @@ def list_samples(
             AgentDataFlywheelLabel.turn_id.isnot(None),
         )
         query = query.filter(~AgentTurn.id.in_(annotated_turn_ids))
+    if min_risk > 0:
+        query = query.filter(AgentTurn.risk_score >= min_risk)
+    if severity != "all":
+        query = query.filter(AgentTurn.risk_severity == severity)
 
     total = query.count()
+    ordering = (
+        (
+            AgentTurn.risk_score.desc(),
+            AgentTurn.created_at.desc(),
+            AgentTurn.id.desc(),
+        )
+        if sort_by == "risk"
+        else (AgentTurn.created_at.desc(), AgentTurn.id.desc())
+    )
     turns = (
-        query.order_by(AgentTurn.created_at.desc(), AgentTurn.id.desc())
+        query.order_by(*ordering)
         .offset(max(offset, 0))
         .limit(max(limit, 0))
         .all()
@@ -788,6 +808,14 @@ def _sample_row(
             events=events,
             pending_lifecycle=pending_lifecycle,
         ),
+        "risk_score": turn.risk_score,
+        "rule_score": turn.rule_score,
+        "risk_dominant_signal": turn.risk_dominant_signal,
+        "risk_severity": turn.risk_severity,
+        "rule_hits": turn.rule_hits or [],
+        "judge_bad_prob": turn.judge_bad_prob,
+        "judge_issue_type": turn.judge_issue_type,
+        "judge_suggested_label": turn.judge_suggested_label,
         "quality_labels": quality_labels,
         "annotation_status": "labeled" if quality_labels else "unlabeled",
         "prelabels": [_prelabel_to_dict(row) for row in prelabels],
@@ -833,6 +861,14 @@ def _turn_to_dict(turn: AgentTurn) -> dict[str, Any]:
         "request_id": turn.request_id,
         "token_total": turn.token_total,
         "latency_ms": turn.latency_ms,
+        "risk_score": turn.risk_score,
+        "rule_score": turn.rule_score,
+        "risk_dominant_signal": turn.risk_dominant_signal,
+        "risk_severity": turn.risk_severity,
+        "rule_hits": turn.rule_hits or [],
+        "judge_bad_prob": turn.judge_bad_prob,
+        "judge_issue_type": turn.judge_issue_type,
+        "judge_suggested_label": turn.judge_suggested_label,
         "status": turn.status,
     }
 

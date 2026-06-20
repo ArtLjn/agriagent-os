@@ -1,0 +1,9 @@
+[Unit]
+Description=Farm Manager DataFlywheel Judge batch
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/farm-manager/backend
+Environment=PYTHONPATH=/opt/farm-manager/backend
+ExecStart=/opt/farm-manager/backend/.venv/bin/python scripts/run_dataflywheel_judge.py

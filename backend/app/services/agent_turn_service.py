@@ -1,6 +1,7 @@
 """Agent turn 聚合记录服务。"""
 
 from datetime import datetime
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,7 @@ from app.models.agent_turn import AgentTurn
 from app.models.conversation import Conversation, ConversationMessage
 
 _PREVIEW_LIMIT = 120
+logger = logging.getLogger(__name__)
 
 
 def _preview(text: str | None) -> str | None:
@@ -75,6 +77,7 @@ def finish_turn(
     turn.pending_plan_id = pending_plan_id
     db.commit()
     db.refresh(turn)
+    _evaluate_discovery_rules(db, turn)
     return turn
 
 
@@ -87,6 +90,18 @@ def _existing_message_id(db: Session, message_id: int | None) -> int | None:
         .first()
     )
     return message_id if exists else None
+
+
+def _evaluate_discovery_rules(db: Session, turn: AgentTurn) -> None:
+    try:
+        from app.evaluation.discovery.rule_engine import evaluate_turn
+
+        evaluate_turn(db, turn)
+    except Exception as exc:
+        logger.warning(
+            "dataflywheel_discovery_rule_failed",
+            extra={"turn_id": turn.id, "error": str(exc)},
+        )
 
 
 def mark_event_range(
@@ -106,6 +121,7 @@ def mark_event_range(
     turn.event_write_status = write_status
     db.commit()
     db.refresh(turn)
+    _evaluate_discovery_rules(db, turn)
     if turn.conversation_id is not None and seq_end is not None:
         db.query(Conversation).filter(Conversation.id == turn.conversation_id).update(
             {"last_event_seq": seq_end, "last_active_at": datetime.now()}

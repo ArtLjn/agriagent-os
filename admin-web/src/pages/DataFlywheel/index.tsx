@@ -60,6 +60,9 @@ interface SampleQuery {
   searchText: string;
   qualityLabel?: DataFlywheelLabel;
   unannotatedOnly: boolean;
+  sortBy: 'risk' | 'time';
+  hideLowRisk: boolean;
+  severity: 'P0' | 'P1' | 'all';
 }
 
 type AnnotationTarget =
@@ -95,10 +98,17 @@ export default function DataFlywheel() {
   const [qualityLabel, setQualityLabel] = useState<DataFlywheelLabel | undefined>();
   const [unannotatedOnly, setUnannotatedOnly] = useState(false);
   const [hideAiNormal, setHideAiNormal] = useState(false);
+  const initialSortBy = new URLSearchParams(window.location.search).get('sort') === 'time' ? 'time' : 'risk';
+  const [sortBy, setSortBy] = useState<'risk' | 'time'>(initialSortBy);
+  const [hideLowRisk, setHideLowRisk] = useState(false);
+  const [riskSeverity, setRiskSeverity] = useState<'P0' | 'P1' | 'all'>('all');
   const [query, setQuery] = useState<SampleQuery>({
     searchText: '',
     qualityLabel: undefined,
     unannotatedOnly: false,
+    sortBy: initialSortBy,
+    hideLowRisk: false,
+    severity: 'all',
   });
   const [selectedSample, setSelectedSample] = useState<DataFlywheelSample | null>(null);
   const [detail, setDetail] = useState<DataFlywheelDetail | null>(null);
@@ -202,6 +212,9 @@ export default function DataFlywheel() {
         offset: 0,
         label: nextQuery.qualityLabel,
         unannotated_only: nextQuery.unannotatedOnly || undefined,
+        sort: nextQuery.sortBy,
+        min_risk: nextQuery.hideLowRisk ? 0.3 : undefined,
+        severity: nextQuery.severity === 'all' ? undefined : nextQuery.severity,
         q: trimmed || undefined,
       });
       if (requestSeq !== listRequestSeq.current) return;
@@ -299,15 +312,27 @@ export default function DataFlywheel() {
     [loadTraceDiagnosticsForReview]
   );
 
-  const submitQuery = () => {
+  const applyQuery = (nextQuery: SampleQuery) => {
     setActiveArchiveKey(ALL_ARCHIVE_KEY);
     setSessionReview(null);
     clearSelection();
-    setQuery({
+    setQuery(nextQuery);
+  };
+
+  const currentQuery = (
+    overrides: Partial<Pick<SampleQuery, 'sortBy' | 'hideLowRisk' | 'severity'>> = {}
+  ): SampleQuery => ({
       searchText,
       qualityLabel,
       unannotatedOnly,
-    });
+      sortBy,
+      hideLowRisk,
+      severity: riskSeverity,
+      ...overrides,
+  });
+
+  const submitQuery = () => {
+    applyQuery(currentQuery());
   };
 
   const refreshSamples = () => {
@@ -944,6 +969,39 @@ export default function DataFlywheel() {
           <Checkbox checked={hideAiNormal} onChange={(event) => setHideAiNormal(event.target.checked)}>
             隐藏 AI 判定正常
           </Checkbox>
+          <Checkbox
+            checked={hideLowRisk}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setHideLowRisk(checked);
+              applyQuery(currentQuery({ hideLowRisk: checked }));
+            }}
+          >
+            隐藏低风险
+          </Checkbox>
+          <Checkbox
+            checked={riskSeverity === 'P0'}
+            onChange={(event) => {
+              const severity = event.target.checked ? 'P0' : 'all';
+              setRiskSeverity(severity);
+              applyQuery(currentQuery({ severity }));
+            }}
+          >
+            P0 严重
+          </Checkbox>
+          <Select
+            aria-label="排序方式"
+            value={sortBy}
+            onChange={(value) => {
+              setSortBy(value);
+              applyQuery(currentQuery({ sortBy: value }));
+            }}
+            options={[
+              { label: '风险排序', value: 'risk' },
+              { label: '时间排序', value: 'time' },
+            ]}
+            style={{ width: 116 }}
+          />
           <Button type="primary" icon={<SearchOutlined />} loading={loadingList} onClick={submitQuery}>
             查询
           </Button>

@@ -70,6 +70,14 @@ export interface DataFlywheelSample {
   issue_candidates: DataFlywheelIssueCandidate[];
   token_total: number | null;
   latency_ms: number | null;
+  risk_score?: number | null;
+  rule_score?: number | null;
+  risk_dominant_signal?: 'rule' | 'judge' | string | null;
+  risk_severity?: 'P0' | 'P1' | string | null;
+  rule_hits?: string[];
+  judge_bad_prob?: number | null;
+  judge_issue_type?: string | null;
+  judge_suggested_label?: DataFlywheelLabel | string | null;
   source_type: string;
   event_log_status?: 'available' | 'missing' | 'unbound' | string;
   chat_record_source?: 'mysql_conversation_messages' | string;
@@ -80,6 +88,10 @@ export interface DataFlywheelSampleListParams {
   sample_type?: string;
   label?: DataFlywheelLabel | string;
   unannotated_only?: boolean;
+  sort?: 'risk' | 'time';
+  sort_by?: 'risk' | 'time';
+  min_risk?: number;
+  severity?: 'P0' | 'P1' | 'all';
   session_id?: string;
   request_id?: string;
   q?: string;

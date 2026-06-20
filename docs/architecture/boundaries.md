@@ -33,8 +33,18 @@ api/
 | Context `context/` | 业务 selector、Memory Service 接口、token budget、cache adapter | Prompt 版本治理、LLM Runtime 节点执行 |
 | Memory `memory/` | Memory models、schemas、retrieval、consolidation、infra adapter | API 路由、Agent Runtime 内部状态机细节 |
 | Skills `agent/skills/` | Skill schema、权限、执行适配、业务模块端口 | API request 对象、Prompt/Context 存储实现 |
-| Evaluation `evaluation/` | replay cases、Prompt 版本、Context 摘要、Skill 调用结果、trace | 生产 API 路由编排、业务写入副作用 |
+| Evaluation `evaluation/` | replay cases、Prompt 版本、Context 摘要、Skill 调用结果、trace、DataFlywheel discovery 风险信号 | 生产 API 路由编排、业务写入副作用 |
 | Observability `observability/` | trace、token、latency、tool call、memory observe、evaluation capture 事件 | 业务决策、Prompt 组合、Context 选择 |
+
+### DataFlywheel Discovery 边界
+
+`app/evaluation/discovery/` 负责 DataFlywheel 标注候选发现层：
+
+- Rule Engine：读取 `rules.yaml`，基于 turn 的白名单上下文计算 `rule_hits`、`rule_score`、`risk_severity`。
+- Risk Scorer：融合规则信号和 Judge 信号，写出 `risk_score` 与 `risk_dominant_signal`。
+- Judge Worker：批处理未人工标注 turn 的 `judge_*` 风险信号，并受成本阈值保护。
+
+Discovery 只能依赖 `models/`、`services` 中稳定的 judge client 协议和 `core` LLM manager。不得直接承载 Admin API 路由逻辑，不得写入最终人工标注真值字段，不得把 `judge_*` 输出静默转为训练或回归数据真值。
 
 ## 禁止规则
 

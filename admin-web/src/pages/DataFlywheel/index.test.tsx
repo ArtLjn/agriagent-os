@@ -96,6 +96,14 @@ const sample: DataFlywheelSample = {
   latency_ms: 920,
   source_type: 'debug_event',
   created_at: '2026-06-11T08:00:00Z',
+  risk_score: 0.88,
+  rule_score: 0.88,
+  risk_dominant_signal: 'rule',
+  risk_severity: 'P0',
+  rule_hits: ['sensitive_info_leak'],
+  judge_bad_prob: 0.62,
+  judge_issue_type: 'sensitive_info_leak',
+  judge_suggested_label: 'sensitive_info_leak',
 };
 
 const anotherSample: DataFlywheelSample = {
@@ -674,13 +682,15 @@ describe('DataFlywheel 页面', () => {
     await waitFor(() => {
       expect(mockedList).toHaveBeenCalledTimes(2);
     });
-    expect(mockedList).toHaveBeenLastCalledWith({
-      limit: 50,
-      offset: 0,
-      label: undefined,
-      unannotated_only: undefined,
-      q: 'req:new',
-    });
+    expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        limit: 50,
+        offset: 0,
+        label: undefined,
+        unannotated_only: undefined,
+        q: 'req:new',
+      })
+    );
   });
 
   it('点击问题候选后只显示有候选问题的样本', async () => {
@@ -1131,6 +1141,42 @@ describe('DataFlywheel 页面', () => {
 
     expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
     expect(screen.queryByText('查询今天农场概况')).not.toBeInTheDocument();
+  });
+
+  it('默认按风险加载并支持隐藏低风险与 P0 筛选', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue({ items: [sample, anotherSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('帮我查一下张三这个月工资有没有漏记');
+
+    expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'risk' })
+    );
+    expect(screen.getAllByText('Rule Risk: 0.88').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('P0').length).toBeGreaterThan(0);
+
+    await user.click(screen.getByLabelText('隐藏低风险'));
+    expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'risk', min_risk: 0.3 })
+    );
+
+    await user.click(screen.getByLabelText('P0 严重'));
+    expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'risk', min_risk: 0.3, severity: 'P0' })
+    );
+  });
+
+  it('URL sort=time 时按时间排序回退加载', async () => {
+    window.history.pushState({}, '', '/dev/data-flywheel?sort=time');
+    mockedList.mockResolvedValue({ items: [anotherSample], total: 1 });
+    render(<DataFlywheel />);
+
+    await screen.findByText('给李四补一条今天的浇水记录');
+
+    expect(mockedList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'time' })
+    );
   });
 
   it('事件 JSONL 缺失时明确提示聊天来自 MySQL 且可同步重建', async () => {

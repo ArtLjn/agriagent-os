@@ -75,6 +75,21 @@ export default function SampleQueueTable({
               规则：{issueText[issue.type] ?? issue.type}
             </Tag>
           ))}
+          {typeof record.risk_score === 'number' && (
+            <Tag
+              color={record.risk_severity === 'P0' ? 'red' : 'purple'}
+              style={statusTagStyle}
+              title={riskSignalTitle(record.risk_dominant_signal)}
+            >
+              {riskSignalLabel(record.risk_dominant_signal)}
+              Risk: {record.risk_score.toFixed(2)}
+            </Tag>
+          )}
+          {record.risk_severity === 'P0' && (
+            <Tag color="red" style={statusTagStyle}>
+              P0
+            </Tag>
+          )}
         </div>
       ),
     },
@@ -180,3 +195,15 @@ const statusTagStyle: React.CSSProperties = {
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 };
+
+function riskSignalTitle(signal?: string | null) {
+  if (signal === 'rule') return '主导信号：规则';
+  if (signal === 'judge') return '主导信号：AI Judge';
+  return '主导信号：暂无';
+}
+
+function riskSignalLabel(signal?: string | null) {
+  if (signal === 'rule') return 'Rule ';
+  if (signal === 'judge') return 'Judge ';
+  return '';
+}
