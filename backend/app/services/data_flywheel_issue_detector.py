@@ -94,6 +94,8 @@ def detect_issue_candidates(
     write_selected = [tool for tool in selected_tools if _is_write_tool(tool)]
     write_successful = [tool for tool in successful_tools if _is_write_tool(tool)]
     pending_tools = _pending_tools(pending_lifecycle)
+    user_input_preview = _evidence_text(user_input)
+    selected_tools_text = ", ".join(selected_tools) if selected_tools else "无"
 
     if (
         _needs_external_data(user_input)
@@ -105,8 +107,8 @@ def detect_issue_candidates(
             _candidate(
                 "wrong_tool_selection",
                 "high",
-                "用户需要实时/外部数据，但 router 没有选择任何工具",
-                _evidence_text(user_input),
+                f"用户输入「{user_input_preview}」需要实时/外部数据，但 router 没有选择任何工具",
+                user_input_preview,
                 "wrong_tool_selection",
             )
         )
@@ -115,18 +117,19 @@ def detect_issue_candidates(
             _candidate(
                 "hallucinated_execution",
                 "high",
-                "回复声称已执行写入，但没有成功的写操作工具调用",
-                ", ".join(selected_tools) or "no selected tool",
+                f"回复声称已执行写入，但选中工具「{selected_tools_text}」未成功调用",
+                selected_tools_text,
                 "hallucinated_execution",
             )
         )
     if _is_question(user_input) and write_selected:
+        write_text = ", ".join(write_selected)
         candidates.append(
             _candidate(
                 "unsafe_write_on_question",
                 "high",
-                "用户是查询/确认类问题，但 router 选择了写操作工具",
-                ", ".join(write_selected),
+                f"用户是查询/确认类问题「{user_input_preview}」，但 router 选择了写操作工具「{write_text}」",
+                write_text,
                 "pending_missed",
             )
         )
@@ -136,45 +139,49 @@ def detect_issue_candidates(
         if write_successful and tool not in pending_tools
     ]
     if missing_pending:
+        missing_text = ", ".join(missing_pending)
         candidates.append(
             _candidate(
                 "pending_missed",
                 "high",
-                "router 选择了写操作工具，但 pending lifecycle 中没有对应的确认计划",
-                ", ".join(missing_pending),
+                f"router 选择了写操作工具「{missing_text}」，但 pending lifecycle 中没有对应的确认计划",
+                missing_text,
                 "pending_missed",
             )
         )
     disabled_workers = _disabled_worker_evidence(events)
     if disabled_workers:
+        workers_text = ", ".join(disabled_workers)
         candidates.append(
             _candidate(
                 "disabled_worker_used",
                 "high",
-                "已停用工人仍被安排到作业或工资记录中",
-                ", ".join(disabled_workers),
+                f"已停用工人「{workers_text}」仍被安排到作业或工资记录中",
+                workers_text,
                 "disabled_worker_used",
             )
         )
 
     missing_wage_workers = _missing_wage_evidence(events)
     if missing_wage_workers:
+        workers_text = ", ".join(missing_wage_workers)
         candidates.append(
             _candidate(
                 "missing_wage",
                 "high",
-                "作业包含工人，但没有工资单价、已付金额、不计工资或欠款策略",
-                ", ".join(missing_wage_workers),
+                f"作业包含工人「{workers_text}」，但没有工资单价、已付金额、不计工资或欠款策略",
+                workers_text,
                 "missing_wage",
             )
         )
     if failed_tools and _claims_execution(assistant_reply):
+        failed_text = ", ".join(failed_tools)
         candidates.append(
             _candidate(
                 "tool_error_ignored",
                 "medium",
-                "工具调用失败后，回复仍呈现为已完成",
-                ", ".join(failed_tools),
+                f"工具「{failed_text}」调用失败后，回复仍呈现为已完成",
+                failed_text,
                 "tool_error_ignored",
             )
         )
@@ -184,7 +191,7 @@ def detect_issue_candidates(
             _candidate(
                 "sensitive_info_leak",
                 "critical",
-                "回复疑似暴露模型参数或系统提示",
+                f"回复疑似暴露内部信息（命中关键词「{sensitive_hit}」）",
                 sensitive_hit,
                 "sensitive_info_leak",
             )
