@@ -13,7 +13,6 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { ReloadOutlined } from '@ant-design/icons';
@@ -67,7 +66,6 @@ export default function RepairPackListPanel({ onOpenDetail }: RepairPackListPane
       setTotal(data.total);
     } catch (error) {
       messageApi.error('加载修复包列表失败');
-      // eslint-disable-next-line no-console
       console.error('[RepairPackListPanel] load failed', error);
     } finally {
       setLoading(false);
@@ -90,7 +88,6 @@ export default function RepairPackListPanel({ onOpenDetail }: RepairPackListPane
       await loadPacks();
     } catch (error) {
       messageApi.error('操作失败');
-      // eslint-disable-next-line no-console
       console.error('[RepairPackListPanel] action failed', error);
     } finally {
       setActingPackId(null);
@@ -129,7 +126,6 @@ export default function RepairPackListPanel({ onOpenDetail }: RepairPackListPane
     } catch (error) {
       onOpenDetail(pack);
       messageApi.warning('加载失败案例详情失败，仅展示元数据');
-      // eslint-disable-next-line no-console
       console.error('[RepairPackListPanel] getRepairPack failed', error);
     } finally {
       setActingPackId(null);

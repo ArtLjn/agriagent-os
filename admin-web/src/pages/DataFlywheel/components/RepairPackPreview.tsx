@@ -1,4 +1,4 @@
-import { Button, Empty, Modal, Space, Tag, Tooltip, Typography } from 'antd';
+import { Button, Empty, Modal, Space, Tag, Typography } from 'antd';
 import type { CSSProperties } from 'react';
 
 import type { DataFlywheelRepairPack, RepairPackCase } from '../../../api/dataFlywheel';

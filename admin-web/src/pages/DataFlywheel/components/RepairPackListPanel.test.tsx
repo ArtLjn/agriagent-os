@@ -4,11 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import RepairPackListPanel from './RepairPackListPanel';
 import {
-  discardRepairPack,
   getRepairPack,
   listRepairPacks,
-  markRepairPackResolved,
-  recordRepairPackVerificationFailure,
   reopenRepairPack,
   type DataFlywheelRepairPack,
 } from '../../../api/dataFlywheel';
