@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Card, Checkbox, Input, Modal, Select, Space, Typography, message } from 'antd';
-import { CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { CloudDownloadOutlined, CloudSyncOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
   getTraceDiagnostics,
@@ -112,6 +112,7 @@ export default function DataFlywheel() {
   const [repairPack, setRepairPack] = useState<DataFlywheelRepairPack | null>(null);
   const [repairPackOpen, setRepairPackOpen] = useState(false);
   const [repairCandidate, setRepairCandidate] = useState<DataFlywheelRepairCandidate | null>(null);
+  const [selectedProblemSessionKeys, setSelectedProblemSessionKeys] = useState<string[]>([]);
   const [activeArchiveKey, setActiveArchiveKey] = useState(ALL_ARCHIVE_KEY);
   const [sessionReview, setSessionReview] = useState<DataFlywheelSessionReview | null>(null);
   const [loadingSessionReview, setLoadingSessionReview] = useState(false);
@@ -150,6 +151,10 @@ export default function DataFlywheel() {
   const confirmedIssueCount = useMemo(
     () => confirmedIssueTotal(samples, sessionAnnotationOverlays),
     [samples, sessionAnnotationOverlays]
+  );
+  const selectedRepairSampleIds = useMemo(
+    () => confirmedProblemSampleIds(samples, selectedProblemSessionKeys),
+    [samples, selectedProblemSessionKeys]
   );
   const visibleSamples = useMemo(() => {
     const baseSamples = hideAiNormal ? samples.filter((sample) => !isAiNormalSample(sample)) : samples;
@@ -200,6 +205,14 @@ export default function DataFlywheel() {
       if (requestSeq !== listRequestSeq.current) return;
       setSamples(result.items);
       setTotal(result.total);
+      const problemSessionKeys = new Set(
+        result.items
+          .filter(hasTurnConfirmedIssue)
+          .map(sessionArchiveKey)
+      );
+      setSelectedProblemSessionKeys((current) =>
+        current.filter((key) => problemSessionKeys.has(key))
+      );
       setSelectedSample((current) => {
         if (!current || result.items.some((item) => item.sample_id === current.sample_id)) {
           return current;
@@ -528,6 +541,24 @@ export default function DataFlywheel() {
     }
   };
 
+  const handleCreateBatchRepairPack = async () => {
+    if (selectedRepairSampleIds.length === 0) return;
+    setActing(true);
+    try {
+      const result = await createRepairPack({
+        sample_ids: selectedRepairSampleIds,
+        limit: selectedRepairSampleIds.length,
+      });
+      setRepairPack(result);
+      setRepairPackOpen(true);
+      message.success(`已生成 ${selectedRepairSampleIds.length} 条失败案例修复包`);
+    } catch {
+      message.error('批量生成修复包失败，请按修复目标分组后重试');
+    } finally {
+      setActing(false);
+    }
+  };
+
   const handleResolveRepairPack = async () => {
     if (!repairPack) return;
     setActing(true);
@@ -779,6 +810,8 @@ export default function DataFlywheel() {
       confirmedIssueKey={CONFIRMED_ISSUE_ARCHIVE_KEY}
       showBuckets={false}
       testIdPrefix="problem-session"
+      selectedKeys={selectedProblemSessionKeys}
+      onSelectedKeysChange={setSelectedProblemSessionKeys}
       onSelect={handleSelectProblemSession}
     />
   ) : isSessionArchiveActive ? (
@@ -912,6 +945,17 @@ export default function DataFlywheel() {
             onClick={handleBatchPrelabel}
           >
             批量 AI 分析
+          </Button>
+          <Button
+            aria-label="批量导出修复包"
+            icon={<CloudDownloadOutlined />}
+            loading={acting}
+            disabled={selectedRepairSampleIds.length === 0}
+            onClick={handleCreateBatchRepairPack}
+          >
+            {selectedRepairSampleIds.length > 0
+              ? `批量导出修复包 ${selectedRepairSampleIds.length}`
+              : '批量导出修复包'}
           </Button>
           <Typography.Text style={{ color: palette.textMuted }}>共 {total} 条</Typography.Text>
         </Space>
@@ -1066,6 +1110,13 @@ function latestConfirmedProblemTurn(samples: DataFlywheelSample[], sessionKey: s
 
 function sessionProblemItems(samples: DataFlywheelSample[], sessionKey: string) {
   return confirmedProblemTurns(samples, sessionKey).map((sample) => ({ sample }));
+}
+
+function confirmedProblemSampleIds(samples: DataFlywheelSample[], sessionKeys: string[]) {
+  const selectedSessions = new Set(sessionKeys);
+  return samples
+    .filter((sample) => hasTurnConfirmedIssue(sample) && selectedSessions.has(sessionArchiveKey(sample)))
+    .map((sample) => sample.sample_id);
 }
 
 function confirmedProblemTurns(samples: DataFlywheelSample[], sessionKey: string) {

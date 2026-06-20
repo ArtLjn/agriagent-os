@@ -1,4 +1,4 @@
-import { Badge, Card, Empty, Space, Tag, Typography } from 'antd';
+import { Badge, Card, Checkbox, Empty, Space, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 
@@ -30,6 +30,8 @@ interface SessionArchivePanelProps {
   showBuckets?: boolean;
   orientation?: 'vertical' | 'horizontal';
   testIdPrefix?: string;
+  selectedKeys?: string[];
+  onSelectedKeysChange?: (keys: string[]) => void;
   onSelect: (key: string) => void;
 }
 
@@ -48,6 +50,8 @@ export default function SessionArchivePanel({
   showBuckets = true,
   orientation = 'vertical',
   testIdPrefix = 'archive-session',
+  selectedKeys = [],
+  onSelectedKeysChange,
   onSelect,
 }: SessionArchivePanelProps) {
   const horizontal = orientation === 'horizontal';
@@ -137,33 +141,50 @@ export default function SessionArchivePanel({
     </button>
   ));
 
-  const groupButtons = groups.map((group) => (
-    <button
-      key={group.key}
-      type="button"
-      data-testid={`${testIdPrefix}-${group.sessionId ?? 'unknown'}`}
-      onClick={() => onSelect(group.key)}
-      style={archiveButtonStyle(activeKey === group.key, horizontal)}
-    >
-      <span style={{ minWidth: 0 }}>
-        <Typography.Text ellipsis style={{ color: palette.text, maxWidth: '100%' }}>
-          {group.sessionId ?? '未关联会话'}
-        </Typography.Text>
-        <Typography.Text
-          ellipsis
-          style={{ display: 'block', color: palette.textMuted, fontSize: 12, marginTop: 4 }}
-        >
-          #{group.latestTurnId} {group.latestInputPreview || '无输入摘要'}
-        </Typography.Text>
-        <Space size={4} wrap style={{ marginTop: 8 }}>
-          <Tag color="blue">{group.total} turn</Tag>
-          {group.unannotated > 0 && <Tag color="gold">{group.unannotated} 未标注</Tag>}
-          {group.sessionLabels > 0 && <Tag color="purple">{group.sessionLabels} 会话标注</Tag>}
-          {group.badCases > 0 && <Tag color="red">{group.badCases} bad</Tag>}
-        </Space>
-      </span>
-    </button>
-  ));
+  const groupButtons = groups.map((group) => {
+    const selected = selectedKeys.includes(group.key);
+    return (
+      <button
+        key={group.key}
+        type="button"
+        data-testid={`${testIdPrefix}-${group.sessionId ?? 'unknown'}`}
+        onClick={() => onSelect(group.key)}
+        style={archiveButtonStyle(activeKey === group.key, horizontal)}
+      >
+        {onSelectedKeysChange && (
+          <Checkbox
+            aria-label={`选择问题会话 ${group.sessionId ?? '未关联会话'}`}
+            checked={selected}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              const nextKeys = event.target.checked
+                ? [...selectedKeys, group.key]
+                : selectedKeys.filter((key) => key !== group.key);
+              onSelectedKeysChange(Array.from(new Set(nextKeys)));
+            }}
+            style={archiveCheckboxStyle}
+          />
+        )}
+        <span style={{ minWidth: 0, flex: 1 }}>
+          <Typography.Text ellipsis style={{ color: palette.text, maxWidth: '100%' }}>
+            {group.sessionId ?? '未关联会话'}
+          </Typography.Text>
+          <Typography.Text
+            ellipsis
+            style={{ display: 'block', color: palette.textMuted, fontSize: 12, marginTop: 4 }}
+          >
+            #{group.latestTurnId} {group.latestInputPreview || '无输入摘要'}
+          </Typography.Text>
+          <Space size={4} wrap style={{ marginTop: 8 }}>
+            <Tag color="blue">{group.total} turn</Tag>
+            {group.unannotated > 0 && <Tag color="gold">{group.unannotated} 未标注</Tag>}
+            {group.sessionLabels > 0 && <Tag color="purple">{group.sessionLabels} 会话标注</Tag>}
+            {group.badCases > 0 && <Tag color="red">{group.badCases} bad</Tag>}
+          </Space>
+        </span>
+      </button>
+    );
+  });
 
   return (
     <Card
@@ -284,6 +305,11 @@ const customScrollbarThumbStyle: CSSProperties = {
   bottom: 2,
   borderRadius: 999,
   background: palette.border,
+};
+
+const archiveCheckboxStyle: CSSProperties = {
+  flexShrink: 0,
+  marginTop: 2,
 };
 
 const archiveCardStyle: CSSProperties = {

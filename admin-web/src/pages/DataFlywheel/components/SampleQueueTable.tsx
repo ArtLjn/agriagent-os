@@ -1,5 +1,5 @@
 import { Space, Table, Tag, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 
 import type { DataFlywheelSample } from '../../../api/dataFlywheel';
 import { palette } from '../../../styles/theme';
@@ -8,6 +8,8 @@ interface SampleQueueTableProps {
   samples: DataFlywheelSample[];
   loading: boolean;
   selectedSampleId?: string;
+  selectedSampleIds?: string[];
+  onSelectedSampleIdsChange?: (sampleIds: string[]) => void;
   onSelect: (sample: DataFlywheelSample) => void;
 }
 
@@ -40,7 +42,14 @@ const issueText: Record<string, string> = {
   off_topic: '答非所问',
 };
 
-export default function SampleQueueTable({ samples, loading, selectedSampleId, onSelect }: SampleQueueTableProps) {
+export default function SampleQueueTable({
+  samples,
+  loading,
+  selectedSampleId,
+  selectedSampleIds = [],
+  onSelectedSampleIdsChange,
+  onSelect,
+}: SampleQueueTableProps) {
   const columns: ColumnsType<DataFlywheelSample> = [
     {
       title: '状态',
@@ -48,7 +57,9 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
       width: 160,
       render: (status: string, record) => (
         <div style={statusStackStyle}>
-          <Tag color={labelColor(status)} style={statusTagStyle}>{status}</Tag>
+          <Tag color={labelColor(status)} style={statusTagStyle}>
+            {status}
+          </Tag>
           {record.quality_labels.slice(0, 1).map((label) => (
             <Tag key={label} color="blue" style={statusTagStyle} title={labelText[label] ?? label}>
               {labelText[label] ?? label}
@@ -117,6 +128,16 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
       ),
     },
   ];
+  const rowSelection: TableRowSelection<DataFlywheelSample> | undefined = onSelectedSampleIdsChange
+    ? {
+        selectedRowKeys: selectedSampleIds,
+        preserveSelectedRowKeys: true,
+        onChange: (keys) => onSelectedSampleIdsChange(keys.map(String)),
+        getCheckboxProps: (record) => ({
+          'aria-label': `Select row ${record.sample_id}`,
+        }) as ReturnType<NonNullable<TableRowSelection<DataFlywheelSample>['getCheckboxProps']>>,
+      }
+    : undefined;
 
   return (
     <div style={{ height: '100%', minHeight: 0 }}>
@@ -127,6 +148,7 @@ export default function SampleQueueTable({ samples, loading, selectedSampleId, o
         columns={columns}
         dataSource={samples}
         pagination={false}
+        rowSelection={rowSelection}
         sticky
         onRow={(record) => ({
           'data-testid': `sample-row-${record.sample_id}`,

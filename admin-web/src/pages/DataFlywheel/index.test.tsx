@@ -9,6 +9,7 @@ import {
   acceptSamplePrelabel,
   addSampleLabel,
   createCaseDraft,
+  createRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
   getDataFlywheelSyncJob,
@@ -27,6 +28,7 @@ import {
 import type {
   DataFlywheelDetail,
   DataFlywheelPrelabel,
+  DataFlywheelRepairPack,
   DataFlywheelSample,
   DataFlywheelSessionAnnotations,
   DataFlywheelSessionReview,
@@ -37,6 +39,7 @@ vi.mock('../../api/dataFlywheel', () => ({
   acceptSamplePrelabel: vi.fn(),
   addSampleLabel: vi.fn(),
   createCaseDraft: vi.fn(),
+  createRepairPack: vi.fn(),
   createSamplePrelabel: vi.fn(),
   createSamplePrelabelBatch: vi.fn(),
   exportSampleJsonl: vi.fn(),
@@ -343,6 +346,7 @@ const mockedPrelabelBatchJob = vi.mocked(getSamplePrelabelBatchJob);
 const mockedAcceptPrelabel = vi.mocked(acceptSamplePrelabel);
 const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateDraft = vi.mocked(createCaseDraft);
+const mockedCreateRepairPack = vi.mocked(createRepairPack);
 const mockedCreatePrelabel = vi.mocked(createSamplePrelabel);
 const mockedMarkBadCase = vi.mocked(markBadCase);
 const mockedDeleteLabel = vi.mocked(deleteSampleLabel);
@@ -390,6 +394,35 @@ const emptyReflectionDiagnostics = (requestId: string): TraceDiagnostics => ({
     issue_codes: [],
   },
 });
+
+const repairPack: DataFlywheelRepairPack = {
+  id: 1,
+  pack_id: 'repair-guardrail-abc123',
+  fix_target: 'guardrail',
+  labels: ['sensitive_info_leak'],
+  source_sample_ids: [sample.sample_id, anotherSample.sample_id],
+  source_label_ids: [1, 4],
+  status: 'exported',
+  export_path: 'data/repair-packs/repair-guardrail-abc123',
+  manifest: {
+    pack_id: 'repair-guardrail-abc123',
+    fix_target: 'guardrail',
+    verification_commands: ['pytest tests/services/test_data_flywheel_repair_pack_service.py -q'],
+    warnings: [],
+  },
+  payload: {
+    manifest: {
+      pack_id: 'repair-guardrail-abc123',
+      fix_target: 'guardrail',
+      verification_commands: ['pytest tests/services/test_data_flywheel_repair_pack_service.py -q'],
+      warnings: [],
+    },
+    cases_jsonl: [],
+    readme: '# Repair Pack repair-guardrail-abc123',
+    debug_files: {},
+    regression_drafts: {},
+  },
+};
 
 describe('DataFlywheel 页面', () => {
   beforeEach(() => {
@@ -475,6 +508,7 @@ describe('DataFlywheel 页面', () => {
       case_json: { request_id: 'req:abc', assertion: 'case_json' },
       created_by: 'admin',
     });
+    mockedCreateRepairPack.mockResolvedValue(repairPack);
     mockedMarkBadCase.mockResolvedValue({
       id: 3,
       sample_id: sample.sample_id,
@@ -526,6 +560,60 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getAllByText('selected_tools').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('tab', { name: /pending lifecycle/ }));
     expect(screen.getByText('pending.plan.created')).toBeInTheDocument();
+  });
+
+  it('批量导出修复包只使用已标注问题列表，不使用用户会话勾选', async () => {
+    const confirmedBadSample: DataFlywheelSample = {
+      ...anotherSample,
+      quality_labels: ['bad_reply'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [sample, confirmedBadSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    await userEvent.click(screen.getByTestId('archive-confirmed-issues'));
+    await userEvent.click(screen.getByRole('checkbox', { name: /选择问题会话 session-b/ }));
+    await userEvent.click(screen.getByRole('button', { name: '批量导出修复包' }));
+
+    await waitFor(() => {
+      expect(mockedCreateRepairPack).toHaveBeenCalledWith({
+        sample_ids: [confirmedBadSample.sample_id],
+        limit: 1,
+      });
+    });
+    expect(await screen.findByText('repair-guardrail-abc123')).toBeInTheDocument();
+  });
+
+  it('已标注问题列表支持勾选问题会话后批量导出', async () => {
+    const user = userEvent.setup();
+    const confirmedBadSample: DataFlywheelSample = {
+      ...anotherSample,
+      quality_labels: ['bad_reply'],
+      annotation_status: 'labeled',
+      issue_candidates: [],
+    };
+    mockedList.mockResolvedValue({ items: [sample, confirmedBadSample], total: 2 });
+    render(<DataFlywheel />);
+
+    await screen.findByTestId('sample-row-turn:session-a:3');
+    await user.click(screen.getByTestId('archive-confirmed-issues'));
+
+    expect(screen.getByRole('button', { name: '批量导出修复包' })).toBeDisabled();
+
+    await user.click(screen.getByRole('checkbox', { name: /选择问题会话 session-b/ }));
+    const exportButton = screen.getByRole('button', { name: '批量导出修复包' });
+    expect(exportButton).toHaveTextContent('批量导出修复包 1');
+    expect(exportButton).toBeEnabled();
+    await user.click(exportButton);
+
+    await waitFor(() => {
+      expect(mockedCreateRepairPack).toHaveBeenCalledWith({
+        sample_ids: [confirmedBadSample.sample_id],
+        limit: 1,
+      });
+    });
   });
 
   it('输入搜索框不会立刻重新请求，点击查询后才使用通用 q 搜索', async () => {
