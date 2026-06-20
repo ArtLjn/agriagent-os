@@ -571,7 +571,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   String get _periodTitle {
     if (_dateFilter == DateRangePreset.allTime) return '全部时间';
     if (_dateFilter == DateRangePreset.custom && _hasCustomRange) {
-      return _customRangeText;
+      return _customRangeFull;
     }
     if (_dateFilter == DateRangePreset.currentMonth ||
         _dateFilter == DateRangePreset.previousMonth) {
@@ -582,19 +582,56 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
 
   String get _periodLabel {
     if (_dateFilter == DateRangePreset.custom && _hasCustomRange) {
-      return _customRangeText;
+      return _customRangeShort;
     }
     return _dateFilter.label;
   }
 
   bool get _hasCustomRange => _customStart != null && _customEnd != null;
 
-  String get _customRangeText {
+  String _fmtFull(DateTime d) =>
+      '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+
+  String _fmtMonthDay(DateTime d) =>
+      '${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+
+  /// 完整日期范围，用于列表卡标题（更详细）
+  String get _customRangeFull {
     if (_customStart == null || _customEnd == null) return '自定义';
-    String fmt(DateTime d) =>
-        '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
-    return '${fmt(_customStart!)} - ${fmt(_customEnd!)}';
+    if (_sameDate(_customStart!, _customEnd!)) return _fmtFull(_customStart!);
+    if (_customStart!.year != _customEnd!.year) {
+      return '${_fmtFull(_customStart!)} - ${_fmtFull(_customEnd!)}';
+    }
+    if (_customStart!.month != _customEnd!.month) {
+      return '${_fmtFull(_customStart!)} - ${_fmtMonthDay(_customEnd!)}';
+    }
+    return '${_fmtFull(_customStart!)} - ${_customEnd!.day.toString().padLeft(2, '0')}';
   }
+
+  /// 紧凑日期范围，用于小卡片"时间范围"列（节省空间）
+  String get _customRangeShort {
+    if (_customStart == null || _customEnd == null) return '自定义';
+    final days = _customEnd!.difference(_customStart!).inDays.abs() + 1;
+    if (_sameDate(_customStart!, _customEnd!)) {
+      return _fmtMonthDay(_customStart!);
+    }
+    // 同年同月：MM.DD-DD
+    if (_customStart!.year == _customEnd!.year &&
+        _customStart!.month == _customEnd!.month) {
+      return '${_fmtMonthDay(_customStart!)}-${_customEnd!.day.toString().padLeft(2, '0')}';
+    }
+    // 同年跨月：MM.DD-MM.DD
+    if (_customStart!.year == _customEnd!.year) {
+      return '${_fmtMonthDay(_customStart!)} - ${_fmtMonthDay(_customEnd!)}';
+    }
+    // 跨年：YY.MM.DD - YY.MM.DD
+    return '${_customStart!.year.toString().substring(2)}.${_fmtMonthDay(_customStart!)} - '
+        '${_customEnd!.year.toString().substring(2)}.${_fmtMonthDay(_customEnd!)}'
+        ' · $days 天';
+  }
+
+  bool _sameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
