@@ -4,6 +4,7 @@ class DailyAdvice {
   const DailyAdvice({
     this.cycleId,
     required this.preview,
+    required this.overview,
     required this.items,
     required this.advice,
   });
@@ -12,6 +13,9 @@ class DailyAdvice {
     return DailyAdvice(
       cycleId: (json['cycle_id'] as num?)?.toInt(),
       preview: '${json['preview'] ?? ''}',
+      overview: DailyAdviceOverview.fromJson(
+        Map<String, dynamic>.from(json['overview'] as Map? ?? {}),
+      ),
       items: (json['items'] as List<dynamic>? ?? [])
           .map((item) =>
               AdviceItem.fromJson(Map<String, dynamic>.from(item as Map)))
@@ -22,8 +26,57 @@ class DailyAdvice {
 
   final int? cycleId;
   final String preview;
+  final DailyAdviceOverview overview;
   final List<AdviceItem> items;
   final String advice;
+}
+
+class DailyAdviceOverview {
+  const DailyAdviceOverview({
+    required this.score,
+    required this.subtitle,
+    required this.metrics,
+  });
+
+  factory DailyAdviceOverview.fromJson(Map<String, dynamic> json) {
+    return DailyAdviceOverview(
+      score: (json['score'] as num?)?.toInt().clamp(0, 100) ?? 80,
+      subtitle: _text(json['subtitle'], '今日经营状态平稳'),
+      metrics: _listOfMaps(json['metrics'])
+          .map(DailyAdviceOverviewMetric.fromJson)
+          .toList(),
+    );
+  }
+
+  final int score;
+  final String subtitle;
+  final List<DailyAdviceOverviewMetric> metrics;
+}
+
+class DailyAdviceOverviewMetric {
+  const DailyAdviceOverviewMetric({
+    required this.key,
+    required this.label,
+    required this.value,
+    required this.level,
+    required this.icon,
+  });
+
+  factory DailyAdviceOverviewMetric.fromJson(Map<String, dynamic> json) {
+    return DailyAdviceOverviewMetric(
+      key: _text(json['key'], ''),
+      label: _text(json['label'], ''),
+      value: _text(json['value'], ''),
+      level: _text(json['level'], 'normal'),
+      icon: _text(json['icon'], 'Activity'),
+    );
+  }
+
+  final String key;
+  final String label;
+  final String value;
+  final String level;
+  final String icon;
 }
 
 class AdviceItem {

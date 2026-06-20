@@ -213,7 +213,10 @@ class _YayaHomePage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ModeChips(onSkillsPressed: onSkillsPressed),
+                _ModeChips(
+                  onSelected: controller.send,
+                  onSkillsPressed: onSkillsPressed,
+                ),
                 const SizedBox(height: 8),
                 AssistantInputBar(
                   sending: controller.sending,
@@ -647,6 +650,7 @@ class _YayaHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final greeting = _greetingText(DateTime.now());
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -657,7 +661,7 @@ class _YayaHero extends StatelessWidget {
         const SizedBox(height: 22),
         Text.rich(
           TextSpan(
-            text: '周末愉快，我是',
+            text: '$greeting，我是',
             children: [
               TextSpan(
                 text: '芽芽',
@@ -688,6 +692,15 @@ class _YayaHero extends StatelessWidget {
   }
 }
 
+String _greetingText(DateTime now) {
+  final hour = now.hour;
+  if (hour < 6) return '夜深了';
+  if (hour < 11) return '早上好';
+  if (hour < 14) return '中午好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+}
+
 class YayaSkillsPage extends StatefulWidget {
   const YayaSkillsPage({super.key, required this.repository});
 
@@ -698,11 +711,16 @@ class YayaSkillsPage extends StatefulWidget {
 }
 
 class _YayaSkillsPageState extends State<YayaSkillsPage> {
+  static const _categoryLabels = ['推荐', '记录', '经营', '生产', '设置'];
+
   static const _fallbackRecommendedCards = [
     _SkillSpec(
       icon: LucideIcons.notebookText,
       title: '今日简报',
       subtitle: '查看今天待办与风险',
+      details: '获取当前农场综合状态，帮助你快速了解今天要关注的种植进度、农事记录、花费变化和天气风险。',
+      examples: ['今天农场怎么样', '最近有什么风险'],
+      category: '推荐',
       color: AppColors.blue,
       background: AppColors.blueSoft,
     ),
@@ -710,6 +728,9 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       icon: LucideIcons.walletCards,
       title: '智能记账',
       subtitle: '一句话生成账本记录',
+      details: '把买肥料、卖货收款、农资赊账等口语描述整理成账本记录，执行前会让你确认关键信息。',
+      examples: ['买化肥花了200元', '今天卖西瓜收入3000'],
+      category: '记录',
       color: AppColors.greenDark,
       background: AppColors.greenSoft,
     ),
@@ -717,6 +738,9 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       icon: LucideIcons.clipboardPenLine,
       title: '农事记录',
       subtitle: '记录作业与备注',
+      details: '把日常农活记录到对应茬口里，后续复盘生产过程、生成报告和分析投入时都能引用。',
+      examples: ['今天6号棚浇水了', '记录一次打药'],
+      category: '记录',
       color: AppColors.amber,
       background: AppColors.amberSoft,
     ),
@@ -724,6 +748,9 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       icon: LucideIcons.handCoins,
       title: '工资结算',
       subtitle: '生成工人工资记录',
+      details: '保存或更新独立工资记录，支持按工人、农活和金额管理未结清工资。',
+      examples: ['张三今天工资120', '结清李四200元'],
+      category: '记录',
       color: AppColors.purple,
       background: AppColors.purpleSoft,
     ),
@@ -734,6 +761,9 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       icon: LucideIcons.layers3,
       title: '批次管理',
       subtitle: '创建和更新种植批次',
+      details: '根据作物、季节、面积和地块信息创建种植批次，方便后续关联农事、账本和工人投入。',
+      examples: ['春茬种西瓜', '6号棚开始种番茄'],
+      category: '生产',
       color: AppColors.blue,
       background: AppColors.blueSoft,
     ),
@@ -741,6 +771,9 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       icon: LucideIcons.chartPie,
       title: '成本分析',
       subtitle: '看本月收支变化',
+      details: '分析农场收入、支出、利润和分类占比，帮助你判断哪个环节花费高。',
+      examples: ['本月成本怎么看', '人工和肥料哪个花得多'],
+      category: '经营',
       color: AppColors.greenDark,
       background: AppColors.greenSoft,
     ),
@@ -748,6 +781,9 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       icon: LucideIcons.fileChartColumn,
       title: '生成报告',
       subtitle: '自动生成经营周报',
+      details: '基于农事、账本和天气信息生成经营报告，方便阶段复盘。',
+      examples: ['生成本周报告', '帮我总结这个月'],
+      category: '经营',
       color: AppColors.purple,
       background: AppColors.purpleSoft,
     ),
@@ -755,13 +791,23 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       icon: LucideIcons.cloudSun,
       title: '天气提醒',
       subtitle: '查看天气和风险',
+      details: '获取未来天气预报和灾害预警，用于安排浇水、打药、采收等对天气敏感的农事。',
+      examples: ['明天适合打药吗', '最近有雨吗'],
+      category: '推荐',
       color: AppColors.amber,
       background: AppColors.amberSoft,
     ),
   ];
 
-  List<_SkillSpec> _recommendedCards = _fallbackRecommendedCards;
-  List<_SkillSpec> _listSkills = _fallbackListSkills;
+  List<_SkillSpec> _skills = [
+    ..._fallbackRecommendedCards,
+    ..._fallbackListSkills,
+  ];
+  String _selectedCategory = '推荐';
+
+  List<_SkillSpec> get _visibleSkills => _skills
+      .where((skill) => skill.category == _selectedCategory)
+      .toList(growable: false);
 
   @override
   void initState() {
@@ -774,22 +820,29 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
       final skills = await widget.repository.loadSkills();
       if (!mounted || skills.isEmpty) return;
       setState(() {
-        _recommendedCards = skills
-            .where((skill) => skill.recommended && skill.enabled)
-            .map(_skillSpecFromApi)
-            .toList();
-        _listSkills = skills
-            .where((skill) => !skill.recommended && skill.enabled)
+        _skills = skills
+            .where((skill) => skill.enabled)
             .map(_skillSpecFromApi)
             .toList();
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _recommendedCards = _fallbackRecommendedCards;
-        _listSkills = _fallbackListSkills;
+        _skills = [
+          ..._fallbackRecommendedCards,
+          ..._fallbackListSkills,
+        ];
       });
     }
+  }
+
+  void _showSkillDetails(_SkillSpec skill) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _SkillDetailsSheet(spec: skill),
+    );
   }
 
   @override
@@ -832,32 +885,32 @@ class _YayaSkillsPageState extends State<YayaSkillsPage> {
                     ),
                   ),
                 ),
-                const SliverPadding(
-                  padding: EdgeInsets.fromLTRB(20, 18, 20, 0),
-                  sliver: SliverToBoxAdapter(child: _SkillCategoryChips()),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: _SkillCategoryChips(
+                      labels: _categoryLabels,
+                      selected: _selectedCategory,
+                      onSelected: (category) {
+                        setState(() => _selectedCategory = category);
+                      },
+                    ),
+                  ),
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  sliver: SliverGrid.builder(
-                    itemCount: _recommendedCards.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.38,
-                    ),
+                  sliver: SliverList.separated(
+                    itemCount: _visibleSkills.length,
                     itemBuilder: (context, index) => _SkillCard(
-                      spec: _recommendedCards[index],
+                      spec: _visibleSkills[index],
+                      onDetailsTap: () =>
+                          _showSkillDetails(_visibleSkills[index]),
                     ),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-                  sliver: SliverToBoxAdapter(
-                    child: _RecommendedSkillList(skills: _listSkills),
-                  ),
-                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
             ),
           ),
@@ -931,17 +984,28 @@ class _SkillsSearchBox extends StatelessWidget {
 }
 
 class _SkillCategoryChips extends StatelessWidget {
-  const _SkillCategoryChips();
+  const _SkillCategoryChips({
+    required this.labels,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<String> labels;
+  final String selected;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['推荐', '记录', '经营', '生产', '设置'];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
           for (var index = 0; index < labels.length; index++) ...[
-            _CategoryChip(label: labels[index], selected: index == 0),
+            _CategoryChip(
+              label: labels[index],
+              selected: labels[index] == selected,
+              onTap: () => onSelected(labels[index]),
+            ),
             if (index != labels.length - 1) const SizedBox(width: 10),
           ],
         ],
@@ -951,28 +1015,42 @@ class _SkillCategoryChips extends StatelessWidget {
 }
 
 class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.label, this.selected = false});
+  const _CategoryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 38,
-      constraints: const BoxConstraints(minWidth: 58),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: selected ? AppColors.blue : AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: selected ? AppColors.blue : AppColors.line),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.body.copyWith(
-          color: selected ? Colors.white : AppColors.muted,
-          fontWeight: FontWeight.w700,
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 38,
+          constraints: const BoxConstraints(minWidth: 58),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.blue : AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border:
+                Border.all(color: selected ? AppColors.blue : AppColors.line),
+          ),
+          child: Text(
+            label,
+            style: AppTextStyles.body.copyWith(
+              color: selected ? Colors.white : AppColors.muted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );
@@ -1025,6 +1103,7 @@ class YayaHistoryDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sections = _groupConversations(conversations);
     return SafeArea(
       bottom: false,
       child: DecoratedBox(
@@ -1059,20 +1138,24 @@ class YayaHistoryDrawer extends StatelessWidget {
                     if (conversations.isEmpty)
                       const _EmptyHistory()
                     else
-                      _ChatSection(
-                        title: '7天内',
-                        items: [
-                          for (final item in conversations)
-                            _ChatItemSpec(
-                              item.title.isEmpty ? '芽芽对话' : item.title,
-                              item.preview,
-                              item.category,
-                              false,
-                              item.sessionId,
-                            ),
-                        ],
-                        onTap: onConversationTap,
-                      ),
+                      for (final section in sections) ...[
+                        _ChatSection(
+                          title: section.title,
+                          items: [
+                            for (final item in section.items)
+                              _ChatItemSpec(
+                                item.title.isEmpty ? '芽芽对话' : item.title,
+                                item.preview,
+                                item.category,
+                                false,
+                                item.sessionId,
+                              ),
+                          ],
+                          onTap: onConversationTap,
+                        ),
+                        if (section != sections.last)
+                          const SizedBox(height: 18),
+                      ],
                   ],
                 ),
               ),
@@ -1083,6 +1166,52 @@ class YayaHistoryDrawer extends StatelessWidget {
       ),
     );
   }
+}
+
+List<_ConversationSectionSpec> _groupConversations(
+  List<ConversationSummary> conversations,
+) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final sevenDaysAgo = today.subtract(const Duration(days: 6));
+  final todayItems = <ConversationSummary>[];
+  final recentItems = <ConversationSummary>[];
+  final earlierItems = <ConversationSummary>[];
+
+  for (final item in conversations) {
+    final activeAt = item.lastActiveAt ?? item.createdAt;
+    if (activeAt == null) {
+      recentItems.add(item);
+      continue;
+    }
+    final day = DateTime(activeAt.year, activeAt.month, activeAt.day);
+    if (!day.isBefore(today)) {
+      todayItems.add(item);
+    } else if (!day.isBefore(sevenDaysAgo)) {
+      recentItems.add(item);
+    } else {
+      earlierItems.add(item);
+    }
+  }
+
+  return [
+    if (todayItems.isNotEmpty)
+      _ConversationSectionSpec(title: '今天', items: todayItems),
+    if (recentItems.isNotEmpty)
+      _ConversationSectionSpec(title: '7天内', items: recentItems),
+    if (earlierItems.isNotEmpty)
+      _ConversationSectionSpec(title: '更早', items: earlierItems),
+  ];
+}
+
+class _ConversationSectionSpec {
+  const _ConversationSectionSpec({
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<ConversationSummary> items;
 }
 
 class _DrawerHeader extends StatelessWidget {
@@ -1168,19 +1297,20 @@ class _NewChatCard extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            stops: [0, 0.58, 1],
+            stops: [0, 0.62, 1],
             colors: [
-              Color(0xFF1677FF),
-              Color(0xFF06B6D4),
-              Color(0xFF10B981),
+              Color(0xFFF5FBF2),
+              Color(0xFFEAF6EF),
+              Color(0xFFFFFBF0),
             ],
           ),
+          border: Border.all(color: Color(0xFFDCEBDF)),
           borderRadius: BorderRadius.circular(24),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x331677FF),
-              blurRadius: 28,
-              offset: Offset(0, 14),
+              color: Color(0x120F3D2E),
+              blurRadius: 18,
+              offset: Offset(0, 10),
             ),
           ],
         ),
@@ -1190,14 +1320,12 @@ class _NewChatCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
+                color: Color(0xFFE0F1E7),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.14),
-                ),
+                border: Border.all(color: Color(0xFFC9E3D1)),
               ),
-              child:
-                  const Icon(LucideIcons.plus, color: Colors.white, size: 24),
+              child: const Icon(LucideIcons.plus,
+                  color: AppColors.greenDark, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1208,7 +1336,7 @@ class _NewChatCard extends StatelessWidget {
                   Text(
                     '新对话',
                     style: AppTextStyles.sectionTitle.copyWith(
-                      color: Colors.white,
+                      color: AppColors.ink,
                       fontSize: 17,
                     ),
                   ),
@@ -1218,7 +1346,7 @@ class _NewChatCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.small.copyWith(
-                      color: Colors.white.withValues(alpha: 0.84),
+                      color: AppColors.muted,
                       fontSize: 12,
                     ),
                   ),

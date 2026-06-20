@@ -31,7 +31,21 @@ class BillingController {
       ),
       transactions: costs.items.map(_transaction).toList(),
       receivables: receivables,
+      monthlyTrend: _monthlyTrend(costs.items),
     );
+  }
+
+  List<double> _monthlyTrend(List<ApiRecord> items) {
+    final monthly = List<double>.filled(12, 0);
+    for (final item in items) {
+      final json = item.json;
+      final date = _parseDate(_firstNonEmpty([json['record_date'], json['created_at']]));
+      if (date == null || date.year != year) continue;
+      final amount = _number(json['amount']);
+      final isIncome = '${json['record_type']}' == 'income';
+      monthly[date.month - 1] += isIncome ? amount.abs() : -amount.abs();
+    }
+    return monthly;
   }
 
   BillingTransactionViewModel _transaction(ApiRecord record) {
@@ -54,13 +68,10 @@ class BillingController {
       json['source'],
     ], fallback: isIncome ? '收入记录' : '手动记账');
     final note = _firstNonEmpty([json['note'], json['description']]);
-    final subtitle = isIncome
-        ? [date, if (counterparty.isNotEmpty) counterparty]
-            .where((item) => item.isNotEmpty)
-            .join(' · ')
-        : [date, if (counterparty.isNotEmpty) counterparty else '日常支出']
-            .where((item) => item.isNotEmpty)
-            .join(' · ');
+    final subtitle = [
+      _relativeDate(_parseDate(date)),
+      if (counterparty.isNotEmpty) counterparty,
+    ].where((item) => item.isNotEmpty).join(' · ');
     return BillingTransactionViewModel(
       title: title,
       subtitle: subtitle,
@@ -127,6 +138,7 @@ class BillingViewModel {
     required this.transactions,
     required this.receivables,
     this.insightText,
+    this.monthlyTrend = const [],
   });
 
   final String incomeText;
@@ -136,6 +148,11 @@ class BillingViewModel {
   final String? insightText;
   final List<BillingTransactionViewModel> transactions;
   final List<BillingReceivableViewModel> receivables;
+
+  /// 12 个月净收益曲线（index 0 = 1 月），数据源来自已加载交易按月聚合。
+  final List<double> monthlyTrend;
+
+  bool get isDeficit => netProfitText.startsWith('-');
 }
 
 class BillingTransactionViewModel {
@@ -208,6 +225,20 @@ DateTime? _parseDate(String value) {
   final day = int.tryParse(parts[2]);
   if (year == null || month == null || day == null) return null;
   return DateTime(year, month, day);
+}
+
+String _relativeDate(DateTime? date) {
+  if (date == null) return '';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(date.year, date.month, date.day);
+  final diffDays = today.difference(target).inDays;
+  if (diffDays <= 0) return '今天';
+  if (diffDays == 1) return '昨天';
+  if (diffDays < 7) return '$diffDays 天前';
+  if (diffDays < 14) return '上周';
+  if (target.year == today.year) return '${target.month}月${target.day}日';
+  return '${target.year}年${target.month}月${target.day}日';
 }
 
 String _dateText(String value) {

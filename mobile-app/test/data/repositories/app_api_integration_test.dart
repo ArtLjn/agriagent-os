@@ -173,6 +173,9 @@ void main() {
       'session_id': 's1',
     });
     expect(skills.single.title, '智能记账');
+    expect(skills.single.summary, '一句话记录支出、收入和赊账。');
+    expect(skills.single.details, contains('执行前会让你确认关键信息'));
+    expect(skills.single.examples, contains('买化肥花了200元'));
     expect(adapter.find('GET', '/agent/skills').query, {});
     expect(adapter.find('GET', '/weather/forecast').query, {
       'days': 3,

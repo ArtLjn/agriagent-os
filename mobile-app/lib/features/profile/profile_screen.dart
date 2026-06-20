@@ -67,7 +67,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onUpdated: _reloadProfile,
             ),
             const SizedBox(height: 14),
-            _AiPreferenceCard(model: model),
+            _AiPreferenceCard(
+              model: model,
+              repository: widget.repository,
+              onUpdated: _reloadProfile,
+            ),
             const SizedBox(height: 14),
             _SystemSettingsCard(
               model: model,
@@ -156,9 +160,15 @@ class _LocationWeatherCard extends StatelessWidget {
 }
 
 class _AiPreferenceCard extends StatelessWidget {
-  const _AiPreferenceCard({required this.model});
+  const _AiPreferenceCard({
+    required this.model,
+    required this.repository,
+    required this.onUpdated,
+  });
 
   final ProfileViewModel model;
+  final ProfileRepository repository;
+  final VoidCallback onUpdated;
 
   @override
   Widget build(BuildContext context) {
@@ -181,6 +191,7 @@ class _AiPreferenceCard extends StatelessWidget {
             background: AppColors.blueSoft,
             title: '回答风格',
             value: model.assistantRoleLabel,
+            onTap: () => _editAssistantRole(context),
           ),
           const Divider(height: 1, color: AppColors.lineSoft),
           const _ProfileOptionRow(
@@ -188,7 +199,7 @@ class _AiPreferenceCard extends StatelessWidget {
             color: AppColors.greenDark,
             background: AppColors.greenSoft,
             title: '分析深度',
-            value: '标准',
+            value: '待开放',
           ),
           const Divider(height: 1, color: AppColors.lineSoft),
           const _ProfileOptionRow(
@@ -196,10 +207,20 @@ class _AiPreferenceCard extends StatelessWidget {
             color: AppColors.purple,
             background: AppColors.purpleSoft,
             title: '自动生成报表',
-            trailing: _SwitchPill(on: true),
+            value: '待开放',
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _editAssistantRole(BuildContext context) async {
+    final role = await showAssistantRoleSheet(
+      context: context,
+      selectedValue: model.assistantRole,
+    );
+    if (role == null || role.value == model.assistantRole) return;
+    await repository.updateSettings({'assistant_role': role.value});
+    onUpdated();
   }
 }

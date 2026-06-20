@@ -460,66 +460,80 @@ class _SmartFillInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CardPanel(
-      radius: 18,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(
-            LucideIcons.sparkles,
-            size: 22,
-            color: AppColors.blue,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 340;
+        final hintText = parsing
+            ? '正在识别记录...'
+            : isNarrow
+                ? '输入一句，芽芽整理'
+                : '输入一句话记录，芽芽会帮你整理';
+        return CardPanel(
+          radius: 18,
+          padding: EdgeInsets.symmetric(
+            horizontal: isNarrow ? 14 : 18,
+            vertical: 10,
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Material(
-              color: Colors.transparent,
-              child: TextField(
-                controller: controller,
-                enabled: !parsing,
-                minLines: 1,
-                maxLines: 2,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => onSubmit(),
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.ink2,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-                decoration: InputDecoration(
-                  hintText: parsing ? '正在识别记录...' : '输入一句话记录，芽芽会帮你整理',
-                  hintStyle: AppTextStyles.body.copyWith(
-                    color: AppColors.subtle,
-                    fontSize: 16,
-                  ),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
+          child: Row(
+            children: [
+              const Icon(
+                LucideIcons.sparkles,
+                size: 22,
+                color: AppColors.blue,
               ),
-            ),
-          ),
-          parsing
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.4),
-                )
-              : GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onSubmit,
-                  child: const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Icon(
-                      LucideIcons.keyboard,
-                      size: 22,
-                      color: AppColors.blue,
+              SizedBox(width: isNarrow ? 10 : 16),
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: TextField(
+                    controller: controller,
+                    enabled: !parsing,
+                    minLines: 1,
+                    maxLines: 1,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => onSubmit(),
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.ink2,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: hintText,
+                      hintStyle: AppTextStyles.body.copyWith(
+                        color: AppColors.subtle,
+                        fontSize: 16,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
                     ),
                   ),
                 ),
-        ],
-      ),
+              ),
+              parsing
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                    )
+                  : GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onSubmit,
+                      child: const SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Icon(
+                          LucideIcons.keyboard,
+                          size: 22,
+                          color: AppColors.blue,
+                        ),
+                      ),
+                    ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -612,35 +626,46 @@ class _QuickRecordGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.06,
-      children: items.map((item) {
-        return _QuickRecordTile(
-          item: item,
-          onTap: switch (item.label) {
-            '记账' => onLedgerTap,
-            '记农事' => onFarmLogTap,
-            '记工资' => onWageTap,
-            '建批次' => onCycleTap,
-            '新增工人' => onWorkerTap,
-            '建模板' => onTemplateTap,
-            _ => null,
-          },
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 340;
+        return GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 8,
+          crossAxisSpacing: isNarrow ? 8 : 12,
+          childAspectRatio: isNarrow ? 1.16 : 1.06,
+          children: items.map((item) {
+            return _QuickRecordTile(
+              item: item,
+              compact: isNarrow,
+              onTap: switch (item.label) {
+                '记账' => onLedgerTap,
+                '记农事' => onFarmLogTap,
+                '记工资' => onWageTap,
+                '建批次' => onCycleTap,
+                '新增工人' => onWorkerTap,
+                '建模板' => onTemplateTap,
+                _ => null,
+              },
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 }
 
 class _QuickRecordTile extends StatelessWidget {
-  const _QuickRecordTile({required this.item, this.onTap});
+  const _QuickRecordTile({
+    required this.item,
+    required this.compact,
+    this.onTap,
+  });
 
   final _QuickRecordItem item;
+  final bool compact;
   final VoidCallback? onTap;
 
   @override
@@ -649,7 +674,7 @@ class _QuickRecordTile extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+        padding: EdgeInsets.fromLTRB(8, compact ? 5 : 6, 8, compact ? 5 : 6),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -669,15 +694,15 @@ class _QuickRecordTile extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _RecordImageIconBadge(item: item),
-            const SizedBox(height: 3),
+            _RecordImageIconBadge(item: item, compact: compact),
+            SizedBox(height: compact ? 2 : 3),
             Text(
               item.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.listTitle.copyWith(
-                fontSize: 13.5,
-                height: 18 / 13.5,
+                fontSize: compact ? 13 : 13.5,
+                height: compact ? 16 / 13 : 18 / 13.5,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -687,8 +712,8 @@ class _QuickRecordTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.small.copyWith(
                 color: AppColors.subtle,
-                fontSize: 9,
-                height: 11 / 9,
+                fontSize: compact ? 8.5 : 9,
+                height: compact ? 10 / 8.5 : 11 / 9,
               ),
             ),
           ],
@@ -723,15 +748,21 @@ class _QuickRecordItem {
 }
 
 class _RecordImageIconBadge extends StatelessWidget {
-  const _RecordImageIconBadge({required this.item});
+  const _RecordImageIconBadge({
+    required this.item,
+    required this.compact,
+  });
 
   final _QuickRecordItem item;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final badgeSize = compact ? 32.0 : 36.0;
+    final imageSize = compact ? 22.0 : 24.0;
     return Container(
-      width: 36,
-      height: 36,
+      width: badgeSize,
+      height: badgeSize,
       decoration: BoxDecoration(
         color: item.background,
         borderRadius: BorderRadius.circular(11),
@@ -740,12 +771,12 @@ class _RecordImageIconBadge extends StatelessWidget {
       child: Center(
         child: Image.asset(
           item.imageAsset,
-          width: 24,
-          height: 24,
+          width: imageSize,
+          height: imageSize,
           fit: BoxFit.contain,
           errorBuilder: (_, __, ___) => Icon(
             item.icon,
-            size: 21,
+            size: compact ? 19 : 21,
             color: item.color,
           ),
         ),

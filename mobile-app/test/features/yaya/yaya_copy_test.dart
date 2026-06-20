@@ -40,10 +40,11 @@ void main() {
     expect(find.text('待确认'), findsNothing);
     expect(find.text('风险'), findsNothing);
     expect(find.text('今日待办'), findsNothing);
+    expect(find.textContaining('周末愉快'), findsNothing);
     expect(find.text('今天适合干什么'), findsWidgets);
     expect(find.text('本月成本怎么看'), findsOneWidget);
     expect(find.text('生成周报'), findsOneWidget);
-    expect(find.text('深度思考'), findsOneWidget);
+    expect(find.text('深度思考'), findsNothing);
     expect(find.text('经营分析'), findsOneWidget);
     expect(find.text('生成报告'), findsOneWidget);
     expect(find.text('全部技能'), findsOneWidget);
@@ -75,6 +76,47 @@ void main() {
     expect(find.text('收到'), findsOneWidget);
   });
 
+  testWidgets('换一换入口存在且点击不报错', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(yayaScreen());
+    await tester.pump();
+
+    expect(find.text('今天适合干什么'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(TextButton, '换一换'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('底部快捷标签会直接发送对应问题', (tester) async {
+    final repository = _TrackingYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaScreen(repository: repository)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('经营分析'));
+    await tester.pumpAndSettle();
+
+    expect(repository.sentMessages, ['分析一下我的农场经营情况']);
+  });
+
+  testWidgets('生成报告标签会直接发送对应问题', (tester) async {
+    final repository = _TrackingYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaScreen(repository: repository)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('生成报告'));
+    await tester.pumpAndSettle();
+
+    expect(repository.sentMessages, ['生成一份农场经营报告']);
+  });
+
   testWidgets('从芽芽首页进入全部技能页会加载接口技能', (tester) async {
     final repository = _SkillsYayaRepository();
     await tester.pumpWidget(
@@ -82,10 +124,12 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('全部技能'));
+    await tester.tap(find.byIcon(LucideIcons.layoutGrid).last);
     await tester.pumpAndSettle();
 
     expect(repository.loadSkillsCalls, 1);
+    await tester.tap(find.text('记录'));
+    await tester.pumpAndSettle();
     expect(find.text('智能记账'), findsOneWidget);
     expect(find.text('赊账汇总'), findsNothing);
   });
@@ -105,6 +149,33 @@ void main() {
     expect(find.textContaining('检测到工具调用格式异常'), findsOneWidget);
     expect(find.text('对话'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('新对话入口使用低饱和农场色', (tester) async {
+    await tester.pumpWidget(yayaScreen());
+    await tester.pump();
+
+    await tester.tap(find.byIcon(LucideIcons.menu));
+    await tester.pumpAndSettle();
+
+    final newChatCard = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((container) => container.decoration)
+        .whereType<BoxDecoration>()
+        .where((decoration) => decoration.gradient is LinearGradient)
+        .cast<BoxDecoration>()
+        .singleWhere(
+          (decoration) => (decoration.gradient! as LinearGradient)
+              .colors
+              .contains(const Color(0xFFF5FBF2)),
+        );
+    final gradient = newChatCard.gradient! as LinearGradient;
+
+    expect(gradient.colors, contains(const Color(0xFFEAF6EF)));
+    expect(gradient.colors, contains(const Color(0xFFFFFBF0)));
+    expect(gradient.colors, isNot(contains(const Color(0xFF1677FF))));
+    expect(gradient.colors, isNot(contains(const Color(0xFF06B6D4))));
+    expect(gradient.colors, isNot(contains(const Color(0xFF10B981))));
   });
 
   testWidgets('历史聊天抽屉关闭和卸载不会触发生命周期断言', (tester) async {
@@ -215,6 +286,8 @@ void main() {
     expect(find.text('全部技能'), findsOneWidget);
     expect(find.text('搜索技能'), findsOneWidget);
     expect(find.byKey(const ValueKey('yaya-skills-banner')), findsOneWidget);
+    expect(find.byType(GridView), findsNothing);
+    expect(find.byType(SliverGrid), findsNothing);
     final banner = tester.widget<Image>(
       find.byKey(const ValueKey('yaya-skills-banner')),
     );
@@ -222,14 +295,46 @@ void main() {
     expect(banner.fit, BoxFit.contain);
     expect(repository.loadSkillsCalls, 1);
     expect(find.text('今日简报'), findsOneWidget);
-    expect(find.text('智能记账'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('天气提醒'),
-      240,
-      scrollable: find.byType(Scrollable).first,
-    );
+    expect(find.text('汇总待办、近期农事、花费和天气。'), findsOneWidget);
     expect(find.text('天气提醒'), findsOneWidget);
+    expect(find.text('智能记账'), findsNothing);
     expect(find.text('赊账汇总'), findsNothing);
+  });
+
+  testWidgets('全部技能标签可以筛选分类', (tester) async {
+    final repository = _SkillsYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaSkillsPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('记录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能记账'), findsOneWidget);
+    expect(find.text('一句话记录支出、收入和赊账。'), findsOneWidget);
+    expect(find.text('今日简报'), findsNothing);
+    expect(find.text('天气提醒'), findsNothing);
+  });
+
+  testWidgets('点击技能箭头查看完整详情', (tester) async {
+    final repository = _SkillsYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaSkillsPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    final summary = tester.widget<Text>(
+      find.text('汇总待办、近期农事、花费和天气。'),
+    );
+    expect(summary.maxLines, 1);
+
+    await tester.tap(find.byTooltip('查看今日简报详情'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('获取当前农场综合状态，汇总今日待办、天气风险和近期经营提醒'), findsOneWidget);
+    expect(find.text('可以这样问'), findsOneWidget);
+    expect(find.text('今天农场怎么样'), findsOneWidget);
   });
 
   test('芽芽主色不是紫色', () {
@@ -286,7 +391,10 @@ class _SkillsYayaRepository extends _YayaCopyRepository {
       YayaSkill(
         key: 'get_farm_status',
         title: '今日简报',
-        description: '查看今天待办与风险',
+        description: '获取当前农场综合状态，汇总今日待办、天气风险和近期经营提醒',
+        summary: '汇总待办、近期农事、花费和天气。',
+        details: '获取当前农场综合状态，汇总今日待办、天气风险和近期经营提醒',
+        examples: ['今天农场怎么样'],
         category: '推荐',
         icon: 'clipboard-list',
         iconColor: 'blue',
@@ -296,7 +404,10 @@ class _SkillsYayaRepository extends _YayaCopyRepository {
       YayaSkill(
         key: 'create_cost_record',
         title: '智能记账',
-        description: '一句话生成账本记录',
+        description: '把买肥料、卖货收款、农资赊账等口语描述整理成账本记录。',
+        summary: '一句话记录支出、收入和赊账。',
+        details: '把买肥料、卖货收款、农资赊账等口语描述整理成账本记录。',
+        examples: ['买化肥花了200元'],
         category: '记录',
         icon: 'receipt-yuan',
         iconColor: 'green',
@@ -307,6 +418,9 @@ class _SkillsYayaRepository extends _YayaCopyRepository {
         key: 'get_weather_forecast',
         title: '天气提醒',
         description: '查看天气和风险',
+        summary: '查看7天天气和农事风险。',
+        details: '获取未来天气预报和灾害预警。',
+        examples: ['明天适合打药吗'],
         category: '推荐',
         icon: 'cloud-sun',
         iconColor: 'amber',

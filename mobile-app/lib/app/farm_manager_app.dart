@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../features/auth/auth_flow.dart';
 import '../shared/app_identity.dart';
@@ -16,6 +17,16 @@ class FarmManagerApp extends StatelessWidget {
     return MaterialApp(
       title: AppIdentity.displayName,
       debugShowCheckedModeBanner: false,
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [
+        Locale('zh', 'CN'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: AppTheme.light(),
       home: AuthFlow(dependencies: dependencies),
     );

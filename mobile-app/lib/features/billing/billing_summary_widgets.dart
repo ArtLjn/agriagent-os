@@ -31,30 +31,16 @@ class LedgerSummaryCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Text(
-                              '资金概览',
-                              style: AppTextStyles.dateTitle.copyWith(
-                                color: _LedgerColors.ink,
-                                fontSize: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            const _LedgerPill(
-                              text: '本年',
-                              foreground: AppColors.blue,
-                              background: Colors.white,
-                              borderColor: Color(0xFFDDEBFF),
-                            ),
-                          ],
+                      Text(
+                        '资金概览',
+                        style: AppTextStyles.dateTitle.copyWith(
+                          color: _LedgerColors.ink,
+                          fontSize: 20,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       const _LedgerPill(
-                        text: '智能复盘',
-                        icon: LucideIcons.sparkles,
+                        text: '本年',
                         foreground: AppColors.blue,
                         background: Colors.white,
                         borderColor: Color(0xFFDDEBFF),
@@ -63,7 +49,7 @@ class LedgerSummaryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '本年支出结构与待收款状态',
+                    '本年收支结构 · 待收款 ${model.debtText}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.small.copyWith(
@@ -103,7 +89,7 @@ class LedgerSummaryCard extends StatelessWidget {
                                 maxLines: 1,
                                 softWrap: false,
                                 style: AppTextStyles.metric.copyWith(
-                                  color: _LedgerColors.ink,
+                                  color: _netProfitColor(model),
                                   fontSize: 42,
                                   height: 1,
                                   fontFeatures: const [
@@ -116,10 +102,15 @@ class LedgerSummaryCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 18),
-                      const SizedBox(
+                      SizedBox(
                         width: 102,
                         height: 60,
-                        child: CustomPaint(painter: _LedgerSparklinePainter()),
+                        child: CustomPaint(
+                          painter: _LedgerSparklinePainter(
+                            data: model.monthlyTrend,
+                            lineColor: _netProfitColor(model),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -197,20 +188,20 @@ class LedgerMetricColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 72,
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
+      height: 56,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.lineSoft),
+        color: background.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
-              Icon(icon, size: 15, color: color),
-              const SizedBox(width: 5),
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   label,
@@ -218,14 +209,13 @@ class LedgerMetricColumn extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.small.copyWith(
                     color: AppColors.muted,
-                    fontSize: 12,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ],
           ),
-          const Spacer(),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -234,7 +224,8 @@ class LedgerMetricColumn extends StatelessWidget {
               maxLines: 1,
               style: AppTextStyles.dateTitle.copyWith(
                 color: color,
-                fontSize: 18,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -253,146 +244,165 @@ class AiFinanceInsightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _LedgerSectionCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
-      child: SizedBox(
-        height: 72,
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: _LedgerColors.blueSoft,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                LucideIcons.chartNoAxesCombined,
-                color: _LedgerColors.debt,
-                size: 24,
-              ),
+      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: _LedgerColors.blueSoft,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'AI财务洞察',
-                        style: AppTextStyles.sectionTitle.copyWith(
-                          color: _LedgerColors.ink,
-                          fontSize: 17,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        height: 22,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: _LedgerColors.line),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '智能复盘',
-                            style: AppTextStyles.small.copyWith(
-                              color: AppColors.blue,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+            child: const Icon(
+              LucideIcons.chartNoAxesCombined,
+              color: _LedgerColors.debt,
+              size: 19,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AI财务洞察',
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    color: _LedgerColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 5),
-                  Text.rich(
-                    TextSpan(
-                      text: model.insightText ?? '已读取本年收支数据，建议持续关注大额支出。',
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.ink2,
-                    ),
+                ),
+                const SizedBox(height: 3),
+                Text.rich(
+                  TextSpan(
+                    text: model.insightText ?? '已读取本年收支数据，建议持续关注大额支出。',
                   ),
-                ],
-              ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.muted,
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            const Icon(
-              LucideIcons.chevronRight,
-              size: 22,
-              color: AppColors.subtle,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(
+            LucideIcons.chevronRight,
+            size: 18,
+            color: AppColors.subtle,
+          ),
+        ],
       ),
     );
   }
 }
 
 class _LedgerSparklinePainter extends CustomPainter {
-  const _LedgerSparklinePainter();
+  const _LedgerSparklinePainter({
+    required this.data,
+    required this.lineColor,
+  });
+
+  final List<double> data;
+  final Color lineColor;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) return;
+
+    final points = _buildPoints(size);
+    if (points.length < 2) {
+      final center = Offset(size.width / 2, size.height / 2);
+      canvas.drawCircle(center, 3.6, Paint()..color = lineColor);
+      return;
+    }
+
     final fillPaint = Paint()
-      ..shader = const LinearGradient(
+      ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0x242F73F6), Color(0x002F73F6)],
+        colors: [lineColor.withValues(alpha: 0.18), lineColor.withValues(alpha: 0)],
       ).createShader(Offset.zero & size);
     final linePaint = Paint()
-      ..color = _LedgerColors.primary
+      ..color = lineColor
       ..strokeWidth = 2.4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    final points = [
-      Offset(size.width * 0.04, size.height * 0.66),
-      Offset(size.width * 0.22, size.height * 0.48),
-      Offset(size.width * 0.40, size.height * 0.56),
-      Offset(size.width * 0.58, size.height * 0.30),
-      Offset(size.width * 0.78, size.height * 0.38),
-      Offset(size.width * 0.96, size.height * 0.18),
-    ];
     final line = Path()..moveTo(points.first.dx, points.first.dy);
     for (final point in points.skip(1)) {
       line.lineTo(point.dx, point.dy);
     }
     final fill = Path.from(line)
-      ..lineTo(size.width * 0.96, size.height)
-      ..lineTo(size.width * 0.04, size.height)
+      ..lineTo(points.last.dx, size.height)
+      ..lineTo(points.first.dx, size.height)
       ..close();
 
     canvas.drawPath(fill, fillPaint);
     canvas.drawPath(line, linePaint);
-    for (final point in [points.first, points.last]) {
-      canvas.drawCircle(point, 3.6, Paint()..color = Colors.white);
-      canvas.drawCircle(point, 3.6, linePaint);
+
+    canvas.drawCircle(points.last, 3.6, Paint()..color = Colors.white);
+    canvas.drawCircle(points.last, 3.6, linePaint);
+  }
+
+  List<Offset> _buildPoints(Size size) {
+    final count = data.length;
+    if (count == 1) {
+      return [Offset(size.width / 2, size.height / 2)];
     }
+    final minVal = data.reduce((a, b) => a < b ? a : b);
+    final maxVal = data.reduce((a, b) => a > b ? a : b);
+    final span = (maxVal - minVal).abs();
+    final padX = size.width * 0.04;
+    final usableW = size.width - padX * 2;
+    final stepX = count > 1 ? usableW / (count - 1) : 0.0;
+    final padY = size.height * 0.18;
+    final usableH = size.height - padY * 2;
+
+    return List.generate(count, (i) {
+      final dx = padX + stepX * i;
+      final normalized = span == 0 ? 0.5 : (data[i] - minVal) / span;
+      final dy = padY + (1 - normalized) * usableH;
+      return Offset(dx, dy);
+    });
   }
 
   @override
-  bool shouldRepaint(covariant _LedgerSparklinePainter oldDelegate) => false;
+  bool shouldRepaint(covariant _LedgerSparklinePainter oldDelegate) {
+    return lineColor != oldDelegate.lineColor ||
+        !_listEquals(data, oldDelegate.data);
+  }
+
+  bool _listEquals(List<double> a, List<double> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
+Color _netProfitColor(BillingViewModel model) {
+  if (model.isDeficit) return _LedgerColors.negative;
+  if (model.netProfitText == '¥0') return _LedgerColors.ink;
+  return _LedgerColors.income;
 }
 
 class _LedgerPill extends StatelessWidget {
   const _LedgerPill({
     required this.text,
-    this.icon,
     this.foreground = const Color(0xFFDCEBFF),
     this.background = const Color(0x1AFFFFFF),
     this.borderColor = const Color(0x22FFFFFF),
   });
 
   final String text;
-  final IconData? icon;
   final Color foreground;
   final Color background;
   final Color borderColor;
@@ -410,10 +420,6 @@ class _LedgerPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 14, color: foreground),
-            const SizedBox(width: 4),
-          ],
           Text(
             text,
             style: AppTextStyles.small.copyWith(

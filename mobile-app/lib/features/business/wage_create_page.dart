@@ -26,11 +26,11 @@ class WageCreatePage extends StatefulWidget {
 class _WageCreatePageState extends State<WageCreatePage> {
   final _workerName = TextEditingController();
   final _operationType = TextEditingController();
-  final _workDate = TextEditingController(text: _todayText());
   final _quantity = TextEditingController();
   final _unitPrice = TextEditingController();
   final _paidAmount = TextEditingController();
   final _note = TextEditingController();
+  DateTime _workDateTime = DateTime.now();
   String _payType = 'daily';
   int? _selectedCycleId;
   String _selectedCycleName = '';
@@ -40,7 +40,6 @@ class _WageCreatePageState extends State<WageCreatePage> {
   void dispose() {
     _workerName.dispose();
     _operationType.dispose();
-    _workDate.dispose();
     _quantity.dispose();
     _unitPrice.dispose();
     _paidAmount.dispose();
@@ -63,7 +62,8 @@ class _WageCreatePageState extends State<WageCreatePage> {
             num.tryParse(_unitPrice.text.trim()) ?? _unitPrice.text.trim(),
         'paid_amount':
             num.tryParse(_paidAmount.text.trim()) ?? _paidAmount.text.trim(),
-        'work_date': _workDate.text.trim(),
+        'work_date': _workDateText,
+        'recorded_at': _recordedAtPayload,
         'note': _note.text.trim(),
         'client_request_id': DateTime.now().microsecondsSinceEpoch.toString(),
       }..removeWhere((_, value) => value == null || value == ''));
@@ -82,17 +82,8 @@ class _WageCreatePageState extends State<WageCreatePage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _showWorkerPicker() async {
-    final selected = await showBusinessPickerSheet<ApiRecord>(
-      context: context,
-      title: '选择工人',
-      future: widget.repository.listWorkerSummaries(activeOnly: true),
-      titleFor: (worker) => _workerNameText(worker.json),
-      subtitleFor: (worker) => _workerSubtitle(worker.json),
-      emptyText: '还没有工人档案，可先到工人管理中新增。',
-    );
-    if (selected == null) return;
-    final json = selected.json;
+  void _selectWorker(ApiRecord worker) {
+    final json = worker.json;
     setState(() {
       _workerName.text = _workerNameText(json);
       final payType = json['default_pay_type']?.toString();
@@ -106,20 +97,36 @@ class _WageCreatePageState extends State<WageCreatePage> {
     });
   }
 
-  Future<void> _pickWorkDate() async {
-    final initialDate =
-        DateTime.tryParse(_workDate.text.trim()) ?? DateTime.now();
-    final picked = await showDatePicker(
+  Future<void> _pickWorkDateTime() async {
+    final pickedDate = await showDatePicker(
       context: context,
-      initialDate: initialDate,
+      initialDate: _workDateTime,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 1)),
       helpText: '选择作业日期',
       cancelText: '取消',
+      confirmText: '下一步',
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_workDateTime),
+      helpText: '选择作业时间',
+      cancelText: '取消',
       confirmText: '确定',
     );
-    if (picked == null) return;
-    setState(() => _workDate.text = _dateText(picked));
+    if (pickedTime == null) return;
+
+    setState(() {
+      _workDateTime = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+    });
   }
 
   @override
@@ -155,13 +162,22 @@ class _WageCreatePageState extends State<WageCreatePage> {
                 _selectedCycleName = cycle.name;
               }),
             ),
-            BusinessFormRow(
+            ApiRecordDropdownFormRow(
+              key: const Key('worker-dropdown-search'),
               label: '工人姓名',
-              value: '',
-              controller: _workerName,
-              hintText: '输入或选择工人',
-              chevron: true,
-              onTap: _showWorkerPicker,
+              future: widget.repository.listWorkerSummaries(activeOnly: true),
+              selectedItem: _selectedWorkerRecord(),
+              placeholder: '选择工人',
+              sheetTitle: '选择工人',
+              sheetSubtitle: '选择后自动带出计薪方式和默认单价',
+              searchHint: '搜索工人',
+              emptyText: '还没有工人档案，可先到工人管理中新增。',
+              optionKeyPrefix: 'worker-option',
+              icon: LucideIcons.userRound,
+              accent: businessGreen,
+              displayNameFor: (worker) => _workerNameText(worker.json),
+              subtitleFor: (worker) => _workerSubtitle(worker.json),
+              onSelected: _selectWorker,
             ),
             BusinessFormRow(
               label: '作业类型',
@@ -169,14 +185,11 @@ class _WageCreatePageState extends State<WageCreatePage> {
               controller: _operationType,
               hintText: '输入作业类型',
             ),
-            BusinessFormRow(
-              label: '作业日期',
-              value: '',
-              controller: _workDate,
-              hintText: '选择日期',
-              chevron: true,
-              onTap: _pickWorkDate,
-              readOnly: true,
+            _WageDateTimeFormRow(
+              label: '作业时间',
+              dateText: _workDateText,
+              timeText: _workTimeText,
+              onTap: _pickWorkDateTime,
             ),
           ],
         ),
@@ -226,16 +239,39 @@ class _WageCreatePageState extends State<WageCreatePage> {
       ],
     );
   }
-}
 
-String _todayText() {
-  return _dateText(DateTime.now());
+  ApiRecord? _selectedWorkerRecord() {
+    final name = _workerName.text.trim();
+    if (name.isEmpty) return null;
+    return ApiRecord({'name': name});
+  }
+
+  String get _workDateText => _dateText(_workDateTime);
+
+  String get _workTimeText => _timeText(TimeOfDay.fromDateTime(_workDateTime));
+
+  String get _recordedAtPayload {
+    final value = DateTime(
+      _workDateTime.year,
+      _workDateTime.month,
+      _workDateTime.day,
+      _workDateTime.hour,
+      _workDateTime.minute,
+    );
+    return value.toIso8601String();
+  }
 }
 
 String _dateText(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
   final day = date.day.toString().padLeft(2, '0');
   return '${date.year}-$month-$day';
+}
+
+String _timeText(TimeOfDay time) {
+  final hour = time.hour.toString().padLeft(2, '0');
+  final minute = time.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }
 
 String _workerNameText(Map<String, dynamic> json) {
@@ -250,4 +286,94 @@ String _workerSubtitle(Map<String, dynamic> json) {
   final price = json['default_unit_price']?.toString();
   if (price == null || price.isEmpty) return payType;
   return '$payType · 默认单价 $price';
+}
+
+class _WageDateTimeFormRow extends StatelessWidget {
+  const _WageDateTimeFormRow({
+    required this.label,
+    required this.dateText,
+    required this.timeText,
+    required this.onTap,
+  });
+
+  final String label;
+  final String dateText;
+  final String timeText;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: const ValueKey('wage-datetime-row'),
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppColors.lineSoft)),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 116,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 16,
+                  height: 23 / 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    dateText,
+                    key: const ValueKey('wage-date-text'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 16,
+                      height: 22 / 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    timeText,
+                    key: const ValueKey('wage-time-text'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.subtle,
+                      fontSize: 13,
+                      height: 18 / 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              LucideIcons.chevronRight,
+              size: 22,
+              color: AppColors.subtle,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

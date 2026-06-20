@@ -168,6 +168,8 @@ class ConversationSummary {
     required this.preview,
     required this.status,
     required this.category,
+    this.createdAt,
+    this.lastActiveAt,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -178,6 +180,8 @@ class ConversationSummary {
       preview: '${json['preview'] ?? ''}',
       status: '${json['status'] ?? ''}',
       category: '${json['category'] ?? '对话'}',
+      createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
+      lastActiveAt: DateTime.tryParse('${json['last_active_at'] ?? ''}'),
     );
   }
 
@@ -187,6 +191,8 @@ class ConversationSummary {
   final String preview;
   final String status;
   final String category;
+  final DateTime? createdAt;
+  final DateTime? lastActiveAt;
 }
 
 class ConversationMessage {
@@ -221,6 +227,9 @@ class YayaSkill {
     required this.key,
     required this.title,
     required this.description,
+    required this.summary,
+    required this.details,
+    this.examples = const [],
     required this.category,
     required this.icon,
     required this.iconColor,
@@ -233,6 +242,10 @@ class YayaSkill {
       key: '${json['key'] ?? ''}',
       title: '${json['title'] ?? ''}',
       description: '${json['description'] ?? ''}',
+      summary: '${json['summary'] ?? json['description'] ?? ''}',
+      details: '${json['details'] ?? json['description'] ?? ''}',
+      examples:
+          (json['examples'] as List<dynamic>? ?? []).map((v) => '$v').toList(),
       category: '${json['category'] ?? ''}',
       icon: '${json['icon'] ?? ''}',
       iconColor: '${json['icon_color'] ?? ''}',
@@ -244,6 +257,9 @@ class YayaSkill {
   final String key;
   final String title;
   final String description;
+  final String summary;
+  final String details;
+  final List<String> examples;
   final String category;
   final String icon;
   final String iconColor;

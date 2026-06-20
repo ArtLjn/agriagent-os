@@ -89,6 +89,25 @@ void main() {
     expect(find.text('账本'), findsWidgets);
   });
 
+  testWidgets('建议详情页底部 Tab 可返回主应用并切到账本', (tester) async {
+    final dependencies = FakeAppDependencies();
+    await pumpAuthFlow(tester, dependencies: dependencies);
+
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('浇水'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议详情'), findsOneWidget);
+
+    await tester.tap(find.text('账本').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('建议详情'), findsNothing);
+    expect(find.text('账本'), findsWidgets);
+    expect(find.text('年度净收益'), findsOneWidget);
+  });
+
   testWidgets('登录页允许覆盖开发默认账号密码', (tester) async {
     final dependencies = FakeAppDependencies();
     await pumpAuthFlow(tester, dependencies: dependencies);

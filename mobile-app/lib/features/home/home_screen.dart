@@ -16,9 +16,14 @@ part 'home_insight_widgets.dart';
 part 'home_suggestions_widgets.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.repository});
+  const HomeScreen({
+    super.key,
+    required this.repository,
+    this.onBottomTabChanged,
+  });
 
   final DashboardRepository repository;
+  final ValueChanged<int>? onBottomTabChanged;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -47,7 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
             else ...[
               _CockpitCard(model: model!),
               const SizedBox(height: 14),
-              _AiSuggestionsCard(suggestions: model.suggestions),
+              _AiSuggestionsCard(
+                suggestions: model.suggestions,
+                onBottomTabChanged: widget.onBottomTabChanged,
+              ),
               const SizedBox(height: 14),
               _InsightGrid(model: model),
               const SizedBox(height: 14),

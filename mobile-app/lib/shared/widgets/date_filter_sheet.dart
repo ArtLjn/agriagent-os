@@ -11,6 +11,7 @@ enum DateRangePreset {
   last30Days,
   currentYear,
   allTime,
+  custom,
 }
 
 extension DateRangePresetLabel on DateRangePreset {
@@ -22,6 +23,7 @@ extension DateRangePresetLabel on DateRangePreset {
       DateRangePreset.last30Days => '近30天',
       DateRangePreset.currentYear => '本年',
       DateRangePreset.allTime => '全部时间',
+      DateRangePreset.custom => '自定义',
     };
   }
 }
@@ -30,16 +32,25 @@ class DateFilterSelection {
   const DateFilterSelection({
     required this.preset,
     required this.visibleMonth,
+    this.customStart,
+    this.customEnd,
   });
 
   final DateRangePreset preset;
   final DateTime visibleMonth;
+  final DateTime? customStart;
+  final DateTime? customEnd;
+
+  bool get hasCustomRange =>
+      preset == DateRangePreset.custom && customStart != null && customEnd != null;
 }
 
 Future<DateFilterSelection?> showDateFilterSheet({
   required BuildContext context,
   required DateRangePreset selected,
   required DateTime visibleMonth,
+  DateTime? customStart,
+  DateTime? customEnd,
 }) {
   return showModalBottomSheet<DateFilterSelection>(
     context: context,
@@ -49,6 +60,8 @@ Future<DateFilterSelection?> showDateFilterSheet({
       return DateFilterSheet(
         selected: selected,
         visibleMonth: visibleMonth,
+        customStart: customStart,
+        customEnd: customEnd,
       );
     },
   );
@@ -59,10 +72,14 @@ class DateFilterSheet extends StatefulWidget {
     super.key,
     required this.selected,
     required this.visibleMonth,
+    this.customStart,
+    this.customEnd,
   });
 
   final DateRangePreset selected;
   final DateTime visibleMonth;
+  final DateTime? customStart;
+  final DateTime? customEnd;
 
   @override
   State<DateFilterSheet> createState() => _DateFilterSheetState();
@@ -74,6 +91,44 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
     widget.visibleMonth.year,
     widget.visibleMonth.month,
   );
+  DateTime? _customStart;
+  DateTime? _customEnd;
+
+  @override
+  void initState() {
+    super.initState();
+    _customStart = widget.customStart;
+    _customEnd = widget.customEnd;
+  }
+
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final initial = (_customStart != null && _customEnd != null)
+        ? DateTimeRange(start: _customStart!, end: _customEnd!)
+        : null;
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year, 12, 31),
+      initialDateRange: initial,
+      helpText: '选择日期范围',
+      locale: const Locale('zh', 'CN'),
+    );
+    if (picked == null) return;
+    setState(() {
+      _selected = DateRangePreset.custom;
+      _customStart = picked.start;
+      _customEnd = picked.end;
+      _visibleMonth = DateTime(picked.start.year, picked.start.month);
+    });
+  }
+
+  String get _customRangeLabel {
+    if (_customStart == null || _customEnd == null) return '未选择';
+    String fmt(DateTime d) =>
+        '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+    return '${fmt(_customStart!)} - ${fmt(_customEnd!)}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,11 +184,61 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                     const SizedBox(height: 10),
                     _PresetGrid(
                       selected: _selected,
-                      onChanged: (preset) => setState(() {
-                        _selected = preset;
-                        _visibleMonth = _monthForPreset(preset);
-                      }),
+                      customRangeLabel:
+                          _selected == DateRangePreset.custom ? _customRangeLabel : null,
+                      onChanged: (preset) {
+                        if (preset == DateRangePreset.custom) {
+                          _pickCustomRange();
+                          return;
+                        }
+                        setState(() {
+                          _selected = preset;
+                          _visibleMonth = _monthForPreset(preset);
+                        });
+                      },
                     ),
+                    if (_selected == DateRangePreset.custom) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.blueSoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              LucideIcons.calendarRange,
+                              size: 16,
+                              color: AppColors.blue,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _customRangeLabel,
+                                style: AppTextStyles.body.copyWith(
+                                  color: AppColors.blue,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _pickCustomRange,
+                              child: Text(
+                                '修改',
+                                style: AppTextStyles.small.copyWith(
+                                  color: AppColors.blue,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     Row(
                       children: [
@@ -239,6 +344,8 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                         DateFilterSelection(
                           preset: _selected,
                           visibleMonth: _visibleMonth,
+                          customStart: _customStart,
+                          customEnd: _customEnd,
                         ),
                       ),
                       style: TextButton.styleFrom(
@@ -297,6 +404,7 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
           DateTime(base.year, 12, 31),
         ),
       DateRangePreset.allTime => const _DateRange(null, null),
+      DateRangePreset.custom => _DateRange(_customStart, _customEnd),
     };
   }
 }
@@ -305,10 +413,12 @@ class _PresetGrid extends StatelessWidget {
   const _PresetGrid({
     required this.selected,
     required this.onChanged,
+    this.customRangeLabel,
   });
 
   final DateRangePreset selected;
   final ValueChanged<DateRangePreset> onChanged;
+  final String? customRangeLabel;
 
   @override
   Widget build(BuildContext context) {

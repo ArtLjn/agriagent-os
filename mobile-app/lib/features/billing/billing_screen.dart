@@ -15,7 +15,6 @@ class _LedgerColors {
   const _LedgerColors._();
 
   static const ink = Color(0xFF132238);
-  static const primary = AppColors.blue;
   static const primaryDark = AppColors.blueDark;
   static const income = AppColors.greenDark;
   static const expense = AppColors.amber;
@@ -52,6 +51,18 @@ Color _transactionIconBackground(BillingTransactionViewModel transaction) {
   if (transaction.isIncome) return _LedgerColors.greenSoft;
   if (transaction.isDebt) return _LedgerColors.blueSoft;
   return const Color(0xFFFFF7EC);
+}
+
+Color _transactionChipColor(BillingTransactionViewModel transaction) {
+  if (transaction.isIncome) return _LedgerColors.income;
+  if (transaction.isDebt) return _LedgerColors.debt;
+  return _LedgerColors.expense;
+}
+
+Color _transactionChipBackground(BillingTransactionViewModel transaction) {
+  if (transaction.isIncome) return _LedgerColors.greenSoft;
+  if (transaction.isDebt) return _LedgerColors.blueSoft;
+  return _LedgerColors.amberSoft;
 }
 
 class _LedgerSectionCard extends StatelessWidget {
@@ -161,7 +172,7 @@ class _BillingScreenState extends State<BillingScreen> {
         return ReferencePage(
           headerTrailing:
               const HeaderIconButton(icon: LucideIcons.calendarDays),
-          bottomPadding: 118,
+          bottomPadding: 200,
           children: [
             const SizedBox(height: 14),
             if (snapshot.connectionState != ConnectionState.done &&
@@ -186,10 +197,6 @@ class _BillingScreenState extends State<BillingScreen> {
                       }
                     : null,
               ),
-              const SizedBox(height: 14),
-              ReceivableReminderCard(receivables: model.receivables),
-              const SizedBox(height: 16),
-              const _ManualLedgerButton(),
             ],
           ],
         );
@@ -296,6 +303,13 @@ class TransactionListCard extends StatelessWidget {
                 amountColor: visibleTransactions[index].isIncome
                     ? _LedgerColors.income
                     : _LedgerColors.negative,
+                trendUp: visibleTransactions[index].isIncome,
+                chipText: visibleTransactions[index].isDebt
+                    ? '欠款'
+                    : (visibleTransactions[index].isIncome ? '收入' : '支出'),
+                chipColor: _transactionChipColor(visibleTransactions[index]),
+                chipBackground:
+                    _transactionChipBackground(visibleTransactions[index]),
               ),
               if (index != visibleTransactions.length - 1)
                 const _IndentedDivider(),
@@ -316,6 +330,10 @@ class TransactionRow extends StatelessWidget {
     required this.subtitle,
     required this.amount,
     required this.amountColor,
+    required this.trendUp,
+    this.chipText,
+    this.chipColor,
+    this.chipBackground,
   });
 
   final IconData icon;
@@ -325,35 +343,67 @@ class TransactionRow extends StatelessWidget {
   final String subtitle;
   final String amount;
   final Color amountColor;
+  final bool trendUp;
+  final String? chipText;
+  final Color? chipColor;
+  final Color? chipBackground;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 70,
+      height: 64,
       child: Row(
         children: [
           _LedgerRoundIcon(
             icon: icon,
             color: iconColor,
             background: iconBackground,
-            size: 42,
-            iconSize: 19,
+            size: 40,
+            iconSize: 18,
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.listTitle.copyWith(
-                    color: _LedgerColors.ink,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.listTitle.copyWith(
+                          color: _LedgerColors.ink,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (chipText != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: chipBackground ?? AppColors.surface3,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          chipText!,
+                          style: AppTextStyles.small.copyWith(
+                            color: chipColor ?? AppColors.muted,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -363,26 +413,34 @@ class TransactionRow extends StatelessWidget {
                   style: AppTextStyles.small.copyWith(
                     color: _LedgerColors.muted,
                     fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerRight,
-              child: Text(
-                amount,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.listTitle.copyWith(
-                  color: amountColor,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    amount,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.listTitle.copyWith(
+                      color: amountColor,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -412,6 +470,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   _TransactionTab _tab = _TransactionTab.all;
   DateRangePreset _dateFilter = DateRangePreset.currentMonth;
   DateTime? _selectedMonth;
+  DateTime? _customStart;
+  DateTime? _customEnd;
 
   List<BillingTransactionViewModel> get _transactions {
     return widget.model.transactions.where((transaction) {
@@ -468,6 +528,10 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           start: DateTime(1900),
           end: DateTime(2999),
         ),
+      DateRangePreset.custom => (
+          start: _customStart ?? DateTime(1900),
+          end: _customEnd ?? DateTime(2999),
+        ),
     };
   }
 
@@ -489,6 +553,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       context: context,
       selected: _dateFilter,
       visibleMonth: _baseMonth,
+      customStart: _customStart,
+      customEnd: _customEnd,
     );
     if (selected == null) return;
     setState(() {
@@ -497,11 +563,16 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         selected.visibleMonth.year,
         selected.visibleMonth.month,
       );
+      _customStart = selected.customStart;
+      _customEnd = selected.customEnd;
     });
   }
 
   String get _periodTitle {
     if (_dateFilter == DateRangePreset.allTime) return '全部时间';
+    if (_dateFilter == DateRangePreset.custom && _hasCustomRange) {
+      return _customRangeText;
+    }
     if (_dateFilter == DateRangePreset.currentMonth ||
         _dateFilter == DateRangePreset.previousMonth) {
       return '${_baseMonth.year}年${_baseMonth.month}月';
@@ -510,7 +581,19 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   }
 
   String get _periodLabel {
+    if (_dateFilter == DateRangePreset.custom && _hasCustomRange) {
+      return _customRangeText;
+    }
     return _dateFilter.label;
+  }
+
+  bool get _hasCustomRange => _customStart != null && _customEnd != null;
+
+  String get _customRangeText {
+    if (_customStart == null || _customEnd == null) return '自定义';
+    String fmt(DateTime d) =>
+        '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+    return '${fmt(_customStart!)} - ${fmt(_customEnd!)}';
   }
 
   @override
@@ -544,8 +627,6 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     title: _periodTitle,
                     transactions: transactions,
                   ),
-                  const SizedBox(height: 14),
-                  const _ManualLedgerButton(),
                 ],
               ),
             ),
@@ -630,48 +711,33 @@ class _TransactionSummaryStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _LedgerSectionCard(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       radius: 20,
-      child: SizedBox(
-        height: 66,
+      child: IntrinsicHeight(
         child: Row(
           children: [
-            _LedgerRoundIcon(
-              icon: LucideIcons.calendarDays,
-              color: AppColors.blue,
-              background: AppColors.blueSoft,
-              size: 42,
-              iconSize: 20,
-            ),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 58,
-              child: Text(
-                periodLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.body.copyWith(
-                  color: _LedgerColors.ink,
-                  fontWeight: FontWeight.w800,
-                ),
+            Expanded(
+              child: _SummaryMetricCell(
+                label: '时间范围',
+                value: periodLabel,
+                valueColor: _LedgerColors.ink,
+                fontSize: 15,
               ),
             ),
-            const _MetricDivider(height: 42),
+            const _MetricDivider(height: 38),
             Expanded(
-              child: _SummaryCompactMetric(
+              child: _SummaryMetricCell(
                 label: '支出',
                 value: expenseText,
-                icon: LucideIcons.arrowDownToLine,
-                color: _LedgerColors.expense,
+                valueColor: _LedgerColors.expense,
               ),
             ),
-            const SizedBox(width: 8),
+            const _MetricDivider(height: 38),
             Expanded(
-              child: _SummaryCompactMetric(
+              child: _SummaryMetricCell(
                 label: '收入',
                 value: incomeText,
-                icon: LucideIcons.badgeDollarSign,
-                color: _LedgerColors.income,
+                valueColor: _LedgerColors.income,
               ),
             ),
           ],
@@ -681,55 +747,53 @@ class _TransactionSummaryStrip extends StatelessWidget {
   }
 }
 
-class _SummaryCompactMetric extends StatelessWidget {
-  const _SummaryCompactMetric({
+class _SummaryMetricCell extends StatelessWidget {
+  const _SummaryMetricCell({
     required this.label,
     required this.value,
-    required this.icon,
-    required this.color,
+    required this.valueColor,
+    this.fontSize = 17,
   });
 
   final String label;
   final String value;
-  final IconData icon;
-  final Color color;
+  final Color valueColor;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 17, color: color),
-        const SizedBox(width: 7),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.small.copyWith(
-                  color: AppColors.muted,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: color,
-                    fontSize: 18,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-            ],
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.small.copyWith(
+            color: AppColors.muted,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: Text(
+            value,
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.sectionTitle.copyWith(
+              color: valueColor,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w800,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              letterSpacing: -0.2,
+            ),
           ),
         ),
       ],
@@ -1187,91 +1251,6 @@ String _compactTransactionMoney(num value) {
   return '$prefix$text$unit';
 }
 
-class ReceivableReminderCard extends StatelessWidget {
-  const ReceivableReminderCard({super.key, required this.receivables});
-
-  final List<BillingReceivableViewModel> receivables;
-
-  @override
-  Widget build(BuildContext context) {
-    final receivable = receivables.isEmpty ? null : receivables.first;
-    return _LedgerSectionCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      child: Row(
-        children: [
-          const _LedgerRoundIcon(
-            icon: LucideIcons.userRound,
-            color: _LedgerColors.primary,
-            background: _LedgerColors.blueSoft,
-            size: 44,
-            iconSize: 21,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '待收款提醒',
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: _LedgerColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  receivable?.counterparty ?? '暂无待收款',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.ink2,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  receivable?.amountText ?? '¥0',
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: _LedgerColors.expense,
-                    fontSize: 21,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (receivable != null)
-            Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 17),
-              decoration: BoxDecoration(
-                color: AppColors.surface3,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: _LedgerColors.line),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    LucideIcons.phone,
-                    size: 18,
-                    color: AppColors.blue,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '拨打',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.blue,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyLine extends StatelessWidget {
   const _EmptyLine({required this.text});
 
@@ -1285,44 +1264,6 @@ class _EmptyLine extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Text(text,
             style: AppTextStyles.body.copyWith(color: AppColors.subtle)),
-      ),
-    );
-  }
-}
-
-class _ManualLedgerButton extends StatelessWidget {
-  const _ManualLedgerButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: AppColors.blue,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x241473FF),
-            blurRadius: 22,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(LucideIcons.penLine, size: 19, color: Colors.white),
-            const SizedBox(width: 8),
-            Text(
-              '手动记一笔',
-              style: AppTextStyles.sectionTitle.copyWith(
-                color: Colors.white,
-                fontSize: 17,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

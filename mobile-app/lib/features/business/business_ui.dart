@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/api/api_models.dart';
@@ -1256,281 +1257,355 @@ class BusinessFormRow extends StatelessWidget {
   }
 }
 
-Future<T?> showBusinessPickerSheet<T extends ApiRecord>({
-  required BuildContext context,
-  required String title,
-  required Future<PageResult<T>> future,
-  required String Function(T item) titleFor,
-  required String Function(T item) subtitleFor,
-  int? selectedId,
-  String? subtitle,
-  String loadingText = '正在加载',
-  String errorText = '加载失败，请稍后再试',
-  String emptyText = '暂无可选项',
-  IconData Function(T item)? leadingIconFor,
-  Color Function(T item)? accentFor,
-}) {
-  return showModalBottomSheet<T>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (context) {
-      return SafeArea(
-        top: false,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.72,
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x1A10271D),
-                blurRadius: 26,
-                offset: Offset(0, -10),
-              ),
-            ],
-          ),
-          child: FutureBuilder<PageResult<T>>(
-            future: future,
-            builder: (context, snapshot) {
-              final items = snapshot.data?.items ?? <T>[];
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.line,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: AppTextStyles.sectionTitle.copyWith(
-                                fontSize: 20,
-                                height: 26 / 20,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            if (subtitle != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                subtitle,
-                                style: AppTextStyles.body.copyWith(
-                                  color: AppColors.muted,
-                                  fontSize: 13,
-                                  height: 18 / 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(LucideIcons.x, size: 20),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  if (snapshot.connectionState == ConnectionState.waiting)
-                    _BusinessPickerMessage(
-                      text: loadingText,
-                      loading: true,
-                    )
-                  else if (snapshot.hasError)
-                    _BusinessPickerMessage(text: errorText)
-                  else if (items.isEmpty)
-                    _BusinessPickerMessage(text: emptyText)
-                  else
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          final selected = item.id == selectedId;
-                          final accent = accentFor?.call(item) ?? businessGreen;
-                          return _BusinessPickerTile<T>(
-                            item: item,
-                            title: titleFor(item),
-                            subtitle: subtitleFor(item),
-                            selected: selected,
-                            accent: accent,
-                            icon:
-                                leadingIconFor?.call(item) ?? LucideIcons.leaf,
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-      );
-    },
-  );
-}
-
-class _BusinessPickerTile<T extends ApiRecord> extends StatelessWidget {
-  const _BusinessPickerTile({
-    required this.item,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.accent,
-    required this.icon,
+class ApiRecordDropdownFormRow extends StatefulWidget {
+  const ApiRecordDropdownFormRow({
+    super.key,
+    required this.label,
+    required this.future,
+    required this.displayNameFor,
+    required this.onSelected,
+    this.subtitleFor,
+    this.selectedItem,
+    this.selectedId,
+    this.placeholder = '请选择',
+    this.sheetTitle = '请选择',
+    this.sheetSubtitle = '',
+    this.searchHint = '搜索',
+    this.emptyText = '没有匹配数据',
+    this.optionKeyPrefix = 'api-record-option',
+    this.icon = LucideIcons.listChecks,
+    this.accent = businessGreen,
   });
 
-  final T item;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final Color accent;
+  final String label;
+  final Future<PageResult<ApiRecord>> future;
+  final String Function(ApiRecord item) displayNameFor;
+  final String Function(ApiRecord item)? subtitleFor;
+  final ApiRecord? selectedItem;
+  final int? selectedId;
+  final String placeholder;
+  final String sheetTitle;
+  final String sheetSubtitle;
+  final String searchHint;
+  final String emptyText;
+  final String optionKeyPrefix;
   final IconData icon;
+  final Color accent;
+  final ValueChanged<ApiRecord> onSelected;
+
+  @override
+  State<ApiRecordDropdownFormRow> createState() =>
+      _ApiRecordDropdownFormRowState();
+}
+
+class _ApiRecordDropdownFormRowState extends State<ApiRecordDropdownFormRow> {
+  List<ApiRecord> _lastItems = const [];
+
+  Future<List<ApiRecord>> _loadItems(String filter) async {
+    final response = await widget.future.catchError(
+      (_) => const PageResult<ApiRecord>(items: [], total: 0),
+    );
+    final items = response.items;
+    _lastItems = items;
+    final keyword = filter.trim();
+    if (keyword.isEmpty) return items;
+    return items.where((item) {
+      final subtitle = widget.subtitleFor?.call(item) ?? '';
+      return widget.displayNameFor(item).contains(keyword) ||
+          subtitle.contains(keyword);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).pop(item),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          constraints: const BoxConstraints(minHeight: 72),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color:
-                selected ? accent.withValues(alpha: 0.08) : AppColors.surface3,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? accent.withValues(alpha: 0.42)
-                  : AppColors.lineSoft,
+    final selected = _selectedItem();
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.lineSoft)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 116,
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontSize: 16,
+                height: 23 / 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
             ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: selected ? 0.16 : 0.10),
-                  borderRadius: BorderRadius.circular(14),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SizedBox(
+              height: 56,
+              child: DropdownSearch<ApiRecord>(
+                selectedItem: selected,
+                compareFn: (a, b) => a.id == b.id,
+                itemAsString: widget.displayNameFor,
+                items: (filter, _) => _loadItems(filter),
+                onSelected: (value) {
+                  if (value != null) widget.onSelected(value);
+                },
+                dropdownBuilder: (context, item) => _ApiRecordSelectedView(
+                  item: item,
+                  placeholder: widget.placeholder,
+                  displayNameFor: widget.displayNameFor,
                 ),
-                child: Icon(icon, color: accent, size: 21),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.listTitle.copyWith(
-                        fontSize: 16,
-                        height: 22 / 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.body.copyWith(
-                          color: AppColors.muted,
-                          fontSize: 13,
-                          height: 18 / 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: selected ? accent : Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected
-                        ? accent
-                        : AppColors.subtle.withValues(alpha: 0.28),
+                decoratorProps: const DropDownDecoratorProps(
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
                   ),
                 ),
-                child: Icon(
-                  selected ? LucideIcons.check : LucideIcons.chevronRight,
-                  color: selected ? Colors.white : AppColors.subtle,
-                  size: selected ? 17 : 18,
+                suffixProps: const DropdownSuffixProps(
+                  dropdownButtonProps: DropdownButtonProps(
+                    iconClosed: Icon(
+                      LucideIcons.chevronDown,
+                      color: AppColors.subtle,
+                      size: 20,
+                    ),
+                    iconOpened: Icon(
+                      LucideIcons.chevronUp,
+                      color: businessGreenDark,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                popupProps: PopupProps.modalBottomSheet(
+                  showSearchBox: true,
+                  constraints: const BoxConstraints(maxHeight: 520),
+                  modalBottomSheetProps: const ModalBottomSheetProps(
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                  ),
+                  searchFieldProps: TextFieldProps(
+                    decoration: InputDecoration(
+                      hintText: widget.searchHint,
+                      prefixIcon: const Icon(LucideIcons.search, size: 19),
+                      filled: true,
+                      fillColor: AppColors.surface2,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  containerBuilder: (context, child) => SafeArea(
+                    top: false,
+                    child: Container(
+                      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(26)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x1A10271D),
+                            blurRadius: 26,
+                            offset: Offset(0, -10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          const _BusinessDropdownSheetGrabber(),
+                          const SizedBox(height: 14),
+                          _BusinessDropdownSheetTitle(
+                            title: widget.sheetTitle,
+                            subtitle: widget.sheetSubtitle,
+                          ),
+                          const SizedBox(height: 12),
+                          Expanded(child: child),
+                        ],
+                      ),
+                    ),
+                  ),
+                  itemBuilder: (context, item, _, isSelected) =>
+                      _DropdownSearchApiRecordTile(
+                    item: item,
+                    selected: isSelected,
+                    displayNameFor: widget.displayNameFor,
+                    subtitleFor: widget.subtitleFor,
+                    optionKeyPrefix: widget.optionKeyPrefix,
+                    icon: widget.icon,
+                    accent: widget.accent,
+                  ),
+                  emptyBuilder: (context, _) => _ApiRecordDropdownEmptyState(
+                    text: widget.emptyText,
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  ApiRecord? _selectedItem() {
+    final item = widget.selectedItem;
+    if (item != null) return item;
+    final selectedId = widget.selectedId;
+    if (selectedId == null) return null;
+    for (final item in _lastItems) {
+      if (item.id == selectedId) return item;
+    }
+    return null;
+  }
+}
+
+class _ApiRecordSelectedView extends StatelessWidget {
+  const _ApiRecordSelectedView({
+    required this.item,
+    required this.placeholder,
+    required this.displayNameFor,
+  });
+
+  final ApiRecord? item;
+  final String placeholder;
+  final String Function(ApiRecord item) displayNameFor;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = item;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Text(
+        selected == null ? placeholder : displayNameFor(selected),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.right,
+        style: AppTextStyles.body.copyWith(
+          color: selected == null ? AppColors.subtle : AppColors.ink,
+          fontSize: 16,
+          height: 22 / 16,
+          fontWeight: selected == null ? FontWeight.w600 : FontWeight.w800,
         ),
       ),
     );
   }
 }
 
-class _BusinessPickerMessage extends StatelessWidget {
-  const _BusinessPickerMessage({required this.text, this.loading = false});
+class _DropdownSearchApiRecordTile extends StatelessWidget {
+  const _DropdownSearchApiRecordTile({
+    required this.item,
+    required this.selected,
+    required this.displayNameFor,
+    required this.subtitleFor,
+    required this.optionKeyPrefix,
+    required this.icon,
+    required this.accent,
+  });
 
-  final String text;
-  final bool loading;
+  final ApiRecord item;
+  final bool selected;
+  final String Function(ApiRecord item) displayNameFor;
+  final String Function(ApiRecord item)? subtitleFor;
+  final String optionKeyPrefix;
+  final IconData icon;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final title = displayNameFor(item);
+    final subtitle = subtitleFor?.call(item) ?? '';
+    return Container(
+      key: Key('$optionKeyPrefix-$title'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: selected ? accent.withValues(alpha: 0.08) : AppColors.surface3,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected ? accent.withValues(alpha: 0.42) : AppColors.lineSoft,
+        ),
+      ),
+      child: Row(
         children: [
-          if (loading) ...[
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.6),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(13),
             ),
-            const SizedBox(height: 12),
-          ],
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.muted,
-              fontWeight: FontWeight.w700,
+            child: Icon(icon, color: accent, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.listTitle.copyWith(
+                    fontSize: 16,
+                    height: 22 / 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.muted,
+                      fontSize: 13,
+                      height: 18 / 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
+          const SizedBox(width: 10),
+          Icon(
+            selected ? LucideIcons.check : LucideIcons.chevronRight,
+            color: selected ? accent : AppColors.subtle,
+            size: selected ? 19 : 20,
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _ApiRecordDropdownEmptyState extends StatelessWidget {
+  const _ApiRecordDropdownEmptyState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        child: Text(
+          text,
+          style: AppTextStyles.body.copyWith(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }
@@ -1558,6 +1633,7 @@ class CyclePickerFormRow extends StatefulWidget {
 
 class _CyclePickerFormRowState extends State<CyclePickerFormRow> {
   late Future<PageResult<ApiRecord>> _cyclesFuture;
+  List<ApiRecord> _lastCycles = const [];
 
   @override
   void initState() {
@@ -1565,32 +1641,364 @@ class _CyclePickerFormRowState extends State<CyclePickerFormRow> {
     _cyclesFuture = widget.repository.listCycles();
   }
 
-  Future<void> _showPicker() async {
-    final result = await showBusinessPickerSheet<ApiRecord>(
-      context: context,
-      title: '选择茬口',
-      subtitle: '选择后自动关联农事、工资和账本记录',
-      future: _cyclesFuture,
-      selectedId: widget.selectedCycleId,
-      loadingText: '正在加载茬口',
-      errorText: '茬口加载失败，请稍后再试',
-      emptyText: '还没有茬口，先新建一个生产批次',
-      titleFor: _cycleDisplayName,
-      subtitleFor: _cycleSubtitle,
-      leadingIconFor: (_) => LucideIcons.layers,
-      accentFor: (_) => businessGreen,
+  Future<List<ApiRecord>> _loadCycles(String filter) async {
+    final response = await _cyclesFuture.catchError(
+      (_) => const PageResult<ApiRecord>(items: [], total: 0),
     );
-    if (result != null) widget.onSelected(result);
+    final items = response.items;
+    _lastCycles = items;
+    final keyword = filter.trim();
+    if (keyword.isEmpty) return items;
+    return items
+        .where((item) =>
+            _cycleDisplayName(item).contains(keyword) ||
+            _cycleSubtitle(item).contains(keyword))
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedText = widget.selectedCycleName.trim();
-    return BusinessFormRow(
-      label: widget.label,
-      value: selectedText.isEmpty ? '选择茬口' : selectedText,
-      chevron: true,
-      onTap: _showPicker,
+    final selected = _selectedCycle();
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.lineSoft)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 116,
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontSize: 16,
+                height: 23 / 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SizedBox(
+              height: 56,
+              child: DropdownSearch<ApiRecord>(
+                key: const Key('cycle-dropdown-search'),
+                selectedItem: selected,
+                compareFn: (a, b) => a.id == b.id,
+                itemAsString: _cycleDisplayName,
+                items: (filter, _) => _loadCycles(filter),
+                onSelected: (value) {
+                  if (value != null) widget.onSelected(value);
+                },
+                dropdownBuilder: (context, item) => _CycleSelectedView(
+                  cycle: item,
+                ),
+                decoratorProps: const DropDownDecoratorProps(
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                  ),
+                ),
+                suffixProps: const DropdownSuffixProps(
+                  dropdownButtonProps: DropdownButtonProps(
+                    iconClosed: Icon(
+                      LucideIcons.chevronDown,
+                      color: AppColors.subtle,
+                      size: 20,
+                    ),
+                    iconOpened: Icon(
+                      LucideIcons.chevronUp,
+                      color: businessGreenDark,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                popupProps: PopupProps.modalBottomSheet(
+                  showSearchBox: true,
+                  constraints: const BoxConstraints(maxHeight: 520),
+                  modalBottomSheetProps: const ModalBottomSheetProps(
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                  ),
+                  searchFieldProps: TextFieldProps(
+                    decoration: InputDecoration(
+                      hintText: '搜索茬口',
+                      prefixIcon: const Icon(LucideIcons.search, size: 19),
+                      filled: true,
+                      fillColor: AppColors.surface2,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  containerBuilder: (context, child) => SafeArea(
+                    top: false,
+                    child: Container(
+                      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(26)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x1A10271D),
+                            blurRadius: 26,
+                            offset: Offset(0, -10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          const _BusinessDropdownSheetGrabber(),
+                          const SizedBox(height: 14),
+                          const _BusinessDropdownSheetTitle(
+                            title: '选择茬口',
+                            subtitle: '选择后自动关联农事、工资和账本记录',
+                          ),
+                          const SizedBox(height: 12),
+                          Expanded(child: child),
+                        ],
+                      ),
+                    ),
+                  ),
+                  itemBuilder: (context, item, _, isSelected) =>
+                      _DropdownSearchCycleTile(
+                    cycle: item,
+                    selected: isSelected,
+                  ),
+                  emptyBuilder: (context, _) =>
+                      const _CycleDropdownEmptyState(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  ApiRecord? _selectedCycle() {
+    final selectedId = widget.selectedCycleId;
+    if (selectedId != null) {
+      for (final cycle in _lastCycles) {
+        if (cycle.id == selectedId) return cycle;
+      }
+    }
+    final selectedName = widget.selectedCycleName.trim();
+    if (selectedName.isEmpty) return null;
+    return ApiRecord({
+      'id': selectedId,
+      'name': selectedName,
+    });
+  }
+}
+
+class _CycleSelectedView extends StatelessWidget {
+  const _CycleSelectedView({required this.cycle});
+
+  final ApiRecord? cycle;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = cycle;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Text(
+        selected == null ? '选择茬口' : _cycleDisplayName(selected),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.right,
+        style: AppTextStyles.body.copyWith(
+          color: selected == null ? AppColors.subtle : AppColors.ink,
+          fontSize: 16,
+          height: 22 / 16,
+          fontWeight: selected == null ? FontWeight.w600 : FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownSearchCycleTile extends StatelessWidget {
+  const _DropdownSearchCycleTile({
+    required this.cycle,
+    required this.selected,
+  });
+
+  final ApiRecord cycle;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: Key('cycle-option-${_cycleDisplayName(cycle)}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: selected
+            ? businessGreen.withValues(alpha: 0.08)
+            : AppColors.surface3,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: selected
+              ? businessGreen.withValues(alpha: 0.42)
+              : AppColors.lineSoft,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: businessGreen.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(
+              LucideIcons.layers,
+              color: businessGreenDark,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _cycleDisplayName(cycle),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.listTitle.copyWith(
+                    fontSize: 16,
+                    height: 22 / 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (_cycleSubtitle(cycle).isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _cycleSubtitle(cycle),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.muted,
+                      fontSize: 13,
+                      height: 18 / 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(
+            selected ? LucideIcons.check : LucideIcons.chevronRight,
+            color: selected ? businessGreenDark : AppColors.subtle,
+            size: selected ? 19 : 20,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CycleDropdownEmptyState extends StatelessWidget {
+  const _CycleDropdownEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        child: Text(
+          '没有匹配茬口',
+          style: AppTextStyles.body.copyWith(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessDropdownSheetGrabber extends StatelessWidget {
+  const _BusinessDropdownSheetGrabber();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 38,
+        height: 4,
+        decoration: BoxDecoration(
+          color: AppColors.line,
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+  }
+}
+
+class _BusinessDropdownSheetTitle extends StatelessWidget {
+  const _BusinessDropdownSheetTitle({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTextStyles.sectionTitle.copyWith(
+                  fontSize: 20,
+                  height: 26 / 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.muted,
+                  fontSize: 13,
+                  height: 18 / 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(LucideIcons.x, size: 20),
+        ),
+      ],
     );
   }
 }

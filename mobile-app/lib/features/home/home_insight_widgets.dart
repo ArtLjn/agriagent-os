@@ -16,9 +16,17 @@ class _InsightGrid extends StatelessWidget {
       childAspectRatio: 1.18,
       children: [
         _MoneyInsightCard(value: model.unsettledLaborText),
-        _CostInsightCard(value: model.workOrderCountText),
-        _ProgressInsightCard(value: model.headline),
-        _RiskInsightCard(value: '${model.riskText}待关注'),
+        _WorkOrderInsightCard(
+          workOrderValue: model.workOrderCountText,
+          pendingValue: model.pendingText,
+          progress: model.adviceScoreProgress,
+        ),
+        _AdviceHealthCard(
+          value: model.adviceScoreText,
+          subtitle: model.headline,
+          progress: model.adviceScoreProgress,
+        ),
+        _RiskInsightCard(value: model.riskSummaryText),
       ],
     );
   }
@@ -78,10 +86,16 @@ class _MoneyInsightCard extends StatelessWidget {
   }
 }
 
-class _CostInsightCard extends StatelessWidget {
-  const _CostInsightCard({required this.value});
+class _WorkOrderInsightCard extends StatelessWidget {
+  const _WorkOrderInsightCard({
+    required this.workOrderValue,
+    required this.pendingValue,
+    required this.progress,
+  });
 
-  final String value;
+  final String workOrderValue;
+  final String pendingValue;
+  final double progress;
 
   @override
   Widget build(BuildContext context) {
@@ -93,11 +107,11 @@ class _CostInsightCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('成本分析', style: AppTextStyles.sectionTitle),
+                const Text('作业跟进', style: AppTextStyles.sectionTitle),
                 const Spacer(),
                 Text('作业', style: AppTextStyles.small.copyWith(fontSize: 13)),
                 Text(
-                  value,
+                  workOrderValue,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.dateTitle.copyWith(
@@ -105,22 +119,33 @@ class _CostInsightCard extends StatelessWidget {
                     fontSize: 26,
                   ),
                 ),
-                Text('待跟进', style: AppTextStyles.small.copyWith(fontSize: 13)),
+                Text(
+                  '待办 $pendingValue',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.small.copyWith(fontSize: 13),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          const _DonutProgress(value: 0.68),
+          _DonutProgress(value: progress, label: '跟进'),
         ],
       ),
     );
   }
 }
 
-class _ProgressInsightCard extends StatelessWidget {
-  const _ProgressInsightCard({required this.value});
+class _AdviceHealthCard extends StatelessWidget {
+  const _AdviceHealthCard({
+    required this.value,
+    required this.subtitle,
+    required this.progress,
+  });
 
   final String value;
+  final String subtitle;
+  final double progress;
 
   @override
   Widget build(BuildContext context) {
@@ -129,9 +154,14 @@ class _ProgressInsightCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('茬口进度', style: AppTextStyles.sectionTitle),
+          const Text('建议健康度', style: AppTextStyles.sectionTitle),
           const Spacer(),
-          Text('今日建议', style: AppTextStyles.small.copyWith(fontSize: 13)),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.small.copyWith(fontSize: 13),
+          ),
           Text(
             value,
             maxLines: 1,
@@ -145,7 +175,7 @@ class _ProgressInsightCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: 0.68,
+              value: progress,
               minHeight: 8,
               backgroundColor: AppColors.greenSoft,
               valueColor: const AlwaysStoppedAnimation(AppColors.greenDark),
@@ -271,9 +301,10 @@ class _SparklinePainter extends CustomPainter {
 }
 
 class _DonutProgress extends StatelessWidget {
-  const _DonutProgress({required this.value});
+  const _DonutProgress({required this.value, required this.label});
 
   final double value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -286,10 +317,11 @@ class _DonutProgress extends StatelessWidget {
           CustomPaint(
               size: const Size.square(74), painter: _DonutPainter(value)),
           Text(
-            '8%',
+            label,
+            maxLines: 1,
             style: AppTextStyles.sectionTitle.copyWith(
               color: AppColors.greenDark,
-              fontSize: 18,
+              fontSize: 15,
             ),
           ),
         ],

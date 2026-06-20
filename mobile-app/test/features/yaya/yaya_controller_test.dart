@@ -34,6 +34,23 @@ void main() {
     expect(controller.sending, false);
   });
 
+  test('新对话首次发送会创建会话并在完成后刷新最近对话', () async {
+    final repository = FakeStreamingYayaRepository([
+      const YayaStreamEvent(content: '建议'),
+      const YayaStreamEvent(done: true),
+    ]);
+    final controller = YayaController(repository: repository);
+
+    await controller.send('今天浇水吗');
+
+    expect(controller.activeSessionId, isNotNull);
+    expect(controller.activeSessionId, startsWith('app-'));
+    expect(repository.sentSessionIds.single, controller.activeSessionId);
+    expect(repository.loadConversationsCalls, 1);
+    expect(
+        controller.conversations.single.sessionId, controller.activeSessionId);
+  });
+
   test('确认待执行操作会清除旧卡片并发送确认消息', () async {
     final repository = FakeStreamingYayaRepository([
       const YayaStreamEvent(
@@ -152,6 +169,8 @@ class FakeStreamingYayaRepository extends YayaRepository {
 
   final List<YayaStreamEvent> events;
   final List<String> sentMessages = [];
+  final List<String?> sentSessionIds = [];
+  int loadConversationsCalls = 0;
 
   @override
   Stream<YayaStreamEvent> streamMessage(
@@ -160,9 +179,26 @@ class FakeStreamingYayaRepository extends YayaRepository {
     String? sessionId,
   }) async* {
     sentMessages.add(message);
+    sentSessionIds.add(sessionId);
     for (final event in events) {
       yield event;
     }
+  }
+
+  @override
+  Future<List<ConversationSummary>> loadConversations({int limit = 20}) async {
+    loadConversationsCalls += 1;
+    final sessionId = sentSessionIds.lastOrNull ?? 's1';
+    return [
+      ConversationSummary(
+        id: 1,
+        sessionId: sessionId,
+        title: '今天浇水吗',
+        preview: '建议',
+        status: 'active',
+        category: '种植',
+      ),
+    ];
   }
 }
 

@@ -1,9 +1,13 @@
 part of 'home_screen.dart';
 
 class _AiSuggestionsCard extends StatelessWidget {
-  const _AiSuggestionsCard({required this.suggestions});
+  const _AiSuggestionsCard({
+    required this.suggestions,
+    this.onBottomTabChanged,
+  });
 
   final List<HomeSuggestionViewModel> suggestions;
+  final ValueChanged<int>? onBottomTabChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +39,7 @@ class _AiSuggestionsCard extends StatelessWidget {
                   MaterialPageRoute<void>(
                     builder: (_) => AdviceDetailScreen(
                       suggestion: visible[index],
+                      onBottomTabChanged: onBottomTabChanged,
                     ),
                   ),
                 );

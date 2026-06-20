@@ -22,6 +22,7 @@ class _SystemSettingsCard extends StatelessWidget {
             color: AppColors.greenDark,
             background: AppColors.greenSoft,
             title: '数据备份与恢复',
+            value: '待开放',
           ),
           const Divider(height: 1, color: AppColors.lineSoft),
           const _ProfileOptionRow(
@@ -29,6 +30,7 @@ class _SystemSettingsCard extends StatelessWidget {
             color: AppColors.amber,
             background: AppColors.amberSoft,
             title: '消息通知',
+            value: '待开放',
           ),
           const Divider(height: 1, color: AppColors.lineSoft),
           _ProfileOptionRow(
@@ -75,7 +77,6 @@ class _ProfileOptionRow extends StatelessWidget {
     this.value,
     this.titleColor,
     this.valueColor = AppColors.muted,
-    this.trailing,
     this.onTap,
   });
 
@@ -86,7 +87,6 @@ class _ProfileOptionRow extends StatelessWidget {
   final String? value;
   final Color? titleColor;
   final Color valueColor;
-  final Widget? trailing;
   final Future<void> Function()? onTap;
 
   @override
@@ -103,9 +103,7 @@ class _ProfileOptionRow extends StatelessWidget {
               style: AppTextStyles.listTitle.copyWith(color: titleColor),
             ),
           ),
-          if (trailing != null)
-            trailing!
-          else if (value != null)
+          if (value != null)
             Flexible(
               child: Text(
                 value!,
@@ -115,12 +113,10 @@ class _ProfileOptionRow extends StatelessWidget {
                 style: AppTextStyles.body.copyWith(color: valueColor),
               ),
             ),
-          const SizedBox(width: 8),
-          Icon(
-            LucideIcons.chevronRight,
-            size: 20,
-            color: onTap == null ? AppColors.subtle : valueColor,
-          ),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            Icon(LucideIcons.chevronRight, size: 20, color: valueColor),
+          ],
         ],
       ),
     );
@@ -424,37 +420,175 @@ class _AboutErrorState extends StatelessWidget {
   }
 }
 
-class _SwitchPill extends StatelessWidget {
-  const _SwitchPill({required this.on});
+class AssistantRoleOption {
+  const AssistantRoleOption({
+    required this.value,
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.background,
+  });
 
-  final bool on;
+  final String value;
+  final String label;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final Color background;
+}
+
+const _assistantRoleOptions = [
+  AssistantRoleOption(
+    value: 'warm',
+    label: '温暖陪伴型',
+    description: '语气更亲切，适合日常农事建议和连续沟通。',
+    icon: LucideIcons.messagesSquare,
+    color: AppColors.greenDark,
+    background: AppColors.greenSoft,
+  ),
+  AssistantRoleOption(
+    value: 'professional',
+    label: '冷静专业型',
+    description: '表达更直接，优先给出依据、风险和操作建议。',
+    icon: LucideIcons.clipboardCheck,
+    color: AppColors.blue,
+    background: AppColors.blueSoft,
+  ),
+  AssistantRoleOption(
+    value: 'creative',
+    label: '灵感创意型',
+    description: '更适合活动策划、经营思路和内容生成。',
+    icon: LucideIcons.sparkles,
+    color: AppColors.purple,
+    background: AppColors.purpleSoft,
+  ),
+];
+
+Future<AssistantRoleOption?> showAssistantRoleSheet({
+  required BuildContext context,
+  required String selectedValue,
+}) {
+  return showModalBottomSheet<AssistantRoleOption>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) {
+      return _AssistantRoleSheet(selectedValue: selectedValue);
+    },
+  );
+}
+
+class _AssistantRoleSheet extends StatelessWidget {
+  const _AssistantRoleSheet({required this.selectedValue});
+
+  final String selectedValue;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 50,
-      height: 28,
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: on ? AppColors.greenDark : AppColors.line,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Align(
-        alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          width: 22,
-          height: 22,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x16000000),
-                blurRadius: 8,
-                offset: Offset(0, 2),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x1A111827),
+              blurRadius: 24,
+              offset: Offset(0, -8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              child: Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD0D5DD),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
-            ],
+            ),
+            const SizedBox(height: 18),
+            const Text('回答风格', style: AppTextStyles.title),
+            const SizedBox(height: 12),
+            for (final option in _assistantRoleOptions)
+              _AssistantRoleTile(
+                option: option,
+                selected: option.value == selectedValue,
+                onTap: () => Navigator.of(context).pop(option),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantRoleTile extends StatelessWidget {
+  const _AssistantRoleTile({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AssistantRoleOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        constraints: const BoxConstraints(minHeight: 76),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blueSoft : AppColors.surface2,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? AppColors.blue : AppColors.lineSoft,
           ),
+        ),
+        child: Row(
+          children: [
+            IconBadge(
+              icon: option.icon,
+              color: option.color,
+              background: option.background,
+              size: 38,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(option.label, style: AppTextStyles.listTitle),
+                  const SizedBox(height: 3),
+                  Text(
+                    option.description,
+                    style: AppTextStyles.small.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              selected ? LucideIcons.circleCheck : LucideIcons.circle,
+              size: 20,
+              color: selected ? AppColors.blue : AppColors.subtle,
+            ),
+          ],
         ),
       ),
     );

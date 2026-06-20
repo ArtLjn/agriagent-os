@@ -85,6 +85,20 @@ void main() {
     );
   }
 
+  Future<void> pumpAtWidth(
+    WidgetTester tester,
+    Widget child, {
+    required double width,
+  }) async {
+    tester.view.physicalSize = Size(width, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(MaterialApp(home: child));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('记录页展示当前工作台入口且不展示语音和样例确认卡', (tester) async {
     await tester.pumpWidget(MaterialApp(home: screen()));
 
@@ -102,6 +116,16 @@ void main() {
     expect(find.text('改一下'), findsNothing);
     expect(find.text('保存'), findsNothing);
     expect(find.text('XX饲料厂'), findsNothing);
+  });
+
+  testWidgets('记录页窄屏输入框使用单行短提示', (tester) async {
+    await pumpAtWidth(tester, screen(), width: 320);
+
+    expect(find.text('输入一句，芽芽整理'), findsOneWidget);
+    expect(find.text('输入一句话记录，芽芽会帮你整理'), findsNothing);
+    final field = tester.widget<TextField>(find.byType(TextField).first);
+    expect(field.minLines, 1);
+    expect(field.maxLines, 1);
   });
 
   testWidgets('AI 帮填使用用户输入文本解析而不是固定样例', (tester) async {

@@ -19,15 +19,34 @@ class HomeController {
     final labor = Map<String, dynamic>.from(results[3] as Map);
     final unpaid = _number(labor['total_unpaid'] ?? labor['unpaid_amount']);
     final weatherText = _weatherText(forecast);
+    final workOrderText = _metricValue(
+      advice.overview,
+      'work_order',
+      fallback: '${workOrders.total}项',
+    );
+    final pendingText = _metricValue(
+      advice.overview,
+      'pending',
+      fallback: unpaid > 0 ? '1项' : '0项',
+    );
+    final score = advice.overview.score.clamp(0, 100).toInt();
 
     return HomeViewModel(
       headline: _nonEmpty(advice.preview, fallback: '暂无建议'),
-      scoreText: workOrders.total.toString(),
-      scoreCaption: '$weatherText · ${workOrders.total}项作业',
+      scoreText: score.toString(),
+      scoreCaption: _nonEmpty(
+        advice.overview.subtitle,
+        fallback: '$weatherText · $workOrderText作业',
+      ),
       weatherText: weatherText,
-      workOrderCountText: '${workOrders.total}项',
+      workOrderCountText: workOrderText,
+      pendingText: pendingText,
+      adviceScoreText: '$score分',
+      adviceScoreProgress: score / 100,
       unsettledLaborText: _money(unpaid),
-      riskText: unpaid > 0 ? '1项' : '0项',
+      riskText: pendingText,
+      riskSummaryText:
+          _riskSummaryText(pendingText: pendingText, unpaid: unpaid),
       suggestions: _suggestions(advice),
     );
   }
@@ -111,6 +130,26 @@ class HomeController {
     }
     return '';
   }
+
+  String _metricValue(
+    DailyAdviceOverview overview,
+    String key, {
+    required String fallback,
+  }) {
+    for (final metric in overview.metrics) {
+      if (metric.key == key && metric.value.trim().isNotEmpty) {
+        return metric.value;
+      }
+    }
+    return fallback;
+  }
+
+  String _riskSummaryText({required String pendingText, required num unpaid}) {
+    final pendingCount = _number(pendingText.replaceAll('项', ''));
+    if (pendingCount > 0) return '$pendingText待处理';
+    if (unpaid > 0) return '1项资金待关注';
+    return '暂无待关注';
+  }
 }
 
 class HomeViewModel {
@@ -120,8 +159,12 @@ class HomeViewModel {
     required this.scoreCaption,
     required this.weatherText,
     required this.workOrderCountText,
+    required this.pendingText,
+    required this.adviceScoreText,
+    required this.adviceScoreProgress,
     required this.unsettledLaborText,
     required this.riskText,
+    required this.riskSummaryText,
     required this.suggestions,
   });
 
@@ -130,8 +173,12 @@ class HomeViewModel {
   final String scoreCaption;
   final String weatherText;
   final String workOrderCountText;
+  final String pendingText;
+  final String adviceScoreText;
+  final double adviceScoreProgress;
   final String unsettledLaborText;
   final String riskText;
+  final String riskSummaryText;
   final List<HomeSuggestionViewModel> suggestions;
 }
 

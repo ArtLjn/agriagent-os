@@ -13,9 +13,19 @@ import 'home_controller.dart';
 part 'advice_detail_sections.dart';
 
 class AdviceDetailScreen extends StatelessWidget {
-  const AdviceDetailScreen({super.key, required this.suggestion});
+  const AdviceDetailScreen({
+    super.key,
+    required this.suggestion,
+    this.onBottomTabChanged,
+  });
 
   final HomeSuggestionViewModel suggestion;
+  final ValueChanged<int>? onBottomTabChanged;
+
+  void _handleBottomTabChanged(BuildContext context, int index) {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    onBottomTabChanged?.call(index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +76,7 @@ class AdviceDetailScreen extends StatelessWidget {
       ),
       bottomNavigationBar: _AdviceBottomArea(
         suggestion: suggestion,
-        onHomeTap: () => Navigator.of(context).pop(),
+        onBottomTabChanged: (index) => _handleBottomTabChanged(context, index),
       ),
     );
   }
@@ -343,11 +353,11 @@ class _MetaChip extends StatelessWidget {
 class _AdviceBottomArea extends StatelessWidget {
   const _AdviceBottomArea({
     required this.suggestion,
-    required this.onHomeTap,
+    required this.onBottomTabChanged,
   });
 
   final HomeSuggestionViewModel suggestion;
-  final VoidCallback onHomeTap;
+  final ValueChanged<int> onBottomTabChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -364,9 +374,7 @@ class _AdviceBottomArea extends StatelessWidget {
           if (actions.isNotEmpty) _AdviceActionBar(actions: actions),
           AppBottomTabBar(
             selectedIndex: 0,
-            onChanged: (index) {
-              if (index == 0) onHomeTap();
-            },
+            onChanged: onBottomTabChanged,
           ),
         ],
       ),

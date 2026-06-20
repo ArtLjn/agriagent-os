@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../app/app_dependencies.dart';
 import '../../theme/app_colors.dart';
 import '../billing/billing_screen.dart';
+import '../business/business_pages.dart';
 import '../home/home_screen.dart';
 import '../record_flow/record_flow_controller.dart';
 import '../profile/profile_screen.dart';
@@ -48,10 +50,33 @@ class _AppShellState extends State<AppShell> {
     setState(() => billingRefreshKey += 1);
   }
 
+  void _openLedgerCreate(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LedgerManualCreatePage(
+          repository: widget.dependencies.business,
+          onSaved: _refreshBilling,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final showLedgerFab = selectedIndex == 3;
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: showLedgerFab
+          ? FloatingActionButton(
+              heroTag: 'ledger-manual-create',
+              onPressed: () => _openLedgerCreate(context),
+              backgroundColor: AppColors.blue,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shape: const CircleBorder(),
+              child: const Icon(LucideIcons.plus, size: 26),
+            )
+          : null,
       bottomNavigationBar: AppBottomTabBar(
         selectedIndex: selectedIndex,
         onChanged: _selectTab,
@@ -67,7 +92,10 @@ class _AppShellState extends State<AppShell> {
         child: IndexedStack(
           index: selectedIndex,
           children: [
-            HomeScreen(repository: widget.dependencies.dashboard),
+            HomeScreen(
+              repository: widget.dependencies.dashboard,
+              onBottomTabChanged: _selectTab,
+            ),
             WorkbenchScreen(
               businessRepository: widget.dependencies.business,
               recordFlowController: recordFlowController,

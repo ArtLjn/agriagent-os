@@ -60,6 +60,8 @@ class YayaController extends ChangeNotifier {
     sending = true;
     errorMessage = null;
     pendingAction = null;
+    activeSessionId ??= _newSessionId();
+    final sessionId = activeSessionId;
     messages.add(YayaMessageViewModel.user(trimmed));
     final assistantIndex = messages.length;
     messages.add(const YayaMessageViewModel(role: 'assistant', content: ''));
@@ -67,7 +69,7 @@ class YayaController extends ChangeNotifier {
     try {
       await for (final event in repository.streamMessage(
         trimmed,
-        sessionId: activeSessionId,
+        sessionId: sessionId,
       )) {
         if (_disposed) break;
         if (event.done) break;
@@ -101,6 +103,7 @@ class YayaController extends ChangeNotifier {
     } finally {
       if (!_disposed) {
         sending = false;
+        await _refreshConversationsSilently();
         _safeNotify();
       }
     }
@@ -128,6 +131,22 @@ class YayaController extends ChangeNotifier {
 
   void _safeNotify() {
     if (!_disposed) notifyListeners();
+  }
+
+  Future<void> _refreshConversationsSilently() async {
+    try {
+      final loaded = await repository.loadConversations();
+      if (_disposed) return;
+      conversations
+        ..clear()
+        ..addAll(loaded);
+    } catch (_) {
+      return;
+    }
+  }
+
+  String _newSessionId() {
+    return 'app-${DateTime.now().microsecondsSinceEpoch}';
   }
 
   @override

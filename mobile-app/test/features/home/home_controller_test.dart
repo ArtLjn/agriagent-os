@@ -23,12 +23,18 @@ void main() {
     final model = await controller.load();
 
     expect(model.headline, '注意控水');
+    expect(model.scoreText, '82');
+    expect(model.scoreCaption, '今日天气偏热，请优先安排关键作业。');
     expect(model.weatherText, '晴');
     expect(model.suggestions, isNotEmpty);
     expect(model.suggestions.first.title, '浇水');
     expect(model.workOrderCountText, '1项');
+    expect(model.pendingText, '1项');
+    expect(model.adviceScoreText, '82分');
+    expect(model.adviceScoreProgress, 0.82);
     expect(model.unsettledLaborText, '¥200');
     expect(model.riskText, '1项');
+    expect(model.riskSummaryText, '1项待处理');
     expect(adapter.find('GET', '/planting/work-orders').query['size'], 10);
     expect(adapter.find('GET', '/weather/forecast').query, {'days': 7});
   });
@@ -71,6 +77,6 @@ void main() {
     final model = await controller.load();
 
     expect(model.weatherText, '高温 32℃');
-    expect(model.scoreCaption, '高温 32℃ · 1项作业');
+    expect(model.scoreCaption, '今日天气偏热，请优先安排关键作业。');
   });
 }

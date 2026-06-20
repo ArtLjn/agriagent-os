@@ -295,9 +295,14 @@ void main() {
   testWidgets('新建茬口选择模板后创建茬口和种植区域', (tester) async {
     await pump(tester, FarmCycleFormPage(repository: repository));
 
-    await tester.tap(find.text('作物模板'));
+    await tester.tap(find.byKey(const Key('template-dropdown-search')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('番茄 / 粉果 306').last);
+    final templateOption = find.byKey(
+      const Key('template-option-番茄 / 粉果 306'),
+    );
+    await tester.tapAt(
+      tester.getTopLeft(templateOption) + const Offset(24, 24),
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -710,7 +715,14 @@ void main() {
     expect(find.text('作业日期'), findsNothing);
     expect(find.text('图片链接'), findsNothing);
 
-    expectRowChevron('关联茬口', findsOneWidget);
+    expect(find.byKey(const Key('cycle-dropdown-search')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('cycle-dropdown-search')),
+        matching: find.byIcon(LucideIcons.chevronDown),
+      ),
+      findsOneWidget,
+    );
     expectRowChevron('作业类型', findsNothing);
     expectRowChevron('备注', findsNothing);
     expect(
@@ -724,9 +736,12 @@ void main() {
   testWidgets('农事记录页保存到后端', (tester) async {
     await pump(tester, FarmLogCreatePage(repository: repository));
 
-    await tester.tap(find.text('选择茬口'));
+    await tester.tap(find.byKey(const Key('cycle-dropdown-search')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('春茬').last);
+    final farmLogCycleOption = find.byKey(const Key('cycle-option-春茬'));
+    await tester.tapAt(
+      tester.getTopLeft(farmLogCycleOption) + const Offset(24, 24),
+    );
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(0), '浇水');
     final selectedDateText =
@@ -768,39 +783,65 @@ void main() {
     expect(find.text('保存工资'), findsOneWidget);
   });
 
-  testWidgets('工资记录页工人和日期字段都有具体选择器', (tester) async {
+  testWidgets('工资记录页工人和作业时间字段都有具体选择器', (tester) async {
     await pump(tester, WageCreatePage(repository: repository));
 
-    await tester.tap(find.text('工人姓名'));
+    await tester.tap(find.byKey(const Key('worker-dropdown-search')));
     await tester.pumpAndSettle();
-    expect(find.text('选择工人'), findsOneWidget);
-    await tester.tap(find.text('张三').last);
+    final workerOption = find.byKey(const Key('worker-option-张三'));
+    expect(workerOption, findsOneWidget);
+    await tester.tapAt(
+      tester.getTopLeft(workerOption) + const Offset(24, 24),
+    );
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 250));
-    expect(find.widgetWithText(TextField, '张三'), findsOneWidget);
+    expect(find.text('张三'), findsOneWidget);
 
     await pump(tester, WageCreatePage(repository: repository));
-    final dateField = tester.widget<TextField>(find.byType(TextField).at(2));
-    expect(dateField.readOnly, isTrue);
-    expectRowChevron('作业日期', findsOneWidget);
+    expect(find.byKey(const ValueKey('wage-datetime-row')), findsOneWidget);
+    expect(find.text('作业时间'), findsOneWidget);
+    expect(find.text(_todayTextForTest()), findsOneWidget);
+    final timeText =
+        tester.widget<Text>(find.byKey(const ValueKey('wage-time-text'))).data!;
+    expect(timeText, matches(RegExp(r'^\d{2}:\d{2}$')));
+
+    final wageDateTimeRow = find.byKey(const ValueKey('wage-datetime-row'));
+    await tester.ensureVisible(wageDateTimeRow);
+    await tester.tapAt(
+      tester.getTopLeft(wageDateTimeRow) + const Offset(24, 24),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('选择作业日期'), findsOneWidget);
+    await tester.tap(find.text('取消').last);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('工资记录页保存到后端', (tester) async {
     await pump(tester, WageCreatePage(repository: repository));
 
-    await tester.tap(find.text('选择茬口'));
+    await tester.tap(find.byKey(const Key('cycle-dropdown-search')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('春茬').last);
+    final wageCycleOption = find.byKey(const Key('cycle-option-春茬'));
+    await tester.tapAt(
+      tester.getTopLeft(wageCycleOption) + const Offset(24, 24),
+    );
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(0), '张三');
-    await tester.enterText(find.byType(TextField).at(1), '浇水');
-    final workDate = (tester.widget(find.byType(TextField).at(2)) as TextField)
-        .controller!
-        .text;
-    await tester.enterText(find.byType(TextField).at(3), '1');
-    await tester.enterText(find.byType(TextField).at(4), '200');
-    await tester.enterText(find.byType(TextField).at(5), '0');
-    await tester.enterText(find.byType(TextField).at(6), '今日浇水工资');
+    await tester.tap(find.byKey(const Key('worker-dropdown-search')));
+    await tester.pumpAndSettle();
+    final workerOption = find.byKey(const Key('worker-option-张三'));
+    await tester.tapAt(
+      tester.getTopLeft(workerOption) + const Offset(24, 24),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), '浇水');
+    final workDate =
+        tester.widget<Text>(find.byKey(const ValueKey('wage-date-text'))).data!;
+    final workTime =
+        tester.widget<Text>(find.byKey(const ValueKey('wage-time-text'))).data!;
+    await tester.enterText(find.byType(TextField).at(1), '1');
+    await tester.enterText(find.byType(TextField).at(2), '200');
+    await tester.enterText(find.byType(TextField).at(3), '0');
+    await tester.enterText(find.byType(TextField).at(4), '今日浇水工资');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存工资'));
@@ -811,6 +852,10 @@ void main() {
     expect(request.data, containsPair('worker_name', '张三'));
     expect(request.data, containsPair('operation_type', '浇水'));
     expect(request.data, containsPair('work_date', workDate));
+    expect(
+      request.data,
+      containsPair('recorded_at', '${workDate}T$workTime:00.000'),
+    );
     expect(request.data, containsPair('quantity', 1));
     expect(request.data, containsPair('unit_price', 200));
     expect(request.data, containsPair('paid_amount', 0));

@@ -226,6 +226,41 @@ void main() {
       'lon': 117.9586,
     });
   });
+
+  testWidgets('点击回答风格可保存已支持的助手角色设置', (tester) async {
+    setMockAppPackageInfo(version: '0.1.0', buildNumber: '1');
+    final adapter = RecordingAdapter({
+      '/auth/me': userResponse,
+      '/settings': settingsResponse,
+      '/api/app/version': versionResponse,
+      'PUT /settings': {
+        ...settingsResponse,
+        'assistant_role': 'professional',
+      },
+    });
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+    dio.httpClientAdapter = adapter;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            repository: ProfileRepository(ApiClient(dio: dio)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('回答风格'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('冷静专业型'));
+    await tester.pumpAndSettle();
+
+    expect(adapter.find('PUT', '/settings').data, {
+      'assistant_role': 'professional',
+    });
+  });
 }
 
 ProfileRepository _profileRepository({Map<String, Object?>? version}) {

@@ -165,7 +165,7 @@ class _CockpitMetrics extends StatelessWidget {
               iconColor: Color(0xFFFF6500),
               iconBackground: AppColors.amberSoft,
               label: '待处理',
-              value: model.riskText,
+              value: model.pendingText,
               valueColor: Color(0xFFFF6500),
             ),
           ),

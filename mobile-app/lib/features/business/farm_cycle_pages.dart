@@ -337,19 +337,23 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
               controller: _name,
               hintText: '输入茬口名称',
             ),
-            BusinessFormRow(
+            ApiRecordDropdownFormRow(
+              key: const Key('template-dropdown-search'),
               label: '作物模板',
-              value: _templateDisplayName(_selectedTemplate),
-              hintText: '选择自己的作物模板',
-              chevron: true,
-              onTap: () async {
-                final selected = await _showTemplatePicker(
-                  context,
-                  _templatesFuture,
-                  _selectedTemplate?.id,
-                );
-                if (selected != null) _selectTemplate(selected);
-              },
+              future: _templatesFuture,
+              selectedItem: _selectedTemplate,
+              selectedId: _selectedTemplate?.id,
+              placeholder: '选择作物模板',
+              sheetTitle: '选择作物模板',
+              sheetSubtitle: '选择后自动带出生长阶段，创建茬口更快',
+              searchHint: '搜索作物模板',
+              emptyText: '还没有作物模板，先新建一个模板',
+              optionKeyPrefix: 'template-option',
+              icon: LucideIcons.sprout,
+              accent: businessGreen,
+              displayNameFor: _templateDisplayName,
+              subtitleFor: _templateSubtitle,
+              onSelected: _selectTemplate,
             ),
             BusinessFormRow(
               label: '开始日期',
@@ -420,27 +424,6 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
       ],
     );
   }
-}
-
-Future<ApiRecord?> _showTemplatePicker(
-  BuildContext context,
-  Future<PageResult<ApiRecord>> templatesFuture,
-  int? selectedTemplateId,
-) {
-  return showBusinessPickerSheet<ApiRecord>(
-    context: context,
-    title: '选择作物模板',
-    subtitle: '选择后自动带出生长阶段，创建茬口更快',
-    future: templatesFuture,
-    selectedId: selectedTemplateId,
-    loadingText: '正在加载模板',
-    errorText: '模板加载失败，请稍后再试',
-    emptyText: '还没有作物模板，先新建一个模板',
-    titleFor: _templateDisplayName,
-    subtitleFor: _templateSubtitle,
-    leadingIconFor: (_) => LucideIcons.sprout,
-    accentFor: (_) => businessGreen,
-  );
 }
 
 class CycleListCard extends StatelessWidget {

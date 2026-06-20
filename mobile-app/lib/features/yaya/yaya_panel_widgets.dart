@@ -1,13 +1,17 @@
 part of 'yaya_screen.dart';
 
-class _SuggestionPills extends StatelessWidget {
+class _SuggestionPills extends StatefulWidget {
   const _SuggestionPills({required this.onSelected});
 
   final ValueChanged<String> onSelected;
 
   @override
-  Widget build(BuildContext context) {
-    const suggestions = [
+  State<_SuggestionPills> createState() => _SuggestionPillsState();
+}
+
+class _SuggestionPillsState extends State<_SuggestionPills> {
+  static const _suggestionGroups = [
+    [
       _SuggestionSpec(
         icon: LucideIcons.sun,
         label: '今天适合干什么',
@@ -26,19 +30,72 @@ class _SuggestionPills extends StatelessWidget {
         color: AppColors.purple,
         background: AppColors.purpleSoft,
       ),
-    ];
+    ],
+    [
+      _SuggestionSpec(
+        icon: LucideIcons.cloudSun,
+        label: '查一下最近天气',
+        color: AppColors.amber,
+        background: AppColors.amberSoft,
+      ),
+      _SuggestionSpec(
+        icon: LucideIcons.clipboardPenLine,
+        label: '记录今天农活',
+        color: AppColors.greenDark,
+        background: AppColors.greenSoft,
+      ),
+      _SuggestionSpec(
+        icon: LucideIcons.walletCards,
+        label: '帮我记一笔账',
+        color: AppColors.blue,
+        background: AppColors.blueSoft,
+      ),
+    ],
+    [
+      _SuggestionSpec(
+        icon: LucideIcons.layers3,
+        label: '查看种植批次',
+        color: AppColors.blue,
+        background: AppColors.blueSoft,
+      ),
+      _SuggestionSpec(
+        icon: LucideIcons.handCoins,
+        label: '看看未结工资',
+        color: AppColors.purple,
+        background: AppColors.purpleSoft,
+      ),
+      _SuggestionSpec(
+        icon: LucideIcons.fileChartColumn,
+        label: '生成经营报告',
+        color: AppColors.greenDark,
+        background: AppColors.greenSoft,
+      ),
+    ],
+  ];
+
+  int _groupIndex = 0;
+
+  void _shuffleSuggestions() {
+    setState(() {
+      _groupIndex = (_groupIndex + 1) % _suggestionGroups.length;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final suggestions = _suggestionGroups[_groupIndex];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final suggestion in suggestions) ...[
           _SuggestionPill(
             spec: suggestion,
-            onTap: () => onSelected(suggestion.label),
+            onTap: () => widget.onSelected(suggestion.label),
           ),
           const SizedBox(height: 10),
         ],
         TextButton.icon(
-          onPressed: () {},
+          onPressed: _shuffleSuggestions,
           icon: const Icon(LucideIcons.refreshCw, size: 16),
           label: const Text('换一换'),
           style: TextButton.styleFrom(
@@ -132,8 +189,12 @@ class _SuggestionSpec {
 }
 
 class _ModeChips extends StatelessWidget {
-  const _ModeChips({required this.onSkillsPressed});
+  const _ModeChips({
+    required this.onSelected,
+    required this.onSkillsPressed,
+  });
 
+  final ValueChanged<String> onSelected;
   final VoidCallback onSkillsPressed;
 
   @override
@@ -143,23 +204,18 @@ class _ModeChips extends StatelessWidget {
       clipBehavior: Clip.none,
       child: Row(
         children: [
-          const ModeChip(
-            icon: LucideIcons.brain,
-            label: '深度思考',
-            selected: true,
-            compact: true,
-          ),
-          const SizedBox(width: 8),
-          const ModeChip(
+          ModeChip(
             icon: LucideIcons.chartSpline,
             label: '经营分析',
             compact: true,
+            onTap: () => onSelected('分析一下我的农场经营情况'),
           ),
           const SizedBox(width: 8),
-          const ModeChip(
+          ModeChip(
             icon: LucideIcons.fileChartColumn,
             label: '生成报告',
             compact: true,
+            onTap: () => onSelected('生成一份农场经营报告'),
           ),
           const SizedBox(width: 8),
           ModeChip(
@@ -696,17 +752,19 @@ class _DrawerUserBar extends StatelessWidget {
 }
 
 class _SkillCard extends StatelessWidget {
-  const _SkillCard({required this.spec});
+  const _SkillCard({required this.spec, required this.onDetailsTap});
 
   final _SkillSpec spec;
+  final VoidCallback onDetailsTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      constraints: const BoxConstraints(minHeight: 92),
+      padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.line),
         boxShadow: const [
           BoxShadow(
@@ -716,161 +774,182 @@ class _SkillCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SoftIcon(
-            icon: spec.icon,
-            color: spec.color,
-            background: spec.background,
-          ),
-          const Spacer(),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  spec.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.listTitle.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const Icon(
-                LucideIcons.chevronRight,
-                size: 18,
-                color: AppColors.subtle,
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            spec.subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.small.copyWith(color: AppColors.muted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecommendedSkillList extends StatelessWidget {
-  const _RecommendedSkillList({required this.skills});
-
-  final List<_SkillSpec> skills;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.line),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x07000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: AppColors.blue,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '推荐技能',
-                style: AppTextStyles.sectionTitle.copyWith(fontSize: 17),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.lineSoft),
-            ),
-            child: Column(
-              children: [
-                for (var index = 0; index < skills.length; index++) ...[
-                  _SkillListTile(spec: skills[index]),
-                  if (index != skills.length - 1)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 78, right: 14),
-                      child: Divider(height: 1, color: AppColors.lineSoft),
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SkillListTile extends StatelessWidget {
-  const _SkillListTile({required this.spec});
-
-  final _SkillSpec spec;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 78),
-      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _SoftIcon(
             icon: spec.icon,
             color: spec.color,
             background: spec.background,
+            size: 52,
+            iconSize: 24,
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   spec.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.listTitle.copyWith(
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    fontSize: 17,
                     fontWeight: FontWeight.w800,
+                    height: 22 / 17,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
                 Text(
                   spec.subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(color: AppColors.muted),
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.muted,
+                    height: 18 / 12,
+                  ),
                 ),
               ],
             ),
           ),
-          const Icon(
-            LucideIcons.chevronRight,
-            size: 20,
-            color: AppColors.subtle,
+          const SizedBox(width: 10),
+          IconButton(
+            onPressed: onDetailsTap,
+            tooltip: '查看${spec.title}详情',
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.surface2,
+              fixedSize: const Size(36, 36),
+              minimumSize: const Size(36, 36),
+              padding: EdgeInsets.zero,
+            ),
+            icon: const Icon(
+              LucideIcons.chevronRight,
+              size: 19,
+              color: AppColors.subtle,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SkillDetailsSheet extends StatelessWidget {
+  const _SkillDetailsSheet({required this.spec});
+
+  final _SkillSpec spec;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 28,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 18),
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                _SoftIcon(
+                  icon: spec.icon,
+                  color: spec.color,
+                  background: spec.background,
+                  size: 48,
+                  iconSize: 23,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        spec.title,
+                        style: AppTextStyles.sectionTitle.copyWith(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        spec.category,
+                        style: AppTextStyles.small.copyWith(
+                          color: AppColors.subtle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(
+              spec.details,
+              style: AppTextStyles.body.copyWith(
+                color: AppColors.ink2,
+                height: 22 / 14,
+              ),
+            ),
+            if (spec.examples.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Text(
+                '可以这样问',
+                style: AppTextStyles.listTitle.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final example in spec.examples)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface2,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.lineSoft),
+                      ),
+                      child: Text(
+                        example,
+                        style: AppTextStyles.small.copyWith(
+                          color: AppColors.ink2,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -918,6 +997,9 @@ class _SkillSpec {
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.details,
+    required this.examples,
+    required this.category,
     required this.color,
     required this.background,
   });
@@ -925,6 +1007,9 @@ class _SkillSpec {
   final IconData icon;
   final String title;
   final String subtitle;
+  final String details;
+  final List<String> examples;
+  final String category;
   final Color color;
   final Color background;
 }
@@ -934,7 +1019,10 @@ _SkillSpec _skillSpecFromApi(YayaSkill skill) {
   return _SkillSpec(
     icon: _skillIcon(skill.icon),
     title: skill.title,
-    subtitle: skill.description,
+    subtitle: skill.summary,
+    details: skill.details,
+    examples: skill.examples,
+    category: skill.category,
     color: colors.$1,
     background: colors.$2,
   );

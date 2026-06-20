@@ -38,6 +38,7 @@ class ProfileController {
       role: _roleLabel(user.role),
       status: _statusLabel(user.status),
       city: city,
+      assistantRole: _assistantRole(settings.assistantRole),
       assistantRoleLabel: _assistantRoleLabel(settings.assistantRole),
       latestVersion: latestVersion,
       hasVersionUpdate: hasUpdate,
@@ -92,12 +93,20 @@ class ProfileController {
   }
 
   String _assistantRoleLabel(String? value) {
-    return switch ((value ?? '').trim().toLowerCase()) {
+    return switch (_assistantRole(value)) {
       'professional' => '冷静专业型',
       'warm' => '温暖陪伴型',
       'creative' => '灵感创意型',
-      '' => '温暖陪伴型',
       _ => '温暖陪伴型',
+    };
+  }
+
+  String _assistantRole(String? value) {
+    return switch ((value ?? '').trim().toLowerCase()) {
+      'professional' => 'professional',
+      'warm' => 'warm',
+      'creative' => 'creative',
+      _ => 'warm',
     };
   }
 }
@@ -109,6 +118,7 @@ class ProfileViewModel {
     required this.role,
     required this.status,
     required this.city,
+    this.assistantRole = 'warm',
     required this.assistantRoleLabel,
     this.latestVersion,
     this.hasVersionUpdate = false,
@@ -123,6 +133,7 @@ class ProfileViewModel {
   final String role;
   final String status;
   final String city;
+  final String assistantRole;
   final String assistantRoleLabel;
   final String? latestVersion;
   final bool hasVersionUpdate;

@@ -27,9 +27,13 @@ void main() {
     expect(find.textContaining('寿光'), findsNothing);
     expect(find.text('1项'), findsWidgets);
     expect(find.text('资金概览'), findsOneWidget);
-    expect(find.text('成本分析'), findsOneWidget);
-    expect(find.text('茬口进度'), findsOneWidget);
+    expect(find.text('作业跟进'), findsOneWidget);
+    expect(find.text('建议健康度'), findsOneWidget);
+    expect(find.text('82分'), findsOneWidget);
     expect(find.text('风险预警'), findsOneWidget);
+    expect(find.text('1项待处理'), findsOneWidget);
+    expect(find.text('茬口进度'), findsNothing);
+    expect(find.text('8%'), findsNothing);
     expect(find.text('问问芽芽'), findsOneWidget);
     expect(find.text('记一笔'), findsOneWidget);
     expect(find.text('生成报告'), findsOneWidget);
