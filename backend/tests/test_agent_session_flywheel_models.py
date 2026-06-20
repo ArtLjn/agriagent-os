@@ -114,6 +114,30 @@ def test_agent_turn_links_messages_and_event_range():
     db.close()
 
 
+def test_agent_turn_discovery_risk_fields_have_defaults():
+    db = Session()
+    turn = AgentTurn(
+        farm_id=1,
+        session_id="sess-risk",
+        request_id="risk1234",
+        input_preview="查一下天气",
+        reply_preview="今天天气不错",
+    )
+    db.add(turn)
+    db.commit()
+    db.refresh(turn)
+
+    assert turn.risk_score == 0.0
+    assert turn.rule_score == 0.0
+    assert turn.risk_dominant_signal is None
+    assert turn.rule_hits == []
+    assert turn.risk_severity is None
+    assert turn.judge_bad_prob is None
+    assert turn.judge_issue_type is None
+    assert turn.judge_suggested_label is None
+    db.close()
+
+
 def test_pending_plan_and_steps_are_recoverable():
     db = Session()
     expires_at = datetime.now() + timedelta(minutes=5)

@@ -1,0 +1,201 @@
+rules:
+  - id: tool_error_ignored
+    weight: 0.95
+    severity: P0
+    description: 工具调用失败后，回复仍声称已完成且未向用户说明失败。
+    when:
+      all:
+        - contains:
+            field: tool_calls.status
+            value: error
+        - contains:
+            field: reply_preview
+            value:
+              - 已
+              - 完成
+        - not_contains:
+            field: reply_preview
+            value:
+              - 失败
+              - 错误
+              - 重试
+              - 无法
+
+  - id: missing_wage
+    weight: 0.9
+    severity: P0
+    description: 工资或用工查询回复缺少基本工资或实发工资等关键字段。
+    when:
+      all:
+        - any:
+            - equals:
+                field: intent
+                value: wage_query
+            - equals:
+                field: intent
+                value: labor_query
+        - not:
+            any:
+              - contains:
+                  field: reply_preview
+                  value: 基本工资
+              - contains:
+                  field: reply_preview
+                  value: 实发工资
+
+  - id: hallucinated_execution
+    weight: 0.95
+    severity: P0
+    description: 没有成功工具调用或待确认动作，却声称已经执行写操作。
+    when:
+      all:
+        - any:
+            - equals:
+                field: intent
+                value: create_cost
+            - equals:
+                field: intent
+                value: update_crop_cycle
+            - equals:
+                field: intent
+                value: settle_labor
+        - not:
+            contains:
+              field: tool_calls.status
+              value: success
+        - contains:
+            field: reply_preview
+            value:
+              - 已创建
+              - 已记录
+              - 已更新
+              - 已完成
+
+  - id: negative_feedback
+    weight: 0.8
+    severity: P1
+    description: 用户反馈为负向或反馈文本包含明显不满。
+    when:
+      any:
+        - equals:
+            field: feedback.rating
+            value: negative
+        - contains:
+            field: feedback.text
+            value:
+              - 错
+              - 不对
+              - 答非所问
+              - 没用
+
+  - id: weather_without_search
+    weight: 0.75
+    severity: P1
+    description: 天气查询没有调用天气或搜索工具却直接给出结论。
+    when:
+      all:
+        - equals:
+            field: intent
+            value: weather_query
+        - not:
+            contains:
+              field: tool_calls.name
+              value:
+                - weather
+                - search
+        - contains:
+            field: reply_preview
+            value:
+              - 今天
+              - 明天
+              - 有雨
+              - 天气
+
+  - id: empty_reply
+    weight: 0.7
+    severity: P1
+    description: 回复为空或只有空白字符。
+    when:
+      equals:
+        field: reply_is_blank
+        value: true
+
+  - id: apology_loop
+    weight: 0.55
+    severity: P1
+    description: 回复短时间重复道歉，可能未解决用户问题。
+    when:
+      count_gte:
+        field: reply_preview
+        value: 2
+        contains: 抱歉
+
+  - id: missing_pending_confirmation
+    weight: 0.85
+    severity: P0
+    description: 生成待确认动作后，回复没有要求用户确认。
+    when:
+      all:
+        - equals:
+            field: pending_action.created
+            value: true
+        - not_contains:
+            field: reply_preview
+            value:
+              - 确认
+              - 是否
+              - 请核对
+
+  - id: unsafe_advice
+    weight: 0.9
+    severity: P0
+    description: 农药或安全建议出现危险表述。
+    when:
+      contains:
+        field: reply_preview
+        value:
+          - 随意混用
+          - 加大剂量
+          - 不用防护
+          - 直接入口
+
+  - id: context_missing
+    weight: 0.6
+    severity: P1
+    description: 农场状态类问题缺少必要上下文。
+    when:
+      all:
+        - equals:
+            field: intent
+            value: farm_status
+        - contains:
+            field: reply_preview
+            value:
+              - 未找到
+              - 缺少
+              - 无法判断
+
+  - id: tool_result_contradiction
+    weight: 0.85
+    severity: P0
+    description: 工具结果与最终回复存在明显冲突。
+    when:
+      all:
+        - contains:
+            field: tool_calls.result.total
+            value: 0
+        - not_contains:
+            field: reply_preview
+            value: "是 0"
+
+  - id: low_confidence_answer
+    weight: 0.45
+    severity: P1
+    description: 回复用猜测语气给出业务结论。
+    when:
+      contains:
+        field: reply_preview
+        value:
+          - 我猜
+          - 可能是
+          - 大概已经

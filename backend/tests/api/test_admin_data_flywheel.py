@@ -5,6 +5,7 @@ import json
 from fastapi.testclient import TestClient
 
 import app.api.admin_data_flywheel as admin_data_flywheel_api
+from app.evaluation.discovery.judge_worker import run_judge_batch
 from app.infra.agent_events import AgentEventWriter
 from app.main import app
 from app.models.data_flywheel import AgentDataFlywheelLabel
@@ -35,6 +36,17 @@ class FakeJudgeClient:
             "confidence": 0.91,
             "reason": "回复声称已安排，但证据中缺少写操作确认链路。",
             "recommended_fix": "补齐 pending 确认后再执行写工具。",
+        }
+
+
+class DiscoveryJudgeClient:
+    def judge(self, payload):
+        return {
+            "bad_prob": 0.97,
+            "issue_type": "tool_error_ignored",
+            "suggested_label": "bad",
+            "evidence": [f"turn {payload['turn_id']} 工具失败后仍声称成功"],
+            "usage": {"input_tokens": 100, "output_tokens": 20},
         }
 
 
@@ -156,6 +168,110 @@ def test_list_samples_returns_items_total_and_request_id(db_session, tmp_path) -
         )
     assert q_resp.status_code == 200
     assert q_resp.json()["total"] == 1
+
+
+def test_list_samples_defaults_to_risk_sort_and_exposes_discovery_fields(
+    db_session, tmp_path
+) -> None:
+    low_risk = _seed_turn(db_session, tmp_path)
+    high_risk = _seed_turn(db_session, tmp_path)
+    high_risk.session_id = "sess-admin-risk"
+    high_risk.request_id = "riskhigh"
+    high_risk.risk_score = 0.91
+    high_risk.rule_score = 0.91
+    high_risk.risk_dominant_signal = "rule"
+    high_risk.risk_severity = "P0"
+    high_risk.rule_hits = ["tool_error_ignored"]
+    high_risk.judge_bad_prob = 0.7
+    high_risk.judge_issue_type = "tool_error_ignored"
+    high_risk.judge_suggested_label = "bad_reply"
+    low_risk.risk_score = 0.2
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get("/admin/data-flywheel/samples", headers=admin_headers())
+
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert items[0]["request_id"] == "riskhigh"
+    assert items[0]["risk_score"] == 0.91
+    assert items[0]["rule_score"] == 0.91
+    assert items[0]["risk_dominant_signal"] == "rule"
+    assert items[0]["risk_severity"] == "P0"
+    assert items[0]["rule_hits"] == ["tool_error_ignored"]
+    assert items[0]["judge_bad_prob"] == 0.7
+    assert items[0]["judge_issue_type"] == "tool_error_ignored"
+    assert items[0]["judge_suggested_label"] == "bad_reply"
+
+
+def test_list_samples_supports_time_sort_min_risk_and_severity_filter(
+    db_session, tmp_path
+) -> None:
+    first = _seed_turn(db_session, tmp_path)
+    second = _seed_turn(db_session, tmp_path)
+    second.session_id = "sess-admin-risk-2"
+    second.request_id = "riskp0"
+    first.risk_score = 0.1
+    first.risk_severity = "P1"
+    second.risk_score = 0.8
+    second.risk_severity = "P0"
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        time_resp = client.get(
+            "/admin/data-flywheel/samples?sort=time", headers=admin_headers()
+        )
+        hidden_resp = client.get(
+            "/admin/data-flywheel/samples?min_risk=0.3", headers=admin_headers()
+        )
+        p0_resp = client.get(
+            "/admin/data-flywheel/samples?severity=P0", headers=admin_headers()
+        )
+
+    assert time_resp.status_code == 200
+    assert time_resp.json()["items"][0]["turn_id"] == second.id
+    assert hidden_resp.status_code == 200
+    assert [item["turn_id"] for item in hidden_resp.json()["items"]] == [second.id]
+    assert p0_resp.status_code == 200
+    assert [item["turn_id"] for item in p0_resp.json()["items"]] == [second.id]
+
+
+def test_discovery_pipeline_updates_risk_visible_in_admin_samples(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.input_preview = "记录一笔化肥成本"
+    turn.reply_preview = "已帮你记录好了。"
+    turn.rule_score = 0.95
+    turn.rule_hits = ["tool_error_ignored"]
+    turn.risk_score = 0.95
+    turn.risk_dominant_signal = "rule"
+    turn.risk_severity = "P0"
+    db_session.commit()
+
+    summary = run_judge_batch(
+        db_session,
+        judge_client=DiscoveryJudgeClient(),
+        month_cost_usd=0,
+        limit=10,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get("/admin/data-flywheel/samples", headers=admin_headers())
+
+    assert summary.updated == 1
+    assert resp.status_code == 200
+    item = resp.json()["items"][0]
+    assert item["turn_id"] == turn.id
+    assert item["rule_hits"] == ["tool_error_ignored"]
+    assert item["judge_bad_prob"] == 0.97
+    assert item["judge_issue_type"] == "tool_error_ignored"
+    assert item["judge_suggested_label"] == "bad"
+    assert item["risk_score"] == 0.97
+    assert item["risk_dominant_signal"] == "judge"
 
 
 def test_add_label_uses_current_admin_as_annotator(db_session, tmp_path) -> None:

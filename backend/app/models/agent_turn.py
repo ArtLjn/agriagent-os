@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 
 from app.core.database import Base
 
@@ -45,4 +45,12 @@ class AgentTurn(Base):
     event_seq_start = Column(Integer, nullable=True)
     event_seq_end = Column(Integer, nullable=True)
     event_write_status = Column(String(20), nullable=False, default="not_started")
+    rule_score = Column(Float, nullable=False, default=0.0)
+    rule_hits = Column(JSON, nullable=False, default=list)
+    risk_score = Column(Float, nullable=False, default=0.0, index=True)
+    risk_dominant_signal = Column(String(20), nullable=True, index=True)
+    risk_severity = Column(String(10), nullable=True, index=True)
+    judge_bad_prob = Column(Float, nullable=True)
+    judge_issue_type = Column(String(80), nullable=True, index=True)
+    judge_suggested_label = Column(String(80), nullable=True)
     created_at = Column(DateTime, default=datetime.now, index=True)
