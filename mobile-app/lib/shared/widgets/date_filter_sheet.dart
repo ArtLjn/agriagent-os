@@ -101,33 +101,48 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
     _customEnd = widget.customEnd;
   }
 
-  Future<void> _pickCustomRange() async {
-    final now = DateTime.now();
-    final initial = (_customStart != null && _customEnd != null)
-        ? DateTimeRange(start: _customStart!, end: _customEnd!)
-        : null;
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year, 12, 31),
-      initialDateRange: initial,
-      helpText: '选择日期范围',
-      locale: const Locale('zh', 'CN'),
-    );
-    if (picked == null) return;
+  void _selectDay(DateTime day) {
     setState(() {
+      // 还没选起点，或已经选完一个完整区间 → 开始新一轮选择
+      if (_customStart == null ||
+          (_customStart != null && _customEnd != null)) {
+        _customStart = day;
+        _customEnd = null;
+        _selected = DateRangePreset.custom;
+        return;
+      }
+      // 已有起点，选终点
+      if (day.isBefore(_customStart!)) {
+        // 比起点早：把新点作为起点
+        _customEnd = _customStart;
+        _customStart = day;
+      } else if (_sameDate(day, _customStart!)) {
+        // 同一天：单日范围
+        _customEnd = day;
+      } else {
+        _customEnd = day;
+      }
       _selected = DateRangePreset.custom;
-      _customStart = picked.start;
-      _customEnd = picked.end;
-      _visibleMonth = DateTime(picked.start.year, picked.start.month);
     });
   }
 
   String get _customRangeLabel {
-    if (_customStart == null || _customEnd == null) return '未选择';
+    if (_customStart == null) return '点击日历选择起止日期';
     String fmt(DateTime d) =>
-        '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
-    return '${fmt(_customStart!)} - ${fmt(_customEnd!)}';
+        '${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+    if (_customEnd == null) {
+      return '${fmt(_customStart!)} - 选结束日期';
+    }
+    if (_sameDate(_customStart!, _customEnd!)) {
+      return '${_customStart!.year}.${fmt(_customStart!)}';
+    }
+    return '${_customStart!.year}.${fmt(_customStart!)} - ${fmt(_customEnd!)}';
+  }
+
+  String get _customHintText {
+    if (_customStart == null) return '点击日历选择起止日期';
+    if (_customEnd == null) return '再点一次选择结束日期';
+    return '已选范围，可继续点击修改或确认';
   }
 
   @override
@@ -184,16 +199,14 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                     const SizedBox(height: 10),
                     _PresetGrid(
                       selected: _selected,
-                      customRangeLabel:
-                          _selected == DateRangePreset.custom ? _customRangeLabel : null,
                       onChanged: (preset) {
-                        if (preset == DateRangePreset.custom) {
-                          _pickCustomRange();
-                          return;
-                        }
                         setState(() {
                           _selected = preset;
                           _visibleMonth = _monthForPreset(preset);
+                          if (preset != DateRangePreset.custom) {
+                            _customStart = null;
+                            _customEnd = null;
+                          }
                         });
                       },
                     ),
@@ -225,14 +238,11 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                                 ),
                               ),
                             ),
-                            GestureDetector(
-                              onTap: _pickCustomRange,
-                              child: Text(
-                                '修改',
-                                style: AppTextStyles.small.copyWith(
-                                  color: AppColors.blue,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            Text(
+                              _customHintText,
+                              style: AppTextStyles.small.copyWith(
+                                color: AppColors.blue,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -290,7 +300,25 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                       ),
                       itemBuilder: (context, index) {
                         final day = days[index];
-                        return _CalendarDayCell(day: day, range: range);
+                        return _CalendarDayCell(
+                          day: day,
+                          range: range,
+                          customStart: _customStart,
+                          customEnd: _customEnd,
+                          isCustomMode:
+                              _selected == DateRangePreset.custom,
+                          onTap: day == null
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _visibleMonth = DateTime(
+                                      day.year,
+                                      day.month,
+                                    );
+                                  });
+                                  _selectDay(day);
+                                },
+                        );
                       },
                     ),
                     const SizedBox(height: 16),
@@ -413,12 +441,10 @@ class _PresetGrid extends StatelessWidget {
   const _PresetGrid({
     required this.selected,
     required this.onChanged,
-    this.customRangeLabel,
   });
 
   final DateRangePreset selected;
   final ValueChanged<DateRangePreset> onChanged;
-  final String? customRangeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -481,33 +507,66 @@ class _WeekdayRow extends StatelessWidget {
 }
 
 class _CalendarDayCell extends StatelessWidget {
-  const _CalendarDayCell({required this.day, required this.range});
+  const _CalendarDayCell({
+    required this.day,
+    required this.range,
+    required this.customStart,
+    required this.customEnd,
+    required this.isCustomMode,
+    this.onTap,
+  });
 
   final DateTime? day;
   final _DateRange range;
+  final DateTime? customStart;
+  final DateTime? customEnd;
+  final bool isCustomMode;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final cellDay = day;
     if (cellDay == null) return const SizedBox.shrink();
-    final inRange = range.contains(cellDay);
-    final isEnd = range.end != null && _sameDate(cellDay, range.end!);
-    return Container(
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: isEnd
-            ? AppColors.blue
-            : inRange
-                ? AppColors.blueSoft
-                : Colors.transparent,
-        shape: isEnd ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: isEnd ? null : BorderRadius.circular(999),
-      ),
-      child: Text(
-        '${cellDay.day}',
-        style: AppTextStyles.body.copyWith(
-          color: isEnd ? Colors.white : AppColors.ink,
-          fontWeight: isEnd || inRange ? FontWeight.w800 : FontWeight.w500,
+
+    final bool isStart;
+    final bool isEnd;
+    final bool inMiddle;
+    if (isCustomMode) {
+      isStart = customStart != null && _sameDate(cellDay, customStart!);
+      isEnd = customEnd != null && _sameDate(cellDay, customEnd!);
+      inMiddle = customStart != null &&
+          customEnd != null &&
+          cellDay.isAfter(customStart!) &&
+          cellDay.isBefore(customEnd!);
+    } else {
+      isStart = range.start != null && _sameDate(cellDay, range.start!);
+      isEnd = range.end != null && _sameDate(cellDay, range.end!);
+      inMiddle = range.contains(cellDay) && !isStart && !isEnd;
+    }
+
+    final isEndpoint = isStart || isEnd;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isEndpoint
+              ? AppColors.blue
+              : inMiddle
+                  ? AppColors.blueSoft
+                  : Colors.transparent,
+          shape: isEndpoint ? BoxShape.circle : BoxShape.rectangle,
+          borderRadius: isEndpoint ? null : BorderRadius.circular(999),
+        ),
+        child: Text(
+          '${cellDay.day}',
+          style: AppTextStyles.body.copyWith(
+            color: isEndpoint ? Colors.white : AppColors.ink,
+            fontWeight:
+                (isEndpoint || inMiddle) ? FontWeight.w800 : FontWeight.w500,
+          ),
         ),
       ),
     );
