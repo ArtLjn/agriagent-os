@@ -103,7 +103,6 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
 
   void _selectDay(DateTime day) {
     setState(() {
-      // 还没选起点，或已经选完一个完整区间 → 开始新一轮选择
       if (_customStart == null ||
           (_customStart != null && _customEnd != null)) {
         _customStart = day;
@@ -111,14 +110,9 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
         _selected = DateRangePreset.custom;
         return;
       }
-      // 已有起点，选终点
       if (day.isBefore(_customStart!)) {
-        // 比起点早：把新点作为起点
         _customEnd = _customStart;
         _customStart = day;
-      } else if (_sameDate(day, _customStart!)) {
-        // 同一天：单日范围
-        _customEnd = day;
       } else {
         _customEnd = day;
       }
@@ -126,23 +120,9 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
     });
   }
 
-  String get _customRangeLabel {
-    if (_customStart == null) return '点击日历选择起止日期';
-    String fmt(DateTime d) =>
-        '${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
-    if (_customEnd == null) {
-      return '${fmt(_customStart!)} - 选结束日期';
-    }
-    if (_sameDate(_customStart!, _customEnd!)) {
-      return '${_customStart!.year}.${fmt(_customStart!)}';
-    }
-    return '${_customStart!.year}.${fmt(_customStart!)} - ${fmt(_customEnd!)}';
-  }
-
-  String get _customHintText {
-    if (_customStart == null) return '点击日历选择起止日期';
-    if (_customEnd == null) return '再点一次选择结束日期';
-    return '已选范围，可继续点击修改或确认';
+  String _chipText(DateTime? date) {
+    if (date == null) return '--';
+    return '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -211,41 +191,46 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                       },
                     ),
                     if (_selected == DateRangePreset.custom) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.blueSoft,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              LucideIcons.calendarRange,
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _CustomRangeChip(
+                              label: '开始',
+                              dateText: _chipText(_customStart),
+                              filled: _customStart != null,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Icon(
+                              LucideIcons.arrowRight,
                               size: 16,
-                              color: AppColors.blue,
+                              color: _customStart != null && _customEnd != null
+                                  ? AppColors.blue
+                                  : AppColors.subtle,
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _customRangeLabel,
-                                style: AppTextStyles.body.copyWith(
-                                  color: AppColors.blue,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                          ),
+                          Expanded(
+                            child: _CustomRangeChip(
+                              label: '结束',
+                              dateText: _chipText(_customEnd),
+                              filled: _customEnd != null,
                             ),
-                            Text(
-                              _customHintText,
-                              style: AppTextStyles.small.copyWith(
-                                color: AppColors.blue,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _customStart == null
+                            ? '点击日历选择开始日期'
+                            : _customEnd == null
+                                ? '再点击一次选择结束日期'
+                                : '已选定范围，可继续点击修改',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.small.copyWith(
+                          color: AppColors.muted,
+                          fontSize: 11.5,
                         ),
                       ),
                     ],
@@ -434,6 +419,60 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
       DateRangePreset.allTime => const _DateRange(null, null),
       DateRangePreset.custom => _DateRange(_customStart, _customEnd),
     };
+  }
+}
+
+class _CustomRangeChip extends StatelessWidget {
+  const _CustomRangeChip({
+    required this.label,
+    required this.dateText,
+    required this.filled,
+  });
+
+  final String label;
+  final String dateText;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: filled ? AppColors.blueSoft : AppColors.surface3,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: filled ? const Color(0xFFBFD4FF) : AppColors.line,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            dateText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.body.copyWith(
+              color: filled ? AppColors.blue : AppColors.subtle,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
