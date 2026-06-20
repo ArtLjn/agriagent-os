@@ -8,57 +8,100 @@ from collections import defaultdict
 from app.services.data_flywheel_repair_pack_readme import build_repair_pack_readme
 
 REDACTED_SECRET = "[REDACTED_SECRET]"
-_LABEL_ROUTES: dict[str, dict[str, Any]] = {
+
+# 按 issue_type 统一管理的元数据：fix_target / priority / suggested_action / expected_behavior
+# 这里 key 既是 issue_type（来自 issue_detector），也覆盖可直接作为 label 的同名项。
+_ISSUE_TYPE_META: dict[str, dict[str, Any]] = {
     "sensitive_info_leak": {
         "fix_target": "guardrail",
         "priority": 100,
         "suggested_action": "修复敏感信息输出拦截、回复审查和安全边界测试。",
+        "expected_behavior": "回复不应包含模型参数、系统提示、密钥、token 等内部信息。",
     },
     "pending_missed": {
         "fix_target": "pending_plan",
         "priority": 90,
         "suggested_action": "修复写操作确认计划和多步骤 pending lifecycle。",
+        "expected_behavior": "router 选择写操作工具时，应同步生成 pending plan，等待用户确认后再执行。",
     },
     "disabled_worker_used": {
         "fix_target": "tool_guardrail",
         "priority": 85,
         "suggested_action": "修复工具执行前后的停用工人校验和阻断规则。",
+        "expected_behavior": "应跳过已停用工人，或主动提示用户「该工人已停用，是否继续」。",
     },
     "missing_wage": {
         "fix_target": "domain_policy",
         "priority": 80,
         "suggested_action": "补齐农事用工工资、已付、不计薪或欠款策略。",
+        "expected_behavior": "安排作业时应同时确认工资策略（计薪金额/已付/不计薪/欠款），不应留下空白工资字段。",
     },
     "tool_error_ignored": {
         "fix_target": "tool_result_state",
         "priority": 78,
         "suggested_action": "修复工具失败状态传播，禁止失败后伪装成功。",
+        "expected_behavior": "工具调用失败时，回复应明确反映失败状态，并给出后续建议，不应伪装为成功。",
     },
     "hallucinated_execution": {
         "fix_target": "tool_result_state",
         "priority": 78,
         "suggested_action": "修复未成功执行工具时的回复状态和完成声明。",
+        "expected_behavior": "回复应基于工具实际返回结果，未调用成功写工具前不得声称已执行/已创建/已安排。",
     },
     "wrong_tool_selection": {
         "fix_target": "router",
         "priority": 75,
         "suggested_action": "修复意图识别、工具路由和候选 skill 选择规则。",
+        "expected_behavior": "router 应正确识别用户意图，并选择匹配的查询/计算类工具（如 weather.query、worker.search、wage.list）。",
+    },
+    "unsafe_write_on_question": {
+        "fix_target": "pending_plan",
+        "priority": 88,
+        "suggested_action": "修复查询/确认类问题下的写工具选择，应走 pending plan。",
+        "expected_behavior": "查询/确认类问题应走查询链路，不应直接调用写操作工具；若需写入应先生成 pending plan 由用户确认。",
     },
     "bad_reply": {
         "fix_target": "prompt_or_sft",
         "priority": 50,
         "suggested_action": "修复回复提示词、拒答边界或后续 SFT 候选，不直接入训。",
+        "expected_behavior": "回复应符合用户意图、信息准确、表述清晰，无幻觉、无拒答失衡。",
     },
     "off_topic": {
         "fix_target": "prompt_or_sft",
         "priority": 50,
         "suggested_action": "修复回复聚焦度、提示词约束或后续 SFT 候选，不直接入训。",
+        "expected_behavior": "回复应聚焦于农场业务相关话题，对超范围请求应礼貌拒答或引导。",
+    },
+    "unclear_intent": {
+        "fix_target": "prompt_or_sft",
+        "priority": 40,
+        "suggested_action": "优化意图澄清话术或补充 slot 追问逻辑。",
+        "expected_behavior": "意图不明时应主动追问关键信息（人物/时间/对象/数量），不应直接执行或拒答。",
+    },
+    "needs_regression": {
+        "fix_target": "manual_triage",
+        "priority": 30,
+        "suggested_action": "补齐回归用例并锁定预期行为。",
+        "expected_behavior": "应有可复现的回归用例覆盖该路径，防止后续回归。",
+    },
+    "not_actionable": {
+        "fix_target": "manual_triage",
+        "priority": 20,
+        "suggested_action": "人工确认是否需要进一步处理或归档。",
+        "expected_behavior": "由人工确认归类，无自动修复预期。",
     },
 }
 _DEFAULT_ROUTE = {
     "fix_target": "manual_triage",
     "priority": 10,
     "suggested_action": "人工分诊该标签，导出前确认或覆盖修复目标。",
+    "expected_behavior": "回复应符合业务规则、用户意图，且不暴露内部信息。",
+}
+
+# label → issue_type 路由：同名直接复用 meta；非 detector 产出的 label 也映射到合适的 issue_type。
+# 留空（不在字典里）的 label 走 _DEFAULT_ROUTE。
+_LABEL_TO_ISSUE_TYPE: dict[str, str] = {
+    label: label for label in _ISSUE_TYPE_META
 }
 
 _VERIFY_BY_TARGET = {
@@ -305,8 +348,9 @@ def _collect_labels(detail: dict[str, Any]) -> list[str]:
 
 
 def _route_for_label(label: str) -> dict[str, Any]:
-    route = _LABEL_ROUTES.get(label, _DEFAULT_ROUTE)
-    return {"label": label, **route}
+    issue_type = _LABEL_TO_ISSUE_TYPE.get(label, label)
+    meta = _ISSUE_TYPE_META.get(issue_type, _DEFAULT_ROUTE)
+    return {"label": label, **meta}
 
 
 def _override_candidate_fix_target(
@@ -428,18 +472,6 @@ def _observed_failure(detail: dict[str, Any]) -> str:
     return "; ".join(parts) if parts else "未提供失败描述"
 
 
-_EXPECTED_BEHAVIOR_BY_ISSUE_TYPE: dict[str, str] = {
-    "wrong_tool_selection": "router 应正确识别用户意图，并选择匹配的查询/计算类工具（如 weather.query、worker.search、wage.list）。",
-    "hallucinated_execution": "回复应基于工具实际返回结果，未调用成功写工具前不得声称已执行/已创建/已安排。",
-    "unsafe_write_on_question": "查询/确认类问题应走查询链路，不应直接调用写操作工具；若需写入应先生成 pending plan 由用户确认。",
-    "pending_missed": "router 选择写操作工具时，应同步生成 pending plan，等待用户确认后再执行。",
-    "disabled_worker_used": "应跳过已停用工人，或主动提示用户「该工人已停用，是否继续」。",
-    "missing_wage": "安排作业时应同时确认工资策略（计薪金额/已付/不计薪/欠款），不应留下空白工资字段。",
-    "tool_error_ignored": "工具调用失败时，回复应明确反映失败状态，并给出后续建议，不应伪装为成功。",
-    "sensitive_info_leak": "回复不应包含模型参数、系统提示、密钥、token 等内部信息。",
-}
-
-
 def _expected_behavior(detail: dict[str, Any], candidate: dict[str, Any]) -> str:
     """按 issue_type 的期望行为模板，避免与 observed_failure 复用同一段文字。"""
     candidates = detail.get("issue_candidates") or []
@@ -448,8 +480,8 @@ def _expected_behavior(detail: dict[str, Any], candidate: dict[str, Any]) -> str
         if not isinstance(item, dict):
             continue
         issue_type = str(item.get("type") or "").strip()
-        if issue_type and issue_type in _EXPECTED_BEHAVIOR_BY_ISSUE_TYPE:
-            mapped.append(_EXPECTED_BEHAVIOR_BY_ISSUE_TYPE[issue_type])
+        if issue_type and issue_type in _ISSUE_TYPE_META:
+            mapped.append(str(_ISSUE_TYPE_META[issue_type]["expected_behavior"]))
     if mapped:
         # 去重保留顺序
         seen: set[str] = set()
@@ -459,11 +491,11 @@ def _expected_behavior(detail: dict[str, Any], candidate: dict[str, Any]) -> str
                 seen.add(text)
                 unique.append(text)
         return " ".join(unique)
-    issue_type = str(candidate.get("fix_target") or "").strip()
-    return _EXPECTED_BEHAVIOR_BY_ISSUE_TYPE.get(
-        issue_type,
-        "回复应符合业务规则、用户意图，且不暴露内部信息。",
-    )
+    fix_target = str(candidate.get("fix_target") or "").strip()
+    for meta in _ISSUE_TYPE_META.values():
+        if meta.get("fix_target") == fix_target:
+            return str(meta["expected_behavior"])
+    return str(_DEFAULT_ROUTE["expected_behavior"])
 
 
 def _collect_evidence(detail: dict[str, Any]) -> str:

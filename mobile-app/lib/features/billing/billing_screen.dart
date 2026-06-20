@@ -1338,7 +1338,7 @@ class _TransactionDetailRow extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: Text(
                   transaction.isIncome
-                      ? _ledgerMoney(transaction.amount, explicitPositive: true)
+                      ? _ledgerMoney(transaction.amount)
                       : _ledgerMoney(-transaction.amount),
                   maxLines: 1,
                   softWrap: false,
@@ -1367,13 +1367,14 @@ class _CreateRecordDock extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
+      minimum: const EdgeInsets.only(bottom: 6),
       child: DecoratedBox(
         decoration: const BoxDecoration(
           color: Color(0xFFF8FAFD),
           border: Border(top: BorderSide(color: Color(0x00F8FAFD))),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+        child: SizedBox(
+          height: 92,
           child: Center(
             child: InkWell(
               onTap: onTap,
@@ -1558,21 +1559,6 @@ String _thousandSeparated(int value) {
     }
   }
   return buffer.toString();
-}
-
-String _compactTransactionMoney(num value) {
-  final abs = value.abs();
-  final prefix = value < 0 ? '-¥' : '¥';
-  if (abs < 100000) {
-    if (abs == abs.roundToDouble()) return '$prefix${abs.toInt()}';
-    return '$prefix${abs.toStringAsFixed(2)}';
-  }
-  final unit = abs >= 100000000 ? '亿' : '万';
-  final divisor = unit == '亿' ? 100000000 : 10000;
-  final fixed = (abs / divisor).toStringAsFixed(1);
-  final text =
-      fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
-  return '$prefix$text$unit';
 }
 
 String _ledgerRelativeDate(DateTime date) {
