@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TTL = 600  # 10 分钟
 _ALERT_TTL = 1800  # 30 分钟
+_EMPTY_ALERT_TTL = 120  # 2 分钟，避免突发预警被空结果缓存过久
 _ALERT_PREFIX = "alert:"
 
 
@@ -15,6 +16,7 @@ class WeatherCache:
     """进程内字典缓存，支持 TTL 过期。"""
 
     _ALERT_TTL = _ALERT_TTL
+    _EMPTY_ALERT_TTL = _EMPTY_ALERT_TTL
     _ALERT_PREFIX = _ALERT_PREFIX
 
     def __init__(self) -> None:
@@ -60,6 +62,8 @@ class WeatherCache:
 
     def set_alert(self, city: str, alerts: list, ttl: int = _ALERT_TTL) -> None:
         key = f"{self._ALERT_PREFIX}{city}"
+        if not alerts and ttl == self._ALERT_TTL:
+            ttl = self._EMPTY_ALERT_TTL
         self.set(key, alerts, ttl=ttl)
 
 

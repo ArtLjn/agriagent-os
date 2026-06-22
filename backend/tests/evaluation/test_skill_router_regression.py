@@ -16,6 +16,7 @@ class _Tool:
 TOOLS = [
     _Tool("get_farm_status"),
     _Tool("get_crop_cycle_info"),
+    _Tool("get_crop_cycles"),
     _Tool("create_crop_cycle"),
     _Tool("manage_workers"),
     _Tool("create_operation_work_order"),
@@ -23,6 +24,11 @@ TOOLS = [
     _Tool("get_workers"),
     _Tool("get_cost_summary"),
     _Tool("get_debt_summary"),
+    _Tool("get_labor_payables"),
+    _Tool("get_crop_templates"),
+    _Tool("get_planting_units"),
+    _Tool("get_cost_categories"),
+    _Tool("get_user_settings"),
     _Tool("settle_labor_payment"),
     _Tool("delete_crop_cycle"),
 ]
@@ -79,3 +85,25 @@ def test_high_risk_delete_not_exposed_for_unknown_text() -> None:
     decision = SkillRouter().route("随便聊聊", TOOLS)
 
     assert "delete_crop_cycle" not in decision.selected_tools
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("老王还欠多少人工钱", ["get_labor_payables"]),
+        ("我的茬口", ["get_crop_cycles"]),
+        ("看一下3号茬口", ["get_crop_cycle_info"]),
+        ("有哪些作物模板", ["get_crop_templates"]),
+        ("有哪些大棚", ["get_planting_units"]),
+        ("有哪些成本分类", ["get_cost_categories"]),
+        ("我的默认城市是什么", ["get_user_settings"]),
+    ],
+)
+def test_specific_read_queries_do_not_fall_back_to_farm_status(
+    message: str,
+    expected: list[str],
+) -> None:
+    decision = SkillRouter().route(message, TOOLS)
+
+    assert decision.selected_tools == expected
+    assert "get_farm_status" not in decision.selected_tools

@@ -12,6 +12,7 @@ from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
 from app.agent.intent_router import IntentType, classify_intent, get_greeting_reply
+from app.agent.llm import get_llm
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.infra.trace_context import clear_trace, init_trace
 from app.models.farm import Farm
@@ -122,6 +123,9 @@ async def invoke_advisor(
     if unsupported_reply:
         return unsupported_reply
 
+    if call_type == "daily_advice":
+        return await _invoke_direct_daily_advice_llm(user_input)
+
     init_trace(
         farm_id=farm_id,
         session_id=session_id,
@@ -179,6 +183,14 @@ async def invoke_advisor(
     filtered = filter_output(reply)
     logger.info("Agent 回复完成 | farm_id=%s, 长度 %d 字符", farm_id, len(filtered))
     return filtered
+
+
+async def _invoke_direct_daily_advice_llm(prompt: str) -> str:
+    """每日建议结构化生成使用短 prompt，避免进入聊天图追加上下文。"""
+    llm = get_llm(role="generation")
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
+    content = getattr(response, "content", response)
+    return filter_output(str(content or ""))
 
 
 async def stream_advisor(

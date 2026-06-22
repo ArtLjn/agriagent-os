@@ -80,7 +80,7 @@ def _skip_reasons(records):
 
 @pytest.mark.asyncio
 async def test_maybe_summarize_消息数低于阈值时跳过并记录_trace(
-    db_session, monkeypatch
+    db_session, monkeypatch, caplog
 ):
     from app.memory import service as service_module
     from app.observability.metrics import reset_metrics, session_summary_skipped_total
@@ -94,15 +94,25 @@ async def test_maybe_summarize_消息数低于阈值时跳过并记录_trace(
     monkeypatch.setattr(service_module, "generate_summary", generate_summary)
 
     service = InMemoryMemoryService()
-    await service.maybe_summarize(
-        db_session,
-        conversation.id,
-        farm_id=1,
-        session_id="summary-session",
-        messages=[],
-    )
+    with caplog.at_level(logging.INFO, logger="app.memory.service"):
+        await service.maybe_summarize(
+            db_session,
+            conversation.id,
+            farm_id=1,
+            session_id="summary-session",
+            messages=[],
+        )
 
     assert _skip_reasons(records) == ["below_threshold"]
+    log_record = next(
+        record
+        for record in caplog.records
+        if record.message == "会话摘要跳过"
+    )
+    assert log_record.code == "MEMORY_SUMMARY_SKIPPED"
+    assert log_record.reason == "below_threshold"
+    assert log_record.message_count == 11
+    assert log_record.threshold == 12
     event = records[0]
     assert event["input_data"]["farm_id"] == 1
     assert event["input_data"]["session_id"] == "summary-session"
@@ -258,6 +268,7 @@ async def test_maybe_summarize_首次摘要并发写入时条件更新失败(
 async def test_maybe_summarize_正常生成后写入数据库并同步短时缓存(
     db_session,
     monkeypatch,
+    caplog,
 ):
     from app.memory import service as service_module
 
@@ -271,7 +282,14 @@ async def test_maybe_summarize_正常生成后写入数据库并同步短时缓�
     monkeypatch.setattr(service_module, "generate_summary", generate_summary)
 
     service = InMemoryMemoryService()
-    await service.maybe_summarize(db_session, conversation.id, 1, "summary-session", [])
+    with caplog.at_level(logging.INFO, logger="app.memory.service"):
+        await service.maybe_summarize(
+            db_session,
+            conversation.id,
+            1,
+            "summary-session",
+            [],
+        )
 
     db_session.refresh(conversation)
     assert conversation.summary == "新增摘要：西棚黄瓜预算 200 元。"
@@ -288,6 +306,21 @@ async def test_maybe_summarize_正常生成后写入数据库并同步短时缓�
     assert len(generate_summary.await_args.kwargs["old_messages"]) == 12
     assert generate_summary.await_args.kwargs["persona"] is None
     assert _skip_reasons(records) == []
+    started_record = next(
+        record
+        for record in caplog.records
+        if record.message == "会话摘要开始生成"
+    )
+    assert started_record.code == "MEMORY_SUMMARY_STARTED"
+    assert started_record.message_count == 12
+    assert started_record.summary_message_count == 12
+    success_record = next(
+        record
+        for record in caplog.records
+        if record.message == "会话摘要写入成功"
+    )
+    assert success_record.code == "MEMORY_SUMMARY_UPDATED"
+    assert success_record.summary_length == len("新增摘要：西棚黄瓜预算 200 元。")
 
 
 @pytest.mark.asyncio

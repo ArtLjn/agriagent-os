@@ -33,9 +33,10 @@ export default function Weather() {
         lat: selectedLocation?.lat,
         lon: selectedLocation?.lon,
       });
-      setWeather(buildWeatherView(res.days));
+      const viewDays = buildWeatherView(res.days);
+      setWeather(viewDays);
       setWarnings(res.warnings ?? []);
-      setSummary(buildWeatherSummary(res.days, res.warnings));
+      setSummary(buildWeatherSummary(res.days));
     } catch {
       setWeather([]);
       setWarnings([]);
@@ -133,11 +134,7 @@ export default function Weather() {
               <Typography.Title level={4} style={{ color: palette.text, margin: 0, lineHeight: 1.45 }}>
                 {summary}
               </Typography.Title>
-              <Space wrap>
-                {(warnings.length > 0 ? warnings : ['无官方预警']).slice(0, 3).map((item) => (
-                  <Tag key={item} color={warnings.length > 0 ? 'orange' : 'green'}>{item}</Tag>
-                ))}
-              </Space>
+              <OfficialWarnings warnings={warnings} />
             </Space>
           </Card>
         </Col>
@@ -178,6 +175,62 @@ export default function Weather() {
         </Row>
       </StateBlock>
     </PageShell>
+  );
+}
+
+function OfficialWarnings({ warnings }: { warnings: string[] }) {
+  if (warnings.length === 0) {
+    return (
+      <Tag color="green" style={{ width: 'fit-content' }}>
+        无官方预警
+      </Tag>
+    );
+  }
+
+  const visibleWarnings = warnings.slice(0, 3);
+  const remaining = warnings.length - visibleWarnings.length;
+
+  return (
+    <div
+      aria-label="官方天气预警"
+      style={{
+        display: 'grid',
+        gap: 8,
+        maxWidth: '100%',
+        overflow: 'hidden',
+      }}
+    >
+      {visibleWarnings.map((item) => (
+        <div
+          key={item}
+          title={item}
+          style={{
+            color: palette.warning,
+            background: 'rgba(210, 153, 34, 0.12)',
+            border: `1px solid rgba(210, 153, 34, 0.36)`,
+            borderRadius: 6,
+            fontSize: 12,
+            lineHeight: 1.55,
+            maxWidth: '100%',
+            minWidth: 0,
+            padding: '6px 10px',
+            wordBreak: 'break-word',
+            overflowWrap: 'anywhere',
+            display: '-webkit-box',
+            WebkitBoxOrient: 'vertical',
+            WebkitLineClamp: 2,
+            overflow: 'hidden',
+          }}
+        >
+          {item}
+        </div>
+      ))}
+      {remaining > 0 && (
+        <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+          另有 {remaining} 条官方预警
+        </Typography.Text>
+      )}
+    </div>
   );
 }
 

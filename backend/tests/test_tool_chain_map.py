@@ -53,10 +53,9 @@ class TestToolChainMap:
         }
         assert set(TOOL_CHAIN_MAP.keys()) == expected_keys
 
-    def test_query_tools_link_to_farm_status(self):
-        """查询类工具应关联 get_farm_status。"""
-        query_tools = [
-            "get_weather_forecast",
+    def test_only_daily_advice_support_tools_link_to_farm_status(self):
+        """普通查询工具不应隐式关联 get_farm_status。"""
+        query_tools_without_farm_status = [
             "get_cost_summary",
             "get_debt_summary",
             "get_cost_analytics",
@@ -71,10 +70,10 @@ class TestToolChainMap:
             "get_crop_templates",
             "get_user_settings",
         ]
-        for tool in query_tools:
-            assert "get_farm_status" in TOOL_CHAIN_MAP[tool], (
-                f"{tool} 应关联 get_farm_status"
-            )
+        for tool in query_tools_without_farm_status:
+            assert TOOL_CHAIN_MAP[tool] == [], f"{tool} 不应关联 get_farm_status"
+
+        assert TOOL_CHAIN_MAP["get_weather_forecast"] == []
 
     def test_write_tools_have_no_chain(self):
         """写操作工具不应关联额外工具。"""
@@ -107,33 +106,29 @@ class TestToolChainMap:
 class TestExpandByChain:
     """expand_by_chain 函数测试。"""
 
-    def test_weather_chain(self):
-        result = expand_by_chain({"get_weather_forecast"})
-        assert "get_farm_status" in result
-
     def test_cost_chain(self):
         result = expand_by_chain({"get_cost_summary"})
-        assert "get_farm_status" in result
+        assert result == {"get_cost_summary"}
 
     def test_debt_chain(self):
         result = expand_by_chain({"get_debt_summary"})
-        assert "get_farm_status" in result
+        assert result == {"get_debt_summary"}
 
     def test_crop_chain(self):
         result = expand_by_chain({"get_crop_cycle_info"})
-        assert "get_farm_status" in result
+        assert result == {"get_crop_cycle_info"}
 
     def test_labor_payables_chain(self):
         result = expand_by_chain({"get_labor_payables"})
-        assert "get_farm_status" in result
+        assert result == {"get_labor_payables"}
 
     def test_operation_work_orders_chain(self):
         result = expand_by_chain({"get_operation_work_orders"})
-        assert "get_farm_status" in result
+        assert result == {"get_operation_work_orders"}
 
     def test_workers_chain(self):
         result = expand_by_chain({"get_workers"})
-        assert "get_farm_status" in result
+        assert result == {"get_workers"}
 
     def test_write_skill_no_chain(self):
         result = expand_by_chain({"create_cost_record"})
@@ -145,9 +140,7 @@ class TestExpandByChain:
 
     def test_multiple_inputs(self):
         result = expand_by_chain({"get_weather_forecast", "get_cost_summary"})
-        assert "get_farm_status" in result
-        assert "get_weather_forecast" in result
-        assert "get_cost_summary" in result
+        assert result == {"get_weather_forecast", "get_cost_summary"}
 
     def test_max_tools_capped(self):
         result = expand_by_chain({"get_weather_forecast"}, max_tools=1)

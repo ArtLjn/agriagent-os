@@ -4,8 +4,9 @@ import asyncio
 import logging
 
 from app.infra.settings import settings
+from app.services.location_catalog import find_region
 from app.services.weather.alert_scraper import AlertScraper
-from app.services.weather.base import AirQuality, ProviderError, WeatherData
+from app.services.weather.base import AirQuality, ProviderError, WeatherAlert, WeatherData
 from app.services.weather.cache import weather_cache
 from app.services.weather.open_meteo import OpenMeteoProvider
 from app.services.weather.qweather import QWeatherProvider
@@ -45,7 +46,8 @@ class WeatherStrategy:
             return cached
 
         last_error: Exception | None = None
-        need_alerts = location and location not in ("当前地块", "地块")
+        alert_location = _alert_location_for(location)
+        need_alerts = bool(alert_location)
 
         for provider in self._providers:
             try:
@@ -62,22 +64,22 @@ class WeatherStrategy:
 
             try:
                 daily_coro = provider.fetch_daily(location, days, lat, lon)
-                if need_alerts:
-                    cached_alerts, alert_hit = weather_cache.get_alert(location)
+                if need_alerts and alert_location:
+                    cached_alerts, alert_hit = weather_cache.get_alert(alert_location)
                     if alert_hit:
                         data = await daily_coro
-                        data.alerts = cached_alerts
+                        data.alerts = _merge_alerts(data.alerts, cached_alerts)
                     else:
                         data, alerts = await asyncio.gather(
                             daily_coro,
                             asyncio.to_thread(
-                                self._alert_scraper.fetch_alerts, location
+                                self._alert_scraper.fetch_alerts, alert_location
                             ),
                             return_exceptions=True,
                         )
                         alerts = alerts if isinstance(alerts, list) else []
-                        data.alerts = alerts
-                        weather_cache.set_alert(location, alerts)
+                        data.alerts = _merge_alerts(data.alerts, alerts)
+                        weather_cache.set_alert(alert_location, alerts)
                 else:
                     data = await daily_coro
                     data.alerts = []
@@ -120,6 +122,49 @@ class WeatherStrategy:
 
 
 _weather_strategy: WeatherStrategy | None = None
+
+
+def _alert_location_for(location: str) -> str:
+    """把区县级天气地点映射成预警查询地点。"""
+    cleaned = location.strip()
+    if not cleaned or cleaned in ("当前地块", "地块"):
+        return ""
+
+    region = find_region(cleaned)
+    if not region:
+        return _strip_city_suffix(cleaned)
+
+    city = str(region.get("city") or "").strip()
+    if city:
+        return _strip_city_suffix(city)
+    name = str(region.get("name") or cleaned).strip()
+    return _strip_city_suffix(name)
+
+
+def _strip_city_suffix(value: str) -> str:
+    """预警源常以“苏州”匹配全市及区县预警。"""
+    return value[:-1] if value.endswith("市") and len(value) > 1 else value
+
+
+def _merge_alerts(
+    primary: list[WeatherAlert] | list | None,
+    secondary: list[WeatherAlert] | list | None,
+) -> list:
+    """合并 provider 预警和外部预警，按标题+描述去重。"""
+    merged: list = []
+    seen: set[tuple[str, str]] = set()
+    for alert in [*(primary or []), *(secondary or [])]:
+        title = getattr(alert, "title", None)
+        description = getattr(alert, "description", None)
+        if isinstance(alert, dict):
+            title = alert.get("title")
+            description = alert.get("description")
+        key = (str(title or ""), str(description or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(alert)
+    return merged
 
 
 def get_weather_strategy() -> WeatherStrategy:

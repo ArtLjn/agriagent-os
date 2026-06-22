@@ -291,7 +291,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_uses_ranked_candidates_for_generation(
         self,
         mock_invoke: AsyncMock,
@@ -331,7 +331,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_retries_invalid_then_caches_repaired(
         self,
         mock_invoke: AsyncMock,
@@ -366,7 +366,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_retry_exhausted_returns_fallback(
         self,
         mock_invoke: AsyncMock,
@@ -396,7 +396,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_empty_candidates_skips_llm(
         self,
         mock_invoke: AsyncMock,
@@ -420,7 +420,7 @@ class TestGetDailyAdvice:
     @patch("app.services.farm_context_service.build_summary")
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_does_not_fallback_to_debt_summary(
         self,
         mock_invoke: AsyncMock,
@@ -449,7 +449,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_returns_structured_items(
         self,
         mock_invoke: AsyncMock,
@@ -474,14 +474,14 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_passes_trusted_user_context(
         self,
         mock_invoke: AsyncMock,
         mock_get_composer: MagicMock,
         mock_collect_candidates: AsyncMock,
     ) -> None:
-        """每日建议调用 Agent 时应携带可信 user_id，避免 quota 身份拦截。"""
+        """每日建议专用 LLM 入口应携带可信 user_id，避免 quota 身份拦截。"""
         candidate = self._candidate()
         mock_collect_candidates.return_value = [candidate]
         mock_get_composer.return_value.compose.return_value = "daily prompt"
@@ -504,7 +504,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_new_format_with_preview(
         self,
         mock_invoke: AsyncMock,
@@ -532,7 +532,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_old_format_backward_compatible(
         self,
         mock_invoke: AsyncMock,
@@ -559,7 +559,7 @@ class TestGetDailyAdvice:
     @pytest.mark.asyncio
     @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_fallback_on_plain_text(
         self,
         mock_invoke: AsyncMock,

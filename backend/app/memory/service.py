@@ -168,6 +168,7 @@ class InMemoryMemoryService:
                     farm_id=farm_id,
                     session_id=session_id,
                     reason="below_threshold",
+                    conversation_id=conversation_id,
                     message_count=message_count,
                 )
                 return
@@ -180,6 +181,7 @@ class InMemoryMemoryService:
                     farm_id=farm_id,
                     session_id=session_id,
                     reason="within_debounce_window",
+                    conversation_id=conversation_id,
                     message_count=message_count,
                 )
                 return
@@ -189,6 +191,16 @@ class InMemoryMemoryService:
                 conversation_id=conversation_id,
                 fallback_messages=messages,
             )
+            _log_summary_event(
+                "会话摘要开始生成",
+                code="MEMORY_SUMMARY_STARTED",
+                farm_id=farm_id,
+                session_id=session_id,
+                conversation_id=conversation_id,
+                message_count=message_count,
+                summary_message_count=len(summary_messages),
+                threshold=settings.ai.session_summary_message_threshold,
+            )
             llm = get_llm(role="generation")
             summary = await generate_summary(
                 llm,
@@ -197,6 +209,15 @@ class InMemoryMemoryService:
                 persona=None,
             )
             if summary is None:
+                _log_summary_event(
+                    "会话摘要未产生新增内容",
+                    code="MEMORY_SUMMARY_EMPTY",
+                    farm_id=farm_id,
+                    session_id=session_id,
+                    conversation_id=conversation_id,
+                    message_count=message_count,
+                    summary_message_count=len(summary_messages),
+                )
                 return
 
             if not _update_summary_if_version_matches(
@@ -205,6 +226,15 @@ class InMemoryMemoryService:
                 previous_updated_at=original_summary_updated_at,
                 summary=summary,
             ):
+                _log_summary_event(
+                    "会话摘要写入跳过",
+                    code="MEMORY_SUMMARY_VERSION_CONFLICT",
+                    farm_id=farm_id,
+                    session_id=session_id,
+                    conversation_id=conversation_id,
+                    message_count=message_count,
+                    summary_length=len(summary),
+                )
                 return
 
             await self.short_term.set_session_summary(
@@ -212,6 +242,15 @@ class InMemoryMemoryService:
                 farm_id=farm_id,
                 session_id=session_id,
                 summary=summary,
+            )
+            _log_summary_event(
+                "会话摘要写入成功",
+                code="MEMORY_SUMMARY_UPDATED",
+                farm_id=farm_id,
+                session_id=session_id,
+                conversation_id=conversation_id,
+                message_count=message_count,
+                summary_length=len(summary),
             )
         except Exception:
             increment_counter("session_summary_failed_total")
@@ -293,9 +332,20 @@ class InMemoryMemoryService:
         farm_id: int,
         session_id: str | None,
         reason: str,
+        conversation_id: int | None = None,
         message_count: int | None = None,
     ) -> None:
         increment_counter("session_summary_skipped_total", {"reason": reason})
+        _log_summary_event(
+            "会话摘要跳过",
+            code="MEMORY_SUMMARY_SKIPPED",
+            farm_id=farm_id,
+            session_id=session_id,
+            conversation_id=conversation_id,
+            reason=reason,
+            message_count=message_count,
+            threshold=settings.ai.session_summary_message_threshold,
+        )
         try:
             get_collector().record(
                 node_type="memory_summary",
@@ -309,6 +359,10 @@ class InMemoryMemoryService:
             )
         except Exception:
             return
+
+
+def _log_summary_event(message: str, **fields: Any) -> None:
+    logger.info(message, extra=fields)
 
 
 def _is_summary_circuit_open() -> bool:

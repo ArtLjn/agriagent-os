@@ -51,14 +51,27 @@ class TestAlertCacheBasicOps:
         assert alert_hit is True
 
     def test_alert_ttl_is_1800_seconds(self) -> None:
-        """预警缓存默认 TTL 为 1800 秒。"""
-        weather_cache.set_alert("苏州", [])
+        """有预警时默认 TTL 为 1800 秒。"""
+        weather_cache.set_alert(
+            "苏州",
+            [{"title": "暴雨预警", "severity": "yellow", "description": "强降水"}],
+        )
 
         key = f"{WeatherCache._ALERT_PREFIX}苏州"
         value, expire_at = weather_cache._store[key]
         remaining = expire_at - time.time()
         assert remaining <= 1800
         assert remaining > 1790
+
+    def test_empty_alert_ttl_is_shorter(self) -> None:
+        """无预警结果只短缓存，避免突发预警长时间不刷新。"""
+        weather_cache.set_alert("苏州", [])
+
+        key = f"{WeatherCache._ALERT_PREFIX}苏州"
+        value, expire_at = weather_cache._store[key]
+        remaining = expire_at - time.time()
+        assert remaining <= 120
+        assert remaining > 110
 
     def test_alert_custom_ttl(self) -> None:
         """预警缓存支持自定义 TTL。"""
@@ -168,6 +181,68 @@ class TestAlertCacheInStrategy:
         cached_alerts, hit = weather_cache.get_alert("苏州")
         assert hit is True
         assert cached_alerts == fetched_alerts
+
+    @pytest.mark.asyncio
+    async def test_district_location_uses_parent_city_for_alerts(self) -> None:
+        """区县级天气查询应按上级市查预警，避免漏掉市域预警。"""
+        fetched_alerts = [
+            {
+                "title": "吴中区气象台发布暴雨黄色预警",
+                "severity": "yellow",
+                "description": "苏州市部分区县有强降水",
+            },
+        ]
+        scraper = MagicMock()
+        scraper.fetch_alerts = MagicMock(return_value=fetched_alerts)
+        provider = self._make_provider()
+        strategy = self._make_strategy([provider], alert_scraper=scraper)
+
+        result = await strategy.fetch(
+            location="苏州市虎丘区",
+            days=7,
+            lat=31.3296,
+            lon=120.4342,
+        )
+
+        assert result.alerts == fetched_alerts
+        scraper.fetch_alerts.assert_called_once_with("苏州")
+
+        cached_alerts, hit = weather_cache.get_alert("苏州")
+        assert hit is True
+        assert cached_alerts == fetched_alerts
+
+    @pytest.mark.asyncio
+    async def test_provider_alerts_are_merged_with_scraper_alerts(self) -> None:
+        """Provider 自带预警不能被爬虫预警覆盖。"""
+        from app.services.weather.base import WeatherAlert
+
+        provider_alert = WeatherAlert(
+            title="苏州市气象台发布大风蓝色预警",
+            severity="blue",
+            description="预计今天有明显大风",
+        )
+        data = self._make_provider().fetch_daily.return_value
+        data.alerts = [provider_alert]
+        provider = self._make_provider(data)
+
+        scraper = MagicMock()
+        scraper.fetch_alerts = MagicMock(
+            return_value=[
+                WeatherAlert(
+                    title="吴中区气象台发布暴雨黄色预警",
+                    severity="yellow",
+                    description="预计有短时强降水",
+                )
+            ]
+        )
+        strategy = self._make_strategy([provider], alert_scraper=scraper)
+
+        result = await strategy.fetch(location="苏州", days=7)
+
+        assert [alert.title for alert in result.alerts] == [
+            "苏州市气象台发布大风蓝色预警",
+            "吴中区气象台发布暴雨黄色预警",
+        ]
 
     @pytest.mark.asyncio
     async def test_alert_cache_miss_scraper_exception_uses_empty(self) -> None:

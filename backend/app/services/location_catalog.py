@@ -59,6 +59,23 @@ def search_regions(query: str, *, limit: int = 20) -> list[dict[str, Any]]:
     return [region for _, region in matches[:limit]]
 
 
+def find_region(query: str) -> dict[str, Any] | None:
+    """返回唯一匹配的行政区划；重名或无匹配时返回 None。"""
+    cleaned = query.strip()
+    if not cleaned:
+        return None
+
+    exact_matches: list[dict[str, Any]] = []
+    for region in load_regions():
+        keys = _search_key_set(region)
+        if cleaned in keys:
+            exact_matches.append(region)
+
+    if len(exact_matches) == 1:
+        return exact_matches[0]
+    return None
+
+
 def list_regions(*, province: str | None = None, city: str | None = None) -> dict[str, Any]:
     """按省市返回城市或区县列表。"""
     regions = load_regions()
@@ -94,6 +111,10 @@ def to_public_region(region: dict[str, Any]) -> dict[str, Any]:
 
 
 def _search_keys(region: dict[str, Any]) -> str:
+    return " ".join(_search_key_set(region))
+
+
+def _search_key_set(region: dict[str, Any]) -> set[str]:
     aliases = region.get("aliases") or []
     parts = [
         str(region.get("name") or ""),
@@ -102,7 +123,7 @@ def _search_keys(region: dict[str, Any]) -> str:
         str(region.get("adcode") or ""),
         *(str(alias) for alias in aliases),
     ]
-    return " ".join(parts)
+    return {part for part in parts if part}
 
 
 def _match_score(query: str, keys: str) -> int:
@@ -132,6 +153,7 @@ def _public_region(region: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "catalog_meta",
+    "find_region",
     "list_regions",
     "load_catalog",
     "load_regions",

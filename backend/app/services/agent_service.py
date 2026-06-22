@@ -145,8 +145,26 @@ async def get_daily_advice(
         farm_id=farm_id,
         cycle_id=cycle_id,
         user_id=user_id,
-        invoke_advisor=invoke_advisor,
+        invoke_advisor=invoke_daily_advice_llm,
         get_composer=get_composer,
+    )
+
+
+async def invoke_daily_advice_llm(
+    prompt: str,
+    *,
+    farm_id: int,
+    db: Session | None = None,
+    user_id: str | None = None,
+    call_type: str = "daily_advice",
+) -> str:
+    """每日建议专用 LLM 入口：保持兼容签名，实际绕过聊天图。"""
+    return await invoke_advisor(
+        prompt,
+        farm_id=farm_id,
+        db=db,
+        user_id=user_id,
+        call_type=call_type,
     )
 
 

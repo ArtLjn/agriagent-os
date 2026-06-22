@@ -47,6 +47,12 @@ InvokeAdvisor = Callable[..., Awaitable[str]]
 GetComposer = Callable[[], Any]
 
 
+class _DailyAdvicePayloadTruncated(ValueError):
+    """LLM 返回的 DailyAdvice JSON 明显被截断。"""
+
+    pass
+
+
 async def generate_daily_advice(
     db: Session,
     *,
@@ -160,8 +166,10 @@ async def _run_generation_attempts(
     validation_errors: list[str] = []
     repair_instruction = ""
     last_reflection: ReflectionResult | None = None
+    fallback_retry_count = MAX_RETRY_COUNT
 
     for attempt_index in range(MAX_RETRY_COUNT + 1):
+        fallback_retry_count = attempt_index
         prompt = _compose_prompt(
             get_composer,
             selected_candidates=selected_candidates,
@@ -176,7 +184,12 @@ async def _run_generation_attempts(
             user_id=user_id,
             call_type="daily_advice",
         )
-        payload, parse_repair_instruction = _parse_llm_payload(raw)
+        try:
+            payload, parse_repair_instruction = _parse_llm_payload(raw)
+        except _DailyAdvicePayloadTruncated as exc:
+            logger.warning("DailyAdvice v2 JSON 明显截断，直接进入 fallback | error=%s", exc)
+            validation_errors.append("llm_json_truncated")
+            break
         if payload is None:
             error_code = (
                 "llm_json_parse_failed"
@@ -227,7 +240,7 @@ async def _run_generation_attempts(
         cycle_id=cycle_id,
         selected_candidates=selected_candidates,
         candidate_fingerprint=candidate_fingerprint,
-        retry_count=MAX_RETRY_COUNT,
+        retry_count=fallback_retry_count,
         validation_errors=validation_errors,
         reflection=last_reflection,
     )
@@ -266,9 +279,36 @@ def _parse_llm_payload(raw: str) -> tuple[dict[str, Any] | None, str]:
     try:
         parsed = safe_parse_json(text)
     except ValueError as exc:
+        if _looks_like_truncated_json(text):
+            raise _DailyAdvicePayloadTruncated(str(exc)) from exc
         logger.warning("DailyAdvice v2 JSON 解析失败，将进入 fallback/retry | error=%s", exc)
         return None, _build_json_parse_repair_instruction(exc)
     return (parsed, "") if isinstance(parsed, dict) else (None, "")
+
+
+def _looks_like_truncated_json(text: str) -> bool:
+    """识别输出在对象中途被截断的 JSON。"""
+    stripped = text.rstrip()
+    if not stripped.startswith("{"):
+        return False
+    if stripped.endswith(("}", "]", "```")):
+        return False
+    return _has_unclosed_string(stripped)
+
+
+def _has_unclosed_string(text: str) -> bool:
+    escaped = False
+    in_string = False
+    for char in text:
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+    return in_string
 
 
 def _build_json_parse_repair_instruction(error: ValueError) -> str:

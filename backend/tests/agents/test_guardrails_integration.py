@@ -57,6 +57,33 @@ class TestAdvisorGuardrails:
             result = await invoke_advisor("正常问题", farm_id=1)
             assert "步数超出限制" in result
 
+    @pytest.mark.asyncio
+    async def test_daily_advice_uses_direct_llm_without_chat_graph(self):
+        """DailyAdvice 结构化生成不应进入聊天图，避免注入长系统上下文。"""
+        with (
+            patch("app.agent.advisor._get_advisor_graph") as mock_graph,
+            patch("app.agent.advisor.get_llm") as mock_get_llm,
+        ):
+            mock_llm = MagicMock()
+            mock_llm.ainvoke = AsyncMock(
+                return_value=MagicMock(content='{"preview":"今日建议","items":[]}')
+            )
+            mock_get_llm.return_value = mock_llm
+
+            result = await invoke_advisor(
+                '{"preview":"只返回 JSON"}',
+                farm_id=1,
+                user_id="user-1",
+                call_type="daily_advice",
+            )
+
+        assert result == '{"preview":"今日建议","items":[]}'
+        mock_graph.assert_not_called()
+        mock_get_llm.assert_called_once_with(role="generation")
+        messages = mock_llm.ainvoke.await_args.args[0]
+        assert len(messages) == 1
+        assert messages[0].content == '{"preview":"只返回 JSON"}'
+
 
 class TestStreamAdvisorGuardrails:
     @pytest.mark.asyncio

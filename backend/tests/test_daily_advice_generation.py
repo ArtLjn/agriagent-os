@@ -123,7 +123,7 @@ async def test_retry_success_reuses_candidates_and_records_meta(
     valid_payload = _v2_payload(candidate)
 
     with patch(
-        "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.side_effect = [
             '{"preview":"今日建议","items":[]}',
@@ -165,7 +165,7 @@ async def test_json_parse_failure_adds_repair_instruction_before_retry(
     )
 
     with patch(
-        "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.side_effect = [
             malformed_payload,
@@ -192,6 +192,40 @@ async def test_json_parse_failure_adds_repair_instruction_before_retry(
 
 
 @pytest.mark.asyncio
+async def test_truncated_daily_advice_json_falls_back_without_retry(
+    db,
+    mock_composer,
+    mock_collect_candidates,
+) -> None:
+    """明显被截断的 JSON 应快速 fallback，避免重复触发长耗时失败。"""
+    candidate = _candidate("weather:storm:truncated", title="暴雨前抢收排水")
+    mock_collect_candidates.return_value = [candidate]
+    truncated_payload = (
+        '{\n'
+        '  "preview": "今日强降雨，抓紧收割水稻与催芽",\n'
+        '  "overview": {\n'
+        '    "score": 55,\n'
+        '    "subtitle": "今日有强降雨，需防涝并处理逾期作'
+    )
+
+    with patch(
+        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
+    ) as mock_llm:
+        mock_llm.return_value = truncated_payload
+        from app.services.agent_service import get_daily_advice
+
+        result = await get_daily_advice(db, farm_id=1)
+
+    assert mock_llm.await_count == 1
+    assert result.generation.mode == "fallback"
+    assert result.items[0].id == candidate.id
+    saved_record = db.query(AgentRecord).filter(AgentRecord.record_type == "daily").one()
+    saved_meta = json.loads(saved_record.meta)
+    assert saved_meta["retry_count"] == 0
+    assert "llm_json_truncated" in saved_meta["validation_errors"]
+
+
+@pytest.mark.asyncio
 async def test_retry_exhausted_returns_candidate_fallback(
     db,
     mock_composer,
@@ -202,7 +236,7 @@ async def test_retry_exhausted_returns_candidate_fallback(
     mock_collect_candidates.return_value = [candidate]
 
     with patch(
-        "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.return_value = '{"preview":"今日建议","items":[]}'
         from app.services.agent_service import get_daily_advice
@@ -230,7 +264,7 @@ async def test_empty_candidates_return_empty_without_llm(
     mock_collect_candidates.return_value = []
 
     with patch(
-        "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         from app.services.agent_service import get_daily_advice
 
@@ -253,7 +287,7 @@ async def test_quota_like_llm_response_retries_then_fallback(
     mock_collect_candidates.return_value = [candidate]
 
     with patch(
-        "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.return_value = "缺少可信用户上下文，无法继续处理。"
         from app.services.agent_service import get_daily_advice

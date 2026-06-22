@@ -151,7 +151,7 @@ class TestDailyAdviceV2Empty:
     """测试无候选时的 v2 empty 响应。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_empty_candidates_do_not_call_llm(
         self, mock_invoke: AsyncMock
     ) -> None:
@@ -185,7 +185,7 @@ class TestDailyAdviceFallback:
     """测试 v2 生成失败时的候选 skeleton fallback。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_plain_text_fallback_uses_candidate_skeleton(
         self, mock_invoke: AsyncMock
     ) -> None:
@@ -221,7 +221,7 @@ class TestRefreshDailyAdvice:
     """测试强制刷新每日建议。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_refresh_returns_structured_items(
         self, mock_invoke: AsyncMock
     ) -> None:
@@ -256,7 +256,7 @@ class TestCycleIdPassthrough:
     """测试 cycle_id 正确传递到记录和响应。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_cycle_id_in_response(self, mock_invoke: AsyncMock) -> None:
         """返回的 DailyAdviceResponse 包含正确的 cycle_id。"""
         from sqlalchemy import create_engine

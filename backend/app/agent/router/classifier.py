@@ -82,6 +82,38 @@ class RuleIntentClassifier:
         "赊账还欠",
         "总欠款",
     )
+    _labor_payable_hints = (
+        "人工钱",
+        "工钱",
+        "工资",
+        "未付人工",
+        "欠人工",
+        "还欠多少人工",
+        "人工欠款",
+    )
+    _cost_category_hints = (
+        "账务分类",
+        "成本分类",
+        "收入分类",
+        "费用分类",
+        "有哪些分类",
+    )
+    _crop_template_hints = (
+        "作物模板",
+        "模板列表",
+        "有哪些模板",
+        "生长阶段模板",
+    )
+    _crop_cycle_list_hints = ("我的茬口", "有哪些茬口", "茬口列表", "种植批次")
+    _planting_unit_hints = ("种植单元", "地块", "大棚", "棚区", "有哪些棚")
+    _user_settings_hints = (
+        "用户设置",
+        "我的设置",
+        "默认城市",
+        "天气城市",
+        "显示名",
+        "昵称",
+    )
     _worker_query_hints = (
         "我的工人",
         "工人列表",
@@ -109,7 +141,84 @@ class RuleIntentClassifier:
                 )
             ]
 
-        if self._looks_like_daily_operation_advice(normalized):
+        if self._looks_like_user_settings_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="settings",
+                    intent="query_user_settings",
+                    risk="read",
+                    entities=["user_settings"],
+                    candidate_tools=["get_user_settings"],
+                    confidence=0.86,
+                )
+            )
+        elif self._looks_like_labor_payable_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="labor",
+                    intent="query_labor_payables",
+                    risk="read",
+                    entities=["labor_payable"],
+                    candidate_tools=["get_labor_payables"],
+                    confidence=0.86,
+                )
+            )
+        elif self._looks_like_cost_category_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="finance",
+                    intent="query_cost_categories",
+                    risk="read",
+                    entities=["cost_category"],
+                    candidate_tools=["get_cost_categories"],
+                    confidence=0.86,
+                )
+            )
+        elif self._looks_like_crop_template_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="planting",
+                    intent="query_crop_templates",
+                    risk="read",
+                    entities=["crop_template"],
+                    candidate_tools=["get_crop_templates"],
+                    confidence=0.86,
+                )
+            )
+        elif self._looks_like_planting_unit_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="planting",
+                    intent="query_planting_units",
+                    risk="read",
+                    entities=["planting_unit"],
+                    candidate_tools=["get_planting_units"],
+                    confidence=0.86,
+                )
+            )
+        elif self._looks_like_crop_cycle_list_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="planting",
+                    intent="query_crop_cycles",
+                    risk="read",
+                    entities=["crop_cycle"],
+                    candidate_tools=["get_crop_cycles"],
+                    confidence=0.86,
+                )
+            )
+        elif self._looks_like_crop_cycle_detail_query(normalized):
+            frames.append(
+                IntentFrame(
+                    domain="planting",
+                    intent="query_crop_cycle",
+                    risk="read",
+                    entities=["crop_cycle"],
+                    candidate_tools=["get_crop_cycle_info"],
+                    confidence=0.86,
+                )
+            )
+        elif self._looks_like_daily_operation_advice(normalized):
             frames.append(
                 IntentFrame(
                     domain="operation",
@@ -325,13 +434,49 @@ class RuleIntentClassifier:
         )
 
     def _looks_like_cost_summary_query(self, message: str) -> bool:
+        if self._looks_like_cost_category_query(message):
+            return False
         return self._has_any(message, self._cost_summary_hints)
 
     def _looks_like_finance_overview_query(self, message: str) -> bool:
         return message.lower() in self._finance_overview_hints
 
     def _looks_like_debt_summary_query(self, message: str) -> bool:
+        if self._looks_like_labor_payable_query(message):
+            return False
         return self._has_any(message, self._debt_summary_hints)
+
+    def _looks_like_labor_payable_query(self, message: str) -> bool:
+        if self._looks_like_create_worker(message):
+            return False
+        return self._has_any(message, self._labor_payable_hints)
+
+    def _looks_like_cost_category_query(self, message: str) -> bool:
+        return self._has_any(message, self._cost_category_hints)
+
+    def _looks_like_crop_template_query(self, message: str) -> bool:
+        return self._has_any(message, self._crop_template_hints)
+
+    def _looks_like_crop_cycle_list_query(self, message: str) -> bool:
+        return self._has_any(message, self._crop_cycle_list_hints)
+
+    def _looks_like_crop_cycle_detail_query(self, message: str) -> bool:
+        return bool(
+            re.search(
+                r"(?:看一下|查询|查一下|看看).{0,8}(?:\d+\s*号)?茬口"
+                r"|(?:茬口|周期|cycle)\s*\d+"
+                r"|\d+\s*(?:号|#)?\s*(?:茬口|周期)",
+                message,
+            )
+        )
+
+    def _looks_like_planting_unit_query(self, message: str) -> bool:
+        return self._has_any(message, self._planting_unit_hints) and self._has_any(
+            message, self._query_hints
+        )
+
+    def _looks_like_user_settings_query(self, message: str) -> bool:
+        return self._has_any(message, self._user_settings_hints)
 
     def _looks_like_worker_query(self, message: str) -> bool:
         if self._looks_like_create_worker(message):

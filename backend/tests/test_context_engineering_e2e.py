@@ -151,20 +151,19 @@ class TestToolChainExpansion:
 
         assert isinstance(TOOL_CHAIN_MAP, dict)
 
-    def test_weather_expands_to_farm_status(self):
-        """get_weather_forecast 链式扩展包含 get_farm_status。"""
+    def test_weather_does_not_expand_to_farm_status(self):
+        """普通天气查询不应隐式扩展到 get_farm_status。"""
         from app.agent.tool_selector import expand_by_chain
 
         result = expand_by_chain({"get_weather_forecast"})
-        assert "get_farm_status" in result
-        assert "get_weather_forecast" in result
+        assert result == {"get_weather_forecast"}
 
-    def test_cost_summary_expands_to_farm_status(self):
-        """get_cost_summary 链式扩展包含 get_farm_status。"""
+    def test_cost_summary_does_not_expand_to_farm_status(self):
+        """账务查询不应隐式扩展到 get_farm_status。"""
         from app.agent.tool_selector import expand_by_chain
 
         result = expand_by_chain({"get_cost_summary"})
-        assert "get_farm_status" in result
+        assert result == {"get_cost_summary"}
 
     def test_write_skills_no_chain(self):
         """写操作 Skill 不会被扩展。"""
@@ -208,8 +207,8 @@ class TestToolChainExpansion:
 class TestCrossCuttingIntegration:
     """跨模块集成验证：三个改造点协同工作。"""
 
-    def test_all_query_tools_have_farm_status_access(self):
-        """所有查询类工具都有途径获取农场状态。"""
+    def test_query_tools_do_not_implicitly_call_farm_status(self):
+        """查询类工具需要上下文时应由 ContextBundle 提供，不隐式调用农场状态。"""
         from app.agent.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
 
         query_tools = [
@@ -220,16 +219,14 @@ class TestCrossCuttingIntegration:
             "get_recent_farm_logs",
         ]
         for tool in query_tools:
-            # 通过 TOOL_CHAIN_MAP 直接关联
-            assert "get_farm_status" in TOOL_CHAIN_MAP.get(tool, []), (
-                f"{tool} 应通过 TOOL_CHAIN_MAP 关联 get_farm_status"
+            assert TOOL_CHAIN_MAP.get(tool, []) == [], (
+                f"{tool} 不应通过 TOOL_CHAIN_MAP 关联 get_farm_status"
             )
-            # 通过 expand_by_chain 扩展
             expanded = expand_by_chain({tool})
-            assert "get_farm_status" in expanded
+            assert expanded == {tool}
 
     def test_tool_chain_handles_farm_status_routing(self, _composer):
-        """get_farm_status 路由由 TOOL_CHAIN_MAP 自动处理，prompt 保留工具引导。"""
+        """prompt 保留工具引导，但具体查询不通过 TOOL_CHAIN_MAP 隐式调用农场状态。"""
         from app.agent.tool_selector import expand_by_chain
 
         text = _composer.compose(
@@ -240,10 +237,10 @@ class TestCrossCuttingIntegration:
         # prompt 保留工具引导，但不再使用旧 farm_context_summary。
         assert "get_farm_status" in text
         assert "farm_context_summary" not in text
-        # TOOL_CHAIN_MAP 确保查询工具能获取农场状态
+        # 查询工具需要上下文时由 ContextBundle 注入，不通过额外 Skill 调用解决。
         for tool in ["get_weather_forecast", "get_cost_summary", "get_crop_cycle_info"]:
             expanded = expand_by_chain({tool})
-            assert "get_farm_status" in expanded
+            assert expanded == {tool}
 
     def test_sliding_window_preserves_recent_context(self):
         """sliding_window_compact 保留最近 N 轮完整上下文。"""
