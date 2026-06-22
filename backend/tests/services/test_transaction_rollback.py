@@ -21,6 +21,7 @@ from app.services.agent_service import (
     get_daily_advice,
     generate_report,
 )
+from app.services.daily_advice_models import DailyAdviceCandidate
 
 
 def _make_report_data():
@@ -216,12 +217,49 @@ class TestAgentServiceRollback:
 
     @patch("app.services.agent_service.invoke_advisor")
     @patch("app.services.agent_service.get_composer")
+    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
     def test_get_daily_advice_rollback_on_commit_failure(
-        self, mock_get_composer: MagicMock, mock_invoke: MagicMock
+        self,
+        mock_collect_candidates: AsyncMock,
+        mock_get_composer: MagicMock,
+        mock_invoke: AsyncMock,
     ) -> None:
         """commit 失败时应调用 rollback 并重新抛出异常。"""
         mock_get_composer.return_value.compose.return_value = "daily prompt"
-        mock_invoke.return_value = "建议"
+        mock_collect_candidates.return_value = [
+            DailyAdviceCandidate(
+                id="candidate-1",
+                category="record",
+                title_hint="补录今日农事",
+                detail_hint="记录今日完成事项",
+                priority=2,
+                due_date=date.today(),
+                source_type="test",
+                source_id=None,
+                dedupe_key="test-record",
+                reason="rollback test",
+            )
+        ]
+        mock_invoke.return_value = """
+        {
+          "cycle_id": null,
+          "preview": "今日建议",
+          "overview": {"metrics": []},
+          "items": [
+            {
+              "id": "candidate-1",
+              "category": "record",
+              "level": "normal",
+              "title": "补录今日农事",
+              "summary": "记录今日完成事项",
+              "steps": [],
+              "actions": [],
+              "evidence": []
+            }
+          ],
+          "generation": {}
+        }
+        """
         mock_db = MagicMock()
         # 缓存查询返回 None，使 get_daily_advice 走生成新建议分支
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None

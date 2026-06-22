@@ -1,6 +1,7 @@
 """Admin 用户管理 API 集成测试。"""
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,7 @@ from app.core.security import create_access_token
 from app.main import app
 from app.models.token_stats import TokenDailyStats
 from app.models.user import User
+from app.services.quota_service import get_month_range, get_week_range
 
 
 def _get_test_db():
@@ -38,12 +40,20 @@ def admin_user(client):
         db.add(admin)
         db.commit()
         db.refresh(admin)
+        admin_data = SimpleNamespace(
+            id=admin.id,
+            phone=admin.phone,
+            password_hash=admin.password_hash,
+            nickname=admin.nickname,
+            role=admin.role,
+            status=admin.status,
+        )
     finally:
         db_iter.close()
 
     original = app.dependency_overrides.get(get_current_user)
-    app.dependency_overrides[get_current_user] = lambda: admin
-    yield admin
+    app.dependency_overrides[get_current_user] = lambda: admin_data
+    yield admin_data
     if original:
         app.dependency_overrides[get_current_user] = original
     else:
@@ -73,8 +83,14 @@ def target_user(client):
         )
         db.add(user)
         db.commit()
-        db.refresh(user)
-        return user
+        return SimpleNamespace(
+            id=user.id,
+            phone=user.phone,
+            password_hash=user.password_hash,
+            nickname=user.nickname,
+            role=user.role,
+            status=user.status,
+        )
     finally:
         db_iter.close()
 
@@ -82,6 +98,9 @@ def target_user(client):
 @pytest.fixture()
 def quota_user(client):
     """创建一个用于配额接口的目标用户。"""
+    current_month_start, _current_month_end = get_month_range()
+    current_week_start, _current_week_end = get_week_range()
+    usage_date = max(current_month_start, current_week_start)
     db_iter = _get_test_db()
     db = next(db_iter)
     try:
@@ -101,7 +120,7 @@ def quota_user(client):
             TokenDailyStats(
                 user_id=user.id,
                 farm_id=1,
-                date=date(2026, 6, 4),
+                date=usage_date,
                 model="qwen3.6-flash",
                 call_type="chat",
                 prompt_tokens=300,
@@ -113,7 +132,16 @@ def quota_user(client):
         )
         db.commit()
         db.refresh(user)
-        return user
+        return SimpleNamespace(
+            id=user.id,
+            phone=user.phone,
+            password_hash=user.password_hash,
+            nickname=user.nickname,
+            role=user.role,
+            status=user.status,
+            token_monthly_limit=user.token_monthly_limit,
+            token_weekly_limit=user.token_weekly_limit,
+        )
     finally:
         db_iter.close()
 
@@ -217,8 +245,9 @@ def test_get_user_quota(client, admin_user, admin_headers, quota_user):
     assert data["weekly_limit"] == 200
     assert data["weekly_usage"] == 800
     assert data["weekly_remaining"] == 0
-    assert data["monthly_start"] <= "2026-06-04" <= data["monthly_end"]
-    assert data["weekly_start"] <= "2026-06-04" <= data["weekly_end"]
+    usage_date = date.today().isoformat()
+    assert data["monthly_start"] <= usage_date <= data["monthly_end"]
+    assert data["weekly_start"] <= usage_date <= data["weekly_end"]
     assert data["status"] == "exceeded"
 
 

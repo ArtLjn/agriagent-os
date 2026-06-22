@@ -28,6 +28,7 @@ EXPECTED_REGISTERED_SKILLS = {
     "get_crop_templates",
     "manage_crop_templates",
     "create_operation_work_order",
+    "get_crop_cycles",
     "get_crop_cycle_info",
     "get_recent_farm_logs",
     "manage_farm_logs",

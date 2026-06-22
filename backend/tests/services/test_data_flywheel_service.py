@@ -205,12 +205,12 @@ def test_list_samples_returns_lightweight_turn_rows(tmp_path):
     assert result["items"][0]["latency_ms"] == 1320
     assert result["items"][0]["created_at"] is not None
     assert result["items"][0]["issue_candidates"] == [
-        {
-            "type": "pending_missed",
-            "severity": "high",
-            "reason": "router 选择了写操作工具，但 pending lifecycle 中没有对应的确认计划",
-            "evidence": "create_operation_work_order",
-            "suggested_label": "pending_missed",
+            {
+                "type": "pending_missed",
+                "severity": "high",
+                "reason": "router 选择了写操作工具「create_operation_work_order」，但 pending lifecycle 中没有对应的确认计划",
+                "evidence": "create_operation_work_order",
+                "suggested_label": "pending_missed",
         }
     ]
     db.close()
@@ -1069,19 +1069,19 @@ def test_build_case_draft_preserves_issue_candidate_assertions(tmp_path):
     )
 
     assert draft["case_json"]["metadata"]["issue_candidates"] == [
-        {
-            "type": "disabled_worker_used",
-            "severity": "high",
-            "reason": "已停用工人仍被安排到作业或工资记录中",
-            "evidence": "李一凡",
-            "suggested_label": "disabled_worker_used",
+            {
+                "type": "disabled_worker_used",
+                "severity": "high",
+                "reason": "已停用工人「李一凡」仍被安排到作业或工资记录中",
+                "evidence": "李一凡",
+                "suggested_label": "disabled_worker_used",
         },
-        {
-            "type": "missing_wage",
-            "severity": "high",
-            "reason": "作业包含工人，但没有工资单价、已付金额、不计工资或欠款策略",
-            "evidence": "李一凡, 王大妈",
-            "suggested_label": "missing_wage",
+            {
+                "type": "missing_wage",
+                "severity": "high",
+                "reason": "作业包含工人「李一凡, 王大妈」，但没有工资单价、已付金额、不计工资或欠款策略",
+                "evidence": "李一凡, 王大妈",
+                "suggested_label": "missing_wage",
         },
     ]
     assert draft["case_json"]["issue_assertions"] == [

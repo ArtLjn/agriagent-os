@@ -266,12 +266,13 @@ PLANTING_ADVICE_HINTS = (
 DISABLED_SKILLS: set[str] = {
     "web_search",
 }
-
+# TODO 这里为这么多映射 get_farm_status 
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_weather_forecast": ["get_farm_status"],
     "get_cost_summary": ["get_farm_status"],
     "get_debt_summary": ["get_farm_status"],
     "get_cost_analytics": ["get_farm_status"],
+    "get_crop_cycles": ["get_farm_status"],
     "get_crop_cycle_info": ["get_farm_status"],
     "get_recent_farm_logs": ["get_farm_status"],
     "get_labor_payables": ["get_farm_status"],

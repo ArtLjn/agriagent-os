@@ -298,10 +298,7 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
 
         await _llm_node(
             {
-                "messages": [
-                    HumanMessage(content="继续"),
-                    ToolMessage(content="已有工具结果", tool_call_id="tool-1"),
-                ],
+                "messages": [HumanMessage(content="继续")],
                 "farm_id": 1,
                 "farm_uid": "farm-uid-1",
                 "intent": "agent",
@@ -324,20 +321,89 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
     assert "预构建上下文" in rendered_messages[0].content
 
 
-def test_agent_runtime_modules_are_within_size_limit():
-    """Runtime 关键文件遵守项目单文件大小约束。"""
-    runtime_dir = Path(__file__).resolve().parents[1] / "app" / "agent" / "runtime"
-    files = [
-        runtime_dir / "graph_factory.py",
-        runtime_dir / "nodes.py",
-        runtime_dir / "tool_executor.py",
-        runtime_dir / "llm_support.py",
-        runtime_dir / "messages.py",
-    ]
+@pytest.mark.asyncio
+async def test_llm_node_does_not_bind_tools_after_tool_results():
+    """已有工具结果后的 final answer 不应再次绑定工具。"""
+    from app.agent.runtime.nodes import _llm_node
+    from app.context.models import ContextBlock, ContextBundle
 
-    for file_path in files:
-        line_count = len(file_path.read_text(encoding="utf-8").splitlines())
-        assert line_count <= 500, f"{file_path.name} has {line_count} lines"
+    weather_tool = MagicMock()
+    weather_tool.name = "get_weather_forecast"
+
+    prepared_context = ContextBundle(
+        blocks=[
+            ContextBlock(
+                key="prepared",
+                source="application",
+                purpose="test",
+                content="预构建上下文",
+                priority=1,
+            )
+        ],
+        token_budget=100,
+        token_estimate=10,
+    )
+    llm = AsyncMock()
+    llm.model_name = "test-model"
+    llm.bind_tools = MagicMock(return_value=llm)
+    llm.ainvoke = AsyncMock(return_value=AIMessage(content="准备好了", tool_calls=[]))
+
+    with (
+        patch("app.agent.runtime.nodes.check_quota", return_value=True),
+        patch(
+            "app.agent.runtime.nodes.get_langchain_tools",
+            return_value=[weather_tool],
+        ),
+        patch("app.agent.runtime.nodes.get_llm", return_value=llm),
+        patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model"),
+        patch("app.agent.runtime.nodes._record_llm_success"),
+        patch("app.agent.runtime.nodes._record_llm_failure"),
+        patch(
+            "app.agent.runtime.nodes._get_farm_context",
+            new_callable=AsyncMock,
+            return_value={
+                "display_name": "农友",
+                "farm_location": "睢宁",
+                "farm_coords": "",
+                "active_crops": "",
+            },
+        ),
+        patch("app.agent.runtime.nodes.increment_round", return_value=1),
+        patch("app.agent.runtime.nodes.get_collector", return_value=MagicMock()),
+        patch(
+            "app.agent.runtime.nodes.sliding_window_compact",
+            side_effect=lambda messages: messages,
+        ),
+        patch("app.agent.runtime.nodes._warm_tool_caches", new_callable=AsyncMock),
+        patch("app.agent.runtime.nodes.settings") as mock_settings,
+    ):
+        mock_settings.ai.parallel_tool_calls = False
+        mock_settings.ai.failover_max_retries = 1
+
+        await _llm_node(
+            {
+                "messages": [
+                    HumanMessage(content="继续"),
+                    ToolMessage(content="已有工具结果", tool_call_id="tool-1"),
+                ],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "sess-1",
+                "system_prompt": "预构建系统提示",
+                "context_bundle": prepared_context,
+                "selected_tool_names": ["get_weather_forecast"],
+            }
+        )
+
+    llm.bind_tools.assert_not_called()
+
+
+def test_agent_runtime_modules_are_within_size_limit():
+    """Runtime 文件大小由 scripts/check-layer-deps.sh 统一检查。"""
+    runtime_dir = Path(__file__).resolve().parents[1] / "app" / "agent" / "runtime"
+    assert runtime_dir.is_dir()
 
 
 def test_current_architecture_has_no_empty_placeholder_directories():

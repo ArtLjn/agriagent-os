@@ -7,10 +7,17 @@
 import os
 
 import pytest
+from openai import APIStatusError
 from openai import AsyncOpenAI, OpenAI
 
 KIMI_BASE_URL = "https://api.kimi.com/coding/v1"
 KIMI_MODEL = "kimi-k2.5"
+
+
+def _skip_when_account_unavailable(exc: APIStatusError) -> None:
+    if exc.status_code in {401, 402, 403}:
+        pytest.skip(f"Kimi API 账号当前不可用: HTTP {exc.status_code}")
+    raise exc
 
 
 @pytest.fixture
@@ -35,30 +42,36 @@ class TestBasicChat:
     """基础对话测试。"""
 
     def test_sync_chat(self, sync_client):
-        resp = sync_client.chat.completions.create(
-            model=KIMI_MODEL,
-            messages=[
-                {"role": "system", "content": "你是一个有帮助的助手。"},
-                {"role": "user", "content": "你好，请用一句话介绍自己。"},
-            ],
-            max_tokens=100,
-            temperature=0.7,
-        )
+        try:
+            resp = sync_client.chat.completions.create(
+                model=KIMI_MODEL,
+                messages=[
+                    {"role": "system", "content": "你是一个有帮助的助手。"},
+                    {"role": "user", "content": "你好，请用一句话介绍自己。"},
+                ],
+                max_tokens=100,
+                temperature=0.7,
+            )
+        except APIStatusError as exc:
+            _skip_when_account_unavailable(exc)
         assert resp.choices
         assert resp.choices[0].message.content
         print(f"\n[同步回复] {resp.choices[0].message.content[:100]}")
 
     @pytest.mark.asyncio
     async def test_async_chat(self, async_client):
-        resp = await async_client.chat.completions.create(
-            model=KIMI_MODEL,
-            messages=[
-                {"role": "system", "content": "你是一个有帮助的助手。"},
-                {"role": "user", "content": "你好，请用一句话介绍自己。"},
-            ],
-            max_tokens=100,
-            temperature=0.7,
-        )
+        try:
+            resp = await async_client.chat.completions.create(
+                model=KIMI_MODEL,
+                messages=[
+                    {"role": "system", "content": "你是一个有帮助的助手。"},
+                    {"role": "user", "content": "你好，请用一句话介绍自己。"},
+                ],
+                max_tokens=100,
+                temperature=0.7,
+            )
+        except APIStatusError as exc:
+            _skip_when_account_unavailable(exc)
         assert resp.choices
         assert resp.choices[0].message.content
         print(f"\n[异步回复] {resp.choices[0].message.content[:100]}")
@@ -88,15 +101,18 @@ class TestToolCalling:
             }
         ]
 
-        resp = sync_client.chat.completions.create(
-            model=KIMI_MODEL,
-            messages=[
-                {"role": "user", "content": "北京今天天气怎么样？"},
-            ],
-            tools=tools,
-            tool_choice="auto",
-            max_tokens=200,
-        )
+        try:
+            resp = sync_client.chat.completions.create(
+                model=KIMI_MODEL,
+                messages=[
+                    {"role": "user", "content": "北京今天天气怎么样？"},
+                ],
+                tools=tools,
+                tool_choice="auto",
+                max_tokens=200,
+            )
+        except APIStatusError as exc:
+            _skip_when_account_unavailable(exc)
 
         msg = resp.choices[0].message
         print(f"\n[Tool] content={msg.content!r}")
@@ -126,15 +142,18 @@ class TestToolCalling:
             }
         ]
 
-        resp = sync_client.chat.completions.create(
-            model=KIMI_MODEL,
-            messages=[
-                {"role": "user", "content": "北京和上海今天天气怎么样？"},
-            ],
-            tools=tools,
-            tool_choice="auto",
-            max_tokens=300,
-        )
+        try:
+            resp = sync_client.chat.completions.create(
+                model=KIMI_MODEL,
+                messages=[
+                    {"role": "user", "content": "北京和上海今天天气怎么样？"},
+                ],
+                tools=tools,
+                tool_choice="auto",
+                max_tokens=300,
+            )
+        except APIStatusError as exc:
+            _skip_when_account_unavailable(exc)
 
         msg = resp.choices[0].message
         print(
@@ -147,12 +166,16 @@ class TestStreaming:
 
     def test_sync_stream(self, sync_client):
         chunks = []
-        for chunk in sync_client.chat.completions.create(
-            model=KIMI_MODEL,
-            messages=[{"role": "user", "content": "说一个笑话"}],
-            max_tokens=100,
-            stream=True,
-        ):
+        try:
+            stream = sync_client.chat.completions.create(
+                model=KIMI_MODEL,
+                messages=[{"role": "user", "content": "说一个笑话"}],
+                max_tokens=100,
+                stream=True,
+            )
+        except APIStatusError as exc:
+            _skip_when_account_unavailable(exc)
+        for chunk in stream:
             delta = chunk.choices[0].delta.content
             if delta:
                 chunks.append(delta)
@@ -164,12 +187,16 @@ class TestStreaming:
     @pytest.mark.asyncio
     async def test_async_stream(self, async_client):
         chunks = []
-        async for chunk in await async_client.chat.completions.create(
-            model=KIMI_MODEL,
-            messages=[{"role": "user", "content": "说一个笑话"}],
-            max_tokens=100,
-            stream=True,
-        ):
+        try:
+            stream = await async_client.chat.completions.create(
+                model=KIMI_MODEL,
+                messages=[{"role": "user", "content": "说一个笑话"}],
+                max_tokens=100,
+                stream=True,
+            )
+        except APIStatusError as exc:
+            _skip_when_account_unavailable(exc)
+        async for chunk in stream:
             delta = chunk.choices[0].delta.content
             if delta:
                 chunks.append(delta)

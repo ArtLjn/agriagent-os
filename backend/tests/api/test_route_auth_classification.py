@@ -14,6 +14,9 @@ PUBLIC_ROUTES: set[tuple[str, str]] = {
     ("POST", "/auth/register"),
     ("POST", "/auth/login"),
     ("GET", "/api/app/version"),
+    ("GET", "/locations/meta"),
+    ("GET", "/locations/regions"),
+    ("GET", "/locations/search"),
     ("GET", "/weather/forecast"),
     ("GET", "/planting/operation-types"),
 }
@@ -52,6 +55,9 @@ PUBLIC_ROUTE_SMOKE_REQUESTS: list[tuple[str, str, dict, set[int]]] = [
         {200, 201, 400, 422},
     ),
     ("GET", "/api/app/version", {}, {200}),
+    ("GET", "/locations/meta", {}, {200}),
+    ("GET", "/locations/regions?province=江苏省", {}, {200}),
+    ("GET", "/locations/search?q=南京", {}, {200}),
     ("GET", "/weather/forecast?location=上海", {}, {200, 500, 502}),
     ("GET", "/planting/operation-types", {}, {200}),
 ]

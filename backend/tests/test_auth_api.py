@@ -341,8 +341,8 @@ class TestAuthFarmLocation:
                 db.query(UserSetting).filter(UserSetting.user_id == user.id).first()
             )
             assert setting.default_city == "阿鲁科尔沁旗"
-            assert setting.default_lat == 42.26833
-            assert setting.default_lon == 118.96361
+            assert setting.default_lat == 43.86994
+            assert setting.default_lon == 120.059646
         finally:
             db.close()
 

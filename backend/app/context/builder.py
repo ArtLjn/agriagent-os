@@ -189,7 +189,7 @@ class ContextBuilder:
 
         farm_location = user_city or (farm.location if farm and farm.location else "")
         farm_coords = ""
-        if user_lat is not None and user_lon is not None:
+        if isinstance(user_lat, int | float) and isinstance(user_lon, int | float):
             farm_coords = f"{user_lat:.4f},{user_lon:.4f}"
 
         return {

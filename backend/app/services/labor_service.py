@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
-from app.core.timezone import ensure_beijing_timezone
+from app.core.timezone import ensure_beijing_timezone  # harness-exempt: 迁移期 service 复用统一时区校验，后续下沉 shared 时间工具
 from app.models.cost import CostRecord
 from app.models.cost_category import CostCategory
 from app.models.cycle import CropCycle

@@ -79,6 +79,8 @@ def test_builder_legacy_farm_context_adapter_returns_runtime_shape(db_session) -
         "farm_coords",
         "display_name",
         "active_crops",
+        "assistant_role",
+        "assistant_role_prompt",
     }
     assert farm_context["display_name"] == "测试用户"
 

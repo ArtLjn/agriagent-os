@@ -102,7 +102,7 @@ class TestChatWithAgentRouting:
 
     @pytest.mark.asyncio
     @patch("app.agent.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.agent.application.chat_use_case.save_message")
+    @patch("app.services.conversation_service.save_message")
     @patch("app.agent.application.chat_use_case.get_or_create_conversation")
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_routes_with_session_id(

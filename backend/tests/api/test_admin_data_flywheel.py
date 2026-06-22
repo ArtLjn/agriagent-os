@@ -477,12 +477,12 @@ def test_build_case_draft_api_returns_issue_candidate_assertions(
     assert resp.status_code == 200
     data = resp.json()
     assert data["case_json"]["metadata"]["issue_candidates"] == [
-        {
-            "type": "pending_missed",
-            "severity": "high",
-            "reason": "router 选择了写操作工具，但 pending lifecycle 中没有对应的确认计划",
-            "evidence": "create_operation_work_order",
-            "suggested_label": "pending_missed",
+            {
+                "type": "pending_missed",
+                "severity": "high",
+                "reason": "router 选择了写操作工具「create_operation_work_order」，但 pending lifecycle 中没有对应的确认计划",
+                "evidence": "create_operation_work_order",
+                "suggested_label": "pending_missed",
         }
     ]
     assert data["case_json"]["issue_assertions"] == [

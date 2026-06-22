@@ -220,6 +220,8 @@ async def _llm_node(state: AgentState) -> dict:
         )
     if prepared_selected_tool_names is not None:
         selected_names = list(prepared_selected_tool_names)
+    if has_tool_results:
+        selected_names = []
     direct_names = direct_query_tool_names(user_msg, selected_names)
     if (
         intent == "query"

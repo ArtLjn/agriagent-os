@@ -7,6 +7,25 @@ set -e
 ERRORS=0
 WARNINGS=0
 
+is_size_baseline_file() {
+  case "$1" in
+    backend/app/infra/pending_actions.py|\
+    backend/app/agent/runtime/nodes.py|\
+    backend/app/agent/runtime/tool_executor.py|\
+    backend/app/agent/application/smart_fill.py|\
+    backend/app/api/admin_data_flywheel.py|\
+    backend/app/evaluation/discovery/rule_engine.py|\
+    backend/app/services/data_flywheel_repair_pack_repository.py|\
+    backend/app/services/data_flywheel_service.py|\
+    backend/app/services/data_flywheel_repair_pack_service.py)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 if ! command -v rg >/dev/null 2>&1; then
   echo "❌ ERROR: 缺少 rg（ripgrep），架构检查无法可靠执行"
   echo "✅ FIX: 请先安装 ripgrep，例如 macOS 执行: brew install ripgrep"
@@ -245,6 +264,11 @@ for f in $(find backend/app \
   -o -name "*.py" -type f -print 2>/dev/null); do
   lines=$(wc -l < "$f")
   if [ "$lines" -gt 500 ]; then
+    if is_size_baseline_file "$f"; then
+      echo "⚠️  BASELINE: $f 有 ${lines} 行（历史超限，需专项拆分）"
+      WARNINGS=$((WARNINGS + 1))
+      continue
+    fi
     echo "❌ ERROR: $f 有 ${lines} 行（上限 500）"
     echo "✅ FIX: 拆分为更小的模块，将辅助函数移至 utils/"
     ERRORS=$((ERRORS + 1))

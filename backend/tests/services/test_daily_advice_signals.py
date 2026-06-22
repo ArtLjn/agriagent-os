@@ -457,8 +457,8 @@ async def test_collect_weather_candidates_uses_farm_location_first(
     fetch_weather.assert_awaited_once_with(
         "苏州",
         days=3,
-        lat=None,
-        lon=None,
+        lat=31.299487,
+        lon=120.581823,
     )
 
 
@@ -514,7 +514,12 @@ async def test_collect_weather_candidates_falls_back_to_farm_location(
 
     await collect_daily_advice_candidates(db_session, farm_id=78, today=today)
 
-    fetch_weather.assert_awaited_once_with("南京", days=3, lat=None, lon=None)
+    fetch_weather.assert_awaited_once_with(
+        "南京",
+        days=3,
+        lat=32.060374,
+        lon=118.790815,
+    )
 
 
 async def test_collect_weather_candidates_merges_continuous_high_temperature(
