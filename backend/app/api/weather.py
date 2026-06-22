@@ -1,6 +1,6 @@
 """天气 API 路由，提供天气预报数据接口。"""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi import Depends
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -19,7 +19,10 @@ from app.modules.auth.tokens import (
     TokenInvalidError,
     decode_access_token,
 )
-from app.services.location_resolver import resolve_weather_location
+from app.services.location_resolver import (
+    AmbiguousWeatherLocationError,
+    resolve_weather_location,
+)
 from app.services.weather_service import fetch_weather, check_weather_warnings
 
 router = APIRouter(prefix="/weather", tags=["weather"])
@@ -46,13 +49,16 @@ async def get_forecast(
     """
     current_user = _get_optional_current_user(request, db)
     if current_user is not None:
-        resolved = resolve_weather_location(
-            db,
-            user_id=current_user.id,
-            explicit_location=location,
-            explicit_lat=lat,
-            explicit_lon=lon,
-        )
+        try:
+            resolved = resolve_weather_location(
+                db,
+                user_id=current_user.id,
+                explicit_location=location,
+                explicit_lat=lat,
+                explicit_lon=lon,
+            )
+        except AmbiguousWeatherLocationError as exc:
+            raise _ambiguous_location_error(exc.location) from exc
         location, lat, lon = resolved.location, resolved.lat, resolved.lon
     elif (lat is None or lon is None) and location.strip() in _PLACEHOLDER_LOCATIONS:
         lat = settings.weather_latitude
@@ -61,6 +67,17 @@ async def get_forecast(
     warnings = check_weather_warnings(data)
     data["warnings"] = warnings
     return data
+
+
+def _ambiguous_location_error(location: str) -> HTTPException:
+    """地点重名时返回结构化错误，避免静默查询错城市。"""
+    return HTTPException(
+        status_code=400,
+        detail={
+            "code": "WEATHER_LOCATION_AMBIGUOUS",
+            "detail": f"天气地点“{location}”不明确，请补充上级城市或经纬度。",
+        },
+    )
 
 
 def _get_optional_current_user(request: Request, db: Session) -> User | None:

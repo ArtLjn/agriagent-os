@@ -27,6 +27,10 @@ ai:
   enable_thinking: false                         # qwen3 思考模式；Function Calling 场景通常保持 false。
   parallel_tool_calls: true                      # 是否允许模型一次返回多个工具调用；旧模型不支持时改 false。
   failover_max_retries: 3                        # LLM 节点失败后的最大重试次数；1 表示不额外重试。
+  enable_session_summary: true                   # 是否自动生成同 session running summary；异常时可关闭降级。
+  session_summary_message_threshold: 12          # 累积消息达到该数量后才触发摘要，避免每轮调用 LLM。
+  session_summary_debounce_minutes: 30           # 摘要成功后的防抖窗口，单位分钟。
+  session_summary_max_tokens: 500                # 单次摘要输出 token 上限，用于控制工作记忆长度和成本。
 
 # 默认天气坐标。用户/农场没有精确位置时会作为兜底。
 weather:

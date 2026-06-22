@@ -335,7 +335,7 @@ Skill 文本匹配/Function Calling       Skill 精准路由
 | Agent 数据飞轮 | 真实会话和仿真失败进入 DataFlywheel，经规则候选、LLM 预标注、人工确认后输出回归和训练数据 | Session event log、Trace、Simulation、Evaluation |
 | RLHF/偏好数据循环 | 利用人工确认的好坏样本、纠正回复和 pairwise 对比评估 Prompt 质量 | DataFlywheel 标签和数据集版本 |
 | Prompt A/B 测试 | 同一意图多版本 Prompt，按效果自动切换 | RLHF 数据 |
-| 个性化记忆 | 用户偏好、历史操作模式 → 注入 prompt | Phase 2 多用户 |
+| 个性化记忆 | 会话 running summary 已落地；用户偏好、历史操作模式等长期记忆后续独立推进 | Phase 2 多用户 |
 | 多 Agent 协作 | 种植顾问 + 气象分析师 + 财务顾问 分工 | Function Calling 稳定 |
 | 知识库 (RAG) | 作物种植指南、病虫害图谱 → 检索增强 | 知识库数据源 |
 

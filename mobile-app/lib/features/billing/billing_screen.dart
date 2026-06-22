@@ -1424,62 +1424,32 @@ void _showTransactionDetail(
   BuildContext context,
   BillingTransactionViewModel transaction,
 ) {
-  final amountColor =
-      transaction.isIncome ? _LedgerColors.income : _LedgerColors.negative;
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     backgroundColor: AppColors.surface,
+    isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (context) {
       return SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _LedgerRoundIcon(
-                    icon: _transactionIcon(transaction),
-                    color: _transactionIconColor(transaction),
-                    background: _transactionIconBackground(transaction),
-                    size: 46,
-                    iconSize: 21,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      transaction.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.dateTitle.copyWith(
-                        color: _LedgerColors.ink,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    transaction.amountText,
-                    style: AppTextStyles.dateTitle.copyWith(
-                      color: amountColor,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _DetailField(label: '账单类型', value: transaction.typeText),
-              _DetailField(label: '发生日期', value: transaction.dateText),
-              _DetailField(label: '分类', value: transaction.categoryText),
-              _DetailField(label: '对象', value: transaction.counterpartyText),
-              _DetailField(label: '来源', value: transaction.sourceText),
-              _DetailField(label: '备注', value: transaction.noteText),
-            ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DetailSummaryHeader(transaction: transaction),
+                const SizedBox(height: 14),
+                _DetailInfoGrid(transaction: transaction),
+                const SizedBox(height: 10),
+                _DetailNoteCard(transaction: transaction),
+              ],
+            ),
           ),
         ),
       );
@@ -1487,26 +1457,154 @@ void _showTransactionDetail(
   );
 }
 
-class _DetailField extends StatelessWidget {
-  const _DetailField({
+class _DetailSummaryHeader extends StatelessWidget {
+  const _DetailSummaryHeader({required this.transaction});
+
+  final BillingTransactionViewModel transaction;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = transaction.isIncome
+        ? _ledgerMoney(transaction.amount)
+        : _ledgerMoney(-transaction.amount);
+    final amountColor =
+        transaction.isIncome ? _LedgerColors.income : _LedgerColors.negative;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _LedgerRoundIcon(
+            icon: _transactionIcon(transaction),
+            color: _transactionIconColor(transaction),
+            background: _transactionIconBackground(transaction),
+            size: 56,
+            iconSize: 25,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  transaction.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.dateTitle.copyWith(
+                    color: _LedgerColors.ink,
+                    fontSize: 21,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '${transaction.typeText} · ${transaction.sourceText}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.body.copyWith(
+                    color: AppColors.muted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 132),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                amount,
+                maxLines: 1,
+                softWrap: false,
+                style: AppTextStyles.dateTitle.copyWith(
+                  color: amountColor,
+                  fontSize: 20,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailInfoGrid extends StatelessWidget {
+  const _DetailInfoGrid({required this.transaction});
+
+  final BillingTransactionViewModel transaction;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface3,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lineSoft),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+        child: Column(
+          children: [
+            _DetailInfoLine(
+              icon: LucideIcons.calendarDays,
+              label: '发生日期',
+              value: transaction.dateText,
+            ),
+            const _IndentedDivider(indent: 32),
+            _DetailInfoLine(
+              icon: LucideIcons.tags,
+              label: '分类',
+              value: transaction.categoryText,
+            ),
+            const _IndentedDivider(indent: 32),
+            _DetailInfoLine(
+              icon: LucideIcons.userRound,
+              label: '对象',
+              value: transaction.counterpartyText,
+            ),
+            const _IndentedDivider(indent: 32),
+            _DetailInfoLine(
+              icon: LucideIcons.fileText,
+              label: '来源',
+              value: transaction.sourceText,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailInfoLine extends StatelessWidget {
+  const _DetailInfoLine({
+    required this.icon,
     required this.label,
     required this.value,
   });
 
+  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return SizedBox(
+      height: 44,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Icon(icon, size: 16, color: AppColors.muted),
+          const SizedBox(width: 10),
           SizedBox(
-            width: 76,
+            width: 78,
             child: Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.body.copyWith(
                 color: AppColors.muted,
                 fontWeight: FontWeight.w700,
@@ -1516,13 +1614,56 @@ class _DetailField extends StatelessWidget {
           Expanded(
             child: Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: AppTextStyles.body.copyWith(
+                color: _LedgerColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailNoteCard extends StatelessWidget {
+  const _DetailNoteCard({required this.transaction});
+
+  final BillingTransactionViewModel transaction;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lineSoft),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '备注',
+              style: AppTextStyles.small.copyWith(
+                color: AppColors.muted,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              transaction.noteText,
               style: AppTextStyles.body.copyWith(
                 color: _LedgerColors.ink,
                 fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

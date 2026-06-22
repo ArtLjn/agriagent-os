@@ -4,7 +4,9 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
+from pydantic import ValidationError
 
 
 class TestYamlConfig:
@@ -122,3 +124,30 @@ class TestAIConfig:
 
         ai_config = AIConfig(enable_thinking=True)
         assert ai_config.enable_thinking is True
+
+    def test_ai_config_session_summary_defaults(self):
+        from app.core.config import AIConfig
+
+        ai_config = AIConfig()
+
+        assert ai_config.enable_session_summary is True
+        assert ai_config.session_summary_message_threshold == 12
+        assert ai_config.session_summary_debounce_minutes == 30
+        assert ai_config.session_summary_max_tokens == 500
+
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "session_summary_message_threshold",
+            "session_summary_debounce_minutes",
+            "session_summary_max_tokens",
+        ],
+    )
+    def test_ai_config_session_summary_numeric_values_must_be_positive(
+        self,
+        field_name,
+    ):
+        from app.core.config import AIConfig
+
+        with pytest.raises(ValidationError):
+            AIConfig(**{field_name: 0})

@@ -18,6 +18,7 @@ class ConversationSelector:
         **_kwargs,
     ) -> list[ContextBlock]:
         lines = messages or []
+        summary = None
         if not lines and db is not None and farm_id is not None:
             query = db.query(Conversation).filter(Conversation.farm_id == farm_id)
             if session_id:
@@ -36,10 +37,11 @@ class ConversationSelector:
                     for row in reversed(rows)
                     if row.content
                 ]
+                summary = conversation.summary
 
         if not lines:
             return []
-        return [
+        blocks = [
             ContextBlock(
                 key="conversation",
                 source="conversation",
@@ -50,6 +52,20 @@ class ConversationSelector:
                 min_tokens=40,
             )
         ]
+        if summary:
+            blocks.append(
+                ContextBlock(
+                    key="conversation_summary",
+                    source="conversation.summary",
+                    purpose="会话摘要",
+                    content=summary,
+                    priority=50,
+                    compressible=True,
+                    min_tokens=64,
+                    metadata={"layer": "working", "cache_scope": "session"},
+                )
+            )
+        return blocks
 
 
 __all__ = ["ConversationSelector"]

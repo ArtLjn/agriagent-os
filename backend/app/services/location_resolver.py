@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.infra.settings import settings
 from app.models.farm import Farm
 from app.models.user_setting import UserSetting
+from app.modules.farm.city_coords import is_ambiguous_city_name
+from app.modules.farm.city_coords import resolve_city_coords
 
 _PLACEHOLDER_LOCATIONS = {"", "当前地块", "地块"}
 
@@ -19,6 +21,14 @@ class WeatherLocation:
     lat: float | None
     lon: float | None
     source: str
+
+
+class AmbiguousWeatherLocationError(ValueError):
+    """天气地点缺少上级城市或坐标，无法安全解析。"""
+
+    def __init__(self, location: str) -> None:
+        self.location = location
+        super().__init__(f"天气地点不明确: {location}")
 
 
 def has_explicit_weather_location(
@@ -49,44 +59,90 @@ def resolve_weather_location(
             lon=explicit_lon,
             source="explicit",
         )
-    if explicit_location and explicit_location.strip() not in _PLACEHOLDER_LOCATIONS:
-        return WeatherLocation(
-            location=explicit_location.strip(),
-            lat=None,
-            lon=None,
-            source="explicit",
-        )
 
     farm = _get_farm(db, farm_id=farm_id, user_id=user_id)
-    if farm and farm.location and farm.location.strip():
-        return WeatherLocation(
-            location=farm.location.strip(),
-            lat=None,
-            lon=None,
-            source="farm",
-        )
-
     setting_user_id = user_id or (farm.user_id if farm else None)
+    setting = None
     if setting_user_id:
         setting = (
             db.query(UserSetting).filter(UserSetting.user_id == setting_user_id).first()
         )
-        if setting:
-            city = (setting.default_city or "").strip()
-            if setting.default_lat is not None and setting.default_lon is not None:
-                return WeatherLocation(
-                    location=city,
-                    lat=setting.default_lat,
-                    lon=setting.default_lon,
-                    source="user_settings",
-                )
-            if city:
-                return WeatherLocation(
-                    location=city,
-                    lat=None,
-                    lon=None,
-                    source="user_settings",
-                )
+
+    if explicit_location and explicit_location.strip() not in _PLACEHOLDER_LOCATIONS:
+        location = explicit_location.strip()
+        lat = None
+        lon = None
+        if (
+            setting
+            and setting.default_city
+            and setting.default_city.strip() == location
+            and setting.default_lat is not None
+            and setting.default_lon is not None
+        ):
+            lat = setting.default_lat
+            lon = setting.default_lon
+        if lat is None or lon is None:
+            coords = resolve_city_coords(location)
+            if coords is not None:
+                lat, lon = coords
+            elif is_ambiguous_city_name(location):
+                raise AmbiguousWeatherLocationError(location)
+        return WeatherLocation(
+            location=location,
+            lat=lat,
+            lon=lon,
+            source="explicit",
+        )
+
+    if farm and farm.location and farm.location.strip():
+        location = farm.location.strip()
+        lat = None
+        lon = None
+        if (
+            setting
+            and setting.default_city
+            and setting.default_city.strip() == location
+            and setting.default_lat is not None
+            and setting.default_lon is not None
+        ):
+            lat = setting.default_lat
+            lon = setting.default_lon
+        if lat is None or lon is None:
+            coords = resolve_city_coords(location)
+            if coords is not None:
+                lat, lon = coords
+            elif is_ambiguous_city_name(location):
+                raise AmbiguousWeatherLocationError(location)
+        return WeatherLocation(
+            location=location,
+            lat=lat,
+            lon=lon,
+            source="farm",
+        )
+
+    if setting:
+        city = (setting.default_city or "").strip()
+        if setting.default_lat is not None and setting.default_lon is not None:
+            return WeatherLocation(
+                location=city,
+                lat=setting.default_lat,
+                lon=setting.default_lon,
+                source="user_settings",
+            )
+        if city:
+            lat = None
+            lon = None
+            coords = resolve_city_coords(city)
+            if coords is not None:
+                lat, lon = coords
+            elif is_ambiguous_city_name(city):
+                raise AmbiguousWeatherLocationError(city)
+            return WeatherLocation(
+                location=city,
+                lat=lat,
+                lon=lon,
+                source="user_settings",
+            )
 
     return WeatherLocation(
         location=explicit_location or "",
@@ -111,6 +167,7 @@ def _get_farm(
 
 
 __all__ = [
+    "AmbiguousWeatherLocationError",
     "WeatherLocation",
     "has_explicit_weather_location",
     "resolve_weather_location",

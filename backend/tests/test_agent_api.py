@@ -78,6 +78,7 @@ class TestAgentChat:
                 "app.agent.application.chat_use_case.get_memory_service",
                 return_value=memory_service,
             ),
+            patch("app.agent.application.chat_use_case.schedule_session_summary"),
         ):
             response = await chat(
                 db_session,
@@ -102,12 +103,16 @@ class TestAgentChatStream:
     """测试流式对话接口。"""
 
     @patch("app.agent.application.chat_use_case._observe_chat_completion")
+    @patch("app.agent.application.chat_use_case.schedule_session_summary")
+    @patch("app.agent.application.chat_use_case.SessionFlywheelRecorder")
     @patch("app.agent.application.chat_use_case.handle_pending_action")
     @patch("app.agent.application.chat_use_case.stream_advisor")
     def test_stream_endpoint_passes_session_id(
         self,
         mock_stream,
         mock_pending,
+        mock_recorder_cls,
+        mock_schedule_summary,
         mock_observe,
     ) -> None:
         """验证 POST /agent/chat/stream 传递 session_id。"""
@@ -118,6 +123,8 @@ class TestAgentChatStream:
 
         mock_pending.return_value = PendingActionDecision.unhandled()
         mock_stream.side_effect = _fake_stream
+        recorder = mock_recorder_cls.return_value
+        recorder.start_turn.return_value = object()
 
         response = client.post(
             "/agent/chat/stream",
@@ -127,6 +134,7 @@ class TestAgentChatStream:
         assert response.status_code == 200
         mock_stream.assert_called_once()
         assert mock_stream.call_args.kwargs["session_id"] == "sess-stream"
+        mock_schedule_summary.assert_called_once()
         mock_observe.assert_awaited_once()
 
 

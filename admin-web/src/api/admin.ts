@@ -269,6 +269,7 @@ export interface AIConfig {
   base_url: string;
   api_key: string;
   enable_thinking: boolean;
+  enable_session_summary: boolean;
 }
 
 export interface TraceConfig {

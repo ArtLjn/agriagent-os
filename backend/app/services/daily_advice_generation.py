@@ -176,9 +176,16 @@ async def _run_generation_attempts(
             user_id=user_id,
             call_type="daily_advice",
         )
-        payload = _parse_llm_payload(raw)
+        payload, parse_repair_instruction = _parse_llm_payload(raw)
         if payload is None:
-            validation_errors.append("empty_or_non_advice_llm_response")
+            error_code = (
+                "llm_json_parse_failed"
+                if parse_repair_instruction
+                else "empty_or_non_advice_llm_response"
+            )
+            validation_errors.append(error_code)
+            if parse_repair_instruction:
+                repair_instruction = parse_repair_instruction
             continue
 
         payload = _normalize_generation_payload(
@@ -252,16 +259,25 @@ def _compose_prompt(
     )
 
 
-def _parse_llm_payload(raw: str) -> dict[str, Any] | None:
+def _parse_llm_payload(raw: str) -> tuple[dict[str, Any] | None, str]:
     text = raw.strip()
     if not text or _is_non_advice_response(text):
-        return None
+        return None, ""
     try:
         parsed = safe_parse_json(text)
     except ValueError as exc:
         logger.warning("DailyAdvice v2 JSON 解析失败，将进入 fallback/retry | error=%s", exc)
-        return None
-    return parsed if isinstance(parsed, dict) else None
+        return None, _build_json_parse_repair_instruction(exc)
+    return (parsed, "") if isinstance(parsed, dict) else (None, "")
+
+
+def _build_json_parse_repair_instruction(error: ValueError) -> str:
+    """生成 JSON 解析失败后的重试约束。"""
+    return (
+        "上次返回不是合法 JSON，解析错误："
+        f"{error}。请只返回合法 JSON 对象，不要输出解释、Markdown、代码块、"
+        "逗号后的中文说明或任何 JSON 外文本；字段必须使用英文双引号。"
+    )
 
 
 def _normalize_generation_payload(

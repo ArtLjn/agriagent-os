@@ -1,9 +1,38 @@
-"""内置行政区划坐标，用于旧客户端未上传坐标时兜底。"""
+"""行政区划坐标，用于旧客户端未上传坐标时兜底。"""
+
+from app.services.location_catalog import load_regions
 
 
 def resolve_city_coords(name: str) -> tuple[float, float] | None:
     """按城市或区县名返回坐标。"""
-    return _CITY_COORDS.get(name.strip())
+    cleaned = name.strip()
+    if not cleaned:
+        return None
+    shared_coords = _SHARED_REGION_COORDS.get(cleaned)
+    if shared_coords is not None:
+        return shared_coords
+    alias = _LOCATION_ALIASES.get(cleaned)
+    if alias:
+        return _CITY_COORDS.get(alias)
+    if is_ambiguous_city_name(cleaned):
+        return None
+    if cleaned in _CITY_COORDS:
+        return _CITY_COORDS[cleaned]
+    for suffix in ("市", "区", "县"):
+        candidate = f"{cleaned}{suffix}"
+        shared_coords = _SHARED_REGION_COORDS.get(candidate)
+        if shared_coords is not None:
+            return shared_coords
+        if is_ambiguous_city_name(candidate):
+            return None
+        if candidate in _CITY_COORDS:
+            return _CITY_COORDS[candidate]
+    return None
+
+
+def is_ambiguous_city_name(name: str) -> bool:
+    """判断是否为需要上级城市辅助 disambiguate 的重名地名。"""
+    return name.strip() in _AMBIGUOUS_CITY_NAMES or name.strip() in _SHARED_AMBIGUOUS_NAMES
 
 
 def _decode_city_coord_rows(rows: tuple[str, ...]) -> dict[str, tuple[float, float]]:
@@ -14,6 +43,51 @@ def _decode_city_coord_rows(rows: tuple[str, ...]) -> dict[str, tuple[float, flo
             coords[name] = (float(lat), float(lon))
     return coords
 
+
+def _build_shared_region_indexes() -> tuple[
+    dict[str, tuple[float, float]],
+    frozenset[str],
+]:
+    names: dict[str, list[tuple[float, float]]] = {}
+    precise_coords: dict[str, tuple[float, float]] = {}
+    for region in load_regions():
+        try:
+            coords = (float(region["lat"]), float(region["lon"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        base_names = [
+            str(region.get("name") or "").strip(),
+            str(region.get("display_name") or "").strip(),
+            str(region.get("full_name") or "").strip(),
+        ]
+        for alias in region.get("aliases") or []:
+            base_names.append(str(alias).strip())
+        for key in {item for item in base_names if item}:
+            names.setdefault(key, []).append(coords)
+
+    ambiguous = {
+        key
+        for key, values in names.items()
+        if len({value for value in values}) > 1
+    }
+    for key, values in names.items():
+        if key not in ambiguous and values:
+            precise_coords[key] = values[0]
+    return precise_coords, frozenset(ambiguous)
+
+
+_AMBIGUOUS_CITY_NAMES = frozenset(
+    {
+        "鼓楼区",
+    }
+)
+
+_LOCATION_ALIASES = {
+    "南京鼓楼区": "南京市",
+    "南京市鼓楼区": "南京市",
+    "徐州鼓楼区": "徐州市",
+    "徐州市鼓楼区": "徐州市",
+}
 
 _CITY_COORD_ROWS = (
     "阿巴嘎旗,40.8414,111.7519|阿坝藏族羌族自治州,30.5728,104.0668|阿坝县,30.5728,104.0668|阿城区,45.75,126.65|阿尔山市,25.61405,110.66854|阿合奇县,43.8256,87.6168|阿克塞哈萨克族自治县,39.74318,98.51736|阿克苏地区,41.18418,80.27921|阿克苏市,41.18418,80.27921|阿克陶县,43.8256,87.6168|阿拉尔市,43.8256,87.6168|阿拉山口市,43.8256,87.6168",
@@ -297,3 +371,4 @@ _CITY_COORD_ROWS = (
 )
 
 _CITY_COORDS = _decode_city_coord_rows(_CITY_COORD_ROWS)
+_SHARED_REGION_COORDS, _SHARED_AMBIGUOUS_NAMES = _build_shared_region_indexes()

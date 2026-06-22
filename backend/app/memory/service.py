@@ -1,16 +1,27 @@
 """Memory Service in-memory 骨架。"""
 
+import logging
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from typing import Any
 
+from sqlalchemy import func, update
+
+from app.agent.llm import get_llm
+from app.core.compat import UTC
+from app.core.config import settings
+from app.infra.trace_collector import get_collector
 from app.memory.consolidation import InMemoryObservationEventSink
 from app.memory.long_term import EmptyLongTermMemoryStore
 from app.memory.models import MemoryContext, MemoryHit, MemoryMessage
 from app.memory.retrieval import EmptyMemoryRetrievalStore
 from app.memory.schemas import MemoryObservationEvent, MemorySearchQuery
 from app.memory.short_term import InMemoryShortTermMemory
+from app.models.conversation import Conversation, ConversationMessage
+from app.observability.metrics import increment_counter
 
 TraceRecorder = Callable[..., None]
+logger = logging.getLogger(__name__)
 
 
 class InMemoryMemoryService:
@@ -111,6 +122,113 @@ class InMemoryMemoryService:
         """执行记忆检索。当前未接入检索后端，返回空列表。"""
         return await self.retrieval.search(query)
 
+    async def maybe_summarize(
+        self,
+        db,
+        conversation_id: int,
+        farm_id: int,
+        session_id: str | None,
+        messages: list[Any] | None,
+    ) -> None:
+        """在达到阈值时生成 running summary，失败时静默降级。"""
+        try:
+            if not settings.ai.enable_session_summary:
+                self._record_summary_skipped_trace(
+                    farm_id=farm_id,
+                    session_id=session_id,
+                    reason="feature_disabled",
+                )
+                return
+
+            if _is_summary_circuit_open():
+                self._record_summary_skipped_trace(
+                    farm_id=farm_id,
+                    session_id=session_id,
+                    reason="circuit_open",
+                )
+                return
+
+            conversation = db.get(Conversation, conversation_id)
+            if conversation is None:
+                self._record_summary_skipped_trace(
+                    farm_id=farm_id,
+                    session_id=session_id,
+                    reason="conversation_not_found",
+                )
+                return
+
+            message_count = (
+                db.query(func.count(ConversationMessage.id))
+                .filter(ConversationMessage.conversation_id == conversation_id)
+                .scalar()
+                or 0
+            )
+            if message_count < settings.ai.session_summary_message_threshold:
+                self._record_summary_skipped_trace(
+                    farm_id=farm_id,
+                    session_id=session_id,
+                    reason="below_threshold",
+                    message_count=message_count,
+                )
+                return
+
+            original_summary_updated_at = conversation.summary_updated_at
+            user_id = conversation.user_id or ""
+            current_summary = conversation.summary
+            if _is_within_debounce_window(original_summary_updated_at):
+                self._record_summary_skipped_trace(
+                    farm_id=farm_id,
+                    session_id=session_id,
+                    reason="within_debounce_window",
+                    message_count=message_count,
+                )
+                return
+
+            summary_messages = _load_summary_messages(
+                db=db,
+                conversation_id=conversation_id,
+                fallback_messages=messages,
+            )
+            llm = get_llm(role="generation")
+            summary = await generate_summary(
+                llm,
+                current_summary=current_summary,
+                old_messages=summary_messages,
+                persona=None,
+            )
+            if summary is None:
+                return
+
+            if not _update_summary_if_version_matches(
+                db=db,
+                conversation_id=conversation_id,
+                previous_updated_at=original_summary_updated_at,
+                summary=summary,
+            ):
+                return
+
+            await self.short_term.set_session_summary(
+                user_id=user_id,
+                farm_id=farm_id,
+                session_id=session_id,
+                summary=summary,
+            )
+        except Exception:
+            increment_counter("session_summary_failed_total")
+            logger.exception(
+                "会话摘要触发失败",
+                extra={
+                    "code": "MEMORY_SUMMARY_FAILED",
+                    "farm_id": farm_id,
+                    "session_id": session_id,
+                    "conversation_id": conversation_id,
+                },
+            )
+            try:
+                db.rollback()
+            except Exception:
+                return
+
     async def observe_chat_completion(
         self,
         *,
@@ -168,6 +286,94 @@ class InMemoryMemoryService:
             )
         except Exception:
             return
+
+    def _record_summary_skipped_trace(
+        self,
+        *,
+        farm_id: int,
+        session_id: str | None,
+        reason: str,
+        message_count: int | None = None,
+    ) -> None:
+        increment_counter("session_summary_skipped_total", {"reason": reason})
+        try:
+            get_collector().record(
+                node_type="memory_summary",
+                node_name="summary_skipped",
+                input_data={
+                    "farm_id": farm_id,
+                    "session_id": session_id,
+                    "message_count": message_count,
+                },
+                output_data={"reason": reason},
+            )
+        except Exception:
+            return
+
+
+def _is_summary_circuit_open() -> bool:
+    """LLM Manager 暂无公开查询熔断状态 API，默认保守不短路。"""
+    return False
+
+
+async def generate_summary(*args: Any, **kwargs: Any) -> str | None:
+    """懒加载 summarizer，避免 app 启动阶段出现循环导入。"""
+    from app.memory.summarizer import generate_summary as _generate_summary
+
+    return await _generate_summary(*args, **kwargs)
+
+
+def _is_within_debounce_window(summary_updated_at: datetime | None) -> bool:
+    if summary_updated_at is None:
+        return False
+    updated_at = _as_aware_utc(summary_updated_at)
+    debounce = timedelta(minutes=settings.ai.session_summary_debounce_minutes)
+    return datetime.now(UTC) - updated_at < debounce
+
+
+def _as_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _load_summary_messages(
+    *,
+    db,
+    conversation_id: int,
+    fallback_messages: list[Any] | None,
+) -> list[Any]:
+    stored_messages = (
+        db.query(ConversationMessage)
+        .filter(ConversationMessage.conversation_id == conversation_id)
+        .order_by(ConversationMessage.id.asc())
+        .all()
+    )
+    return stored_messages or list(fallback_messages or [])
+
+
+def _update_summary_if_version_matches(
+    *,
+    db,
+    conversation_id: int,
+    previous_updated_at: datetime | None,
+    summary: str,
+) -> bool:
+    now = datetime.now(UTC)
+    stmt = update(Conversation).where(Conversation.id == conversation_id)
+    if previous_updated_at is None:
+        stmt = stmt.where(Conversation.summary_updated_at.is_(None))
+    else:
+        stmt = stmt.where(Conversation.summary_updated_at == previous_updated_at)
+    result = db.execute(
+        stmt.values(summary=summary, summary_updated_at=now),
+        execution_options={"synchronize_session": False},
+    )
+    if result.rowcount != 1:
+        db.rollback()
+        return False
+    db.commit()
+    return True
 
 
 _memory_service = InMemoryMemoryService()

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 DEFAULT_DATABASE_URL = (
     "mysql+pymysql://farm_manager:password@localhost:3306/farm_manager?charset=utf8mb4"
@@ -55,6 +55,10 @@ class AIConfig(BaseModel):
     enable_thinking: bool = False
     parallel_tool_calls: bool = True
     failover_max_retries: int = 3
+    enable_session_summary: bool = True
+    session_summary_message_threshold: int = Field(default=12, gt=0)
+    session_summary_debounce_minutes: int = Field(default=30, gt=0)
+    session_summary_max_tokens: int = Field(default=500, gt=0)
 
 
 class WeatherConfig(BaseModel):

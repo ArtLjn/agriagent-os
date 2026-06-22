@@ -59,8 +59,8 @@ void main() {
       ),
     );
 
-    expect(find.text('AI帮我填'), findsOneWidget);
-    expect(find.text('自己填'), findsOneWidget);
+    expect(find.text('芽芽智能填写'), findsOneWidget);
+    expect(find.text('手动记一笔'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

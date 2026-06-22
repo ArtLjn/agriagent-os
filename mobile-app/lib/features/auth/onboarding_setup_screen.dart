@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/location/location_service.dart';
+import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../shared/widgets/city_picker_sheet.dart';
 import '../../theme/app_colors.dart';
@@ -15,12 +16,14 @@ class OnboardingSetupScreen extends StatefulWidget {
     required this.onSkip,
     required this.profile,
     required this.location,
+    required this.locations,
   });
 
   final VoidCallback onStart;
   final VoidCallback onSkip;
   final ProfileRepository profile;
   final LocationService location;
+  final LocationRepository locations;
 
   @override
   State<OnboardingSetupScreen> createState() => _OnboardingSetupScreenState();
@@ -100,12 +103,24 @@ class _OnboardingSetupScreenState extends State<OnboardingSetupScreen> {
     final location = await showCityPickerSheet(
       context: context,
       selectedCity: _locationController.text.trim(),
+      onSearchLocations: _searchLocations,
     );
     if (location == null || !mounted) return;
     _locationController.text = location.name;
     _selectedLocation = location;
     _locationSuggestion = null;
     setState(() => _message = null);
+  }
+
+  Future<List<CityPickerResult>> _searchLocations(String query) async {
+    final results = await widget.locations.searchLocations(query);
+    return results
+        .map((item) => CityPickerResult(
+              name: item.name,
+              latitude: item.latitude,
+              longitude: item.longitude,
+            ))
+        .toList();
   }
 
   @override

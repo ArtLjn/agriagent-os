@@ -111,6 +111,7 @@ class _AuthFlowState extends State<AuthFlow> {
       AuthStep.setup => OnboardingSetupScreen(
           profile: widget.dependencies.profile,
           location: widget.dependencies.location,
+          locations: widget.dependencies.locations,
           onStart: () => setState(() => step = AuthStep.app),
           onSkip: () => setState(() => step = AuthStep.app),
         ),

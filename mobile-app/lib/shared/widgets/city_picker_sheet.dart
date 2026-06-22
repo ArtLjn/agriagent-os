@@ -26,6 +26,7 @@ Future<CityPickerResult?> showCityPickerSheet({
   required BuildContext context,
   required String selectedCity,
   Future<CityPickerResult?> Function()? onUseCurrentLocation,
+  Future<List<CityPickerResult>> Function(String query)? onSearchLocations,
 }) {
   return showModalBottomSheet<CityPickerResult>(
     context: context,
@@ -35,6 +36,7 @@ Future<CityPickerResult?> showCityPickerSheet({
     builder: (_) => _CityPickerSheet(
       selectedCity: selectedCity,
       onUseCurrentLocation: onUseCurrentLocation,
+      onSearchLocations: onSearchLocations,
     ),
   );
 }
@@ -45,10 +47,12 @@ class _CityPickerSheet extends StatefulWidget {
   const _CityPickerSheet({
     required this.selectedCity,
     this.onUseCurrentLocation,
+    this.onSearchLocations,
   });
 
   final String selectedCity;
   final Future<CityPickerResult?> Function()? onUseCurrentLocation;
+  final Future<List<CityPickerResult>> Function(String query)? onSearchLocations;
 
   @override
   State<_CityPickerSheet> createState() => _CityPickerSheetState();
@@ -57,11 +61,13 @@ class _CityPickerSheet extends StatefulWidget {
 class _CityPickerSheetState extends State<_CityPickerSheet> {
   final TextEditingController _searchController = TextEditingController();
   late final List<_SearchCityItem> _searchIndex = _buildSearchIndex();
+  List<CityPickerResult> _remoteSearchResults = const [];
   _PickerLevel _level = _PickerLevel.province;
   ProvinceEntry? _selectedProvince;
   CityEntry? _selectedCity;
   String _query = '';
   bool _locating = false;
+  bool _searching = false;
   String? _message;
 
   @override
@@ -180,7 +186,7 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                 ),
                 style: AppTextStyles.body.copyWith(fontSize: 15),
                 textInputAction: TextInputAction.search,
-                onChanged: (value) => setState(() => _query = value),
+                onChanged: _onSearchChanged,
               ),
             ),
             if (_query.isNotEmpty)
@@ -188,7 +194,11 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                 tooltip: '清除搜索',
                 onPressed: () {
                   _searchController.clear();
-                  setState(() => _query = '');
+                  setState(() {
+                    _query = '';
+                    _remoteSearchResults = const [];
+                    _searching = false;
+                  });
                 },
                 icon: const Icon(LucideIcons.circleX, size: 18),
                 color: AppColors.subtle,
@@ -253,6 +263,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
   }
 
   Widget _buildList(List<_PickerItem> items) {
+    if (_query.trim().isNotEmpty && _searching && items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (_query.trim().isNotEmpty && items.isEmpty) {
       return Center(
         child: Text(
@@ -277,6 +290,12 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
   List<_PickerItem> _visibleItems() {
     final query = _query.trim();
     if (query.isNotEmpty) {
+      if (_remoteSearchResults.isNotEmpty) {
+        return _remoteSearchResults
+            .map(_SearchCityItem.fromResult)
+            .map(_PickerItem.search)
+            .toList(growable: false);
+      }
       return _searchIndex
           .where((item) => item.name.contains(query))
           .take(50)
@@ -350,6 +369,29 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
       return;
     }
     Navigator.of(context).pop(location);
+  }
+
+  Future<void> _onSearchChanged(String value) async {
+    final query = value.trim();
+    setState(() {
+      _query = value;
+      _remoteSearchResults = const [];
+    });
+    final search = widget.onSearchLocations;
+    if (search == null || query.isEmpty) return;
+
+    setState(() => _searching = true);
+    try {
+      final results = await search(query);
+      if (!mounted || _query.trim() != query) return;
+      setState(() {
+        _remoteSearchResults = results;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted || _query.trim() != query) return;
+      setState(() => _searching = false);
+    }
   }
 
   void _resetToProvince() {

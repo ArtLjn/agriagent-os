@@ -6,7 +6,11 @@ from skillify.skills.base import Skill
 from app.agent.skills.context import require_farm_context
 from app.core.database import SessionLocal
 from app.infra.skill_cache import cached
-from app.services.location_resolver import resolve_weather_location
+from app.modules.farm.city_coords import is_ambiguous_city_name, resolve_city_coords
+from app.services.location_resolver import (
+    AmbiguousWeatherLocationError,
+    resolve_weather_location,
+)
 from app.services.weather_service import check_weather_warnings, fetch_weather
 
 # 常见城市名列表（用于从消息中提取）
@@ -77,9 +81,34 @@ def _get_user_location(farm_id: int) -> tuple[str, float | None, float | None] |
             return resolved.location, resolved.lat, resolved.lon
         finally:
             db.close()
+    except AmbiguousWeatherLocationError:
+        raise
     except Exception:
         pass
     return None
+
+
+def _resolve_explicit_location(
+    location: str, farm_id: int | None
+) -> tuple[str, float | None, float | None]:
+    """解析显式天气地点，优先复用用户保存的同名坐标。"""
+    if farm_id is None:
+        coords = resolve_city_coords(location)
+        lat, lon = coords if coords is not None else (None, None)
+        if (lat is None or lon is None) and is_ambiguous_city_name(location):
+            raise AmbiguousWeatherLocationError(location)
+        return location, lat, lon
+
+    db = SessionLocal()
+    try:
+        resolved = resolve_weather_location(
+            db,
+            farm_id=farm_id,
+            explicit_location=location,
+        )
+        return resolved.location, resolved.lat, resolved.lon
+    finally:
+        db.close()
 
 
 def _weather_emoji(precip: float, max_temp: float) -> str:
@@ -194,26 +223,41 @@ class WeatherSkill(Skill):
         return {
             "type": "object",
             "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "要查询的地点，如'苏州'、'虎丘区'、'宁德'等。",
+                },
                 "city": {
                     "type": "string",
-                    "description": "要查询的城市名，如'北京'、'上海'、'宁德'等。",
-                }
+                    "description": "兼容旧参数：要查询的城市名，如'北京'、'上海'、'宁德'等。",
+                },
             },
             "required": [],
         }
 
     @cached(ttl_seconds=1800)
     async def execute(self, params: dict, context) -> SkillResult:
-        # 优先使用参数中的城市名
-        city = params.get("city", "").strip()
-        if city:
-            location, lat, lon = city, None, None
+        # 优先使用参数中的地点名，兼容旧 city 参数。
+        explicit_location = (
+            params.get("location") or params.get("city") or ""
+        ).strip()
+        if explicit_location:
+            try:
+                location, lat, lon = _resolve_explicit_location(
+                    explicit_location,
+                    getattr(context, "farm_id", None),
+                )
+            except AmbiguousWeatherLocationError:
+                return _ambiguous_location_result(explicit_location)
         else:
             farm_id, context_error = require_farm_context(context, "查询天气")
             if context_error:
                 return context_error
             # 降级到用户设置的位置
-            user_location = _get_user_location(farm_id)
+            try:
+                user_location = _get_user_location(farm_id)
+            except AmbiguousWeatherLocationError as exc:
+                return _ambiguous_location_result(exc.location)
             if user_location is None:
                 return SkillResult(
                     status=ResultStatus.NEED_CLARIFY,
@@ -224,3 +268,14 @@ class WeatherSkill(Skill):
         data = await fetch_weather(location, days=3, lat=lat, lon=lon)
         reply = _format_weather_reply(location, data)
         return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
+
+
+def _ambiguous_location_result(location: str) -> SkillResult:
+    """地点重名时要求补充城市或坐标。"""
+    return SkillResult(
+        status=ResultStatus.NEED_CLARIFY,
+        reply=(
+            f"“{location}”可能对应多个城市，请补充上级城市或经纬度，"
+            "例如“南京鼓楼区”或“徐州鼓楼区”。"
+        ),
+    )

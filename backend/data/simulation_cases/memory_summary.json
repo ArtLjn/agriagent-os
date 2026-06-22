@@ -1,0 +1,12 @@
+[
+  {
+    "case_id": "TC-MEMORY-001",
+    "description": "会话摘要 — 13 轮后追问早期西棚黄瓜预算",
+    "user_input": "前面说的西棚黄瓜预算是多少？",
+    "expected_response_matches": ["西棚", "黄瓜", "200"],
+    "expected_db_changes": {},
+    "verify_tables": ["conversation_messages"],
+    "category": "memory",
+    "precondition": {}
+  }
+]

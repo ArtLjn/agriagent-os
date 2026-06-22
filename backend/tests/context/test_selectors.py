@@ -17,6 +17,7 @@ from app.context.selectors.planting import (
 from app.context.selectors.retrieval import RetrievalSelector
 from app.context.selectors.user_settings import UserSettingsSelector
 from app.memory.models import MemoryContext, MemoryMessage, PendingActionSnapshot
+from app.models.conversation import Conversation, ConversationMessage
 from app.models.cost import CostRecord
 from app.models.cost_category import CostCategory
 from app.models.crop import CropTemplate
@@ -86,6 +87,98 @@ def test_in_memory_selectors_are_independently_testable() -> None:
     assert conversation[0].source == "conversation"
     assert memory[0].source == "memory"
     assert retrieval[0].source == "retrieval"
+
+
+def test_conversation_selector_injects_conversation_summary_block(db_session) -> None:
+    conversation = Conversation(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="summary-session",
+        summary="用户正在确认西棚黄瓜预算 200 元。",
+    )
+    db_session.add(conversation)
+    db_session.commit()
+    db_session.refresh(conversation)
+    db_session.add(
+        ConversationMessage(
+            conversation_id=conversation.id,
+            role="user",
+            content="西棚黄瓜预算是多少？",
+        )
+    )
+    db_session.commit()
+
+    blocks = ConversationSelector().select(
+        db_session,
+        farm_id=1,
+        session_id="summary-session",
+    )
+
+    blocks_by_key = {block.key: block for block in blocks}
+    assert set(blocks_by_key) == {"conversation", "conversation_summary"}
+    summary = blocks_by_key["conversation_summary"]
+    assert summary.source == "conversation.summary"
+    assert summary.priority == 50
+    assert summary.compressible is True
+    assert summary.min_tokens == 64
+    assert summary.metadata == {"layer": "working", "cache_scope": "session"}
+    assert "西棚黄瓜预算 200 元" in summary.content
+
+
+def test_conversation_selector_omits_empty_summary_block(db_session) -> None:
+    conversation = Conversation(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="empty-summary-session",
+        summary="",
+    )
+    db_session.add(conversation)
+    db_session.commit()
+    db_session.refresh(conversation)
+    db_session.add(
+        ConversationMessage(
+            conversation_id=conversation.id,
+            role="assistant",
+            content="已记录浇水。",
+        )
+    )
+    db_session.commit()
+
+    blocks = ConversationSelector().select(
+        db_session,
+        farm_id=1,
+        session_id="empty-summary-session",
+    )
+
+    assert [block.key for block in blocks] == ["conversation"]
+
+
+def test_conversation_selector_omits_null_summary_block(db_session) -> None:
+    conversation = Conversation(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="null-summary-session",
+        summary=None,
+    )
+    db_session.add(conversation)
+    db_session.commit()
+    db_session.refresh(conversation)
+    db_session.add(
+        ConversationMessage(
+            conversation_id=conversation.id,
+            role="assistant",
+            content="已记录施肥。",
+        )
+    )
+    db_session.commit()
+
+    blocks = ConversationSelector().select(
+        db_session,
+        farm_id=1,
+        session_id="null-summary-session",
+    )
+
+    assert [block.key for block in blocks] == ["conversation"]
 
 
 def test_memory_selector_returns_short_term_memory_blocks() -> None:

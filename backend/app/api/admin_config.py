@@ -75,6 +75,7 @@ def get_config() -> dict:
             "base_url": settings.ai_base_url,
             "api_key": _mask_key(settings.ai_api_key),
             "enable_thinking": settings.ai.enable_thinking,
+            "enable_session_summary": settings.ai.enable_session_summary,
         },
         "trace": {
             "batch_size": settings.trace.batch_size,

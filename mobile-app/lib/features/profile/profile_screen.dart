@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/location/location_service.dart';
+import '../../data/repositories/location_repository.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../shared/app_identity.dart';
 import '../../shared/widgets/city_picker_sheet.dart';
@@ -18,11 +19,13 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.repository,
+    this.locations,
     this.location,
     this.onLogout,
   });
 
   final ProfileRepository repository;
+  final LocationRepository? locations;
   final LocationService? location;
   final Future<void> Function()? onLogout;
 
@@ -63,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _LocationWeatherCard(
               model: model,
               repository: widget.repository,
+              locations: widget.locations,
               location: widget.location,
               onUpdated: _reloadProfile,
             ),
@@ -91,12 +95,14 @@ class _LocationWeatherCard extends StatelessWidget {
   const _LocationWeatherCard({
     required this.model,
     required this.repository,
+    this.locations,
     this.location,
     required this.onUpdated,
   });
 
   final ProfileViewModel model;
   final ProfileRepository repository;
+  final LocationRepository? locations;
   final LocationService? location;
   final VoidCallback onUpdated;
 
@@ -132,6 +138,18 @@ class _LocationWeatherCard extends StatelessWidget {
     final location = await showCityPickerSheet(
       context: context,
       selectedCity: model.city == '未设置' ? '' : model.city,
+      onSearchLocations: locations == null
+          ? null
+          : (query) async {
+              final results = await locations!.searchLocations(query);
+              return results
+                  .map((item) => CityPickerResult(
+                        name: item.name,
+                        latitude: item.latitude,
+                        longitude: item.longitude,
+                      ))
+                  .toList();
+            },
       onUseCurrentLocation: this.location == null
           ? null
           : () async {

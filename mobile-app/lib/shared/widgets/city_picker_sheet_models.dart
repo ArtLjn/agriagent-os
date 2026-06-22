@@ -65,6 +65,15 @@ class _SearchCityItem {
     required this.longitude,
   });
 
+  factory _SearchCityItem.fromResult(CityPickerResult result) =>
+      _SearchCityItem(
+        name: result.name,
+        provinceName: '',
+        cityName: '统一位置数据',
+        latitude: result.latitude,
+        longitude: result.longitude,
+      );
+
   final String name;
   final String provinceName;
   final String cityName;

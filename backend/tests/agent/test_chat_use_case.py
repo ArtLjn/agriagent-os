@@ -1,10 +1,16 @@
 """Agent Application 聊天用例测试。"""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.agent.application import chat_use_case
 from app.agent.application.chat_use_case import chat, stream_chat_events
+from app.agent.application.session_summary import (
+    run_session_summary_task,
+    schedule_session_summary,
+)
 from app.schemas.agent import ChatRequest
 
 
@@ -151,6 +157,9 @@ async def test_chat_with_session_id_saves_user_and_assistant_messages():
             "app.agent.application.chat_use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
+        patch(
+            "app.agent.application.chat_use_case.schedule_session_summary",
+        ) as mock_schedule_summary,
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -181,6 +190,12 @@ async def test_chat_with_session_id_saves_user_and_assistant_messages():
         user_message="你好",
     )
     recorder.finish_turn.assert_called_once()
+    mock_schedule_summary.assert_called_once_with(
+        conversation_id=42,
+        farm_id=farm.id,
+        session_id="sess-123",
+        memory_service_provider=chat_use_case.get_memory_service,
+    )
     mock_advisor.assert_awaited_once()
 
 
@@ -209,6 +224,7 @@ async def test_chat_with_session_id_passes_conversation_context_to_advisor():
             "app.agent.application.chat_use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
+        patch("app.agent.application.chat_use_case.schedule_session_summary"),
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -305,6 +321,7 @@ async def test_chat_pending_confirm_saves_to_conversation():
             "app.agent.application.chat_use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
+        patch("app.agent.application.chat_use_case.schedule_session_summary"),
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -470,6 +487,7 @@ async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():
             "app.agent.application.chat_use_case.build_pending_action_response",
             return_value=None,
         ),
+        patch("app.agent.application.chat_use_case.schedule_session_summary"),
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -544,6 +562,9 @@ async def test_chat_records_turn_and_event_metadata(db_session, monkeypatch):
         return "当前有水稻"
 
     monkeypatch.setattr(chat_use_case, "invoke_advisor", fake_invoke_advisor)
+    monkeypatch.setattr(
+        chat_use_case, "schedule_session_summary", lambda **_kwargs: None
+    )
 
     response = await chat_use_case.chat(
         db_session,
@@ -595,6 +616,9 @@ async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch
     monkeypatch.setattr(chat_use_case, "stream_advisor", fake_stream_advisor)
     monkeypatch.setattr(chat_use_case, "_flush_trace_queue", fake_flush_trace_queue)
     monkeypatch.setattr(chat_use_case, "_get_skill_names", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        chat_use_case, "schedule_session_summary", lambda **_kwargs: None
+    )
 
     chunks = []
     async for chunk in chat_use_case.stream_chat_events(
@@ -609,3 +633,196 @@ async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch
     assert any("当前" in chunk for chunk in chunks)
     turn = db_session.query(AgentTurn).filter_by(session_id="sess-stream").one()
     assert turn.reply_preview == "当前有水稻"
+
+
+async def test_stream_chat_completion_schedules_session_summary():
+    """流式回复落库后触发会话摘要后台任务。"""
+    db = MagicMock()
+    user = _mock_user()
+    farm = _mock_farm()
+    conversation = MagicMock()
+    conversation.id = 88
+    recorder = MagicMock()
+    recorder.start_turn.return_value = MagicMock()
+
+    async def _fake_stream(*args, **kwargs):
+        yield "当前"
+        yield "有水稻"
+
+    with (
+        patch(
+            "app.agent.application.chat_use_case.get_or_create_conversation",
+            return_value=conversation,
+        ),
+        patch(
+            "app.agent.application.chat_use_case.SessionFlywheelRecorder",
+            return_value=recorder,
+        ),
+        patch(
+            "app.agent.application.chat_use_case.handle_pending_action",
+            new_callable=AsyncMock,
+        ) as mock_pending,
+        patch(
+            "app.agent.application.chat_use_case.stream_advisor",
+            side_effect=_fake_stream,
+        ),
+        patch(
+            "app.agent.application.chat_use_case._flush_trace_queue",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.agent.application.chat_use_case._get_skill_names",
+            return_value=[],
+        ),
+        patch(
+            "app.agent.application.chat_use_case._save_stream_reply",
+            return_value=conversation,
+        ),
+        patch(
+            "app.agent.application.chat_use_case._observe_chat_completion",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.agent.application.chat_use_case.schedule_session_summary",
+        ) as mock_schedule_summary,
+    ):
+        from app.agent.executor.models import PendingActionDecision
+
+        mock_pending.return_value = PendingActionDecision.unhandled()
+
+        events = [
+            event
+            async for event in stream_chat_events(
+                db,
+                ChatRequest(message="问题", session_id="sess-stream"),
+                user,
+                farm,
+                request_id="req-stream-3",
+            )
+        ]
+
+    assert events[-1] == "data: [DONE]\n\n"
+    recorder.finish_turn.assert_called_once()
+    mock_schedule_summary.assert_called_once_with(
+        conversation_id=88,
+        farm_id=farm.id,
+        session_id="sess-stream",
+        memory_service_provider=chat_use_case.get_memory_service,
+    )
+
+
+async def test_run_session_summary_task_uses_fresh_db_and_calls_maybe_summarize():
+    """后台任务使用独立 DB session 调用 maybe_summarize。"""
+    fresh_db = MagicMock()
+    memory_service = MagicMock()
+    memory_service.maybe_summarize = AsyncMock()
+
+    await run_session_summary_task(
+        conversation_id=42,
+        farm_id=1,
+        session_id="sess-123",
+        memory_service_provider=lambda: memory_service,
+        session_factory=lambda: fresh_db,
+        timeout_seconds=1,
+    )
+
+    memory_service.maybe_summarize.assert_awaited_once_with(
+        fresh_db,
+        42,
+        1,
+        "sess-123",
+        messages=None,
+    )
+    fresh_db.close.assert_called_once()
+
+
+async def test_schedule_session_summary_creates_task_that_calls_maybe_summarize():
+    """调度函数通过 create_task 创建任务，任务最终调用 maybe_summarize。"""
+    created = []
+    fresh_db = MagicMock()
+    memory_service = MagicMock()
+    memory_service.maybe_summarize = AsyncMock()
+
+    def _capture_task(coro):
+        created.append(coro)
+        return "task-1"
+
+    task = schedule_session_summary(
+        conversation_id=42,
+        farm_id=1,
+        session_id="sess-123",
+        memory_service=memory_service,
+        session_factory=lambda: fresh_db,
+        create_task=_capture_task,
+        timeout_seconds=1,
+    )
+
+    assert task == "task-1"
+    assert len(created) == 1
+    await created[0]
+    memory_service.maybe_summarize.assert_awaited_once_with(
+        fresh_db,
+        42,
+        1,
+        "sess-123",
+        messages=None,
+    )
+    fresh_db.close.assert_called_once()
+
+
+async def test_schedule_session_summary_closes_coroutine_when_create_task_fails():
+    """调度失败时关闭 coroutine，避免未 await 警告并不影响调用方。"""
+
+    def _raise_create_task(_coro):
+        raise RuntimeError("event loop closed")
+
+    result = schedule_session_summary(
+        conversation_id=42,
+        farm_id=1,
+        session_id="sess-123",
+        memory_service=MagicMock(),
+        create_task=_raise_create_task,
+        timeout_seconds=1,
+    )
+
+    assert result is None
+
+
+async def test_run_session_summary_task_closes_db_when_maybe_summarize_errors():
+    """摘要任务异常时不向外抛出并关闭 DB session。"""
+    fresh_db = MagicMock()
+    memory_service = MagicMock()
+    memory_service.maybe_summarize = AsyncMock(side_effect=RuntimeError("boom"))
+
+    await run_session_summary_task(
+        conversation_id=42,
+        farm_id=1,
+        session_id="sess-123",
+        memory_service=memory_service,
+        session_factory=lambda: fresh_db,
+        timeout_seconds=1,
+    )
+
+    fresh_db.close.assert_called_once()
+
+
+async def test_run_session_summary_task_closes_db_when_timeout():
+    """摘要任务超时时不向外抛出并关闭 DB session。"""
+    fresh_db = MagicMock()
+    memory_service = MagicMock()
+
+    async def _never_finish(*args, **kwargs):
+        await asyncio.sleep(1)
+
+    memory_service.maybe_summarize = AsyncMock(side_effect=_never_finish)
+
+    await run_session_summary_task(
+        conversation_id=42,
+        farm_id=1,
+        session_id="sess-123",
+        memory_service=memory_service,
+        session_factory=lambda: fresh_db,
+        timeout_seconds=0.01,
+    )
+
+    fresh_db.close.assert_called_once()

@@ -151,6 +151,47 @@ async def test_retry_success_reuses_candidates_and_records_meta(
 
 
 @pytest.mark.asyncio
+async def test_json_parse_failure_adds_repair_instruction_before_retry(
+    db,
+    mock_composer,
+    mock_collect_candidates,
+) -> None:
+    """JSON 解析失败后，下一轮 prompt 应明确要求只返回合法 JSON。"""
+    candidate = _candidate("weather:storm:1", title="暴雨前抢收排水")
+    mock_collect_candidates.return_value = [candidate]
+    valid_payload = _v2_payload(candidate)
+    malformed_payload = (
+        '{"preview": "暴雨将至，抓紧收割与排水", 我发现今日建议这个接口频繁报错'
+    )
+
+    with patch(
+        "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+    ) as mock_llm:
+        mock_llm.side_effect = [
+            malformed_payload,
+            json.dumps(valid_payload, ensure_ascii=False),
+        ]
+        from app.services.agent_service import get_daily_advice
+
+        result = await get_daily_advice(db, farm_id=1)
+
+    assert result.generation.mode == "repaired"
+    assert mock_llm.await_count == 2
+    first_variables = mock_composer.return_value.compose.call_args_list[0].kwargs[
+        "variables"
+    ]
+    retry_variables = mock_composer.return_value.compose.call_args_list[1].kwargs[
+        "variables"
+    ]
+    assert first_variables["repair_instruction"] == ""
+    assert "只返回合法 JSON" in retry_variables["repair_instruction"]
+    assert "不要输出解释" in retry_variables["repair_instruction"]
+    saved_record = db.query(AgentRecord).filter(AgentRecord.record_type == "daily").one()
+    saved_meta = json.loads(saved_record.meta)
+    assert "llm_json_parse_failed" in saved_meta["validation_errors"]
+
+
+@pytest.mark.asyncio
 async def test_retry_exhausted_returns_candidate_fallback(
     db,
     mock_composer,

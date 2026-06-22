@@ -35,6 +35,7 @@ class _EvidenceCard extends StatelessWidget {
     return _DetailSectionCard(
       icon: LucideIcons.sparkles,
       title: 'AI 判断依据',
+      subtitle: '用于生成这条建议的关键信号',
       children: rows,
     );
   }
@@ -73,6 +74,7 @@ class _StepsCard extends StatelessWidget {
     return _DetailSectionCard(
       icon: LucideIcons.listChecks,
       title: '执行步骤',
+      subtitle: '按顺序完成，方便现场核对',
       children: rows,
     );
   }
@@ -113,6 +115,7 @@ class _RelatedCard extends StatelessWidget {
     return _DetailSectionCard(
       icon: LucideIcons.link,
       title: '关联事项',
+      subtitle: '和本次建议相关的记录',
       children: rows,
     );
   }
@@ -122,28 +125,63 @@ class _DetailSectionCard extends StatelessWidget {
   const _DetailSectionCard({
     required this.icon,
     required this.title,
+    required this.subtitle,
     required this.children,
   });
 
   final IconData icon;
   final String title;
+  final String subtitle;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     return CardPanel(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      radius: 18,
+      borderColor: const Color(0xFFE7EEF8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 23, color: AppColors.blue),
-              const SizedBox(width: 10),
-              Text(title, style: AppTextStyles.dateTitle),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.blueSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 20, color: AppColors.blue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.sectionTitle.copyWith(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.small.copyWith(
+                        color: AppColors.subtle,
+                        fontSize: 12.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           ...children,
         ],
       ),
@@ -181,8 +219,8 @@ class _InfoRow extends StatelessWidget {
             icon: icon,
             color: iconColor,
             background: iconBackground,
-            size: 44,
-            iconSize: 22,
+            size: 40,
+            iconSize: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -220,8 +258,8 @@ class _StepRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 26,
+            height: 26,
             decoration: BoxDecoration(
               color: AppColors.blueSoft,
               borderRadius: BorderRadius.circular(999),
@@ -232,16 +270,16 @@ class _StepRow extends StatelessWidget {
                 '$index',
                 style: AppTextStyles.small.copyWith(
                   color: AppColors.blue,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Container(
-            margin: const EdgeInsets.only(top: 3),
-            width: 22,
-            height: 22,
+            margin: const EdgeInsets.only(top: 2),
+            width: 20,
+            height: 20,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(999),
               border: Border.all(color: AppColors.subtle, width: 1.4),
@@ -274,8 +312,8 @@ class _TextBlock extends StatelessWidget {
         Text(
           title,
           style: AppTextStyles.listTitle.copyWith(
-            height: 1.36,
-            fontWeight: FontWeight.w700,
+            height: 1.34,
+            fontWeight: FontWeight.w600,
           ),
         ),
         if (description.trim().isNotEmpty) ...[
@@ -285,7 +323,7 @@ class _TextBlock extends StatelessWidget {
             style: AppTextStyles.small.copyWith(
               color: AppColors.muted,
               fontSize: 13.5,
-              height: 1.46,
+              height: 1.5,
             ),
           ),
         ],
@@ -321,8 +359,8 @@ class _RelatedRow extends StatelessWidget {
             icon: icon,
             color: iconColor,
             background: iconBackground,
-            size: 46,
-            iconSize: 23,
+            size: 40,
+            iconSize: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -332,7 +370,7 @@ class _RelatedRow extends StatelessWidget {
                 Text(
                   title,
                   style: AppTextStyles.listTitle.copyWith(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 if (value.trim().isNotEmpty) ...[
@@ -342,7 +380,7 @@ class _RelatedRow extends StatelessWidget {
                     style: AppTextStyles.small.copyWith(
                       color: AppColors.muted,
                       fontSize: 13.5,
-                      height: 1.42,
+                      height: 1.5,
                     ),
                   ),
                 ],
@@ -371,7 +409,7 @@ class _DividedRow extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 9),
           child: child,
         ),
         if (showDivider) const Divider(height: 1, color: AppColors.lineSoft),

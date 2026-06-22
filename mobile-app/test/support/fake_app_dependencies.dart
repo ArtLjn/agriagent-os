@@ -4,6 +4,7 @@ import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/repositories/billing_repository.dart';
 import 'package:farm_manager_app/data/repositories/business_repository.dart';
 import 'package:farm_manager_app/data/repositories/dashboard_repository.dart';
+import 'package:farm_manager_app/data/repositories/location_repository.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
 import 'package:farm_manager_app/data/repositories/yaya_repository.dart';
@@ -64,6 +65,7 @@ class FakeAppDependencies implements AppDependencies {
     BusinessRepository? business,
     WorkbenchRepository? workbench,
     YayaRepository? yaya,
+    LocationRepository? locations,
     LocationService? location,
   })  : profile = profile ?? _fakeProfileRepository(),
         dashboard = dashboard ?? _fakeDashboardRepository(),
@@ -71,6 +73,7 @@ class FakeAppDependencies implements AppDependencies {
         business = business ?? _fakeBusinessRepository(),
         workbench = workbench ?? _fakeWorkbenchRepository(),
         yaya = yaya ?? _fakeYayaRepository(),
+        locations = locations ?? _fakeLocationRepository(),
         location = location ?? FakeLocationService() {
     setMockAppPackageInfo();
   }
@@ -87,6 +90,8 @@ class FakeAppDependencies implements AppDependencies {
   final WorkbenchRepository workbench;
   @override
   final YayaRepository yaya;
+  @override
+  final LocationRepository locations;
   @override
   final LocationService location;
   final bool restoreResult;
@@ -190,6 +195,23 @@ YayaRepository _fakeYayaRepository() {
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
   dio.httpClientAdapter = adapter;
   return YayaRepository(ApiClient(dio: dio));
+}
+
+LocationRepository _fakeLocationRepository() {
+  final adapter = RecordingAdapter({
+    '/locations/search': {
+      'items': [
+        {
+          'display_name': '苏州市虎丘区',
+          'lat': 31.3296,
+          'lon': 120.4342,
+        },
+      ],
+    },
+  });
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8099'));
+  dio.httpClientAdapter = adapter;
+  return LocationRepository(ApiClient(dio: dio));
 }
 
 DashboardRepository _fakeDashboardRepository() {

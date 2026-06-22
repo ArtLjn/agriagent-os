@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.advisor import invoke_advisor, stream_advisor
 from app.agent.application.session_flywheel import SessionFlywheelRecorder
+from app.agent.application.session_summary import schedule_session_summary
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.llm import LlmNotConfiguredError
 from app.core.database import SessionLocal
@@ -229,6 +230,12 @@ async def chat(
             latency_ms=int((time.perf_counter() - start) * 1000),
             status="success",
         )
+        schedule_session_summary(
+            conversation_id=conversation.id,
+            farm_id=farm.id,
+            session_id=chat_request.session_id,
+            memory_service_provider=get_memory_service,
+        )
     await _observe_chat_completion(
         user_id=farm.user_id or "",
         farm_id=farm.id,
@@ -365,6 +372,12 @@ async def stream_chat_events(
                 token_total=None,
                 latency_ms=int((time.perf_counter() - start) * 1000),
                 status="success",
+            )
+            schedule_session_summary(
+                conversation_id=conversation.id,
+                farm_id=farm.id,
+                session_id=chat_request.session_id,
+                memory_service_provider=get_memory_service,
             )
         conversation = _save_stream_reply(
             db,

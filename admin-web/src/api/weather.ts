@@ -18,6 +18,33 @@ export interface ForecastResponse {
   days: DayWeather[];
 }
 
+export interface ForecastQuery {
+  days?: number;
+  location?: string;
+  lat?: number;
+  lon?: number;
+}
+
+export interface LocationOption {
+  province?: string;
+  city?: string;
+  district?: string;
+  name?: string;
+  full_name?: string;
+  display_name: string;
+  adcode?: string;
+  lat: number;
+  lon: number;
+  level?: string;
+  coordinate_system?: string;
+  coordinate_source?: string;
+}
+
+interface LocationSearchResponse {
+  items?: LocationOption[];
+  total?: number;
+}
+
 interface LegacyForecastResponse {
   location?: string;
   provider?: string;
@@ -68,7 +95,13 @@ function normalizeForecast(data: ForecastResponse | LegacyForecastResponse): For
   };
 }
 
-export async function getForecast(days: number = 7): Promise<ForecastResponse> {
-  const res = await apiClient.get<ForecastResponse | LegacyForecastResponse>('/weather/forecast', { params: { days } });
+export async function getForecast(query: number | ForecastQuery = 7): Promise<ForecastResponse> {
+  const params = typeof query === 'number' ? { days: query } : { days: query.days ?? 7, location: query.location, lat: query.lat, lon: query.lon };
+  const res = await apiClient.get<ForecastResponse | LegacyForecastResponse>('/weather/forecast', { params });
   return normalizeForecast(res.data);
+}
+
+export async function searchLocations(q: string, limit: number = 20): Promise<LocationOption[]> {
+  const res = await apiClient.get<LocationSearchResponse>('/locations/search', { params: { q, limit } });
+  return res.data.items ?? [];
 }

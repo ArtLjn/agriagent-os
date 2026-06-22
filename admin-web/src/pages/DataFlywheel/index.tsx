@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Button, Card, Checkbox, Input, Modal, Select, Space, Tabs, Typography, message } from 'antd';
+import { Button, Card, Checkbox, Empty, Input, Modal, Select, Space, Spin, Tabs, Tag, Typography, message } from 'antd';
 import { CloudDownloadOutlined, CloudSyncOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
@@ -69,6 +69,9 @@ type AnnotationTarget =
   | { type: 'turn'; sample: DataFlywheelSample }
   | { type: 'session'; sampleId: string; sessionId: string };
 
+type DataFlywheelTab = 'queue' | 'candidates' | 'sessions' | 'turn-review' | 'repair-packs';
+type HeaderTone = 'queue' | 'candidate' | 'session' | 'turn';
+
 const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '好回复', value: 'good_reply' },
   { label: '坏回复', value: 'bad_reply' },
@@ -133,7 +136,7 @@ export default function DataFlywheel() {
   const [batchPrelabeling, setBatchPrelabeling] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'workbench' | 'repair-packs'>('workbench');
+  const [activeTab, setActiveTab] = useState<DataFlywheelTab>('queue');
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const sessionReviewRequestSeq = useRef(0);
@@ -182,6 +185,31 @@ export default function DataFlywheel() {
     }
     return baseSamples.filter((sample) => sessionArchiveKey(sample) === activeArchiveKey);
   }, [activeArchiveKey, hideAiNormal, samples]);
+  const candidateSamples = useMemo(
+    () => samples.filter(isProblemCandidateSample),
+    [samples]
+  );
+  const candidateVisibleSamples = useMemo(() => {
+    if (activeArchiveKey === ISSUE_ARCHIVE_KEY) {
+      return visibleSamples.filter((sample) => sample.issue_candidates.length > 0);
+    }
+    if (activeArchiveKey === AI_PRELABEL_ARCHIVE_KEY) {
+      return visibleSamples.filter(hasPendingAiPrelabel);
+    }
+    return candidateSamples;
+  }, [activeArchiveKey, candidateSamples, visibleSamples]);
+  const p0Count = useMemo(
+    () => samples.filter((sample) => sample.risk_severity === 'P0').length,
+    [samples]
+  );
+  const missingEventCount = useMemo(
+    () => samples.filter((sample) => sample.event_log_status === 'missing').length,
+    [samples]
+  );
+  const reviewSamples = useMemo(
+    () => selectedSample ? [selectedSample] : candidateSamples,
+    [candidateSamples, selectedSample]
+  );
   const isSessionArchiveActive =
     activeArchiveKey !== ALL_ARCHIVE_KEY &&
     activeArchiveKey !== ISSUE_ARCHIVE_KEY &&
@@ -792,6 +820,7 @@ export default function DataFlywheel() {
   const handleSelectArchive = (key: string) => {
     setActiveArchiveKey(key);
     clearSelection();
+    setActiveTab(tabForArchiveKey(key));
     if (
       key === ALL_ARCHIVE_KEY ||
       key === ISSUE_ARCHIVE_KEY ||
@@ -808,6 +837,7 @@ export default function DataFlywheel() {
 
   const handleSelectProblemSession = (key: string) => {
     setActiveArchiveKey(key);
+    setActiveTab('sessions');
     clearSelection();
     loadSessionReview(key);
     const problemTurn = latestConfirmedProblemTurn(samples, key);
@@ -817,6 +847,97 @@ export default function DataFlywheel() {
     }
     loadSessionAnnotations(key);
   };
+
+  const filterBar = (
+    <Card size="small" style={filterCardStyle} styles={{ body: { padding: 12 } }}>
+      <Space wrap>
+        <Input
+          allowClear
+          placeholder="Session / Request ID"
+          value={searchText}
+          onChange={(event) => setSearchText(event.target.value)}
+          onPressEnter={submitQuery}
+          style={{ width: 260 }}
+        />
+        <Select
+          allowClear
+          placeholder="质量标签"
+          value={qualityLabel}
+          onChange={setQualityLabel}
+          options={labelOptions}
+          style={{ width: 180 }}
+        />
+        <Checkbox checked={unannotatedOnly} onChange={(event) => setUnannotatedOnly(event.target.checked)}>
+          只看未标注
+        </Checkbox>
+        <Checkbox checked={hideAiNormal} onChange={(event) => setHideAiNormal(event.target.checked)}>
+          隐藏 AI 判定正常
+        </Checkbox>
+        <Checkbox
+          checked={hideLowRisk}
+          onChange={(event) => {
+            const checked = event.target.checked;
+            setHideLowRisk(checked);
+            applyQuery(currentQuery({ hideLowRisk: checked }));
+          }}
+        >
+          隐藏低风险
+        </Checkbox>
+        <Checkbox
+          checked={riskSeverity === 'P0'}
+          onChange={(event) => {
+            const severity = event.target.checked ? 'P0' : 'all';
+            setRiskSeverity(severity);
+            applyQuery(currentQuery({ severity }));
+          }}
+        >
+          P0 严重
+        </Checkbox>
+        <Select
+          aria-label="排序方式"
+          value={sortBy}
+          onChange={(value) => {
+            setSortBy(value);
+            applyQuery(currentQuery({ sortBy: value }));
+          }}
+          options={[
+            { label: '风险排序', value: 'risk' },
+            { label: '时间排序', value: 'time' },
+          ]}
+          style={{ width: 116 }}
+        />
+        <Button type="primary" icon={<SearchOutlined />} loading={loadingList} onClick={submitQuery}>
+          查询
+        </Button>
+        <Button icon={<ReloadOutlined />} loading={loadingList} onClick={refreshSamples}>
+          刷新
+        </Button>
+        <Button icon={<CloudSyncOutlined />} loading={syncingSessions} onClick={handleSyncSessions}>
+          同步会话
+        </Button>
+        <Button
+          icon={<CloudSyncOutlined />}
+          loading={batchPrelabeling}
+          disabled={loadingList}
+          onClick={handleBatchPrelabel}
+        >
+          批量 AI 分析
+        </Button>
+        <Button
+          aria-label="批量导出修复包"
+          icon={<CloudDownloadOutlined />}
+          loading={acting}
+          disabled={selectedRepairSampleIds.length === 0}
+          onClick={handleCreateBatchRepairPack}
+        >
+          {selectedRepairSampleIds.length > 0
+            ? `批量导出修复包 ${selectedRepairSampleIds.length}`
+            : '批量导出修复包'}
+        </Button>
+        <Typography.Text style={{ color: palette.textMuted }}>共 {total} 条</Typography.Text>
+      </Space>
+    </Card>
+  );
 
   const archiveContent = (
     <SessionArchivePanel
@@ -835,7 +956,28 @@ export default function DataFlywheel() {
       onSelect={handleSelectArchive}
     />
   );
-  const mainContent = activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY ? (
+
+  const queueMainContent = (
+    <SampleListCard
+      title="全部 turn"
+      count={visibleSamples.length}
+      samples={visibleSamples}
+      loading={loadingList}
+      selectedSampleId={selectedSample?.sample_id}
+      onSelect={loadDetail}
+    />
+  );
+
+  const candidateMainContent = (
+    <CandidateTriageBoard
+      samples={candidateVisibleSamples}
+      loading={loadingList}
+      selectedSampleId={selectedSample?.sample_id}
+      onSelect={loadDetail}
+    />
+  );
+
+  const sessionMainContent = activeArchiveKey === CONFIRMED_ISSUE_ARCHIVE_KEY ? (
     <SessionArchivePanel
       title="问题会话归档"
       groups={confirmedIssueGroups}
@@ -865,24 +1007,30 @@ export default function DataFlywheel() {
       onSelectSession={() => loadSessionAnnotations(activeArchiveKey)}
     />
   ) : (
-    <Card
-      title="会话 turn"
-      extra={
-        <Typography.Text style={{ color: palette.textMuted }}>
-          会话 turn：{visibleSamples.length} 条
-        </Typography.Text>
-      }
-      style={workspaceCardStyle}
-      styles={{ body: { padding: 0, minHeight: 0, flex: 1, overflow: 'hidden' } }}
-    >
-      <SampleQueueTable
-        samples={visibleSamples}
-        loading={loadingList}
-        selectedSampleId={selectedSample?.sample_id}
-        onSelect={loadDetail}
-      />
-    </Card>
+    <EmptyCard title="Session 复盘" description="从顶部会话归档选择一个 session 查看完整对话" />
   );
+
+  const turnReviewMainContent = selectedSample ? (
+    <TurnReviewWorkbench
+      sample={selectedSample}
+      detail={detail}
+      loading={loadingDetail}
+      traceDiagnosticsByRequestId={traceDiagnosticsByRequestId}
+      loadingTraceDiagnostics={loadingTraceDiagnostics}
+      onSelectTurn={loadDetail}
+      onSelectSession={() => selectedSample.session_id && loadSessionAnnotations(selectedSample.session_id)}
+    />
+  ) : (
+    <SampleListCard
+      title="待审核 turn"
+      count={reviewSamples.length}
+      samples={reviewSamples}
+      loading={loadingList}
+      onSelect={loadDetail}
+      emptyText="从样本队列或问题候选选择一个 turn"
+    />
+  );
+
   const detailContent = (
     <div style={detailRailStyle}>
       <ReviewEvidencePanel detail={detail} />
@@ -934,113 +1082,106 @@ export default function DataFlywheel() {
     </div>
   );
 
-  const workbenchContent = (
+  const queueContent = (
     <>
-      <Space direction="vertical" size={4} style={{ flexShrink: 0 }}>
-        <Typography.Title level={4} style={{ color: palette.text, margin: 0 }}>
-          Agent 数据飞轮
-        </Typography.Title>
-        <Typography.Text style={{ color: palette.textMuted }}>
-          真实会话与调试事件样本标注工作台，用于沉淀 Agent 回复调优与回归样本。
-        </Typography.Text>
-      </Space>
-
-      <Card size="small" style={filterCardStyle} styles={{ body: { padding: 12 } }}>
-        <Space wrap>
-          <Input
-            allowClear
-            placeholder="Session / Request ID"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            onPressEnter={submitQuery}
-            style={{ width: 260 }}
-          />
-          <Select
-            allowClear
-            placeholder="质量标签"
-            value={qualityLabel}
-            onChange={setQualityLabel}
-            options={labelOptions}
-            style={{ width: 180 }}
-          />
-          <Checkbox checked={unannotatedOnly} onChange={(event) => setUnannotatedOnly(event.target.checked)}>
-            只看未标注
-          </Checkbox>
-          <Checkbox checked={hideAiNormal} onChange={(event) => setHideAiNormal(event.target.checked)}>
-            隐藏 AI 判定正常
-          </Checkbox>
-          <Checkbox
-            checked={hideLowRisk}
-            onChange={(event) => {
-              const checked = event.target.checked;
-              setHideLowRisk(checked);
-              applyQuery(currentQuery({ hideLowRisk: checked }));
-            }}
-          >
-            隐藏低风险
-          </Checkbox>
-          <Checkbox
-            checked={riskSeverity === 'P0'}
-            onChange={(event) => {
-              const severity = event.target.checked ? 'P0' : 'all';
-              setRiskSeverity(severity);
-              applyQuery(currentQuery({ severity }));
-            }}
-          >
-            P0 严重
-          </Checkbox>
-          <Select
-            aria-label="排序方式"
-            value={sortBy}
-            onChange={(value) => {
-              setSortBy(value);
-              applyQuery(currentQuery({ sortBy: value }));
-            }}
-            options={[
-              { label: '风险排序', value: 'risk' },
-              { label: '时间排序', value: 'time' },
-            ]}
-            style={{ width: 116 }}
-          />
-          <Button type="primary" icon={<SearchOutlined />} loading={loadingList} onClick={submitQuery}>
-            查询
-          </Button>
-          <Button icon={<ReloadOutlined />} loading={loadingList} onClick={refreshSamples}>
-            刷新
-          </Button>
-          <Button icon={<CloudSyncOutlined />} loading={syncingSessions} onClick={handleSyncSessions}>
-            同步会话
-          </Button>
-          <Button
-            icon={<CloudSyncOutlined />}
-            loading={batchPrelabeling}
-            disabled={loadingList}
-            onClick={handleBatchPrelabel}
-          >
-            批量 AI 分析
-          </Button>
-          <Button
-            aria-label="批量导出修复包"
-            icon={<CloudDownloadOutlined />}
-            loading={acting}
-            disabled={selectedRepairSampleIds.length === 0}
-            onClick={handleCreateBatchRepairPack}
-          >
-            {selectedRepairSampleIds.length > 0
-              ? `批量导出修复包 ${selectedRepairSampleIds.length}`
-              : '批量导出修复包'}
-          </Button>
-          <Typography.Text style={{ color: palette.textMuted }}>共 {total} 条</Typography.Text>
-        </Space>
-      </Card>
-
+      <WorkbenchHeader
+        title="样本队列"
+        description="保留正常对话和全部 turn，用于浏览、搜索、回溯原始样本。"
+        tone="queue"
+        stats={[
+          { label: '当前样本', value: visibleSamples.length },
+          { label: '正常对话保留', value: Math.max(0, visibleSamples.length - candidateVisibleSamples.length) },
+          { label: '事件缺失', value: missingEventCount },
+        ]}
+        flow="浏览原始 turn -> 选择样本 -> 右侧查看证据 / 标注"
+      />
+      {filterBar}
       <CollapsibleWorkspace
         leftCollapsed={leftCollapsed}
         rightCollapsed={rightCollapsed}
         onLeftCollapsedChange={setLeftCollapsed}
         onRightCollapsedChange={setRightCollapsed}
         left={archiveContent}
-        main={mainContent}
+        main={queueMainContent}
+        right={detailContent}
+      />
+    </>
+  );
+
+  const candidateContent = (
+    <>
+      <WorkbenchHeader
+        title="问题候选"
+        description="只处理规则命中、AI 预判或风险分较高的 turn，默认不展示正常对话。"
+        tone="candidate"
+        stats={[
+          { label: '候选 turn', value: candidateVisibleSamples.length },
+          { label: '规则命中', value: issueCount },
+          { label: 'AI 待审', value: aiPrelabelCount },
+          { label: 'P0', value: p0Count },
+        ]}
+        flow="先判优先级 -> 打开单 turn -> 采纳 / 驳回 / 标注"
+      />
+      {filterBar}
+      <CollapsibleWorkspace
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed}
+        onLeftCollapsedChange={setLeftCollapsed}
+        onRightCollapsedChange={setRightCollapsed}
+        left={archiveContent}
+        main={candidateMainContent}
+        right={detailContent}
+      />
+    </>
+  );
+
+  const sessionContent = (
+    <>
+      <WorkbenchHeader
+        title="Session 复盘"
+        description="按完整会话复盘上下文，保存 session 级标签；选择 turn 后可进入 turn 级审核。"
+        tone="session"
+        stats={[
+          { label: '会话归档', value: archiveGroups.length },
+          { label: '问题会话', value: confirmedIssueGroups.length },
+          { label: '已标注问题', value: confirmedIssueCount },
+        ]}
+        flow="选择 session -> 看完整上下文 -> 标注整个会话或下钻 turn"
+      />
+      {filterBar}
+      <CollapsibleWorkspace
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed}
+        onLeftCollapsedChange={setLeftCollapsed}
+        onRightCollapsedChange={setRightCollapsed}
+        left={archiveContent}
+        main={sessionMainContent}
+        right={detailContent}
+      />
+    </>
+  );
+
+  const turnReviewContent = (
+    <>
+      <WorkbenchHeader
+        title="Turn 审核"
+        description="聚焦单轮输入、回复、工具链路、pending lifecycle、AI 预判和 turn 级标注。"
+        tone="turn"
+        stats={[
+          { label: '当前 turn', value: selectedSample ? `#${selectedSample.turn_id}` : '-' },
+          { label: '风险', value: selectedSample?.risk_score?.toFixed(2) ?? '-' },
+          { label: '工具链路', value: selectedSample ? `${selectedSample.selected_tools.length}/${selectedSample.actual_tools.length}` : '-' },
+        ]}
+        flow="核对用户输入 -> 对比回复和工具 -> 保存 turn 级结论"
+      />
+      {filterBar}
+      <CollapsibleWorkspace
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed}
+        onLeftCollapsedChange={setLeftCollapsed}
+        onRightCollapsedChange={setRightCollapsed}
+        left={archiveContent}
+        main={turnReviewMainContent}
         right={detailContent}
       />
     </>
@@ -1048,18 +1189,54 @@ export default function DataFlywheel() {
 
   return (
     <div style={pageShellStyle}>
+      <Space direction="vertical" size={4} style={{ flexShrink: 0 }}>
+        <Typography.Title level={3} style={{ color: palette.text, margin: 0 }}>
+          Agent 数据飞轮
+        </Typography.Title>
+        <Typography.Text style={{ color: palette.textMuted }}>
+          将真实对话沉淀为问题候选、session 复盘、turn 审核和修复包闭环。
+        </Typography.Text>
+      </Space>
       <Tabs
         activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as 'workbench' | 'repair-packs')}
+        onChange={(key) => setActiveTab(key as DataFlywheelTab)}
+        destroyInactiveTabPane
         items={[
           {
-            key: 'workbench',
+            key: 'queue',
             label: (
               <span>
-                <EditOutlined /> 样本标注
+                <EditOutlined /> 样本队列
               </span>
             ),
-            children: workbenchContent,
+            children: queueContent,
+          },
+          {
+            key: 'candidates',
+            label: (
+              <span>
+                <SearchOutlined /> 问题候选
+              </span>
+            ),
+            children: candidateContent,
+          },
+          {
+            key: 'sessions',
+            label: (
+              <span>
+                <FolderOpenOutlined /> Session 复盘
+              </span>
+            ),
+            children: sessionContent,
+          },
+          {
+            key: 'turn-review',
+            label: (
+              <span>
+                <EditOutlined /> Turn 审核
+              </span>
+            ),
+            children: turnReviewContent,
           },
           {
             key: 'repair-packs',
@@ -1116,10 +1293,483 @@ const detailRailStyle: CSSProperties = {
   scrollbarGutter: 'stable',
 };
 
+function workbenchHeaderStyle(tone: HeaderTone): CSSProperties {
+  const colorByTone: Record<HeaderTone, string> = {
+    queue: palette.accent,
+    candidate: palette.warning,
+    session: palette.purple,
+    turn: palette.success,
+  };
+  const color = colorByTone[tone];
+  return {
+    flexShrink: 0,
+    display: 'grid',
+    gridTemplateColumns: 'minmax(260px, 1.1fr) minmax(360px, 1.4fr) minmax(260px, 0.9fr)',
+    gap: 14,
+    alignItems: 'stretch',
+    padding: '14px 16px',
+    border: `1px solid ${palette.border}`,
+    borderLeft: `4px solid ${color}`,
+    borderRadius: 8,
+    background: `linear-gradient(90deg, ${color}1f, ${palette.bgElevated} 34%, ${palette.bgElevated})`,
+  };
+}
+
+const headerStatsStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))',
+  gap: 8,
+};
+
+const headerStatStyle: CSSProperties = {
+  minWidth: 0,
+  padding: '8px 10px',
+  border: `1px solid ${palette.borderSoft}`,
+  borderRadius: 6,
+  background: 'rgba(13, 17, 23, 0.46)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+};
+
+const headerFlowStyle: CSSProperties = {
+  color: palette.textMuted,
+  border: `1px dashed ${palette.borderSoft}`,
+  borderRadius: 6,
+  padding: '10px 12px',
+  alignSelf: 'stretch',
+  display: 'flex',
+  alignItems: 'center',
+};
+
+const triageBoardStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(220px, 1fr))',
+  gap: 12,
+  alignItems: 'start',
+  minHeight: '100%',
+};
+
+function triageColumnStyle(color: string): CSSProperties {
+  return {
+    minWidth: 0,
+    minHeight: 260,
+    padding: 10,
+    border: `1px solid ${palette.border}`,
+    borderTop: `3px solid ${color}`,
+    borderRadius: 8,
+    background: palette.bg,
+  };
+}
+
+const emptyLaneStyle: CSSProperties = {
+  padding: '24px 10px',
+  border: `1px dashed ${palette.borderSoft}`,
+  borderRadius: 6,
+  color: palette.textMuted,
+  textAlign: 'center',
+  fontSize: 12,
+};
+
+function candidateCardStyle(active: boolean): CSSProperties {
+  return {
+    width: '100%',
+    border: `1px solid ${active ? palette.accentStrong : palette.borderSoft}`,
+    borderRadius: 8,
+    background: active ? 'rgba(31, 111, 235, 0.14)' : palette.bgElevated,
+    color: palette.text,
+    cursor: 'pointer',
+    padding: 10,
+  };
+}
+
+const turnWorkbenchStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateRows: 'max-content minmax(0, 1fr)',
+  gap: 12,
+  height: '100%',
+  minHeight: 0,
+};
+
+const turnSummaryCardStyle: CSSProperties = {
+  ...cardStyle,
+  flexShrink: 0,
+};
+
+const turnAuditGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+  gap: 8,
+};
+
+const auditFactStyle: CSSProperties = {
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  padding: '8px 10px',
+  borderRadius: 6,
+  background: palette.bg,
+  border: `1px solid ${palette.borderSoft}`,
+};
+
+function WorkbenchHeader({
+  title,
+  description,
+  tone,
+  stats,
+  flow,
+}: {
+  title: string;
+  description: string;
+  tone: HeaderTone;
+  stats: Array<{ label: string; value: string | number }>;
+  flow: string;
+}) {
+  return (
+    <div style={workbenchHeaderStyle(tone)}>
+      <Space direction="vertical" size={4} style={{ minWidth: 260 }}>
+        <Typography.Title level={4} style={{ color: palette.text, margin: 0 }}>
+          {title}
+        </Typography.Title>
+        <Typography.Text style={{ color: palette.textMuted }}>{description}</Typography.Text>
+      </Space>
+      <div style={headerStatsStyle}>
+        {stats.map((stat) => (
+          <div key={stat.label} style={headerStatStyle}>
+            <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>{stat.label}</Typography.Text>
+            <Typography.Text strong style={{ color: palette.text, fontSize: 18 }}>{stat.value}</Typography.Text>
+          </div>
+        ))}
+      </div>
+      <Typography.Text style={headerFlowStyle}>{flow}</Typography.Text>
+    </div>
+  );
+}
+
+function SampleListCard({
+  title,
+  count,
+  samples,
+  loading,
+  selectedSampleId,
+  emptyText = '暂无样本',
+  onSelect,
+}: {
+  title: string;
+  count: number;
+  samples: DataFlywheelSample[];
+  loading: boolean;
+  selectedSampleId?: string;
+  emptyText?: string;
+  onSelect: (sample: DataFlywheelSample) => void;
+}) {
+  return (
+    <Card
+      title={title}
+      extra={
+        <Typography.Text style={{ color: palette.textMuted }}>
+          {title}：{count} 条
+        </Typography.Text>
+      }
+      style={workspaceCardStyle}
+      styles={{ body: { padding: 0, minHeight: 0, flex: 1, overflow: 'hidden' } }}
+    >
+      {samples.length === 0 && !loading ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />
+      ) : (
+        <SampleQueueTable
+          samples={samples}
+          loading={loading}
+          selectedSampleId={selectedSampleId}
+          onSelect={onSelect}
+        />
+      )}
+    </Card>
+  );
+}
+
+function EmptyCard({ title, description }: { title: string; description: string }) {
+  return (
+    <Card title={title} style={workspaceCardStyle}>
+      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={description} />
+    </Card>
+  );
+}
+
+function CandidateTriageBoard({
+  samples,
+  loading,
+  selectedSampleId,
+  onSelect,
+}: {
+  samples: DataFlywheelSample[];
+  loading: boolean;
+  selectedSampleId?: string;
+  onSelect: (sample: DataFlywheelSample) => void;
+}) {
+  const p0Samples = samples.filter((sample) => sample.risk_severity === 'P0' || (sample.risk_score ?? 0) >= 0.7);
+  const p0Ids = new Set(p0Samples.map((sample) => sample.sample_id));
+  const aiSamples = samples.filter((sample) => hasPendingAiPrelabel(sample) && !p0Ids.has(sample.sample_id));
+  const assignedFirstPassIds = new Set([...p0Ids, ...aiSamples.map((sample) => sample.sample_id)]);
+  const ruleSamples = samples.filter(
+    (sample) => sample.issue_candidates.length > 0 && !assignedFirstPassIds.has(sample.sample_id)
+  );
+  const buckets = [
+    {
+      key: 'p0',
+      title: 'P0 / 高风险',
+      description: '先处理会造成错误执行或严重误导的 turn',
+      color: palette.danger,
+      samples: p0Samples,
+    },
+    {
+      key: 'ai',
+      title: 'AI 待确认',
+      description: '模型已给出判断，等待人工采纳或驳回',
+      color: palette.accent,
+      samples: aiSamples,
+    },
+    {
+      key: 'rule',
+      title: '规则候选',
+      description: '规则命中但需要结合上下文确认',
+      color: palette.warning,
+      samples: ruleSamples,
+    },
+  ];
+  const assignedIds = new Set(buckets.flatMap((bucket) => bucket.samples.map((sample) => sample.sample_id)));
+  const uncategorizedSamples = samples.filter((sample) => !assignedIds.has(sample.sample_id));
+  const visibleBuckets = uncategorizedSamples.length > 0
+    ? [
+        ...buckets,
+        {
+          key: 'other',
+          title: '其他风险',
+          description: '风险分或 judge 信号较高，需要抽检',
+          color: palette.purple,
+          samples: uncategorizedSamples,
+        },
+      ]
+    : buckets;
+
+  return (
+    <Card
+      title="候选处理看板"
+      extra={<Typography.Text style={{ color: palette.textMuted }}>待处理：{samples.length} 条</Typography.Text>}
+      style={workspaceCardStyle}
+      styles={{ body: { padding: 12, minHeight: 0, flex: 1, overflow: 'auto', scrollbarGutter: 'stable' } }}
+    >
+      <Spin spinning={loading}>
+        {samples.length === 0 && !loading ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险候选" />
+        ) : (
+          <div style={triageBoardStyle}>
+            {visibleBuckets.map((bucket) => (
+              <section key={bucket.key} style={triageColumnStyle(bucket.color)}>
+                <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Typography.Text strong style={{ color: palette.text }}>{bucket.title}</Typography.Text>
+                    <Tag color={bucket.samples.length > 0 ? 'blue' : 'default'}>{bucket.samples.length}</Tag>
+                  </Space>
+                  <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                    {bucket.description}
+                  </Typography.Text>
+                </Space>
+                <Space direction="vertical" size={8} style={{ width: '100%', marginTop: 10 }}>
+                  {bucket.samples.length === 0 ? (
+                    <div style={emptyLaneStyle}>暂无</div>
+                  ) : (
+                    bucket.samples.map((sample) => (
+                      <CandidateCard
+                        key={sample.sample_id}
+                        sample={sample}
+                        active={sample.sample_id === selectedSampleId}
+                        onSelect={() => onSelect(sample)}
+                      />
+                    ))
+                  )}
+                </Space>
+              </section>
+            ))}
+          </div>
+        )}
+      </Spin>
+    </Card>
+  );
+}
+
+function CandidateCard({
+  sample,
+  active,
+  onSelect,
+}: {
+  sample: DataFlywheelSample;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const prelabel = latestAiPrelabel(sample);
+  return (
+    <button
+      type="button"
+      data-testid={`sample-row-${sample.sample_id}`}
+      onClick={onSelect}
+      style={candidateCardStyle(active)}
+    >
+      <Space direction="vertical" size={8} style={{ width: '100%', textAlign: 'left' }}>
+        <Space wrap size={6}>
+          <Tag color={sample.risk_severity === 'P0' ? 'red' : 'purple'}>
+            {sample.risk_severity ?? 'risk'} {sample.risk_score?.toFixed(2) ?? '-'}
+          </Tag>
+          <Tag color={sample.annotation_status === 'labeled' ? 'success' : 'warning'}>
+            {sample.annotation_status}
+          </Tag>
+          {prelabel && hasPendingAiPrelabel(sample) && <Tag color="blue">AI {prelabel.confidence.toFixed(2)}</Tag>}
+        </Space>
+        <Typography.Text ellipsis style={{ color: palette.text, maxWidth: '100%' }}>
+          #{sample.turn_id} {sample.user_input_preview || '无输入摘要'}
+        </Typography.Text>
+        <Typography.Text ellipsis style={{ color: palette.textMuted, fontSize: 12, maxWidth: '100%' }}>
+          {sample.session_id || 'unknown-session'} / {sample.request_id || '-'}
+        </Typography.Text>
+        <Typography.Text ellipsis style={{ color: palette.warning, fontSize: 12, maxWidth: '100%' }}>
+          {candidateReason(sample)}
+        </Typography.Text>
+      </Space>
+    </button>
+  );
+}
+
+function TurnReviewWorkbench({
+  sample,
+  detail,
+  loading,
+  traceDiagnosticsByRequestId,
+  loadingTraceDiagnostics,
+  onSelectTurn,
+  onSelectSession,
+}: {
+  sample: DataFlywheelSample;
+  detail: DataFlywheelDetail | null;
+  loading: boolean;
+  traceDiagnosticsByRequestId: Record<string, TraceDiagnostics>;
+  loadingTraceDiagnostics: Record<string, boolean>;
+  onSelectTurn: (sample: DataFlywheelSample) => void;
+  onSelectSession: () => void;
+}) {
+  return (
+    <div style={turnWorkbenchStyle}>
+      <Card
+        title="当前审核对象"
+        style={turnSummaryCardStyle}
+        styles={{ body: { padding: 12 } }}
+      >
+        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Space wrap>
+            <Tag color={sample.risk_severity === 'P0' ? 'red' : 'purple'}>
+              {sample.risk_severity ?? 'risk'} {sample.risk_score?.toFixed(2) ?? '-'}
+            </Tag>
+            <Tag color={sample.annotation_status === 'labeled' ? 'success' : 'warning'}>
+              {sample.annotation_status}
+            </Tag>
+            <Tag color={sample.event_log_status === 'missing' ? 'orange' : 'default'}>
+              {sample.event_log_status ?? 'event'}
+            </Tag>
+          </Space>
+          <div style={turnAuditGridStyle}>
+            <AuditFact label="Session" value={sample.session_id || '-'} />
+            <AuditFact label="Request" value={sample.request_id || '-'} />
+            <AuditFact label="工具链路" value={`${sample.selected_tools.length}/${sample.actual_tools.length}`} />
+            <AuditFact label="成本" value={`${sample.token_total ?? '-'} tokens`} />
+          </div>
+          <Typography.Paragraph style={{ color: palette.text, margin: 0 }}>
+            {sample.user_input_preview || '无用户输入摘要'}
+          </Typography.Paragraph>
+          <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+            审核顺序：先看用户意图，再核对助手回复和工具调用，最后保存 turn 级标签。
+          </Typography.Text>
+        </Space>
+      </Card>
+      <SessionConversationView
+        review={singleTurnReview(sample, detail)}
+        loading={loading}
+        selectedSampleId={sample.sample_id}
+        traceDiagnosticsByRequestId={traceDiagnosticsByRequestId}
+        loadingTraceDiagnostics={loadingTraceDiagnostics}
+        onSelectTurn={onSelectTurn}
+        onSelectSession={onSelectSession}
+      />
+    </div>
+  );
+}
+
+function AuditFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={auditFactStyle}>
+      <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>{label}</Typography.Text>
+      <Typography.Text ellipsis style={{ color: palette.text }}>{value}</Typography.Text>
+    </div>
+  );
+}
+
+function tabForArchiveKey(key: string): DataFlywheelTab {
+  if (key === ALL_ARCHIVE_KEY) return 'queue';
+  if (key === ISSUE_ARCHIVE_KEY || key === AI_PRELABEL_ARCHIVE_KEY) return 'candidates';
+  return 'sessions';
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function isProblemCandidateSample(sample: DataFlywheelSample) {
+  const risk = sample.risk_score ?? 0;
+  return (
+    risk >= 0.3 ||
+    sample.risk_severity === 'P0' ||
+    sample.risk_severity === 'P1' ||
+    sample.issue_candidates.length > 0 ||
+    hasPendingAiPrelabel(sample)
+  );
+}
+
+function candidateReason(sample: DataFlywheelSample) {
+  const prelabel = latestAiPrelabel(sample);
+  if (hasPendingAiPrelabel(sample) && prelabel?.reason) return `AI 预判：${prelabel.reason}`;
+  if (sample.issue_candidates[0]) return `规则候选：${sample.issue_candidates[0].reason}`;
+  if (sample.judge_issue_type) return `Judge：${sample.judge_issue_type}`;
+  if (sample.event_log_status === 'missing') return '事件文件缺失，可同步重建';
+  return '风险分较高，建议抽检';
+}
+
+function singleTurnReview(
+  sample: DataFlywheelSample,
+  detail: DataFlywheelDetail | null
+): DataFlywheelSessionReview {
+  return {
+    session_id: sample.session_id ?? 'unknown-session',
+    turns: [
+      {
+        sample,
+        messages: detail?.messages ?? [
+          { role: 'user', content: sample.user_input_preview || '' },
+          { role: 'assistant', content: sample.assistant_reply_preview || '' },
+        ],
+        router_decision: detail?.router_decision ?? null,
+        tool_events: detail?.tool_events ?? [],
+        pending_lifecycle: detail?.pending_lifecycle ?? [],
+        source: detail?.source ?? {
+          event_file: null,
+          event_seq_start: null,
+          event_seq_end: null,
+          event_log_status: sample.event_log_status,
+          chat_record_source: sample.chat_record_source,
+        },
+      },
+    ],
+  };
 }
 
 function isAiNormalSample(sample: DataFlywheelSample) {

@@ -45,7 +45,7 @@ class AdviceDetailScreen extends StatelessWidget {
               _AdviceAppBar(onBack: () => Navigator.of(context).pop()),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 430),
@@ -53,14 +53,14 @@ class AdviceDetailScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _AdviceHeroCard(suggestion: suggestion),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           if (_EvidenceCard.hasContent(suggestion.item)) ...[
                             _EvidenceCard(item: suggestion.item),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 12),
                           ],
                           if (_StepsCard.hasContent(suggestion.item)) ...[
                             _StepsCard(item: suggestion.item),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 12),
                           ],
                           if (_RelatedCard.hasContent(suggestion.item))
                             _RelatedCard(item: suggestion.item),
@@ -137,7 +137,7 @@ class _AdviceHeroCard extends StatelessWidget {
         const <AdviceHeroBadge>[];
     final metaChips = _heroMeta(badges);
     return CardPanel(
-      radius: 18,
+      radius: 20,
       padding: EdgeInsets.zero,
       borderColor: const Color(0xFFDDEBFF),
       gradient: const LinearGradient(
@@ -146,9 +146,9 @@ class _AdviceHeroCard extends StatelessWidget {
         colors: [Color(0xFFF4FAFF), Color(0xFFEAF4FF)],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: SizedBox(
-          height: 270,
+        borderRadius: BorderRadius.circular(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 244),
           child: Stack(
             children: [
               Positioned.fill(
@@ -163,12 +163,12 @@ class _AdviceHeroCard extends StatelessWidget {
                 ),
               ),
               Positioned(
-                right: -34,
-                top: 18,
-                bottom: 10,
-                width: 292,
+                right: -56,
+                top: 44,
+                bottom: -8,
+                width: 282,
                 child: Opacity(
-                  opacity: 0.76,
+                  opacity: 0.5,
                   child: ShaderMask(
                     blendMode: BlendMode.dstIn,
                     shaderCallback: (bounds) {
@@ -214,19 +214,20 @@ class _AdviceHeroCard extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
-                      stops: [0, 0.5, 1],
+                      stops: [0, 0.64, 1],
                       colors: [
-                        Color(0xFAF4FAFF),
-                        Color(0xDDF4FAFF),
-                        Color(0x3DF4FAFF),
+                        Color(0xFFF4FAFF),
+                        Color(0xF2F4FAFF),
+                        Color(0x99F4FAFF),
                       ],
                     ),
                   ),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -236,10 +237,10 @@ class _AdviceHeroCard extends StatelessWidget {
                           icon: _adviceIcon(item?.compact.icon),
                           color: AppColors.blue,
                           background: AppColors.blueSoft,
-                          size: 52,
-                          iconSize: 27,
+                          size: 48,
+                          iconSize: 25,
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,7 +251,11 @@ class _AdviceHeroCard extends StatelessWidget {
                                     : suggestion.title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.title,
+                                style: AppTextStyles.title.copyWith(
+                                  fontSize: 21,
+                                  height: 1.28,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               StatusPill(
@@ -264,25 +269,25 @@ class _AdviceHeroCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 18),
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 292),
+                      constraints: const BoxConstraints(maxWidth: 318),
                       child: Text(
                         detail?.description.isNotEmpty == true
                             ? detail!.description
                             : suggestion.subtitle,
-                        maxLines: 3,
+                        maxLines: 4,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.body.copyWith(
-                          color: AppColors.muted,
-                          fontSize: 16,
-                          height: 1.46,
-                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink2.withValues(alpha: 0.72),
+                          fontSize: 15,
+                          height: 1.52,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
                     if (metaChips.isNotEmpty) ...[
-                      const Spacer(),
+                      const SizedBox(height: 22),
                       Row(
                         children: [
                           for (var index = 0;
@@ -321,7 +326,7 @@ class _MetaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 11),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(12),
@@ -340,7 +345,7 @@ class _MetaChip extends StatelessWidget {
               style: AppTextStyles.small.copyWith(
                 color: AppColors.ink,
                 fontSize: 13.5,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

@@ -103,14 +103,23 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: screen()));
 
     expect(find.bySemanticsLabel('田掌柜'), findsOneWidget);
-    expect(find.text('AI帮我填'), findsOneWidget);
-    expect(find.text('输入一句，自动整理成记录'), findsOneWidget);
-    expect(find.text('输入一句话记录，芽芽会帮你整理'), findsOneWidget);
-    expect(find.text('立即识别'), findsOneWidget);
-    expect(find.text('自己填'), findsOneWidget);
+    expect(find.text('芽芽智能填写'), findsOneWidget);
+    expect(find.text('今天要记什么？'), findsOneWidget);
+    expect(find.text('说一句，芽芽会整理成账目、农事或工资'), findsOneWidget);
+    expect(find.text('识别'), findsOneWidget);
+    expect(find.text('手动记一笔'), findsOneWidget);
+    expect(find.text('AI帮我填'), findsNothing);
+    expect(find.text('自己填'), findsNothing);
+    expect(find.text('经营报告'), findsOneWidget);
+    expect(find.text('生成周报'), findsOneWidget);
+    expect(find.text('生成月报'), findsOneWidget);
+    expect(find.text('今日概览'), findsOneWidget);
     expect(find.text('开始说话'), findsNothing);
     expect(find.text('例如：今天买饲料 3680 元'), findsNothing);
-    expect(find.text('记账'), findsOneWidget);
+    expect(find.text('常用工具'), findsOneWidget);
+    expect(find.text('建批次'), findsOneWidget);
+    expect(find.text('最近记录'), findsOneWidget);
+    expect(find.text('补记录'), findsOneWidget);
     expect(find.text('建模板'), findsOneWidget);
     expect(find.text('AI待确认'), findsNothing);
     expect(find.text('改一下'), findsNothing);
@@ -121,8 +130,7 @@ void main() {
   testWidgets('记录页窄屏输入框使用单行短提示', (tester) async {
     await pumpAtWidth(tester, screen(), width: 320);
 
-    expect(find.text('输入一句，芽芽整理'), findsOneWidget);
-    expect(find.text('输入一句话记录，芽芽会帮你整理'), findsNothing);
+    expect(find.text('例：买肥料300，老王工资200'), findsOneWidget);
     final field = tester.widget<TextField>(find.byType(TextField).first);
     expect(field.minLines, 1);
     expect(field.maxLines, 1);
@@ -136,7 +144,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: screenWithAdapter(adapter)));
 
     await tester.enterText(find.byType(TextField), '今天买种子 120 元');
-    await tester.tap(find.text('立即识别'));
+    await tester.tap(find.text('识别'));
     await tester.pumpAndSettle();
 
     final request = adapter.find('POST', '/smart-fill/parse');
@@ -149,20 +157,10 @@ void main() {
     expect(find.textContaining('/'), findsNothing);
   });
 
-  testWidgets('手动快捷记账入口进入记账页', (tester) async {
+  testWidgets('手动记一笔入口进入手动记账页', (tester) async {
     await tester.pumpWidget(MaterialApp(home: screen()));
 
-    await tester.tap(find.text('记账').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('保存记录'), findsOneWidget);
-    expect(find.text('金额'), findsOneWidget);
-  });
-
-  testWidgets('自己填入口进入手动记账页', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: screen()));
-
-    await tester.tap(find.text('自己填'));
+    await tester.tap(find.text('手动记一笔'));
     await tester.pumpAndSettle();
 
     expect(find.text('保存记录'), findsOneWidget);
@@ -172,7 +170,7 @@ void main() {
   testWidgets('记农事入口进入农事记录页', (tester) async {
     await tester.pumpWidget(MaterialApp(home: screen()));
 
-    await tester.tap(find.text('记农事'));
+    await tester.tap(find.text('记农事').first);
     await tester.pumpAndSettle();
 
     expect(find.text('记农事'), findsWidgets);
@@ -183,7 +181,7 @@ void main() {
   testWidgets('记工资入口进入工资记录页', (tester) async {
     await tester.pumpWidget(MaterialApp(home: screen()));
 
-    await tester.tap(find.text('记工资'));
+    await tester.tap(find.text('记工资').first);
     await tester.pumpAndSettle();
 
     expect(find.text('记工资'), findsWidgets);
@@ -201,9 +199,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('记账').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('账本').last);
+    final recentEntry = find.text('最近记录');
+    await tester.ensureVisible(recentEntry);
+    await tester.tap(recentEntry);
     await tester.pumpAndSettle();
 
     expect(selectedIndex, 3);
@@ -220,7 +218,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('记账').last);
+    await tester.tap(find.text('手动记一笔'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, '输入金额'), '200');
     await tester.tap(find.text('保存记录'));

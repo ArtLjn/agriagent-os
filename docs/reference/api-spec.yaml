@@ -6,6 +6,19 @@ info:
 servers:
   - url: /api/v1
 paths:
+  /admin/config:
+    get:
+      tags:
+        - admin
+      summary: 获取运行时配置
+      description: 返回管理后台展示用的运行时配置；敏感字段已脱敏。
+      responses:
+        '200':
+          description: 当前运行时配置。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminConfig'
   /crops/templates:
     post:
       tags:
@@ -87,6 +100,82 @@ paths:
           description: 系统模板不存在。
 components:
   schemas:
+    AdminAIConfig:
+      type: object
+      required:
+        - model
+        - base_url
+        - api_key
+        - enable_thinking
+        - enable_session_summary
+      properties:
+        model:
+          type: string
+        base_url:
+          type: string
+        api_key:
+          type: string
+          description: 脱敏后的 API key。
+        enable_thinking:
+          type: boolean
+        enable_session_summary:
+          type: boolean
+          description: 是否启用同 session running summary 自动生成。
+    AdminTraceConfig:
+      type: object
+      required:
+        - batch_size
+        - flush_interval
+        - trace_ttl_days
+      properties:
+        batch_size:
+          type: integer
+        flush_interval:
+          type: number
+        trace_ttl_days:
+          type: integer
+    AdminTokenQuotaConfig:
+      type: object
+      required:
+        - monthly_limit
+        - weekly_limit
+        - over_quota_action
+      properties:
+        monthly_limit:
+          type: integer
+        weekly_limit:
+          type: integer
+        over_quota_action:
+          type: string
+          enum:
+            - warn
+            - reject
+    AdminLangSmithConfig:
+      type: object
+      required:
+        - enabled
+        - project
+      properties:
+        enabled:
+          type: boolean
+        project:
+          type: string
+    AdminConfig:
+      type: object
+      required:
+        - ai
+        - trace
+        - token_quota
+        - langsmith
+      properties:
+        ai:
+          $ref: '#/components/schemas/AdminAIConfig'
+        trace:
+          $ref: '#/components/schemas/AdminTraceConfig'
+        token_quota:
+          $ref: '#/components/schemas/AdminTokenQuotaConfig'
+        langsmith:
+          $ref: '#/components/schemas/AdminLangSmithConfig'
     GrowthStageCreate:
       type: object
       required:

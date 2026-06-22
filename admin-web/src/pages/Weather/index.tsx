@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, InputNumber, Row, Space, Statistic, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, InputNumber, Row, Select, Space, Statistic, Tag, Typography, message } from 'antd';
 import {
   CloudOutlined,
   DashboardOutlined,
@@ -8,7 +8,7 @@ import {
   ThunderboltOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { getForecast } from '../../api/weather';
+import { getForecast, searchLocations, type LocationOption } from '../../api/weather';
 import { MetricCard, PageShell, StateBlock, Toolbar } from '../../components/PageShell';
 import { cardStyle, palette } from '../../styles/theme';
 import { buildWeatherSummary, buildWeatherView, type WeatherViewDay } from './weatherModel';
@@ -19,12 +19,20 @@ export default function Weather() {
   const [weather, setWeather] = useState<WeatherViewDay[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [summary, setSummary] = useState('暂无天气数据');
+  const [selectedLocation, setSelectedLocation] = useState<LocationOption | null>(null);
+  const [locationOptions, setLocationOptions] = useState<LocationOption[]>([]);
+  const [locationSearching, setLocationSearching] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const fetchWeather = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getForecast(queryDays);
+      const res = await getForecast({
+        days: queryDays,
+        location: selectedLocation?.display_name,
+        lat: selectedLocation?.lat,
+        lon: selectedLocation?.lon,
+      });
       setWeather(buildWeatherView(res.days));
       setWarnings(res.warnings ?? []);
       setSummary(buildWeatherSummary(res.days, res.warnings));
@@ -36,7 +44,7 @@ export default function Weather() {
     } finally {
       setLoading(false);
     }
-  }, [queryDays]);
+  }, [queryDays, selectedLocation]);
 
   useEffect(() => { fetchWeather(); }, [fetchWeather]);
 
@@ -46,6 +54,31 @@ export default function Weather() {
       return;
     }
     setQueryDays(days);
+  };
+
+  const handleSearchLocation = async (query: string) => {
+    const keyword = query.trim();
+    if (!keyword) {
+      setLocationOptions([]);
+      return;
+    }
+    setLocationSearching(true);
+    try {
+      setLocationOptions(await searchLocations(keyword));
+    } catch {
+      setLocationOptions([]);
+    } finally {
+      setLocationSearching(false);
+    }
+  };
+
+  const handleSelectLocation = (value?: string) => {
+    if (!value) {
+      setSelectedLocation(null);
+      return;
+    }
+    const option = locationOptions.find((item) => item.display_name === value);
+    if (option) setSelectedLocation(option);
   };
 
   const hotDays = weather.filter((day) => day.riskText === '高温').length;
@@ -62,6 +95,21 @@ export default function Weather() {
           <>
             <span style={{ color: palette.textMuted, fontSize: 13 }}>预报天数</span>
             <InputNumber min={1} max={16} value={days} onChange={(v) => setDays(v ?? 7)} />
+            <Select
+              allowClear
+              showSearch
+              filterOption={false}
+              loading={locationSearching}
+              placeholder="搜索地点"
+              value={selectedLocation?.display_name}
+              style={{ width: 240 }}
+              onSearch={handleSearchLocation}
+              onChange={handleSelectLocation}
+              options={locationOptions.map((item) => ({
+                value: item.display_name,
+                label: item.display_name,
+              }))}
+            />
             <Button
               type="primary"
               icon={<ReloadOutlined />}

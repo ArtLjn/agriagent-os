@@ -102,7 +102,7 @@ def safe_parse_json(text: str) -> dict:
         try:
             return json.loads(repaired)
         except json.JSONDecodeError as e:
-            logger.error("JSON 解析失败 | raw=%s error=%s", raw[:100], e)
+            logger.warning("JSON 解析失败 | raw=%s error=%s", raw[:100], e)
             raise ValueError(f"AI 返回格式异常: {raw[:100]}")
 
 

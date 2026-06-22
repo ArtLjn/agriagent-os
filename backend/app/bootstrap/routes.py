@@ -20,6 +20,7 @@ from app.api import (
     cycle,
     debt,
     feedback,
+    locations,
     log,
     planting,
     smart_fill,
@@ -42,6 +43,7 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(agent.router)
     app.include_router(auth.router)
     app.include_router(weather.router)
+    app.include_router(locations.router)
     app.include_router(admin.router)
     app.include_router(admin_data_flywheel.router)
     app.include_router(admin_data_flywheel_repair_packs.router)

@@ -36,9 +36,9 @@
 - 不上 MemGPT / Letta 自治 memory 模型
 - 不引入新 LLM provider（如 Haiku），复用现有 qwen
 - 不改 LangGraph 拓扑（保持现有 Response 节点不变，仅在末尾挂异步任务）
-- 不做跨 session 长期记忆（Phase B 范围）
+- 不做跨 session 长期记忆（由 `add-long-term-memory-observations` 单独承接）
 - 不做 prompt-level 摘要缓存（成本敏感场景再考虑）
-- 不扩 ConversationSelector 默认窗口（Phase B 范围）
+- 不扩 ConversationSelector 默认窗口
 
 ## Decisions
 
@@ -130,62 +130,6 @@
 - 上线初期可以快速回滚而不重新部署
 - A/B 测试时可以对照效果
 
-### D9：长期记忆与摘要共触发，一次 LLM 调用两份产出
-
-**选择**：摘要 prompt 与抽取 prompt **合并**——Response 节点后一次 LLM 调用同时输出 `{summary, observations}`。
-
-**理由**：
-- 两者都需要"看一遍最近窗口消息"，输入重叠
-- 分两次 LLM 调用成本翻倍，且增加 DashScope 配额压力
-- 合并 prompt 只增加少量输出 token（observations JSON 几百字符）
-
-**Alternatives**：
-- 分两次独立调用（rejected：成本翻倍）
-- 只做摘要，不做抽取（rejected：用户喜好无沉淀仍是痛点）
-
-### D10：5 类记忆，不做类型合并
-
-**选择**：固定 5 类 `preference / habit / alias / event / fact`，与 [04_Memory工程 § 4](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md) 一致。
-
-**理由**：
-- 类型决定流转规则（fact 永久，preference 可覆盖）
-- 合并类型会让 archive / superseded 逻辑混乱
-
-### D11：candidate→confirmed 双轨触发
-
-**选择**：升级路径有两条并行：
-1. 用户显式确认（"对"、"以后都这样"）→ confirmed (0.8)
-2. 同类候选重复 N=3 次 → 自动 confirmed (0.7)
-
-**理由**：
-- 显式确认置信度高
-- 隐式重复说明习惯稳定，应升级
-- 两条独立触发，互不阻塞
-
-**Alternatives**：
-- 只允许显式确认（rejected：用户不会每次确认，导致候选队列堆积）
-- 只看重复次数（rejected：误抽会因重复升级为 confirmed）
-
-### D12：不做 embedding 相似检索，SQL where 够用
-
-**选择**：长期记忆注入只按 `farm_id + status + importance + last_referenced_at` 排序取前 5 条，不做向量相似。
-
-**理由**：
-- 用户偏好是结构化事实（"我喜欢下午浇水"），与当前对话的关联靠 LLM 自身判断更准
-- 当前用户量 < 10，每户 memory_records < 100，SQL 排序足够快
-- 引入 embedding 等于引入向量库，违背 [brainstorming spec § 5](../../../docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md) "Qdrant 暂缓"决策
-
-### D13：显式说 vs 隐式抽的分流
-
-**选择**：
-- 显式：用户说"记一下"、"记住"等触发词 → LLM 不参与判断，直接 `source=user_explicit, importance=0.8, status=confirmed`
-- 隐式：LLM 在抽取阶段输出 → `source=llm_extracted, importance=0.3, status=candidate`
-
-**理由**：
-- 显式用户意图明确，无需候选阶段
-- 隐式需要校验，走候选流程
-- 通过 `source` 字段区分，便于追溯
-
 ## Risks / Trade-offs
 
 | Risk | Mitigation |
@@ -195,13 +139,9 @@
 | 异步任务异常拖累 event loop | `asyncio.create_task` 内全 catch，任务长度限制 30s 超时 |
 | 并发写 `conversations.summary`（多请求同 session） | `summary_updated_at` 时间戳乐观锁；版本旧的不覆盖新的 |
 | 摘要 prompt 与人设/语言不一致 | prompt 模板走 PromptComposer，复用人设变量 |
-| 用户跨 session 仍失忆 | 本提案已落地长期记忆（D9-D13），跨 session 偏好通过 memory_records 表持久化解决 |
+| 用户跨 session 仍失忆 | 本提案只解决同 session 工作记忆；跨 session 偏好由 `add-long-term-memory-observations` 后续解决 |
 | 摘要生成延迟，用户感知 | 异步触发，下一轮才生效；首启可接受 1-2 轮"过渡期" |
 | 历史数据未回填 | 明确不回填，从接入日起向前生成；老 session 仍走截断 |
-| LLM 抽取出错误偏好污染 | candidate 阶段 importance=0.3，仅 confirmed 后高优先级注入；用户可主动否决触发 superseded |
-| 候选队列无限堆积 | 90 天未被引用 + importance < 0.5 自动 archive |
-| 同类候选"重复 N 次"识别难 | 第一版用 type + 内容前 50 字符 hash 去重；后续按 trace 数据再优化 |
-| 显式触发词覆盖不全 | 第一版固定列表（"记一下"、"记住"、"以后都"），后续按 bad case 补 |
 
 ## Migration Plan
 

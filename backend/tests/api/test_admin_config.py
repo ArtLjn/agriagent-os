@@ -62,6 +62,15 @@ class TestGetConfig:
         assert data["token_quota"]["over_quota_action"] == "reject"
         assert "daily_limit" not in data["token_quota"]
 
+    def test_config_returns_session_summary_flag(self, db_session) -> None:
+        ensure_admin_user(db_session)
+        with auth_override_scope(app):
+            resp = TestClient(app).get("/admin/config", headers=admin_headers())
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ai"]["enable_session_summary"] is True
+
 
 class TestClearCache:
     def test_clear_cache(self, db_session) -> None:

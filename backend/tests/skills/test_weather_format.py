@@ -135,7 +135,7 @@ class TestWeatherLocationMissing:
     async def test_explicit_city_can_query_without_farm_location(
         self, mock_fetch_weather, db_session, monkeypatch
     ):
-        """用户显式给城市时不依赖 Farm.location。"""
+        """用户显式给城市时不依赖 Farm.location，并补齐内置坐标。"""
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
         farm.location = "睢宁县"
         db_session.commit()
@@ -146,17 +146,109 @@ class TestWeatherLocationMissing:
         )
         mock_fetch_weather.return_value = _make_weather_data()
 
-        result = await WeatherSkill().execute({"city": "上海"}, SkillContext())
+        result = await WeatherSkill().execute({"city": "苏州"}, SkillContext())
 
         assert result.status.value == "success"
         mock_fetch_weather.assert_awaited_once_with(
-            "上海",
+            "苏州",
             days=3,
-            lat=None,
-            lon=None,
+            lat=31.299487,
+            lon=120.581823,
         )
         db_session.refresh(farm)
         assert farm.location == "睢宁县"
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    async def test_explicit_location_parameter_is_supported(
+        self, mock_fetch_weather
+    ):
+        """兼容 skill.md 声明的 location 参数，避免 LLM 传参被忽略。"""
+        mock_fetch_weather.return_value = _make_weather_data()
+
+        result = await WeatherSkill().execute(
+            {"location": "苏州"},
+            SkillContext(farm_id=1),
+        )
+
+        assert result.status.value == "success"
+        mock_fetch_weather.assert_awaited_once_with(
+            "苏州",
+            days=3,
+            lat=31.299487,
+            lon=120.581823,
+        )
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    async def test_ambiguous_location_requires_clarification(
+        self, mock_fetch_weather
+    ):
+        """裸鼓楼区可能属于南京或徐州，不能静默查询。"""
+        result = await WeatherSkill().execute(
+            {"location": "鼓楼区"},
+            SkillContext(farm_id=1),
+        )
+
+        assert result.status.value == "need_clarify"
+        assert "南京鼓楼区" in result.reply
+        assert "徐州鼓楼区" in result.reply
+        mock_fetch_weather.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    async def test_ambiguous_location_uses_saved_coordinates(
+        self, mock_fetch_weather, db_session, monkeypatch
+    ):
+        """用户已保存同名地点坐标时，Agent 直接按经纬度查询。"""
+        setting = UserSetting(
+            user_id="test-user-001",
+            default_city="鼓楼区",
+            default_lat=34.28889,
+            default_lon=117.18559,
+        )
+        db_session.add(setting)
+        db_session.commit()
+        monkeypatch.setattr(
+            _weather_mod,
+            "SessionLocal",
+            lambda: _SessionProxy(db_session),
+        )
+        mock_fetch_weather.return_value = _make_weather_data()
+
+        result = await WeatherSkill().execute(
+            {"location": "鼓楼区"},
+            SkillContext(farm_id=1),
+        )
+
+        assert result.status.value == "success"
+        mock_fetch_weather.assert_awaited_once_with(
+            "鼓楼区",
+            days=3,
+            lat=34.28889,
+            lon=117.18559,
+        )
+
+    @pytest.mark.asyncio
+    @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    async def test_qualified_ambiguous_location_uses_alias_coords(
+        self, mock_fetch_weather
+    ):
+        """带上级城市的重名区县可安全解析坐标。"""
+        mock_fetch_weather.return_value = _make_weather_data()
+
+        result = await WeatherSkill().execute(
+            {"location": "徐州鼓楼区"},
+            SkillContext(farm_id=1),
+        )
+
+        assert result.status.value == "success"
+        mock_fetch_weather.assert_awaited_once_with(
+            "徐州鼓楼区",
+            days=3,
+            lat=34.28889,
+            lon=117.18559,
+        )
 
     @pytest.mark.asyncio
     @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
@@ -187,8 +279,8 @@ class TestWeatherLocationMissing:
         mock_fetch_weather.assert_awaited_once_with(
             "睢宁县",
             days=3,
-            lat=None,
-            lon=None,
+            lat=33.914129,
+            lon=117.935535,
         )
 
     @pytest.mark.asyncio

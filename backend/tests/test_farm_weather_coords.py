@@ -35,7 +35,7 @@ class TestWeatherLineCoords:
     async def test_farm_location_has_priority_over_user_setting(
         self, db_session, monkeypatch
     ):
-        """农场经营地区存在时优先使用 farm.location。"""
+        """农场经营地区存在时优先使用 farm.location，并补齐坐标。"""
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
         farm.location = "睢宁县"
         setting = UserSetting(
@@ -57,8 +57,8 @@ class TestWeatherLineCoords:
         fetch_weather.assert_awaited_once_with(
             "睢宁县",
             days=3,
-            lat=None,
-            lon=None,
+            lat=33.914129,
+            lon=117.935535,
         )
 
     async def test_with_user_setting_uses_user_coords(self, db_session, monkeypatch):

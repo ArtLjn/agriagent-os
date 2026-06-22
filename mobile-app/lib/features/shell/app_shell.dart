@@ -117,6 +117,8 @@ class _AppShellState extends State<AppShell> {
             ),
             ProfileScreen(
               repository: widget.dependencies.profile,
+              locations: widget.dependencies.locations,
+              location: widget.dependencies.location,
               onLogout: widget.onLogout,
             ),
           ],

@@ -47,6 +47,14 @@ class AppAssets {
   static const recordBrandLogo = 'assets/images/record/brand_logo.png';
   static const recordManualNote = 'assets/images/record/manual_note.png';
   static const recordMicrophone = 'assets/images/record/microphone.png';
+  static const recordOverviewRecordedBlue =
+      'assets/images/record/overview/overview_recorded_blue.png';
+  static const recordOverviewPendingOrange =
+      'assets/images/record/overview/overview_pending_orange.png';
+  static const recordOverviewWorkersGreen =
+      'assets/images/record/overview/overview_workers_green.png';
+  static const recordOverviewWalletPurple =
+      'assets/images/record/overview/overview_wallet_purple.png';
   static const recordQuickBatch = 'assets/images/record/quick_batch.png';
   static const recordQuickFarm = 'assets/images/record/quick_farm.png';
   static const recordQuickLedger = 'assets/images/record/quick_ledger.png';
