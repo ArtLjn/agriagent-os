@@ -61,6 +61,13 @@ class AppAssets {
   static const recordQuickTemplate = 'assets/images/record/quick_template.png';
   static const recordQuickWage = 'assets/images/record/quick_wage.png';
   static const recordQuickWorker = 'assets/images/record/quick_worker.png';
+  static const recordToolBatch = 'assets/images/record/tools/tool_batch.png';
+  static const recordToolPatch = 'assets/images/record/tools/tool_patch.png';
+  static const recordToolRecent = 'assets/images/record/tools/tool_recent.png';
+  static const recordToolTemplate =
+      'assets/images/record/tools/tool_template.png';
+  static const recordToolWage = 'assets/images/record/tools/tool_wage.png';
+  static const recordToolWorker = 'assets/images/record/tools/tool_worker.png';
   static const recordVoiceWave = 'assets/images/record/voice_wave.png';
   static const yayaMascotLogo = 'assets/images/yaya/mascot_logo.png';
   static const yayaSkillsBanner = 'assets/images/yaya/skills_banner.png';

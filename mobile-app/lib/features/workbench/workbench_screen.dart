@@ -1079,16 +1079,41 @@ class _ToolSection extends StatelessWidget {
 
   static const items = [
     _ToolItem(
-        '建批次', LucideIcons.layers, AppColors.purple, AppColors.purpleSoft),
+      '建批次',
+      AppColors.purple,
+      AppColors.purpleSoft,
+      AppAssets.recordToolBatch,
+    ),
     _ToolItem(
-        '新增工人', LucideIcons.userRoundPlus, AppColors.blue, AppColors.blueSoft),
+      '新增工人',
+      AppColors.blue,
+      AppColors.blueSoft,
+      AppAssets.recordToolWorker,
+    ),
     _ToolItem(
-        '建模板', LucideIcons.fileText, AppColors.greenDark, AppColors.greenSoft),
-    _ToolItem('最近记录', LucideIcons.clock, AppColors.blue, AppColors.blueSoft),
+      '建模板',
+      AppColors.greenDark,
+      AppColors.greenSoft,
+      AppAssets.recordToolTemplate,
+    ),
     _ToolItem(
-        '补记录', LucideIcons.pencilLine, AppColors.amber, AppColors.amberSoft),
+      '最近记录',
+      AppColors.blue,
+      AppColors.blueSoft,
+      AppAssets.recordToolRecent,
+    ),
     _ToolItem(
-        '工资结算', LucideIcons.walletCards, AppColors.amber, AppColors.amberSoft),
+      '补记录',
+      AppColors.amber,
+      AppColors.amberSoft,
+      AppAssets.recordToolPatch,
+    ),
+    _ToolItem(
+      '工资结算',
+      AppColors.amber,
+      AppColors.amberSoft,
+      AppAssets.recordToolWage,
+    ),
   ];
 
   @override
@@ -1154,36 +1179,57 @@ class _ToolTile extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 10),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 9),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(13),
           border: Border.all(color: AppColors.lineSoft),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Container(
-              width: compact ? 30 : 31,
-              height: compact ? 30 : 31,
+              width: compact ? 30 : 32,
+              height: compact ? 30 : 32,
               decoration: BoxDecoration(
                 color: item.background,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(
+                  color: item.color.withValues(alpha: 0.08),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: item.color.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child:
-                  Icon(item.icon, size: compact ? 17 : 18, color: item.color),
+              child: Center(
+                child: Image.asset(
+                  item.asset,
+                  width: compact ? 22 : 24,
+                  height: compact ? 22 : 24,
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
-            SizedBox(width: compact ? 6 : 7),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  item.label,
-                  maxLines: 1,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.ink2,
-                    fontSize: compact ? 12.5 : 13,
-                    fontWeight: FontWeight.w700,
+            SizedBox(width: compact ? 5 : 6),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    item.label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.ink2,
+                      fontSize: compact ? 12.5 : 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -1196,12 +1242,17 @@ class _ToolTile extends StatelessWidget {
 }
 
 class _ToolItem {
-  const _ToolItem(this.label, this.icon, this.color, this.background);
+  const _ToolItem(
+    this.label,
+    this.color,
+    this.background,
+    this.asset,
+  );
 
   final String label;
-  final IconData icon;
   final Color color;
   final Color background;
+  final String asset;
 }
 
 class _SectionHeading extends StatelessWidget {
