@@ -7,6 +7,16 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 
+@pytest.fixture(autouse=True)
+def load_prompt_registry():
+    from app.core.config import settings
+    from app.prompt.registry import get_registry
+
+    get_registry().reload(settings.prompts_dir)
+    yield
+    get_registry().reload()
+
+
 def test_render_summary_prompt_keeps_protected_field_requirements():
     from app.memory.summarizer import render_summary_prompt
 
@@ -29,6 +39,30 @@ def test_render_summary_prompt_keeps_protected_field_requirements():
     assert "pending action 类型与关键参数" in prompt
     assert "追加段落" in prompt
     assert "不要重写" in prompt
+
+
+def test_render_summary_prompt_uses_registry_template(monkeypatch):
+    from app.memory import summarizer
+
+    calls = []
+
+    class Registry:
+        def get(self, name):
+            calls.append(name)
+            return "摘要模板：{{ current_summary }} / {{ recent_messages }} / {{ persona }}"
+
+    monkeypatch.setattr(summarizer, "get_registry", lambda: Registry())
+
+    prompt = summarizer.render_summary_prompt(
+        current_summary="旧摘要",
+        recent_messages=[HumanMessage(content="新消息")],
+        persona="助手人设",
+    )
+
+    assert calls == ["memory.running_summary"]
+    assert "旧摘要" in prompt
+    assert "新消息" in prompt
+    assert "助手人设" in prompt
 
 
 @pytest.mark.asyncio

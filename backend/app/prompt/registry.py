@@ -13,6 +13,8 @@ from app.prompt.models import PromptVersion
 
 logger = logging.getLogger(__name__)
 
+MEMORY_RUNNING_SUMMARY_PROMPT = "memory.running_summary"
+
 
 class PromptRegistry:
     """内存中的 Prompt 模板注册表，支持版本注册和活跃版本选择。"""
@@ -99,6 +101,7 @@ class PromptRegistry:
             self._active_versions.clear()
         if prompts_dir:
             self._load_from_dir(prompts_dir)
+            self._load_memory_prompts(prompts_dir)
 
     def _load_from_dir(self, prompts_dir: Path) -> None:
         """从 prompts/ 目录加载模板。"""
@@ -142,6 +145,25 @@ class PromptRegistry:
             self._register_alias(alias, target)
 
         logger.info("Prompt 加载完成 | count=%d", len(self._templates))
+
+    def _load_memory_prompts(self, prompts_dir: Path) -> None:
+        """加载 memory 子域 prompt，并注册到统一 registry。"""
+        app_dir = prompts_dir.parent / "app"
+        summary_path = app_dir / "memory" / "prompts" / "summary.md"
+        if not summary_path.exists():
+            logger.warning("Memory 摘要模板不存在: %s", summary_path)
+            return
+        self.register(
+            MEMORY_RUNNING_SUMMARY_PROMPT,
+            "1.0",
+            summary_path.read_text(),
+            metadata={
+                "file": str(summary_path.relative_to(prompts_dir.parent)),
+                "domain": "memory",
+                "description": "会话 running summary 生成 prompt",
+            },
+            active=True,
+        )
 
     def _register_alias(self, alias: str, target: str) -> None:
         with self._lock:

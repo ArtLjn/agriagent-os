@@ -47,7 +47,8 @@ COPYFILE_DISABLE=1 tar czf /tmp/farm-backend-sync.tar.gz \
     backend/config.yaml \
     backend/config.yaml.example \
     backend/providers.json \
-    backend/prompts
+    backend/prompts \
+    shared/location
 
 log "上传到服务器..."
 # 清理可能残留的旧包（sticky bit 下 scp 无法覆盖非当前用户拥有的文件）
@@ -84,7 +85,7 @@ rlog "解压..."
 tar xzf /tmp/farm-backend-sync.tar.gz 2>&1 | grep -v 'LIBARCHIVE.xattr' || true
 rm -f /tmp/farm-backend-sync.tar.gz
 
-# --- 备份旧代码 + config ---
+# --- 备份旧代码 + config + shared 数据 ---
 rlog "备份旧代码..."
 BACKUP_DIR="/tmp/farm-backup-${TIMESTAMP}"
 mkdir -p "${BACKUP_DIR}"
@@ -95,6 +96,11 @@ done
 [ -f config.yaml ] && cp config.yaml "${BACKUP_DIR}/"
 [ -f providers.json ] && cp providers.json "${BACKUP_DIR}/"
 [ -f requirements.txt ] && cp requirements.txt "${BACKUP_DIR}/"
+# shared 目录位于 REMOTE_DIR 上一级（仓库根）
+if [ -d "../shared" ]; then
+    rm -rf "${BACKUP_DIR}/shared"
+    cp -a "../shared" "${BACKUP_DIR}/shared"
+fi
 rlog "备份已保存到 ${BACKUP_DIR}"
 
 # --- 自动回滚函数（建表或启动失败时调用）---
@@ -107,6 +113,10 @@ rollback() {
     [ -f "${BACKUP_DIR}/config.yaml" ] && cp "${BACKUP_DIR}/config.yaml" .
     [ -f "${BACKUP_DIR}/providers.json" ] && cp "${BACKUP_DIR}/providers.json" .
     [ -f "${BACKUP_DIR}/requirements.txt" ] && cp "${BACKUP_DIR}/requirements.txt" .
+    if [ -d "${BACKUP_DIR}/shared" ]; then
+        rm -rf "../shared"
+        cp -a "${BACKUP_DIR}/shared" "../shared"
+    fi
     systemctl restart "${SERVICE_NAME}" 2>/dev/null || true
     rlog "已回滚到 ${BACKUP_DIR}"
 }
@@ -123,6 +133,13 @@ mv backend/requirements.txt .
 mv backend/config.yaml .
 mv backend/config.yaml.example .
 [ -f backend/providers.json ] && mv backend/providers.json .
+# shared 部署到仓库根（REMOTE_DIR 上一级），代码通过 parents[3] 解析
+if [ -d shared ]; then
+    mkdir -p ../shared
+    rm -rf ../shared/location
+    mv shared/location ../shared/
+    rm -rf shared
+fi
 rm -rf backend
 
 # --- 配置兜底 ---
@@ -220,8 +237,8 @@ systemctl restart "${SERVICE_NAME}"
 # --- 健康检查 ---
 rlog "等待启动..."
 for i in $(seq 1 20); do
-    # 优先尝试 /api/v1/health，fallback 到 /docs
-    if curl -sf "http://localhost:${APP_PORT}/api/v1/health" > /dev/null 2>&1; then
+    # 优先尝试 /health（应用根路由），fallback 到 /docs
+    if curl -sf "http://localhost:${APP_PORT}/health" > /dev/null 2>&1; then
         echo "  部署成功！"
         echo "  API:    http://${SERVER_HOST}:${APP_PORT}"
         echo "  文档:   http://${SERVER_HOST}:${APP_PORT}/docs"

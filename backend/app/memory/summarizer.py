@@ -7,7 +7,6 @@ import inspect
 import logging
 import time
 from collections.abc import Iterable
-from pathlib import Path
 from typing import Any
 
 from jinja2 import Template
@@ -21,10 +20,10 @@ from app.agent.runtime.llm_support import (
 from app.core.config import settings
 from app.infra.trace_collector import get_collector
 from app.observability.metrics import increment_counter
+from app.prompt.registry import MEMORY_RUNNING_SUMMARY_PROMPT, get_registry
 
 logger = logging.getLogger(__name__)
 
-SUMMARY_PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "summary.md"
 SUMMARY_TIMEOUT_SECONDS = 30
 NO_SUMMARY_SENTINELS = {"无新增摘要", "无新增摘要。"}
 
@@ -36,7 +35,7 @@ def render_summary_prompt(
     persona: str | None,
 ) -> str:
     """渲染会话摘要 prompt。"""
-    template = Template(SUMMARY_PROMPT_PATH.read_text())
+    template = Template(get_registry().get(MEMORY_RUNNING_SUMMARY_PROMPT))
     return template.render(
         current_summary=current_summary or "",
         recent_messages=_format_messages(recent_messages),

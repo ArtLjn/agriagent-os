@@ -1,5 +1,7 @@
 """Tests for PromptRegistry."""
 
+from pathlib import Path
+
 import pytest
 
 from app.agent.prompt_registry import PromptRegistry
@@ -41,6 +43,16 @@ class TestPromptRegistry:
         reg.reload()
         with pytest.raises(KeyError):
             reg.get("test")
+
+    def test_reload_registers_memory_running_summary_prompt(self):
+        prompts_dir = Path(__file__).resolve().parents[2] / "prompts"
+        reg = PromptRegistry()
+
+        reg.reload(prompts_dir)
+
+        content = reg.get("memory.running_summary")
+        assert "当前摘要" in content
+        assert "追加段落" in content
 
     def test_get_fallback_removed(self):
         """get_fallback 方法已被删除。"""
