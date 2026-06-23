@@ -8,230 +8,194 @@ class LedgerSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _LedgerSectionCard(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       radius: 22,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(18, 17, 18, 16),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFF4FAFF),
-                    Color(0xFFEAF4FF),
-                  ],
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        '资金概览',
-                        style: AppTextStyles.dateTitle.copyWith(
-                          color: _LedgerColors.ink,
-                          fontSize: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const _LedgerPill(
-                        text: '本年',
-                        foreground: AppColors.blue,
-                        background: Colors.white,
-                        borderColor: Color(0xFFDDEBFF),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '本年收支结构 · 待收款 ${model.debtText}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.small.copyWith(
-                      color: AppColors.muted,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-              child: Column(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '年度净收益',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.small.copyWith(
-                                color: AppColors.muted,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                model.netProfitText,
-                                maxLines: 1,
-                                softWrap: false,
-                                style: AppTextStyles.metric.copyWith(
-                                  color: _netProfitColor(model),
-                                  fontSize: 42,
-                                  height: 1,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      SizedBox(
-                        width: 102,
-                        height: 60,
-                        child: CustomPaint(
-                          painter: _LedgerSparklinePainter(
-                            data: model.monthlyTrend,
-                            lineColor: _netProfitColor(model),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  _LedgerMetricsPanel(model: model),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LedgerMetricsPanel extends StatelessWidget {
-  const _LedgerMetricsPanel({required this.model});
-
-  final BillingViewModel model;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: LedgerMetricColumn(
-            icon: LucideIcons.trendingUp,
-            label: '收入',
-            value: model.incomeText,
-            color: _LedgerColors.income,
-            background: _LedgerColors.greenSoft,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: LedgerMetricColumn(
-            icon: LucideIcons.arrowDownToLine,
-            label: '支出',
-            value: model.expenseText,
-            color: _LedgerColors.expense,
-            background: _LedgerColors.amberSoft,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: LedgerMetricColumn(
-            icon: LucideIcons.badgeAlert,
-            label: '欠款',
-            value: model.debtText,
-            color: _LedgerColors.debt,
-            background: _LedgerColors.blueSoft,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class LedgerMetricColumn extends StatelessWidget {
-  const LedgerMetricColumn({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.background,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-  final Color background;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      decoration: BoxDecoration(
-        color: background.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
-              Icon(icon, size: 13, color: color),
-              const SizedBox(width: 4),
-              Expanded(
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.surface2,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  LucideIcons.wallet,
+                  size: 15,
+                  color: AppColors.ink2,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
                 child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(
-                    color: AppColors.muted,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
+                  '账本概览',
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+              const Text(
+                '本年',
+                style: TextStyle(
+                  color: AppColors.subtle,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '年度净收益',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      model.netProfitText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: _netProfitColor(model),
+                        fontSize: model.netProfitText.length > 12 ? 24 : 32,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                        letterSpacing: -0.4,
+                        fontFeatures: const [
+                          FontFeature.tabularFigures(),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 96,
+                height: 56,
+                child: CustomPaint(
+                  painter: _LedgerSparklinePainter(
+                    data: model.monthlyTrend,
+                    lineColor: _netProfitColor(model),
                   ),
                 ),
               ),
             ],
           ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: AppTextStyles.dateTitle.copyWith(
-                color: color,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                fontFeatures: const [FontFeature.tabularFigures()],
+          const SizedBox(height: 18),
+          Container(
+            height: 1,
+            color: AppColors.lineSoft,
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricPlain(
+                  label: '收入',
+                  value: model.incomeText,
+                  accent: _LedgerColors.income,
+                ),
               ),
-            ),
+              Container(
+                width: 1,
+                height: 30,
+                color: AppColors.lineSoft,
+              ),
+              Expanded(
+                child: _MetricPlain(
+                  label: '支出',
+                  value: model.expenseText,
+                  accent: _LedgerColors.expense,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 30,
+                color: AppColors.lineSoft,
+              ),
+              Expanded(
+                child: _MetricPlain(
+                  label: '欠款',
+                  value: model.debtText,
+                  accent: model.debtText == '¥0'
+                      ? AppColors.muted
+                      : _LedgerColors.debt,
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MetricPlain extends StatelessWidget {
+  const _MetricPlain({
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  final String label;
+  final String value;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
+          ),
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: TextStyle(
+              color: accent,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -244,20 +208,21 @@ class AiFinanceInsightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _LedgerSectionCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: _LedgerColors.blueSoft,
-              shape: BoxShape.circle,
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
-              LucideIcons.chartNoAxesCombined,
-              color: _LedgerColors.debt,
-              size: 19,
+              LucideIcons.sparkles,
+              color: AppColors.ink2,
+              size: 17,
             ),
           ),
           const SizedBox(width: 12),
@@ -266,25 +231,25 @@ class AiFinanceInsightCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'AI财务洞察',
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: _LedgerColors.ink,
-                    fontSize: 16,
+                const Text(
+                  'AI 财务洞察',
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
+                    letterSpacing: -0.1,
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text.rich(
-                  TextSpan(
-                    text: model.insightText ?? '已读取本年收支数据，建议持续关注大额支出。',
-                  ),
+                Text(
+                  model.insightText ?? '已读取本年收支数据，建议持续关注大额支出。',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(
+                  style: const TextStyle(
                     color: AppColors.muted,
                     fontSize: 12.5,
-                    height: 1.35,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -293,7 +258,7 @@ class AiFinanceInsightCard extends StatelessWidget {
           const SizedBox(width: 6),
           const Icon(
             LucideIcons.chevronRight,
-            size: 18,
+            size: 16,
             color: AppColors.subtle,
           ),
         ],
@@ -394,58 +359,3 @@ Color _netProfitColor(BillingViewModel model) {
   return _LedgerColors.income;
 }
 
-class _LedgerPill extends StatelessWidget {
-  const _LedgerPill({
-    required this.text,
-    this.foreground = const Color(0xFFDCEBFF),
-    this.background = const Color(0x1AFFFFFF),
-    this.borderColor = const Color(0x22FFFFFF),
-  });
-
-  final String text;
-  final Color foreground;
-  final Color background;
-  final Color borderColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            text,
-            style: AppTextStyles.small.copyWith(
-              color: foreground,
-              fontSize: 13,
-              height: 16 / 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricDivider extends StatelessWidget {
-  const _MetricDivider({this.height = 36});
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: height,
-      color: AppColors.lineSoft,
-    );
-  }
-}

@@ -12,33 +12,46 @@ class ReferencePage extends StatelessWidget {
     this.headerTrailing,
     this.showHeaderLogo = true,
     this.bottomPadding = 112,
+    this.overlay,
   });
 
   final List<Widget> children;
   final Widget? headerTrailing;
   final bool showHeaderLogo;
   final double bottomPadding;
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(20, 14, 20, bottomPadding),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ReferenceHeader(
-                  trailing: headerTrailing,
-                  showLogo: showHeaderLogo,
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, bottomPadding),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ReferenceHeader(
+                      trailing: headerTrailing,
+                      showLogo: showHeaderLogo,
+                    ),
+                    ...children,
+                  ],
                 ),
-                ...children,
-              ],
+              ),
             ),
           ),
-        ),
+          if (overlay != null)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 92,
+              child: overlay!,
+            ),
+        ],
       ),
     );
   }

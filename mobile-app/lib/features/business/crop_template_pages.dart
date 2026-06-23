@@ -4,11 +4,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
 import '../../shared/assets/app_assets.dart';
+import '../../shared/widgets/animated_press.dart';
+import '../../shared/widgets/textured_card.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_text_styles.dart';
 import 'bulk_delete_ui.dart';
 import 'business_ui.dart';
-import 'farm_cycle_pages.dart';
 
 class CropTemplateListPage extends StatefulWidget {
   const CropTemplateListPage({
@@ -71,15 +71,12 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
           future: _templatesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Column(
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TemplateLibraryBanner(
-                    asset: AppAssets.businessTemplateOpenBookBanner,
-                    templateCount: 0,
-                  ),
-                  SizedBox(height: 13),
-                  LoadingCard(),
+                  _TemplateLibraryHero(templateCount: 0),
+                  const SizedBox(height: 16),
+                  const LoadingCard(),
                 ],
               );
             }
@@ -92,23 +89,21 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TemplateLibraryBanner(
-                  asset: AppAssets.businessTemplateOpenBookBanner,
-                  templateCount: items.length,
-                ),
-                const SizedBox(height: 13),
+                _TemplateLibraryHero(templateCount: items.length),
+                const SizedBox(height: 16),
                 SearchFieldCard(
                   text: '搜索作物或品种',
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 13),
+                const SizedBox(height: 12),
                 ChipRail(
                   items: _filters,
                   activeIndex: _filterIndex,
+                  activeColor: AppColors.ink,
                   onSelected: (index) => setState(() => _filterIndex = index),
                 ),
-                const SizedBox(height: 13),
+                const SizedBox(height: 16),
                 BulkDeleteListSection(
                   items: visibleItems,
                   hasError: snapshot.hasError,
@@ -132,6 +127,89 @@ class _CropTemplateListPageState extends State<CropTemplateListPage> {
           },
         ),
       ],
+    );
+  }
+}
+
+class _TemplateLibraryHero extends StatelessWidget {
+  const _TemplateLibraryHero({required this.templateCount});
+
+  final int templateCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return TexturedCard(
+      accent: AppColors.blue,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          GradientIconTile(
+            icon: LucideIcons.bookOpenText,
+            accent: AppColors.blue,
+            size: 44,
+            iconSize: 20,
+            borderRadius: 14,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '模板库',
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  templateCount == 0
+                      ? '还没有模板，新建后生成茬口更快'
+                      : '已创建 $templateCount 个作物模板',
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.blueSoft,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  LucideIcons.layers,
+                  size: 12,
+                  color: AppColors.blue,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$templateCount',
+                  style: const TextStyle(
+                    color: AppColors.blue,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -467,122 +545,145 @@ class TemplateListCard extends StatelessWidget {
     final name = _firstNonEmpty([json['name']], fallback: '未命名模板');
     final variety = _firstNonEmpty([json['variety']], fallback: '未填写品种');
     final stageCount = stageNames.length;
-    final days = _firstNonEmpty([json['total_cycle_days']], fallback: '未设置');
+    final days = _firstNonEmpty([json['total_cycle_days']], fallback: '');
     final used = json['usage_count'] ?? 0;
-    return BusinessCard(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SelectionCheckbox(visible: selectionMode, selected: selected),
-              SizedBox(
-                width: 104,
-                child: Image.asset(
-                  AppAssets.businessTemplateBanner,
-                  height: 112,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    LucideIcons.sprout,
-                    color: AppColors.green,
+    return AnimatedPress(
+      scale: 0.99,
+      onTap: selectionMode
+          ? null
+          : () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => CropTemplateFormPage(
+                    repository: repository,
+                    templateId: record.id,
+                    initialRecord: record,
+                    onBottomTabChanged: onBottomTabChanged,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.sectionTitle.copyWith(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    SoftPill(
-                      text: variety,
-                      color: AppColors.greenDark,
-                      background: AppColors.greenSoft,
-                    ),
-                    const SizedBox(height: 9),
-                    Text(
-                      '$stageCount 个阶段 · 周期 $days 天 · 已用于$used个茬口',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.body.copyWith(
-                        color: AppColors.muted,
-                        fontSize: 13,
-                        height: 18 / 13,
-                      ),
-                    ),
-                  ],
-                ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? AppColors.ink : AppColors.lineSoft,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SelectionCheckbox(visible: selectionMode, selected: selected),
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(11),
               ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          MiniStageTimeline(
-            stages: stageNames.take(6).toList(),
-            activeIndex: stageNames.isEmpty ? 0 : stageNames.length - 1,
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: FilledActionButton(
-                  label: '新建茬口',
-                  foreground: businessBlue,
-                  background: AppColors.blueSoft,
-                  borderColor: AppColors.blueSoft,
-                  icon: LucideIcons.layers,
-                  height: 42,
-                  onTap: selectionMode
-                      ? null
-                      : () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => FarmCycleFormPage(
-                                repository: repository,
-                                initialTemplateId: record.id,
-                                initialTemplateName: name,
-                                onBottomTabChanged: onBottomTabChanged,
-                              ),
-                            ),
+              child: const Icon(
+                LucideIcons.sprout,
+                size: 18,
+                color: AppColors.ink2,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                            height: 1.2,
                           ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledActionButton(
-                  label: '编辑',
-                  foreground: AppColors.purple,
-                  background: AppColors.purpleSoft,
-                  borderColor: AppColors.purpleSoft,
-                  icon: LucideIcons.pencil,
-                  height: 42,
-                  onTap: selectionMode
-                      ? null
-                      : () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => CropTemplateFormPage(
-                                repository: repository,
-                                templateId: record.id,
-                                initialRecord: record,
-                                onBottomTabChanged: onBottomTabChanged,
-                              ),
-                            ),
+                        ),
+                      ),
+                      if (variety.isNotEmpty && variety != '未填写品种') ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          variety,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.subtle,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
-                ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      _MetaItem(
+                        icon: LucideIcons.gitBranch,
+                        text: '$stageCount 阶段',
+                      ),
+                      const SizedBox(width: 12),
+                      if (days.isNotEmpty) ...[
+                        _MetaItem(
+                          icon: LucideIcons.calendarDays,
+                          text: '$days 天',
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      _MetaItem(
+                        icon: LucideIcons.layers,
+                        text: '用于 $used',
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              LucideIcons.chevronRight,
+              color: AppColors.subtle,
+              size: 18,
+            ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _MetaItem extends StatelessWidget {
+  const _MetaItem({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 11, color: AppColors.subtle),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
+          ),
+        ),
+      ],
     );
   }
 }

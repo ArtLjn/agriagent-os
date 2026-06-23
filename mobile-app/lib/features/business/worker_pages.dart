@@ -4,11 +4,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
 import '../../shared/assets/app_assets.dart';
+import '../../shared/widgets/animated_press.dart';
+import '../../shared/widgets/textured_card.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_text_styles.dart';
 import 'bulk_delete_ui.dart';
 import 'business_ui.dart';
-import 'wage_create_page.dart';
 
 class WorkerListPage extends StatefulWidget {
   const WorkerListPage({
@@ -58,23 +58,33 @@ class _WorkerListPageState extends State<WorkerListPage> {
       trailingIcon: LucideIcons.slidersHorizontal,
       showBottomTabs: true,
       onBottomTabChanged: widget.onBottomTabChanged,
+      bottomOverlay: _WorkerCreatePill(
+        label: '新增工人',
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => WorkerFormPage(
+              repository: widget.repository,
+              onBottomTabChanged: widget.onBottomTabChanged,
+            ),
+          ),
+        ),
+      ),
       children: [
         FutureBuilder<PageResult<ApiRecord>>(
           future: _workersFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Column(
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  WorkerSummaryBanner(
-                    asset: AppAssets.businessWorkerHatBanner,
+                  _workerSummaryHero(const _WorkerSummary(
                     unpaidText: '0',
                     workerCount: 0,
                     monthlyWorkCount: 0,
                     relatedCycleCount: 0,
-                  ),
-                  SizedBox(height: 13),
-                  LoadingCard(),
+                  )),
+                  const SizedBox(height: 16),
+                  const LoadingCard(),
                 ],
               );
             }
@@ -88,66 +98,21 @@ class _WorkerListPageState extends State<WorkerListPage> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                WorkerSummaryBanner(
-                  asset: AppAssets.businessWorkerHatBanner,
-                  unpaidText: summary.unpaidText,
-                  workerCount: summary.workerCount,
-                  monthlyWorkCount: summary.monthlyWorkCount,
-                  relatedCycleCount: summary.relatedCycleCount,
-                ),
-                const SizedBox(height: 13),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledActionButton(
-                        label: '记一笔工资',
-                        foreground: Colors.white,
-                        background: businessBlue,
-                        borderColor: businessBlue,
-                        icon: LucideIcons.squarePen,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => WageCreatePage(
-                              repository: widget.repository,
-                              onBottomTabChanged: widget.onBottomTabChanged,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledActionButton(
-                        label: '新增工人',
-                        foreground: businessBlue,
-                        background: Colors.white,
-                        borderColor: businessBlue,
-                        icon: LucideIcons.userRoundPlus,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => WorkerFormPage(
-                              repository: widget.repository,
-                              onBottomTabChanged: widget.onBottomTabChanged,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 13),
+                _workerSummaryHero(summary),
+                const SizedBox(height: 16),
                 SearchFieldCard(
                   text: '搜索工人姓名',
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 13),
+                const SizedBox(height: 12),
                 ChipRail(
                   items: _filters,
                   activeIndex: _filterIndex,
+                  activeColor: AppColors.ink,
                   onSelected: (index) => setState(() => _filterIndex = index),
                 ),
-                const SizedBox(height: 13),
+                const SizedBox(height: 16),
                 BulkDeleteListSection(
                   items: visibleItems,
                   hasError: snapshot.hasError,
@@ -171,6 +136,288 @@ class _WorkerListPageState extends State<WorkerListPage> {
           },
         ),
       ],
+    );
+  }
+}
+
+_WorkerSummaryHero _workerSummaryHero(_WorkerSummary summary) {
+  return _WorkerSummaryHero(
+    unpaidText: summary.unpaidText,
+    workerCount: summary.workerCount,
+    monthlyWorkCount: summary.monthlyWorkCount,
+    relatedCycleCount: summary.relatedCycleCount,
+  );
+}
+
+class _WorkerSummaryHero extends StatelessWidget {
+  const _WorkerSummaryHero({
+    required this.unpaidText,
+    required this.workerCount,
+    required this.monthlyWorkCount,
+    required this.relatedCycleCount,
+  });
+
+  final String unpaidText;
+  final int workerCount;
+  final int monthlyWorkCount;
+  final int relatedCycleCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final unpaidValue = num.tryParse(unpaidText) ?? 0;
+    final hasUnpaid = unpaidValue > 0;
+    return TexturedCard(
+      accent: hasUnpaid ? AppColors.red : AppColors.blue,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GradientIconTile(
+                icon: LucideIcons.users,
+                accent: hasUnpaid ? AppColors.red : AppColors.blue,
+                size: 32,
+                iconSize: 17,
+                borderRadius: 10,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  '工人概览',
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+              if (hasUnpaid)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.redSoft,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.circleAlert,
+                        size: 12,
+                        color: AppColors.red,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        '有欠款',
+                        style: TextStyle(
+                          color: AppColors.red,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _MetricValue(
+                  value: '¥$unpaidText',
+                  label: '未结金额',
+                  accent: hasUnpaid ? AppColors.red : AppColors.ink,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 44,
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                color: AppColors.line,
+              ),
+              Expanded(
+                child: _MetricValue(
+                  value: '$workerCount',
+                  unit: '人',
+                  label: '工人总数',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  LucideIcons.calendarClock,
+                  size: 13,
+                  color: AppColors.subtle,
+                ),
+                const SizedBox(width: 5),
+                const Text(
+                  '本月用工',
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$monthlyWorkCount 次',
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 1,
+                  height: 12,
+                  color: AppColors.line,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  '相关茬口',
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  '$relatedCycleCount',
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricValue extends StatelessWidget {
+  const _MetricValue({
+    required this.value,
+    required this.label,
+    this.unit = '',
+    this.accent = AppColors.ink,
+  });
+
+  final String value;
+  final String label;
+  final String unit;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+            ),
+            if (unit.isNotEmpty) ...[
+              const SizedBox(width: 2),
+              Text(
+                unit,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorkerCreatePill extends StatelessWidget {
+  const _WorkerCreatePill({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: AnimatedPress(
+        scale: 0.92,
+        onTap: onTap,
+        child: Container(
+          width: 56,
+          height: 56,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.ink,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.ink.withValues(alpha: 0.22),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(
+            LucideIcons.plus,
+            color: Colors.white,
+            size: 24,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -455,119 +702,166 @@ class WorkerListCard extends StatelessWidget {
     final json = record.json;
     final name = _firstNonEmpty([json['name']], fallback: '未命名工人');
     final unitPrice =
-        _firstNonEmpty([json['default_unit_price']], fallback: '未设置');
+        _firstNonEmpty([json['default_unit_price']], fallback: '');
     final unpaid = json['unpaid_amount'] ?? 0;
     final isSettled = unpaid == 0 || '$unpaid' == '0';
-    return BusinessCard(
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-      child: Row(
-        children: [
-          SelectionCheckbox(visible: selectionMode, selected: selected),
-          AssetAvatar(
-            asset: AppAssets.businessWorkerAvatar1,
-            size: 74,
-            background: const Color(0xFFEAF5FF),
+    final phone = _firstNonEmpty([json['phone']], fallback: '未填写手机号');
+    final statusLabel = _statusLabel(json['status']);
+    final isActive = statusLabel == '在用';
+    return AnimatedPress(
+      scale: 0.99,
+      onTap: selectionMode
+          ? null
+          : () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => WorkerFormPage(
+                    repository: repository,
+                    workerId: record.id,
+                    initialRecord: record,
+                    onBottomTabChanged: onBottomTabChanged,
+                  ),
+                ),
+              ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? AppColors.ink : AppColors.lineSoft,
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.sectionTitle.copyWith(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SelectionCheckbox(visible: selectionMode, selected: selected),
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Text(
+                name.isNotEmpty ? name.characters.first : '?',
+                style: const TextStyle(
+                  color: AppColors.ink2,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                            height: 1.2,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$unitPrice/天',
-                      style: AppTextStyles.body.copyWith(
-                        color: businessBlue,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    if (_firstNonEmpty([json['status']]).isNotEmpty)
-                      SoftPill(
-                        text: _statusLabel(json['status']),
-                        color: AppColors.greenDark,
-                        background: AppColors.greenSoft,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      LucideIcons.phone,
-                      size: 12,
-                      color: AppColors.subtle,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _firstNonEmpty([json['phone']], fallback: '未填写手机号'),
-                      style: AppTextStyles.small,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    isSettled ? '结清' : '欠$unpaid元',
-                    style: AppTextStyles.body.copyWith(
-                      color: isSettled ? businessGreen : AppColors.red,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 18,
-                    ),
+                      if (statusLabel.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '· $statusLabel',
+                          style: TextStyle(
+                            color: isActive
+                                ? AppColors.greenDark
+                                : AppColors.subtle,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: 76,
-                    child: FilledActionButton(
-                      label: '编辑',
-                      foreground: businessBlue,
-                      background: AppColors.blueSoft,
-                      borderColor: AppColors.blueSoft,
-                      icon: LucideIcons.pencil,
-                      height: 34,
-                      onTap: selectionMode
-                          ? null
-                          : () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => WorkerFormPage(
-                                    repository: repository,
-                                    workerId: record.id,
-                                    initialRecord: record,
-                                    onBottomTabChanged: onBottomTabChanged,
-                                  ),
-                                ),
-                              ),
-                    ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      if (unitPrice.isNotEmpty) ...[
+                        Text(
+                          '¥$unitPrice/天',
+                          style: const TextStyle(
+                            color: AppColors.ink2,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '·',
+                          style: TextStyle(
+                            color: AppColors.line,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: Text(
+                          phone,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.subtle,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: 8),
+            if (!isSettled)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '未结',
+                    style: TextStyle(
+                      color: AppColors.red,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                  Text(
+                    '¥$unpaid',
+                    style: const TextStyle(
+                      color: AppColors.red,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.3,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              )
+            else
+              const Icon(
+                LucideIcons.check,
+                color: AppColors.subtle,
+                size: 18,
+              ),
+          ],
+        ),
       ),
     );
   }

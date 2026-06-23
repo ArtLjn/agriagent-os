@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/repositories/billing_repository.dart';
+import '../../shared/widgets/animated_press.dart';
 import '../../shared/widgets/card_panel.dart';
 import '../../shared/widgets/date_filter_sheet.dart';
 import '../../shared/widgets/reference_page.dart';
@@ -15,15 +16,12 @@ class _LedgerColors {
   const _LedgerColors._();
 
   static const ink = Color(0xFF132238);
-  static const primaryDark = AppColors.blueDark;
   static const income = AppColors.greenDark;
   static const expense = AppColors.amber;
   static const debt = AppColors.blue;
   static const negative = AppColors.red;
   static const surfaceTint = Color(0xFFFFFFFF);
   static const line = AppColors.line;
-  static const lineSoft = AppColors.lineSoft;
-  static const amberSoft = AppColors.amberSoft;
   static const blueSoft = AppColors.blueSoft;
   static const greenSoft = AppColors.greenSoft;
   static const muted = AppColors.muted;
@@ -49,18 +47,6 @@ Color _transactionIconBackground(BillingTransactionViewModel transaction) {
   if (transaction.isIncome) return _LedgerColors.greenSoft;
   if (transaction.isDebt) return _LedgerColors.blueSoft;
   return const Color(0xFFFFF7EC);
-}
-
-Color _transactionChipColor(BillingTransactionViewModel transaction) {
-  if (transaction.isIncome) return _LedgerColors.income;
-  if (transaction.isDebt) return _LedgerColors.debt;
-  return _LedgerColors.expense;
-}
-
-Color _transactionChipBackground(BillingTransactionViewModel transaction) {
-  if (transaction.isIncome) return _LedgerColors.greenSoft;
-  if (transaction.isDebt) return _LedgerColors.blueSoft;
-  return _LedgerColors.amberSoft;
 }
 
 class _LedgerSectionCard extends StatelessWidget {
@@ -208,6 +194,44 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 }
 
+class _BillingCreateFab extends StatelessWidget {
+  const _BillingCreateFab({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: AnimatedPress(
+        scale: 0.92,
+        onTap: onTap,
+        child: Container(
+          width: 56,
+          height: 56,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.ink,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.ink.withValues(alpha: 0.22),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(
+            LucideIcons.plus,
+            color: Colors.white,
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BillingStateCard extends StatelessWidget {
   const _BillingStateCard({required this.text});
 
@@ -290,7 +314,19 @@ class TransactionListCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (transactions.isEmpty)
-            const _EmptyLine(text: '暂无交易')
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  '暂无交易',
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            )
           else
             for (var index = 0;
                 index < visibleTransactions.length;
@@ -310,12 +346,12 @@ class TransactionListCard extends StatelessWidget {
                 chipText: visibleTransactions[index].isDebt
                     ? '欠款'
                     : (visibleTransactions[index].isIncome ? '收入' : '支出'),
-                chipColor: _transactionChipColor(visibleTransactions[index]),
-                chipBackground:
-                    _transactionChipBackground(visibleTransactions[index]),
               ),
               if (index != visibleTransactions.length - 1)
-                const _IndentedDivider(),
+                const Padding(
+                  padding: EdgeInsets.only(left: 50),
+                  child: Divider(height: 1, color: AppColors.lineSoft),
+                ),
             ],
         ],
       ),
@@ -354,17 +390,20 @@ class TransactionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 64,
+      height: 60,
       child: Row(
         children: [
-          _LedgerRoundIcon(
-            icon: icon,
-            color: iconColor,
-            background: iconBackground,
-            size: 40,
-            iconSize: 18,
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: AppColors.ink2),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -377,46 +416,37 @@ class TransactionRow extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.listTitle.copyWith(
-                          color: _LedgerColors.ink,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.1,
+                          height: 1.2,
                         ),
                       ),
                     ),
                     if (chipText != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: chipBackground ?? AppColors.surface3,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          chipText!,
-                          style: AppTextStyles.small.copyWith(
-                            color: chipColor ?? AppColors.muted,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            height: 1.3,
-                          ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '· $chipText',
+                        style: TextStyle(
+                          color: chipColor ?? AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.small.copyWith(
-                    color: _LedgerColors.muted,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+                  style: const TextStyle(
+                    color: AppColors.subtle,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -427,23 +457,17 @@ class TransactionRow extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerRight,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    amount,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.listTitle.copyWith(
-                      color: amountColor,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ],
+              child: Text(
+                amount,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: amountColor,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  letterSpacing: -0.3,
+                ),
               ),
             ),
           ),
@@ -596,22 +620,6 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     return _periodTitle;
   }
 
-  String get _dateGroupLabel {
-    final dated = _transactions
-        .map((transaction) => transaction.recordDate)
-        .whereType<DateTime>()
-        .toList();
-    if (dated.isEmpty) return '暂无日期';
-    dated.sort((a, b) => b.compareTo(a));
-    final latest = dated.first;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final target = DateTime(latest.year, latest.month, latest.day);
-    final prefix = today == target ? '今天' : _ledgerRelativeDate(latest);
-    const weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
-    return '$prefix  ${latest.month}月${latest.day}日  ${weekdays[latest.weekday - 1]}';
-  }
-
   bool get _hasCustomRange => _customStart != null && _customEnd != null;
 
   String _fmtFull(DateTime d) =>
@@ -644,60 +652,75 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final expenseCount = transactions
         .where((transaction) => !transaction.isIncome && !transaction.isDebt)
         .length;
+    final incomeTotal = _sumAmount(transactions, income: true);
+    final expenseTotal = _sumAmount(transactions, income: false);
+    final balanceTotal = incomeTotal - expenseTotal;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFD),
-      bottomNavigationBar: _CreateRecordDock(onTap: widget.onCreateRecord),
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _AllTransactionsHeader(
-                    onBack: Navigator.of(context).pop,
-                    onPickDate: _pickDateFilter,
-                  ),
-                  const SizedBox(height: 22),
-                  _LedgerPeriodTitle(
-                    title: _monthLabel,
-                    countText: '共${transactions.length}笔交易',
-                  ),
-                  const SizedBox(height: 16),
-                  _MonthlyBalanceCard(
-                    balanceText: _ledgerMoney(
-                      _sumAmount(transactions, income: true) -
-                          _sumAmount(transactions, income: false),
-                      round: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _AllTransactionsHeader(
+              onBack: Navigator.of(context).pop,
+              onPickDate: _pickDateFilter,
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _AliStyleSummary(
+                          periodLabel: _monthLabel,
+                          balanceText: _ledgerMoney(balanceTotal, round: true),
+                          incomeText: _sumText(transactions, income: true),
+                          incomeCount: incomeCount,
+                          expenseText: _sumText(transactions, income: false),
+                          expenseCount: expenseCount,
+                        ),
+                        const SizedBox(height: 20),
+                        _AliStyleFilterBar(
+                          selected: _tab,
+                          countText: '共${transactions.length}笔',
+                          onChanged: _setTab,
+                        ),
+                        const SizedBox(height: 12),
+                        if (transactions.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 40),
+                            child: Center(
+                              child: Text(
+                                '暂无交易',
+                                style: TextStyle(
+                                  color: AppColors.muted,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          _AliStyleGroupedList(transactions: transactions),
+                      ],
                     ),
-                    incomeText: _sumText(transactions, income: true),
-                    incomeCount: incomeCount,
-                    expenseText: _sumText(transactions, income: false),
-                    expenseCount: expenseCount,
-                    trendData: _monthlyTrendValues(transactions),
                   ),
-                  const SizedBox(height: 14),
-                  _TransactionFilterBar(selected: _tab, onChanged: _setTab),
-                  const SizedBox(height: 12),
-                  _TransactionListToolbar(
-                    incomeCount: incomeCount,
-                    expenseCount: expenseCount,
-                    onFilter: _pickDateFilter,
-                  ),
-                  const SizedBox(height: 12),
-                  _DateGroupHeader(text: _dateGroupLabel),
-                  const SizedBox(height: 8),
-                  _AllTransactionsListCard(
-                    transactions: transactions,
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
+      floatingActionButton: widget.onCreateRecord != null
+          ? Padding(
+              padding: const EdgeInsets.only(right: 4, bottom: 8),
+              child: _BillingCreateFab(onTap: widget.onCreateRecord!),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -723,20 +746,383 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             : !transaction.isIncome && !transaction.isDebt)
         .fold<num>(0, (sum, transaction) => sum + transaction.amount);
   }
+}
 
-  List<double> _monthlyTrendValues(List<BillingTransactionViewModel> source) {
-    final sorted = source
-        .where((transaction) => transaction.recordDate != null)
-        .toList()
-      ..sort((a, b) => a.recordDate!.compareTo(b.recordDate!));
-    if (sorted.isEmpty) return widget.model.monthlyTrend;
-    var running = 0.0;
-    return sorted.map((transaction) {
-      final delta =
-          transaction.isIncome ? transaction.amount : -transaction.amount;
-      running += delta.toDouble();
-      return running;
+class _AliStyleSummary extends StatelessWidget {
+  const _AliStyleSummary({
+    required this.periodLabel,
+    required this.balanceText,
+    required this.incomeText,
+    required this.incomeCount,
+    required this.expenseText,
+    required this.expenseCount,
+  });
+
+  final String periodLabel;
+  final String balanceText;
+  final String incomeText;
+  final int incomeCount;
+  final String expenseText;
+  final int expenseCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final balanceLength = balanceText.length;
+    final balanceFontSize = balanceLength > 12
+        ? 28.0
+        : balanceLength > 9
+            ? 32.0
+            : 38.0;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.lineSoft),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$periodLabel · 结余',
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            balanceText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.ink,
+              fontSize: balanceFontSize,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+              height: 1.1,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            height: 1,
+            color: AppColors.lineSoft,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _AliMetric(
+                  icon: LucideIcons.arrowDownToLine,
+                  label: '收入',
+                  value: incomeText,
+                  countText: '$incomeCount笔',
+                  color: AppColors.greenDark,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 36,
+                color: AppColors.lineSoft,
+              ),
+              Expanded(
+                child: _AliMetric(
+                  icon: LucideIcons.arrowUpFromLine,
+                  label: '支出',
+                  value: expenseText,
+                  countText: '$expenseCount笔',
+                  color: AppColors.ink,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AliMetric extends StatelessWidget {
+  const _AliMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.countText,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String countText;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: TextStyle(
+              color: color,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          countText,
+          style: const TextStyle(
+            color: AppColors.subtle,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AliStyleFilterBar extends StatelessWidget {
+  const _AliStyleFilterBar({
+    required this.selected,
+    required this.countText,
+    required this.onChanged,
+  });
+
+  final _TransactionTab selected;
+  final String countText;
+  final ValueChanged<_TransactionTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = <(_TransactionTab, String)>[
+      (_TransactionTab.all, '全部'),
+      (_TransactionTab.income, '收入'),
+      (_TransactionTab.expense, '支出'),
+      (_TransactionTab.debt, '欠款'),
+    ];
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (final tab in tabs)
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(tab.$1),
+                  child: Container(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          width: 2,
+                          color: selected == tab.$1
+                              ? AppColors.ink
+                              : Colors.transparent,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      tab.$2,
+                      style: TextStyle(
+                        color: selected == tab.$1
+                            ? AppColors.ink
+                            : AppColors.muted,
+                        fontSize: 14,
+                        fontWeight: selected == tab.$1
+                            ? FontWeight.w800
+                            : FontWeight.w500,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        Container(height: 1, color: AppColors.lineSoft),
+      ],
+    );
+  }
+}
+
+class _AliStyleGroupedList extends StatelessWidget {
+  const _AliStyleGroupedList({required this.transactions});
+
+  final List<BillingTransactionViewModel> transactions;
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = _groupByDay(transactions);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < groups.length; i++) ...[
+          if (i != 0) const SizedBox(height: 14),
+          _AliGroupHeader(
+            label: groups[i].label,
+            netText: groups[i].netText,
+          ),
+          const SizedBox(height: 2),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.lineSoft),
+            ),
+            child: Column(
+              children: [
+                for (var j = 0; j < groups[i].items.length; j++) ...[
+                  _TransactionDetailRow(
+                    transaction: groups[i].items[j],
+                    onTap: () => _showTransactionDetail(
+                      context,
+                      groups[i].items[j],
+                    ),
+                  ),
+                  if (j != groups[i].items.length - 1)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 60),
+                      child:
+                          Divider(height: 1, color: AppColors.lineSoft),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  List<_AliGroup> _groupByDay(List<BillingTransactionViewModel> items) {
+    final map = <String, List<BillingTransactionViewModel>>{};
+    final sorted = [...items]
+      ..sort((a, b) {
+        final aDate = a.recordDate ?? DateTime(1970);
+        final bDate = b.recordDate ?? DateTime(1970);
+        return bDate.compareTo(aDate);
+      });
+    for (final item in sorted) {
+      final date = item.recordDate;
+      final key = date != null
+          ? '${date.year}-${date.month}-${date.day}'
+          : 'unknown';
+      map.putIfAbsent(key, () => []).add(item);
+    }
+    return map.entries.map((entry) {
+      final parts = entry.key.split('-');
+      final date = parts.length == 3
+          ? DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]))
+          : null;
+      final income = entry.value
+          .where((t) => t.isIncome)
+          .fold<num>(0, (s, t) => s + t.amount);
+      final expense = entry.value
+          .where((t) => !t.isIncome && !t.isDebt)
+          .fold<num>(0, (s, t) => s + t.amount);
+      final net = income - expense;
+      return _AliGroup(
+        label: _aliGroupLabel(date),
+        netText: _aliNetText(net),
+        items: entry.value,
+      );
     }).toList();
+  }
+
+  String _aliGroupLabel(DateTime? date) {
+    if (date == null) return '未分组';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(target).inDays;
+    if (diff == 0) return '今天';
+    if (diff == 1) return '昨天';
+    if (diff < 7) return '$diff 天前';
+    const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return '${date.month}月${date.day}日 · ${weekdays[date.weekday - 1]}';
+  }
+
+  String _aliNetText(num net) {
+    if (net == 0) return '收支平衡';
+    if (net > 0) return '净收 ${_ledgerMoney(net, round: true)}';
+    return '净支 ${_ledgerMoney(-net, round: true)}';
+  }
+}
+
+class _AliGroup {
+  const _AliGroup({
+    required this.label,
+    required this.netText,
+    required this.items,
+  });
+
+  final String label;
+  final String netText;
+  final List<BillingTransactionViewModel> items;
+}
+
+class _AliGroupHeader extends StatelessWidget {
+  const _AliGroupHeader({required this.label, required this.netText});
+
+  final String label;
+  final String netText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.1,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            netText,
+            style: const TextStyle(
+              color: AppColors.subtle,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -782,473 +1168,6 @@ class _AllTransactionsHeader extends StatelessWidget {
               padding: EdgeInsets.zero,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LedgerPeriodTitle extends StatelessWidget {
-  const _LedgerPeriodTitle({
-    required this.title,
-    required this.countText,
-  });
-
-  final String title;
-  final String countText;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: AppTextStyles.metric.copyWith(
-                color: _LedgerColors.ink,
-                fontSize: 31,
-                height: 1.08,
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              LucideIcons.chevronDown,
-              size: 20,
-              color: AppColors.muted,
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          countText,
-          style: AppTextStyles.body.copyWith(
-            color: AppColors.muted,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MonthlyBalanceCard extends StatelessWidget {
-  const _MonthlyBalanceCard({
-    required this.balanceText,
-    required this.incomeText,
-    required this.incomeCount,
-    required this.expenseText,
-    required this.expenseCount,
-    required this.trendData,
-  });
-
-  final String balanceText;
-  final String incomeText;
-  final int incomeCount;
-  final String expenseText;
-  final int expenseCount;
-  final List<double> trendData;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A14365F),
-            blurRadius: 28,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '本月结余',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.muted,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      balanceText,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: AppTextStyles.metric.copyWith(
-                        color: _LedgerColors.ink,
-                        fontSize: 38,
-                        height: 1,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 32,
-                    child: CustomPaint(
-                      painter: _LedgerSparklinePainter(
-                        data: _sparklineData(trendData),
-                        lineColor: const Color(0xFF34C986),
-                      ),
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            const _MetricDivider(height: 96),
-            const SizedBox(width: 18),
-            Expanded(
-              flex: 8,
-              child: Column(
-                children: [
-                  _BalanceSideMetric(
-                    label: '收入',
-                    value: incomeText,
-                    countText: '$incomeCount笔',
-                    color: _LedgerColors.income,
-                    icon: LucideIcons.arrowUpRight,
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 9),
-                    child: Divider(height: 1, color: AppColors.lineSoft),
-                  ),
-                  _BalanceSideMetric(
-                    label: '支出',
-                    value: expenseText,
-                    countText: '$expenseCount笔',
-                    color: _LedgerColors.ink,
-                    icon: LucideIcons.arrowDownRight,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-List<double> _sparklineData(List<double> source) {
-  if (source.length >= 3) return source;
-  if (source.isEmpty) return const [0, 1, 0.4, 1.2, 0.9, 1.5, 1.1];
-  if (source.length == 1) {
-    final value = source.first;
-    return [value - 1, value, value + 0.6, value + 0.2, value + 1.1];
-  }
-  final first = source.first;
-  final last = source.last;
-  final mid = (first + last) / 2;
-  return [first, mid + 0.4, mid - 0.2, last, last + 0.3];
-}
-
-class _BalanceSideMetric extends StatelessWidget {
-  const _BalanceSideMetric({
-    required this.label,
-    required this.value,
-    required this.countText,
-    required this.color,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final String countText;
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTextStyles.small.copyWith(
-              color: AppColors.muted,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: color,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(icon, size: 17, color: color),
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            countText,
-            style: AppTextStyles.small.copyWith(
-              color: AppColors.muted,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TransactionFilterBar extends StatelessWidget {
-  const _TransactionFilterBar({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final _TransactionTab selected;
-  final ValueChanged<_TransactionTab> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 42,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.zero,
-        children: [
-          _FilterChipLabel(
-            key: const Key('transaction-filter-all'),
-            text: '全部',
-            selected: selected == _TransactionTab.all,
-            onTap: () => onChanged(_TransactionTab.all),
-          ),
-          const SizedBox(width: 10),
-          _FilterChipLabel(
-            key: const Key('transaction-filter-income'),
-            text: '收入',
-            selected: selected == _TransactionTab.income,
-            onTap: () => onChanged(_TransactionTab.income),
-          ),
-          const SizedBox(width: 10),
-          _FilterChipLabel(
-            key: const Key('transaction-filter-expense'),
-            text: '支出',
-            selected: selected == _TransactionTab.expense,
-            onTap: () => onChanged(_TransactionTab.expense),
-          ),
-          const SizedBox(width: 10),
-          _FilterChipLabel(
-            text: '工资',
-            selected: false,
-            onTap: () => onChanged(_TransactionTab.expense),
-          ),
-          const SizedBox(width: 10),
-          _FilterChipLabel(
-            text: '材料',
-            selected: false,
-            onTap: () => onChanged(_TransactionTab.expense),
-          ),
-          const SizedBox(width: 10),
-          _FilterChipLabel(
-            text: '运费',
-            selected: false,
-            onTap: () => onChanged(_TransactionTab.expense),
-          ),
-          const SizedBox(width: 10),
-          _FilterChipLabel(
-            key: const Key('transaction-filter-debt'),
-            text: '借贷',
-            selected: selected == _TransactionTab.debt,
-            onTap: () => onChanged(_TransactionTab.debt),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterChipLabel extends StatelessWidget {
-  const _FilterChipLabel({
-    super.key,
-    required this.text,
-    required this.onTap,
-    this.selected = false,
-  });
-
-  final String text;
-  final VoidCallback onTap;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        height: 38,
-        constraints: const BoxConstraints(minWidth: 72),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? _LedgerColors.primaryDark : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color:
-                selected ? _LedgerColors.primaryDark : const Color(0xFFD3DCE8),
-          ),
-        ),
-        child: Text(
-          text,
-          style: AppTextStyles.body.copyWith(
-            color: selected ? Colors.white : AppColors.muted,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TransactionListToolbar extends StatelessWidget {
-  const _TransactionListToolbar({
-    required this.incomeCount,
-    required this.expenseCount,
-    required this.onFilter,
-  });
-
-  final int incomeCount;
-  final int expenseCount;
-  final VoidCallback onFilter;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: RichText(
-            text: TextSpan(
-              style: AppTextStyles.body.copyWith(
-                color: _LedgerColors.ink,
-                fontWeight: FontWeight.w800,
-              ),
-              children: [
-                TextSpan(
-                  text: '收入 $incomeCount笔',
-                  style: const TextStyle(color: _LedgerColors.income),
-                ),
-                const TextSpan(text: ' · '),
-                TextSpan(text: '支出 $expenseCount笔'),
-              ],
-            ),
-          ),
-        ),
-        InkWell(
-          key: const Key('transaction-toolbar-filter'),
-          onTap: onFilter,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
-            child: Row(
-              children: [
-                Text(
-                  '筛选',
-                  style: AppTextStyles.body.copyWith(
-                    color: _LedgerColors.ink,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Icon(
-                  LucideIcons.funnel,
-                  size: 20,
-                  color: _LedgerColors.ink,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DateGroupHeader extends StatelessWidget {
-  const _DateGroupHeader({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTextStyles.body.copyWith(
-        color: AppColors.muted,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
-
-class _AllTransactionsListCard extends StatelessWidget {
-  const _AllTransactionsListCard({
-    required this.transactions,
-  });
-
-  final List<BillingTransactionViewModel> transactions;
-
-  @override
-  Widget build(BuildContext context) {
-    return _LedgerSectionCard(
-      radius: 22,
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (transactions.isEmpty)
-            const _EmptyLine(text: '暂无交易')
-          else
-            Column(
-              children: [
-                for (var index = 0; index < transactions.length; index++) ...[
-                  _TransactionDetailRow(
-                    transaction: transactions[index],
-                    onTap: () => _showTransactionDetail(
-                      context,
-                      transactions[index],
-                    ),
-                  ),
-                  if (index != transactions.length - 1)
-                    const _IndentedDivider(indent: 58),
-                ],
-              ],
-            ),
         ],
       ),
     );
@@ -1358,68 +1277,6 @@ class _TransactionDetailRow extends StatelessWidget {
   }
 }
 
-class _CreateRecordDock extends StatelessWidget {
-  const _CreateRecordDock({required this.onTap});
-
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 6),
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Color(0xFFF8FAFD),
-          border: Border(top: BorderSide(color: Color(0x00F8FAFD))),
-        ),
-        child: SizedBox(
-          height: 92,
-          child: Center(
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(999),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: _LedgerColors.primaryDark,
-                      shape: BoxShape.circle,
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x2608223F),
-                          blurRadius: 18,
-                          offset: Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      LucideIcons.plus,
-                      size: 34,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '新增记录',
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.muted,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 void _showTransactionDetail(
   BuildContext context,
   BillingTransactionViewModel transaction,
@@ -1436,17 +1293,17 @@ void _showTransactionDetail(
       return SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+          padding: const EdgeInsets.fromLTRB(24, 6, 24, 28),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _DetailSummaryHeader(transaction: transaction),
-                const SizedBox(height: 14),
+                _DetailAmountHeader(transaction: transaction),
+                const SizedBox(height: 24),
                 _DetailInfoGrid(transaction: transaction),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _DetailNoteCard(transaction: transaction),
               ],
             ),
@@ -1457,78 +1314,100 @@ void _showTransactionDetail(
   );
 }
 
-class _DetailSummaryHeader extends StatelessWidget {
-  const _DetailSummaryHeader({required this.transaction});
+class _DetailAmountHeader extends StatelessWidget {
+  const _DetailAmountHeader({required this.transaction});
 
   final BillingTransactionViewModel transaction;
 
   @override
   Widget build(BuildContext context) {
     final amount = transaction.isIncome
-        ? _ledgerMoney(transaction.amount)
-        : _ledgerMoney(-transaction.amount);
+        ? '+${_ledgerMoney(transaction.amount)}'
+        : '-${_ledgerMoney(transaction.amount)}';
     final amountColor =
         transaction.isIncome ? _LedgerColors.income : _LedgerColors.negative;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _LedgerRoundIcon(
-            icon: _transactionIcon(transaction),
-            color: _transactionIconColor(transaction),
-            background: _transactionIconBackground(transaction),
-            size: 56,
-            iconSize: 25,
+    final typeLabel = transaction.isDebt
+        ? '欠款'
+        : (transaction.isIncome ? '收入' : '支出');
+    final datetime = _formatDetailDateTime(transaction.recordDate);
+    final length = amount.length;
+    final amountFontSize =
+        length > 12 ? 30.0 : (length > 9 ? 34.0 : 40.0);
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: transaction.isIncome
+                ? AppColors.greenSoft
+                : (transaction.isDebt
+                    ? AppColors.blueSoft
+                    : const Color(0xFFFFEFEF)),
+            borderRadius: BorderRadius.circular(999),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  transaction.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.dateTitle.copyWith(
-                    color: _LedgerColors.ink,
-                    fontSize: 21,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '${transaction.typeText} · ${transaction.sourceText}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.muted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+          child: Text(
+            typeLabel,
+            style: TextStyle(
+              color: amountColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.1,
             ),
           ),
-          const SizedBox(width: 12),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 132),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: Text(
-                amount,
-                maxLines: 1,
-                softWrap: false,
-                style: AppTextStyles.dateTitle.copyWith(
-                  color: amountColor,
-                  fontSize: 20,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          amount,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: amountColor,
+            fontSize: amountFontSize,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.6,
+            height: 1.1,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          transaction.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.1,
+          ),
+        ),
+        if (datetime.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            datetime,
+            style: const TextStyle(
+              color: AppColors.subtle,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.1,
             ),
           ),
         ],
-      ),
+      ],
     );
+  }
+
+  String _formatDetailDateTime(DateTime? value) {
+    final date = value ?? transaction.recordDate;
+    if (date == null) return transaction.dateText;
+    final y = date.year;
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    final h = date.hour.toString().padLeft(2, '0');
+    final min = date.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $h:$min';
   }
 }
 
@@ -1539,41 +1418,30 @@ class _DetailInfoGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface3,
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.lineSoft),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-        child: Column(
-          children: [
-            _DetailInfoLine(
-              icon: LucideIcons.calendarDays,
-              label: '发生日期',
-              value: transaction.dateText,
-            ),
-            const _IndentedDivider(indent: 32),
-            _DetailInfoLine(
-              icon: LucideIcons.tags,
-              label: '分类',
-              value: transaction.categoryText,
-            ),
-            const _IndentedDivider(indent: 32),
-            _DetailInfoLine(
-              icon: LucideIcons.userRound,
-              label: '对象',
-              value: transaction.counterpartyText,
-            ),
-            const _IndentedDivider(indent: 32),
-            _DetailInfoLine(
-              icon: LucideIcons.fileText,
-              label: '来源',
-              value: transaction.sourceText,
-            ),
-          ],
-        ),
+      child: Column(
+        children: [
+          _DetailInfoLine(
+            label: '分类',
+            value: transaction.categoryText,
+            showDivider: true,
+          ),
+          _DetailInfoLine(
+            label: '对象',
+            value: transaction.counterpartyText,
+            showDivider: true,
+          ),
+          _DetailInfoLine(
+            label: '来源',
+            value: transaction.sourceText,
+            showDivider: false,
+          ),
+        ],
       ),
     );
   }
@@ -1581,50 +1449,58 @@ class _DetailInfoGrid extends StatelessWidget {
 
 class _DetailInfoLine extends StatelessWidget {
   const _DetailInfoLine({
-    required this.icon,
     required this.label,
     required this.value,
+    required this.showDivider,
   });
 
-  final IconData icon;
   final String label;
   final String value;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, size: 16, color: AppColors.muted),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 78,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.muted,
-                fontWeight: FontWeight.w700,
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 72,
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: AppTextStyles.body.copyWith(
-                color: _LedgerColors.ink,
-                fontWeight: FontWeight.w800,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  value.isEmpty ? '—' : value,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: value.isEmpty ? AppColors.subtle : AppColors.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                    height: 1.35,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        if (showDivider)
+          const Padding(
+            padding: EdgeInsets.only(left: 16),
+            child: Divider(height: 1, thickness: 1, color: AppColors.lineSoft),
+          ),
+      ],
     );
   }
 }
@@ -1636,34 +1512,45 @@ class _DetailNoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final note = transaction.noteText;
+    final hasNote = note.isNotEmpty && note != '—';
+    if (!hasNote) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.lineSoft),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(
+            width: 72,
+            child: Text(
               '备注',
-              style: AppTextStyles.small.copyWith(
+              style: TextStyle(
                 color: AppColors.muted,
-                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              transaction.noteText,
-              style: AppTextStyles.body.copyWith(
-                color: _LedgerColors.ink,
-                fontWeight: FontWeight.w700,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              note,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+                letterSpacing: -0.1,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1702,47 +1589,4 @@ String _thousandSeparated(int value) {
   return buffer.toString();
 }
 
-String _ledgerRelativeDate(DateTime date) {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final target = DateTime(date.year, date.month, date.day);
-  final diffDays = today.difference(target).inDays;
-  if (diffDays <= 0) return '今天';
-  if (diffDays == 1) return '昨天';
-  if (diffDays < 7) return '$diffDays天前';
-  if (diffDays < 14) return '上周';
-  if (target.year == today.year) return '${target.month}月${target.day}日';
-  return '${target.year}年${target.month}月${target.day}日';
-}
 
-class _EmptyLine extends StatelessWidget {
-  const _EmptyLine({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(text,
-            style: AppTextStyles.body.copyWith(color: AppColors.subtle)),
-      ),
-    );
-  }
-}
-
-class _IndentedDivider extends StatelessWidget {
-  const _IndentedDivider({this.indent = 58});
-
-  final double indent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(left: indent),
-      child: const Divider(height: 1, color: _LedgerColors.lineSoft),
-    );
-  }
-}

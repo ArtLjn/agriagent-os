@@ -4,7 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/api/api_models.dart';
 import '../../data/repositories/business_repository.dart';
-import '../../shared/assets/app_assets.dart';
+import '../../shared/widgets/animated_press.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'business_ui.dart';
@@ -37,6 +37,14 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
   bool _customCategory = false;
   int _categoryReloadKey = 0;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amount.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -106,24 +114,17 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
         onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
-        _LedgerHeroBanner(
-          asset: AppAssets.businessLedgerFarmBanner,
+        _AmountHero(
+          recordType: _recordType,
           amount: _amount.text.trim(),
+          onTypeChanged: (value) => setState(() {
+            _recordType = value;
+            _category.clear();
+            _customCategory = false;
+          }),
         ),
-        _LedgerQuickCard(
-          title: '记一笔',
-          icon: LucideIcons.walletCards,
+        _RecordFormCard(
           children: [
-            SegmentedFormRow(
-              label: '类型',
-              options: const {'cost': '支出', 'income': '收入'},
-              value: _recordType,
-              onChanged: (value) => setState(() {
-                _recordType = value;
-                _category.clear();
-                _customCategory = false;
-              }),
-            ),
             _LedgerCategoryPickerFormRow(
               repository: widget.repository,
               recordType: _recordType,
@@ -137,37 +138,104 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
               }),
             ),
             if (_customCategory)
-              BusinessFormRow(
-                label: '自定义分类',
-                value: '',
-                controller: _category,
-                hintText: '输入分类名称',
+              _CompactFormRow(
+                label: '自定义',
+                child: TextField(
+                  controller: _category,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '输入分类名称',
+                    hintStyle: AppTextStyles.body.copyWith(
+                      color: AppColors.subtle,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
               ),
-            BusinessFormRow(
+            _CompactFormRow(
               label: '金额',
-              value: '',
-              controller: _amount,
-              hintText: '输入金额',
-              large: true,
-              keyboardType: TextInputType.number,
+              prefix: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Text(
+                  '￥',
+                  style: TextStyle(
+                    color: _amount.text.isEmpty
+                        ? AppColors.subtle
+                        : AppColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              child: TextField(
+                controller: _amount,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: _amount.text.isEmpty
+                      ? AppColors.subtle
+                      : AppColors.ink,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+                decoration: InputDecoration(
+                  hintText: '0.00',
+                  hintStyle: TextStyle(
+                    color: AppColors.subtle,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             ),
             _LedgerDateTimeFormRow(
-              label: '日期',
               dateText: _recordDateText,
               timeText: _recordTimeText,
               onTap: _pickDateTime,
             ),
-            BusinessFormRow(
+            _CompactFormRow(
               label: '备注',
-              value: '',
-              controller: _note,
-              hintText: '补充说明',
+              child: TextField(
+                controller: _note,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+                decoration: InputDecoration(
+                  hintText: '补充说明（可选）',
+                  hintStyle: AppTextStyles.body.copyWith(
+                    color: AppColors.subtle,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             ),
           ],
         ),
-        const AssistEntryCard(text: '可用一句话智能填写'),
-        const SizedBox(height: 8),
-        const _LedgerHintCard(),
+        _AssistEntryCard(
+          onTap: () => Navigator.of(context).maybePop(),
+        ),
       ],
     );
   }
@@ -256,197 +324,337 @@ String _timeText(TimeOfDay time) {
   return '$hour:$minute';
 }
 
-class _LedgerDateTimeFormRow extends StatelessWidget {
-  const _LedgerDateTimeFormRow({
+class _AmountHero extends StatelessWidget {
+  const _AmountHero({
+    required this.recordType,
+    required this.amount,
+    required this.onTypeChanged,
+  });
+
+  final String recordType;
+  final String amount;
+  final ValueChanged<String> onTypeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isIncome = recordType == 'income';
+    final accent = isIncome ? AppColors.green : AppColors.blue;
+    final accentSoft = isIncome ? AppColors.greenSoft : AppColors.blueSoft;
+    final amountDisplay = amount.isEmpty ? '0.00' : amount;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.lineSoft),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _RecordTypeSegmented(
+            value: recordType,
+            onChanged: onTypeChanged,
+          ),
+          const SizedBox(height: 20),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 240),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.06),
+                  end: Offset.zero,
+                ).animate(anim),
+                child: child,
+              ),
+            ),
+            child: amount.isEmpty
+                ? Text(
+                    '今天随手记一笔',
+                    key: const ValueKey('hero-hint'),
+                    style: TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 15,
+                      height: 22 / 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                  )
+                : Row(
+                    key: ValueKey('hero-amount-$amountDisplay'),
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        '￥',
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            amountDisplay,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.ink,
+                              fontSize: 40,
+                              fontWeight: FontWeight.w900,
+                              height: 1.05,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: accentSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isIncome
+                          ? LucideIcons.arrowDownLeft
+                          : LucideIcons.arrowUpRight,
+                      size: 13,
+                      color: accent,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isIncome ? '收入' : '支出',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '金额将记录到农场账本',
+                style: TextStyle(
+                  color: AppColors.subtle,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordTypeSegmented extends StatelessWidget {
+  const _RecordTypeSegmented({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        children: [
+          _SegmentedItem(
+            label: '支出',
+            icon: LucideIcons.arrowUpRight,
+            selected: value == 'cost',
+            accent: AppColors.blue,
+            onTap: () => onChanged('cost'),
+          ),
+          _SegmentedItem(
+            label: '收入',
+            icon: LucideIcons.arrowDownLeft,
+            selected: value == 'income',
+            accent: AppColors.green,
+            onTap: () => onChanged('income'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentedItem extends StatelessWidget {
+  const _SegmentedItem({
     required this.label,
-    required this.dateText,
-    required this.timeText,
+    required this.icon,
+    required this.selected,
+    required this.accent,
     required this.onTap,
   });
 
   final String label;
-  final String dateText;
-  final String timeText;
+  final IconData icon;
+  final bool selected;
+  final Color accent;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      key: const ValueKey('ledger-datetime-row'),
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 64),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AppColors.lineSoft)),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 116,
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 16,
-                  height: 23 / 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
+    return Expanded(
+      child: AnimatedPress(
+        scale: 0.96,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.28),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: selected ? Colors.white : AppColors.muted,
+              ),
+              const SizedBox(width: 6),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                style: TextStyle(
+                  color: selected ? Colors.white : AppColors.muted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
+                  fontFamily: null,
                 ),
+                child: Text(label),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    dateText,
-                    key: const ValueKey('ledger-date-text'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.ink,
-                      fontSize: 16,
-                      height: 22 / 16,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    timeText,
-                    key: const ValueKey('ledger-time-text'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.subtle,
-                      fontSize: 13,
-                      height: 18 / 13,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              LucideIcons.chevronRight,
-              size: 22,
-              color: AppColors.subtle,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _LedgerHeroBanner extends StatelessWidget {
-  const _LedgerHeroBanner({
-    required this.asset,
-    required this.amount,
-  });
+class _RecordFormCard extends StatelessWidget {
+  const _RecordFormCard({required this.children});
 
-  final String asset;
-  final String amount;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final amountText = amount.isEmpty ? '今天随手记一笔' : '￥$amount';
     return Container(
-      height: 156,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: const Color(0xFFF1F8F3),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.lineSoft),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x080B5C38),
-            blurRadius: 14,
+            color: Color(0x06000000),
+            blurRadius: 16,
             offset: Offset(0, 6),
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
+      child: Column(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              asset,
-              fit: BoxFit.cover,
-              alignment: Alignment.centerRight,
-              errorBuilder: (_, __, ___) => const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Color(0xFFE8F8F0),
-                      Color(0xFFEAF8FF),
-                      Color(0xFFFFF5E6),
-                    ],
-                  ),
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i != children.length - 1)
+              const Padding(
+                padding: EdgeInsets.only(left: 20),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: AppColors.lineSoft,
                 ),
               ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactFormRow extends StatelessWidget {
+  const _CompactFormRow({required this.label, required this.child, this.prefix});
+
+  final String label;
+  final Widget child;
+  final Widget? prefix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.muted,
+              fontSize: 15,
+              height: 22 / 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
             ),
           ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.92),
-                    Colors.white.withValues(alpha: 0.64),
-                    Colors.white.withValues(alpha: 0.04),
-                  ],
-                  stops: const [0, 0.48, 1],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 18,
-            top: 18,
-            bottom: 16,
-            width: 202,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Icon(
-                  LucideIcons.receiptText,
-                  color: businessGreenDark,
-                  size: 24,
-                ),
-                const Spacer(),
-                Text(
-                  '农场记账',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.title.copyWith(
-                    color: AppColors.navy,
-                    fontSize: 25,
-                    height: 30 / 25,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  amountText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    color: businessGreenDark,
-                    fontSize: 15,
-                    height: 20 / 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                if (prefix != null) prefix!,
+                Expanded(child: child),
               ],
             ),
           ),
@@ -456,37 +664,82 @@ class _LedgerHeroBanner extends StatelessWidget {
   }
 }
 
-class _LedgerQuickCard extends StatelessWidget {
-  const _LedgerQuickCard({
-    required this.title,
-    required this.icon,
-    required this.children,
+class _LedgerDateTimeFormRow extends StatelessWidget {
+  const _LedgerDateTimeFormRow({
+    required this.dateText,
+    required this.timeText,
+    required this.onTap,
   });
 
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
+  final String dateText;
+  final String timeText;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEAF0F6)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x04101828),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          BusinessCardHeader(title: title, icon: icon),
-          ...children,
-        ],
+    return AnimatedPress(
+      scale: 0.99,
+      onTap: onTap,
+      borderRadius: BorderRadius.zero,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            const Text(
+              '日期',
+              style: TextStyle(
+                color: AppColors.muted,
+                fontSize: 15,
+                height: 22 / 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    dateText,
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 16,
+                      height: 22 / 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface2,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      timeText,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(
+                    LucideIcons.chevronRight,
+                    size: 18,
+                    color: AppColors.subtle,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -557,10 +810,7 @@ class _LedgerCategoryPickerFormRowState
     final response = await _categoriesFuture.catchError(
       (_) => const PageResult<ApiRecord>(items: [], total: 0),
     );
-    final options = _categoryOptions(
-      response.items,
-      widget.recordType,
-    );
+    final options = _categoryOptions(response.items, widget.recordType);
     _lastOptions = options;
     final keyword = filter.trim();
     if (keyword.isEmpty) return options;
@@ -573,56 +823,25 @@ class _LedgerCategoryPickerFormRowState
   @override
   Widget build(BuildContext context) {
     final selected = _selectedOption();
-    return Container(
-      constraints: const BoxConstraints(minHeight: 56),
-      padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.lineSoft)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 116,
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    '分类',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 16,
-                      height: 23 / 16,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: widget.onManageTap,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 10,
-                    ),
-                    child: Text(
-                      '管理',
-                      style: AppTextStyles.small.copyWith(
-                        color: AppColors.blue,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          const Text(
+            '分类',
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: 15,
+              height: 22 / 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 16),
           Expanded(
             child: SizedBox(
-              height: 56,
+              height: 30,
               child: DropdownSearch<_LedgerOption>(
                 key: const Key('ledger-category-dropdown-search'),
                 selectedItem: selected,
@@ -635,8 +854,9 @@ class _LedgerCategoryPickerFormRowState
                 },
                 dropdownBuilder: (context, item) => _CategorySelectedView(
                   option: item,
-                  placeholder:
-                      widget.recordType == 'income' ? '选择收入分类' : '选择支出分类',
+                  placeholder: widget.recordType == 'income'
+                      ? '选择收入分类'
+                      : '选择支出分类',
                 ),
                 decoratorProps: const DropDownDecoratorProps(
                   decoration: InputDecoration(
@@ -650,12 +870,12 @@ class _LedgerCategoryPickerFormRowState
                     iconClosed: Icon(
                       LucideIcons.chevronDown,
                       color: AppColors.subtle,
-                      size: 20,
+                      size: 18,
                     ),
                     iconOpened: Icon(
                       LucideIcons.chevronUp,
-                      color: businessGreenDark,
-                      size: 20,
+                      color: AppColors.ink,
+                      size: 18,
                     ),
                   ),
                 ),
@@ -686,15 +906,15 @@ class _LedgerCategoryPickerFormRowState
                     top: false,
                     child: Container(
                       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                       decoration: const BoxDecoration(
                         color: Colors.white,
                         borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(26)),
+                            BorderRadius.vertical(top: Radius.circular(28)),
                         boxShadow: [
                           BoxShadow(
-                            color: Color(0x1A10271D),
-                            blurRadius: 26,
+                            color: Color(0x14000000),
+                            blurRadius: 30,
                             offset: Offset(0, -10),
                           ),
                         ],
@@ -708,6 +928,7 @@ class _LedgerCategoryPickerFormRowState
                             subtitle: widget.recordType == 'income'
                                 ? '选择收入来源，也可以输入关键字搜索'
                                 : '选择支出用途，也可以输入关键字搜索',
+                            onManageTap: widget.onManageTap,
                           ),
                           const SizedBox(height: 12),
                           Expanded(child: child),
@@ -769,26 +990,32 @@ class _CategorySelectedView extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.body.copyWith(
             color: AppColors.subtle,
-            fontSize: 16,
-            height: 22 / 16,
-            fontWeight: FontWeight.w600,
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
           ),
         ),
       );
     }
     return Align(
       alignment: Alignment.centerRight,
-      child: Text(
-        selected.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.right,
-        style: AppTextStyles.listTitle.copyWith(
-          color: AppColors.ink,
-          fontSize: 16,
-          height: 22 / 16,
-          fontWeight: FontWeight.w800,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(selected.icon, size: 15, color: AppColors.muted),
+          const SizedBox(width: 6),
+          Text(
+            selected.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -811,25 +1038,29 @@ class _DropdownSearchCategoryTile extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: selected
-            ? businessGreen.withValues(alpha: 0.08)
-            : AppColors.surface3,
-        borderRadius: BorderRadius.circular(16),
+            ? AppColors.blueSoft
+            : AppColors.surface2,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: selected
-              ? businessGreen.withValues(alpha: 0.42)
-              : AppColors.lineSoft,
+          color: selected ? AppColors.blue : AppColors.line,
         ),
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: businessGreen.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(13),
+              color: selected
+                  ? AppColors.blue.withValues(alpha: 0.12)
+                  : AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(option.icon, color: businessGreenDark, size: 20),
+            child: Icon(
+              option.icon,
+              color: selected ? AppColors.blue : AppColors.muted,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -840,10 +1071,11 @@ class _DropdownSearchCategoryTile extends StatelessWidget {
                   option.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.listTitle.copyWith(
-                    fontSize: 16,
-                    height: 22 / 16,
-                    fontWeight: FontWeight.w900,
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
                   ),
                 ),
                 if (option.subtitle.isNotEmpty) ...[
@@ -852,11 +1084,11 @@ class _DropdownSearchCategoryTile extends StatelessWidget {
                     option.subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.body.copyWith(
+                    style: TextStyle(
                       color: AppColors.muted,
-                      fontSize: 13,
-                      height: 18 / 13,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
                     ),
                   ),
                 ],
@@ -866,8 +1098,8 @@ class _DropdownSearchCategoryTile extends StatelessWidget {
           const SizedBox(width: 10),
           Icon(
             selected ? LucideIcons.check : LucideIcons.chevronRight,
-            color: selected ? businessGreenDark : AppColors.subtle,
-            size: selected ? 19 : 20,
+            color: selected ? AppColors.blue : AppColors.subtle,
+            size: selected ? 18 : 18,
           ),
         ],
       ),
@@ -887,7 +1119,7 @@ class _DropdownEmptyState extends StatelessWidget {
           '没有匹配分类',
           style: AppTextStyles.body.copyWith(
             color: AppColors.muted,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -902,7 +1134,7 @@ class _SheetGrabber extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 38,
+        width: 36,
         height: 4,
         decoration: BoxDecoration(
           color: AppColors.line,
@@ -914,10 +1146,15 @@ class _SheetGrabber extends StatelessWidget {
 }
 
 class _SheetTitle extends StatelessWidget {
-  const _SheetTitle({required this.title, this.subtitle});
+  const _SheetTitle({
+    required this.title,
+    this.subtitle,
+    this.onManageTap,
+  });
 
   final String title;
   final String? subtitle;
+  final VoidCallback? onManageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -930,33 +1167,141 @@ class _SheetTitle extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: AppTextStyles.sectionTitle.copyWith(
+                style: const TextStyle(
+                  color: AppColors.ink,
                   fontSize: 20,
-                  height: 26 / 20,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
                 ),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 4),
                 Text(
                   subtitle!,
-                  style: AppTextStyles.body.copyWith(
+                  style: const TextStyle(
                     color: AppColors.muted,
                     fontSize: 13,
-                    height: 18 / 13,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
                   ),
                 ),
               ],
             ],
           ),
         ),
+        if (onManageTap != null) ...[
+          const SizedBox(width: 8),
+          AnimatedPress(
+            scale: 0.96,
+            onTap: onManageTap,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.blueSoft,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.settings2,
+                    size: 13,
+                    color: AppColors.blue,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    '管理',
+                    style: TextStyle(
+                      color: AppColors.blue,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         IconButton(
           visualDensity: VisualDensity.compact,
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(LucideIcons.x, size: 20),
+          icon: const Icon(LucideIcons.x, size: 18, color: AppColors.muted),
         ),
       ],
+    );
+  }
+}
+
+class _AssistEntryCard extends StatelessWidget {
+  const _AssistEntryCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedPress(
+      scale: 0.98,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.blueSoft,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.blue.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                LucideIcons.sparkles,
+                color: AppColors.blue,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '一句话智能填写',
+                    style: TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '说"买了200块化肥"试试',
+                    style: TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              LucideIcons.chevronRight,
+              color: AppColors.blue,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1037,38 +1382,4 @@ String _ledgerFirstNonEmpty(
     if (value != null && text.isNotEmpty && text != 'null') return text;
   }
   return fallback;
-}
-
-class _LedgerHintCard extends StatelessWidget {
-  const _LedgerHintCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.greenSoft,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.green.withValues(alpha: 0.16)),
-      ),
-      child: const Row(
-        children: [
-          Icon(LucideIcons.circleCheckBig,
-              color: AppColors.greenDark, size: 20),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '只填类型、分类、金额和时间即可保存，常用分类可单独维护。',
-              style: TextStyle(
-                color: AppColors.greenDark,
-                fontSize: 13,
-                height: 18 / 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../shared/assets/app_assets.dart';
-import '../../shared/widgets/card_panel.dart';
+import '../../shared/widgets/animated_press.dart';
 import '../../shared/widgets/reference_page.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_text_styles.dart';
 import '../../data/repositories/business_repository.dart';
 import '../business/business_pages.dart';
 import '../record_flow/record_flow_controller.dart';
@@ -129,8 +127,7 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> {
     return _WorkbenchPage(
       headerTrailing: const HeaderIconButton(icon: LucideIcons.clock),
       children: [
-        const SizedBox(height: 2),
-        _SmartFillBanner(
+        _AiRecordHero(
           parsing: _parsing,
           controller: _recordTextController,
           onSubmit: () => _openAiConfirm(context),
@@ -152,11 +149,8 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const _TodayMetricsSection(),
         const _ReportShortcutCard(),
-        const SizedBox(height: 8),
-        const _TodayOverviewSection(),
-        const SizedBox(height: 8),
         _ToolSection(
           onCycleTap: () => _openBusinessPage(
             context,
@@ -193,7 +187,6 @@ class _WorkbenchScreenState extends State<WorkbenchScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
       ],
     );
   }
@@ -212,7 +205,7 @@ class _WorkbenchPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 112),
+        padding: const EdgeInsets.only(bottom: 120),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 430),
@@ -227,10 +220,13 @@ class _WorkbenchPage extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: children,
+                    children: [
+                      const SizedBox(height: 14),
+                      ...children,
+                    ],
                   ),
                 ),
               ],
@@ -242,51 +238,91 @@ class _WorkbenchPage extends StatelessWidget {
   }
 }
 
-class _RecordCard extends StatelessWidget {
-  const _RecordCard({
-    required this.child,
-    this.padding = const EdgeInsets.all(14),
-  });
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.child, this.padding});
 
   final Widget child;
-  final EdgeInsets padding;
+  final EdgeInsets? padding;
 
   @override
   Widget build(BuildContext context) {
-    return CardPanel(
-      radius: 18,
-      padding: padding,
-      background: Colors.white,
-      borderColor: const Color(0xFFE2EAF4),
-      shadow: true,
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: padding ?? const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.lineSoft),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
       child: child,
     );
   }
 }
 
-class _GeneratedIcon extends StatelessWidget {
-  const _GeneratedIcon({
-    required this.asset,
-    required this.size,
-  });
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.icon, required this.title, this.hint});
 
-  final String asset;
-  final double size;
+  final IconData icon;
+  final String title;
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      asset,
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.blueSoft,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 15, color: AppColors.blue),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+              if (hint != null) ...[
+                const SizedBox(height: 1),
+                Text(
+                  hint!,
+                  style: const TextStyle(
+                    color: AppColors.subtle,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _SmartFillBanner extends StatelessWidget {
-  const _SmartFillBanner({
+class _AiRecordHero extends StatelessWidget {
+  const _AiRecordHero({
     required this.parsing,
     required this.controller,
     required this.onSubmit,
@@ -304,225 +340,108 @@ class _SmartFillBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final isNarrow = width < 382;
-        final hintText = parsing ? '正在识别记录...' : '例：买肥料300，老王工资200';
-        return SizedBox(
-          width: width,
-          child: CardPanel(
-            radius: 18,
-            padding: EdgeInsets.zero,
-            borderColor: const Color(0xFFDCE8F7),
-            shadow: true,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Stack(
-                children: [
-                  const Positioned.fill(child: _SmartBannerBackground()),
-                  Positioned(
-                    right: isNarrow ? 36 : 50,
-                    top: 18,
-                    child: Container(
-                      width: isNarrow ? 82 : 94,
-                      height: isNarrow ? 82 : 94,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.74),
-                        border: Border.all(
-                          color: const Color(0xFFE3F0FF),
-                          width: 1,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.blue.withValues(alpha: 0.09),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(
-                          AppAssets.yayaMascotLogo,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _SmartFillBadge(),
-                        const SizedBox(height: 12),
-                        Text(
-                          '今天要记什么？',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.title.copyWith(
-                            fontSize: 22,
-                            height: 28 / 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        SizedBox(
-                          width: isNarrow ? 218 : 264,
-                          child: Text(
-                            '说一句，芽芽会整理成账目、农事或工资',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.body.copyWith(
-                              color: AppColors.muted,
-                              fontSize: 13.5,
-                              height: 18 / 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _SmartFillInputRow(
-                          parsing: parsing,
-                          controller: controller,
-                          hintText: hintText,
-                          onSubmit: onSubmit,
-                          compact: isNarrow,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _SmartShortcutPill(
-                                icon: LucideIcons.pencilLine,
-                                label: '手动记一笔',
-                                color: AppColors.blue,
-                                onTap: onManualTap,
-                                compact: isNarrow,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _SmartShortcutPill(
-                                icon: LucideIcons.sprout,
-                                label: '记农事',
-                                color: AppColors.greenDark,
-                                onTap: onFarmLogTap,
-                                compact: isNarrow,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _SmartShortcutPill(
-                                icon: LucideIcons.handCoins,
-                                label: '记工资',
-                                color: AppColors.amber,
-                                onTap: onWageTap,
-                                compact: isNarrow,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SmartBannerBackground extends StatelessWidget {
-  const _SmartBannerBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
+    final hintText = parsing ? '正在识别记录...' : '例：买肥料 300，老王工资 200';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFFFFF), Color(0xFFF9FCFF), Color(0xFFF6FBFF)],
-        ),
-        boxShadow: [
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.lineSoft),
+        boxShadow: const [
           BoxShadow(
-            color: AppColors.blue.withValues(alpha: 0.05),
-            blurRadius: 26,
-            offset: const Offset(0, 8),
+            color: Color(0x08000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
           ),
         ],
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -22,
-            top: -18,
-            width: 164,
-            height: 164,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.blue.withValues(alpha: 0.12),
-                    AppColors.cyan.withValues(alpha: 0.04),
-                    Colors.transparent,
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.blueSoft,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.sparkles, size: 12, color: AppColors.blue),
+                    SizedBox(width: 4),
+                    Text(
+                      '芽芽智能填写',
+                      style: TextStyle(
+                        color: AppColors.blue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
                   ],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '今天要记什么？',
+            style: TextStyle(
+              color: AppColors.ink,
+              fontSize: 22,
+              height: 28 / 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.2,
             ),
           ),
-          Positioned(
-            right: 14,
-            top: 70,
-            width: 128,
-            height: 116,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.blue.withValues(alpha: 0.04),
+          const SizedBox(height: 4),
+          const Text(
+            '账目、农事或工资，一句话自动识别',
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: 13,
+              height: 18 / 13,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _SmartFillInputRow(
+            parsing: parsing,
+            controller: controller,
+            hintText: hintText,
+            onSubmit: onSubmit,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ShortcutTile(
+                  icon: LucideIcons.pencilLine,
+                  label: '手动记一笔',
+                  onTap: onManualTap,
+                ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SmartFillBadge extends StatelessWidget {
-  const _SmartFillBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 26,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFD4E7FF)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(LucideIcons.sparkles, size: 14, color: AppColors.blue),
-          const SizedBox(width: 5),
-          Text(
-            '芽芽智能填写',
-            style: AppTextStyles.small.copyWith(
-              color: AppColors.blue,
-              fontSize: 12,
-              height: 16 / 12,
-              fontWeight: FontWeight.w800,
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ShortcutTile(
+                  icon: LucideIcons.sprout,
+                  label: '记农事',
+                  onTap: onFarmLogTap,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ShortcutTile(
+                  icon: LucideIcons.handCoins,
+                  label: '记工资',
+                  onTap: onWageTap,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -536,27 +455,25 @@ class _SmartFillInputRow extends StatelessWidget {
     required this.controller,
     required this.hintText,
     required this.onSubmit,
-    required this.compact,
   });
 
   final bool parsing;
   final TextEditingController controller;
   final String hintText;
   final VoidCallback onSubmit;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 44,
+      height: 52,
+      padding: const EdgeInsets.only(left: 16, right: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.98),
+        color: AppColors.surface2,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFD9E4F0)),
+        border: Border.all(color: AppColors.line),
       ),
       child: Row(
         children: [
-          const SizedBox(width: 16),
           Expanded(
             child: Material(
               color: Colors.transparent,
@@ -567,17 +484,19 @@ class _SmartFillInputRow extends StatelessWidget {
                 maxLines: 1,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => onSubmit(),
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.ink2,
+                style: const TextStyle(
+                  color: AppColors.ink,
                   fontSize: 15,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
                 ),
                 decoration: InputDecoration(
                   hintText: hintText,
-                  hintStyle: AppTextStyles.body.copyWith(
+                  hintStyle: const TextStyle(
                     color: AppColors.subtle,
-                    fontSize: compact ? 13.5 : 15,
-                    overflow: TextOverflow.ellipsis,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
                   ),
                   border: InputBorder.none,
                   isDense: true,
@@ -587,54 +506,53 @@ class _SmartFillInputRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: parsing ? null : onSubmit,
-              child: Container(
-                height: 36,
-                width: compact ? 84 : 92,
-                decoration: BoxDecoration(
-                  color: AppColors.blue,
-                  borderRadius: BorderRadius.circular(13),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.blue.withValues(alpha: 0.22),
-                      blurRadius: 12,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: parsing
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              LucideIcons.sparkles,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '识别',
-                              style: AppTextStyles.sectionTitle.copyWith(
-                                color: Colors.white,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+          AnimatedPress(
+            scale: 0.95,
+            onTap: parsing ? null : onSubmit,
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: AppColors.blue,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.blue.withValues(alpha: 0.24),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: parsing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.white,
                         ),
-                ),
+                      )
+                    : const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.sparkles,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            '识别',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),
@@ -644,49 +562,45 @@ class _SmartFillInputRow extends StatelessWidget {
   }
 }
 
-class _SmartShortcutPill extends StatelessWidget {
-  const _SmartShortcutPill({
+class _ShortcutTile extends StatelessWidget {
+  const _ShortcutTile({
     required this.icon,
     required this.label,
-    required this.color,
     required this.onTap,
-    required this.compact,
   });
 
   final IconData icon;
   final String label;
-  final Color color;
   final VoidCallback onTap;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return AnimatedPress(
+      scale: 0.96,
       onTap: onTap,
       child: Container(
-        height: 40,
-        padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: const Color(0xFFE1E8F2)),
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _SmartShortcutIcon(icon: icon, color: color, label: label),
-            SizedBox(width: compact ? 5 : 7),
+            Icon(icon, size: 15, color: AppColors.blue),
+            const SizedBox(width: 5),
             Flexible(
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   label,
                   maxLines: 1,
-                  style: AppTextStyles.body.copyWith(
+                  style: const TextStyle(
                     color: AppColors.ink2,
-                    fontSize: compact ? 12.5 : 13.5,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
                   ),
                 ),
               ),
@@ -698,31 +612,187 @@ class _SmartShortcutPill extends StatelessWidget {
   }
 }
 
-class _SmartShortcutIcon extends StatelessWidget {
-  const _SmartShortcutIcon({
-    required this.icon,
-    required this.color,
-    required this.label,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String label;
+class _TodayMetricsSection extends StatelessWidget {
+  const _TodayMetricsSection();
 
   @override
   Widget build(BuildContext context) {
-    if (label == '记农事') {
-      return Container(
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(
-          color: AppColors.greenDark,
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: const Icon(LucideIcons.sprout, size: 15, color: Colors.white),
-      );
-    }
-    return Icon(icon, size: 18, color: color);
+    return _SectionCard(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(
+            icon: LucideIcons.layoutDashboard,
+            title: '今日概览',
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricTile(
+                  label: '今日已记',
+                  value: '3',
+                  unit: '条',
+                  icon: LucideIcons.pencilLine,
+                  accent: AppColors.blue,
+                  accentSoft: AppColors.blueSoft,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MetricTile(
+                  label: '待确认',
+                  value: '1',
+                  unit: '条',
+                  icon: LucideIcons.circleAlert,
+                  accent: AppColors.amber,
+                  accentSoft: AppColors.amberSoft,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricTile(
+                  label: '工资待结',
+                  value: '2',
+                  unit: '人',
+                  icon: LucideIcons.users,
+                  accent: AppColors.green,
+                  accentSoft: AppColors.greenSoft,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MetricTile(
+                  label: '本周支出',
+                  value: '1,280',
+                  unit: '¥',
+                  icon: LucideIcons.wallet,
+                  accent: AppColors.purple,
+                  accentSoft: AppColors.purpleSoft,
+                  currencyPrefix: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.icon,
+    required this.accent,
+    required this.accentSoft,
+    this.currencyPrefix = false,
+  });
+
+  final String label;
+  final String value;
+  final String unit;
+  final IconData icon;
+  final Color accent;
+  final Color accentSoft;
+  final bool currencyPrefix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accentSoft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: accent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    if (currencyPrefix) ...[
+                      Text(
+                        unit,
+                        style: TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 1),
+                    ],
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          value,
+                          maxLines: 1,
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (!currencyPrefix) ...[
+                      const SizedBox(width: 2),
+                      Text(
+                        unit,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -731,333 +801,120 @@ class _ReportShortcutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final isNarrow = width < 382;
-        return SizedBox(
-          width: width,
-          child: _RecordCard(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: isNarrow
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _ReportSummaryBlock(compact: true),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: const [
-                          Expanded(
-                            child: _ReportActionButton(
-                              icon: LucideIcons.fileBarChart,
-                              label: '生成周报',
-                              color: AppColors.blue,
-                              background: Color(0xFFF4F9FF),
-                              compact: true,
-                            ),
-                          ),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: _ReportActionButton(
-                              icon: LucideIcons.calendarDays,
-                              label: '生成月报',
-                              color: AppColors.greenDark,
-                              background: Color(0xFFF0FAF6),
-                              compact: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: const [
-                      Expanded(child: _ReportSummaryBlock(compact: false)),
-                      SizedBox(width: 8),
-                      _ReportActionButton(
-                        icon: LucideIcons.fileBarChart,
-                        label: '生成周报',
-                        color: AppColors.blue,
-                        background: Color(0xFFF4F9FF),
-                        compact: false,
-                      ),
-                      SizedBox(width: 10),
-                      _ReportActionButton(
-                        icon: LucideIcons.calendarDays,
-                        label: '生成月报',
-                        color: AppColors.greenDark,
-                        background: Color(0xFFF0FAF6),
-                        compact: false,
-                      ),
-                    ],
-                  ),
+    return _SectionCard(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(
+            icon: LucideIcons.barChart3,
+            title: '经营报告',
+            hint: '本周12条记录 · 本月支出 ¥4,820',
           ),
-        );
-      },
-    );
-  }
-}
-
-class _ReportSummaryBlock extends StatelessWidget {
-  const _ReportSummaryBlock({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const _SectionIconBadge(
-              icon: LucideIcons.barChart3,
-              color: Colors.white,
-              background: AppColors.blue,
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                '经营报告',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.sectionTitle.copyWith(
-                  fontSize: 17,
-                  height: 22 / 17,
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _ReportButton(
+                  icon: LucideIcons.fileText,
+                  label: '生成周报',
+                  hint: '本周经营汇总',
+                  accent: AppColors.blue,
+                  accentSoft: AppColors.blueSoft,
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text.rich(
-          TextSpan(
-            children: const [
-              TextSpan(text: '本周'),
-              TextSpan(
-                text: '12',
-                style: TextStyle(color: AppColors.blue),
-              ),
-              TextSpan(text: '条记录 · 本月支出'),
-              TextSpan(
-                text: '¥4,820',
-                style: TextStyle(color: AppColors.greenDark),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ReportButton(
+                  icon: LucideIcons.calendarDays,
+                  label: '生成月报',
+                  hint: '本月经营汇总',
+                  accent: AppColors.green,
+                  accentSoft: AppColors.greenSoft,
+                ),
               ),
             ],
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.small.copyWith(
-            color: AppColors.muted,
-            fontSize: compact ? 11.8 : 12.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _ReportActionButton extends StatelessWidget {
-  const _ReportActionButton({
+class _ReportButton extends StatelessWidget {
+  const _ReportButton({
     required this.icon,
     required this.label,
-    required this.color,
-    required this.background,
-    required this.compact,
+    required this.hint,
+    required this.accent,
+    required this.accentSoft,
   });
 
   final IconData icon;
   final String label;
-  final Color color;
-  final Color background;
-  final bool compact;
+  final String hint;
+  final Color accent;
+  final Color accentSoft;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      width: compact ? 70 : 76,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDDE7F3)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: compact ? 14 : 16, color: color),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.small.copyWith(
-                color: color,
-                fontSize: compact ? 10.5 : 11.5,
-                fontWeight: FontWeight.w800,
+    return AnimatedPress(
+      scale: 0.97,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        decoration: BoxDecoration(
+          color: accentSoft,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(9),
               ),
+              child: Icon(icon, size: 15, color: accent),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TodayOverviewSection extends StatelessWidget {
-  const _TodayOverviewSection();
-
-  static const items = [
-    _OverviewMetric(
-      label: '今日已记',
-      value: '3条',
-      imageAsset: AppAssets.recordOverviewRecordedBlue,
-      background: Color(0xFFF4F8FF),
-      border: Color(0xFFDDEBFF),
-    ),
-    _OverviewMetric(
-      label: '待确认',
-      value: '1条',
-      imageAsset: AppAssets.recordOverviewPendingOrange,
-      background: Color(0xFFFFFAF3),
-      border: Color(0xFFFFE8C8),
-    ),
-    _OverviewMetric(
-      label: '工资待结',
-      value: '2人',
-      imageAsset: AppAssets.recordOverviewWorkersGreen,
-      background: Color(0xFFF3FCF7),
-      border: Color(0xFFDDF4E8),
-    ),
-    _OverviewMetric(
-      label: '本周支出',
-      value: '¥1,280',
-      imageAsset: AppAssets.recordOverviewWalletPurple,
-      background: Color(0xFFF8F5FF),
-      border: Color(0xFFE8DEFF),
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final isNarrow = width < 382;
-        return SizedBox(
-          width: width,
-          child: _RecordCard(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionHeading(
-                  icon: LucideIcons.layoutDashboard,
-                  title: '今日概览',
-                ),
-                const SizedBox(height: 12),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: isNarrow ? 10 : 12,
-                  childAspectRatio: isNarrow ? 1.2 : 2.92,
-                  children: items
-                      .map((item) => _OverviewMetricTile(
-                            item: item,
-                            compact: isNarrow,
-                          ))
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _OverviewMetricTile extends StatelessWidget {
-  const _OverviewMetricTile({required this.item, required this.compact});
-
-  final _OverviewMetric item;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 12 : 14,
-        vertical: compact ? 7 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: item.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: item.border),
-      ),
-      child: Row(
-        children: [
-          _GeneratedIcon(
-            asset: item.imageAsset,
-            size: compact ? 35 : 40,
-          ),
-          SizedBox(width: compact ? 9 : 11),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.muted,
-                    fontSize: compact ? 11.5 : 12.5,
-                    height: compact ? 15 / 11.5 : 15 / 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(height: compact ? 1 : 2),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    item.value,
-                    maxLines: 1,
-                    style: AppTextStyles.sectionTitle.copyWith(
-                      fontSize: compact ? 18 : 19,
-                      height: 22 / 19,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 1),
+                  Text(
+                    hint,
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            Icon(
+              LucideIcons.chevronRight,
+              size: 14,
+              color: accent.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
       ),
     );
   }
-}
-
-class _OverviewMetric {
-  const _OverviewMetric({
-    required this.label,
-    required this.value,
-    required this.imageAsset,
-    required this.background,
-    required this.border,
-  });
-
-  final String label;
-  final String value;
-  final String imageAsset;
-  final Color background;
-  final Color border;
 }
 
 class _ToolSection extends StatelessWidget {
@@ -1077,161 +934,107 @@ class _ToolSection extends StatelessWidget {
   final VoidCallback onPatchRecordTap;
   final VoidCallback onWageSettlementTap;
 
-  static const items = [
-    _ToolItem(
-      '建批次',
-      AppColors.purple,
-      AppColors.purpleSoft,
-      AppAssets.recordToolBatch,
-    ),
-    _ToolItem(
-      '新增工人',
-      AppColors.blue,
-      AppColors.blueSoft,
-      AppAssets.recordToolWorker,
-    ),
-    _ToolItem(
-      '建模板',
-      AppColors.greenDark,
-      AppColors.greenSoft,
-      AppAssets.recordToolTemplate,
-    ),
-    _ToolItem(
-      '最近记录',
-      AppColors.blue,
-      AppColors.blueSoft,
-      AppAssets.recordToolRecent,
-    ),
-    _ToolItem(
-      '补记录',
-      AppColors.amber,
-      AppColors.amberSoft,
-      AppAssets.recordToolPatch,
-    ),
-    _ToolItem(
-      '工资结算',
-      AppColors.amber,
-      AppColors.amberSoft,
-      AppAssets.recordToolWage,
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final isNarrow = width < 382;
-        return SizedBox(
-          width: width,
-          child: _RecordCard(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionHeading(
-                  icon: LucideIcons.briefcaseBusiness,
-                  title: '常用工具',
-                ),
-                const SizedBox(height: 12),
-                GridView.count(
-                  crossAxisCount: 3,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: isNarrow ? 10 : 12,
-                  childAspectRatio: isNarrow ? 2.35 : 2.92,
-                  children: items.map((item) {
-                    return _ToolTile(
-                      item: item,
-                      compact: isNarrow,
-                      onTap: switch (item.label) {
-                        '建批次' => onCycleTap,
-                        '新增工人' => onWorkerTap,
-                        '建模板' => onTemplateTap,
-                        '最近记录' => onRecentTap,
-                        '补记录' => onPatchRecordTap,
-                        '工资结算' => onWageSettlementTap,
-                        _ => null,
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
+    final items = [
+      _ToolItem(
+        label: '建批次',
+        icon: LucideIcons.layers,
+        onTap: onCycleTap,
+      ),
+      _ToolItem(
+        label: '新增工人',
+        icon: LucideIcons.userPlus,
+        onTap: onWorkerTap,
+      ),
+      _ToolItem(
+        label: '建模板',
+        icon: LucideIcons.layoutTemplate,
+        onTap: onTemplateTap,
+      ),
+      _ToolItem(
+        label: '最近记录',
+        icon: LucideIcons.history,
+        onTap: onRecentTap,
+      ),
+      _ToolItem(
+        label: '补记录',
+        icon: LucideIcons.filePlus,
+        onTap: onPatchRecordTap,
+      ),
+      _ToolItem(
+        label: '工资结算',
+        icon: LucideIcons.coins,
+        onTap: onWageSettlementTap,
+      ),
+    ];
+
+    return _SectionCard(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle(
+            icon: LucideIcons.briefcaseBusiness,
+            title: '常用工具',
           ),
-        );
-      },
+          const SizedBox(height: 16),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.05,
+            children: items
+                .map((item) => _ToolTile(item: item))
+                .toList(growable: false),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _ToolTile extends StatelessWidget {
-  const _ToolTile({required this.item, required this.compact, this.onTap});
+  const _ToolTile({required this.item});
 
   final _ToolItem item;
-  final bool compact;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+    return AnimatedPress(
+      scale: 0.95,
+      onTap: item.onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 9),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: AppColors.lineSoft),
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: compact ? 30 : 32,
-              height: compact ? 30 : 32,
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: item.background,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(11),
-                border: Border.all(
-                  color: item.color.withValues(alpha: 0.08),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: item.color.withValues(alpha: 0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                border: Border.all(color: AppColors.lineSoft),
               ),
-              child: Center(
-                child: Image.asset(
-                  item.asset,
-                  width: compact ? 22 : 24,
-                  height: compact ? 22 : 24,
-                  fit: BoxFit.contain,
-                ),
-              ),
+              child: Icon(item.icon, size: 17, color: AppColors.ink2),
             ),
-            SizedBox(width: compact ? 5 : 6),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    item.label,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: AppTextStyles.body.copyWith(
-                      color: AppColors.ink2,
-                      fontSize: compact ? 12.5 : 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+            const SizedBox(height: 7),
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.ink2,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
               ),
             ),
           ],
@@ -1242,68 +1045,39 @@ class _ToolTile extends StatelessWidget {
 }
 
 class _ToolItem {
-  const _ToolItem(
-    this.label,
-    this.color,
-    this.background,
-    this.asset,
-  );
-
-  final String label;
-  final Color color;
-  final Color background;
-  final String asset;
-}
-
-class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({required this.icon, required this.title});
-
-  final IconData icon;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _SectionIconBadge(
-          icon: icon,
-          color: Colors.white,
-          background: AppColors.blue,
-        ),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: AppTextStyles.sectionTitle.copyWith(
-            fontSize: 18,
-            height: 24 / 18,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionIconBadge extends StatelessWidget {
-  const _SectionIconBadge({
+  const _ToolItem({
+    required this.label,
     required this.icon,
-    required this.color,
-    required this.background,
+    required this.onTap,
   });
 
+  final String label;
   final IconData icon;
-  final Color color;
-  final Color background;
+  final VoidCallback onTap;
+}
+
+class HeaderIconButton extends StatelessWidget {
+  const HeaderIconButton({super.key, required this.icon, this.onTap});
+
+  final IconData icon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
+    return AnimatedPress(
+      scale: 0.94,
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.lineSoft),
+        ),
+        child: Icon(icon, size: 18, color: AppColors.ink),
       ),
-      child: Icon(icon, size: 18, color: color),
     );
   }
 }
