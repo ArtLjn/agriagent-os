@@ -191,6 +191,31 @@ async def test_low_risk_chitchat_does_not_instantiate_reflector() -> None:
 
 
 @pytest.mark.asyncio
+async def test_no_tool_write_success_claim_returns_fail_closed_reply() -> None:
+    fake_llm = _FakeLLM("已记录李海这个月干了15天压瓜。")
+    safe_reason = "没有工具写入结果或待确认动作，但最终回复声称业务数据已经写入。"
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, [])
+
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="李海这个月干了15天压瓜")],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-no-tool-write-claim",
+                "router_decision": RouterDecision(selected_tools=[]),
+            }
+        )
+
+    final_text = result["messages"][0].content
+    assert final_text == safe_reason
+    assert "已记录" not in final_text
+
+
+@pytest.mark.asyncio
 async def test_required_selected_tool_missing_returns_safe_fallback() -> None:
     fake_llm = _FakeLLM("你现在有两个茬口。")
     tools = [_FakeTool("get_farm_status")]

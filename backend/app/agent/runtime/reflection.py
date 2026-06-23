@@ -2,7 +2,12 @@
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from app.agent.reflector import ReflectionDecision, ReflectionResult, ReflectorService
+from app.agent.reflector import (
+    ReflectionDecision,
+    ReflectionResult,
+    ReflectorService,
+    has_write_success_claim,
+)
 from app.infra.pending_actions import is_write_skill
 
 
@@ -18,6 +23,12 @@ def apply_post_tool_reflection(
 ) -> AIMessage:
     """最终文本返回前执行工具结果一致性检查。"""
     final_text = str(response.content or "")
+    if (
+        not tool_messages
+        and not selected_tool_names
+        and not has_write_success_claim(final_text)
+    ):
+        return response
 
     tool_call_ids = [
         str(getattr(message, "tool_call_id", ""))

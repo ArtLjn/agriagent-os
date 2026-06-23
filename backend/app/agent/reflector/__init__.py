@@ -15,6 +15,7 @@ __all__ = [
     "ReflectionSeverity",
     "ReflectionTrigger",
     "ReflectorService",
+    "has_write_success_claim",
 ]
 
 
@@ -23,4 +24,8 @@ def __getattr__(name: str):
         from app.agent.reflector.service import ReflectorService
 
         return ReflectorService
+    if name == "has_write_success_claim":
+        from app.agent.reflector.checks import first_write_success_phrase
+
+        return lambda text: first_write_success_phrase(text) is not None
     raise AttributeError(name)
