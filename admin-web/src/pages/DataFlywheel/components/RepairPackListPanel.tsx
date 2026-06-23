@@ -26,6 +26,7 @@ import {
   getRepairPack,
   listRepairPacks,
   markRepairPackResolved,
+  rebuildRepairPack,
   recordRepairPackVerificationFailure,
   reopenRepairPack,
 } from '../../../api/dataFlywheel';
@@ -102,6 +103,10 @@ export default function RepairPackListPanel({ onOpenDetail }: RepairPackListPane
 
   const handleReopen = (pack: DataFlywheelRepairPack) => {
     void runAction(pack.pack_id, () => reopenRepairPack(pack.pack_id));
+  };
+
+  const handleRebuild = (pack: DataFlywheelRepairPack) => {
+    void runAction(pack.pack_id, () => rebuildRepairPack(pack.pack_id));
   };
 
   const handleResolve = (pack: DataFlywheelRepairPack) => {
@@ -206,6 +211,7 @@ export default function RepairPackListPanel({ onOpenDetail }: RepairPackListPane
               onOpenDetail={handleOpenDetail}
               onDiscard={handleDiscard}
               onReopen={handleReopen}
+              onRebuild={handleRebuild}
               onResolve={handleResolve}
               onVerificationFailed={handleVerificationFailed}
             />
@@ -233,6 +239,7 @@ interface RepairPackRowProps {
   onOpenDetail: (pack: DataFlywheelRepairPack) => void;
   onDiscard: (pack: DataFlywheelRepairPack) => void;
   onReopen: (pack: DataFlywheelRepairPack) => void;
+  onRebuild: (pack: DataFlywheelRepairPack) => void;
   onResolve: (pack: DataFlywheelRepairPack) => void;
   onVerificationFailed: (pack: DataFlywheelRepairPack) => void;
 }
@@ -243,6 +250,7 @@ function RepairPackRow({
   onOpenDetail,
   onDiscard,
   onReopen,
+  onRebuild,
   onResolve,
   onVerificationFailed,
 }: RepairPackRowProps) {
@@ -309,6 +317,14 @@ function RepairPackRow({
               data-testid={`repair-pack-detail-${pack.pack_id}`}
             >
               查看详情
+            </Button>
+            <Button
+              size="small"
+              loading={acting}
+              onClick={() => onRebuild(pack)}
+              data-testid={`repair-pack-rebuild-${pack.pack_id}`}
+            >
+              同步重建
             </Button>
             {!isResolved && !isDiscarded && pack.status !== REPAIR_PACK_STATUS.EXPORT_FAILED && (
               <Button

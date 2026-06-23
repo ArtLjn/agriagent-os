@@ -4,16 +4,20 @@ export interface CostRecord {
   id: number; cycle_id?: number; record_type: string;
   category: string; amount: string; record_date: string; note?: string;
   record_subtype?: string | null; counterparty?: string | null; due_date?: string | null;
+  settled_amount: string; settlement_status: string; unsettled_amount: string;
+  settled_at?: string | null;
   recorded_at?: string | null; created_at?: string | null;
 }
 
 export interface CycleProfit {
   cycle_id: number; total_cost: string; total_income: string; net_profit: string;
+  settled_cost?: string; settled_income?: string; unsettled_cost?: string; unsettled_income?: string;
 }
 
 export interface YearlySummary {
   year: number; total_cost: string; total_income: string;
-  net_profit: string; by_category: Record<string, string>;
+  net_profit: string; settled_cost?: string; settled_income?: string;
+  unsettled_cost?: string; unsettled_income?: string; by_category: Record<string, string>;
 }
 
 export interface CostParseResponse {
@@ -32,7 +36,16 @@ export interface PaginatedList<T> {
   total: number;
 }
 
-export async function listRecords(params?: { cycle_id?: number; category?: string; page?: number; size?: number }): Promise<PaginatedList<CostRecord>> {
+export interface ListRecordsParams {
+  cycle_id?: number;
+  category?: string;
+  page?: number;
+  size?: number;
+  date_from?: string;
+  date_to?: string;
+}
+
+export async function listRecords(params?: ListRecordsParams): Promise<PaginatedList<CostRecord>> {
   const res = await apiClient.get<PaginatedList<CostRecord>>('/costs', { params });
   return res.data;
 }

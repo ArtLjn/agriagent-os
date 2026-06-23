@@ -21,6 +21,7 @@ import {
   listRepairPacks,
   markBadCase,
   markRepairPackResolved,
+  rebuildRepairPack,
   recordRepairPackVerificationFailure,
   reopenRepairPack,
   deleteSampleLabel,
@@ -654,5 +655,27 @@ describe('dataFlywheel api', () => {
       '/admin/data-flywheel/repair-packs/repair-pending-plan-xyz/reopen'
     );
     expect(result.status).toBe('exported');
+  });
+
+  it('同步重建 repair pack 本地文件', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 2,
+        pack_id: 'repair-pending-plan-xyz',
+        fix_target: 'pending_plan',
+        labels: ['pending_missed'],
+        source_sample_ids: ['turn:2:s:1'],
+        status: 'exported',
+        export_path: 'data/repair-packs/repair-pending-plan-xyz',
+        manifest: {},
+      },
+    });
+
+    const result = await rebuildRepairPack('repair-pending-plan-xyz');
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/repair-packs/repair-pending-plan-xyz/rebuild'
+    );
+    expect(result.pack_id).toBe('repair-pending-plan-xyz');
   });
 });

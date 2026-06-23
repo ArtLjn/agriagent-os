@@ -54,6 +54,7 @@ vi.mock('../../api/dataFlywheel', () => ({
   listDataFlywheelSamples: vi.fn(),
   markBadCase: vi.fn(),
   markRepairPackResolved: vi.fn(),
+  rebuildRepairPack: vi.fn(),
   recordRepairPackVerificationFailure: vi.fn(),
   reopenRepairPack: vi.fn(),
   deleteSampleLabel: vi.fn(),

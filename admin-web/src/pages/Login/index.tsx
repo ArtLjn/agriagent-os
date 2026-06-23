@@ -54,11 +54,11 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <img
             src="/logo.png"
-            alt="农博社"
+            alt="田掌柜"
             style={{ width: 64, height: 64, marginBottom: 16 }}
           />
-          <Typography.Title level={3} style={{ color: palette.text, margin: 0 }}>农博社</Typography.Title>
-          <p style={{ color: palette.textMuted, margin: '8px 0 0' }}>智能种植管理平台</p>
+          <Typography.Title level={3} style={{ color: palette.text, margin: 0 }}>田掌柜</Typography.Title>
+          <p style={{ color: palette.textMuted, margin: '8px 0 0' }}>智能种植运营助手</p>
           <div style={{ color: palette.textSubtle, fontSize: 12, marginTop: 10 }}>
             <SafetyCertificateOutlined style={{ marginRight: 6 }} />
             管理员安全入口

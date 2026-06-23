@@ -6,6 +6,7 @@ import RepairPackListPanel from './RepairPackListPanel';
 import {
   getRepairPack,
   listRepairPacks,
+  rebuildRepairPack,
   reopenRepairPack,
   type DataFlywheelRepairPack,
 } from '../../../api/dataFlywheel';
@@ -18,6 +19,7 @@ vi.mock('../../../api/dataFlywheel', async (importOriginal) => {
     getRepairPack: vi.fn(),
     listRepairPacks: vi.fn(),
     markRepairPackResolved: vi.fn(),
+    rebuildRepairPack: vi.fn(),
     recordRepairPackVerificationFailure: vi.fn(),
     reopenRepairPack: vi.fn(),
   };
@@ -134,6 +136,29 @@ describe('RepairPackListPanel', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('repair-pack-restore-repair-router-abc123')).toBeInTheDocument();
+    });
+  });
+
+  it('点击同步重建触发 repair pack 重建并刷新列表', async () => {
+    vi.mocked(listRepairPacks).mockResolvedValue({
+      items: [basePack({ status: 'exported' })],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+    vi.mocked(rebuildRepairPack).mockResolvedValue(basePack({ status: 'exported' }));
+
+    renderWithApp(<RepairPackListPanel onOpenDetail={() => undefined} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('repair-pack-rebuild-repair-router-abc123')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('repair-pack-rebuild-repair-router-abc123'));
+
+    await waitFor(() => {
+      expect(rebuildRepairPack).toHaveBeenCalledWith('repair-router-abc123');
+      expect(listRepairPacks).toHaveBeenCalledTimes(2);
     });
   });
 

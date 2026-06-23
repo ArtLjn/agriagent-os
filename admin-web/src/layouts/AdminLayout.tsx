@@ -82,13 +82,17 @@ const pageTitles: Record<string, string> = {
   '/dev/config': '配置管理',
 };
 
+const brandLogoSrc = '/logo.png';
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState<string[]>(['user-ops', 'assistant-workbench', 'agent-platform']);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const currentTitle = pageTitles[location.pathname] || 'Farm Manager';
+  const currentTitle = pageTitles[location.pathname] || '田掌柜';
+  const collapseLabel = collapsed ? '展开侧边栏' : '折叠侧边栏';
+  const toggleSidebar = () => setCollapsed((current) => !current);
   const selectedKey = useMemo(() => {
     if (location.pathname.startsWith('/cycles/')) return '/cycles';
     if (location.pathname.startsWith('/crops/system')) return '/crops/system';
@@ -97,11 +101,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const activeParentKey = useMemo(() => (
     menuGroups.find((group) => group.children.some((item) => item.key === selectedKey))?.key
   ), [selectedKey]);
+  const activeGroup = useMemo(() => (
+    menuGroups.find((group) => group.key === activeParentKey) ?? menuGroups[0]
+  ), [activeParentKey]);
+  const collapsedMenuItems = useMemo(() => (
+    activeGroup.children.map((item) => ({
+      ...item,
+      icon: iconByName[item.icon],
+    }))
+  ), [activeGroup]);
   const displayedOpenKeys = collapsed
     ? []
     : activeParentKey && !openKeys.includes(activeParentKey)
       ? [...openKeys, activeParentKey]
       : openKeys;
+  const visibleMenuItems = collapsed ? collapsedMenuItems : menuItems;
 
   return (
     <Layout className="app-shell" style={{ height: '100vh', background: palette.bg }}>
@@ -120,35 +134,59 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             height: layout.headerHeight,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            padding: collapsed ? 0 : '0 20px',
+            justifyContent: collapsed ? 'center' : 'space-between',
+            padding: collapsed ? 0 : '0 12px 0 20px',
             borderBottom: `1px solid ${palette.border}`,
             gap: 10,
           }}
         >
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              background: `linear-gradient(135deg, ${palette.accent} 0%, ${palette.success} 100%)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>F</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                background: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 3,
+                flexShrink: 0,
+                boxShadow: '0 10px 24px rgba(0, 0, 0, 0.18)',
+              }}
+            >
+              <img
+                src={brandLogoSrc}
+                alt="田掌柜"
+                style={{ width: '100%', height: '100%', borderRadius: 7, objectFit: 'contain', display: 'block' }}
+              />
+            </div>
+            {!collapsed && (
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: palette.text, fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  田掌柜
+                </div>
+                <div style={{ color: palette.textMuted, fontSize: 11, marginTop: 2 }}>
+                  智能种植运营助手
+                </div>
+              </div>
+            )}
           </div>
           {!collapsed && (
-            <div style={{ minWidth: 0 }}>
-              <div style={{ color: palette.text, fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                Farm Manager
-              </div>
-              <div style={{ color: palette.textMuted, fontSize: 11, marginTop: 2 }}>
-                智能种植运营台
-              </div>
-            </div>
+            <Tooltip title={collapseLabel} placement="right">
+              <Button
+                type="text"
+                aria-label={collapseLabel}
+                icon={<MenuFoldOutlined />}
+                onClick={toggleSidebar}
+                style={{
+                  color: palette.textMuted,
+                  flexShrink: 0,
+                  width: 30,
+                  height: 30,
+                }}
+              />
+            </Tooltip>
           )}
         </div>
 
@@ -158,9 +196,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             theme="dark"
             mode="inline"
             selectedKeys={[selectedKey]}
-            openKeys={displayedOpenKeys}
-            items={menuItems}
-            onOpenChange={(keys) => setOpenKeys(keys)}
+            openKeys={collapsed ? undefined : displayedOpenKeys}
+            items={visibleMenuItems}
+            onOpenChange={collapsed ? undefined : (keys) => setOpenKeys(keys)}
             onClick={({ key }: { key: string }) => {
               if (key.startsWith('/')) navigate(key);
             }}
@@ -187,11 +225,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             background: palette.bgElevated,
           }}
         >
-          <Tooltip title={collapsed ? '展开' : '收起'} placement="right">
+          <Tooltip title={collapseLabel} placement="right">
             <Button
               type="text"
+              aria-label={collapsed ? collapseLabel : '底部折叠侧边栏'}
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={toggleSidebar}
               style={{ color: palette.textMuted }}
             />
           </Tooltip>

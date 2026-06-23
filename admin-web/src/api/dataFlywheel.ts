@@ -602,3 +602,10 @@ export async function reopenRepairPack(packId: string): Promise<DataFlywheelRepa
   );
   return response.data;
 }
+
+export async function rebuildRepairPack(packId: string): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.post<DataFlywheelRepairPack>(
+    `/admin/data-flywheel/repair-packs/${encodeURIComponent(packId)}/rebuild`
+  );
+  return response.data;
+}

@@ -220,15 +220,46 @@ export interface SkillItem {
   description: string;
   parameters_schema: Record<string, unknown>;
   status: string;
+  metadata: {
+    enabled: boolean;
+    disabled_reason: string | null;
+    permission_level: string;
+    risk_level: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface SkillSummary {
+  total: number;
+  enabled: number;
+  disabled: number;
+  admin_only: number;
 }
 
 export interface ListSkillsResponse {
   items: SkillItem[];
   total: number;
+  summary: SkillSummary;
 }
 
 export async function listSkills(): Promise<ListSkillsResponse> {
   const res = await apiClient.get<ListSkillsResponse>('/admin/skills');
+  return res.data;
+}
+
+export interface UpdateSkillEnabledRequest {
+  enabled: boolean;
+  disabled_reason?: string;
+}
+
+export async function updateSkillEnabled(
+  skillName: string,
+  payload: UpdateSkillEnabledRequest
+): Promise<SkillItem> {
+  const res = await apiClient.put<SkillItem>(
+    `/admin/skills/${encodeURIComponent(skillName)}/enabled`,
+    payload
+  );
   return res.data;
 }
 

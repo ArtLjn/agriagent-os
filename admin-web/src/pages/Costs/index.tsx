@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { Dayjs } from 'dayjs';
 import { Table, Button, Modal, Form, Input, InputNumber, DatePicker, Select, Space, Card, Row, Col, Statistic, message, Tag, Alert } from 'antd';
 import { PlusOutlined, BugOutlined, DollarOutlined, RiseOutlined, FallOutlined, RobotOutlined } from '@ant-design/icons';
 import { listRecords, createRecord, parseCostRecord, getCycleProfit, getYearlySummary, type CostRecord, type CostParseResponse, type CycleProfit, type YearlySummary } from '../../api/costs';
@@ -6,7 +7,29 @@ import { listCycles, type CropCycleListItem } from '../../api/cycles';
 import ApiDebugger from '../../components/ApiDebugger';
 import { MetricCard, PageShell, Toolbar } from '../../components/PageShell';
 import { cardStyle, palette } from '../../styles/theme';
+import { buildCostListParams, type MonthRange } from './costFilters';
 import { buildCostCreatePayload, buildCostFormValues } from './costSmartFill';
+
+const { RangePicker } = DatePicker;
+
+const moneyFormatter = new Intl.NumberFormat('zh-CN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatMoney(value: string | number | null | undefined) {
+  return `¥ ${moneyFormatter.format(Number(value ?? 0))}`;
+}
+
+function settlementLabel(record: CostRecord) {
+  if (record.record_subtype === '赊账') {
+    if (record.settlement_status === 'settled') return { text: '赊账已结清', color: 'green' };
+    if (record.settlement_status === 'partial') return { text: '赊账部分结算', color: 'gold' };
+    return { text: '赊账未结', color: 'red' };
+  }
+  if (Number(record.unsettled_amount ?? 0) > 0) return { text: '未结', color: 'gold' };
+  return { text: '已结', color: 'default' };
+}
 
 export default function Costs() {
   const [data, setData] = useState<CostRecord[]>([]);
@@ -21,13 +44,14 @@ export default function Costs() {
   const [profit, setProfit] = useState<CycleProfit | null>(null);
   const [yearly, setYearly] = useState<YearlySummary | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
+  const [monthRange, setMonthRange] = useState<MonthRange>(null);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
   const fetchData = useCallback(async (page: number, pageSize: number) => {
     setLoading(true);
     try {
       const [recordsRes, cyclesRes] = await Promise.all([
-        listRecords(selectedCycle ? { cycle_id: selectedCycle, page, size: pageSize } : { page, size: pageSize }),
+        listRecords(buildCostListParams({ selectedCycle, page, size: pageSize, monthRange })),
         listCycles(),
       ]);
       setData(recordsRes.items);
@@ -47,7 +71,7 @@ export default function Costs() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCycle]);
+  }, [monthRange, selectedCycle]);
 
   useEffect(() => { fetchData(1, pagination.pageSize); }, [fetchData, pagination.pageSize]);
 
@@ -70,6 +94,14 @@ export default function Costs() {
     form.resetFields();
     if (selectedCycle) form.setFieldsValue({ cycle_id: selectedCycle });
     setModalOpen(true);
+  };
+
+  const handleMonthRangeChange = (values: null | [Dayjs | null, Dayjs | null]) => {
+    if (values?.[0] && values?.[1]) {
+      setMonthRange([values[0], values[1]]);
+      return;
+    }
+    setMonthRange(null);
   };
 
   const handleSmartParse = async () => {
@@ -103,8 +135,42 @@ export default function Costs() {
       ),
     },
     { title: '分类', dataIndex: 'category' },
-    { title: '金额', dataIndex: 'amount', render: (value: string) => `¥ ${Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}` },
-    { title: '日期', dataIndex: 'record_date' },
+    { title: '金额', dataIndex: 'amount', render: (value: string) => formatMoney(value) },
+    {
+      title: '结算',
+      width: 220,
+      render: (_: unknown, record: CostRecord) => {
+        const label = settlementLabel(record);
+        const isTracked = record.record_subtype === '赊账' || Number(record.unsettled_amount ?? 0) > 0;
+        return (
+          <Space direction="vertical" size={2}>
+            <Space size={6} wrap>
+              <Tag color={label.color}>{label.text}</Tag>
+              {record.counterparty && <span style={{ color: palette.textMuted }}>{record.counterparty}</span>}
+            </Space>
+            {isTracked && (
+              <span style={{ color: palette.textMuted, fontSize: 12 }}>
+                已结 {formatMoney(record.settled_amount)} · 剩余 {formatMoney(record.unsettled_amount)}
+              </span>
+            )}
+          </Space>
+        );
+      },
+    },
+    {
+      title: '日期',
+      dataIndex: 'record_date',
+      render: (value: string, record: CostRecord) => (
+        <Space direction="vertical" size={2}>
+          <span>{value}</span>
+          {record.settled_at && (
+            <span style={{ color: palette.success, fontSize: 12 }}>
+              结清 {new Date(record.settled_at).toLocaleDateString('zh-CN')}
+            </span>
+          )}
+        </Space>
+      ),
+    },
     { title: '备注', dataIndex: 'note', ellipsis: true },
   ];
 
@@ -131,6 +197,14 @@ export default function Costs() {
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>新增记录</Button>
             <Select placeholder="按茬口筛选" allowClear style={{ width: 220 }} value={selectedCycle}
               onChange={(v) => setSelectedCycle(v)} options={cycles.map((c) => ({ value: c.id, label: c.name }))} />
+            <RangePicker
+              picker="month"
+              allowClear
+              value={monthRange}
+              onChange={handleMonthRangeChange}
+              placeholder={['开始月份', '结束月份']}
+              style={{ width: 260 }}
+            />
             <Button icon={<BugOutlined />} onClick={() => setDebugOpen(true)}>调试</Button>
           </>
         )}
@@ -140,9 +214,11 @@ export default function Costs() {
       {profit && (
         <Card size="small" style={{ ...cardStyle, marginBottom: 16 }}>
           <Space wrap>
-            <span>周期支出: ¥ {Number(profit.total_cost).toLocaleString('zh-CN')}</span>
-            <span>周期收入: ¥ {Number(profit.total_income).toLocaleString('zh-CN')}</span>
-            <span>净利润: <strong style={{ color: Number(profit.net_profit) >= 0 ? palette.success : palette.danger }}>¥ {Number(profit.net_profit).toLocaleString('zh-CN')}</strong></span>
+            <span>周期支出: {formatMoney(profit.total_cost)}</span>
+            <span>周期收入: {formatMoney(profit.total_income)}</span>
+            <span>净利润: <strong style={{ color: Number(profit.net_profit) >= 0 ? palette.success : palette.danger }}>{formatMoney(profit.net_profit)}</strong></span>
+            <span style={{ color: palette.textMuted }}>未结支出: {formatMoney(profit.unsettled_cost)}</span>
+            <span style={{ color: palette.textMuted }}>未结收入: {formatMoney(profit.unsettled_income)}</span>
           </Space>
         </Card>
       )}
@@ -153,7 +229,7 @@ export default function Costs() {
         columns={columns}
         loading={loading}
         size="small"
-        scroll={{ x: 760 }}
+        scroll={{ x: 980 }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
