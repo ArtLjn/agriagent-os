@@ -1,5 +1,8 @@
 """Admin 数据飞轮 repair pack API 测试。"""
 
+import shutil
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.infra.agent_events import AgentEventWriter
@@ -271,3 +274,34 @@ def test_resolve_repair_pack_marks_labels_resolved(db_session, tmp_path) -> None
     assert resolve_resp.json()["status"] == "resolved"
     label = db_session.query(AgentDataFlywheelLabel).one()
     assert label.status == "resolved"
+
+
+def test_rebuild_repair_pack_endpoint_restores_cleaned_data(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(
+        db_session, farm_id=turn.farm_id, sample_id=sample_id, label="pending_missed"
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        create_resp = client.post(
+            "/admin/data-flywheel/repair-packs",
+            json={"sample_ids": [sample_id]},
+            headers=admin_headers(),
+        )
+        pack_id = create_resp.json()["pack_id"]
+        pack_dir = Path(create_resp.json()["export_path"])
+        shutil.rmtree(pack_dir)
+        rebuild_resp = client.post(
+            f"/admin/data-flywheel/repair-packs/{pack_id}/rebuild",
+            headers=admin_headers(),
+        )
+
+    assert rebuild_resp.status_code == 200
+    assert rebuild_resp.json()["pack_id"] == pack_id
+    assert rebuild_resp.json()["cases"][0]["sample_id"] == sample_id
+    assert (pack_dir / "manifest.json").exists()
+    assert (pack_dir / "cases.jsonl").exists()

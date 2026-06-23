@@ -155,6 +155,57 @@ def test_regression_ready_false_for_generated_fallback_assertions() -> None:
     assert candidate["regression_ready"] is False
 
 
+def test_no_tool_success_claim_generates_actionable_regression_assertions() -> None:
+    detail = _sample_detail(
+        ["hallucinated_execution"],
+        sample_id="turn:1:sess-no-tool:21",
+    )
+    detail["sample"]["user_input_preview"] = "李海这个月干了15天压瓜"
+    detail["sample"]["assistant_reply_preview"] = (
+        "已为您记录：李海这个月干了15天压瓜。"
+    )
+    detail["sample"]["selected_tools"] = []
+    detail["messages"] = [
+        {"role": "user", "content": "李海这个月干了15天压瓜"},
+        {"role": "assistant", "content": "已为您记录：李海这个月干了15天压瓜。"},
+    ]
+    detail["issue_candidates"] = [
+        {
+            "type": "hallucinated_execution",
+            "severity": "high",
+            "reason": "回复声称已执行写入，但选中工具「无」未成功调用",
+            "evidence": "无",
+            "suggested_label": "hallucinated_execution",
+        }
+    ]
+
+    payload = build_repair_pack_payload(
+        [detail],
+        pack_id="pack-no-tool",
+        export_path="repair-packs/pack-no-tool",
+    )
+
+    case = payload["cases_jsonl"][0]
+    draft = payload["regression_drafts"][case["regression_draft"]]
+
+    assert case["regression_ready"] is True
+    assert draft["issue_assertions"] == [
+        {
+            "type": "hallucinated_execution",
+            "expected": "没有成功写工具调用时，回复不得声称已完成写入",
+            "evidence": "无",
+            "stage": "assertion_generated",
+        }
+    ]
+    assert draft["reply_assertions"] == [
+        {
+            "not_contains_any": ["已为您记录", "已记录", "已创建", "已保存", "已执行"],
+            "stage": "pending_fix",
+        }
+    ]
+    assert draft["metadata"]["regression_stage"] == "assertion_generated"
+
+
 def test_build_repair_pack_payload_rejects_mixed_fix_targets() -> None:
     samples = [
         _sample_detail(["pending_missed"], sample_id="turn:1:sess-1:12"),

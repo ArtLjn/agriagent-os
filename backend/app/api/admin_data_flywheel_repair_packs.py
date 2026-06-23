@@ -19,6 +19,7 @@ from app.services.data_flywheel_repair_pack_repository import (
     mark_repair_pack_discarded,
     mark_repair_pack_exported,
     mark_repair_pack_resolved,
+    rebuild_repair_pack_files,
     record_repair_pack_verification_failure,
 )
 
@@ -237,6 +238,24 @@ def reopen_admin_data_flywheel_repair_pack(
     """把 repair pack 状态重置为 exported（撤销已修复 / 恢复已废弃）。"""
     try:
         return mark_repair_pack_exported(db, farm_id=farm.id, pack_id=pack_id)
+    except ValueError as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/repair-packs/{pack_id}/rebuild")
+def rebuild_admin_data_flywheel_repair_pack(
+    pack_id: str,
+    db: Session = Depends(get_db),
+    farm: Farm = Depends(get_current_farm),
+) -> dict[str, Any]:
+    """按数据库记录同步重建 repair pack 本地文件。"""
+    try:
+        return rebuild_repair_pack_files(
+            db,
+            farm_id=farm.id,
+            pack_id=pack_id,
+            export_base_dir=REPAIR_PACK_BASE_DIR,
+        )
     except ValueError as exc:
         raise _http_error(exc) from exc
 

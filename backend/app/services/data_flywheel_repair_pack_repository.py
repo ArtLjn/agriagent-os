@@ -231,6 +231,49 @@ def get_repair_pack(db: Session, *, farm_id: int, pack_id: str) -> dict[str, Any
     return data
 
 
+def rebuild_repair_pack_files(
+    db: Session,
+    *,
+    farm_id: int,
+    pack_id: str,
+    export_base_dir: str | Path,
+) -> dict[str, Any]:
+    """按数据库记录重新生成 repair pack 磁盘文件。"""
+    row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
+    source_sample_ids = [str(item) for item in row.source_sample_ids or []]
+    if not source_sample_ids:
+        raise ValueError("EMPTY_REPAIR_PACK")
+    export_path = row.export_path or str(Path(export_base_dir) / row.pack_id)
+    details = [
+        get_sample_detail(db, farm_id=farm_id, sample_id=sample_id)
+        for sample_id in source_sample_ids
+    ]
+    payload = build_repair_pack_payload(
+        details,
+        pack_id=row.pack_id,
+        export_path=export_path,
+        created_by=row.created_by,
+        fix_target_override=row.fix_target,
+    )
+    manifest = payload["manifest"]
+    if row.dedup_key:
+        manifest["dedup_key"] = row.dedup_key
+    existing_manifest = row.manifest_json or {}
+    if isinstance(existing_manifest.get("dedup_inputs"), dict):
+        manifest["dedup_inputs"] = existing_manifest["dedup_inputs"]
+    _write_repair_pack_files(Path(export_path), payload)
+    row.export_path = export_path
+    row.manifest_json = manifest
+    row.export_error = None
+    db.commit()
+    db.refresh(row)
+    return {
+        **_pack_to_dict(row),
+        "cases": payload.get("cases_jsonl", []),
+        "payload": payload,
+    }
+
+
 def _load_cases_from_disk(export_path: str | None) -> list[dict[str, Any]]:
     """从 export_path/cases.jsonl 读失败案例；失败返回空列表。"""
     if not export_path:

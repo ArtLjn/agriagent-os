@@ -378,6 +378,8 @@ def _override_candidate_fix_target(
 def _is_regression_ready(detail: dict[str, Any]) -> bool:
     case_json = _explicit_case_json(detail)
     if not case_json:
+        if _has_actionable_generated_assertions(detail):
+            return True
         return False
     if case_json.get("expected_pending_action"):
         return True
@@ -404,7 +406,9 @@ def _case_json(detail: dict[str, Any]) -> dict[str, Any]:
             "source": "data_flywheel",
             "source_sample_id": _sample_id(detail),
             "quality_labels": _collect_labels(detail),
+            "regression_stage": _regression_stage(detail),
         },
+        "reply_assertions": _reply_assertions(detail),
         "issue_assertions": _issue_assertions(detail),
     }
 
@@ -416,11 +420,68 @@ def _issue_assertions(detail: dict[str, Any]) -> list[dict[str, Any]]:
             assertions.append(
                 {
                     "type": candidate.get("type"),
-                    "expected": candidate.get("reason") or "",
+                    "expected": _expected_for_issue(str(candidate.get("type")))
+                    or candidate.get("reason")
+                    or "",
                     "evidence": candidate.get("evidence") or "",
+                    "stage": "assertion_generated",
                 }
             )
     return assertions
+
+
+def _has_actionable_generated_assertions(detail: dict[str, Any]) -> bool:
+    issue_types = {
+        str(candidate.get("type"))
+        for candidate in detail.get("issue_candidates") or []
+        if isinstance(candidate, dict) and candidate.get("type")
+    }
+    return bool(
+        issue_types.intersection({"hallucinated_execution", "tool_error_ignored"})
+        and _issue_assertions(detail)
+    )
+
+
+def _reply_assertions(detail: dict[str, Any]) -> list[dict[str, Any]]:
+    issue_types = {
+        str(candidate.get("type"))
+        for candidate in detail.get("issue_candidates") or []
+        if isinstance(candidate, dict) and candidate.get("type")
+    }
+    if not issue_types.intersection({"hallucinated_execution", "tool_error_ignored"}):
+        return []
+    return [
+        {
+            "not_contains_any": [
+                "已为您记录",
+                "已记录",
+                "已创建",
+                "已保存",
+                "已执行",
+            ],
+            "stage": "pending_fix",
+        }
+    ]
+
+
+def _regression_stage(detail: dict[str, Any]) -> str:
+    if _issue_assertions(detail):
+        return "assertion_generated"
+    if _collect_labels(detail):
+        return "issue_found"
+    return "pending_fix"
+
+
+def _expected_for_issue(issue_type: str | None) -> str | None:
+    expected_by_type = {
+        "disabled_worker_used": "停用或离职工人不得被安排到作业或工资记录中",
+        "missing_wage": "包含工人的作业必须明确工资、已付金额、不计工资或欠款策略",
+        "pending_missed": "写操作必须先创建 pending plan，用户确认后才能执行",
+        "hallucinated_execution": "没有成功写工具调用时，回复不得声称已完成写入",
+        "tool_error_ignored": "工具失败时回复必须说明失败或要求补充信息，不得伪装成功",
+        "wrong_tool_selection": "router 必须选择与用户意图匹配的 skill",
+    }
+    return expected_by_type.get(issue_type)
 
 
 def _verification_commands(fix_target: str) -> list[str]:

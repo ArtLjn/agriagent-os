@@ -1,5 +1,7 @@
 """数据飞轮 repair pack 数据库编排服务测试。"""
 
+import shutil
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -18,6 +20,7 @@ from app.services.data_flywheel_repair_pack_repository import (
     mark_repair_pack_discarded,
     mark_repair_pack_exported,
     mark_repair_pack_resolved,
+    rebuild_repair_pack_files,
     record_repair_pack_verification_failure,
 )
 from app.services.data_flywheel_service import add_sample_label, get_sample_detail
@@ -180,6 +183,40 @@ def test_create_repair_pack_persists_metadata_and_payload(tmp_path):
     ).exists()
     assert loaded["manifest"]["source_sample_ids"] == [sample_id]
     assert db.query(AgentRepairPack).count() == 1
+    db.close()
+
+
+def test_rebuild_repair_pack_files_restores_cleaned_local_export(tmp_path):
+    db = Session()
+    turn = _seed_turn(db, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(db, farm_id=1, sample_id=sample_id, label="pending_missed")
+    export_base_dir = tmp_path / "repair-packs"
+    pack = create_repair_pack(
+        db,
+        farm_id=1,
+        sample_ids=[sample_id],
+        export_base_dir=export_base_dir,
+        created_by="admin-1",
+    )
+    pack_dir = export_base_dir / pack["pack_id"]
+    shutil.rmtree(pack_dir)
+
+    rebuilt = rebuild_repair_pack_files(
+        db,
+        farm_id=1,
+        pack_id=pack["pack_id"],
+        export_base_dir=export_base_dir,
+    )
+
+    assert rebuilt["pack_id"] == pack["pack_id"]
+    assert rebuilt["status"] == "exported"
+    assert rebuilt["manifest"]["dedup_key"] == pack["dedup_key"]
+    assert rebuilt["cases"][0]["sample_id"] == sample_id
+    assert (pack_dir / "manifest.json").exists()
+    assert (pack_dir / "cases.jsonl").exists()
+    assert (pack_dir / "README.md").exists()
+    assert (pack_dir / rebuilt["cases"][0]["source_debug_json"]).exists()
     db.close()
 
 

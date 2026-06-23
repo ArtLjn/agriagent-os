@@ -240,6 +240,26 @@ def test_detects_tool_error_ignored_with_specific_label() -> None:
     } in candidates
 
 
+def test_detects_no_tool_success_claim_as_hallucinated_execution() -> None:
+    candidates = detect_issue_candidates(
+        user_input="李海这个月干了15天压瓜",
+        assistant_reply="已为您记录：李海这个月干了15天压瓜。",
+        selected_tools=[],
+        events=[],
+        pending_lifecycle=[],
+    )
+
+    assert candidates == [
+        {
+            "type": "hallucinated_execution",
+            "severity": "high",
+            "reason": "回复声称已执行写入，但选中工具「无」未成功调用",
+            "evidence": "无",
+            "suggested_label": "hallucinated_execution",
+        }
+    ]
+
+
 def test_detects_missing_tool_selection_for_realtime_query() -> None:
     candidates = detect_issue_candidates(
         user_input="今天适合做什么",
