@@ -1,6 +1,7 @@
+from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import extract
+from sqlalchemy import desc, extract, nullslast
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
@@ -167,6 +168,8 @@ def get_records(
     category: str | None = None,
     source_type: str | None = None,
     source_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[CostRecord]:
@@ -177,6 +180,8 @@ def get_records(
         farm_id: 农场 ID。
         cycle_id: 按种植周期 ID 筛选（可选）。
         category: 按类别筛选（可选）。
+        date_from: 按记录日期起始筛选（可选）。
+        date_to: 按记录日期结束筛选（可选）。
         skip: 跳过记录数。
         limit: 返回最大记录数。
 
@@ -195,8 +200,13 @@ def get_records(
         query = query.filter(CostRecord.source_type == source_type)
     if source_id is not None:
         query = query.filter(CostRecord.source_id == source_id)
+    if date_from is not None:
+        query = query.filter(CostRecord.record_date >= date_from)
+    if date_to is not None:
+        query = query.filter(CostRecord.record_date <= date_to)
     return (
         query.order_by(
+            nullslast(desc(CostRecord.settled_at)),
             CostRecord.record_date.desc(),
             CostRecord.recorded_at.desc(),
             CostRecord.id.desc(),
@@ -214,6 +224,8 @@ def count_records(
     category: str | None = None,
     source_type: str | None = None,
     source_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> int:
     """查询成本记账记录总数。
 
@@ -222,6 +234,8 @@ def count_records(
         farm_id: 农场 ID。
         cycle_id: 按种植周期 ID 筛选（可选）。
         category: 按类别筛选（可选）。
+        date_from: 按记录日期起始筛选（可选）。
+        date_to: 按记录日期结束筛选（可选）。
 
     Returns:
         符合条件的记录总数。
@@ -238,6 +252,10 @@ def count_records(
         query = query.filter(CostRecord.source_type == source_type)
     if source_id is not None:
         query = query.filter(CostRecord.source_id == source_id)
+    if date_from is not None:
+        query = query.filter(CostRecord.record_date >= date_from)
+    if date_to is not None:
+        query = query.filter(CostRecord.record_date <= date_to)
     return query.count()
 
 

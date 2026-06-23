@@ -407,6 +407,84 @@ def test_legacy_repayment_record_is_excluded_from_report_data(cycle_id, db_sessi
     assert all(cost["category"] != "还款" for cost in report_data.costs)
 
 
+def test_recently_settled_old_debt_surfaces_in_cost_list(cycle_id):
+    debt_response = client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "农资赊账",
+            "amount": "80.00",
+            "settled_amount": "0.00",
+            "record_subtype": "赊账",
+            "counterparty": "老王农资店",
+            "record_date": "2025-03-01",
+        },
+    )
+    client.post(
+        "/costs",
+        json={
+            "cycle_id": cycle_id,
+            "record_type": "cost",
+            "category": "肥料",
+            "amount": "120.00",
+            "record_date": "2026-06-01",
+        },
+    )
+
+    settle_response = client.post(
+        "/debts/settle",
+        json={"counterparty": "老王农资店"},
+    )
+    list_response = client.get("/costs", params={"page": 1, "size": 10})
+
+    assert debt_response.status_code == 200
+    assert settle_response.status_code == 200
+    assert list_response.status_code == 200
+    first = list_response.json()["items"][0]
+    assert first["id"] == debt_response.json()["id"]
+    assert first["settlement_status"] == "settled"
+    assert first["settled_amount"] == "80.00"
+    assert first["unsettled_amount"] == "0.00"
+    assert first["settled_at"] is not None
+
+
+def test_cost_list_filters_by_record_month_range(cycle_id):
+    for category, record_date in [
+        ("五月肥料", "2026-05-31"),
+        ("六月肥料", "2026-06-01"),
+        ("六月种子", "2026-06-30"),
+        ("七月肥料", "2026-07-01"),
+    ]:
+        response = client.post(
+            "/costs",
+            json={
+                "cycle_id": cycle_id,
+                "record_type": "cost",
+                "category": category,
+                "amount": "100.00",
+                "record_date": record_date,
+            },
+        )
+        assert response.status_code == 200
+
+    response = client.get(
+        "/costs",
+        params={
+            "cycle_id": cycle_id,
+            "date_from": "2026-06-01",
+            "date_to": "2026-06-30",
+            "page": 1,
+            "size": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    assert [item["category"] for item in data["items"]] == ["六月种子", "六月肥料"]
+
+
 def test_cycle_profit_empty():
     response = client.get("/costs/cycles/99999/profit")
     assert response.status_code == 200

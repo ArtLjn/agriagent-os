@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from langchain_core.messages import HumanMessage
@@ -43,6 +44,8 @@ def list_records(
     category: str | None = None,
     source_type: str | None = None,
     source_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -57,6 +60,8 @@ def list_records(
         category=category,
         source_type=source_type,
         source_id=source_id,
+        date_from=date_from,
+        date_to=date_to,
         skip=skip,
         limit=size,
     )
@@ -67,6 +72,8 @@ def list_records(
         category=category,
         source_type=source_type,
         source_id=source_id,
+        date_from=date_from,
+        date_to=date_to,
     )
     return {"items": items, "total": total}
 
