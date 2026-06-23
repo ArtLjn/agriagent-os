@@ -7,6 +7,7 @@ import logging
 from langchain_core.messages import ToolMessage
 
 from app.agent.reflector.checks import (
+    check_no_tool_write_success_claim,
     check_pending_plan_consistency,
     check_required_tool_missing,
     check_tool_failure_success_reply,
@@ -127,6 +128,15 @@ class ReflectorService:
         trace_metadata: dict[str, Any] | None = None,
     ) -> ReflectionResult:
         try:
+            no_tool_result = check_no_tool_write_success_claim(
+                user_message=str((trace_metadata or {}).get("user_message") or ""),
+                final_text=final_text,
+                selected_tools=selected_tools or [],
+                tool_messages=tool_messages,
+                tool_calls=tool_calls or [],
+            )
+            if no_tool_result.decision != ReflectionDecision.PASS:
+                return self._record(no_tool_result, trace_metadata=trace_metadata)
             if not self.policy.should_run(
                 trigger=ReflectionTrigger.POST_TOOL_RESULT,
                 selected_tools=selected_tools or [],

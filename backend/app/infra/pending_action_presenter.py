@@ -47,11 +47,13 @@ def build_confirmation_context(
 
     if skill_name == "settle_labor_payment":
         worker = params.get("worker") or params.get("worker_name")
+        scope = params.get("scope")
         return {
             "skill_name": skill_name,
             "original_input": original_input,
             "target": {
                 "type": "labor_payment",
+                "scope": scope,
                 "worker": worker,
                 "work_order_id": params.get("work_order_id"),
                 "cycle_id": params.get("cycle_id"),
@@ -65,6 +67,7 @@ def build_confirmation_context(
                 }
             ],
             "inferred_fields": {
+                "scope": scope,
                 "worker": worker,
                 "affected_entries": params.get("affected_entries"),
             },
@@ -245,6 +248,28 @@ def build_confirm_message(
             lines.append(f"数量：{params['quantity']}")
         if params.get("paid_amount") is not None:
             lines.append(f"已付：{params['paid_amount']}元")
+        if original_input:
+            lines.append(f"理解：您说的是「{original_input}」")
+        lines.append("确认吗？")
+        return "\n".join(lines)
+
+    if skill_name == "settle_labor_payment":
+        target = context["target"]
+        if target.get("scope") == "all_unpaid_labor":
+            target_text = "全部未付人工"
+        elif target.get("worker"):
+            target_text = str(target["worker"])
+        elif target.get("work_order_id"):
+            target_text = f"作业单#{target['work_order_id']}"
+        elif target.get("cycle_id"):
+            target_text = f"茬口#{target['cycle_id']}"
+        else:
+            target_text = "待确认人工范围"
+        amount = params.get("amount") or "全额结清"
+        lines = [
+            f"💳 确认结算人工：{target_text}",
+            f"结算金额：{amount}",
+        ]
         if original_input:
             lines.append(f"理解：您说的是「{original_input}」")
         lines.append("确认吗？")

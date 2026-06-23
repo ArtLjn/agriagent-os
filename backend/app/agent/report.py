@@ -19,7 +19,7 @@ def _get_report_llm(farm_id: int = 1):
     tools = get_langchain_tools(farm_id=farm_id)
     return get_llm().bind_tools(tools)
 
-
+# TODO prompt 是否迁移
 async def generate_cycle_report(cycle_id: int, farm_id: int = 1) -> str:
     """生成指定种植周期的综合报告。"""
     start = time.perf_counter()

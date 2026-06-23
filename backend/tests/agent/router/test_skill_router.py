@@ -309,6 +309,111 @@ def test_session4_extracts_wage_after_greenhouse_number() -> None:
     assert "create_operation_work_order" in work_order_frame.candidate_tools
 
 
+def test_implicit_labor_operation_routes_to_work_order_not_no_tool() -> None:
+    tools = [
+        _tool("create_operation_work_order"),
+        _tool("get_labor_payables"),
+        _tool("manage_workers"),
+    ]
+
+    decision = SkillRouter().route("李海这个月干了15天压瓜", tools)
+
+    assert decision.fallback != "no_tools"
+    assert "create_operation_work_order" in decision.selected_tools
+    assert "get_labor_payables" not in decision.selected_tools
+    work_order_frame = next(
+        frame for frame in decision.frames if frame.intent == "create_work_order"
+    )
+    assert work_order_frame.params_hint is not None
+    assert work_order_frame.params_hint["workers"] == ["李海"]
+    assert work_order_frame.params_hint["operation_type"] == "压瓜"
+    assert work_order_frame.params_hint["quantity"] == 15
+    assert work_order_frame.params_hint["pay_type"] == "daily"
+
+
+def test_farm_labor_statement_extracts_worker_unit_operation_and_daily_wage() -> None:
+    tools = [
+        _tool("create_operation_work_order"),
+        _tool("get_labor_payables"),
+        _tool("manage_workers"),
+    ]
+
+    decision = SkillRouter().route("今天李海去6号棚压蔓工资100一天", tools)
+
+    assert decision.selected_tools == ["create_operation_work_order"]
+    assert "get_labor_payables" not in decision.selected_tools
+    work_order_frame = next(
+        frame for frame in decision.frames if frame.intent == "create_work_order"
+    )
+    assert work_order_frame.params_hint is not None
+    assert work_order_frame.params_hint["workers"] == ["李海"]
+    assert work_order_frame.params_hint["unit_names"] == ["6号棚"]
+    assert work_order_frame.params_hint["operation_type"] == "压蔓"
+    assert work_order_frame.params_hint["unit_price"] == 100
+
+
+def test_new_worker_and_work_order_keeps_two_step_dependency() -> None:
+    tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
+
+    decision = SkillRouter().route("新来一个工人李丽工资100一天，今天去6号棚收水稻", tools)
+
+    assert [frame.intent for frame in decision.frames if frame.requires_confirmation] == [
+        "create_worker",
+        "create_work_order",
+    ]
+    assert decision.selected_tools == ["manage_workers"]
+    steps = SkillRouter().build_pending_plan_steps(decision)
+    assert steps == [
+        {
+            "step_id": "create_worker",
+            "tool_name": "manage_workers",
+            "params": {
+                "action": "create",
+                "name": "李丽",
+                "default_pay_type": "daily",
+                "default_unit_price": 100,
+            },
+            "depends_on": [],
+        },
+        {
+            "step_id": "create_work_order",
+            "tool_name": "create_operation_work_order",
+            "params": {
+                "workers": "李丽",
+                "unit_names": "6号棚",
+                "operation_type": "采收",
+                "unit_price": 100,
+            },
+            "depends_on": ["create_worker"],
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    ("message", "tools"),
+    [
+        ("你好", [_tool("create_operation_work_order"), _tool("get_labor_payables")]),
+        (
+            "李海最近挺忙的",
+            [_tool("create_operation_work_order"), _tool("get_labor_payables")],
+        ),
+        (
+            "老王还欠多少人工钱",
+            [_tool("create_operation_work_order"), _tool("get_labor_payables")],
+        ),
+    ],
+)
+def test_farm_labor_semantic_gate_keeps_greeting_chitchat_and_query_negative_cases(
+    message: str,
+    tools: list,
+) -> None:
+    decision = SkillRouter().route(message, tools)
+
+    assert "create_operation_work_order" not in decision.selected_tools
+    if "人工钱" in message:
+        assert decision.selected_tools == ["get_labor_payables"]
+
+
 def test_multi_intent_worker_name_with_digit_and_field_name_are_extracted() -> None:
     tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
 

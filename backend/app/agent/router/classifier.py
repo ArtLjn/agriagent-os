@@ -44,8 +44,9 @@ class RuleIntentClassifier:
     )
     _write_entity_hints = ("工人", "作业", "账")
     _worker_create_hints = ("新来", "招了", "新增", "创建")
-    _worker_pay_hints = ("工资", "日薪", "每天")
+    _worker_pay_hints = ("工资", "日薪", "每天", "一天")
     _work_order_hints = ("作业", "采收", "授粉", "安排")
+    _operation_hints = ("授粉", "装车", "整枝", "打杈", "压蔓", "压瓜", "留瓜", "垫瓜")
     _work_order_read_hints = ("作业单", "作业", "采收", "授粉")
     _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
     _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
@@ -429,8 +430,10 @@ class RuleIntentClassifier:
     def _looks_like_create_work_order(self, message: str) -> bool:
         if self._has_any(message, self._read_blockers):
             return False
-        return self._has_any(message, self._work_order_hints) or (
-            self._extract_operation_type(message) is not None
+        return (
+            self._looks_like_farm_labor_work(message)
+            or self._has_any(message, self._work_order_hints)
+            or (self._extract_operation_type(message) is not None)
         )
 
     def _looks_like_cost_summary_query(self, message: str) -> bool:
@@ -449,7 +452,19 @@ class RuleIntentClassifier:
     def _looks_like_labor_payable_query(self, message: str) -> bool:
         if self._looks_like_create_worker(message):
             return False
+        if self._looks_like_farm_labor_work(message):
+            return False
         return self._has_any(message, self._labor_payable_hints)
+
+    def _looks_like_farm_labor_work(self, message: str) -> bool:
+        has_operation = self._extract_operation_type(message) is not None
+        has_worker = self._extract_worker_name(message) is not None
+        has_labor_hint = bool(
+            re.search(r"\d+\s*天", message)
+            or self._extract_unit_price(message) is not None
+            or self._has_any(message, ("干了", "去", "到", "安排"))
+        )
+        return has_operation and has_worker and has_labor_hint
 
     def _looks_like_cost_category_query(self, message: str) -> bool:
         return self._has_any(message, self._cost_category_hints)
@@ -508,12 +523,16 @@ class RuleIntentClassifier:
         unit_name = self._extract_unit_name(message)
         unit_price = self._extract_unit_price(message)
         operation_type = self._extract_operation_type(message)
+        quantity = self._extract_labor_quantity(message)
         if name:
             params["workers"] = [name]
         if unit_name:
             params["unit_names"] = [unit_name]
         if operation_type:
             params["operation_type"] = operation_type
+        if quantity is not None:
+            params["quantity"] = quantity
+            params["pay_type"] = "daily"
         if unit_price is not None:
             params["unit_price"] = unit_price
         return params
@@ -523,6 +542,9 @@ class RuleIntentClassifier:
         name_chars = r"[\u4e00-\u9fa5A-Za-z0-9]{1,8}"
         patterns = (
             rf"(?:工人|员工|师傅)(?P<name>{name_chars})(?:工资|日薪|每天)",
+            r"(?:今天|昨天|前天|这个月|本月)?(?P<name>[\u4e00-\u9fa5]{2,4})(?:去|到).{0,16}?(?:采收|授粉|装车|整枝|打杈|压蔓|压瓜|留瓜|垫瓜)",
+            r"(?P<name>[\u4e00-\u9fa5]{2,4})(?:这个月|本月).{0,4}?干了\s*\d+\s*天",
+            r"(?P<name>[\u4e00-\u9fa5]{2,4})(?:这个月|本月)?.{0,4}?干了\s*\d+\s*天",
             r"(?P<name>[\u4e00-\u9fa5]{2,4})(?:工资|日薪|每天)",
             rf"(?:工人|员工|师傅)(?P<name>{name_chars})",
         )
@@ -548,6 +570,13 @@ class RuleIntentClassifier:
         return int(price)
 
     @staticmethod
+    def _extract_labor_quantity(message: str) -> int | None:
+        match = re.search(r"(?P<quantity>\d+)\s*天", message)
+        if not match:
+            return None
+        return int(match.group("quantity"))
+
+    @staticmethod
     def _extract_unit_name(message: str) -> str | None:
         field_match = re.search(
             r"(?:去|到|在)(?P<unit>[\u4e00-\u9fa5A-Za-z0-9]{1,12}?"
@@ -565,7 +594,7 @@ class RuleIntentClassifier:
     def _extract_operation_type(message: str) -> str | None:
         if "采收" in message or re.search(r"收(?:水稻|麦|菜|瓜|果|玉米)", message):
             return "采收"
-        for operation_type in ("授粉", "装车", "整枝", "打杈", "压蔓", "留瓜", "垫瓜"):
+        for operation_type in RuleIntentClassifier._operation_hints:
             if operation_type in message:
                 return operation_type
         return None

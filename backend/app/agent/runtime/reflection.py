@@ -14,11 +14,10 @@ def apply_post_tool_reflection(
     farm_id: int,
     session_id: str | None,
     intent: str,
+    user_message: str = "",
 ) -> AIMessage:
     """最终文本返回前执行工具结果一致性检查。"""
     final_text = str(response.content or "")
-    if not tool_messages and not selected_tool_names:
-        return response
 
     tool_call_ids = [
         str(getattr(message, "tool_call_id", ""))
@@ -34,6 +33,7 @@ def apply_post_tool_reflection(
             "farm_id": farm_id,
             "session_id": session_id,
             "intent": intent,
+            "user_message": user_message[:500],
             "selected_tools": selected_tool_names,
             "tool_call_ids": tool_call_ids,
             "response_preview": final_text[:200],

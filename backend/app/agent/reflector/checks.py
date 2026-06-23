@@ -24,7 +24,19 @@ _PENDING_PLAN_CHECK = "pending_plan_consistency"
 _TOOL_RESPONSE_CHECK = "tool_failure_success_reply"
 _TOOL_CONCLUSION_CHECK = "tool_result_final_contradiction"
 _REQUIRED_TOOL_CHECK = "required_tool_missing"
+_NO_TOOL_WRITE_SUCCESS_CHECK = "no_tool_write_success_claim"
 _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9.])\d+(?:\.\d+)?(?![A-Za-z0-9.])")
+_WRITE_SUCCESS_PHRASES = (
+    "已记录",
+    "已为您记录",
+    "已经记录",
+    "已创建",
+    "已经创建",
+    "已保存",
+    "已经保存",
+    "已执行",
+    "已经执行",
+)
 
 
 def check_write_plan_consistency(
@@ -172,6 +184,46 @@ def check_required_tool_missing(
     )
 
 
+def check_no_tool_write_success_claim(
+    *,
+    user_message: str,
+    final_text: str,
+    selected_tools: list[str],
+    tool_messages: list[ToolMessage],
+    tool_calls: list[dict[str, Any]],
+) -> ReflectionResult:
+    if selected_tools or tool_messages or tool_calls:
+        return ReflectionResult.passed(
+            ReflectionTrigger.FALLBACK_GUARD,
+            checks=[_NO_TOOL_WRITE_SUCCESS_CHECK],
+        )
+
+    matched_phrase = first_write_success_phrase(final_text)
+    if matched_phrase is None:
+        return ReflectionResult.passed(
+            ReflectionTrigger.FALLBACK_GUARD,
+            checks=[_NO_TOOL_WRITE_SUCCESS_CHECK],
+        )
+
+    return _single_issue(
+        trigger=ReflectionTrigger.FALLBACK_GUARD,
+        decision=ReflectionDecision.FALLBACK_RESPONSE,
+        checks=[_NO_TOOL_WRITE_SUCCESS_CHECK],
+        code="no_tool_write_success_claim",
+        message=(
+            "没有工具写入结果或待确认动作，但最终回复声称业务数据已经写入。"
+        ),
+        evidence={
+            "user_message": user_message[:160],
+            "final_text": final_text[:160],
+            "matched_success_phrase": matched_phrase,
+            "selected_tools": selected_tools,
+            "tool_messages_count": len(tool_messages),
+            "tool_calls_count": len(tool_calls),
+        },
+    )
+
+
 def check_tool_result_final_contradiction(
     *,
     tool_messages: list[ToolMessage],
@@ -256,6 +308,10 @@ def _extract_numbers(text: str) -> set[Decimal]:
 def _contains_any(text: str, hints: Iterable[str]) -> bool:
     lowered = text.lower()
     return any(hint.lower() in lowered for hint in hints)
+
+
+def first_write_success_phrase(text: str) -> str | None:
+    return next((phrase for phrase in _WRITE_SUCCESS_PHRASES if phrase in text), None)
 
 
 def _single_issue(

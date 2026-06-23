@@ -26,6 +26,46 @@ class TestListSkills:
         assert "enabled" in metadata
         assert "disabled_reason" in metadata
 
+    def test_returns_skill_status_summary(self, db_session) -> None:
+        ensure_admin_user(db_session)
+        with auth_override_scope(app):
+            resp = TestClient(app).get("/admin/skills", headers=admin_headers())
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["summary"]["total"] == data["total"]
+        assert data["summary"]["enabled"] > 0
+        assert data["summary"]["disabled"] >= 1
+        assert data["summary"]["admin_only"] >= 0
+        disabled = [item for item in data["items"] if item["status"] == "disabled"]
+        assert disabled
+        assert disabled[0]["metadata"]["enabled"] is False
+
+    def test_update_skill_enabled_state(self, db_session) -> None:
+        ensure_admin_user(db_session)
+        with auth_override_scope(app):
+            disabled_resp = TestClient(app).put(
+                "/admin/skills/get_cost_summary/enabled",
+                headers=admin_headers(),
+                json={"enabled": False, "disabled_reason": "测试禁用"},
+            )
+            list_resp = TestClient(app).get("/admin/skills", headers=admin_headers())
+            enabled_resp = TestClient(app).put(
+                "/admin/skills/get_cost_summary/enabled",
+                headers=admin_headers(),
+                json={"enabled": True},
+            )
+
+        assert disabled_resp.status_code == 200
+        assert disabled_resp.json()["metadata"]["enabled"] is False
+        assert disabled_resp.json()["metadata"]["disabled_reason"] == "测试禁用"
+        items = {item["name"]: item for item in list_resp.json()["items"]}
+        assert items["get_cost_summary"]["status"] == "disabled"
+        assert items["get_cost_summary"]["metadata"]["disabled_reason"] == "测试禁用"
+        assert enabled_resp.status_code == 200
+        assert enabled_resp.json()["metadata"]["enabled"] is True
+        assert enabled_resp.json()["metadata"]["disabled_reason"] is None
+
 
 class TestListPrompts:
     def test_returns_prompt_list(self, db_session) -> None:

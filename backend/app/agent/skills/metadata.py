@@ -218,6 +218,8 @@ _EXTERNAL_NETWORK_SKILL_METADATA: dict[str, dict[str, Any]] = {
     },
 }
 
+_RUNTIME_ENABLEMENT_OVERRIDES: dict[str, dict[str, Any]] = {}
+
 
 def get_skill_metadata(skill: Any) -> SkillMetadata:
     """从 Skill 读取 metadata，缺失时提供兼容默认值。"""
@@ -231,21 +233,29 @@ def get_skill_metadata(skill: Any) -> SkillMetadata:
                 raw_metadata["cache_invalidation"] = get_cache_groups_for_skill(
                     skill_name
                 )
+        raw_metadata = _apply_runtime_enablement(skill_name, raw_metadata)
         metadata = SkillMetadata.model_validate(raw_metadata)
         metadata.metadata_incomplete = False
         return metadata
 
     if default_metadata is not None:
-        return SkillMetadata.model_validate(default_metadata)
+        return SkillMetadata.model_validate(
+            _apply_runtime_enablement(skill_name, default_metadata)
+        )
 
     if skill_name in WRITE_SKILLS:
-        return SkillMetadata(
-            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
-            risk_level=SkillRiskLevel.MEDIUM,
-            cache_invalidation=get_cache_groups_for_skill(skill_name),
-            confirmation_schema=_DEFAULT_WRITE_CONFIRMATION,
-            evaluation_tags=["write"],
-            metadata_incomplete=True,
+        return SkillMetadata.model_validate(
+            _apply_runtime_enablement(
+                skill_name,
+                {
+                    "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
+                    "risk_level": SkillRiskLevel.MEDIUM,
+                    "cache_invalidation": get_cache_groups_for_skill(skill_name),
+                    "confirmation_schema": _DEFAULT_WRITE_CONFIRMATION,
+                    "evaluation_tags": ["write"],
+                    "metadata_incomplete": True,
+                },
+            )
         )
 
     permission_level = (
@@ -253,12 +263,52 @@ def get_skill_metadata(skill: Any) -> SkillMetadata:
         if skill_name in _EXTERNAL_NETWORK_SKILLS
         else SkillPermissionLevel.READ
     )
-    return SkillMetadata(
-        permission_level=permission_level,
-        risk_level=SkillRiskLevel.LOW,
-        evaluation_tags=["read"],
-        metadata_incomplete=True,
+    return SkillMetadata.model_validate(
+        _apply_runtime_enablement(
+            skill_name,
+            {
+                "permission_level": permission_level,
+                "risk_level": SkillRiskLevel.LOW,
+                "evaluation_tags": ["read"],
+                "metadata_incomplete": True,
+            },
+        )
     )
+
+
+def set_skill_enabled_state(
+    skill_name: str, *, enabled: bool, disabled_reason: str | None = None
+) -> SkillMetadata:
+    """设置运行时 Skill 启用状态。"""
+    if enabled:
+        _RUNTIME_ENABLEMENT_OVERRIDES[skill_name] = {
+            "enabled": True,
+            "disabled_reason": None,
+        }
+    else:
+        _RUNTIME_ENABLEMENT_OVERRIDES[skill_name] = {
+            "enabled": False,
+            "disabled_reason": disabled_reason or "管理员手动禁用",
+        }
+    return get_skill_metadata(type("_SkillRef", (), {"name": lambda _self: skill_name})())
+
+
+def clear_skill_enabled_state(skill_name: str | None = None) -> None:
+    """清除运行时 Skill 启用状态覆盖。"""
+    if skill_name is None:
+        _RUNTIME_ENABLEMENT_OVERRIDES.clear()
+        return
+    _RUNTIME_ENABLEMENT_OVERRIDES.pop(skill_name, None)
+
+
+def _apply_runtime_enablement(
+    skill_name: str, metadata: Mapping[str, Any]
+) -> dict[str, Any]:
+    merged = dict(metadata)
+    override = _RUNTIME_ENABLEMENT_OVERRIDES.get(skill_name)
+    if override:
+        merged.update(override)
+    return merged
 
 
 def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
@@ -319,6 +369,8 @@ __all__ = [
     "SkillMetadata",
     "SkillPermissionLevel",
     "SkillRiskLevel",
+    "clear_skill_enabled_state",
     "get_skill_metadata",
     "metadata_to_dict",
+    "set_skill_enabled_state",
 ]

@@ -146,6 +146,69 @@ def test_check_required_tool_missing_requests_retry() -> None:
     assert result.issues[0].code == "required_tool_missing"
 
 
+def test_no_tool_write_success_claim_is_blocked_and_traced(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeCollector:
+        def __init__(self) -> None:
+            self.records = []
+
+        def record(self, **kwargs) -> None:
+            self.records.append(kwargs)
+
+    collector = FakeCollector()
+    monkeypatch.setattr(
+        "app.agent.reflector.service.get_collector",
+        lambda: collector,
+    )
+    service = ReflectorService(policy=ReflectionPolicy(enabled=True))
+
+    result = service.check_tool_response(
+        tool_messages=[],
+        final_text="已记录李海这个月干了15天压瓜。",
+        selected_tools=[],
+        tool_calls=[],
+        trace_metadata={
+            "farm_id": 1,
+            "session_id": "no-tool-write-claim",
+            "user_message": "李海这个月干了15天压瓜",
+            "selected_tools": [],
+        },
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    assert result.issues[0].code == "no_tool_write_success_claim"
+    assert result.issues[0].evidence["matched_success_phrase"] == "已记录"
+    assert result.issues[0].evidence["selected_tools"] == []
+    assert collector.records[0]["node_type"] == "reflection_check"
+    assert collector.records[0]["output_data"]["issues"][0]["code"] == (
+        "no_tool_write_success_claim"
+    )
+    assert collector.records[0]["input_data"]["user_message"] == "李海这个月干了15天压瓜"
+
+
+def test_no_tool_write_success_guard_allows_safe_non_write_replies() -> None:
+    service = ReflectorService(policy=ReflectionPolicy(enabled=True))
+
+    greeting = service.check_tool_response(
+        tool_messages=[],
+        final_text="你好，有什么我可以帮你？",
+        selected_tools=[],
+        tool_calls=[],
+        trace_metadata={"user_message": "你好"},
+    )
+    explanation = service.check_tool_response(
+        tool_messages=[],
+        final_text="记录工资前需要先确认工人、日期和金额。",
+        selected_tools=[],
+        tool_calls=[],
+        trace_metadata={"user_message": "为什么不能直接记录工资？"},
+    )
+
+    assert greeting.decision == ReflectionDecision.PASS
+    assert explanation.decision == ReflectionDecision.PASS
+
+
 def test_check_tool_result_final_contradiction_blocks_number_mismatch() -> None:
     tool_message = ToolMessage(
         content="查询结果：当前共有 2 个茬口。",

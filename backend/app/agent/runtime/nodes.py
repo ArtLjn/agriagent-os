@@ -601,6 +601,7 @@ async def _llm_node(state: AgentState) -> dict:
             farm_id=farm_id,
             session_id=state.get("session_id"),
             intent=intent,
+            user_message=user_msg,
         )
         content = response.content or ""
         logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)

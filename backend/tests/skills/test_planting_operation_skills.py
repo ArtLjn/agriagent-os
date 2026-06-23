@@ -10,6 +10,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from skillify.core.context import SkillContext
 
+from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.skills import _attach_skill_metadata
 from app.infra.pending_actions import get_pending, remove_pending
@@ -392,6 +393,82 @@ async def test_settle_labor_payment_skill_accepts_worker_name_alias(
         worker_name="老李",
     )
     assert payables[0].unpaid_amount == Decimal("180.00")
+
+
+@pytest.mark.asyncio
+async def test_all_workers_pending_confirm_settles_every_unpaid_labor(
+    skill_sessions, ctx
+):
+    """用户结清所有人工时，确认后必须结清所有未付人工条目。"""
+    work_order = _create_work_order(skill_sessions)
+    work_order_id = work_order.id
+
+    async def _ainvoke(params):
+        result = await SettleLaborPaymentSkill().execute(params, ctx)
+        return result.reply
+
+    tool = SimpleNamespace(
+        name="settle_labor_payment",
+        args_schema=None,
+        ainvoke=AsyncMock(side_effect=_ainvoke),
+    )
+    _attach_skill_metadata(tool, SettleLaborPaymentSkill())
+    state = {
+        "messages": [
+            HumanMessage(content="把所有员工工资结了"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "settle_labor_payment",
+                        "args": {"worker": "老王"},
+                    },
+                    {
+                        "id": "tc2",
+                        "name": "settle_labor_payment",
+                        "args": {"worker": "老李"},
+                    },
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-settle-all-labor",
+    }
+
+    with (
+        patch("app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]),
+        patch(
+            "app.agent.executor.pending_actions.get_langchain_tools",
+            return_value=[tool],
+        ),
+    ):
+        pending_result = await _parallel_tool_node(state)
+        pending = get_pending(1, session_id="sess-settle-all-labor")
+        assert pending is not None
+        assert pending.params == {"scope": "all_unpaid_labor"}
+        assert len(pending_result["messages"]) == 1
+
+        decision = await handle_pending_action(
+            farm_id=1,
+            message="确认",
+            session_id="sess-settle-all-labor",
+        )
+
+    skill_sessions.expire_all()
+    entries = (
+        skill_sessions.query(LaborEntry)
+        .filter(LaborEntry.work_order_id == work_order_id)
+        .order_by(LaborEntry.id)
+        .all()
+    )
+    assert decision.status == "confirmed"
+    assert "已结算人工280.00元" in decision.reply
+    assert [entry.unpaid_amount for entry in entries] == [
+        Decimal("0.00"),
+        Decimal("0.00"),
+    ]
+    assert [entry.settlement_status for entry in entries] == ["settled", "settled"]
 
 
 @pytest.mark.asyncio

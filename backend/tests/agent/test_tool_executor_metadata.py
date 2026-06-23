@@ -275,6 +275,98 @@ async def test_settle_labor_pending_preview_accepts_worker_name_alias(
 
 
 @pytest.mark.asyncio
+async def test_settle_labor_payment_all_workers_drops_polluted_content_param():
+    """全员结算不能把上下文中的单人工人名作为待执行参数。"""
+    tool = SimpleNamespace(
+        name="settle_labor_payment",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.WRITE_CONFIRM),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="把所有员工工资结了"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "settle_labor_payment",
+                        "args": {"内容": "猪八戒"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-all-workers-pay",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-all-workers-pay")
+    assert pending is not None
+    assert pending.params == {"scope": "all_unpaid_labor"}
+    assert pending.confirmation_context["target"]["worker"] is None
+    assert pending.confirmation_context["target"]["scope"] == "all_unpaid_labor"
+    assert "全部未付人工" in result["messages"][0].content
+    assert "猪八戒" not in result["messages"][0].content
+    assert "把所有员工工资结了" in result["messages"][0].content
+
+
+@pytest.mark.asyncio
+async def test_settle_labor_payment_all_workers_collapses_multiple_tool_calls():
+    """全员结算的多次单人工具调用应收敛为一次待确认操作。"""
+    tool = SimpleNamespace(
+        name="settle_labor_payment",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.WRITE_CONFIRM),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="把所有员工工资结了"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "settle_labor_payment",
+                        "args": {"worker": "诸葛四郎"},
+                    },
+                    {
+                        "id": "tc2",
+                        "name": "settle_labor_payment",
+                        "args": {"worker": "猪八戒"},
+                    },
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-all-workers-batch",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-all-workers-batch")
+    assert pending is not None
+    assert pending.params == {"scope": "all_unpaid_labor"}
+    assert len(result["messages"]) == 1
+    content = result["messages"][0].content
+    assert content.count("[PENDING_ACTION]") == 1
+    assert "全部未付人工" in content
+    assert "诸葛四郎" not in content
+    assert "猪八戒" not in content
+
+
+@pytest.mark.asyncio
 async def test_read_metadata_executes_immediately_even_when_name_matches_write_fallback():
     tool = SimpleNamespace(
         name="create_cost_record",

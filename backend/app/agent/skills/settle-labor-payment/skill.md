@@ -13,6 +13,9 @@ parameters:
     worker:
       type: string
       description: 工人姓名。
+    scope:
+      type: string
+      description: 结算范围；all_unpaid_labor 表示全部未付人工。
     amount:
       type: number
       description: 本次支付金额，不传表示全额结清。
@@ -49,6 +52,7 @@ parameters:
 
 - “给老王补付 300 人工” -> `worker=老王`, `amount=300`。
 - “把作业单 12 的人工结清” -> `work_order_id=12`, 不传 `amount` 表示全额。
+- “把所有员工工资结了” -> `scope=all_unpaid_labor`，不要填单个工人。
 - “这批玉米的人工先付 500” -> 推断茬口并设置 `amount=500`。
 
 ## 缺参策略

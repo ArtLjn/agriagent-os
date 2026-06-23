@@ -28,6 +28,10 @@ class SettleLaborPaymentSkill(Skill):
             "type": "object",
             "properties": {
                 "worker": {"type": "string", "description": "工人姓名"},
+                "scope": {
+                    "type": "string",
+                    "description": "结算范围，all_unpaid_labor 表示全部未付人工",
+                },
                 "amount": {
                     "type": "number",
                     "description": "本次支付金额，不传表示全额结清",
@@ -50,10 +54,11 @@ class SettleLaborPaymentSkill(Skill):
             ],
             "cache_invalidation": ["cost_analytics", "cost_summary", "get_farm_status"],
             "confirmation_schema": {
-                "target_fields": ["worker", "cycle_id", "work_order_id"],
+                "target_fields": ["scope", "worker", "cycle_id", "work_order_id"],
                 "changed_fields": ["amount"],
-                "inferred_fields": ["worker", "affected_entries"],
+                "inferred_fields": ["scope", "worker", "affected_entries"],
                 "editable_fields": [
+                    "scope",
                     "worker",
                     "amount",
                     "cycle_id",

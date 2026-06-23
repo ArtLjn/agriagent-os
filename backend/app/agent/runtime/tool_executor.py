@@ -52,6 +52,20 @@ _DEBT_DIRECTION_HINT_RE = re.compile(
 _AMBIGUOUS_DEBT_RE = re.compile(
     r"^(?P<name>[\u4e00-\u9fffA-Za-z0-9·]{1,20})(?:赊账|赊了|赊|欠账|欠款|欠)\s*\d*"
 )
+_ALL_LABOR_PAYMENT_RE = re.compile(
+    r"(?:所有|全部|全体|全部的|所有的).{0,8}(?:员工|工人|人工|工资)"
+    r"|(?:员工|工人|人工|工资).{0,8}(?:全部|全都|全额|全结|结清|结了)"
+)
+_SETTLE_LABOR_PAYMENT_ALLOWED_ARGS = {
+    "scope",
+    "worker",
+    "worker_name",
+    "amount",
+    "cycle_id",
+    "work_order_id",
+    "start_date",
+    "end_date",
+}
 
 
 def _permission_decision(
@@ -135,6 +149,8 @@ def _build_pending_execution_args(
     execution_args = dict(args or {})
     if name == "create_operation_work_order":
         _normalize_operation_work_order_args(execution_args)
+    if name == "settle_labor_payment":
+        _normalize_settle_labor_payment_args(execution_args, original_input)
     if name == "manage_workers":
         _fill_manage_workers_target_args(execution_args, farm_id, original_input)
     return execution_args
@@ -151,6 +167,47 @@ def _normalize_operation_work_order_args(args: dict) -> None:
 def _copy_arg_if_missing(args: dict, target: str, source: str) -> None:
     if args.get(target) in (None, "") and args.get(source) not in (None, ""):
         args[target] = args[source]
+
+
+def _normalize_settle_labor_payment_args(args: dict, original_input: str) -> None:
+    """规范化人工结算参数，避免上下文实体污染全员结算意图。"""
+    for key in list(args):
+        if key not in _SETTLE_LABOR_PAYMENT_ALLOWED_ARGS:
+            args.pop(key, None)
+    if _is_all_labor_payment_request(original_input):
+        args.pop("worker", None)
+        args.pop("worker_name", None)
+        args["scope"] = "all_unpaid_labor"
+
+
+def _is_all_labor_payment_request(original_input: str) -> bool:
+    return bool(_ALL_LABOR_PAYMENT_RE.search(_normalize_text(original_input)))
+
+
+def _collapse_all_labor_payment_tool_calls(
+    tool_calls: list[dict], original_input: str
+) -> list[dict]:
+    """将全员人工结算拆出的多次单人调用收敛成一次确认。"""
+    if not _is_all_labor_payment_request(original_input):
+        return tool_calls
+    settle_calls = [
+        tool_call
+        for tool_call in tool_calls
+        if tool_call.get("name") == "settle_labor_payment"
+    ]
+    if len(settle_calls) <= 1:
+        return tool_calls
+
+    collapsed = dict(settle_calls[0])
+    collapsed["args"] = {"scope": "all_unpaid_labor"}
+    return [
+        collapsed,
+        *[
+            tool_call
+            for tool_call in tool_calls
+            if tool_call.get("name") != "settle_labor_payment"
+        ],
+    ]
 
 
 def _ambiguous_debt_direction_message(
@@ -509,11 +566,14 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             original_input = msg.content[:200]
             break
 
+    tool_calls = _collapse_all_labor_payment_tool_calls(
+        last.tool_calls, original_input
+    )
     plan_messages = _pending_plan_tool_message(
         state=state,
         farm_id=farm_id,
         original_input=original_input,
-        tool_calls=last.tool_calls,
+        tool_calls=tool_calls,
     )
     if plan_messages is not None:
         collector.record(
@@ -748,19 +808,19 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             )
             return ToolMessage(content=f"工具调用失败: {e}", tool_call_id=tool_call_id)
 
-    if len(last.tool_calls) == 1:
-        results = [await _call_one(last.tool_calls[0])]
+    if len(tool_calls) == 1:
+        results = [await _call_one(tool_calls[0])]
     else:
-        logger.info("并行执行 %d 个 Skill", len(last.tool_calls))
+        logger.info("并行执行 %d 个 Skill", len(tool_calls))
         batch_start = _time.perf_counter()
-        results = await asyncio.gather(*[_call_one(tc) for tc in last.tool_calls])
+        results = await asyncio.gather(*[_call_one(tc) for tc in tool_calls])
         batch_duration = int((_time.perf_counter() - batch_start) * 1000)
         collector.record(
             node_type="parallel_batch",
             node_name=f"parallel_{len(results)}_skills",
             output_data={
                 "parallel_count": len(results),
-                "skills": [{"name": tc["name"]} for tc in last.tool_calls],
+                "skills": [{"name": tc["name"]} for tc in tool_calls],
             },
             duration_ms=batch_duration,
         )

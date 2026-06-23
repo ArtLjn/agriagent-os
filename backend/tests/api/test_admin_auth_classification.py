@@ -18,6 +18,11 @@ AdminRequest = tuple[str, str, Callable[[str], dict]]
 
 ADMIN_CONFIG_REQUESTS: list[AdminRequest] = [
     ("GET", "/admin/skills", lambda _method: {}),
+    (
+        "PUT",
+        "/admin/skills/get_cost_summary/enabled",
+        lambda _method: {"json": {"enabled": False, "disabled_reason": "测试禁用"}},
+    ),
     ("GET", "/admin/prompts", lambda _method: {}),
     ("GET", "/admin/config", lambda _method: {}),
     ("POST", "/admin/cache/clear", lambda _method: {}),
