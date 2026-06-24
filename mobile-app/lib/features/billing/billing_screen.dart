@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/repositories/billing_repository.dart';
@@ -76,43 +77,6 @@ class _LedgerSectionCard extends StatelessWidget {
         ],
       ),
       child: Padding(padding: padding, child: child),
-    );
-  }
-}
-
-class _LedgerRoundIcon extends StatelessWidget {
-  const _LedgerRoundIcon({
-    required this.icon,
-    required this.color,
-    required this.background,
-    this.size = 42,
-    this.iconSize = 19,
-  });
-
-  final IconData icon;
-  final Color color;
-  final Color background;
-  final double size;
-  final double iconSize;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: background,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.76)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x081473FF),
-            blurRadius: 12,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Icon(icon, size: iconSize, color: color),
     );
   }
 }
@@ -504,11 +468,46 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   DateTime? _selectedMonth;
   DateTime? _customStart;
   DateTime? _customEnd;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchKeyword = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      final value = _searchController.text;
+      if (value != _searchKeyword) {
+        setState(() => _searchKeyword = value);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   List<BillingTransactionViewModel> get _transactions {
     return widget.model.transactions.where((transaction) {
-      return _matchesDate(transaction) && _matchesTab(transaction);
+      return _matchesDate(transaction) &&
+          _matchesTab(transaction) &&
+          _matchesSearch(transaction);
     }).toList();
+  }
+
+  bool _matchesSearch(BillingTransactionViewModel transaction) {
+    final keyword = _searchKeyword.trim().toLowerCase();
+    if (keyword.isEmpty) return true;
+    final haystack = [
+      transaction.title,
+      transaction.subtitle,
+      transaction.counterpartyText,
+      transaction.categoryText,
+      transaction.sourceText,
+      transaction.noteText,
+    ].map((value) => value.toLowerCase()).join(' ');
+    return haystack.contains(keyword);
   }
 
   DateTime get _baseMonth {
@@ -665,9 +664,14 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
               onBack: Navigator.of(context).pop,
               onPickDate: _pickDateFilter,
             ),
+            _SearchSortBar(
+              searchController: _searchController,
+              onSort: _pickDateFilter,
+              onClearSearch: () => setState(() => _searchController.clear()),
+            ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 430),
@@ -767,12 +771,6 @@ class _AliStyleSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final balanceLength = balanceText.length;
-    final balanceFontSize = balanceLength > 12
-        ? 28.0
-        : balanceLength > 9
-            ? 32.0
-            : 38.0;
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
       decoration: BoxDecoration(
@@ -792,18 +790,22 @@ class _AliStyleSummary extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Text(
-            balanceText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.ink,
-              fontSize: balanceFontSize,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-              height: 1.1,
-              fontFeatures: const [FontFeature.tabularFigures()],
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text(
+              balanceText,
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.ink,
+                fontSize: 36,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+                height: 1.1,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -1010,9 +1012,8 @@ class _AliStyleGroupedList extends StatelessWidget {
                   ),
                   if (j != groups[i].items.length - 1)
                     const Padding(
-                      padding: EdgeInsets.only(left: 60),
-                      child:
-                          Divider(height: 1, color: AppColors.lineSoft),
+                      padding: EdgeInsets.only(left: 62),
+                      child: Divider(height: 1, color: AppColors.lineSoft),
                     ),
                 ],
               ],
@@ -1025,23 +1026,22 @@ class _AliStyleGroupedList extends StatelessWidget {
 
   List<_AliGroup> _groupByDay(List<BillingTransactionViewModel> items) {
     final map = <String, List<BillingTransactionViewModel>>{};
-    final sorted = [...items]
-      ..sort((a, b) {
+    final sorted = [...items]..sort((a, b) {
         final aDate = a.recordDate ?? DateTime(1970);
         final bDate = b.recordDate ?? DateTime(1970);
         return bDate.compareTo(aDate);
       });
     for (final item in sorted) {
       final date = item.recordDate;
-      final key = date != null
-          ? '${date.year}-${date.month}-${date.day}'
-          : 'unknown';
+      final key =
+          date != null ? '${date.year}-${date.month}-${date.day}' : 'unknown';
       map.putIfAbsent(key, () => []).add(item);
     }
     return map.entries.map((entry) {
       final parts = entry.key.split('-');
       final date = parts.length == 3
-          ? DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]))
+          ? DateTime(
+              int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]))
           : null;
       final income = entry.value
           .where((t) => t.isIncome)
@@ -1174,6 +1174,110 @@ class _AllTransactionsHeader extends StatelessWidget {
   }
 }
 
+class _SearchSortBar extends StatelessWidget {
+  const _SearchSortBar({
+    required this.searchController,
+    required this.onSort,
+    required this.onClearSearch,
+  });
+
+  final TextEditingController searchController;
+  final VoidCallback onSort;
+  final VoidCallback onClearSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.lineSoft),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    LucideIcons.search,
+                    size: 16,
+                    color: AppColors.subtle,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      textInputAction: TextInputAction.search,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        hintText: '搜索分类、对象、备注',
+                        hintStyle: const TextStyle(
+                          color: AppColors.subtle,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: searchController,
+                    builder: (context, value, _) {
+                      if (value.text.isEmpty) return const SizedBox.shrink();
+                      return GestureDetector(
+                        onTap: onClearSearch,
+                        behavior: HitTestBehavior.opaque,
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 6),
+                          child: Icon(
+                            LucideIcons.x,
+                            size: 15,
+                            color: AppColors.subtle,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: onSort,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              height: 40,
+              width: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.lineSoft),
+              ),
+              child: const Icon(
+                LucideIcons.slidersHorizontal,
+                size: 18,
+                color: AppColors.ink,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TransactionDetailRow extends StatelessWidget {
   const _TransactionDetailRow({
     required this.transaction,
@@ -1185,8 +1289,9 @@ class _TransactionDetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amountColor =
-        transaction.isIncome ? _LedgerColors.income : _LedgerColors.ink;
+    final amountColor = transaction.isIncome
+        ? _LedgerColors.income
+        : (transaction.isDebt ? _LedgerColors.debt : _LedgerColors.ink);
     final hasCounterparty = transaction.counterpartyText.isNotEmpty &&
         transaction.counterpartyText != '未填写对象';
     final detailText =
@@ -1195,78 +1300,91 @@ class _TransactionDetailRow extends StatelessWidget {
         ? transaction.dateText
         : transaction.subtitle.split(' · ').first;
 
-    return GestureDetector(
+    return AnimatedPress(
+      scale: 0.99,
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        height: 78,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _LedgerRoundIcon(
-              icon: _transactionIcon(transaction),
-              color: _transactionIconColor(transaction),
-              background: _transactionIconBackground(transaction),
-              size: 44,
-              iconSize: 20,
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _transactionIcon(transaction),
+                size: 16,
+                color: AppColors.ink2,
+              ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    transaction.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.sectionTitle.copyWith(
-                      color: _LedgerColors.ink,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          transaction.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.1,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '· $timeText',
+                        style: const TextStyle(
+                          color: AppColors.subtle,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 3),
                   Text(
                     detailText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.body.copyWith(
+                    style: const TextStyle(
                       color: AppColors.muted,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    transaction.subtitle.isEmpty ? timeText : timeText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.small.copyWith(
-                      color: AppColors.muted,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 126),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerRight,
-                child: Text(
-                  transaction.isIncome
-                      ? _ledgerMoney(transaction.amount)
-                      : _ledgerMoney(-transaction.amount),
-                  maxLines: 1,
-                  softWrap: false,
-                  style: AppTextStyles.sectionTitle.copyWith(
-                    color: amountColor,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                transaction.isIncome
+                    ? '+${_ledgerMoney(transaction.amount)}'
+                    : '-${_ledgerMoney(transaction.amount)}',
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  color: amountColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  letterSpacing: -0.3,
                 ),
               ),
             ),
@@ -1289,11 +1407,11 @@ void _showTransactionDetail(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (context) {
+    builder: (sheetContext) {
       return SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 6, 24, 28),
+          padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 430),
             child: Column(
@@ -1305,6 +1423,9 @@ void _showTransactionDetail(
                 _DetailInfoGrid(transaction: transaction),
                 const SizedBox(height: 12),
                 _DetailNoteCard(transaction: transaction),
+                const SizedBox(height: 20),
+                _DetailActionBar(transaction: transaction),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -1312,6 +1433,97 @@ void _showTransactionDetail(
       );
     },
   );
+}
+
+class _DetailActionBar extends StatelessWidget {
+  const _DetailActionBar({required this.transaction});
+
+  final BillingTransactionViewModel transaction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _DetailActionTile(
+            icon: LucideIcons.pencil,
+            label: '编辑',
+            onTap: () => Navigator.of(context).pop(),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _DetailActionTile(
+            icon: LucideIcons.copy,
+            label: '复制金额',
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: '${transaction.amount}'));
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('金额已复制')),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _DetailActionTile(
+            icon: LucideIcons.trash2,
+            label: '删除',
+            danger: true,
+            onTap: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailActionTile extends StatelessWidget {
+  const _DetailActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? AppColors.red : AppColors.ink2;
+    return AnimatedPress(
+      scale: 0.96,
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DetailAmountHeader extends StatelessWidget {
@@ -1326,13 +1538,11 @@ class _DetailAmountHeader extends StatelessWidget {
         : '-${_ledgerMoney(transaction.amount)}';
     final amountColor =
         transaction.isIncome ? _LedgerColors.income : _LedgerColors.negative;
-    final typeLabel = transaction.isDebt
-        ? '欠款'
-        : (transaction.isIncome ? '收入' : '支出');
+    final typeLabel =
+        transaction.isDebt ? '欠款' : (transaction.isIncome ? '收入' : '支出');
     final datetime = _formatDetailDateTime(transaction.recordDate);
     final length = amount.length;
-    final amountFontSize =
-        length > 12 ? 30.0 : (length > 9 ? 34.0 : 40.0);
+    final amountFontSize = length > 12 ? 30.0 : (length > 9 ? 34.0 : 40.0);
     return Column(
       children: [
         Container(
@@ -1588,5 +1798,3 @@ String _thousandSeparated(int value) {
   }
   return buffer.toString();
 }
-
-
