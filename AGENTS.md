@@ -30,6 +30,7 @@ farm-manager，FastAPI 后端 + React+TS 前端
 4. 新增代码必须有对应测试
 5. 使用结构化日志，禁止 console.log / print 调试
 6. 错误信息必须含 code 字段和上下文
+7. 修改代码后必须运行复杂度预算检查；新增抽象、生成物入库、大文件和工作区污染由 check-complexity-budget.sh 拦截
 
 ## 可测试性分级
 开发新功能前，先判断需求类型再选验证策略：
@@ -44,6 +45,7 @@ farm-manager，FastAPI 后端 + React+TS 前端
 |------|------|
 | Lint | ``ruff check . && ruff format .`` |
 | 架构约束 | `bash scripts/check-layer-deps.sh` |
+| 复杂度预算 | `bash scripts/check-complexity-budget.sh` |
 | Guide+Sensor 配对 | `bash scripts/check-guide-sensor-pairing.sh` |
 | Lint 规则过期追踪 | `bash scripts/check-lint-expiry.sh` |
 | Harness 全量检查 | `bash scripts/harness-check.sh` |

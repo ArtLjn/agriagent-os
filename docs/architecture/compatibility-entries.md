@@ -18,8 +18,6 @@
 | --- | --- | --- | --- |
 | `app.core.security` | `app.modules.auth.password`、`app.modules.auth.tokens` | 保持历史安全工具 import 兼容 | 业务代码和测试全部迁移到 `app.modules.auth` 后删除 |
 | `app.api.deps` | `app.modules.auth.dependencies`、`app.modules.farm.dependencies` | 保持 FastAPI 依赖 import 兼容 | API 路由全部迁移到模块依赖后删除 |
-| `app.services.auth_service` | `app.modules.auth.service` | 保持服务层历史 import 兼容 | 调用方全部改用 Auth 模块后删除 |
-| `app.api.auth` | `app.modules.auth.router` | 保持路由注册路径兼容 | Bootstrap 路由注册确认只使用模块 router 后删除 |
 
 ## 维护规则
 

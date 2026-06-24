@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import desc, extract, nullslast
+from sqlalchemy import desc, extract
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
@@ -206,7 +206,8 @@ def get_records(
         query = query.filter(CostRecord.record_date <= date_to)
     return (
         query.order_by(
-            nullslast(desc(CostRecord.settled_at)),
+            CostRecord.settled_at.is_(None).asc(),
+            desc(CostRecord.settled_at),
             CostRecord.record_date.desc(),
             CostRecord.recorded_at.desc(),
             CostRecord.id.desc(),

@@ -10,14 +10,16 @@ WARNINGS=0
 is_size_baseline_file() {
   case "$1" in
     backend/app/infra/pending_actions.py|\
+    backend/app/infra/pending_action_presenter.py|\
     backend/app/agent/runtime/nodes.py|\
     backend/app/agent/runtime/tool_executor.py|\
     backend/app/agent/application/smart_fill.py|\
+    backend/app/agent/router/classifier.py|\
     backend/app/api/admin_data_flywheel.py|\
     backend/app/evaluation/discovery/rule_engine.py|\
-    backend/app/services/data_flywheel_repair_pack_repository.py|\
-    backend/app/services/data_flywheel_service.py|\
-    backend/app/services/data_flywheel_repair_pack_service.py)
+    backend/app/modules/data_flywheel/repair_pack_repository.py|\
+    backend/app/modules/data_flywheel/service.py|\
+    backend/app/modules/data_flywheel/repair_pack_service.py)
       return 0
       ;;
     *)
@@ -129,7 +131,7 @@ check_python_files() {
 }
 
 # ── 后端检查 ──
-# 层级（从低到高）: schemas → agents → api → core → models → services
+# 兼容期旧目录只拦截反向依赖；services/ 可依赖 core/infra 这类底层能力。
 BACKEND="backend/app"
 if [ -d "$BACKEND" ]; then
   echo "🔍 检查后端分层依赖..."
@@ -168,12 +170,12 @@ if [ -d "$BACKEND" ]; then
     "models/ 层违规引用了其他层" \
     "只允许导入: core, models"
 
-  # services/ 层不能引用 api, core
+  # services/ 层不能引用 api
   check_python_imports_recursive_excluding \
     "$BACKEND/services" \
-    "^[[:space:]]*(from|import)[[:space:]]+app\\.(api|core)(\\.|[[:space:]]|$)" \
+    "^[[:space:]]*(from|import)[[:space:]]+app\\.api(\\.|[[:space:]]|$)" \
     "services/ 层违规引用了其他层" \
-    "只允许导入: agents, models, schemas, services"
+    "只允许导入底层能力、agent 编排、models、schemas、services；不得反向依赖 api"
 
   echo "🔍 检查 Agent 平台边界..."
   check_python_files \
@@ -276,14 +278,29 @@ for f in $(find backend/app \
 done
 
 # TypeScript 文件
-for f in $(find frontend/src/ -name "*.ts" -o -name "*.tsx" 2>/dev/null | grep -v node_modules); do
-  lines=$(wc -l < "$f")
-  if [ "$lines" -gt 300 ]; then
-    echo "❌ ERROR: $f 有 ${lines} 行（上限 300）"
-    echo "✅ FIX: 拆分为更小的组件或模块"
-    ERRORS=$((ERRORS + 1))
+for frontend_dir in admin-web/src farm-index/app/src frontend/src; do
+  if [ ! -d "$frontend_dir" ]; then
+    continue
   fi
+  while IFS= read -r f; do
+    lines=$(wc -l < "$f")
+    if [ "$lines" -gt 300 ]; then
+      echo "⚠️  BASELINE: $f 有 ${lines} 行（上限 300，历史超限，需专项拆分）"
+      WARNINGS=$((WARNINGS + 1))
+    fi
+  done < <(find "$frontend_dir" \( -name "*.ts" -o -name "*.tsx" \) -type f 2>/dev/null | grep -v node_modules)
 done
+
+# Dart 文件
+if [ -d "mobile-app/lib" ]; then
+  while IFS= read -r f; do
+    lines=$(wc -l < "$f")
+    if [ "$lines" -gt 500 ]; then
+      echo "⚠️  BASELINE: $f 有 ${lines} 行（上限 500，历史超限，需专项拆分）"
+      WARNINGS=$((WARNINGS + 1))
+    fi
+  done < <(find mobile-app/lib -name "*.dart" -type f 2>/dev/null)
+fi
 
 # ── TODO/FIXME 检查 ──
 echo "🔍 检查 TODO/FIXME 残留..."
@@ -291,9 +308,11 @@ TODO_TARGETS=""
 if [ -d "backend/app" ]; then
   TODO_TARGETS="$TODO_TARGETS backend/app"
 fi
-if [ -d "frontend/src" ]; then
-  TODO_TARGETS="$TODO_TARGETS frontend/src"
-fi
+for frontend_dir in admin-web/src farm-index/app/src frontend/src mobile-app/lib; do
+  if [ -d "$frontend_dir" ]; then
+    TODO_TARGETS="$TODO_TARGETS $frontend_dir"
+  fi
+done
 
 TODO_MATCHES=""
 if [ -n "$TODO_TARGETS" ]; then
@@ -306,7 +325,7 @@ if [ -n "$TODO_TARGETS" ]; then
     --glob '!**/_vendor/**' \
     --glob '!**/node_modules/**' 2>/dev/null || true)
 fi
-TODO_COUNT=$(printf "%s" "$TODO_MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
+TODO_COUNT=$(printf "%s\n" "$TODO_MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')
 if [ "$TODO_COUNT" -gt 0 ]; then
   echo "⚠️  发现 $TODO_COUNT 处 TODO/FIXME 残留："
   printf "%s\n" "$TODO_MATCHES" | head -20

@@ -10,15 +10,15 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_farm, get_current_user, get_db, require_admin
 from app.models.farm import Farm
 from app.models.user import User
-from app.services.data_flywheel_review_issue_chain_service import (
+from app.modules.data_flywheel.review_issue_chain_service import (
     get_review_issue_chain_detail,
     list_daily_review_inbox,
     save_review_issue_chain_review,
 )
-from app.services.data_flywheel_review_issue_chain_case import (
+from app.modules.data_flywheel.review_issue_chain_case import (
     build_case_draft_from_review_issue_chain,
 )
-from app.services.data_flywheel_review_issue_chain_repair import (
+from app.modules.data_flywheel.review_issue_chain_repair import (
     create_repair_pack_from_review_issue_chain,
 )
 

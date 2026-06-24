@@ -320,16 +320,19 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                       _visibleMonth = _monthForPreset(_selected);
                     }),
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      side: const BorderSide(color: Color(0xFF8DB5FF)),
+                      minimumSize: const Size.fromHeight(50),
+                      backgroundColor: AppColors.surface,
+                      side: const BorderSide(color: AppColors.line),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: Text(
+                    child: const Text(
                       '重置',
-                      style: AppTextStyles.sectionTitle.copyWith(
-                        color: AppColors.blue,
+                      style: TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -337,42 +340,30 @@ class _DateFilterSheetState extends State<DateFilterSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   flex: 2,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1473FF), Color(0xFF2F73F6)],
+                  child: TextButton(
+                    key: const Key('date-filter-confirm'),
+                    onPressed: () => Navigator.of(context).pop(
+                      DateFilterSelection(
+                        preset: _selected,
+                        visibleMonth: _visibleMonth,
+                        customStart: _customStart,
+                        customEnd: _customEnd,
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x261473FF),
-                          blurRadius: 16,
-                          offset: Offset(0, 8),
-                        ),
-                      ],
                     ),
-                    child: TextButton(
-                      key: const Key('date-filter-confirm'),
-                      onPressed: () => Navigator.of(context).pop(
-                        DateFilterSelection(
-                          preset: _selected,
-                          visibleMonth: _visibleMonth,
-                          customStart: _customStart,
-                          customEnd: _customEnd,
-                        ),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size.fromHeight(50),
+                      backgroundColor: AppColors.ink,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Text(
-                        '确认',
-                        style: AppTextStyles.sectionTitle.copyWith(
-                          color: Colors.white,
-                          fontSize: 18,
-                        ),
+                    ),
+                    child: const Text(
+                      '应用筛选',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.1,
                       ),
                     ),
                   ),
@@ -436,13 +427,13 @@ class _CustomRangeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 54,
+      height: 50,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: filled ? AppColors.blueSoft : AppColors.surface3,
+        color: filled ? AppColors.surface2 : AppColors.surface,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: filled ? const Color(0xFFBFD4FF) : AppColors.line,
+          color: filled ? AppColors.ink : AppColors.line,
         ),
       ),
       child: Column(
@@ -450,7 +441,7 @@ class _CustomRangeChip extends StatelessWidget {
         children: [
           Text(
             label,
-            style: AppTextStyles.small.copyWith(
+            style: const TextStyle(
               color: AppColors.muted,
               fontSize: 10,
               fontWeight: FontWeight.w600,
@@ -462,10 +453,10 @@ class _CustomRangeChip extends StatelessWidget {
             dateText,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.body.copyWith(
-              color: filled ? AppColors.blue : AppColors.subtle,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+            style: TextStyle(
+              color: filled ? AppColors.ink : AppColors.subtle,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
               fontFeatures: const [FontFeature.tabularFigures()],
               letterSpacing: -0.2,
             ),
@@ -494,29 +485,33 @@ class _PresetGrid extends StatelessWidget {
       itemCount: presets.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 2.7,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 2.8,
       ),
       itemBuilder: (context, index) {
         final preset = presets[index];
         final active = selected == preset;
-        return OutlinedButton(
-          onPressed: () => onChanged(preset),
-          style: OutlinedButton.styleFrom(
-            backgroundColor: active ? AppColors.blueSoft : AppColors.surface,
-            side: BorderSide(
-              color: active ? const Color(0xFF8DB5FF) : AppColors.line,
+        return GestureDetector(
+          onTap: () => onChanged(preset),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active ? AppColors.ink : AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: active ? AppColors.ink : AppColors.line,
+              ),
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          child: Text(
-            preset.label,
-            style: AppTextStyles.body.copyWith(
-              color: active ? AppColors.blue : AppColors.ink,
-              fontWeight: FontWeight.w800,
+            child: Text(
+              preset.label,
+              style: TextStyle(
+                color: active ? Colors.white : AppColors.ink,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.1,
+              ),
             ),
           ),
         );

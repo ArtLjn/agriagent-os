@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_farm, get_current_user, get_db, require_admin
 from app.models.farm import Farm
 from app.models.user import User
-from app.services.data_flywheel_service import SAMPLE_TYPE_SESSION_TURN
-from app.services.data_flywheel_repair_pack_repository import (
+from app.modules.data_flywheel.service import SAMPLE_TYPE_SESSION_TURN
+from app.modules.data_flywheel.repair_pack_repository import (
     create_repair_pack,
     get_repair_pack,
     list_repair_candidates,

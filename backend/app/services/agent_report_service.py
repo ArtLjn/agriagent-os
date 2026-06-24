@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.guardrails import filter_output
 from app.agent.llm import get_llm
-from app.infra.json_repair import safe_parse_json
+from app.core.json_repair import safe_parse_json
 from app.models.agent_record import AgentRecord
 from app.schemas.agent import ReportResponse
 from app.schemas.structured_report import (

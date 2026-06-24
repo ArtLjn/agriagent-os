@@ -690,6 +690,496 @@ def _validated_plan_draft_action_args(
     return dict(step["params"])
 
 
+def _latest_human_input(state: AgentState) -> str:
+    """获取最近一条用户输入，保持原有 200 字截断。"""
+    for msg in reversed(state.get("messages", [])):
+        if isinstance(msg, HumanMessage):
+            return msg.content[:200]
+    return ""
+
+
+def _record_pending_plan_trace(collector, original_input: str) -> None:
+    collector.record(
+        node_type="skill_call",
+        node_name="pending_plan",
+        input_data={"message": original_input},
+        output_data={"status": "pending_plan"},
+        duration_ms=0,
+    )
+
+
+def _disabled_tool_message(
+    *,
+    name: str,
+    args: dict,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage | None:
+    """如果工具被禁用，记录 trace 并返回失败消息。"""
+    if not permission_decision.is_disabled:
+        return None
+
+    output_data = {
+        "status": "disabled",
+        "permission_level": permission_decision.permission_level,
+    }
+    content = "工具调用失败：工具已禁用。"
+    if permission_decision.disabled_reason:
+        output_data["disabled_reason"] = permission_decision.disabled_reason
+        content = f"{content} 原因：{permission_decision.disabled_reason}"
+    logger.warning(
+        "Skill 已禁用 | name=%s | permission_level=%s",
+        name,
+        permission_decision.permission_level,
+    )
+    collector.record(
+        node_type="skill_call",
+        node_name=name,
+        input_data=args,
+        output_data=output_data,
+        duration_ms=0,
+    )
+    return ToolMessage(
+        content=content,
+        tool_call_id=tool_call_id,
+    )
+
+
+def _validation_error_message(
+    *,
+    tool,
+    name: str,
+    args: dict,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage | None:
+    """执行 Pydantic 参数校验，失败时反馈 LLM 自纠错。"""
+    if not (tool and hasattr(tool, "args_schema") and tool.args_schema):
+        return None
+    try:
+        tool.args_schema.model_validate(args)
+    except Exception as e:
+        error_msg = f"参数校验失败: {e}"
+        logger.warning("Tool 参数校验失败 | name=%s | error=%s", name, e)
+        collector.record(
+            node_type="skill_call",
+            node_name=name,
+            input_data=args,
+            output_data={
+                "status": "validation_error",
+                "permission_level": permission_decision.permission_level,
+            },
+            duration_ms=0,
+            error_message=str(e),
+        )
+        return ToolMessage(
+            content=error_msg,
+            tool_call_id=tool_call_id,
+        )
+    return None
+
+
+def _permission_reject_message(
+    *,
+    name: str,
+    args: dict,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage | None:
+    """处理权限拒绝响应。"""
+    if permission_decision.reject_message is None:
+        return None
+
+    logger.warning(
+        "Skill 权限拒绝 | name=%s | permission_level=%s",
+        name,
+        permission_decision.permission_level,
+    )
+    collector.record(
+        node_type="skill_call",
+        node_name=name,
+        input_data=args,
+        output_data={
+            "status": "rejected",
+            "permission_level": permission_decision.permission_level,
+        },
+        duration_ms=0,
+    )
+    return ToolMessage(
+        content=permission_decision.reject_message,
+        tool_call_id=tool_call_id,
+    )
+
+
+def _resolve_pending_execution_args(
+    *,
+    state: AgentState,
+    name: str,
+    args: dict,
+    farm_id: int,
+    original_input: str,
+) -> dict:
+    execution_args = _validated_plan_draft_action_args(
+        state.get("plan_draft"),
+        tool_name=name,
+    )
+    if execution_args is not None:
+        return execution_args
+    return _build_pending_execution_args(name, args, farm_id, original_input)
+
+
+def _ambiguous_pending_message(
+    *,
+    name: str,
+    execution_args: dict,
+    original_input: str,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage | None:
+    ambiguous_debt_name = _needs_debt_direction_clarification(
+        name, execution_args, original_input
+    )
+    if not ambiguous_debt_name:
+        return None
+
+    content = _ambiguous_debt_direction_message(
+        ambiguous_debt_name,
+        execution_args,
+    )
+    collector.record(
+        node_type="skill_call",
+        node_name=name,
+        input_data=execution_args,
+        output_data={
+            "status": "need_clarify",
+            "permission_level": permission_decision.permission_level,
+            "reason": "ambiguous_debt_direction",
+        },
+        duration_ms=0,
+    )
+    return ToolMessage(
+        content=content,
+        tool_call_id=tool_call_id,
+    )
+
+
+def _build_pending_confirmation(
+    *,
+    name: str,
+    execution_args: dict,
+    farm_id: int,
+    original_input: str,
+) -> tuple[dict, str]:
+    confirmation_args = _build_pending_confirmation_args(
+        name, execution_args, farm_id
+    )
+    confirmation_context = build_confirmation_context(
+        name, confirmation_args, original_input=original_input
+    )
+    confirm_text = build_confirm_message(
+        name, confirmation_args, original_input=original_input
+    )
+    return confirmation_context, confirm_text
+
+
+def _reflection_block_message(
+    *,
+    state: AgentState,
+    name: str,
+    execution_args: dict,
+    confirm_text: str,
+    farm_id: int,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage | None:
+    reflection_result = ReflectorService().check_write_plan(
+        trigger=ReflectionTrigger.PRE_WRITE_PLAN,
+        skill_name=name,
+        params=execution_args,
+        confirmation_text=confirm_text,
+        trace_metadata={
+            "farm_id": farm_id,
+            "session_id": state.get("session_id"),
+            "tool_name": name,
+            "tool_call_id": tool_call_id,
+            "plan_draft": state.get("plan_draft") or {},
+        },
+    )
+    if reflection_result.decision == ReflectionDecision.PASS:
+        return None
+
+    collector.record(
+        node_type="skill_call",
+        node_name=name,
+        input_data=execution_args,
+        output_data={
+            "status": "reflection_blocked",
+            "permission_level": permission_decision.permission_level,
+            "reflection": reflection_result.to_trace_payload(),
+        },
+        duration_ms=0,
+    )
+    return ToolMessage(
+        content=reflection_result.reason,
+        tool_call_id=tool_call_id,
+    )
+
+
+def _store_pending_action_message(
+    *,
+    state: AgentState,
+    name: str,
+    execution_args: dict,
+    original_input: str,
+    confirmation_context: dict,
+    confirm_text: str,
+    farm_id: int,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage:
+    session_id = state.get("session_id")
+    action_id = store_pending(
+        farm_id,
+        name,
+        execution_args,
+        original_input=original_input,
+        confirmation_context=confirmation_context,
+        session_id=session_id,
+    )
+    logger.info(
+        "写操作 Skill 已拦截 | farm=%s action_id=%s skill=%s",
+        farm_id,
+        action_id,
+        name,
+    )
+    collector.record(
+        node_type="skill_call",
+        node_name=name,
+        input_data=execution_args,
+        output_data={
+            "status": "pending",
+            "permission_level": permission_decision.permission_level,
+            "confirmation_context": confirmation_context,
+            "plan_draft": state.get("plan_draft") or {},
+        },
+        duration_ms=0,
+    )
+    return ToolMessage(
+        content=f"{PENDING_MARKER} {confirm_text}",
+        tool_call_id=tool_call_id,
+    )
+
+
+def _pending_action_message(
+    *,
+    state: AgentState,
+    name: str,
+    args: dict,
+    farm_id: int,
+    original_input: str,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage | None:
+    """写操作 Skill 拦截：存储 pending action，不直接执行。"""
+    if not permission_decision.requires_confirmation:
+        return None
+
+    execution_args = _resolve_pending_execution_args(
+        state=state,
+        name=name,
+        args=args,
+        farm_id=farm_id,
+        original_input=original_input,
+    )
+    ambiguous_message = _ambiguous_pending_message(
+        name=name,
+        execution_args=execution_args,
+        original_input=original_input,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+    if ambiguous_message is not None:
+        return ambiguous_message
+
+    confirmation_context, confirm_text = _build_pending_confirmation(
+        name=name,
+        execution_args=execution_args,
+        farm_id=farm_id,
+        original_input=original_input,
+    )
+    reflection_message = _reflection_block_message(
+        state=state,
+        name=name,
+        execution_args=execution_args,
+        confirm_text=confirm_text,
+        farm_id=farm_id,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+    if reflection_message is not None:
+        return reflection_message
+
+    return _store_pending_action_message(
+        state=state,
+        name=name,
+        execution_args=execution_args,
+        original_input=original_input,
+        confirmation_context=confirmation_context,
+        confirm_text=confirm_text,
+        farm_id=farm_id,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+
+
+def _success_trace_output(result, permission_level: str) -> dict:
+    """组装工具成功 trace metadata。"""
+    trace_output = getattr(result, "trace_data", None)
+    if not trace_output:
+        trace_output = {
+            "status": "success",
+            "reply_preview": str(result)[:500],
+        }
+    else:
+        trace_output["reply_preview"] = str(result)[:500]
+    trace_output["permission_level"] = permission_level
+    return trace_output
+
+
+async def _invoke_read_tool_message(
+    *,
+    tool,
+    name: str,
+    args: dict,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+    start: float,
+) -> ToolMessage:
+    """执行读操作工具并记录结果 metadata。"""
+    if not tool:
+        return ToolMessage(content=f"未知工具: {name}", tool_call_id=tool_call_id)
+    try:
+        result = await tool.ainvoke(args)
+        duration_ms = int((_time.perf_counter() - start) * 1000)
+        summary = str(result)[:120].replace("\n", " ")
+        logger.info(
+            "Skill 完成 | name=%s | duration_ms=%d | result=%s",
+            name,
+            duration_ms,
+            summary,
+        )
+        collector.record(
+            node_type="skill_call",
+            node_name=name,
+            input_data=args,
+            output_data=_success_trace_output(
+                result, permission_decision.permission_level
+            ),
+            duration_ms=duration_ms,
+        )
+        return ToolMessage(content=str(result), tool_call_id=tool_call_id)
+    except Exception as e:
+        duration_ms = int((_time.perf_counter() - start) * 1000)
+        logger.error(
+            "Skill 失败 | name=%s | error=%s",
+            name,
+            e,
+        )
+        collector.record(
+            node_type="skill_call",
+            node_name=name,
+            input_data=args,
+            duration_ms=duration_ms,
+            error_message=str(e),
+        )
+        return ToolMessage(content=f"工具调用失败: {e}", tool_call_id=tool_call_id)
+
+
+async def _call_one(
+    *,
+    tc: dict,
+    tool_map: dict,
+    state: AgentState,
+    farm_id: int,
+    original_input: str,
+    collector,
+) -> ToolMessage:
+    """执行单个 tool_call，保持原有权限、pending 和 trace 顺序。"""
+    name = tc["name"]
+    args = tc["args"]
+    tool_call_id = tc["id"]
+    logger.info("Skill 调用 %s(%s)", name, args)
+    start = _time.perf_counter()
+
+    tool = tool_map.get(name)
+    permission_decision = _permission_decision(tool, name, state)
+
+    message = _disabled_tool_message(
+        name=name,
+        args=args,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+    if message is not None:
+        return message
+
+    message = _validation_error_message(
+        tool=tool,
+        name=name,
+        args=args,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+    if message is not None:
+        return message
+
+    message = _permission_reject_message(
+        name=name,
+        args=args,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+    if message is not None:
+        return message
+
+    message = _pending_action_message(
+        state=state,
+        name=name,
+        args=args,
+        farm_id=farm_id,
+        original_input=original_input,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+    if message is not None:
+        return message
+
+    return await _invoke_read_tool_message(
+        tool=tool,
+        name=name,
+        args=args,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+        start=start,
+    )
+
+
 async def _parallel_tool_node(state: AgentState) -> dict:
     """并行执行多个 tool_calls 的节点。写操作 Skill 拦截为 pending action。"""
     last = state["messages"][-1]
@@ -713,12 +1203,7 @@ async def _parallel_tool_node(state: AgentState) -> dict:
     }
     collector = get_collector()
 
-    # 获取用户原始输入（最近一条 HumanMessage）
-    original_input = ""
-    for msg in reversed(state.get("messages", [])):
-        if isinstance(msg, HumanMessage):
-            original_input = msg.content[:200]
-            break
+    original_input = _latest_human_input(state)
 
     tool_calls = _collapse_all_labor_payment_tool_calls(
         last.tool_calls, original_input
@@ -730,251 +1215,36 @@ async def _parallel_tool_node(state: AgentState) -> dict:
         tool_calls=tool_calls,
     )
     if plan_messages is not None:
-        collector.record(
-            node_type="skill_call",
-            node_name="pending_plan",
-            input_data={"message": original_input},
-            output_data={"status": "pending_plan"},
-            duration_ms=0,
-        )
+        _record_pending_plan_trace(collector, original_input)
         return {"messages": plan_messages}
 
-    async def _call_one(tc: dict) -> ToolMessage:
-        name = tc["name"]
-        args = tc["args"]
-        tool_call_id = tc["id"]
-        logger.info("Skill 调用 %s(%s)", name, args)
-        start = _time.perf_counter()
-
-        tool = tool_map.get(name)
-        permission_decision = _permission_decision(tool, name, state)
-
-        if permission_decision.is_disabled:
-            output_data = {
-                "status": "disabled",
-                "permission_level": permission_decision.permission_level,
-            }
-            content = "工具调用失败：工具已禁用。"
-            if permission_decision.disabled_reason:
-                output_data["disabled_reason"] = permission_decision.disabled_reason
-                content = f"{content} 原因：{permission_decision.disabled_reason}"
-            logger.warning(
-                "Skill 已禁用 | name=%s | permission_level=%s",
-                name,
-                permission_decision.permission_level,
-            )
-            collector.record(
-                node_type="skill_call",
-                node_name=name,
-                input_data=args,
-                output_data=output_data,
-                duration_ms=0,
-            )
-            return ToolMessage(
-                content=content,
-                tool_call_id=tool_call_id,
-            )
-
-        # Pydantic 参数校验：在写操作拦截前校验，校验失败反馈 LLM 自纠错
-        if tool and hasattr(tool, "args_schema") and tool.args_schema:
-            try:
-                tool.args_schema.model_validate(args)
-            except Exception as e:
-                error_msg = f"参数校验失败: {e}"
-                logger.warning("Tool 参数校验失败 | name=%s | error=%s", name, e)
-                collector.record(
-                    node_type="skill_call",
-                    node_name=name,
-                    input_data=args,
-                    output_data={
-                        "status": "validation_error",
-                        "permission_level": permission_decision.permission_level,
-                    },
-                    duration_ms=0,
-                    error_message=str(e),
-                )
-                return ToolMessage(
-                    content=error_msg,
-                    tool_call_id=tool_call_id,
-                )
-
-        if permission_decision.reject_message is not None:
-            logger.warning(
-                "Skill 权限拒绝 | name=%s | permission_level=%s",
-                name,
-                permission_decision.permission_level,
-            )
-            collector.record(
-                node_type="skill_call",
-                node_name=name,
-                input_data=args,
-                output_data={
-                    "status": "rejected",
-                    "permission_level": permission_decision.permission_level,
-                },
-                duration_ms=0,
-            )
-            return ToolMessage(
-                content=permission_decision.reject_message,
-                tool_call_id=tool_call_id,
-            )
-
-        # 写操作 Skill 拦截：存储 pending action，不直接执行
-        if permission_decision.requires_confirmation:
-            execution_args = _validated_plan_draft_action_args(
-                state.get("plan_draft"),
-                tool_name=name,
-            )
-            if execution_args is None:
-                execution_args = _build_pending_execution_args(
-                    name, args, farm_id, original_input
-                )
-            ambiguous_debt_name = _needs_debt_direction_clarification(
-                name, execution_args, original_input
-            )
-            if ambiguous_debt_name:
-                content = _ambiguous_debt_direction_message(
-                    ambiguous_debt_name,
-                    execution_args,
-                )
-                collector.record(
-                    node_type="skill_call",
-                    node_name=name,
-                    input_data=execution_args,
-                    output_data={
-                        "status": "need_clarify",
-                        "permission_level": permission_decision.permission_level,
-                        "reason": "ambiguous_debt_direction",
-                    },
-                    duration_ms=0,
-                )
-                return ToolMessage(
-                    content=content,
-                    tool_call_id=tool_call_id,
-                )
-            confirmation_args = _build_pending_confirmation_args(
-                name, execution_args, farm_id
-            )
-            confirmation_context = build_confirmation_context(
-                name, confirmation_args, original_input=original_input
-            )
-            confirm_text = build_confirm_message(
-                name, confirmation_args, original_input=original_input
-            )
-            reflection_result = ReflectorService().check_write_plan(
-                trigger=ReflectionTrigger.PRE_WRITE_PLAN,
-                skill_name=name,
-                params=execution_args,
-                confirmation_text=confirm_text,
-                trace_metadata={
-                    "farm_id": farm_id,
-                    "session_id": state.get("session_id"),
-                    "tool_name": name,
-                    "tool_call_id": tool_call_id,
-                    "plan_draft": state.get("plan_draft") or {},
-                },
-            )
-            if reflection_result.decision != ReflectionDecision.PASS:
-                collector.record(
-                    node_type="skill_call",
-                    node_name=name,
-                    input_data=execution_args,
-                    output_data={
-                        "status": "reflection_blocked",
-                        "permission_level": permission_decision.permission_level,
-                        "reflection": reflection_result.to_trace_payload(),
-                    },
-                    duration_ms=0,
-                )
-                return ToolMessage(
-                    content=reflection_result.reason,
-                    tool_call_id=tool_call_id,
-                )
-
-            session_id = state.get("session_id")
-            action_id = store_pending(
-                farm_id,
-                name,
-                execution_args,
-                original_input=original_input,
-                confirmation_context=confirmation_context,
-                session_id=session_id,
-            )
-            logger.info(
-                "写操作 Skill 已拦截 | farm=%s action_id=%s skill=%s",
-                farm_id,
-                action_id,
-                name,
-            )
-            collector.record(
-                node_type="skill_call",
-                node_name=name,
-                input_data=execution_args,
-                output_data={
-                    "status": "pending",
-                    "permission_level": permission_decision.permission_level,
-                    "confirmation_context": confirmation_context,
-                    "plan_draft": state.get("plan_draft") or {},
-                },
-                duration_ms=0,
-            )
-            return ToolMessage(
-                content=f"{PENDING_MARKER} {confirm_text}",
-                tool_call_id=tool_call_id,
-            )
-
-        # 读操作执行
-        if not tool:
-            return ToolMessage(content=f"未知工具: {name}", tool_call_id=tool_call_id)
-        try:
-            result = await tool.ainvoke(args)
-            duration_ms = int((_time.perf_counter() - start) * 1000)
-            summary = str(result)[:120].replace("\n", " ")
-            logger.info(
-                "Skill 完成 | name=%s | duration_ms=%d | result=%s",
-                name,
-                duration_ms,
-                summary,
-            )
-            trace_output = getattr(result, "trace_data", None)
-            if not trace_output:
-                trace_output = {
-                    "status": "success",
-                    "reply_preview": str(result)[:500],
-                }
-            else:
-                trace_output["reply_preview"] = str(result)[:500]
-            trace_output["permission_level"] = permission_decision.permission_level
-            collector.record(
-                node_type="skill_call",
-                node_name=name,
-                input_data=args,
-                output_data=trace_output,
-                duration_ms=duration_ms,
-            )
-            return ToolMessage(content=str(result), tool_call_id=tool_call_id)
-        except Exception as e:
-            duration_ms = int((_time.perf_counter() - start) * 1000)
-            logger.error(
-                "Skill 失败 | name=%s | error=%s",
-                name,
-                e,
-            )
-            collector.record(
-                node_type="skill_call",
-                node_name=name,
-                input_data=args,
-                duration_ms=duration_ms,
-                error_message=str(e),
-            )
-            return ToolMessage(content=f"工具调用失败: {e}", tool_call_id=tool_call_id)
-
     if len(tool_calls) == 1:
-        results = [await _call_one(tool_calls[0])]
+        results = [
+            await _call_one(
+                tc=tool_calls[0],
+                tool_map=tool_map,
+                state=state,
+                farm_id=farm_id,
+                original_input=original_input,
+                collector=collector,
+            )
+        ]
     else:
         logger.info("并行执行 %d 个 Skill", len(tool_calls))
         batch_start = _time.perf_counter()
-        results = await asyncio.gather(*[_call_one(tc) for tc in tool_calls])
+        results = await asyncio.gather(
+            *[
+                _call_one(
+                    tc=tc,
+                    tool_map=tool_map,
+                    state=state,
+                    farm_id=farm_id,
+                    original_input=original_input,
+                    collector=collector,
+                )
+                for tc in tool_calls
+            ]
+        )
         batch_duration = int((_time.perf_counter() - batch_start) * 1000)
         collector.record(
             node_type="parallel_batch",

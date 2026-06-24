@@ -118,14 +118,11 @@ def _route_tools(user_msg: str, tools: list) -> RouterDecision:
     return SkillRouter().route(user_msg, tools)
 
 
-async def _llm_node(state: AgentState) -> dict:
-    """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
-    messages = state["messages"]
-
-    tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
-    pending_msgs = [m for m in tool_msgs if is_pending_tool_message(m)]
-    normal_msgs = [m for m in tool_msgs if not is_pending_tool_message(m)]
-
+def _direct_tool_message_response(
+    pending_msgs: list[ToolMessage],
+    normal_msgs: list[ToolMessage],
+) -> dict | None:
+    """处理无需再次进入 LLM 的 ToolMessage 结果。"""
     if pending_msgs and normal_msgs:
         summaries = []
         for m in normal_msgs:
@@ -157,59 +154,69 @@ async def _llm_node(state: AgentState) -> dict:
         )
         return {"messages": [AIMessage(content=content)]}
 
-    prepared_system_prompt = state.get("system_prompt")
-    prepared_context_bundle = state.get("context_bundle")
-    prepared_selected_tool_names = state.get("selected_tool_names")
-    prepared_router_decision = state.get("router_decision")
+    return None
 
-    farm_id = state.get("farm_id", 1)
-    if not isinstance(farm_id, int) or farm_id <= 0:
-        return {"messages": [AIMessage(content="缺少可信农场上下文，无法继续处理。")]}
-    farm_uid = state.get("farm_uid")
 
-    quota = check_quota(state.get("user_id"))
+def _quota_rejection_response(user_id: int | None) -> dict | None:
+    """检查 token quota，返回拒绝响应或继续执行。"""
+    quota = check_quota(user_id)
     quota_allowed = quota if isinstance(quota, bool) else quota.allowed
     exceeded_period = None if isinstance(quota, bool) else quota.exceeded_period
-    if not quota_allowed:
-        action = settings.token_quota.over_quota_action
-        if action == "reject":
-            logger.warning(
-                "Token 配额超限，拒绝调用（reject 模式）| period=%s",
-                exceeded_period,
-            )
-            content = QUOTA_REJECT_MESSAGES.get(
-                exceeded_period,
-                "用量已达上限，请稍后再试。",
-            )
-            return {"messages": [AIMessage(content=content)]}
-        if action == "warn":
-            logger.warning(
-                "Token 配额超限，继续调用（warn 模式）| period=%s",
-                exceeded_period,
-            )
+    if quota_allowed:
+        return None
 
-    tools = get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
-    has_tool_results = bool(tool_msgs)
-    intent = state.get("intent", "agent")
-    user_msg = _find_last_human_message(messages)
+    action = settings.token_quota.over_quota_action
+    if action == "reject":
+        logger.warning(
+            "Token 配额超限，拒绝调用（reject 模式）| period=%s",
+            exceeded_period,
+        )
+        content = QUOTA_REJECT_MESSAGES.get(
+            exceeded_period,
+            "用量已达上限，请稍后再试。",
+        )
+        return {"messages": [AIMessage(content=content)]}
+    if action == "warn":
+        logger.warning(
+            "Token 配额超限，继续调用（warn 模式）| period=%s",
+            exceeded_period,
+        )
+    return None
+
+
+def _resolve_router_decision(
+    *,
+    prepared_router_decision,
+    normal_msgs: list[ToolMessage],
+    user_msg: str,
+    tools: list,
+) -> RouterDecision:
+    """确定本轮路由决策，保留工具结果后不重绑工具的行为。"""
     if prepared_router_decision is not None:
-        router_decision = prepared_router_decision
-    elif normal_msgs:
-        router_decision = RouterDecision(
+        return prepared_router_decision
+    if normal_msgs:
+        return RouterDecision(
             selected_tools=[],
             fallback="final_answer_no_tools",
             reason="已有工具结果，final answer 默认不重新绑定工具",
         )
-    else:
-        router_decision = _route_tools(user_msg, tools)
+    return _route_tools(user_msg, tools)
 
-    increment_round()
-    collector = get_collector()
+
+def _record_router_plan_trace(
+    *,
+    collector,
+    router_decision: RouterDecision,
+    user_msg: str,
+    farm_id: int,
+    session_id: str | None,
+) -> dict:
+    """记录 skill router trace，并返回 plan draft payload。"""
     plan_draft = plan_draft_from_router_decision(
         raw_user_input=user_msg,
         decision=router_decision,
         farm_id=farm_id,
-        session_id=state.get("session_id"),
+        session_id=session_id,
     )
     plan_validation = DomainValidator().validate(plan_draft)
     plan_draft = attach_validation(plan_draft, plan_validation)
@@ -226,7 +233,18 @@ async def _llm_node(state: AgentState) -> dict:
             "usage_source": "router_estimate",
         },
     )
+    return plan_draft_payload
 
+
+def _resolve_selected_names(
+    *,
+    router_decision: RouterDecision,
+    messages: list,
+    tools: list,
+    prepared_selected_tool_names,
+    has_tool_results: bool,
+) -> list[str]:
+    """汇总最终可绑定工具名。"""
     selected_names = list(router_decision.selected_tools)
     if _is_operation_work_order_clarification(messages):
         selected_names = _append_tool_name_once(
@@ -238,8 +256,20 @@ async def _llm_node(state: AgentState) -> dict:
         selected_names = list(prepared_selected_tool_names)
     if has_tool_results:
         selected_names = []
+    return selected_names
+
+
+def _direct_query_response(
+    *,
+    intent: str,
+    has_tool_results: bool,
+    user_msg: str,
+    tools: list,
+    selected_names: list[str],
+) -> dict | None:
+    """构造确定性 query 工具直达响应。"""
     direct_names = direct_query_tool_names(user_msg, selected_names)
-    if (
+    if not (
         intent == "query"
         and not has_tool_results
         and direct_names
@@ -251,37 +281,48 @@ async def _llm_node(state: AgentState) -> dict:
         )
         and can_direct_route(user_msg, selected_names, direct_names)
     ):
-        tool_calls = [
-            {
-                "name": name,
-                "args": direct_query_tool_args(user_msg, name),
-                "id": f"direct_{name}",
-                "type": "tool_call",
-            }
-            for name in direct_names
-        ]
-        logger.info(
-            "确定性工具直达 | input=%r | tool_calls=%s | skipped_llm=true",
-            user_msg[:80],
-            direct_names,
-        )
-        return {"messages": [AIMessage(content="", tool_calls=tool_calls)]}
+        return None
 
-    model_role = "lightweight" if intent == "query" else "generation"
-    raw_llm = get_llm(role=model_role)
-    logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
-    _circuit_key = _build_circuit_key(raw_llm)
-    selected_tools = [t for t in tools if t.name in selected_names]
+    tool_calls = [
+        {
+            "name": name,
+            "args": direct_query_tool_args(user_msg, name),
+            "id": f"direct_{name}",
+            "type": "tool_call",
+        }
+        for name in direct_names
+    ]
+    logger.info(
+        "确定性工具直达 | input=%r | tool_calls=%s | skipped_llm=true",
+        user_msg[:80],
+        direct_names,
+    )
+    return {"messages": [AIMessage(content="", tool_calls=tool_calls)]}
+
+
+def _bind_llm_for_tools(raw_llm, selected_tools: list, *, log_no_tools: bool = True):
+    """按配置绑定可用工具。"""
     if selected_tools:
         parallel = (
             {"parallel_tool_calls": True} if settings.ai.parallel_tool_calls else {}
         )
-        llm = raw_llm.bind_tools(selected_tools, **parallel)
-    else:
-        llm = raw_llm
+        return raw_llm.bind_tools(selected_tools, **parallel)
+    if log_no_tools:
         logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
+    return raw_llm
 
-    selected_tool_names = [t.name for t in selected_tools] if selected_tools else []
+
+async def _prepare_context_bundle(
+    *,
+    prepared_context_bundle,
+    farm_id: int,
+    intent: str,
+    selected_tool_names: list[str],
+    router_decision: RouterDecision,
+    user_id: int | None,
+    session_id: str | None,
+):
+    """准备 runtime context bundle 和 farm context。"""
     if prepared_context_bundle is not None:
         if not isinstance(prepared_context_bundle, ContextBundle):
             raise TypeError("prepared context_bundle must be ContextBundle")
@@ -293,68 +334,87 @@ async def _llm_node(state: AgentState) -> dict:
             intent=intent,
             selected_tool_names=selected_tool_names,
             context_dependencies=router_decision.context_dependencies,
-            user_id=state.get("user_id"),
-            session_id=state.get("session_id"),
+            user_id=user_id,
+            session_id=session_id,
         )
     if not context_bundle.blocks and farm_ctx.get("display_name") == "农友":
         farm_ctx = await _get_farm_context(farm_id)
-    display_name = farm_ctx["display_name"]
-    farm_location = farm_ctx["farm_location"]
-    assistant_role = farm_ctx.get("assistant_role", "warm")
-    assistant_role_prompt = farm_ctx.get("assistant_role_prompt", "")
+    return context_bundle, farm_ctx
 
+
+def _compose_system_text(
+    *,
+    prepared_system_prompt: str | None,
+    farm_id: int,
+    farm_ctx: dict,
+    selected_tool_names: list[str],
+    has_tool_results: bool,
+    router_decision: RouterDecision,
+) -> tuple[str, str]:
+    """渲染 system prompt，保持原有缓存 key 与 scene 选择。"""
     if prepared_system_prompt:
-        system_text = prepared_system_prompt
-        prompt_scene = "prepared"
-    else:
-        current_date = get_request_date()
-        date_str = str(current_date)
-        current_season = _get_season(current_date)
-        prompt_scene = select_system_prompt_scene(
-            selected_tool_names=selected_tool_names,
-            has_tool_results=has_tool_results,
-            router_decision=router_decision,
-        )
-        prompt_variables = {
-            "display_name": display_name,
-            "farm_location": farm_location,
-            "farm_coords": farm_ctx["farm_coords"],
-            "current_season": current_season,
-            "active_crops": farm_ctx["active_crops"],
-            "assistant_role": assistant_role,
-            "assistant_role_prompt": assistant_role_prompt,
-        }
-        if prompt_scene == SYSTEM_BASE_SCENE:
-            prompt_cache = get_prompt_cache()
-            cache_date_key = f"{date_str}:{assistant_role}"
-            cached_prompt = prompt_cache.get(farm_id=farm_id, date_str=cache_date_key)
-            if cached_prompt is not None:
-                system_text = cached_prompt
-            else:
-                system_text = get_composer().compose(
-                    prompt_scene,
-                    variables=prompt_variables,
-                    current_date=current_date,
-                )
-                prompt_cache.set(
-                    farm_id=farm_id, date_str=cache_date_key, value=system_text
-                )
-        else:
-            system_text = get_composer().compose(
-                prompt_scene,
-                variables=prompt_variables,
-                current_date=current_date,
-            )
+        return prepared_system_prompt, "prepared"
 
+    current_date = get_request_date()
+    date_str = str(current_date)
+    current_season = _get_season(current_date)
+    prompt_scene = select_system_prompt_scene(
+        selected_tool_names=selected_tool_names,
+        has_tool_results=has_tool_results,
+        router_decision=router_decision,
+    )
+    assistant_role = farm_ctx.get("assistant_role", "warm")
+    prompt_variables = {
+        "display_name": farm_ctx["display_name"],
+        "farm_location": farm_ctx["farm_location"],
+        "farm_coords": farm_ctx["farm_coords"],
+        "current_season": current_season,
+        "active_crops": farm_ctx["active_crops"],
+        "assistant_role": assistant_role,
+        "assistant_role_prompt": farm_ctx.get("assistant_role_prompt", ""),
+    }
+    if prompt_scene == SYSTEM_BASE_SCENE:
+        prompt_cache = get_prompt_cache()
+        cache_date_key = f"{date_str}:{assistant_role}"
+        cached_prompt = prompt_cache.get(farm_id=farm_id, date_str=cache_date_key)
+        if cached_prompt is not None:
+            return cached_prompt, prompt_scene
+        system_text = get_composer().compose(
+            prompt_scene,
+            variables=prompt_variables,
+            current_date=current_date,
+        )
+        prompt_cache.set(farm_id=farm_id, date_str=cache_date_key, value=system_text)
+        return system_text, prompt_scene
+
+    system_text = get_composer().compose(
+        prompt_scene,
+        variables=prompt_variables,
+        current_date=current_date,
+    )
+    return system_text, prompt_scene
+
+
+def _append_runtime_context(system_text: str, context_bundle: ContextBundle) -> str:
     runtime_context_text = context_bundle.render_text()
-    if runtime_context_text:
-        system_text = (
-            f"{system_text}\n\n<runtime_context>\n"
-            f"{runtime_context_text}\n"
-            f"</runtime_context>"
-        )
+    if not runtime_context_text:
+        return system_text
+    return (
+        f"{system_text}\n\n<runtime_context>\n"
+        f"{runtime_context_text}\n"
+        f"</runtime_context>"
+    )
 
-    # 记录 prompt_render trace
+
+def _record_prompt_budget(
+    *,
+    collector,
+    system_text: str,
+    prompt_scene: str,
+    context_bundle: ContextBundle,
+    state: AgentState,
+) -> tuple[SystemMessage, list, str]:
+    """记录 prompt 渲染与预算 trace，返回 LLM 输入。"""
     collector.record(
         node_type="prompt_render",
         node_name="system_prompt",
@@ -388,53 +448,52 @@ async def _llm_node(state: AgentState) -> dict:
             final_budget.max_tokens,
             final_budget.actions,
         )
+    return system, messages, input_summary
 
-    # 并行缓存预热（与 LLM 调用并行执行）
-    preload_task = asyncio.create_task(
-        _warm_tool_caches(
-            selected_tool_names,
-            farm_id,
-            farm_ctx,
-            context_dependencies=router_decision.context_dependencies,
-        )
-    )
 
-    # LLM 调用 + 计时 + 请求内重试
+async def _invoke_llm_with_retry(
+    *,
+    model_role: str,
+    raw_llm,
+    llm,
+    selected_tools: list,
+    system: SystemMessage,
+    messages: list,
+    collector,
+    input_summary: str,
+):
+    """执行 LLM 调用和请求内重试。"""
     start = _time.perf_counter()
     max_retries = settings.ai.failover_max_retries
     response = None
+    circuit_key = _build_circuit_key(raw_llm)
 
     async with _LLM_SEMAPHORE:
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
                     raw_llm = get_llm(role=model_role)
-                    _circuit_key = _build_circuit_key(raw_llm)
-                    if selected_tools:
-                        parallel = (
-                            {"parallel_tool_calls": True}
-                            if settings.ai.parallel_tool_calls
-                            else {}
-                        )
-                        llm = raw_llm.bind_tools(selected_tools, **parallel)
-                    else:
-                        llm = raw_llm
+                    circuit_key = _build_circuit_key(raw_llm)
+                    llm = _bind_llm_for_tools(
+                        raw_llm,
+                        selected_tools,
+                        log_no_tools=False,
+                    )
                 response = await llm.ainvoke([system] + messages)
-                _record_llm_success(_circuit_key)
+                _record_llm_success(circuit_key)
                 break
             except Exception as exc:
                 duration_ms = int((_time.perf_counter() - start) * 1000)
                 model_name = getattr(raw_llm, "model_name", "unknown")
-                _record_llm_failure(_circuit_key, exc)
+                _record_llm_failure(circuit_key, exc)
 
-                # 非可恢复错误（400 schema 错误等）不重试，直接抛出
-                from app.core.llm_client_manager import classify_error, ErrorLevel
+                from app.core.llm_client_manager import ErrorLevel, classify_error
 
                 error_level = classify_error(exc)
                 if error_level == ErrorLevel.MODEL:
                     logger.warning(
                         "LLM 不可恢复错误，跳过重试 | key=%s | model=%s | level=%s",
-                        _circuit_key,
+                        circuit_key,
                         model_name,
                         error_level.value,
                     )
@@ -451,7 +510,7 @@ async def _llm_node(state: AgentState) -> dict:
                     "LLM 重试 | attempt=%d/%d | key=%s | model=%s | latency_ms=%d | error=%s",
                     attempt + 1,
                     max_retries,
-                    _circuit_key,
+                    circuit_key,
                     model_name,
                     duration_ms,
                     str(exc)[:120],
@@ -468,112 +527,155 @@ async def _llm_node(state: AgentState) -> dict:
 
     duration_ms = int((_time.perf_counter() - start) * 1000)
     model_name = getattr(raw_llm, "model_name", "unknown")
+    return response, raw_llm, llm, circuit_key, duration_ms, model_name
 
-    # 等待预热完成（不阻塞，已并行运行）
+
+async def _wait_for_preload(preload_task) -> None:
+    """短暂等待缓存预热完成，保持原有非阻塞语义。"""
     try:
         await asyncio.wait_for(preload_task, timeout=0.1)
     except (asyncio.TimeoutError, Exception):
         pass
 
-    # 兼容层：部分 provider（如 nvidia llama-3.1）不支持 bind_tools，
-    # LLM 会把工具调用 JSON 直接写进 content 而不是通过 tool_calls API。
-    # 这里检测并手动解析，确保 graph 能正确路由到 tools 节点。
-    if not response.tool_calls:
+
+async def _normalize_content_tool_calls(
+    *,
+    response: AIMessage,
+    llm,
+    system_text: str,
+    messages: list,
+    model_name: str,
+    selected_tools: list,
+) -> AIMessage:
+    """兼容 content 内 JSON 工具调用。"""
+    if response.tool_calls:
+        return response
+
+    parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
+    if parsed_tool_calls and not selected_tools:
+        response = await retry_no_tool_json_leak(
+            llm=llm,
+            system_text=system_text,
+            messages=messages,
+            response=response,
+            model_name=model_name,
+        )
         parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
-        if parsed_tool_calls and not selected_tools:
-            response = await retry_no_tool_json_leak(
-                llm=llm,
-                system_text=system_text,
-                messages=messages,
-                response=response,
-                model_name=model_name,
+    if not parsed_tool_calls:
+        return response
+
+    filtered_tool_calls = filter_tool_calls_by_selected(parsed_tool_calls, selected_tools)
+    if not filtered_tool_calls:
+        return response
+
+    logger.info(
+        "LLM content 中检测到工具调用 JSON，手动构造 tool_calls | tools=%s | model=%s",
+        [tc["name"] for tc in filtered_tool_calls],
+        model_name,
+    )
+    return AIMessage(
+        content="",
+        tool_calls=filtered_tool_calls,
+        response_metadata=response.response_metadata,
+        id=response.id,
+    )
+
+
+async def _retry_missed_tool_call(
+    *,
+    response: AIMessage,
+    llm,
+    system_text: str,
+    messages: list,
+    user_msg: str,
+    selected_tools: list,
+) -> AIMessage:
+    """检测并重试应该调用工具但未调用的响应。"""
+    if response.tool_calls:
+        return response
+
+    should_retry, missed_tools = _detect_missed_tool_call(
+        user_msg, response.content or "", selected_tools
+    )
+    if not (should_retry and selected_tools):
+        return response
+
+    logger.warning(
+        "检测到 LLM 应调用工具但未调用 | user_msg=%r | selected=%s | 尝试重试",
+        user_msg[:80],
+        [t.name for t in selected_tools],
+    )
+    retry_system = SystemMessage(
+        content=system_text
+        + "\n\n【重要提醒】用户的问题需要调用工具获取真实数据，请直接输出工具调用 JSON，不要回复文本。"
+    )
+    retry_messages = [retry_system] + messages
+    try:
+        retry_response = await llm.ainvoke(retry_messages)
+        retry_calls = getattr(retry_response, "tool_calls", None) or []
+        filtered_retry_calls = filter_tool_calls_by_selected(retry_calls, selected_tools)
+        retry_parsed = None
+        if not filtered_retry_calls:
+            retry_parsed = _extract_tool_calls_from_content(
+                retry_response.content or ""
             )
-            parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
-        if parsed_tool_calls:
-            filtered_tool_calls = filter_tool_calls_by_selected(
-                parsed_tool_calls,
+        if retry_parsed:
+            filtered_retry_calls = filter_tool_calls_by_selected(
+                retry_parsed,
                 selected_tools,
             )
-            if filtered_tool_calls:
-                logger.info(
-                    "LLM content 中检测到工具调用 JSON，手动构造 tool_calls | tools=%s | model=%s",
-                    [tc["name"] for tc in filtered_tool_calls],
-                    model_name,
-                )
-                # 重建 AIMessage，保留原 metadata，注入 tool_calls
-                response = AIMessage(
-                    content="",
-                    tool_calls=filtered_tool_calls,
-                    response_metadata=response.response_metadata,
-                    id=response.id,
-                )
 
-    # 检测"应该调用工具但未调用"的情况：写意图空回复也必须 fail closed。
-    if not response.tool_calls:
-        should_retry, missed_tools = _detect_missed_tool_call(
-            user_msg, response.content or "", selected_tools
-        )
-        if should_retry and selected_tools:
-            logger.warning(
-                "检测到 LLM 应调用工具但未调用 | user_msg=%r | selected=%s | 尝试重试",
-                user_msg[:80],
-                [t.name for t in selected_tools],
+        if filtered_retry_calls:
+            logger.info(
+                "重试成功，LLM 输出了工具调用 | tools=%s",
+                [tc["name"] for tc in filtered_retry_calls],
             )
-            retry_system = SystemMessage(
-                content=system_text
-                + "\n\n【重要提醒】用户的问题需要调用工具获取真实数据，请直接输出工具调用 JSON，不要回复文本。"
+            return AIMessage(
+                content="",
+                tool_calls=filtered_retry_calls,
+                response_metadata=retry_response.response_metadata,
+                id=retry_response.id,
             )
-            retry_messages = [retry_system] + messages
-            try:
-                retry_response = await llm.ainvoke(retry_messages)
-                retry_calls = getattr(retry_response, "tool_calls", None) or []
-                filtered_retry_calls = filter_tool_calls_by_selected(
-                    retry_calls,
-                    selected_tools,
-                )
-                retry_parsed = None
-                if not filtered_retry_calls:
-                    retry_parsed = _extract_tool_calls_from_content(
-                        retry_response.content or ""
-                    )
-                if retry_parsed:
-                    filtered_retry_calls = filter_tool_calls_by_selected(
-                        retry_parsed,
-                        selected_tools,
-                    )
 
-                if filtered_retry_calls:
-                    logger.info(
-                        "重试成功，LLM 输出了工具调用 | tools=%s",
-                        [tc["name"] for tc in filtered_retry_calls],
-                    )
-                    response = AIMessage(
-                        content="",
-                        tool_calls=filtered_retry_calls,
-                        response_metadata=retry_response.response_metadata,
-                        id=retry_response.id,
-                    )
-                else:
-                    from app.infra.pending_actions import is_write_skill
+        from app.infra.pending_actions import is_write_skill
 
-                    if any(is_write_skill(tool.name) for tool in missed_tools):
-                        logger.warning("写操作重试后仍未输出工具调用，使用安全兜底回复")
-                        response = AIMessage(
-                            content=(
-                                "这条操作还没有执行。"
-                                "系统没有生成可确认的待执行动作。"
-                                "请重新描述要新增、修改或结算的对象和关键参数，"
-                                "我会先生成待确认操作，确认后再执行。"
-                            ),
-                            response_metadata=retry_response.response_metadata,
-                            id=retry_response.id,
-                        )
-                    else:
-                        logger.warning("重试后 LLM 仍未输出工具调用，使用原回复")
-            except Exception as retry_exc:
-                logger.warning("重试调用失败 | error=%s", retry_exc)
+        if any(is_write_skill(tool.name) for tool in missed_tools):
+            logger.warning("写操作重试后仍未输出工具调用，使用安全兜底回复")
+            return AIMessage(
+                content=(
+                    "这条操作还没有执行。"
+                    "系统没有生成可确认的待执行动作。"
+                    "请重新描述要新增、修改或结算的对象和关键参数，"
+                    "我会先生成待确认操作，确认后再执行。"
+                ),
+                response_metadata=retry_response.response_metadata,
+                id=retry_response.id,
+            )
+        logger.warning("重试后 LLM 仍未输出工具调用，使用原回复")
+    except Exception as retry_exc:
+        logger.warning("重试调用失败 | error=%s", retry_exc)
+    return response
 
-    # 提取真实 provider token usage，缺失时不参与 TokenDailyStats 入账。
+
+def _record_llm_response(
+    *,
+    response: AIMessage,
+    collector,
+    model_role: str,
+    circuit_key: str,
+    model_name: str,
+    duration_ms: int,
+    selected_tools: list,
+    selected_tool_names: list[str],
+    normal_msgs: list[ToolMessage],
+    farm_id: int,
+    session_id: str | None,
+    intent: str,
+    user_msg: str,
+    plan_draft_payload: dict,
+    input_summary: str,
+) -> tuple[AIMessage, dict | None]:
+    """整理最终响应、记录 LLM trace，并返回 token usage。"""
     token_usage = extract_token_usage(response)
     tokens = (
         token_usage["total_tokens"] if token_usage else _extract_tokens_used(response)
@@ -583,7 +685,7 @@ async def _llm_node(state: AgentState) -> dict:
         "LLM 调用完成 | role=%s | key=%s | model=%s | latency_ms=%d | "
         "selected_tools=%d | tool_calls=%d | tokens=%s",
         model_role,
-        _circuit_key,
+        circuit_key,
         model_name,
         duration_ms,
         len(selected_tools),
@@ -591,7 +693,6 @@ async def _llm_node(state: AgentState) -> dict:
         tokens if tokens is not None else "-",
     )
 
-    # LLM 工具选择日志
     if response.tool_calls:
         tool_names = [tc["name"] for tc in response.tool_calls]
         logger.info("LLM 工具选择 | tool_calls=%s | model=%s", tool_names, model_name)
@@ -615,7 +716,7 @@ async def _llm_node(state: AgentState) -> dict:
             tool_messages=normal_msgs,
             selected_tool_names=selected_tool_names,
             farm_id=farm_id,
-            session_id=state.get("session_id"),
+            session_id=session_id,
             intent=intent,
             user_message=user_msg,
             plan_draft=plan_draft_payload,
@@ -631,6 +732,165 @@ async def _llm_node(state: AgentState) -> dict:
         output_data=output_summary,
         duration_ms=duration_ms,
         token_usage=token_usage,
+    )
+    return response, token_usage
+
+
+async def _llm_node(state: AgentState) -> dict:
+    """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
+    messages = state["messages"]
+
+    tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
+    pending_msgs = [m for m in tool_msgs if is_pending_tool_message(m)]
+    normal_msgs = [m for m in tool_msgs if not is_pending_tool_message(m)]
+
+    direct_tool_response = _direct_tool_message_response(pending_msgs, normal_msgs)
+    if direct_tool_response is not None:
+        return direct_tool_response
+
+    prepared_system_prompt = state.get("system_prompt")
+    prepared_context_bundle = state.get("context_bundle")
+    prepared_selected_tool_names = state.get("selected_tool_names")
+    prepared_router_decision = state.get("router_decision")
+
+    farm_id = state.get("farm_id", 1)
+    if not isinstance(farm_id, int) or farm_id <= 0:
+        return {"messages": [AIMessage(content="缺少可信农场上下文，无法继续处理。")]}
+    farm_uid = state.get("farm_uid")
+
+    quota_response = _quota_rejection_response(state.get("user_id"))
+    if quota_response is not None:
+        return quota_response
+
+    tools = get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
+    has_tool_results = bool(tool_msgs)
+    intent = state.get("intent", "agent")
+    user_msg = _find_last_human_message(messages)
+    router_decision = _resolve_router_decision(
+        prepared_router_decision=prepared_router_decision,
+        normal_msgs=normal_msgs,
+        user_msg=user_msg,
+        tools=tools,
+    )
+
+    increment_round()
+    collector = get_collector()
+    session_id = state.get("session_id")
+    plan_draft_payload = _record_router_plan_trace(
+        collector=collector,
+        router_decision=router_decision,
+        user_msg=user_msg,
+        farm_id=farm_id,
+        session_id=session_id,
+    )
+
+    selected_names = _resolve_selected_names(
+        router_decision=router_decision,
+        messages=messages,
+        tools=tools,
+        prepared_selected_tool_names=prepared_selected_tool_names,
+        has_tool_results=has_tool_results,
+    )
+    direct_response = _direct_query_response(
+        intent=intent,
+        has_tool_results=has_tool_results,
+        user_msg=user_msg,
+        tools=tools,
+        selected_names=selected_names,
+    )
+    if direct_response is not None:
+        return direct_response
+
+    model_role = "lightweight" if intent == "query" else "generation"
+    raw_llm = get_llm(role=model_role)
+    logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
+    selected_tools = [t for t in tools if t.name in selected_names]
+    llm = _bind_llm_for_tools(raw_llm, selected_tools)
+
+    selected_tool_names = [t.name for t in selected_tools] if selected_tools else []
+    context_bundle, farm_ctx = await _prepare_context_bundle(
+        prepared_context_bundle=prepared_context_bundle,
+        farm_id=farm_id,
+        intent=intent,
+        selected_tool_names=selected_tool_names,
+        router_decision=router_decision,
+        user_id=state.get("user_id"),
+        session_id=session_id,
+    )
+    system_text, prompt_scene = _compose_system_text(
+        prepared_system_prompt=prepared_system_prompt,
+        farm_id=farm_id,
+        farm_ctx=farm_ctx,
+        selected_tool_names=selected_tool_names,
+        has_tool_results=has_tool_results,
+        router_decision=router_decision,
+    )
+    system_text = _append_runtime_context(system_text, context_bundle)
+
+    system, messages, input_summary = _record_prompt_budget(
+        collector=collector,
+        system_text=system_text,
+        prompt_scene=prompt_scene,
+        context_bundle=context_bundle,
+        state=state,
+    )
+
+    # 并行缓存预热（与 LLM 调用并行执行）
+    preload_task = asyncio.create_task(
+        _warm_tool_caches(
+            selected_tool_names,
+            farm_id,
+            farm_ctx,
+            context_dependencies=router_decision.context_dependencies,
+        )
+    )
+
+    response, raw_llm, llm, circuit_key, duration_ms, model_name = (
+        await _invoke_llm_with_retry(
+            model_role=model_role,
+            raw_llm=raw_llm,
+            llm=llm,
+            selected_tools=selected_tools,
+            system=system,
+            messages=messages,
+            collector=collector,
+            input_summary=input_summary,
+        )
+    )
+
+    await _wait_for_preload(preload_task)
+    response = await _normalize_content_tool_calls(
+        response=response,
+        llm=llm,
+        system_text=system_text,
+        messages=messages,
+        model_name=model_name,
+        selected_tools=selected_tools,
+    )
+    response = await _retry_missed_tool_call(
+        response=response,
+        llm=llm,
+        system_text=system_text,
+        messages=messages,
+        user_msg=user_msg,
+        selected_tools=selected_tools,
+    )
+    response, _token_usage = _record_llm_response(
+        response=response,
+        collector=collector,
+        model_role=model_role,
+        circuit_key=circuit_key,
+        model_name=model_name,
+        duration_ms=duration_ms,
+        selected_tools=selected_tools,
+        selected_tool_names=selected_tool_names,
+        normal_msgs=normal_msgs,
+        farm_id=farm_id,
+        session_id=session_id,
+        intent=intent,
+        user_msg=user_msg,
+        plan_draft_payload=plan_draft_payload,
+        input_summary=input_summary,
     )
 
     return {

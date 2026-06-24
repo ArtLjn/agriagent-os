@@ -55,7 +55,7 @@ fi
 
 # ── 单元测试 ──
 if [ -d "backend" ] && command -v pytest &>/dev/null; then
-  run_check "Python Tests (pytest)" "cd backend && pytest -v --tb=short"
+  run_check "Python Tests (pytest)" "cd backend && PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider -v --tb=short"
 else
   echo "⏭️  Python Tests: 跳过"
   SKIP=$((SKIP + 1))
@@ -73,6 +73,14 @@ if [ -f "scripts/check-layer-deps.sh" ]; then
   run_check "架构约束检查" "bash scripts/check-layer-deps.sh"
 else
   echo "⏭️  架构约束检查: 跳过"
+  SKIP=$((SKIP + 1))
+fi
+
+# ── 复杂度预算 ──
+if [ -f "scripts/check-complexity-budget.sh" ]; then
+  run_check "复杂度预算检查" "bash scripts/check-complexity-budget.sh"
+else
+  echo "⏭️  复杂度预算检查: 跳过"
   SKIP=$((SKIP + 1))
 fi
 

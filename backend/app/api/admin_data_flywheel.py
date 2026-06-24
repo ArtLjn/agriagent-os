@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.farm import Farm
 from app.models.user import User
-from app.services.data_flywheel_service import (
+from app.modules.data_flywheel.service import (
     SAMPLE_TYPE_SESSION_TURN,
     build_case_draft,
     create_sample_prelabel,
@@ -21,12 +21,12 @@ from app.services.data_flywheel_service import (
     get_sample_detail,
     list_samples,
 )
-from app.services.data_flywheel_judge_service import (
+from app.modules.data_flywheel.judge_service import (
     DataFlywheelJudgeClient,
     OpenAIDataFlywheelJudgeClient,
 )
-from app.services.data_flywheel_session_review_service import get_session_review
-from app.services.data_flywheel_session_sync_service import sync_session_events
+from app.modules.data_flywheel.session_review_service import get_session_review
+from app.modules.data_flywheel.session_sync_service import sync_session_events
 
 router = APIRouter(
     prefix="/admin/data-flywheel",

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_farm, get_current_user, get_db, require_admin
 from app.models.farm import Farm
 from app.models.user import User
-from app.services.data_flywheel_service import (
+from app.modules.data_flywheel.service import (
     SAMPLE_TYPE_SESSION_TURN,
     accept_sample_prelabel,
     add_sample_label,
