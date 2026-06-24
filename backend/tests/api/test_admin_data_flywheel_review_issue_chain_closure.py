@@ -75,7 +75,9 @@ def _seed_turn(
             (
                 "tool.call.finished",
                 {
-                    "tool_name": router_tools[0] if router_tools else "get_labor_payables",
+                    "tool_name": router_tools[0]
+                    if router_tools
+                    else "get_labor_payables",
                     "result": {"ok": True},
                 },
             )
@@ -176,7 +178,8 @@ def _seed_reviewed_chain(db, tmp_path, *, expected_behavior: str | None = None):
             "result_turn_ids": [result.id],
             "final_labels": ["needs_regression", "wrong_tool_selection"],
             "root_cause": "批量结算意图被参数抽取收窄为单个工人",
-            "expected_behavior": expected_behavior or "确认批量结算时应保留所有待结算工人。",
+            "expected_behavior": expected_behavior
+            or "确认批量结算时应保留所有待结算工人。",
         }
         review_resp = client.post(
             f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}/review",
@@ -200,7 +203,7 @@ def test_chain_case_draft_preserves_review_metadata_and_related_turns(
             headers=admin_headers(),
         )
 
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.json()
     data = resp.json()
     case_json = data["case_json"]
     metadata = case_json["metadata"]
@@ -236,9 +239,11 @@ def test_chain_case_draft_rejects_missing_expected_behavior(
     row = db_session.query(AgentCaseDraft).count()
     from app.models.data_flywheel import AgentReviewIssueChain
 
-    saved = db_session.query(AgentReviewIssueChain).filter_by(
-        chain_id=_chain_id(trigger)
-    ).one()
+    saved = (
+        db_session.query(AgentReviewIssueChain)
+        .filter_by(chain_id=_chain_id(trigger))
+        .one()
+    )
     saved.expected_behavior = None
     db_session.commit()
 
@@ -270,7 +275,7 @@ def test_chain_repair_pack_exports_traceable_case_and_debug_evidence(
             headers=admin_headers(),
         )
 
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.json()
     data = resp.json()
     manifest = data["payload"]["manifest"]
     case = data["payload"]["cases_jsonl"][0]
@@ -279,7 +284,8 @@ def test_chain_repair_pack_exports_traceable_case_and_debug_evidence(
     assert manifest["source_sample_ids"] == [_sample_id(trigger)]
     assert manifest["root_cause"] == "批量结算意图被参数抽取收窄为单个工人"
     assert manifest["expected_behavior"] == "确认批量结算时应保留所有待结算工人。"
-    assert manifest["warnings"] == []
+    warning_keys = {item["evidence_key"] for item in manifest["warnings"]}
+    assert {"tool_result", "trace", "db_diff", "backfilled_event"} <= warning_keys
     assert case["chain_id"] == _chain_id(trigger)
     assert case["session_id"] == trigger.session_id
     assert case["trigger_turn_id"] == trigger.id
@@ -310,9 +316,11 @@ def test_chain_repair_pack_rejects_needs_evidence_or_missing_expected(
     import app.modules.data_flywheel.review_issue_chains_router as chain_api
 
     monkeypatch.setattr(chain_api, "REPAIR_PACK_BASE_DIR", tmp_path / "repair-packs")
-    saved = db_session.query(AgentReviewIssueChain).filter_by(
-        chain_id=_chain_id(trigger)
-    ).one()
+    saved = (
+        db_session.query(AgentReviewIssueChain)
+        .filter_by(chain_id=_chain_id(trigger))
+        .one()
+    )
 
     auth_scope, client = _admin_client()
     with auth_scope:
@@ -369,3 +377,31 @@ def test_chain_repair_pack_cleans_export_dir_when_db_commit_fails(
         )
 
     assert list(export_base_dir.glob("repair-router-*")) == []
+
+
+def test_review_issue_chain_accepts_tool_parameter_mismatch_label(
+    db_session, tmp_path
+) -> None:
+    context, trigger, result = _seed_reviewed_chain(db_session, tmp_path)
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}/review",
+            json={
+                "status": "accepted",
+                "context_turn_ids": [context.id],
+                "result_turn_ids": [result.id],
+                "final_labels": ["tool_parameter_mismatch", "needs_regression"],
+                "root_cause": "批量结算作用域被收窄为单个工人",
+                "expected_behavior": "应保留所有待结算工人并逐一生成确认步骤。",
+            },
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200, resp.json()
+    human_review = resp.json()["chain"]["human_review"]
+    assert "tool_parameter_mismatch" in human_review["quality_labels"]
+    assert human_review["expected_behavior"] == (
+        "应保留所有待结算工人并逐一生成确认步骤。"
+    )

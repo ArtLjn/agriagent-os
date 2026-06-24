@@ -1,4 +1,5 @@
 import { Button, Card, Checkbox, Empty, Form, Input, Radio, Select, Space, Tag, Typography } from 'antd';
+import { ExperimentOutlined, FileZipOutlined } from '@ant-design/icons';
 import { useEffect } from 'react';
 import type { CSSProperties } from 'react';
 
@@ -14,7 +15,11 @@ interface IssueChainReviewPanelProps {
   contextTurnIds: number[];
   resultTurnIds: number[];
   saving: boolean;
+  creatingDraft: boolean;
+  creatingRepairPack: boolean;
   onSave: (body: ReviewIssueChainReviewRequest) => Promise<void>;
+  onCreateCaseDraft: () => Promise<void>;
+  onCreateRepairPack: () => Promise<void>;
 }
 
 interface ReviewFormValues {
@@ -27,10 +32,20 @@ interface ReviewFormValues {
 }
 
 const labelOptions = [
-  { label: 'needs_regression', value: 'needs_regression' },
-  { label: 'wrong_tool_selection', value: 'wrong_tool_selection' },
-  { label: 'pending_missed', value: 'pending_missed' },
+  { label: 'good_reply', value: 'good_reply' },
   { label: 'bad_reply', value: 'bad_reply' },
+  { label: 'wrong_tool_selection', value: 'wrong_tool_selection' },
+  { label: 'tool_parameter_mismatch', value: 'tool_parameter_mismatch' },
+  { label: 'pending_missed', value: 'pending_missed' },
+  { label: 'hallucinated_execution', value: 'hallucinated_execution' },
+  { label: 'tool_error_ignored', value: 'tool_error_ignored' },
+  { label: 'off_topic', value: 'off_topic' },
+  { label: 'sensitive_info_leak', value: 'sensitive_info_leak' },
+  { label: 'missing_wage', value: 'missing_wage' },
+  { label: 'disabled_worker_used', value: 'disabled_worker_used' },
+  { label: 'unclear_intent', value: 'unclear_intent' },
+  { label: 'not_actionable', value: 'not_actionable' },
+  { label: 'needs_regression', value: 'needs_regression' },
 ];
 
 const missingEvidenceOptions = [
@@ -45,7 +60,11 @@ export default function IssueChainReviewPanel({
   contextTurnIds,
   resultTurnIds,
   saving,
+  creatingDraft,
+  creatingRepairPack,
   onSave,
+  onCreateCaseDraft,
+  onCreateRepairPack,
 }: IssueChainReviewPanelProps) {
   const [form] = Form.useForm<ReviewFormValues>();
   const status = Form.useWatch('status', form);
@@ -82,6 +101,9 @@ export default function IssueChainReviewPanel({
       missing_evidence: values.status === 'needs_evidence' ? values.missing_evidence ?? [] : undefined,
     });
   };
+
+  const closureBlockReason = getClosureBlockReason(detail);
+  const closureBlocked = Boolean(closureBlockReason);
 
   return (
     <Card
@@ -178,6 +200,29 @@ export default function IssueChainReviewPanel({
               <Typography.Text style={{ color: palette.textMuted }}>
                 repair: {detail.chain.repair.export_blocked_reason || 'ready'}
               </Typography.Text>
+              {closureBlockReason && (
+                <Typography.Text type="warning" aria-live="polite">
+                  阻断原因：{closureBlockReason}
+                </Typography.Text>
+              )}
+              <Space wrap size={8} style={{ marginTop: 4 }}>
+                <Button
+                  icon={<ExperimentOutlined />}
+                  disabled={closureBlocked}
+                  loading={creatingDraft}
+                  onClick={onCreateCaseDraft}
+                >
+                  生成回归草稿
+                </Button>
+                <Button
+                  icon={<FileZipOutlined />}
+                  disabled={closureBlocked}
+                  loading={creatingRepairPack}
+                  onClick={onCreateRepairPack}
+                >
+                  导出修复包
+                </Button>
+              </Space>
             </Space>
           </section>
 
@@ -217,6 +262,21 @@ function missingEvidenceFromChecklist(checklist: ReviewIssueChainEvidenceItem[])
   return checklist
     .filter((item) => item.status === 'missing')
     .map((item) => item.key);
+}
+
+function getClosureBlockReason(detail: ReviewIssueChainDetail): string | null {
+  const reviewStatus = detail.chain.human_review.status;
+  const chainStatus = reviewStatus && reviewStatus !== 'unreviewed' ? reviewStatus : detail.chain.status;
+  if (chainStatus === 'needs_evidence') {
+    return '问题链仍需补证据';
+  }
+  if (chainStatus !== 'accepted') {
+    return '问题链尚未 accepted';
+  }
+  if (!detail.chain.human_review.expected_behavior?.trim()) {
+    return '缺少 expected behavior';
+  }
+  return null;
 }
 
 const panelStyle: CSSProperties = {

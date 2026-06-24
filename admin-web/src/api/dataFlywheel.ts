@@ -4,6 +4,7 @@ export type DataFlywheelLabel =
   | 'good_reply'
   | 'bad_reply'
   | 'wrong_tool_selection'
+  | 'tool_parameter_mismatch'
   | 'pending_missed'
   | 'hallucinated_execution'
   | 'off_topic'
@@ -362,7 +363,8 @@ export interface ExportJsonlResponse {
 export interface CaseDraft {
   id: number;
   draft_id: string;
-  source_sample_id: string;
+  source_sample_id?: string | null;
+  chain_id?: string;
   target_type: string;
   status: string;
   case_json: Record<string, unknown>;
@@ -470,6 +472,7 @@ export interface DataFlywheelRepairPack {
   fix_target: string;
   labels: string[];
   source_sample_ids: string[];
+  source_chain_ids?: string[];
   source_label_ids?: number[];
   dedup_key?: string | null;
   status: RepairPackStatus;
@@ -531,6 +534,8 @@ export interface VerificationFailureRequest {
 }
 
 const samplePath = (sampleId: string) => `/admin/data-flywheel/samples/${encodeURIComponent(sampleId)}`;
+const reviewIssueChainPath = (chainId: string) =>
+  `/admin/data-flywheel/review-issue-chains/${encodeURIComponent(chainId)}`;
 
 export async function listDataFlywheelSamples(
   params?: DataFlywheelSampleListParams
@@ -607,7 +612,7 @@ export async function getDailyReviewInbox(
 
 export async function getReviewIssueChain(chainId: string): Promise<ReviewIssueChainDetail> {
   const response = await apiClient.get<ReviewIssueChainDetail>(
-    `/admin/data-flywheel/review-issue-chains/${encodeURIComponent(chainId)}`
+    reviewIssueChainPath(chainId)
   );
   return response.data;
 }
@@ -617,8 +622,25 @@ export async function saveReviewIssueChainReview(
   body: ReviewIssueChainReviewRequest
 ): Promise<ReviewIssueChainReviewResponse> {
   const response = await apiClient.post<ReviewIssueChainReviewResponse>(
-    `/admin/data-flywheel/review-issue-chains/${encodeURIComponent(chainId)}/review`,
+    `${reviewIssueChainPath(chainId)}/review`,
     body
+  );
+  return response.data;
+}
+
+export async function createReviewIssueChainCaseDraft(
+  chainId: string,
+  targetType: CaseDraftTargetType
+): Promise<CaseDraft> {
+  const response = await apiClient.post<CaseDraft>(`${reviewIssueChainPath(chainId)}/case-draft`, {
+    target_type: targetType,
+  });
+  return response.data;
+}
+
+export async function createReviewIssueChainRepairPack(chainId: string): Promise<DataFlywheelRepairPack> {
+  const response = await apiClient.post<DataFlywheelRepairPack>(
+    `${reviewIssueChainPath(chainId)}/repair-pack`
   );
   return response.data;
 }

@@ -12,6 +12,7 @@ from app.infra.agent_events import AgentEventWriter
 from app.main import app
 from app.models.data_flywheel import AgentDataFlywheelLabel, AgentReviewIssueChain
 from app.models.farm import Farm
+from app.models.trace import TraceRecord
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
 from tests.api.auth_helpers import (
@@ -134,6 +135,18 @@ def _seed_turn(db, tmp_path):
         seq_end=writes[-1].seq,
         write_status="success",
     )
+    db.add(
+        TraceRecord(
+            farm_id=farm.id,
+            session_id=session_id,
+            request_id="adminfly",
+            node_type="llm_call",
+            node_name="data_flywheel_test_trace",
+            status="success",
+            conversation_message_id=assistant_msg.id,
+        )
+    )
+    db.commit()
     return turn
 
 
@@ -423,9 +436,7 @@ def test_get_session_review_returns_session_turns_for_admin(
     )
 
 
-def test_daily_review_inbox_groups_risk_chains_by_session(
-    db_session, tmp_path
-) -> None:
+def test_daily_review_inbox_groups_risk_chains_by_session(db_session, tmp_path) -> None:
     first = _seed_turn(db_session, tmp_path)
     first.risk_score = 0.65
     first.risk_severity = "P1"
@@ -469,9 +480,7 @@ def test_daily_review_inbox_groups_risk_chains_by_session(
     assert item["next_action"] == "review_chain"
 
 
-def test_daily_review_inbox_overlays_saved_review_status(
-    db_session, tmp_path
-) -> None:
+def test_daily_review_inbox_overlays_saved_review_status(db_session, tmp_path) -> None:
     first = _seed_turn(db_session, tmp_path)
     trigger = _seed_turn(db_session, tmp_path)
     trigger.risk_score = 0.92
@@ -650,9 +659,7 @@ def test_review_issue_chain_detail_rejects_low_risk_trigger(
     assert resp.json()["detail"]["code"] == "CHAIN_NOT_FOUND"
 
 
-def test_review_issue_chain_detail_marks_missing_evidence(
-    db_session, tmp_path
-) -> None:
+def test_review_issue_chain_detail_marks_missing_evidence(db_session, tmp_path) -> None:
     turn = _seed_turn(db_session, tmp_path)
     turn.event_file = None
     turn.event_seq_start = None
@@ -675,6 +682,83 @@ def test_review_issue_chain_detail_marks_missing_evidence(
     checklist = data["evidence_checklist"]
     assert {"key": "event_log", "status": "missing", "turn_id": turn.id} in checklist
     assert data["chain"]["repair"]["export_blocked_reason"] == "needs_evidence"
+
+
+def test_review_issue_chain_detail_distinguishes_required_evidence_keys(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.88
+    turn.risk_severity = "P1"
+    db_session.query(TraceRecord).filter_by(
+        farm_id=turn.farm_id,
+        session_id=turn.session_id,
+        request_id=turn.request_id,
+    ).delete()
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    checklist = {item["key"]: item["status"] for item in data["evidence_checklist"]}
+    assert set(checklist) == {
+        "event_log",
+        "chat_messages",
+        "router_decision",
+        "tool_result",
+        "pending_lifecycle",
+        "trace",
+        "db_diff",
+        "backfilled_event",
+    }
+    assert checklist["trace"] == "missing"
+    assert checklist["db_diff"] == "needs_human"
+    assert checklist["event_log"] == "present"
+    assert "tool_or_pending_evidence" not in checklist
+    assert data["evidence_status"] == "needs_evidence"
+
+
+def test_review_issue_chain_detail_marks_backfilled_event_from_payload_and_meta(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.88
+    turn.risk_severity = "P1"
+    user_msg = save_message(db_session, turn.conversation_id, "user", "补录消息")
+    user_msg.turn_id = turn.id
+    user_msg.meta_json = {"event_backfilled": True}
+    writer = AgentEventWriter(base_dir=tmp_path)
+    write = writer.write(
+        event_type="message.user",
+        farm_id=turn.farm_id,
+        user_id=ADMIN_USER_ID,
+        session_id=turn.session_id,
+        turn_id=turn.id,
+        request_id=turn.request_id,
+        payload={"content": "补录消息", "backfilled": True},
+    )
+    turn.event_seq_end = write.seq
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    checklist = {item["key"]: item["status"] for item in data["evidence_checklist"]}
+    assert checklist["backfilled_event"] == "present"
+    trigger_summary = data["turn_debug_summaries"][str(turn.id)]
+    assert trigger_summary["backfilled_event"] is True
 
 
 def test_review_issue_chain_review_accepts_and_overrides_related_turns(
@@ -1230,6 +1314,29 @@ def test_build_case_draft_returns_source_sample_metadata(db_session, tmp_path) -
     assert data["status"] == "draft"
     assert data["created_by"] == ADMIN_USER_ID
     assert data["case_json"]["metadata"]["source_sample_id"] == sample_id
+    assert data["case_json"]["metadata"]["asset_path"] == "compatibility_debug"
+    assert data["case_json"]["metadata"]["formal_review_required"] is True
+
+
+def test_sample_case_draft_marks_compatibility_debug_path(db_session, tmp_path) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/samples/{sample_id}/case-draft",
+            json={"target_type": "evaluation_replay"},
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["case_json"]["metadata"]["source"] == "data_flywheel"
+    assert data["case_json"]["metadata"]["asset_path"] == "compatibility_debug"
+    assert data["case_json"]["metadata"]["formal_review_required"] is True
+    assert data["case_json"]["metadata"]["asset_path"] == "compatibility_debug"
+    assert data["case_json"]["metadata"]["formal_review_required"] is True
 
 
 def test_build_case_draft_api_returns_issue_candidate_assertions(
@@ -1254,12 +1361,12 @@ def test_build_case_draft_api_returns_issue_candidate_assertions(
     assert resp.status_code == 200
     data = resp.json()
     assert data["case_json"]["metadata"]["issue_candidates"] == [
-            {
-                "type": "pending_missed",
-                "severity": "high",
-                "reason": "router 选择了写操作工具「create_operation_work_order」，但 pending lifecycle 中没有对应的确认计划",
-                "evidence": "create_operation_work_order",
-                "suggested_label": "pending_missed",
+        {
+            "type": "pending_missed",
+            "severity": "high",
+            "reason": "router 选择了写操作工具「create_operation_work_order」，但 pending lifecycle 中没有对应的确认计划",
+            "evidence": "create_operation_work_order",
+            "suggested_label": "pending_missed",
         }
     ]
     assert data["case_json"]["issue_assertions"] == [
@@ -1388,9 +1495,7 @@ def test_create_repair_pack_returns_payload_and_metadata(db_session, tmp_path) -
     assert detail_resp.json()["manifest"]["source_sample_ids"] == [sample_id]
 
 
-def test_create_repair_pack_rejects_mixed_fix_targets(
-    db_session, tmp_path
-) -> None:
+def test_create_repair_pack_rejects_mixed_fix_targets(db_session, tmp_path) -> None:
     first = _seed_turn(db_session, tmp_path)
     second = _seed_turn(db_session, tmp_path)
     second.session_id = "sess-admin-flywheel-2"
@@ -1456,9 +1561,7 @@ def test_create_repair_pack_accepts_manual_fix_target_override(
     data = resp.json()
     assert data["fix_target"] == "router"
     assert data["pack_id"].startswith("repair-router-")
-    assert {case["fix_target"] for case in data["payload"]["cases_jsonl"]} == {
-        "router"
-    }
+    assert {case["fix_target"] for case in data["payload"]["cases_jsonl"]} == {"router"}
 
 
 def test_resolve_repair_pack_marks_labels_resolved(db_session, tmp_path) -> None:

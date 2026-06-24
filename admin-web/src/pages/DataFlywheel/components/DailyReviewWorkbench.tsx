@@ -3,11 +3,15 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import {
+  createReviewIssueChainCaseDraft,
+  createReviewIssueChainRepairPack,
   getDailyReviewInbox,
   getReviewIssueChain,
   saveReviewIssueChainReview,
+  type CaseDraft,
   type DailyReviewInboxItem,
   type DailyReviewInboxResponse,
+  type DataFlywheelRepairPack,
   type ReviewIssueChainDetail,
   type ReviewIssueChainReviewRequest,
 } from '../../../api/dataFlywheel';
@@ -16,7 +20,15 @@ import IssueChainReviewPanel from './IssueChainReviewPanel';
 import ReviewIssueChainTimeline from './ReviewIssueChainTimeline';
 import RiskSessionInbox from './RiskSessionInbox';
 
-export default function DailyReviewWorkbench() {
+interface DailyReviewWorkbenchProps {
+  onCaseDraftCreated: (draft: CaseDraft) => void;
+  onRepairPackCreated: (pack: DataFlywheelRepairPack) => void;
+}
+
+export default function DailyReviewWorkbench({
+  onCaseDraftCreated,
+  onRepairPackCreated,
+}: DailyReviewWorkbenchProps) {
   const [inbox, setInbox] = useState<DailyReviewInboxResponse>({ items: [], total: 0 });
   const [selectedItem, setSelectedItem] = useState<DailyReviewInboxItem | null>(null);
   const [detail, setDetail] = useState<ReviewIssueChainDetail | null>(null);
@@ -25,6 +37,8 @@ export default function DailyReviewWorkbench() {
   const [loadingInbox, setLoadingInbox] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const [creatingRepairPack, setCreatingRepairPack] = useState(false);
   const inboxRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
 
@@ -120,6 +134,38 @@ export default function DailyReviewWorkbench() {
     }
   };
 
+  const handleCreateCaseDraft = async () => {
+    if (!selectedChainId) return;
+    setCreatingDraft(true);
+    try {
+      const result = await createReviewIssueChainCaseDraft(selectedChainId, 'evaluation_replay');
+      onCaseDraftCreated(result);
+      message.success('已生成问题链回归草稿');
+    } catch {
+      message.error('生成问题链回归草稿失败');
+    } finally {
+      setCreatingDraft(false);
+    }
+  };
+
+  const handleCreateRepairPack = async () => {
+    if (!selectedChainId) return;
+    setCreatingRepairPack(true);
+    try {
+      const result = await createReviewIssueChainRepairPack(selectedChainId);
+      onRepairPackCreated(result);
+      if (result.deduplicated) {
+        message.info(`检测到重复，已复用 pack ${result.pack_id}`);
+      } else {
+        message.success('已导出问题链修复包');
+      }
+    } catch {
+      message.error('导出问题链修复包失败');
+    } finally {
+      setCreatingRepairPack(false);
+    }
+  };
+
   return (
     <div style={workbenchShellStyle}>
       <Card style={summaryCardStyle} styles={{ body: { padding: 12 } }}>
@@ -158,7 +204,11 @@ export default function DailyReviewWorkbench() {
           contextTurnIds={contextTurnIds}
           resultTurnIds={resultTurnIds}
           saving={saving}
+          creatingDraft={creatingDraft}
+          creatingRepairPack={creatingRepairPack}
           onSave={handleSave}
+          onCreateCaseDraft={handleCreateCaseDraft}
+          onCreateRepairPack={handleCreateRepairPack}
         />
       </div>
       {detail?.chain.status === 'needs_evidence' && (

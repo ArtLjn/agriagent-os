@@ -31,6 +31,7 @@ ALLOWED_LABELS = {
     "good_reply",
     "bad_reply",
     "wrong_tool_selection",
+    "tool_parameter_mismatch",
     "pending_missed",
     "hallucinated_execution",
     "tool_error_ignored",
@@ -42,6 +43,7 @@ ALLOWED_LABELS = {
     "unclear_intent",
     "not_actionable",
 }
+COMPATIBILITY_DEBUG_ASSET_PATH = "compatibility_debug"
 SAMPLE_TYPE_SESSION_TURN = "session_turn"
 SAMPLE_TYPE_SESSION = "session"
 LABEL_STATUS_OPEN = "open"
@@ -274,12 +276,7 @@ def list_samples(
         if sort_by == "risk"
         else (AgentTurn.created_at.desc(), AgentTurn.id.desc())
     )
-    turns = (
-        query.order_by(*ordering)
-        .offset(max(offset, 0))
-        .limit(max(limit, 0))
-        .all()
-    )
+    turns = query.order_by(*ordering).offset(max(offset, 0)).limit(max(limit, 0)).all()
     sample_ids = [_sample_id(turn) for turn in turns]
     labels = _labels_by_sample(db, sample_ids)
     prelabels = _prelabels_by_sample(db, farm_id=farm_id, sample_ids=sample_ids)
@@ -712,6 +709,11 @@ def build_case_draft(
     detail = get_sample_detail(db, farm_id=farm_id, sample_id=sample_id)
     sample = detail["sample"]
     case_json = build_case_json(sample_id=sample_id, sample=sample, detail=detail)
+    case_json["metadata"] = {
+        **(case_json.get("metadata") or {}),
+        "asset_path": COMPATIBILITY_DEBUG_ASSET_PATH,
+        "formal_review_required": True,
+    }
 
     draft = AgentCaseDraft(
         farm_id=farm_id,
