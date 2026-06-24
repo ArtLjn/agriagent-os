@@ -322,4 +322,7 @@ def _raw_context(raw: dict[str, Any]) -> ContextExpectation:
         farm_context=raw.get("farm_context", {}),
         required_facts=raw.get("required_facts", []),
         expected_block_types=raw.get("expected_block_types", []),
+        related_turns=[
+            item for item in raw.get("related_turns", []) if isinstance(item, dict)
+        ],
     )

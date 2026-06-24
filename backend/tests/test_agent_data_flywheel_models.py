@@ -10,6 +10,7 @@ from app.models.data_flywheel import (
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,
+    AgentReviewIssueChain,
 )
 from app.models.farm import Farm
 
@@ -174,6 +175,50 @@ def test_agent_repair_pack_round_trip():
     assert loaded.source_sample_ids == ["turn:1:sess-1:12"]
     assert loaded.status == "draft"
     assert loaded.manifest_json["goal"] == "写操作必须先创建 pending plan"
+    assert loaded.created_at is not None
+    assert loaded.updated_at is not None
+    db.close()
+
+
+def test_agent_review_issue_chain_round_trip():
+    db = Session()
+    chain = AgentReviewIssueChain(
+        farm_id=1,
+        chain_id="chain:1:sess-1:12",
+        session_id="sess-1",
+        trigger_turn_id=12,
+        context_turn_ids=[9, 10, 11],
+        result_turn_ids=[13],
+        status="accepted",
+        severity="P0",
+        dominant_signal="rule",
+        final_labels=["needs_regression", "tool_parameter_mismatch"],
+        source_label_ids=[1, 2],
+        root_cause="批量意图被参数抽取收窄为单人",
+        expected_behavior="确认批量结算时应保留所有待结算工人的作用域。",
+        false_positive_reason=None,
+        missing_evidence=None,
+        reviewer_id="admin-1",
+    )
+    db.add(chain)
+    db.commit()
+    db.refresh(chain)
+
+    loaded = (
+        db.query(AgentReviewIssueChain)
+        .filter_by(farm_id=1, chain_id="chain:1:sess-1:12")
+        .one()
+    )
+
+    assert loaded.id is not None
+    assert loaded.context_turn_ids == [9, 10, 11]
+    assert loaded.result_turn_ids == [13]
+    assert loaded.status == "accepted"
+    assert loaded.final_labels == ["needs_regression", "tool_parameter_mismatch"]
+    assert loaded.source_label_ids == [1, 2]
+    assert loaded.root_cause == "批量意图被参数抽取收窄为单人"
+    assert loaded.expected_behavior == "确认批量结算时应保留所有待结算工人的作用域。"
+    assert loaded.reviewer_id == "admin-1"
     assert loaded.created_at is not None
     assert loaded.updated_at is not None
     db.close()

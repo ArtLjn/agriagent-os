@@ -7,7 +7,9 @@ from app.api import (
     admin,
     admin_config,
     admin_data_flywheel,
+    admin_data_flywheel_annotations,
     admin_data_flywheel_repair_packs,
+    admin_data_flywheel_review_issue_chains,
     admin_stats,
     admin_trace,
     admin_users,
@@ -46,6 +48,8 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(locations.router)
     app.include_router(admin.router)
     app.include_router(admin_data_flywheel.router)
+    app.include_router(admin_data_flywheel_annotations.router)
+    app.include_router(admin_data_flywheel_review_issue_chains.router)
     app.include_router(admin_data_flywheel_repair_packs.router)
     app.include_router(admin_trace.router)
     app.include_router(admin_stats.router)

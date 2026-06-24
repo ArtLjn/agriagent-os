@@ -10,8 +10,10 @@ import {
   createSamplePrelabelBatch,
   discardRepairPack,
   exportSampleJsonl,
+  getDailyReviewInbox,
   getSampleDetail,
   getRepairPack,
+  getReviewIssueChain,
   getSessionReview,
   getDataFlywheelSyncJob,
   getSamplePrelabelBatchJob,
@@ -27,6 +29,7 @@ import {
   deleteSampleLabel,
   rejectSamplePrelabel,
   resolveSampleLabel,
+  saveReviewIssueChainReview,
   syncDataFlywheelSessions,
   type AcceptPrelabelRequest,
 } from './dataFlywheel';
@@ -163,6 +166,136 @@ describe('dataFlywheel api', () => {
       '/admin/data-flywheel/sessions/playground%3As%3A1/review'
     );
     expect(result.session_id).toBe('playground:s:1');
+  });
+
+  it('读取每日质检 inbox 时传递排序筛选参数', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            session_id: 'playground:s:1',
+            session_card: {
+              session_id: 'playground:s:1',
+              summary: '批量结算工资',
+              latest_turn_id: 12,
+              risk_score: 0.95,
+              severity: 'P0',
+            },
+            highest_risk_chain: {
+              chain_id: 'chain:1:playground:s:1:12',
+              session_id: 'playground:s:1',
+              trigger_turn_id: 12,
+              context_turn_ids: [10, 11],
+              result_turn_ids: [13],
+              status: 'ready_for_review',
+              severity: 'P0',
+              dominant_signal: 'judge',
+              diagnosis: { title: 'tool_parameter_mismatch' },
+              ai_judge: {},
+              human_review: {},
+              regression: {},
+              repair: {},
+            },
+            candidate_chain_count: 2,
+            evidence_status: 'ready_for_review',
+            next_action: 'review_chain',
+            status: 'ready_for_review',
+            dominant_signal: 'judge',
+            updated_at: '2026-06-11T08:00:00Z',
+          },
+        ],
+        total: 1,
+      },
+    });
+
+    const params = {
+      session_id: 'playground:s:1',
+      min_risk: 0.2,
+      severity: 'P0' as const,
+      limit: 20,
+      offset: 0,
+    };
+    const result = await getDailyReviewInbox(params);
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith('/admin/data-flywheel/daily-review/inbox', { params });
+    expect(result.items[0].highest_risk_chain.chain_id).toBe('chain:1:playground:s:1:12');
+  });
+
+  it('编码 chain_id 后读取问题链详情', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        chain: {
+          chain_id: 'chain:1:playground:s:1:12',
+          session_id: 'playground:s:1',
+          trigger_turn_id: 12,
+          context_turn_ids: [10, 11],
+          result_turn_ids: [13],
+          status: 'ready_for_review',
+          severity: 'P0',
+          dominant_signal: 'judge',
+          diagnosis: { title: 'tool_parameter_mismatch' },
+          ai_judge: {},
+          human_review: {},
+          regression: {},
+          repair: {},
+        },
+        session_id: 'playground:s:1',
+        timeline: [],
+        trigger_turn: null,
+        context_turns: [],
+        result_turns: [],
+        turn_debug_summaries: {},
+        evidence_checklist: [],
+        evidence_status: 'ready_for_review',
+        existing_labels: [],
+        ai_judge: {},
+      },
+    });
+
+    const result = await getReviewIssueChain('chain:1:playground:s:1:12');
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith(
+      '/admin/data-flywheel/review-issue-chains/chain%3A1%3Aplayground%3As%3A1%3A12'
+    );
+    expect(result.chain.trigger_turn_id).toBe(12);
+  });
+
+  it('保存问题链审核结论时提交 related turn ids 和人工结论', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        chain: {
+          chain_id: 'chain:1:playground:s:1:12',
+          session_id: 'playground:s:1',
+          trigger_turn_id: 12,
+          context_turn_ids: [10, 11],
+          result_turn_ids: [13],
+          status: 'accepted',
+          severity: 'P0',
+          dominant_signal: 'judge',
+          diagnosis: { title: 'tool_parameter_mismatch' },
+          ai_judge: {},
+          human_review: { expected_behavior: '应保留批量结算范围' },
+          regression: { regression_ready: true },
+          repair: { regression_ready: true },
+        },
+      },
+    });
+
+    const body = {
+      status: 'accepted' as const,
+      context_turn_ids: [10, 11],
+      result_turn_ids: [13],
+      final_labels: ['needs_regression', 'wrong_tool_selection'],
+      root_cause: '批量意图被收窄',
+      expected_behavior: '应保留批量结算范围',
+    };
+    const result = await saveReviewIssueChainReview('chain:1:playground:s:1:12', body);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/review-issue-chains/chain%3A1%3Aplayground%3As%3A1%3A12/review',
+      body
+    );
+    expect(result.chain.status).toBe('accepted');
   });
 
   it('编码 session_id 后读取会话级标注', async () => {

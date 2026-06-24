@@ -115,3 +115,35 @@ class AgentRepairPack(Base):
         onupdate=datetime.now,
         nullable=False,
     )
+
+
+class AgentReviewIssueChain(Base):
+    """人工审核后的 DataFlywheel 问题链。"""
+
+    __tablename__ = "agent_review_issue_chains"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
+    chain_id = Column(String(160), unique=True, nullable=False, index=True)
+    session_id = Column(String(64), nullable=False, index=True)
+    trigger_turn_id = Column(Integer, nullable=False, index=True)
+    context_turn_ids = Column(JSON, nullable=False, default=list)
+    result_turn_ids = Column(JSON, nullable=False, default=list)
+    status = Column(String(20), nullable=False, index=True)
+    severity = Column(String(20), nullable=False, index=True)
+    dominant_signal = Column(String(32), nullable=False, index=True)
+    final_labels = Column(JSON, nullable=False, default=list)
+    source_label_ids = Column(JSON, nullable=False, default=list)
+    root_cause = Column(Text, nullable=True)
+    expected_behavior = Column(Text, nullable=True)
+    false_positive_reason = Column(Text, nullable=True)
+    missing_evidence = Column(JSON, nullable=True)
+    reviewer_id = Column(String(64), nullable=True, index=True)
+    reviewed_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = Column(
+        DateTime,
+        default=datetime.now,
+        onupdate=datetime.now,
+        nullable=False,
+    )

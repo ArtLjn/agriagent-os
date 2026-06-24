@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,9 +12,11 @@ import {
   createRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
+  getDailyReviewInbox,
   getDataFlywheelSyncJob,
   getSamplePrelabelBatchJob,
   getSampleDetail,
+  getReviewIssueChain,
   getSessionReview,
   getSessionAnnotations,
   listRepairPackCandidates,
@@ -23,16 +25,19 @@ import {
   deleteSampleLabel,
   rejectSamplePrelabel,
   resolveSampleLabel,
+  saveReviewIssueChainReview,
   syncDataFlywheelSessions,
 } from '../../api/dataFlywheel';
 import type {
   DataFlywheelDetail,
+  DailyReviewInboxResponse,
   DataFlywheelPrelabel,
   DataFlywheelRepairPack,
   DataFlywheelSample,
   DataFlywheelSessionAnnotations,
   DataFlywheelSessionReview,
   DataFlywheelSyncJob,
+  ReviewIssueChainDetail,
 } from '../../api/dataFlywheel';
 
 vi.mock('../../api/dataFlywheel', () => ({
@@ -44,9 +49,11 @@ vi.mock('../../api/dataFlywheel', () => ({
   createSamplePrelabelBatch: vi.fn(),
   discardRepairPack: vi.fn(),
   exportSampleJsonl: vi.fn(),
+  getDailyReviewInbox: vi.fn(),
   getDataFlywheelSyncJob: vi.fn(),
   getSamplePrelabelBatchJob: vi.fn(),
   getSampleDetail: vi.fn(),
+  getReviewIssueChain: vi.fn(),
   getSessionReview: vi.fn(),
   getSessionAnnotations: vi.fn(),
   listRepairPacks: vi.fn(),
@@ -60,12 +67,25 @@ vi.mock('../../api/dataFlywheel', () => ({
   deleteSampleLabel: vi.fn(),
   rejectSamplePrelabel: vi.fn(),
   resolveSampleLabel: vi.fn(),
+  saveReviewIssueChainReview: vi.fn(),
   syncDataFlywheelSessions: vi.fn(),
 }));
 
 vi.mock('../../api/admin', () => ({
   getTraceDiagnostics: vi.fn(),
 }));
+
+const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) => {
+  const result = rtlRender(ui, options);
+  const currentTestName = expect.getState().currentTestName ?? '';
+  if (
+    !currentTestName.includes('默认进入每日质检') &&
+    !currentTestName.includes('高级搜索中保留旧样本检索入口')
+  ) {
+    fireEvent.click(screen.getByRole('tab', { name: /高级搜索/ }));
+  }
+  return result;
+};
 
 const sample: DataFlywheelSample = {
   sample_id: 'turn:session-a:3',
@@ -349,6 +369,9 @@ const sessionAnnotations: DataFlywheelSessionAnnotations = {
 };
 
 const mockedList = vi.mocked(listDataFlywheelSamples);
+const mockedInbox = vi.mocked(getDailyReviewInbox);
+const mockedReviewChain = vi.mocked(getReviewIssueChain);
+const mockedSaveReviewChain = vi.mocked(saveReviewIssueChainReview);
 const mockedDetail = vi.mocked(getSampleDetail);
 const mockedRepairCandidates = vi.mocked(listRepairPackCandidates);
 const mockedSessionReview = vi.mocked(getSessionReview);
@@ -438,6 +461,187 @@ const repairPack: DataFlywheelRepairPack = {
   },
 };
 
+const reviewChainId = 'chain:1:session-a:3';
+const nextReviewChainId = 'chain:1:session-b:4';
+
+const dailyReviewInbox: DailyReviewInboxResponse = {
+  items: [
+    {
+      session_id: 'session-a',
+      session_card: {
+        session_id: 'session-a',
+        summary: '批量结算工资时参数范围被收窄',
+        latest_turn_id: 4,
+        risk_score: 0.92,
+        severity: 'P0',
+      },
+      highest_risk_chain: {
+        chain_id: reviewChainId,
+        session_id: 'session-a',
+        trigger_turn_id: 3,
+        context_turn_ids: [1, 2],
+        result_turn_ids: [4],
+        status: 'ready_for_review',
+        severity: 'P0',
+        dominant_signal: 'judge',
+        diagnosis: {
+          title: 'tool_parameter_mismatch',
+          summary: '确认执行时工具参数只保留了单个工人。',
+          candidate_type: 'tool_parameter_mismatch',
+          suggested_labels: ['wrong_tool_selection', 'needs_regression'],
+        },
+        ai_judge: {
+          bad_prob: 0.91,
+          issue_type: 'tool_parameter_mismatch',
+          suggested_label: 'wrong_tool_selection',
+          dominant_signal: 'judge',
+        },
+        human_review: {
+          status: 'unreviewed',
+          labels: [],
+          quality_labels: [],
+          expected_behavior: null,
+          root_cause: null,
+        },
+        regression: {
+          needs_regression: false,
+          regression_ready: false,
+          source_sample_id: sample.sample_id,
+        },
+        repair: {
+          fix_target: 'router',
+          regression_ready: false,
+          export_blocked_reason: 'needs_human_review',
+        },
+      },
+      candidate_chain_count: 2,
+      evidence_status: 'ready_for_review',
+      next_action: 'review_chain',
+      status: 'ready_for_review',
+      dominant_signal: 'judge',
+      updated_at: '2026-06-11T08:00:00Z',
+    },
+  ],
+  total: 1,
+};
+
+const refreshedDailyReviewInbox: DailyReviewInboxResponse = {
+  items: [
+    {
+      session_id: 'session-b',
+      session_card: {
+        session_id: 'session-b',
+        summary: '下一条风险链',
+        latest_turn_id: 5,
+        risk_score: 0.81,
+        severity: 'P1',
+      },
+      highest_risk_chain: {
+        ...dailyReviewInbox.items[0].highest_risk_chain,
+        chain_id: nextReviewChainId,
+        session_id: 'session-b',
+        trigger_turn_id: 4,
+        context_turn_ids: [3],
+        result_turn_ids: [5],
+        severity: 'P1',
+      },
+      candidate_chain_count: 1,
+      evidence_status: 'ready_for_review',
+      next_action: 'review_chain',
+      status: 'ready_for_review',
+      dominant_signal: 'rule',
+      updated_at: '2026-06-11T08:10:00Z',
+    },
+  ],
+  total: 1,
+};
+
+const reviewChainDetail: ReviewIssueChainDetail = {
+  chain: dailyReviewInbox.items[0].highest_risk_chain,
+  session_id: 'session-a',
+  timeline: [
+    {
+      turn_id: 1,
+      request_id: 'req:context',
+      user_input_preview: '查一下张三和李四欠款',
+      assistant_reply_preview: '张三和李四都有未结算工资。',
+      messages: [
+        { role: 'user', content: '查一下张三和李四欠款' },
+        { role: 'assistant', content: '张三和李四都有未结算工资。' },
+      ],
+      selected_tools: ['wage.list'],
+      tool_events: [],
+      pending_lifecycle: [],
+      router_decision: { selected_tools: ['wage.list'] },
+      source: {
+        event_file: 'events/debug.jsonl',
+        event_seq_start: 1,
+        event_seq_end: 4,
+        event_log_status: 'available',
+      },
+      event_log_status: 'available',
+      chain_role: 'context',
+    },
+    {
+      turn_id: 3,
+      request_id: 'req:abc',
+      user_input_preview: '把这些欠款都结算掉',
+      assistant_reply_preview: '我会为张三结算工资。',
+      messages: sessionMessages,
+      selected_tools: ['wage.batch_settle'],
+      tool_events: [{ event_type: 'tool.call.finished', payload: { tool_name: 'wage.batch_settle' } }],
+      pending_lifecycle: [{ event_type: 'pending.plan.created', at: '2026-06-11T08:00:01Z' }],
+      router_decision: { selected_tools: ['wage.batch_settle'], args: { worker_id: 1 } },
+      source: {
+        event_file: 'events/debug.jsonl',
+        event_seq_start: 11,
+        event_seq_end: 18,
+        event_log_status: 'available',
+      },
+      event_log_status: 'available',
+      chain_role: 'trigger',
+    },
+    {
+      turn_id: 4,
+      request_id: 'req:confirm',
+      user_input_preview: '确认',
+      assistant_reply_preview: '已为张三结算。',
+      messages: confirmMessages,
+      selected_tools: ['wage.batch_settle'],
+      tool_events: [{ event_type: 'tool.call.finished', payload: { tool_name: 'wage.batch_settle' } }],
+      pending_lifecycle: [],
+      router_decision: { selected_tools: ['wage.batch_settle'] },
+      source: {
+        event_file: 'events/debug.jsonl',
+        event_seq_start: 19,
+        event_seq_end: 24,
+        event_log_status: 'available',
+      },
+      event_log_status: 'available',
+      chain_role: 'result',
+    },
+  ],
+  trigger_turn: null,
+  context_turns: [],
+  result_turns: [],
+  turn_debug_summaries: {
+    '3': {
+      trace_debug_summary: {
+        reflection: 'scope narrowed to one worker',
+      },
+    },
+  },
+  evidence_checklist: [
+    { key: 'event_log', status: 'present', turn_id: 3 },
+    { key: 'chat_messages', status: 'present', turn_id: 3 },
+    { key: 'router_decision', status: 'present', turn_id: 3 },
+    { key: 'tool_or_pending_evidence', status: 'needs_human', turn_id: 3 },
+  ],
+  evidence_status: 'ready_for_review',
+  existing_labels: [],
+  ai_judge: dailyReviewInbox.items[0].highest_risk_chain.ai_judge,
+};
+
 describe('DataFlywheel 页面', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -446,6 +650,33 @@ describe('DataFlywheel 页面', () => {
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
     mockedList.mockResolvedValue({ items: [sample], total: 1 });
+    mockedInbox.mockResolvedValue(dailyReviewInbox);
+    mockedReviewChain.mockResolvedValue(reviewChainDetail);
+    mockedSaveReviewChain.mockResolvedValue({
+      chain: {
+        ...dailyReviewInbox.items[0].highest_risk_chain,
+        status: 'accepted',
+        context_turn_ids: [1, 2],
+        result_turn_ids: [4],
+        human_review: {
+          status: 'accepted',
+          labels: [],
+          quality_labels: ['needs_regression', 'wrong_tool_selection'],
+          expected_behavior: '应保留张三和李四两个工人的批量结算范围',
+          root_cause: '批量作用域被收窄为单人',
+        },
+        regression: {
+          needs_regression: true,
+          regression_ready: true,
+          source_sample_id: sample.sample_id,
+        },
+        repair: {
+          fix_target: 'router',
+          regression_ready: true,
+          export_blocked_reason: null,
+        },
+      },
+    });
     mockedDetail.mockResolvedValue(detail);
     mockedRepairCandidates.mockResolvedValue({
       items: [
@@ -540,6 +771,83 @@ describe('DataFlywheel 页面', () => {
       status: 'resolved',
     });
   });
+
+  it('默认进入每日质检，点击 session 加载最高风险链并提交审核 payload', async () => {
+    mockedInbox
+      .mockResolvedValueOnce(dailyReviewInbox)
+      .mockResolvedValueOnce(refreshedDailyReviewInbox);
+    render(<DataFlywheel />);
+
+    expect(await screen.findByRole('tab', { name: /每日质检/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('批量结算工资时参数范围被收窄')).toBeInTheDocument();
+    expect(screen.getByText('最高风险链')).toBeInTheDocument();
+    expect(screen.getAllByText('P0').length).toBeGreaterThan(0);
+    expect(screen.getByText('候选链 2')).toBeInTheDocument();
+    expect(screen.getAllByText('ready_for_review').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('judge').length).toBeGreaterThan(0);
+    expect(screen.getByText('review_chain')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+
+    await waitFor(() => {
+      expect(mockedReviewChain).toHaveBeenCalledWith(reviewChainId);
+    });
+    expect(await screen.findByText((content) => content.includes('把这些欠款都结算掉'))).toBeInTheDocument();
+    const triggerArticle = document.querySelector('#turn-3');
+    expect(triggerArticle).not.toBeNull();
+    expect(screen.getAllByRole('link', { name: /turn #3/ })[0]).toHaveAttribute('href', '#turn-3');
+
+    fireEvent.click(within(triggerArticle as HTMLElement).getAllByRole('button', { name: /展开详情/ })[0]);
+    expect(await within(triggerArticle as HTMLElement).findByText('trace_debug_summary')).toBeInTheDocument();
+    expect(
+      within(triggerArticle as HTMLElement).getByText((content) => content.includes('scope narrowed to one worker'))
+    ).toBeInTheDocument();
+    const contextArticle = document.querySelector('#turn-1') as HTMLElement;
+    expect(contextArticle).not.toBeNull();
+    const contextCheckbox = within(contextArticle).getByRole('checkbox', { name: 'context' });
+    const resultCheckbox = within(contextArticle).getByRole('checkbox', { name: 'result' });
+    expect(contextCheckbox).toBeChecked();
+    fireEvent.click(resultCheckbox);
+    expect(resultCheckbox).toBeChecked();
+    expect(contextCheckbox).not.toBeChecked();
+
+    fireEvent.click(screen.getByLabelText('采纳坏例'));
+    fireEvent.change(screen.getByLabelText('Root cause'), { target: { value: '批量作用域被收窄为单人' } });
+    fireEvent.change(screen.getByLabelText('Expected behavior'), {
+      target: { value: '应保留张三和李四两个工人的批量结算范围' },
+    });
+    fireEvent.click(screen.getByLabelText('needs_regression'));
+    fireEvent.click(screen.getByLabelText('wrong_tool_selection'));
+    fireEvent.click(screen.getByRole('button', { name: /保存并下一条/ }));
+
+    await waitFor(() => {
+      expect(mockedSaveReviewChain).toHaveBeenCalledWith(reviewChainId, {
+        status: 'accepted',
+        context_turn_ids: [2],
+        result_turn_ids: [1, 4],
+        final_labels: ['needs_regression', 'wrong_tool_selection'],
+        root_cause: '批量作用域被收窄为单人',
+        expected_behavior: '应保留张三和李四两个工人的批量结算范围',
+        false_positive_reason: undefined,
+        missing_evidence: undefined,
+      });
+    });
+    expect(mockedInbox).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 50, offset: 0 }));
+    await waitFor(() => {
+      expect(mockedReviewChain).toHaveBeenCalledWith(nextReviewChainId);
+    });
+  }, 15000);
+
+  it('高级搜索中保留旧样本检索入口', async () => {
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByRole('tab', { name: /高级搜索/ }));
+
+    expect(await screen.findByRole('tab', { name: /样本队列/ })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Session / Request ID')).toBeInTheDocument();
+    expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
+  }, 15000);
 
   it('初次渲染显示标题、样本输入摘要、request_id 和 token 数', async () => {
     render(<DataFlywheel />);

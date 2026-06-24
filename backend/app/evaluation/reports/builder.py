@@ -53,6 +53,8 @@ class EvaluationReportBuilder:
                     skill_calls=[call.name for call in result.actual_skill_calls],
                     drilldown_links=result.drilldown_links,
                     failure_stage=self._failure_stage(result),
+                    chain_id=_chain_id(result.case_metadata),
+                    metadata=result.case_metadata,
                 )
                 for result in results
             ],
@@ -118,3 +120,8 @@ class EvaluationReportBuilder:
             if "bad_reply" in error:
                 return "response_quality"
         return ""
+
+
+def _chain_id(metadata: dict[str, Any]) -> str | None:
+    value = metadata.get("chain_id")
+    return str(value) if value else None

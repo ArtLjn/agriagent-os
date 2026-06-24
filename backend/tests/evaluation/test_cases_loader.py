@@ -8,9 +8,11 @@ from app.evaluation.cases.loader import (
     load_simulation_cases,
 )
 
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
 
 def test_load_simulation_cases_reuses_existing_json() -> None:
-    cases = load_simulation_cases(Path("data/simulation_cases"), category="basic")
+    cases = load_simulation_cases(BACKEND_DIR / "data/simulation_cases", category="basic")
 
     assert cases
     first_case = cases[0]
@@ -46,6 +48,59 @@ def test_load_replay_case_supports_pending_confirmation_and_db_diff(tmp_path) ->
     assert case.expected_pending_action.skill_name == "update_crop_cycle"
     assert case.confirmation_flow[0].expected_status == "confirmed"
     assert case.expected_database_diff[0].table == "crop_cycles"
+
+
+def test_load_replay_case_preserves_review_issue_chain_metadata(tmp_path) -> None:
+    path = tmp_path / "chain_cases.json"
+    path.write_text(
+        """
+[
+  {
+    "case_id": "regression-chain-1",
+    "user_input": "把这些人工都结清",
+    "context": {
+      "related_turns": [
+        {"turn_id": 11, "role": "context"},
+        {"turn_id": 12, "role": "trigger"},
+        {"turn_id": 13, "role": "result"}
+      ]
+    },
+    "reply_assertions": [{"contains": "应保留所有待结算工人"}],
+    "metadata": {
+      "source": "data_flywheel_review_issue_chain",
+      "chain_id": "chain:1:sess-1:12",
+      "session_id": "sess-1",
+      "trigger_turn_id": 12,
+      "context_turn_ids": [11],
+      "result_turn_ids": [13],
+      "related_turn_ids": [11, 12, 13],
+      "expected_behavior": "确认批量结算时应保留所有待结算工人。",
+      "quality_labels": ["needs_regression", "wrong_tool_selection"],
+      "root_cause": "参数抽取收窄了批量作用域"
+    }
+  }
+]
+""",
+        encoding="utf-8",
+    )
+
+    case = load_replay_cases(path)[0]
+
+    assert case.context.related_turns == [
+        {"turn_id": 11, "role": "context"},
+        {"turn_id": 12, "role": "trigger"},
+        {"turn_id": 13, "role": "result"},
+    ]
+    assert case.metadata["chain_id"] == "chain:1:sess-1:12"
+    assert case.metadata["context_turn_ids"] == [11]
+    assert case.metadata["result_turn_ids"] == [13]
+    assert case.metadata["related_turn_ids"] == [11, 12, 13]
+    assert case.metadata["expected_behavior"] == "确认批量结算时应保留所有待结算工人。"
+    assert case.metadata["quality_labels"] == [
+        "needs_regression",
+        "wrong_tool_selection",
+    ]
+    assert case.metadata["root_cause"] == "参数抽取收窄了批量作用域"
 
 
 def test_builtin_skill_regression_cases_cover_required_domains() -> None:

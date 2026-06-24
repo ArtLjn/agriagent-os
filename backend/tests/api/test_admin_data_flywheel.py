@@ -5,10 +5,12 @@ import json
 from fastapi.testclient import TestClient
 
 import app.api.admin_data_flywheel as admin_data_flywheel_api
+import app.services.data_flywheel_review_issue_chain_service as review_chain_service
+import app.services.data_flywheel_review_issue_chain_repository as review_chain_repo
 from app.evaluation.discovery.judge_worker import run_judge_batch
 from app.infra.agent_events import AgentEventWriter
 from app.main import app
-from app.models.data_flywheel import AgentDataFlywheelLabel
+from app.models.data_flywheel import AgentDataFlywheelLabel, AgentReviewIssueChain
 from app.models.farm import Farm
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
@@ -137,6 +139,10 @@ def _seed_turn(db, tmp_path):
 
 def _sample_id(turn) -> str:
     return f"turn:{turn.farm_id}:sess-admin-flywheel:{turn.id}"
+
+
+def _chain_id(turn) -> str:
+    return f"chain:{turn.farm_id}:{turn.session_id}:{turn.id}"
 
 
 def _admin_client():
@@ -414,6 +420,777 @@ def test_get_session_review_returns_session_turns_for_admin(
     ]
     assert data["turns"][0]["pending_lifecycle"][0]["event_type"] == (
         "pending.plan.created"
+    )
+
+
+def test_daily_review_inbox_groups_risk_chains_by_session(
+    db_session, tmp_path
+) -> None:
+    first = _seed_turn(db_session, tmp_path)
+    first.risk_score = 0.65
+    first.risk_severity = "P1"
+    first.risk_dominant_signal = "rule"
+    second = _seed_turn(db_session, tmp_path)
+    second.risk_score = 0.92
+    second.rule_score = 0.8
+    second.risk_severity = "P0"
+    second.risk_dominant_signal = "judge"
+    second.judge_bad_prob = 0.92
+    second.judge_issue_type = "tool_parameter_mismatch"
+    second.judge_suggested_label = "wrong_tool_selection"
+    result = _seed_turn(db_session, tmp_path)
+    result.risk_score = 0.0
+    other = _seed_turn(db_session, tmp_path)
+    other.session_id = "sess-review-low"
+    other.request_id = "reviewlow"
+    other.risk_score = 0.4
+    other.risk_severity = "P1"
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            "/admin/data-flywheel/daily-review/inbox",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    item = data["items"][0]
+    assert item["session_id"] == "sess-admin-flywheel"
+    assert item["candidate_chain_count"] == 2
+    assert item["highest_risk_chain"]["chain_id"] == _chain_id(second)
+    assert item["highest_risk_chain"]["context_turn_ids"] == [first.id]
+    assert item["highest_risk_chain"]["result_turn_ids"] == [result.id]
+    assert item["highest_risk_chain"]["severity"] == "P0"
+    assert item["highest_risk_chain"]["dominant_signal"] == "judge"
+    assert item["evidence_status"] == "ready_for_review"
+    assert item["next_action"] == "review_chain"
+
+
+def test_daily_review_inbox_overlays_saved_review_status(
+    db_session, tmp_path
+) -> None:
+    first = _seed_turn(db_session, tmp_path)
+    trigger = _seed_turn(db_session, tmp_path)
+    trigger.risk_score = 0.92
+    trigger.risk_severity = "P0"
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        review_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}/review",
+            json={
+                "status": "accepted",
+                "context_turn_ids": [first.id],
+                "result_turn_ids": [],
+                "final_labels": ["needs_regression", "wrong_tool_selection"],
+                "root_cause": "参数抽取收窄了批量作用域",
+                "expected_behavior": "应保留所有待处理对象。",
+            },
+            headers=admin_headers(),
+        )
+        inbox_resp = client.get(
+            "/admin/data-flywheel/daily-review/inbox",
+            headers=admin_headers(),
+        )
+
+    assert review_resp.status_code == 200
+    assert inbox_resp.status_code == 200
+    item = inbox_resp.json()["items"][0]
+    assert item["status"] == "accepted"
+    assert item["next_action"] == "done"
+    assert item["highest_risk_chain"]["status"] == "accepted"
+    assert item["highest_risk_chain"]["context_turn_ids"] == [first.id]
+    assert item["highest_risk_chain"]["human_review"]["expected_behavior"] == (
+        "应保留所有待处理对象。"
+    )
+
+
+def test_daily_review_inbox_only_reads_events_for_current_page_sessions(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    page_turn = _seed_turn(db_session, tmp_path)
+    page_turn.risk_score = 0.95
+    page_turn.risk_severity = "P0"
+    offpage_turn = _seed_turn(db_session, tmp_path)
+    offpage_turn.session_id = "sess-offpage-risk"
+    offpage_turn.request_id = "offpage"
+    offpage_turn.risk_score = 0.75
+    offpage_turn.risk_severity = "P1"
+    db_session.commit()
+    seen_sessions: list[str] = []
+    original_events_for_turn = review_chain_service._events_for_turn
+
+    def tracking_events_for_turn(turn):
+        seen_sessions.append(turn.session_id)
+        return original_events_for_turn(turn)
+
+    monkeypatch.setattr(
+        review_chain_service,
+        "_events_for_turn",
+        tracking_events_for_turn,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            "/admin/data-flywheel/daily-review/inbox",
+            params={"limit": 1},
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert [item["session_id"] for item in data["items"]] == [page_turn.session_id]
+    assert seen_sessions
+    assert set(seen_sessions) == {page_turn.session_id}
+
+
+def test_review_issue_chain_detail_returns_virtual_context_and_results(
+    db_session, tmp_path
+) -> None:
+    turns = [_seed_turn(db_session, tmp_path) for _ in range(5)]
+    trigger = turns[3]
+    trigger.risk_score = 0.95
+    trigger.risk_severity = "P0"
+    trigger.risk_dominant_signal = "rule"
+    trigger.rule_hits = ["bulk_intent_narrowed_to_single_entity"]
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    chain = data["chain"]
+    assert chain["chain_id"] == _chain_id(trigger)
+    assert chain["trigger_turn_id"] == trigger.id
+    assert chain["context_turn_ids"] == [turn.id for turn in turns[:3]]
+    assert chain["result_turn_ids"] == [turns[4].id]
+    assert set(chain) >= {
+        "chain_id",
+        "session_id",
+        "trigger_turn_id",
+        "context_turn_ids",
+        "result_turn_ids",
+        "status",
+        "severity",
+        "dominant_signal",
+        "diagnosis",
+        "ai_judge",
+        "human_review",
+        "regression",
+        "repair",
+    }
+    timeline_roles = {item["turn_id"]: item["chain_role"] for item in data["timeline"]}
+    assert timeline_roles[trigger.id] == "trigger"
+    assert timeline_roles[turns[0].id] == "context"
+    assert timeline_roles[turns[4].id] == "result"
+    assert data["turn_debug_summaries"][str(trigger.id)]["event_log_status"] == (
+        "available"
+    )
+    assert data["existing_labels"] == []
+    assert data["ai_judge"]["issue_type"] is None
+
+
+def test_review_issue_chain_detail_excludes_followup_without_result_evidence(
+    db_session, tmp_path
+) -> None:
+    turns = [_seed_turn(db_session, tmp_path) for _ in range(3)]
+    trigger = turns[1]
+    followup = turns[2]
+    trigger.risk_score = 0.9
+    trigger.risk_severity = "P0"
+    followup.event_file = None
+    followup.event_seq_start = None
+    followup.event_seq_end = None
+    followup.tool_calls_count = 0
+    followup.pending_plan_id = None
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["chain"]["context_turn_ids"] == [turns[0].id]
+    assert data["chain"]["result_turn_ids"] == []
+    timeline_roles = {item["turn_id"]: item["chain_role"] for item in data["timeline"]}
+    assert timeline_roles[followup.id] == "unrelated"
+
+
+def test_review_issue_chain_detail_rejects_low_risk_trigger(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.0
+    turn.risk_severity = None
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "CHAIN_NOT_FOUND"
+
+
+def test_review_issue_chain_detail_marks_missing_evidence(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.event_file = None
+    turn.event_seq_start = None
+    turn.event_seq_end = None
+    turn.risk_score = 0.88
+    turn.risk_severity = "P1"
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["chain"]["status"] == "needs_evidence"
+    assert data["evidence_status"] == "needs_evidence"
+    checklist = data["evidence_checklist"]
+    assert {"key": "event_log", "status": "missing", "turn_id": turn.id} in checklist
+    assert data["chain"]["repair"]["export_blocked_reason"] == "needs_evidence"
+
+
+def test_review_issue_chain_review_accepts_and_overrides_related_turns(
+    db_session, tmp_path
+) -> None:
+    turns = [_seed_turn(db_session, tmp_path) for _ in range(5)]
+    trigger = turns[3]
+    trigger.risk_score = 0.95
+    trigger.risk_severity = "P0"
+    trigger.risk_dominant_signal = "judge"
+    trigger.judge_issue_type = "tool_parameter_mismatch"
+    db_session.commit()
+
+    payload = {
+        "status": "accepted",
+        "context_turn_ids": [turns[0].id, turns[2].id],
+        "result_turn_ids": [turns[4].id],
+        "final_labels": ["needs_regression", "wrong_tool_selection"],
+        "root_cause": "批量结算意图被参数抽取收窄为单人",
+        "expected_behavior": "确认批量结算时应保留所有待结算工人。",
+    }
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        review_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}/review",
+            json=payload,
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}",
+            headers=admin_headers(),
+        )
+
+    assert review_resp.status_code == 200
+    saved = review_resp.json()["chain"]
+    assert saved["status"] == "accepted"
+    assert saved["context_turn_ids"] == [turns[0].id, turns[2].id]
+    assert saved["result_turn_ids"] == [turns[4].id]
+    assert saved["human_review"]["status"] == "accepted"
+    assert saved["human_review"]["final_labels"] == [
+        "needs_regression",
+        "wrong_tool_selection",
+    ]
+    assert saved["human_review"]["root_cause"] == "批量结算意图被参数抽取收窄为单人"
+    assert saved["human_review"]["expected_behavior"] == (
+        "确认批量结算时应保留所有待结算工人。"
+    )
+    assert saved["regression"]["needs_regression"] is True
+    assert saved["regression"]["regression_ready"] is True
+    assert saved["repair"]["regression_ready"] is True
+    assert saved["repair"]["export_blocked_reason"] is None
+    assert detail_resp.status_code == 200
+    detail_chain = detail_resp.json()["chain"]
+    assert detail_chain["context_turn_ids"] == [turns[0].id, turns[2].id]
+    assert detail_chain["result_turn_ids"] == [turns[4].id]
+    assert detail_chain["human_review"]["expected_behavior"] == (
+        "确认批量结算时应保留所有待结算工人。"
+    )
+    labels = (
+        db_session.query(AgentDataFlywheelLabel)
+        .filter_by(sample_id=_sample_id(trigger))
+        .order_by(AgentDataFlywheelLabel.label.asc())
+        .all()
+    )
+    assert [row.label for row in labels] == [
+        "needs_regression",
+        "wrong_tool_selection",
+    ]
+    stored_chain = (
+        db_session.query(AgentReviewIssueChain)
+        .filter_by(chain_id=_chain_id(trigger))
+        .one()
+    )
+    assert stored_chain.source_label_ids == [row.id for row in labels]
+
+
+def test_review_issue_chain_review_does_not_call_committing_label_service(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    db_session.commit()
+
+    def forbidden_add_sample_label(*args, **kwargs):
+        raise AssertionError("chain review must not call committing add_sample_label")
+
+    monkeypatch.setattr(
+        review_chain_repo,
+        "add_sample_label",
+        forbidden_add_sample_label,
+        raising=False,
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "accepted",
+                "final_labels": ["needs_regression"],
+                "root_cause": "参数作用域丢失",
+                "expected_behavior": "应保留批量作用域",
+            },
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 200
+    assert db_session.query(AgentDataFlywheelLabel).count() == 1
+
+
+def test_review_issue_chain_review_rolls_back_when_final_commit_fails(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    db_session.commit()
+
+    original_commit = db_session.commit
+
+    def failing_commit():
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+
+    try:
+        review_chain_service.save_review_issue_chain_review(
+            db_session,
+            farm_id=turn.farm_id,
+            chain_id=_chain_id(turn),
+            status="accepted",
+            final_labels=["needs_regression", "wrong_tool_selection"],
+            root_cause="参数作用域丢失",
+            expected_behavior="应保留批量作用域",
+            reviewer_id=ADMIN_USER_ID,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "commit failed"
+    else:
+        raise AssertionError("commit failure should bubble up")
+    finally:
+        monkeypatch.setattr(db_session, "commit", original_commit)
+
+    assert db_session.query(AgentReviewIssueChain).count() == 0
+    assert db_session.query(AgentDataFlywheelLabel).count() == 0
+
+
+def test_review_issue_chain_review_requires_accepted_fields(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        missing_expected = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "accepted",
+                "root_cause": "参数作用域丢失",
+                "final_labels": ["needs_regression"],
+            },
+            headers=admin_headers(),
+        )
+        missing_labels = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "accepted",
+                "root_cause": "参数作用域丢失",
+                "expected_behavior": "应保留批量作用域",
+            },
+            headers=admin_headers(),
+        )
+
+    assert missing_expected.status_code == 400
+    assert missing_expected.json()["detail"]["code"] == (
+        "CHAIN_REVIEW_EXPECTED_BEHAVIOR_REQUIRED"
+    )
+    assert missing_labels.status_code == 400
+    assert missing_labels.json()["detail"]["code"] == (
+        "CHAIN_REVIEW_FINAL_LABELS_REQUIRED"
+    )
+
+
+def test_review_issue_chain_review_rejects_with_reason_without_labels(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        missing_reason = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={"status": "rejected"},
+            headers=admin_headers(),
+        )
+        review_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "rejected",
+                "false_positive_reason": "规则误把正常确认流程判为参数错配",
+            },
+            headers=admin_headers(),
+        )
+
+    assert missing_reason.status_code == 400
+    assert missing_reason.json()["detail"]["code"] == (
+        "CHAIN_REVIEW_FALSE_POSITIVE_REASON_REQUIRED"
+    )
+    assert review_resp.status_code == 200
+    chain = review_resp.json()["chain"]
+    assert chain["status"] == "rejected"
+    assert chain["human_review"]["false_positive_reason"] == (
+        "规则误把正常确认流程判为参数错配"
+    )
+    assert db_session.query(AgentDataFlywheelLabel).count() == 0
+
+
+def test_review_issue_chain_review_rejects_final_labels_for_non_accepted(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        rejected_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "rejected",
+                "final_labels": ["needs_regression"],
+                "false_positive_reason": "规则误报",
+            },
+            headers=admin_headers(),
+        )
+        evidence_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "needs_evidence",
+                "final_labels": ["needs_regression"],
+                "missing_evidence": ["trace"],
+            },
+            headers=admin_headers(),
+        )
+
+    assert rejected_resp.status_code == 400
+    assert rejected_resp.json()["detail"]["code"] == (
+        "CHAIN_REVIEW_FINAL_LABELS_NOT_ALLOWED"
+    )
+    assert rejected_resp.json()["detail"]["field"] == "final_labels"
+    assert evidence_resp.status_code == 400
+    assert evidence_resp.json()["detail"]["code"] == (
+        "CHAIN_REVIEW_FINAL_LABELS_NOT_ALLOWED"
+    )
+    assert db_session.query(AgentReviewIssueChain).count() == 0
+    assert db_session.query(AgentDataFlywheelLabel).count() == 0
+
+
+def test_review_issue_chain_review_transition_from_accepted_resolves_chain_labels(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    sample_id = _sample_id(turn)
+    existing_label = AgentDataFlywheelLabel(
+        farm_id=turn.farm_id,
+        sample_id=sample_id,
+        sample_type="session_turn",
+        session_id=turn.session_id,
+        turn_id=turn.id,
+        request_id=turn.request_id,
+        label="bad_reply",
+        status="open",
+        annotator_id="manual-admin",
+    )
+    db_session.add(existing_label)
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        accepted_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "accepted",
+                "final_labels": ["needs_regression"],
+                "root_cause": "参数作用域丢失",
+                "expected_behavior": "应保留批量作用域",
+            },
+            headers=admin_headers(),
+        )
+        rejected_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "rejected",
+                "false_positive_reason": "人工复核为正常流程",
+            },
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}",
+            headers=admin_headers(),
+        )
+
+    assert accepted_resp.status_code == 200
+    assert rejected_resp.status_code == 200
+    assert detail_resp.status_code == 200
+    labels = (
+        db_session.query(AgentDataFlywheelLabel)
+        .filter_by(sample_id=sample_id)
+        .order_by(AgentDataFlywheelLabel.label.asc())
+        .all()
+    )
+    assert [(row.label, row.status) for row in labels] == [
+        ("bad_reply", "open"),
+        ("needs_regression", "resolved"),
+    ]
+    stored_chain = (
+        db_session.query(AgentReviewIssueChain)
+        .filter_by(chain_id=_chain_id(turn))
+        .one()
+    )
+    assert stored_chain.status == "rejected"
+    assert stored_chain.final_labels == []
+    assert stored_chain.source_label_ids == [labels[1].id]
+    assert detail_resp.json()["chain"]["human_review"]["final_labels"] == []
+
+
+def test_review_issue_chain_review_resolves_removed_source_labels_on_accepted_update(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    sample_id = _sample_id(turn)
+    manual_label = AgentDataFlywheelLabel(
+        farm_id=turn.farm_id,
+        sample_id=sample_id,
+        sample_type="session_turn",
+        session_id=turn.session_id,
+        turn_id=turn.id,
+        request_id=turn.request_id,
+        label="bad_reply",
+        status="open",
+        annotator_id="manual-admin",
+    )
+    db_session.add(manual_label)
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        first_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "accepted",
+                "final_labels": ["needs_regression", "wrong_tool_selection"],
+                "root_cause": "参数作用域丢失",
+                "expected_behavior": "应保留批量作用域",
+            },
+            headers=admin_headers(),
+        )
+        second_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "accepted",
+                "final_labels": ["wrong_tool_selection"],
+                "root_cause": "参数作用域丢失",
+                "expected_behavior": "应保留批量作用域",
+            },
+            headers=admin_headers(),
+        )
+        rejected_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "rejected",
+                "false_positive_reason": "人工复核为正常流程",
+            },
+            headers=admin_headers(),
+        )
+
+    assert first_resp.status_code == 200
+    assert second_resp.status_code == 200
+    assert rejected_resp.status_code == 200
+    labels = (
+        db_session.query(AgentDataFlywheelLabel)
+        .filter_by(sample_id=sample_id)
+        .order_by(AgentDataFlywheelLabel.label.asc())
+        .all()
+    )
+    assert [(row.label, row.status) for row in labels] == [
+        ("bad_reply", "open"),
+        ("needs_regression", "resolved"),
+        ("wrong_tool_selection", "resolved"),
+    ]
+
+
+def test_review_issue_chain_review_requires_missing_evidence(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        missing_payload = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={"status": "needs_evidence"},
+            headers=admin_headers(),
+        )
+        review_resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(turn)}/review",
+            json={
+                "status": "needs_evidence",
+                "missing_evidence": ["event", "trace", "db_diff", "context"],
+            },
+            headers=admin_headers(),
+        )
+
+    assert missing_payload.status_code == 400
+    assert missing_payload.json()["detail"]["code"] == (
+        "CHAIN_REVIEW_MISSING_EVIDENCE_REQUIRED"
+    )
+    assert review_resp.status_code == 200
+    chain = review_resp.json()["chain"]
+    assert chain["status"] == "needs_evidence"
+    assert chain["human_review"]["missing_evidence"] == [
+        "event",
+        "trace",
+        "db_diff",
+        "context",
+    ]
+    assert db_session.query(AgentDataFlywheelLabel).count() == 0
+
+
+def test_review_issue_chain_review_validates_related_turn_scope(
+    db_session, tmp_path
+) -> None:
+    trigger = _seed_turn(db_session, tmp_path)
+    other_session_turn = _seed_turn(db_session, tmp_path)
+    trigger.risk_score = 0.9
+    other_session_turn.session_id = "sess-other-review"
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}/review",
+            json={
+                "status": "not_actionable",
+                "context_turn_ids": [other_session_turn.id],
+            },
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "CHAIN_REVIEW_RELATED_TURN_NOT_FOUND"
+    assert resp.json()["detail"]["chain_id"] == _chain_id(trigger)
+    assert resp.json()["detail"]["status"] == "not_actionable"
+    assert db_session.query(AgentReviewIssueChain).count() == 0
+
+
+def test_review_issue_chain_review_rejects_overlapping_related_turns(
+    db_session, tmp_path
+) -> None:
+    related = _seed_turn(db_session, tmp_path)
+    trigger = _seed_turn(db_session, tmp_path)
+    trigger.risk_score = 0.9
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}/review",
+            json={
+                "status": "not_actionable",
+                "context_turn_ids": [related.id],
+                "result_turn_ids": [related.id],
+            },
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "CHAIN_REVIEW_RELATED_TURN_OVERLAP"
+    assert db_session.query(AgentReviewIssueChain).count() == 0
+
+
+def test_review_issue_chain_respects_current_farm_boundary(
+    db_session, tmp_path
+) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    turn.risk_score = 0.9
+    turn.risk_severity = "P0"
+    forbidden_chain_id = f"chain:{turn.farm_id + 1}:{turn.session_id}:{turn.id}"
+    db_session.commit()
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        detail_resp = client.get(
+            f"/admin/data-flywheel/review-issue-chains/{forbidden_chain_id}",
+            headers=admin_headers(),
+        )
+        inbox_resp = client.get(
+            "/admin/data-flywheel/daily-review/inbox",
+            params={"session_id": turn.session_id, "min_risk": 0.1},
+            headers=admin_headers(),
+        )
+
+    assert detail_resp.status_code == 404
+    assert detail_resp.json()["detail"]["code"] == "CHAIN_NOT_FOUND"
+    assert inbox_resp.status_code == 200
+    assert inbox_resp.json()["items"][0]["session_id"] == turn.session_id
+    assert inbox_resp.json()["items"][0]["highest_risk_chain"]["chain_id"] == (
+        _chain_id(turn)
     )
 
 

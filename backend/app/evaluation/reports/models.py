@@ -19,6 +19,8 @@ class EvaluationCaseResult:
     skill_calls: list[str] = field(default_factory=list)
     drilldown_links: dict[str, str] = field(default_factory=dict)
     failure_stage: str = ""
+    chain_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

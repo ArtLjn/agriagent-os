@@ -71,6 +71,7 @@ class ContextExpectation:
     farm_context: dict[str, Any] = field(default_factory=dict)
     required_facts: list[str] = field(default_factory=list)
     expected_block_types: list[str] = field(default_factory=list)
+    related_turns: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

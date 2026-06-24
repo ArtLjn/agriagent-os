@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Card, Checkbox, Empty, Input, Modal, Select, Space, Spin, Tabs, Tag, Typography, message } from 'antd';
-import { CloudDownloadOutlined, CloudSyncOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { CloudDownloadOutlined, CloudSyncOutlined, DatabaseOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
   getTraceDiagnostics,
@@ -42,6 +42,7 @@ import { cardStyle, palette } from '../../styles/theme';
 import AnnotationPanel from './components/AnnotationPanel';
 import CaseDraftPreview from './components/CaseDraftPreview';
 import CollapsibleWorkspace from './components/CollapsibleWorkspace';
+import DailyReviewWorkbench from './components/DailyReviewWorkbench';
 import SampleDetailPanel from './components/SampleDetailPanel';
 import SampleQueueTable from './components/SampleQueueTable';
 import SessionConversationView from './components/SessionConversationView';
@@ -69,7 +70,8 @@ type AnnotationTarget =
   | { type: 'turn'; sample: DataFlywheelSample }
   | { type: 'session'; sampleId: string; sessionId: string };
 
-type DataFlywheelTab = 'queue' | 'candidates' | 'sessions' | 'turn-review' | 'repair-packs';
+type DataFlywheelTab = 'daily-review' | 'advanced-search' | 'repair-packs' | 'datasets-evaluation';
+type AdvancedSearchTab = 'queue' | 'candidates' | 'sessions' | 'turn-review';
 type HeaderTone = 'queue' | 'candidate' | 'session' | 'turn';
 
 const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
@@ -136,7 +138,8 @@ export default function DataFlywheel() {
   const [batchPrelabeling, setBatchPrelabeling] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<DataFlywheelTab>('queue');
+  const [activeTab, setActiveTab] = useState<DataFlywheelTab>('daily-review');
+  const [activeAdvancedTab, setActiveAdvancedTab] = useState<AdvancedSearchTab>('queue');
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const sessionReviewRequestSeq = useRef(0);
@@ -820,7 +823,8 @@ export default function DataFlywheel() {
   const handleSelectArchive = (key: string) => {
     setActiveArchiveKey(key);
     clearSelection();
-    setActiveTab(tabForArchiveKey(key));
+    setActiveTab('advanced-search');
+    setActiveAdvancedTab(tabForArchiveKey(key));
     if (
       key === ALL_ARCHIVE_KEY ||
       key === ISSUE_ARCHIVE_KEY ||
@@ -837,7 +841,8 @@ export default function DataFlywheel() {
 
   const handleSelectProblemSession = (key: string) => {
     setActiveArchiveKey(key);
-    setActiveTab('sessions');
+    setActiveTab('advanced-search');
+    setActiveAdvancedTab('sessions');
     clearSelection();
     loadSessionReview(key);
     const problemTurn = latestConfirmedProblemTurn(samples, key);
@@ -1187,6 +1192,58 @@ export default function DataFlywheel() {
     </>
   );
 
+  const advancedSearchContent = (
+    <Tabs
+      activeKey={activeAdvancedTab}
+      onChange={(key) => setActiveAdvancedTab(key as AdvancedSearchTab)}
+      destroyOnHidden
+      items={[
+        {
+          key: 'queue',
+          label: (
+            <span>
+              <EditOutlined /> 样本队列
+            </span>
+          ),
+          children: queueContent,
+        },
+        {
+          key: 'candidates',
+          label: (
+            <span>
+              <SearchOutlined /> 问题候选
+            </span>
+          ),
+          children: candidateContent,
+        },
+        {
+          key: 'sessions',
+          label: (
+            <span>
+              <FolderOpenOutlined /> Session 复盘
+            </span>
+          ),
+          children: sessionContent,
+        },
+        {
+          key: 'turn-review',
+          label: (
+            <span>
+              <EditOutlined /> Turn 审核
+            </span>
+          ),
+          children: turnReviewContent,
+        },
+      ]}
+    />
+  );
+
+  const datasetsEvaluationContent = (
+    <Card title="数据集/评测" style={workspaceCardStyle}>
+      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="数据集、simulation 与 evaluation 趋势入口将在后续切片接入" />
+    </Card>
+  );
+
   return (
     <div style={pageShellStyle}>
       <Space direction="vertical" size={4} style={{ flexShrink: 0 }}>
@@ -1200,43 +1257,25 @@ export default function DataFlywheel() {
       <Tabs
         activeKey={activeTab}
         onChange={(key) => setActiveTab(key as DataFlywheelTab)}
-        destroyInactiveTabPane
+        destroyOnHidden
         items={[
           {
-            key: 'queue',
+            key: 'daily-review',
             label: (
               <span>
-                <EditOutlined /> 样本队列
+                <EditOutlined /> 每日质检
               </span>
             ),
-            children: queueContent,
+            children: <DailyReviewWorkbench />,
           },
           {
-            key: 'candidates',
+            key: 'advanced-search',
             label: (
               <span>
-                <SearchOutlined /> 问题候选
+                <SearchOutlined /> 高级搜索
               </span>
             ),
-            children: candidateContent,
-          },
-          {
-            key: 'sessions',
-            label: (
-              <span>
-                <FolderOpenOutlined /> Session 复盘
-              </span>
-            ),
-            children: sessionContent,
-          },
-          {
-            key: 'turn-review',
-            label: (
-              <span>
-                <EditOutlined /> Turn 审核
-              </span>
-            ),
-            children: turnReviewContent,
+            children: advancedSearchContent,
           },
           {
             key: 'repair-packs',
@@ -1246,6 +1285,15 @@ export default function DataFlywheel() {
               </span>
             ),
             children: <RepairPackListPanel onOpenDetail={handleOpenRepairPackDetail} />,
+          },
+          {
+            key: 'datasets-evaluation',
+            label: (
+              <span>
+                <DatabaseOutlined /> 数据集/评测
+              </span>
+            ),
+            children: datasetsEvaluationContent,
           },
         ]}
       />
@@ -1712,7 +1760,7 @@ function AuditFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function tabForArchiveKey(key: string): DataFlywheelTab {
+function tabForArchiveKey(key: string): AdvancedSearchTab {
   if (key === ALL_ARCHIVE_KEY) return 'queue';
   if (key === ISSUE_ARCHIVE_KEY || key === AI_PRELABEL_ARCHIVE_KEY) return 'candidates';
   return 'sessions';
