@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.agent_turn import AgentTurn
 from app.models.data_flywheel import AgentDataFlywheelLabel, AgentReviewIssueChain
-from app.services.data_flywheel_service import (
+from app.modules.data_flywheel.service import (
     ALLOWED_LABELS,
     LABEL_STATUS_OPEN,
     LABEL_STATUS_RESOLVED,

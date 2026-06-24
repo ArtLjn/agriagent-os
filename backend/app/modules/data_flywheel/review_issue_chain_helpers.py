@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.agent_turn import AgentTurn
-from app.services.data_flywheel_service import (
+from app.modules.data_flywheel.service import (
     _events_for_turn,
     _label_to_dict,
     _messages_for_turn,

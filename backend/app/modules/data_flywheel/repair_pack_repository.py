@@ -11,12 +11,12 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.models.data_flywheel import AgentDataFlywheelLabel, AgentRepairPack
-from app.services.data_flywheel_repair_pack_service import (
+from app.modules.data_flywheel.repair_pack_service import (
     build_repair_pack_payload,
     derive_repair_candidate,
     group_samples_by_fix_target,
 )
-from app.services.data_flywheel_service import get_sample_detail, list_samples
+from app.modules.data_flywheel.service import get_sample_detail, list_samples
 
 REPAIR_PACK_STATUS_DRAFT = "draft"
 REPAIR_PACK_STATUS_EXPORTED = "exported"

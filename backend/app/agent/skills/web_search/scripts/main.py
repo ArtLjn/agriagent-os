@@ -9,7 +9,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.agent.llm import LlmNotConfiguredError, get_llm
-from app.infra.settings import settings
+from app.core.config import settings
 from app.infra.skill_cache import cached
 from app.agent.skills.web_search.scripts.support import (
     _compute_relevance as _support_compute_relevance,

@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.services.auth_service import get_user_by_id, login, register
+from app.modules.auth.service import get_user_by_id, login, register
 
 
 def test_register_success(db_session):

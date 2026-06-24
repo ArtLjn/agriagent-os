@@ -6,14 +6,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.agent_turn import AgentTurn
-from app.services.data_flywheel_service import (
+from app.modules.data_flywheel.service import (
     _events_for_turn,
     _labels_by_sample,
     _prelabels_by_sample,
     _sample_id,
     _sample_row,
 )
-from app.services.data_flywheel_review_issue_chain_helpers import (
+from app.modules.data_flywheel.review_issue_chain_helpers import (
     ai_judge,
     chain_id,
     diagnosis,
@@ -32,7 +32,7 @@ from app.services.data_flywheel_review_issue_chain_helpers import (
     turn_debug_summary,
     virtual_related_turns,
 )
-from app.services.data_flywheel_review_issue_chain_repository import (
+from app.modules.data_flywheel.review_issue_chain_repository import (
     get_saved_review_issue_chain,
     overlay_saved_review,
     save_review_issue_chain,

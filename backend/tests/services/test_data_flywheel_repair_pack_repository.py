@@ -11,7 +11,7 @@ from app.infra.agent_events import AgentEventWriter
 from app.models import AgentDataFlywheelLabel, AgentRepairPack, Farm
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
-from app.services.data_flywheel_repair_pack_repository import (
+from app.modules.data_flywheel.repair_pack_repository import (
     _compute_dedup_key,
     create_repair_pack,
     get_repair_pack,
@@ -23,7 +23,7 @@ from app.services.data_flywheel_repair_pack_repository import (
     rebuild_repair_pack_files,
     record_repair_pack_verification_failure,
 )
-from app.services.data_flywheel_service import add_sample_label, get_sample_detail
+from app.modules.data_flywheel.service import add_sample_label, get_sample_detail
 
 pytestmark = pytest.mark.no_db
 
@@ -371,7 +371,7 @@ def test_create_repair_pack_records_export_failed_metadata(tmp_path, monkeypatch
         raise OSError("disk full")
 
     monkeypatch.setattr(
-        "app.services.data_flywheel_repair_pack_repository._write_repair_pack_files",
+        "app.modules.data_flywheel.repair_pack_repository._write_repair_pack_files",
         fail_write,
     )
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin
-from app.infra.settings import settings
+from app.core.config import settings
 from app.models.farm import Farm
 from app.models.user import User
 from app.schemas.admin_user import (

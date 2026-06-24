@@ -7,10 +7,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.data_flywheel import AgentCaseDraft
-from app.services.data_flywheel_review_issue_chain_service import (
+from app.modules.data_flywheel.review_issue_chain_service import (
     get_review_issue_chain_detail,
 )
-from app.services.data_flywheel_service import _ALLOWED_TARGET_TYPES
+from app.modules.data_flywheel.service import _ALLOWED_TARGET_TYPES
 
 
 def build_case_draft_from_review_issue_chain(

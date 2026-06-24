@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from app.services.data_flywheel_judge_service import (
+from app.modules.data_flywheel.judge_service import (
     DEFAULT_PROMPT_VERSION,
     DataFlywheelJudgeClient,
     OpenAIDataFlywheelJudgeClient,

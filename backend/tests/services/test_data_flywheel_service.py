@@ -12,7 +12,7 @@ from app.infra.agent_events import AgentEventWriter
 from app.models import Farm
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
-from app.services.data_flywheel_service import (
+from app.modules.data_flywheel.service import (
     SAMPLE_TYPE_SESSION,
     accept_sample_prelabel,
     add_sample_label,
@@ -26,9 +26,9 @@ from app.services.data_flywheel_service import (
     reject_sample_prelabel,
     resolve_sample_label,
 )
-from app.services.data_flywheel_judge_service import DataFlywheelJudgeClient
-from app.services.data_flywheel_session_sync_service import sync_session_events
-from app.services.data_flywheel_session_review_service import get_session_review
+from app.modules.data_flywheel.judge_service import DataFlywheelJudgeClient
+from app.modules.data_flywheel.session_sync_service import sync_session_events
+from app.modules.data_flywheel.session_review_service import get_session_review
 
 pytestmark = pytest.mark.no_db
 

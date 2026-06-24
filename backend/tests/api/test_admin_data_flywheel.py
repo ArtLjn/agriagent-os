@@ -5,8 +5,8 @@ import json
 from fastapi.testclient import TestClient
 
 import app.api.admin_data_flywheel as admin_data_flywheel_api
-import app.services.data_flywheel_review_issue_chain_service as review_chain_service
-import app.services.data_flywheel_review_issue_chain_repository as review_chain_repo
+import app.modules.data_flywheel.review_issue_chain_service as review_chain_service
+import app.modules.data_flywheel.review_issue_chain_repository as review_chain_repo
 from app.evaluation.discovery.judge_worker import run_judge_batch
 from app.infra.agent_events import AgentEventWriter
 from app.main import app

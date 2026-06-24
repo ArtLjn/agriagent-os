@@ -124,26 +124,36 @@ class RuleIntentClassifier:
         "查一下工人",
         "工人有哪些",
     )
-    # TODO 这里是否有代码冗余
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
         normalized = message.strip()
-        frames: list[IntentFrame] = []
+        precheck_frames = self._classify_precheck(normalized)
+        if precheck_frames is not None:
+            return precheck_frames
 
-        if self._looks_like_ambiguous_write(normalized):
+        frames = self._classify_primary_read(normalized)
+        frames.extend(self._classify_additional_reads(normalized))
+        frames.extend(self._classify_search_or_weather(normalized))
+        frames.extend(self._classify_write_candidates(normalized, frames))
+        return frames
+
+    def _classify_precheck(self, message: str) -> list[IntentFrame] | None:
+        if not self._looks_like_ambiguous_write(message):
+            return None
+        return [
+            IntentFrame(
+                domain="general",
+                intent="ambiguous_write",
+                risk="write_confirm",
+                candidate_tools=[],
+                confidence=0.7,
+                requires_confirmation=True,
+            )
+        ]
+
+    def _classify_primary_read(self, message: str) -> list[IntentFrame]:
+        if self._looks_like_user_settings_query(message):
             return [
-                IntentFrame(
-                    domain="general",
-                    intent="ambiguous_write",
-                    risk="write_confirm",
-                    candidate_tools=[],
-                    confidence=0.7,
-                    requires_confirmation=True,
-                )
-            ]
-
-        if self._looks_like_user_settings_query(normalized):
-            frames.append(
                 IntentFrame(
                     domain="settings",
                     intent="query_user_settings",
@@ -152,9 +162,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_user_settings"],
                     confidence=0.86,
                 )
-            )
-        elif self._looks_like_labor_payable_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_labor_payable_query(message):
+            return [
                 IntentFrame(
                     domain="labor",
                     intent="query_labor_payables",
@@ -163,9 +173,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_labor_payables"],
                     confidence=0.86,
                 )
-            )
-        elif self._looks_like_cost_category_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_cost_category_query(message):
+            return [
                 IntentFrame(
                     domain="finance",
                     intent="query_cost_categories",
@@ -174,9 +184,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_cost_categories"],
                     confidence=0.86,
                 )
-            )
-        elif self._looks_like_crop_template_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_crop_template_query(message):
+            return [
                 IntentFrame(
                     domain="planting",
                     intent="query_crop_templates",
@@ -185,9 +195,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_crop_templates"],
                     confidence=0.86,
                 )
-            )
-        elif self._looks_like_planting_unit_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_planting_unit_query(message):
+            return [
                 IntentFrame(
                     domain="planting",
                     intent="query_planting_units",
@@ -196,9 +206,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_planting_units"],
                     confidence=0.86,
                 )
-            )
-        elif self._looks_like_crop_cycle_list_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_crop_cycle_list_query(message):
+            return [
                 IntentFrame(
                     domain="planting",
                     intent="query_crop_cycles",
@@ -207,9 +217,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_crop_cycles"],
                     confidence=0.86,
                 )
-            )
-        elif self._looks_like_crop_cycle_detail_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_crop_cycle_detail_query(message):
+            return [
                 IntentFrame(
                     domain="planting",
                     intent="query_crop_cycle",
@@ -218,9 +228,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_crop_cycle_info"],
                     confidence=0.86,
                 )
-            )
-        elif self._looks_like_daily_operation_advice(normalized):
-            frames.append(
+            ]
+        if self._looks_like_daily_operation_advice(message):
+            return [
                 IntentFrame(
                     domain="operation",
                     intent="query_daily_operation_advice",
@@ -229,9 +239,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_weather_forecast", "get_farm_status"],
                     confidence=0.84,
                 )
-            )
-        elif self._looks_like_active_crop_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_active_crop_query(message):
+            return [
                 IntentFrame(
                     domain="planting",
                     intent="query_active_crops",
@@ -240,9 +250,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_farm_status", "get_crop_cycle_info"],
                     confidence=0.85,
                 )
-            )
-        elif self._looks_like_planting_advice(normalized):
-            frames.append(
+            ]
+        if self._looks_like_planting_advice(message):
+            return [
                 IntentFrame(
                     domain="planting",
                     intent="query_planting_advice",
@@ -251,9 +261,9 @@ class RuleIntentClassifier:
                     candidate_tools=["get_farm_status"],
                     confidence=0.72,
                 )
-            )
-        elif self._looks_like_farm_read(normalized):
-            frames.append(
+            ]
+        if self._looks_like_farm_read(message):
+            return [
                 IntentFrame(
                     domain="farm",
                     intent="unknown_farm_read",
@@ -262,9 +272,12 @@ class RuleIntentClassifier:
                     candidate_tools=[],
                     confidence=0.6,
                 )
-            )
+            ]
+        return []
 
-        if self._looks_like_query_work_orders(normalized):
+    def _classify_additional_reads(self, message: str) -> list[IntentFrame]:
+        frames: list[IntentFrame] = []
+        if self._looks_like_query_work_orders(message):
             frames.append(
                 IntentFrame(
                     domain="operation",
@@ -275,8 +288,7 @@ class RuleIntentClassifier:
                     confidence=0.82,
                 )
             )
-
-        if self._looks_like_finance_overview_query(normalized):
+        if self._looks_like_finance_overview_query(message):
             frames.append(
                 IntentFrame(
                     domain="finance",
@@ -287,8 +299,7 @@ class RuleIntentClassifier:
                     confidence=0.78,
                 )
             )
-
-        if self._looks_like_cost_summary_query(normalized):
+        if self._looks_like_cost_summary_query(message):
             frames.append(
                 IntentFrame(
                     domain="finance",
@@ -299,8 +310,7 @@ class RuleIntentClassifier:
                     confidence=0.84,
                 )
             )
-
-        if self._looks_like_debt_summary_query(normalized):
+        if self._looks_like_debt_summary_query(message):
             frames.append(
                 IntentFrame(
                     domain="finance",
@@ -311,8 +321,7 @@ class RuleIntentClassifier:
                     confidence=0.84,
                 )
             )
-
-        if self._looks_like_worker_query(normalized):
+        if self._looks_like_worker_query(message):
             frames.append(
                 IntentFrame(
                     domain="labor",
@@ -323,9 +332,11 @@ class RuleIntentClassifier:
                     confidence=0.84,
                 )
             )
+        return frames
 
-        if self._looks_like_web_search(normalized):
-            frames.append(
+    def _classify_search_or_weather(self, message: str) -> list[IntentFrame]:
+        if self._looks_like_web_search(message):
+            return [
                 IntentFrame(
                     domain="external_search",
                     intent="query_web_search",
@@ -334,9 +345,9 @@ class RuleIntentClassifier:
                     candidate_tools=["web_search"],
                     confidence=0.8,
                 )
-            )
-        elif self._looks_like_weather_query(normalized):
-            frames.append(
+            ]
+        if self._looks_like_weather_query(message):
+            return [
                 IntentFrame(
                     domain="weather",
                     intent="query_weather",
@@ -345,73 +356,86 @@ class RuleIntentClassifier:
                     candidate_tools=["get_weather_forecast"],
                     confidence=0.82,
                 )
-            )
+            ]
+        return []
 
-        if self._looks_like_create_worker(normalized):
-            worker_params = self._extract_worker_params(normalized)
+    def _classify_write_candidates(
+        self,
+        message: str,
+        existing_frames: list[IntentFrame],
+    ) -> list[IntentFrame]:
+        frames: list[IntentFrame] = []
+        if self._looks_like_create_worker(message):
+            frames.append(self._build_create_worker_frame(message))
+        if self._looks_like_incomplete_farm_labor_work(message):
+            frames.append(self._build_clarify_farm_labor_frame(message))
+        if self._looks_like_create_work_order(message):
             frames.append(
-                IntentFrame(
-                    domain="labor",
-                    intent="create_worker",
-                    risk="write_confirm",
-                    entities=["worker"],
-                    candidate_tools=["manage_workers"],
-                    confidence=0.78,
-                    params_hint=worker_params or None,
-                    requires_confirmation=True,
-                )
+                self._build_create_work_order_frame(message, existing_frames + frames)
             )
-
-        if self._looks_like_incomplete_farm_labor_work(normalized):
-            name = self._extract_worker_name(normalized)
-            quantity = self._extract_labor_quantity(normalized)
-            evidence = self._build_farm_labor_evidence(
-                worker=name,
-                operation_type=None,
-                quantity=quantity,
-                unit_price=None,
-            )
-            frames.append(
-                IntentFrame(
-                    domain="operation",
-                    intent="clarify_farm_labor_work",
-                    risk="write_confirm",
-                    entities=["worker", "operation_work_order"],
-                    candidate_tools=[],
-                    confidence=0.7,
-                    params_hint=None,
-                    planning_evidence=evidence,
-                    missing_fields=["operation_type"],
-                    requires_confirmation=True,
-                )
-            )
-
-        if self._looks_like_create_work_order(normalized):
-            work_order_params = self._extract_work_order_params(normalized)
-            work_order_evidence = self._extract_work_order_evidence(normalized)
-            work_order_missing = self._missing_work_order_fields(work_order_params)
-            depends_on = (
-                ["create_worker"]
-                if any(frame.intent == "create_worker" for frame in frames)
-                else []
-            )
-            frames.append(
-                IntentFrame(
-                    domain="operation",
-                    intent="create_work_order",
-                    risk="write_confirm",
-                    entities=["operation_work_order"],
-                    candidate_tools=["create_operation_work_order"],
-                    confidence=0.76,
-                    params_hint=work_order_params or None,
-                    planning_evidence=work_order_evidence,
-                    missing_fields=work_order_missing,
-                    depends_on=depends_on,
-                    requires_confirmation=True,
-                )
-            )
-
         return frames
+
+    def _build_create_worker_frame(self, message: str) -> IntentFrame:
+        worker_params = self._extract_worker_params(message)
+        return IntentFrame(
+            domain="labor",
+            intent="create_worker",
+            risk="write_confirm",
+            entities=["worker"],
+            candidate_tools=["manage_workers"],
+            confidence=0.78,
+            params_hint=worker_params or None,
+            requires_confirmation=True,
+        )
+
+    def _build_clarify_farm_labor_frame(self, message: str) -> IntentFrame:
+        name = self._extract_worker_name(message)
+        quantity = self._extract_labor_quantity(message)
+        evidence = self._build_farm_labor_evidence(
+            worker=name,
+            operation_type=None,
+            quantity=quantity,
+            unit_price=None,
+        )
+        return IntentFrame(
+            domain="operation",
+            intent="clarify_farm_labor_work",
+            risk="write_confirm",
+            entities=["worker", "operation_work_order"],
+            candidate_tools=[],
+            confidence=0.7,
+            params_hint=None,
+            planning_evidence=evidence,
+            missing_fields=["operation_type"],
+            requires_confirmation=True,
+        )
+
+    def _build_create_work_order_frame(
+        self,
+        message: str,
+        frames: list[IntentFrame],
+    ) -> IntentFrame:
+        work_order_params = self._extract_work_order_params(message)
+        work_order_evidence = self._extract_work_order_evidence(message)
+        work_order_missing = self._missing_work_order_fields(work_order_params)
+        depends_on = (
+            ["create_worker"]
+            if any(frame.intent == "create_worker" for frame in frames)
+            else []
+        )
+        return IntentFrame(
+            domain="operation",
+            intent="create_work_order",
+            risk="write_confirm",
+            entities=["operation_work_order"],
+            candidate_tools=["create_operation_work_order"],
+            confidence=0.76,
+            params_hint=work_order_params or None,
+            planning_evidence=work_order_evidence,
+            missing_fields=work_order_missing,
+            depends_on=depends_on,
+            requires_confirmation=True,
+        )
 
     def _looks_like_active_crop_query(self, message: str) -> bool:
         return self._has_any(message, self._query_hints) and self._has_any(

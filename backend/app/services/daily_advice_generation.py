@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.agent.reflector.daily_advice import check_daily_advice_generation
 from app.agent.reflector.models import ReflectionDecision, ReflectionResult
 from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES
-from app.infra.json_repair import safe_parse_json
+from app.core.json_repair import safe_parse_json
 from app.models.agent_record import AgentRecord
 from app.schemas.agent import DailyAdviceGeneration, DailyAdviceResponse
 from app.services.daily_advice_models import (

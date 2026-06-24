@@ -11,19 +11,19 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.models.data_flywheel import AgentRepairPack
-from app.services.data_flywheel_repair_pack_chain import (
+from app.modules.data_flywheel.repair_pack_chain import (
     build_chain_repair_pack_payload,
     derive_chain_repair_candidate,
     validate_chain_repair_export_ready,
 )
-from app.services.data_flywheel_repair_pack_repository import (
+from app.modules.data_flywheel.repair_pack_repository import (
     REPAIR_PACK_STATUS_DISCARDED,
     REPAIR_PACK_STATUS_EXPORTED,
     _open_label_ids_for_samples,
     _pack_to_dict,
     _write_repair_pack_files,
 )
-from app.services.data_flywheel_review_issue_chain_service import (
+from app.modules.data_flywheel.review_issue_chain_service import (
     get_review_issue_chain_detail,
 )
 

@@ -15,7 +15,6 @@ from app.api import (
     admin_users,
     agent,
     app_version,
-    auth,
     cost,
     cost_categories,
     crop,
@@ -30,6 +29,7 @@ from app.api import (
     weather,
 )
 from app.infra.limiter import limiter
+from app.modules.auth.router import router as auth_router
 from app.simulation.routes import router as simulation_router
 
 
@@ -43,7 +43,7 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(cost_categories.router)
     app.include_router(smart_fill.router)
     app.include_router(agent.router)
-    app.include_router(auth.router)
+    app.include_router(auth_router)
     app.include_router(weather.router)
     app.include_router(locations.router)
     app.include_router(admin.router)
