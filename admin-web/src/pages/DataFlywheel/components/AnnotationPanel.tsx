@@ -8,6 +8,7 @@ import {
   DownloadOutlined,
   ExperimentOutlined,
   FileZipOutlined,
+  FolderOpenOutlined,
   RobotOutlined,
   SaveOutlined,
 } from '@ant-design/icons';
@@ -26,6 +27,7 @@ export interface SessionProblemItem {
 }
 
 interface AnnotationPanelProps {
+  mode?: 'review' | 'evidence';
   selectedSample: DataFlywheelSample | null;
   label: DataFlywheelLabel;
   comment: string;
@@ -52,6 +54,7 @@ interface AnnotationPanelProps {
   onResolveLabel: (label: DataFlywheelLabelRecord) => void;
   onCopyDebug: () => void;
   onExportJsonl: () => void;
+  onOpenDailyReview?: () => void;
   onMarkBadCase: () => void;
   onCreateRegressionCase: () => void;
   onCreateRepairPack: () => void;
@@ -78,6 +81,7 @@ const labelText = Object.fromEntries(
 ) as Record<DataFlywheelLabel, string>;
 
 export default function AnnotationPanel({
+  mode = 'review',
   selectedSample,
   label,
   comment,
@@ -104,11 +108,13 @@ export default function AnnotationPanel({
   onResolveLabel,
   onCopyDebug,
   onExportJsonl,
+  onOpenDailyReview,
   onMarkBadCase,
   onCreateRegressionCase,
   onCreateRepairPack,
 }: AnnotationPanelProps) {
   const disabled = !selectedSample;
+  const isEvidenceMode = mode === 'evidence';
   const prelabelDisabled = disabled || !canPrelabel;
   const latestPrelabel = prelabels[0] ?? selectedSample?.latest_prelabel ?? null;
   const pendingPrelabel = latestPrelabel?.status === 'pending' ? latestPrelabel : null;
@@ -126,104 +132,108 @@ export default function AnnotationPanel({
   };
 
   return (
-    <Card title="标注与动作" style={cardStyle} styles={{ body: { padding: 14 } }}>
+    <Card title={isEvidenceMode ? '查证与证据' : '标注与动作'} style={cardStyle} styles={{ body: { padding: 14 } }}>
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        <div
-          style={{
-            border: `1px solid ${palette.borderSoft}`,
-            borderRadius: 6,
-            padding: 12,
-            background: palette.bg,
-          }}
-        >
-          <Space direction="vertical" size={8} style={{ width: '100%' }}>
-            <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
-              <Space size={8}>
-                <RobotOutlined style={{ color: palette.accent }} />
-                <Typography.Text style={{ color: palette.text }}>AI 预判</Typography.Text>
-                {latestPrelabel && <Tag>{latestPrelabel.status}</Tag>}
+        {(!isEvidenceMode || latestPrelabel) && (
+          <div
+            style={{
+              border: `1px solid ${palette.borderSoft}`,
+              borderRadius: 6,
+              padding: 12,
+              background: palette.bg,
+            }}
+          >
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
+                <Space size={8}>
+                  <RobotOutlined style={{ color: palette.accent }} />
+                  <Typography.Text style={{ color: palette.text }}>AI 预判</Typography.Text>
+                  {latestPrelabel && <Tag>{latestPrelabel.status}</Tag>}
+                </Space>
+                {!isEvidenceMode && (
+                  <Button
+                    aria-label="AI 预判"
+                    icon={<RobotOutlined />}
+                    disabled={prelabelDisabled}
+                    loading={prelabeling}
+                    onClick={onCreatePrelabel}
+                  >
+                    AI 预判
+                  </Button>
+                )}
               </Space>
-              <Button
-                aria-label="AI 预判"
-                icon={<RobotOutlined />}
-                disabled={prelabelDisabled}
-                loading={prelabeling}
-                onClick={onCreatePrelabel}
-              >
-                AI 预判
-              </Button>
-            </Space>
 
-            {latestPrelabel && (
-              <>
-                <Space size={6} wrap>
-                  {latestPrelabel.labels.map((item) => (
-                    <Tag key={item} title={item}>
-                      {labelText[item] ?? item}
+              {latestPrelabel && (
+                <>
+                  <Space size={6} wrap>
+                    {latestPrelabel.labels.map((item) => (
+                      <Tag key={item} title={item}>
+                        {labelText[item] ?? item}
+                      </Tag>
+                    ))}
+                    <Tag color={latestPrelabel.severity === 'critical' || latestPrelabel.severity === 'high' ? 'red' : 'blue'}>
+                      {latestPrelabel.severity}
                     </Tag>
-                  ))}
-                  <Tag color={latestPrelabel.severity === 'critical' || latestPrelabel.severity === 'high' ? 'red' : 'blue'}>
-                    {latestPrelabel.severity}
-                  </Tag>
-                  <Tag>{Math.round(latestPrelabel.confidence * 100)}%</Tag>
-                </Space>
-                {latestPrelabel.root_cause && (
-                  <Typography.Text style={{ color: palette.text }}>{latestPrelabel.root_cause}</Typography.Text>
-                )}
-                <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                  {latestPrelabel.reason}
-                </Typography.Text>
-                {latestPrelabel.recommended_fix && (
+                    <Tag>{Math.round(latestPrelabel.confidence * 100)}%</Tag>
+                  </Space>
+                  {latestPrelabel.root_cause && (
+                    <Typography.Text style={{ color: palette.text }}>{latestPrelabel.root_cause}</Typography.Text>
+                  )}
                   <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                    {latestPrelabel.recommended_fix}
+                    {latestPrelabel.reason}
                   </Typography.Text>
-                )}
-                <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                  {latestPrelabel.judge_model} · {latestPrelabel.prompt_version}
-                </Typography.Text>
-              </>
-            )}
+                  {latestPrelabel.recommended_fix && (
+                    <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                      {latestPrelabel.recommended_fix}
+                    </Typography.Text>
+                  )}
+                  <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
+                    {latestPrelabel.judge_model} · {latestPrelabel.prompt_version}
+                  </Typography.Text>
+                </>
+              )}
 
-            {pendingPrelabel && (
-              <>
-                <Select
-                  aria-label="AI 建议标签"
-                  mode="multiple"
-                  value={selectedPrelabelLabels}
-                  options={labelOptions}
-                  disabled={prelabelDisabled}
-                  onChange={onSelectedPrelabelLabelsChange}
-                  style={{ width: '100%' }}
-                />
-                <Space wrap>
-                  <Button
-                    type="primary"
+              {!isEvidenceMode && pendingPrelabel && (
+                <>
+                  <Select
+                    aria-label="AI 建议标签"
+                    mode="multiple"
+                    value={selectedPrelabelLabels}
+                    options={labelOptions}
                     disabled={prelabelDisabled}
-                    loading={reviewingPrelabel}
-                    onClick={onAcceptPrelabel}
-                  >
-                    采纳 AI 预判
-                  </Button>
-                  <Button
-                    disabled={prelabelDisabled}
-                    loading={reviewingPrelabel}
-                    onClick={onAcceptPrelabel}
-                  >
-                    修改后保存
-                  </Button>
-                  <Button
-                    danger
-                    disabled={prelabelDisabled}
-                    loading={reviewingPrelabel}
-                    onClick={onRejectPrelabel}
-                  >
-                    驳回 AI 预判
-                  </Button>
-                </Space>
-              </>
-            )}
-          </Space>
-        </div>
+                    onChange={onSelectedPrelabelLabelsChange}
+                    style={{ width: '100%' }}
+                  />
+                  <Space wrap>
+                    <Button
+                      type="primary"
+                      disabled={prelabelDisabled}
+                      loading={reviewingPrelabel}
+                      onClick={onAcceptPrelabel}
+                    >
+                      采纳 AI 预判
+                    </Button>
+                    <Button
+                      disabled={prelabelDisabled}
+                      loading={reviewingPrelabel}
+                      onClick={onAcceptPrelabel}
+                    >
+                      修改后保存
+                    </Button>
+                    <Button
+                      danger
+                      disabled={prelabelDisabled}
+                      loading={reviewingPrelabel}
+                      onClick={onRejectPrelabel}
+                    >
+                      驳回 AI 预判
+                    </Button>
+                  </Space>
+                </>
+              )}
+            </Space>
+          </div>
+        )}
 
         {repairCandidate && (
           <div
@@ -250,23 +260,25 @@ export default function AnnotationPanel({
           </div>
         )}
 
-        <div>
-          <Typography.Text style={{ color: palette.textMuted }}>
-            质量标签{annotationTargetLabel ? ` · ${annotationTargetLabel}` : ''}
-          </Typography.Text>
-          <Radio.Group
-            value={label}
-            onChange={(event) => onLabelChange(event.target.value)}
-            disabled={disabled}
-            style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}
-          >
-            {labelOptions.map((option) => (
-              <Radio key={option.value} value={option.value} style={{ color: palette.text, marginInlineEnd: 0 }}>
-                {option.label}
-              </Radio>
-            ))}
-          </Radio.Group>
-        </div>
+        {!isEvidenceMode && (
+          <div>
+            <Typography.Text style={{ color: palette.textMuted }}>
+              质量标签{annotationTargetLabel ? ` · ${annotationTargetLabel}` : ''}
+            </Typography.Text>
+            <Radio.Group
+              value={label}
+              onChange={(event) => onLabelChange(event.target.value)}
+              disabled={disabled}
+              style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}
+            >
+              {labelOptions.map((option) => (
+                <Radio key={option.value} value={option.value} style={{ color: palette.text, marginInlineEnd: 0 }}>
+                  {option.label}
+                </Radio>
+              ))}
+            </Radio.Group>
+          </div>
+        )}
 
         {sessionProblemItems.length > 1 && (
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
@@ -323,26 +335,28 @@ export default function AnnotationPanel({
                         </Typography.Text>
                       )}
                     </Space>
-                    <Space size={6}>
-                      <Button
-                        aria-label={resolved ? `已完成 ${item.label}` : `标记已完成 ${item.label}`}
-                        size="small"
-                        icon={<CheckCircleOutlined />}
-                        loading={acting}
-                        disabled={resolved}
-                        onClick={() => onResolveLabel(item)}
-                      >
-                        已完成
-                      </Button>
-                      <Button
-                        aria-label={`删除标注 ${item.label}`}
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        loading={acting}
-                        onClick={() => onDeleteLabel(item)}
-                      />
-                    </Space>
+                    {!isEvidenceMode && (
+                      <Space size={6}>
+                        <Button
+                          aria-label={resolved ? `已完成 ${item.label}` : `标记已完成 ${item.label}`}
+                          size="small"
+                          icon={<CheckCircleOutlined />}
+                          loading={acting}
+                          disabled={resolved}
+                          onClick={() => onResolveLabel(item)}
+                        >
+                          已完成
+                        </Button>
+                        <Button
+                          aria-label={`删除标注 ${item.label}`}
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          loading={acting}
+                          onClick={() => onDeleteLabel(item)}
+                        />
+                      </Space>
+                    )}
                   </Space>
                 </div>
               );
@@ -350,36 +364,49 @@ export default function AnnotationPanel({
           </Space>
         )}
 
-        <Input.TextArea
-          rows={5}
-          value={comment}
-          onChange={(event) => onCommentChange(event.target.value)}
-          disabled={disabled}
-          placeholder="记录判断依据、复现条件或后续处理建议"
-        />
+        {!isEvidenceMode && (
+          <Input.TextArea
+            rows={5}
+            value={comment}
+            onChange={(event) => onCommentChange(event.target.value)}
+            disabled={disabled}
+            placeholder="记录判断依据、复现条件或后续处理建议"
+          />
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))', gap: 8 }}>
-          <Button type="primary" icon={<SaveOutlined />} disabled={disabled} loading={saving} onClick={onSave}>
-            保存标注
-          </Button>
+          {!isEvidenceMode && (
+            <Button type="primary" icon={<SaveOutlined />} disabled={disabled} loading={saving} onClick={onSave}>
+              保存标注
+            </Button>
+          )}
           <Button icon={<CopyOutlined />} disabled={disabled} onClick={onCopyDebug}>
             复制 debug JSON
           </Button>
           <Button icon={<DownloadOutlined />} disabled={disabled} loading={acting} onClick={onExportJsonl}>
-            导出 JSONL
+            Evidence Pack
           </Button>
-          <Button danger icon={<BugOutlined />} disabled={disabled} loading={acting} onClick={onMarkBadCase}>
-            标记 bad case
-          </Button>
-          <Button icon={<ExperimentOutlined />} disabled={disabled} loading={acting} onClick={onCreateRegressionCase}>
-            生成 regression case
-          </Button>
-          <Button icon={<FileZipOutlined />} disabled={disabled} loading={acting} onClick={onCreateRepairPack}>
-            生成修复包
-          </Button>
+          {!isEvidenceMode && (
+            <>
+              <Button danger icon={<BugOutlined />} disabled={disabled} loading={acting} onClick={onMarkBadCase}>
+                标记 bad case
+              </Button>
+              <Button icon={<ExperimentOutlined />} disabled={disabled} loading={acting} onClick={onCreateRegressionCase}>
+                生成 regression case
+              </Button>
+              <Button icon={<FileZipOutlined />} disabled={disabled} loading={acting} onClick={onCreateRepairPack}>
+                生成修复包
+              </Button>
+            </>
+          )}
           <Button icon={<BranchesOutlined />} disabled={disabled} onClick={handleTraceJump}>
             跳转 TraceMonitor
           </Button>
+          {isEvidenceMode && (
+            <Button icon={<FolderOpenOutlined />} disabled={disabled} onClick={onOpenDailyReview}>
+              打开每日质检
+            </Button>
+          )}
         </div>
       </Space>
     </Card>

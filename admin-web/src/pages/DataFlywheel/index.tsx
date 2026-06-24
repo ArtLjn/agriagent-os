@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Button, Card, Checkbox, Empty, Input, Modal, Select, Space, Spin, Tabs, Tag, Typography, message } from 'antd';
-import { CloudDownloadOutlined, CloudSyncOutlined, DatabaseOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { CloudSyncOutlined, DatabaseOutlined, EditOutlined, FolderOpenOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 import {
   getTraceDiagnostics,
@@ -9,8 +9,6 @@ import {
 import {
   acceptSamplePrelabel,
   addSampleLabel,
-  createCaseDraft,
-  createRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
   deleteSampleLabel,
@@ -78,6 +76,7 @@ const labelOptions: Array<{ label: string; value: DataFlywheelLabel }> = [
   { label: '好回复', value: 'good_reply' },
   { label: '坏回复', value: 'bad_reply' },
   { label: '工具选错', value: 'wrong_tool_selection' },
+  { label: '工具参数错配', value: 'tool_parameter_mismatch' },
   { label: 'pending 漏拦截', value: 'pending_missed' },
   { label: '幻觉执行', value: 'hallucinated_execution' },
   { label: '工具错误被忽略', value: 'tool_error_ignored' },
@@ -169,10 +168,6 @@ export default function DataFlywheel() {
   const confirmedIssueCount = useMemo(
     () => confirmedIssueTotal(samples, sessionAnnotationOverlays),
     [samples, sessionAnnotationOverlays]
-  );
-  const selectedRepairSampleIds = useMemo(
-    () => confirmedProblemSampleIds(samples, selectedProblemSessionKeys),
-    [samples, selectedProblemSessionKeys]
   );
   const visibleSamples = useMemo(() => {
     const baseSamples = hideAiNormal ? samples.filter((sample) => !isAiNormalSample(sample)) : samples;
@@ -567,66 +562,27 @@ export default function DataFlywheel() {
   };
 
   const handleCreateRegressionCase = async () => {
-    if (!selectedSample) return;
-    setActing(true);
-    try {
-      const result = await createCaseDraft(selectedSample.sample_id, 'evaluation_replay');
-      setDraft(result);
-      setDraftOpen(true);
-      message.success('已生成 regression case 草稿');
-    } catch {
-      message.error('生成 regression case 失败');
-    } finally {
-      setActing(false);
-    }
+    setActiveTab('daily-review');
+    message.info('正式回归草稿需要在每日质检中从 accepted 问题链生成');
   };
 
   const handleCreateRepairPack = async () => {
-    if (!selectedSample) return;
-    setActing(true);
-    try {
-      const result = await createRepairPack({
-        sample_ids: [selectedSample.sample_id],
-        limit: 1,
-      });
-      setRepairPack(result);
-      setRepairPackOpen(true);
-      if (result.deduplicated) {
-        message.info(`检测到重复，已复用 pack ${result.pack_id}`);
-      } else {
-        message.success('已生成失败案例修复包');
-      }
-    } catch {
-      message.error('生成修复包失败');
-    } finally {
-      setActing(false);
-    }
-  };
-
-  const handleCreateBatchRepairPack = async () => {
-    if (selectedRepairSampleIds.length === 0) return;
-    setActing(true);
-    try {
-      const result = await createRepairPack({
-        sample_ids: selectedRepairSampleIds,
-        limit: selectedRepairSampleIds.length,
-      });
-      setRepairPack(result);
-      setRepairPackOpen(true);
-      if (result.deduplicated) {
-        message.info(`检测到重复，已复用 pack ${result.pack_id}`);
-      } else {
-        message.success(`已生成 ${selectedRepairSampleIds.length} 条失败案例修复包`);
-      }
-    } catch {
-      message.error('批量生成修复包失败，请按修复目标分组后重试');
-    } finally {
-      setActing(false);
-    }
+    setActiveTab('daily-review');
+    message.info('正式修复包需要在每日质检中从 accepted 问题链导出');
   };
 
   const handleOpenRepairPackDetail = useCallback((pack: DataFlywheelRepairPack) => {
     setRepairPack(pack);
+    setRepairPackOpen(true);
+  }, []);
+
+  const handleDailyReviewCaseDraftCreated = useCallback((result: CaseDraft) => {
+    setDraft(result);
+    setDraftOpen(true);
+  }, []);
+
+  const handleDailyReviewRepairPackCreated = useCallback((result: DataFlywheelRepairPack) => {
+    setRepairPack(result);
     setRepairPackOpen(true);
   }, []);
 
@@ -928,17 +884,6 @@ export default function DataFlywheel() {
         >
           批量 AI 分析
         </Button>
-        <Button
-          aria-label="批量导出修复包"
-          icon={<CloudDownloadOutlined />}
-          loading={acting}
-          disabled={selectedRepairSampleIds.length === 0}
-          onClick={handleCreateBatchRepairPack}
-        >
-          {selectedRepairSampleIds.length > 0
-            ? `批量导出修复包 ${selectedRepairSampleIds.length}`
-            : '批量导出修复包'}
-        </Button>
         <Typography.Text style={{ color: palette.textMuted }}>共 {total} 条</Typography.Text>
       </Space>
     </Card>
@@ -1054,6 +999,7 @@ export default function DataFlywheel() {
         }
       />
       <AnnotationPanel
+        mode="evidence"
         selectedSample={annotationTarget ? selectedSample ?? sessionAnnotationPlaceholder(annotationTarget) : null}
         label={currentLabel}
         comment={comment}
@@ -1080,6 +1026,7 @@ export default function DataFlywheel() {
         onResolveLabel={handleResolveLabel}
         onCopyDebug={handleCopyDebug}
         onExportJsonl={handleExportJsonl}
+        onOpenDailyReview={() => setActiveTab('daily-review')}
         onMarkBadCase={handleMarkBadCase}
         onCreateRegressionCase={handleCreateRegressionCase}
         onCreateRepairPack={handleCreateRepairPack}
@@ -1098,7 +1045,7 @@ export default function DataFlywheel() {
           { label: '正常对话保留', value: Math.max(0, visibleSamples.length - candidateVisibleSamples.length) },
           { label: '事件缺失', value: missingEventCount },
         ]}
-        flow="浏览原始 turn -> 选择样本 -> 右侧查看证据 / 标注"
+        flow="浏览原始 turn -> 选择样本 -> 右侧查看证据 -> 打开每日质检"
       />
       {filterBar}
       <CollapsibleWorkspace
@@ -1125,7 +1072,7 @@ export default function DataFlywheel() {
           { label: 'AI 待审', value: aiPrelabelCount },
           { label: 'P0', value: p0Count },
         ]}
-        flow="先判优先级 -> 打开单 turn -> 采纳 / 驳回 / 标注"
+        flow="先判优先级 -> 打开单 turn -> 查验证据 -> 打开每日质检"
       />
       {filterBar}
       <CollapsibleWorkspace
@@ -1144,14 +1091,14 @@ export default function DataFlywheel() {
     <>
       <WorkbenchHeader
         title="Session 复盘"
-        description="按完整会话复盘上下文，保存 session 级标签；选择 turn 后可进入 turn 级审核。"
+        description="按完整会话复盘上下文，定位候选问题；最终审核请进入每日质检。"
         tone="session"
         stats={[
           { label: '会话归档', value: archiveGroups.length },
           { label: '问题会话', value: confirmedIssueGroups.length },
           { label: '已标注问题', value: confirmedIssueCount },
         ]}
-        flow="选择 session -> 看完整上下文 -> 标注整个会话或下钻 turn"
+        flow="选择 session -> 看完整上下文 -> 下钻 turn -> 打开每日质检"
       />
       {filterBar}
       <CollapsibleWorkspace
@@ -1170,14 +1117,14 @@ export default function DataFlywheel() {
     <>
       <WorkbenchHeader
         title="Turn 审核"
-        description="聚焦单轮输入、回复、工具链路、pending lifecycle、AI 预判和 turn 级标注。"
+        description="聚焦单轮输入、回复、工具链路、pending lifecycle 和 AI 预判，只用于查证。"
         tone="turn"
         stats={[
           { label: '当前 turn', value: selectedSample ? `#${selectedSample.turn_id}` : '-' },
           { label: '风险', value: selectedSample?.risk_score?.toFixed(2) ?? '-' },
           { label: '工具链路', value: selectedSample ? `${selectedSample.selected_tools.length}/${selectedSample.actual_tools.length}` : '-' },
         ]}
-        flow="核对用户输入 -> 对比回复和工具 -> 保存 turn 级结论"
+        flow="核对用户输入 -> 对比回复和工具 -> 打开每日质检"
       />
       {filterBar}
       <CollapsibleWorkspace
@@ -1266,7 +1213,12 @@ export default function DataFlywheel() {
                 <EditOutlined /> 每日质检
               </span>
             ),
-            children: <DailyReviewWorkbench />,
+            children: (
+              <DailyReviewWorkbench
+                onCaseDraftCreated={handleDailyReviewCaseDraftCreated}
+                onRepairPackCreated={handleDailyReviewRepairPackCreated}
+              />
+            ),
           },
           {
             key: 'advanced-search',
@@ -1910,13 +1862,6 @@ function latestConfirmedProblemTurn(samples: DataFlywheelSample[], sessionKey: s
 
 function sessionProblemItems(samples: DataFlywheelSample[], sessionKey: string) {
   return confirmedProblemTurns(samples, sessionKey).map((sample) => ({ sample }));
-}
-
-function confirmedProblemSampleIds(samples: DataFlywheelSample[], sessionKeys: string[]) {
-  const selectedSessions = new Set(sessionKeys);
-  return samples
-    .filter((sample) => hasTurnConfirmedIssue(sample) && selectedSessions.has(sessionArchiveKey(sample)))
-    .map((sample) => sample.sample_id);
 }
 
 function confirmedProblemTurns(samples: DataFlywheelSample[], sessionKey: string) {

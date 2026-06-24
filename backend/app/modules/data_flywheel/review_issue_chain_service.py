@@ -345,7 +345,7 @@ def _chain_for_turn(
     )
     events = _events_for_turn(trigger)
     sample = _sample_row(trigger, labels, events, prelabels=prelabels)
-    evidence = evidence_checklist(trigger, events)
+    evidence = evidence_checklist(db, trigger, events)
     status = (
         "needs_evidence"
         if evidence_status(evidence) == "needs_evidence"
@@ -402,9 +402,7 @@ def _related_turns_from_chain(
     by_id = {turn.id: turn for turn in session_turns}
     return {
         "context_turns": [
-            by_id[turn_id]
-            for turn_id in chain["context_turn_ids"]
-            if turn_id in by_id
+            by_id[turn_id] for turn_id in chain["context_turn_ids"] if turn_id in by_id
         ],
         "result_turns": [
             by_id[turn_id] for turn_id in chain["result_turn_ids"] if turn_id in by_id

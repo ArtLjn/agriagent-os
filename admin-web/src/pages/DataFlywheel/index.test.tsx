@@ -8,8 +8,9 @@ import type { TraceDiagnostics } from '../../api/admin';
 import {
   acceptSamplePrelabel,
   addSampleLabel,
-  createCaseDraft,
   createRepairPack,
+  createReviewIssueChainCaseDraft,
+  createReviewIssueChainRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
   getDailyReviewInbox,
@@ -43,8 +44,9 @@ import type {
 vi.mock('../../api/dataFlywheel', () => ({
   acceptSamplePrelabel: vi.fn(),
   addSampleLabel: vi.fn(),
-  createCaseDraft: vi.fn(),
   createRepairPack: vi.fn(),
+  createReviewIssueChainCaseDraft: vi.fn(),
+  createReviewIssueChainRepairPack: vi.fn(),
   createSamplePrelabel: vi.fn(),
   createSamplePrelabelBatch: vi.fn(),
   discardRepairPack: vi.fn(),
@@ -78,8 +80,12 @@ vi.mock('../../api/admin', () => ({
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) => {
   const result = rtlRender(ui, options);
   const currentTestName = expect.getState().currentTestName ?? '';
+  const staysOnDailyReview =
+    currentTestName.includes('默认进入每日质检') ||
+    currentTestName.includes('每日质检') ||
+    currentTestName.includes('IssueChain');
   if (
-    !currentTestName.includes('默认进入每日质检') &&
+    !staysOnDailyReview &&
     !currentTestName.includes('高级搜索中保留旧样本检索入口')
   ) {
     fireEvent.click(screen.getByRole('tab', { name: /高级搜索/ }));
@@ -382,8 +388,9 @@ const mockedPrelabelBatch = vi.mocked(createSamplePrelabelBatch);
 const mockedPrelabelBatchJob = vi.mocked(getSamplePrelabelBatchJob);
 const mockedAcceptPrelabel = vi.mocked(acceptSamplePrelabel);
 const mockedAddLabel = vi.mocked(addSampleLabel);
-const mockedCreateDraft = vi.mocked(createCaseDraft);
 const mockedCreateRepairPack = vi.mocked(createRepairPack);
+const mockedCreateChainDraft = vi.mocked(createReviewIssueChainCaseDraft);
+const mockedCreateChainRepairPack = vi.mocked(createReviewIssueChainRepairPack);
 const mockedCreatePrelabel = vi.mocked(createSamplePrelabel);
 const mockedMarkBadCase = vi.mocked(markBadCase);
 const mockedDeleteLabel = vi.mocked(deleteSampleLabel);
@@ -458,6 +465,27 @@ const repairPack: DataFlywheelRepairPack = {
     readme: '# Repair Pack repair-guardrail-abc123',
     debug_files: {},
     regression_drafts: {},
+  },
+};
+
+const chainRepairPack: DataFlywheelRepairPack = {
+  ...repairPack,
+  id: 2,
+  pack_id: 'repair-chain-router-abc123',
+  fix_target: 'router',
+  labels: ['tool_parameter_mismatch'],
+  source_chain_ids: ['chain:1:session-a:3'],
+  manifest: {
+    ...repairPack.manifest,
+    source_chain_ids: ['chain:1:session-a:3'],
+  },
+  payload: {
+    ...repairPack.payload!,
+    manifest: {
+      ...repairPack.payload!.manifest,
+      source_chain_ids: ['chain:1:session-a:3'],
+    },
+    readme: '# Repair Pack\nsource_chain_ids: chain:1:session-a:3',
   },
 };
 
@@ -642,6 +670,31 @@ const reviewChainDetail: ReviewIssueChainDetail = {
   ai_judge: dailyReviewInbox.items[0].highest_risk_chain.ai_judge,
 };
 
+const acceptedReviewChainDetail: ReviewIssueChainDetail = {
+  ...reviewChainDetail,
+  chain: {
+    ...reviewChainDetail.chain,
+    status: 'accepted',
+    human_review: {
+      status: 'accepted',
+      labels: [],
+      quality_labels: ['tool_parameter_mismatch', 'needs_regression'],
+      expected_behavior: '应保留张三和李四两个工人的批量结算范围',
+      root_cause: '批量作用域被收窄为单人',
+    },
+    regression: {
+      needs_regression: true,
+      regression_ready: true,
+      source_sample_id: sample.sample_id,
+    },
+    repair: {
+      fix_target: 'router',
+      regression_ready: true,
+      export_blocked_reason: null,
+    },
+  },
+};
+
 describe('DataFlywheel 页面', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -744,16 +797,25 @@ describe('DataFlywheel 页面', () => {
       comment: '确认工资缺失',
       annotator_id: 'admin',
     });
-    mockedCreateDraft.mockResolvedValue({
+    mockedCreateChainDraft.mockResolvedValue({
       id: 10,
-      draft_id: 'draft:1',
-      source_sample_id: sample.sample_id,
+      draft_id: 'chain-draft:1',
+      chain_id: reviewChainId,
+      source_sample_id: null,
       target_type: 'evaluation_replay',
       status: 'draft',
-      case_json: { request_id: 'req:abc', assertion: 'case_json' },
+      case_json: {
+        chain_id: reviewChainId,
+        request_id: 'req:abc',
+        related_turns: {
+          context_turn_ids: [1, 2],
+          result_turn_ids: [4],
+        },
+      },
       created_by: 'admin',
     });
     mockedCreateRepairPack.mockResolvedValue(repairPack);
+    mockedCreateChainRepairPack.mockResolvedValue(chainRepairPack);
     mockedMarkBadCase.mockResolvedValue({
       id: 3,
       sample_id: sample.sample_id,
@@ -825,7 +887,7 @@ describe('DataFlywheel 页面', () => {
         status: 'accepted',
         context_turn_ids: [2],
         result_turn_ids: [1, 4],
-        final_labels: ['needs_regression', 'wrong_tool_selection'],
+        final_labels: ['wrong_tool_selection', 'needs_regression'],
         root_cause: '批量作用域被收窄为单人',
         expected_behavior: '应保留张三和李四两个工人的批量结算范围',
         false_positive_reason: undefined,
@@ -835,6 +897,117 @@ describe('DataFlywheel 页面', () => {
     expect(mockedInbox).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 50, offset: 0 }));
     await waitFor(() => {
       expect(mockedReviewChain).toHaveBeenCalledWith(nextReviewChainId);
+    });
+  }, 15000);
+
+  it('每日质检从 accepted 问题链生成回归草稿并显示 Case Draft', async () => {
+    mockedReviewChain.mockResolvedValue(acceptedReviewChainDetail);
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    await screen.findByText('应保留张三和李四两个工人的批量结算范围');
+
+    fireEvent.click(screen.getByRole('button', { name: /生成回归草稿/ }));
+
+    await waitFor(() => {
+      expect(mockedCreateChainDraft).toHaveBeenCalledWith(reviewChainId, 'evaluation_replay');
+    });
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Case Draft')).toBeInTheDocument();
+    expect(within(dialog).getByText(/chain:1:session-a:3/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/related_turns/)).toBeInTheDocument();
+  }, 15000);
+
+  it('每日质检从 accepted 问题链导出修复包并显示 source_chain_ids 预览', async () => {
+    mockedReviewChain.mockResolvedValue(acceptedReviewChainDetail);
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    await screen.findByText('应保留张三和李四两个工人的批量结算范围');
+
+    fireEvent.click(screen.getByRole('button', { name: /导出修复包/ }));
+
+    await waitFor(() => {
+      expect(mockedCreateChainRepairPack).toHaveBeenCalledWith(reviewChainId);
+    });
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Repair Pack')).toBeInTheDocument();
+    expect(within(dialog).getByText('repair-chain-router-abc123')).toBeInTheDocument();
+    expect(within(dialog).getByText(/source_chain_ids/)).toBeInTheDocument();
+  }, 15000);
+
+  it('每日质检未 accepted、needs_evidence 或缺 expected behavior 时禁用闭环出口并展示原因', async () => {
+    const { unmount } = render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    expect(await screen.findByText('阻断原因：问题链尚未 accepted')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /生成回归草稿/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /导出修复包/ })).toBeDisabled();
+
+    unmount();
+    vi.clearAllMocks();
+    mockedList.mockResolvedValue({ items: [sample], total: 1 });
+    mockedInbox.mockResolvedValue(dailyReviewInbox);
+    mockedReviewChain.mockResolvedValue({
+      ...reviewChainDetail,
+      chain: {
+        ...reviewChainDetail.chain,
+        status: 'needs_evidence',
+        human_review: { ...reviewChainDetail.chain.human_review, status: 'needs_evidence' },
+      },
+    });
+    const secondRender = render(<DataFlywheel />);
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    expect(await screen.findByText('阻断原因：问题链仍需补证据')).toBeInTheDocument();
+
+    secondRender.unmount();
+    vi.clearAllMocks();
+    mockedList.mockResolvedValue({ items: [sample], total: 1 });
+    mockedInbox.mockResolvedValue(dailyReviewInbox);
+    mockedReviewChain.mockResolvedValue({
+      ...reviewChainDetail,
+      chain: {
+        ...reviewChainDetail.chain,
+        status: 'accepted',
+        human_review: { ...reviewChainDetail.chain.human_review, status: 'accepted', expected_behavior: null },
+      },
+    });
+    render(<DataFlywheel />);
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    expect(await screen.findByText('阻断原因：缺少 expected behavior')).toBeInTheDocument();
+    expect(mockedCreateChainDraft).not.toHaveBeenCalled();
+    expect(mockedCreateChainRepairPack).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('IssueChain 审核面板展示完整固定标签集合', async () => {
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    fireEvent.click(screen.getByLabelText('采纳坏例'));
+
+    [
+      'good_reply',
+      'bad_reply',
+      'wrong_tool_selection',
+      'tool_parameter_mismatch',
+      'pending_missed',
+      'hallucinated_execution',
+      'tool_error_ignored',
+      'off_topic',
+      'sensitive_info_leak',
+      'missing_wage',
+      'disabled_worker_used',
+      'unclear_intent',
+      'not_actionable',
+      'needs_regression',
+    ].forEach((label) => {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
     });
   }, 15000);
 
@@ -884,7 +1057,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('pending.plan.created')).toBeInTheDocument();
   });
 
-  it('批量导出修复包只使用已标注问题列表，不使用用户会话勾选', async () => {
+  it('高级搜索不暴露批量 sample repair pack 作为默认正式出口', async () => {
     const confirmedBadSample: DataFlywheelSample = {
       ...anotherSample,
       quality_labels: ['bad_reply'],
@@ -897,18 +1070,12 @@ describe('DataFlywheel 页面', () => {
     await screen.findByTestId('sample-row-turn:session-a:3');
     await userEvent.click(screen.getByTestId('archive-confirmed-issues'));
     await userEvent.click(screen.getByRole('checkbox', { name: /选择问题会话 session-b/ }));
-    await userEvent.click(screen.getByRole('button', { name: '批量导出修复包' }));
 
-    await waitFor(() => {
-      expect(mockedCreateRepairPack).toHaveBeenCalledWith({
-        sample_ids: [confirmedBadSample.sample_id],
-        limit: 1,
-      });
-    });
-    expect(await screen.findByText('repair-guardrail-abc123')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /批量导出修复包/ })).not.toBeInTheDocument();
+    expect(mockedCreateRepairPack).not.toHaveBeenCalled();
   });
 
-  it('已标注问题列表支持勾选问题会话后批量导出', async () => {
+  it('高级搜索问题会话勾选不会直接导出正式 repair pack', async () => {
     const user = userEvent.setup();
     const confirmedBadSample: DataFlywheelSample = {
       ...anotherSample,
@@ -922,23 +1089,13 @@ describe('DataFlywheel 页面', () => {
     await screen.findByTestId('sample-row-turn:session-a:3');
     await user.click(screen.getByTestId('archive-confirmed-issues'));
 
-    expect(screen.getByRole('button', { name: '批量导出修复包' })).toBeDisabled();
-
     await user.click(screen.getByRole('checkbox', { name: /选择问题会话 session-b/ }));
-    const exportButton = screen.getByRole('button', { name: '批量导出修复包' });
-    expect(exportButton).toHaveTextContent('批量导出修复包 1');
-    expect(exportButton).toBeEnabled();
-    await user.click(exportButton);
 
-    await waitFor(() => {
-      expect(mockedCreateRepairPack).toHaveBeenCalledWith({
-        sample_ids: [confirmedBadSample.sample_id],
-        limit: 1,
-      });
-    });
+    expect(screen.queryByRole('button', { name: /批量导出修复包/ })).not.toBeInTheDocument();
+    expect(mockedCreateRepairPack).not.toHaveBeenCalled();
   });
 
-  it('已标注问题列表支持全选问题会话后批量导出', async () => {
+  it('高级搜索问题会话全选不会直接导出正式 repair pack', async () => {
     const user = userEvent.setup();
     const firstProblemSample: DataFlywheelSample = {
       ...sample,
@@ -959,16 +1116,9 @@ describe('DataFlywheel 页面', () => {
     await user.click(screen.getByTestId('archive-confirmed-issues'));
 
     await user.click(screen.getByRole('checkbox', { name: '全选问题会话' }));
-    const exportButton = screen.getByRole('button', { name: '批量导出修复包' });
-    expect(exportButton).toHaveTextContent('批量导出修复包 2');
-    await user.click(exportButton);
 
-    await waitFor(() => {
-      expect(mockedCreateRepairPack).toHaveBeenCalledWith({
-        sample_ids: [firstProblemSample.sample_id, secondProblemSample.sample_id],
-        limit: 2,
-      });
-    });
+    expect(screen.queryByRole('button', { name: /批量导出修复包/ })).not.toBeInTheDocument();
+    expect(mockedCreateRepairPack).not.toHaveBeenCalled();
   });
 
   it('输入搜索框不会立刻重新请求，点击查询后才使用通用 q 搜索', async () => {
@@ -1067,7 +1217,9 @@ describe('DataFlywheel 页面', () => {
     await waitFor(() => {
       expect(mockedDetail).toHaveBeenCalledWith(confirmedBadSample.sample_id);
     });
-    expect(screen.getByText('质量标签 · turn #4')).toBeInTheDocument();
+    expect(screen.getByText('查证与证据')).toBeInTheDocument();
+    expect(screen.queryByText('质量标签 · turn #4')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /保存标注/ })).not.toBeInTheDocument();
     expect(screen.getAllByText('第二条样本备注').length).toBeGreaterThan(0);
   });
 
@@ -1288,32 +1440,24 @@ describe('DataFlywheel 页面', () => {
     expect(await screen.findByText('暂无 Reflection 检查')).toBeInTheDocument();
   });
 
-  it('可以选择工资缺失、填写备注并保存标注', async () => {
+  it('高级搜索不能保存 final label', async () => {
     const user = userEvent.setup();
     render(<DataFlywheel />);
 
     await fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
     await screen.findByText('样本详情');
 
-    await user.click(screen.getByLabelText('工资缺失'));
-    const commentBox = screen.getByPlaceholderText('记录判断依据、复现条件或后续处理建议');
-    await user.clear(commentBox);
-    await user.type(commentBox, '确认工资缺失');
-    await user.click(screen.getByRole('button', { name: /保存标注/ }));
-
-    await waitFor(() => {
-      expect(mockedAddLabel).toHaveBeenCalledWith(sample.sample_id, {
-        label: 'missing_wage',
-        comment: '确认工资缺失',
-        sample_type: 'turn',
-        session_id: 'session-a',
-        turn_id: 3,
-        request_id: 'req:abc',
-      });
-    });
+    expect(screen.getByText('查证与证据')).toBeInTheDocument();
+    expect(screen.queryByLabelText('工资缺失')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('记录判断依据、复现条件或后续处理建议')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /保存标注/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /打开每日质检/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /打开每日质检/ }));
+    expect(await screen.findByRole('tab', { name: /每日质检/ })).toHaveAttribute('aria-selected', 'true');
+    expect(mockedAddLabel).not.toHaveBeenCalled();
   });
 
-  it('在完整会话中保存标注后刷新 session 审阅流', async () => {
+  it('高级搜索完整会话不能保存 final label', async () => {
     const user = userEvent.setup();
     mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
     render(<DataFlywheel />);
@@ -1321,50 +1465,36 @@ describe('DataFlywheel 页面', () => {
     await screen.findByText('session-a');
     fireEvent.click(screen.getByTestId('archive-session-session-a'));
     await screen.findByText('完整对话记录');
-    fireEvent.click(screen.getByTestId('review-select-turn:session-a:4'));
-    await screen.findByText('样本详情');
+    await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
 
-    await user.click(screen.getByLabelText('坏回复'));
-    await user.click(screen.getByRole('button', { name: /保存标注/ }));
-
-    await waitFor(() => {
-      expect(mockedSessionReview).toHaveBeenCalledTimes(2);
-    });
-    expect(mockedSessionReview).toHaveBeenLastCalledWith('session-a');
+    expect(screen.getByText('查证与证据')).toBeInTheDocument();
+    expect(screen.queryByLabelText('需要回归')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /保存标注/ })).not.toBeInTheDocument();
+    expect(mockedAddLabel).not.toHaveBeenCalled();
   });
 
-  it('点击生成 regression case 后创建草稿并显示 Case Draft', async () => {
+  it('高级搜索不能直接创建正式 regression draft', async () => {
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
     await screen.findByText('样本详情');
-    fireEvent.click(screen.getByRole('button', { name: /生成 regression case/ }));
 
-    await waitFor(() => {
-      expect(mockedCreateDraft).toHaveBeenCalledWith(sample.sample_id, 'evaluation_replay');
-    });
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Case Draft')).toBeInTheDocument();
-    expect(within(dialog).getByText(/case_json/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /生成 regression case/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Case Draft')).not.toBeInTheDocument();
+    expect(mockedCreateChainDraft).not.toHaveBeenCalled();
   });
 
-  it('点击标记 bad case 调用 markBadCase', async () => {
+  it('高级搜索不能标记 bad case 或直接导出正式 repair pack', async () => {
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
     await screen.findByText('样本详情');
-    fireEvent.click(screen.getByRole('button', { name: /标记 bad case/ }));
 
-    await waitFor(() => {
-      expect(mockedMarkBadCase).toHaveBeenCalledWith(sample.sample_id, {
-        label: 'bad_reply',
-        comment: '初始备注',
-        sample_type: 'turn',
-        session_id: 'session-a',
-        turn_id: 3,
-        request_id: 'req:abc',
-      });
-    });
+    expect(screen.queryByRole('button', { name: /标记 bad case/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /生成修复包/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Evidence Pack/ })).toBeInTheDocument();
+    expect(mockedMarkBadCase).not.toHaveBeenCalled();
+    expect(mockedCreateRepairPack).not.toHaveBeenCalled();
   });
 
   it('在会话归档视图点击同步会话后同步当前 session 并刷新列表与会话审阅', async () => {
@@ -1506,7 +1636,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('缺失，可点击“同步会话”重建基础事件')).toBeInTheDocument();
   });
 
-  it('可以对完整会话保存会话级标注', async () => {
+  it('高级搜索不能对完整会话保存会话级 final label', async () => {
     const user = userEvent.setup();
     mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
     render(<DataFlywheel />);
@@ -1516,23 +1646,14 @@ describe('DataFlywheel 页面', () => {
     await screen.findByText('完整对话记录');
     await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
 
-    await user.click(screen.getByLabelText('需要回归'));
-    const commentBox = screen.getByPlaceholderText('记录判断依据、复现条件或后续处理建议');
-    await user.clear(commentBox);
-    await user.type(commentBox, '整段会话需要回归');
-    await user.click(screen.getByRole('button', { name: /保存标注/ }));
-
-    await waitFor(() => {
-      expect(mockedAddLabel).toHaveBeenCalledWith('session:1:session-a', {
-        label: 'needs_regression',
-        comment: '整段会话需要回归',
-        sample_type: 'session',
-        session_id: 'session-a',
-      });
-    });
+    expect(screen.getByText('查证与证据')).toBeInTheDocument();
+    expect(screen.queryByLabelText('需要回归')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('记录判断依据、复现条件或后续处理建议')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /保存标注/ })).not.toBeInTheDocument();
+    expect(mockedAddLabel).not.toHaveBeenCalled();
   });
 
-  it('完整会话级标注下禁用 AI 预判入口', async () => {
+  it('高级搜索完整会话级查证不暴露 AI 预判入口', async () => {
     const user = userEvent.setup();
     mockedList.mockResolvedValue({ items: [sample, sessionSecondSample], total: 2 });
     render(<DataFlywheel />);
@@ -1542,10 +1663,7 @@ describe('DataFlywheel 页面', () => {
     await screen.findByText('完整对话记录');
     await user.click(screen.getByRole('button', { name: /标注整个会话/ }));
 
-    const prelabelButton = screen.getByRole('button', { name: 'AI 预判' });
-    expect(prelabelButton).toBeDisabled();
-    await user.click(prelabelButton);
-
+    expect(screen.queryByRole('button', { name: 'AI 预判' })).not.toBeInTheDocument();
     expect(mockedCreatePrelabel).not.toHaveBeenCalled();
   });
 
@@ -1587,8 +1705,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByTestId('problem-session-session-a')).toBeInTheDocument();
   });
 
-  it('从问题会话归档进入后可以将完整会话标注标记为已完成', async () => {
-    const user = userEvent.setup();
+  it('高级搜索从问题会话归档进入后不能 resolve 完整会话标注', async () => {
     const sessionLevelBadSample: DataFlywheelSample = {
       ...sample,
       quality_labels: [],
@@ -1640,39 +1757,28 @@ describe('DataFlywheel 页面', () => {
       expect(mockedSessionAnnotations).toHaveBeenCalledWith('session-a');
     });
     expect(screen.getAllByText('错误的 json 泄漏判断').length).toBeGreaterThan(0);
-    await user.click(screen.getByRole('button', { name: /标记已完成 sensitive_info_leak/ }));
-
-    await waitFor(() => {
-      expect(mockedResolveLabel).toHaveBeenCalledWith('session:1:session-a', 9);
-    });
+    expect(screen.queryByRole('button', { name: /标记已完成 sensitive_info_leak/ })).not.toBeInTheDocument();
+    expect(mockedResolveLabel).not.toHaveBeenCalled();
   });
 
-  it('可以删除已有标注并刷新当前样本', async () => {
-    const user = userEvent.setup();
+  it('高级搜索不能删除已有标注', async () => {
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
     await screen.findByText('样本详情');
-    await user.click(screen.getByRole('button', { name: /删除标注 good_reply/ }));
 
-    await waitFor(() => {
-      expect(mockedDeleteLabel).toHaveBeenCalledWith(sample.sample_id, 1);
-    });
-    expect(mockedDetail).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: /删除标注 good_reply/ })).not.toBeInTheDocument();
+    expect(mockedDeleteLabel).not.toHaveBeenCalled();
   });
 
-  it('可以将已有标注标记为已完成并刷新当前样本', async () => {
-    const user = userEvent.setup();
+  it('高级搜索不能将已有标注标记为已完成', async () => {
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
     await screen.findByText('样本详情');
-    await user.click(screen.getByRole('button', { name: /标记已完成 good_reply/ }));
 
-    await waitFor(() => {
-      expect(mockedResolveLabel).toHaveBeenCalledWith(sample.sample_id, 1);
-    });
-    expect(mockedDetail).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: /标记已完成 good_reply/ })).not.toBeInTheDocument();
+    expect(mockedResolveLabel).not.toHaveBeenCalled();
   });
 
   it('加载样本详情不会自动触发 AI 预标注', async () => {
@@ -1769,7 +1875,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('1 个 pending 事件')).toBeInTheDocument();
   });
 
-  it('采纳 AI 预判后预判队列移除样本并进入已标注问题', async () => {
+  it('高级搜索不能采纳 AI 预判写入人工标签', async () => {
     const prelabel: DataFlywheelPrelabel = {
       id: 9,
       sample_id: sample.sample_id,
@@ -1793,79 +1899,20 @@ describe('DataFlywheel 页面', () => {
       latest_prelabel: prelabel,
       prelabels: [prelabel],
     };
-    const acceptedSample: DataFlywheelSample = {
-      ...sample,
-      quality_labels: ['wrong_tool_selection'],
-      annotation_status: 'labeled',
-      latest_prelabel: { ...prelabel, status: 'accepted' },
-      prelabels: [],
-    };
-    mockedList
-      .mockResolvedValueOnce({ items: [predictedSample], total: 1 })
-      .mockResolvedValueOnce({ items: [acceptedSample], total: 1 });
+    mockedList.mockResolvedValueOnce({ items: [predictedSample], total: 1 });
     mockedDetail.mockResolvedValueOnce({ ...detail, sample: predictedSample, labels: [], prelabels: [prelabel] });
-    mockedAcceptPrelabel.mockResolvedValueOnce({
-      ...prelabel,
-      status: 'accepted',
-      accepted_label_ids: [7],
-    });
     render(<DataFlywheel />);
 
     await screen.findByTestId('archive-ai-prelabels');
     fireEvent.click(screen.getByTestId('archive-ai-prelabels'));
     fireEvent.click(screen.getByTestId('sample-row-turn:session-a:3'));
-    await userEvent.click(await screen.findByRole('button', { name: '采纳 AI 预判' }));
 
-    await waitFor(() => {
-      expect(mockedAcceptPrelabel).toHaveBeenCalledWith(sample.sample_id, 9, {
-        labels: ['wrong_tool_selection'],
-        comment: 'AI 预判采纳：用户需要实时数据，但没有工具调用。',
-      });
-    });
-    expect(mockedList).toHaveBeenCalledTimes(2);
-
-    fireEvent.click(screen.getByTestId('archive-ai-prelabels'));
-    expect(screen.queryByTestId('sample-row-turn:session-a:3')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('archive-confirmed-issues'));
-    expect(screen.getByTestId('problem-session-session-a')).toBeInTheDocument();
+    expect(await screen.findByText('实时查询未调用工具')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '采纳 AI 预判' })).not.toBeInTheDocument();
+    expect(mockedAcceptPrelabel).not.toHaveBeenCalled();
   });
 
-  it('点击 AI 预判后调用 createSamplePrelabel 并展示预判结果', async () => {
-    const prelabel: DataFlywheelPrelabel = {
-      id: 9,
-      sample_id: sample.sample_id,
-      sample_type: 'session_turn',
-      session_id: sample.session_id,
-      turn_id: sample.turn_id,
-      request_id: sample.request_id,
-      source: 'llm_judge',
-      status: 'pending',
-      labels: ['bad_reply', 'pending_missed'],
-      root_cause: '写操作缺少 pending 确认',
-      severity: 'high',
-      confidence: 0.86,
-      reason: '回复声称已安排，但没有完整 pending lifecycle。',
-      recommended_fix: '写操作执行前必须创建 pending plan。',
-      judge_model: 'fake-judge',
-      prompt_version: 'data-flywheel-prelabel-v1',
-    };
-    mockedCreatePrelabel.mockResolvedValueOnce(prelabel);
-    mockedDetail.mockResolvedValueOnce(detail).mockResolvedValueOnce({
-      ...detail,
-      prelabels: [prelabel],
-    });
-    render(<DataFlywheel />);
-
-    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
-    await userEvent.click(await screen.findByRole('button', { name: 'AI 预判' }));
-
-    expect(mockedCreatePrelabel).toHaveBeenCalledWith(sample.sample_id);
-    expect(await screen.findByText('写操作缺少 pending 确认')).toBeInTheDocument();
-    expect(screen.getByTitle('bad_reply')).toHaveTextContent('坏回复');
-    expect(screen.getByTitle('pending_missed')).toHaveTextContent('pending 漏拦截');
-  });
-
-  it('采纳 AI 预判时调用 acceptSamplePrelabel 写入建议标签', async () => {
+  it('高级搜索不能创建 AI 预判但可展示已有预判结果', async () => {
     const prelabel: DataFlywheelPrelabel = {
       id: 9,
       sample_id: sample.sample_id,
@@ -1888,28 +1935,51 @@ describe('DataFlywheel 页面', () => {
       ...detail,
       prelabels: [prelabel],
     });
-    mockedAcceptPrelabel.mockResolvedValueOnce({
-      ...prelabel,
-      status: 'accepted',
-      accepted_label_ids: [7, 8],
+    render(<DataFlywheel />);
+
+    fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+
+    expect(await screen.findByText('写操作缺少 pending 确认')).toBeInTheDocument();
+    expect(screen.getByTitle('bad_reply')).toHaveTextContent('坏回复');
+    expect(screen.getByTitle('pending_missed')).toHaveTextContent('pending 漏拦截');
+    expect(screen.queryByRole('button', { name: 'AI 预判' })).not.toBeInTheDocument();
+    expect(mockedCreatePrelabel).not.toHaveBeenCalled();
+  });
+
+  it('高级搜索不能采纳 AI 预判写入建议标签', async () => {
+    const prelabel: DataFlywheelPrelabel = {
+      id: 9,
+      sample_id: sample.sample_id,
+      sample_type: 'session_turn',
+      session_id: sample.session_id,
+      turn_id: sample.turn_id,
+      request_id: sample.request_id,
+      source: 'llm_judge',
+      status: 'pending',
+      labels: ['bad_reply', 'pending_missed'],
+      root_cause: '写操作缺少 pending 确认',
+      severity: 'high',
+      confidence: 0.86,
+      reason: '回复声称已安排，但没有完整 pending lifecycle。',
+      recommended_fix: '写操作执行前必须创建 pending plan。',
+      judge_model: 'fake-judge',
+      prompt_version: 'data-flywheel-prelabel-v1',
+    };
+    mockedDetail.mockResolvedValueOnce({
+      ...detail,
+      prelabels: [prelabel],
     });
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
-    const commentBox = await screen.findByPlaceholderText('记录判断依据、复现条件或后续处理建议');
-    await userEvent.clear(commentBox);
-    await userEvent.type(commentBox, '人工确认 pending 缺失');
-    await userEvent.click(await screen.findByRole('button', { name: '采纳 AI 预判' }));
 
-    await waitFor(() => {
-      expect(mockedAcceptPrelabel).toHaveBeenCalledWith(sample.sample_id, 9, {
-        labels: ['bad_reply', 'pending_missed'],
-        comment: '人工确认 pending 缺失',
-      });
-    });
+    expect(await screen.findByText('写操作缺少 pending 确认')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('记录判断依据、复现条件或后续处理建议')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '采纳 AI 预判' })).not.toBeInTheDocument();
+    expect(mockedAcceptPrelabel).not.toHaveBeenCalled();
   });
 
-  it('修改 AI 建议标签后点击修改后保存使用修改后的标签', async () => {
+  it('高级搜索不能修改 AI 建议标签后保存', async () => {
     const prelabel: DataFlywheelPrelabel = {
       id: 9,
       sample_id: sample.sample_id,
@@ -1932,33 +2002,17 @@ describe('DataFlywheel 页面', () => {
       ...detail,
       prelabels: [prelabel],
     });
-    mockedAcceptPrelabel.mockResolvedValueOnce({
-      ...prelabel,
-      status: 'accepted',
-      labels: ['unclear_intent'],
-      accepted_label_ids: [8],
-    });
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
-    const prelabelSelect = (await screen.findAllByLabelText('AI 建议标签'))[0];
-    await userEvent.click(within(prelabelSelect).getByLabelText('close'));
-    const selectInput = prelabelSelect.querySelector('.ant-select-selector');
-    expect(selectInput).not.toBeNull();
-    fireEvent.mouseDown(selectInput as Element);
-    const unclearIntentOptions = await screen.findAllByText('意图不清');
-    await userEvent.click(unclearIntentOptions[unclearIntentOptions.length - 1]);
-    await userEvent.click(await screen.findByRole('button', { name: '修改后保存' }));
 
-    await waitFor(() => {
-      expect(mockedAcceptPrelabel).toHaveBeenCalledWith(sample.sample_id, 9, {
-        labels: ['unclear_intent'],
-        comment: '初始备注',
-      });
-    });
+    expect(await screen.findByText('回复不可验证')).toBeInTheDocument();
+    expect(screen.queryByLabelText('AI 建议标签')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '修改后保存' })).not.toBeInTheDocument();
+    expect(mockedAcceptPrelabel).not.toHaveBeenCalled();
   });
 
-  it('点击驳回 AI 预判调用 rejectSamplePrelabel 且不保存人工标签', async () => {
+  it('高级搜索不能驳回 AI 预判或保存人工标签', async () => {
     const prelabel: DataFlywheelPrelabel = {
       id: 9,
       sample_id: sample.sample_id,
@@ -1981,18 +2035,13 @@ describe('DataFlywheel 页面', () => {
       ...detail,
       prelabels: [prelabel],
     });
-    mockedRejectPrelabel.mockResolvedValueOnce({
-      ...prelabel,
-      status: 'rejected',
-    });
     render(<DataFlywheel />);
 
     fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
-    await userEvent.click(await screen.findByRole('button', { name: '驳回 AI 预判' }));
 
-    await waitFor(() => {
-      expect(mockedRejectPrelabel).toHaveBeenCalledWith(sample.sample_id, 9);
-    });
+    expect(await screen.findByText('误判')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '驳回 AI 预判' })).not.toBeInTheDocument();
+    expect(mockedRejectPrelabel).not.toHaveBeenCalled();
     expect(mockedAddLabel).not.toHaveBeenCalled();
   });
 });

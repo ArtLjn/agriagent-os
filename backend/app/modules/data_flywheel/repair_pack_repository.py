@@ -27,6 +27,7 @@ REPAIR_PACK_STATUS_DISCARDED = "discarded"
 MAX_REPAIR_PACK_SCAN_LIMIT = 500
 DEFAULT_REPAIR_PACK_PAGE_SIZE = 20
 MAX_REPAIR_PACK_PAGE_SIZE = 100
+COMPATIBILITY_DEBUG_ASSET_PATH = "compatibility_debug"
 
 
 def list_repair_candidates(
@@ -159,6 +160,7 @@ def create_repair_pack(
         raise
 
     manifest = payload["manifest"]
+    _mark_compatibility_debug_manifest(manifest)
     dedup_key = _compute_dedup_key(
         farm_id=farm_id,
         fix_target=str(manifest["fix_target"]),
@@ -220,7 +222,11 @@ def create_repair_pack(
     db.add(row)
     db.commit()
     db.refresh(row)
-    return {**_pack_to_dict(row), "cases": payload.get("cases_jsonl", []), "payload": payload}
+    return {
+        **_pack_to_dict(row),
+        "cases": payload.get("cases_jsonl", []),
+        "payload": payload,
+    }
 
 
 def get_repair_pack(db: Session, *, farm_id: int, pack_id: str) -> dict[str, Any]:
@@ -256,6 +262,7 @@ def rebuild_repair_pack_files(
         fix_target_override=row.fix_target,
     )
     manifest = payload["manifest"]
+    _mark_compatibility_debug_manifest(manifest)
     if row.dedup_key:
         manifest["dedup_key"] = row.dedup_key
     existing_manifest = row.manifest_json or {}
@@ -386,7 +393,9 @@ def mark_repair_pack_discarded(
     row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
     row.status = REPAIR_PACK_STATUS_DISCARDED
     if reason:
-        row.repair_note = reason if not row.repair_note else f"{row.repair_note}\n{reason}"
+        row.repair_note = (
+            reason if not row.repair_note else f"{row.repair_note}\n{reason}"
+        )
     row.resolved_by = resolved_by
     row.resolved_at = datetime.now()
     db.commit()
@@ -471,7 +480,9 @@ def _open_label_ids_for_samples(
     )
     if labels:
         query = query.filter(AgentDataFlywheelLabel.label.in_(labels))
-    return [int(row.id) for row in query.order_by(AgentDataFlywheelLabel.id.asc()).all()]
+    return [
+        int(row.id) for row in query.order_by(AgentDataFlywheelLabel.id.asc()).all()
+    ]
 
 
 def _resolve_open_labels(db: Session, *, farm_id: int, label_ids: list[int]) -> None:
@@ -491,6 +502,8 @@ def _resolve_open_labels(db: Session, *, farm_id: int, label_ids: list[int]) -> 
 
 
 def _pack_to_dict(row: AgentRepairPack) -> dict[str, Any]:
+    manifest = dict(row.manifest_json or {})
+    _mark_compatibility_debug_manifest(manifest)
     return {
         "id": row.id,
         "pack_id": row.pack_id,
@@ -501,7 +514,7 @@ def _pack_to_dict(row: AgentRepairPack) -> dict[str, Any]:
         "dedup_key": row.dedup_key,
         "status": row.status,
         "export_path": row.export_path,
-        "manifest": row.manifest_json or {},
+        "manifest": manifest,
         "cases": [],
         "export_error": row.export_error,
         "repair_note": row.repair_note,
@@ -555,7 +568,9 @@ def _find_existing_active_pack(
 def _group_suggestions(samples: list[dict[str, Any]]) -> dict[str, list[str]]:
     return {
         target: [
-            str((detail.get("sample") or {}).get("sample_id") or detail.get("sample_id"))
+            str(
+                (detail.get("sample") or {}).get("sample_id") or detail.get("sample_id")
+            )
             for detail in details
         ]
         for target, details in group_samples_by_fix_target(samples).items()
@@ -621,3 +636,8 @@ def _write_json(path: Path, content: Any) -> None:
         json.dumps(content, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def _mark_compatibility_debug_manifest(manifest: dict[str, Any]) -> None:
+    manifest["asset_path"] = COMPATIBILITY_DEBUG_ASSET_PATH
+    manifest["formal_review_required"] = True

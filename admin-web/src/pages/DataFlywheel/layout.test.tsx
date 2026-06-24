@@ -21,6 +21,8 @@ vi.mock('../../api/dataFlywheel', () => ({
   addSampleLabel: vi.fn(),
   createCaseDraft: vi.fn(),
   createRepairPack: vi.fn(),
+  createReviewIssueChainCaseDraft: vi.fn(),
+  createReviewIssueChainRepairPack: vi.fn(),
   exportSampleJsonl: vi.fn(),
   getDailyReviewInbox: vi.fn(),
   getSampleDetail: vi.fn(),

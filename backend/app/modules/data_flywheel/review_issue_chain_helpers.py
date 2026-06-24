@@ -2,9 +2,12 @@
 
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.agent_turn import AgentTurn
+from app.models.conversation import ConversationMessage
+from app.models.trace import TraceRecord
 from app.modules.data_flywheel.service import (
     _events_for_turn,
     _label_to_dict,
@@ -57,7 +60,9 @@ def has_result_evidence(turn: AgentTurn) -> bool:
     return bool(_pending_lifecycle(events) or _tool_events(events))
 
 
-def timeline_turn(db: Session, turn: AgentTurn, *, chain: dict[str, Any]) -> dict[str, Any]:
+def timeline_turn(
+    db: Session, turn: AgentTurn, *, chain: dict[str, Any]
+) -> dict[str, Any]:
     summary = turn_debug_summary(db, turn)
     summary["chain_role"] = chain_role(turn.id, chain)
     return summary
@@ -67,6 +72,7 @@ def turn_debug_summary(db: Session, turn: AgentTurn) -> dict[str, Any]:
     events = _events_for_turn(turn)
     router_decision = _router_decision(events)
     source = _source_to_dict(turn)
+    backfilled = has_backfilled_event(db, turn, events)
     return {
         "turn_id": turn.id,
         "request_id": turn.request_id,
@@ -79,6 +85,7 @@ def turn_debug_summary(db: Session, turn: AgentTurn) -> dict[str, Any]:
         "router_decision": router_decision,
         "source": source,
         "event_log_status": source["event_log_status"],
+        "backfilled_event": backfilled,
     }
 
 
@@ -93,38 +100,135 @@ def chain_role(turn_id: int, chain: dict[str, Any]) -> str:
 
 
 def evidence_checklist(
-    trigger: AgentTurn, events: list[dict[str, Any]]
+    db: Session, trigger: AgentTurn, events: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    source = _source_to_dict(trigger)
-    event_status = source["event_log_status"]
+    turn_id = trigger.id
     return [
-        {
-            "key": "event_log",
-            "status": "present" if event_status == "available" else "missing",
-            "turn_id": trigger.id,
-        },
-        {"key": "chat_messages", "status": "present", "turn_id": trigger.id},
-        {
-            "key": "router_decision",
-            "status": "present" if _router_decision(events) else "missing",
-            "turn_id": trigger.id,
-        },
-        {
-            "key": "tool_or_pending_evidence",
-            "status": (
-                "present"
-                if _tool_events(events) or _pending_lifecycle(events)
-                else "needs_human"
-            ),
-            "turn_id": trigger.id,
-        },
+        _evidence_item("event_log", _event_log_status(trigger), turn_id),
+        _evidence_item(
+            "chat_messages",
+            "present" if _messages_for_turn(db, trigger) else "missing",
+            turn_id,
+        ),
+        _evidence_item(
+            "router_decision",
+            "present" if _router_decision(events) else "missing",
+            turn_id,
+        ),
+        _evidence_item(
+            "tool_result",
+            "present" if _tool_events(events) else "needs_human",
+            turn_id,
+        ),
+        _evidence_item(
+            "pending_lifecycle",
+            "present" if _pending_lifecycle(events) else "needs_human",
+            turn_id,
+        ),
+        _evidence_item(
+            "trace",
+            "present" if has_trace_record(db, trigger) else "missing",
+            turn_id,
+        ),
+        _evidence_item("db_diff", "needs_human", turn_id),
+        _evidence_item(
+            "backfilled_event",
+            "present" if has_backfilled_event(db, trigger, events) else "missing",
+            turn_id,
+        ),
     ]
 
 
 def evidence_status(checklist: list[dict[str, Any]]) -> str:
-    if any(item["status"] == "missing" for item in checklist):
+    required_keys = {"event_log", "chat_messages", "router_decision", "trace"}
+    if any(
+        item["status"] == "missing" and item["key"] in required_keys
+        for item in checklist
+    ):
         return "needs_evidence"
     return "ready_for_review"
+
+
+def _event_log_status(trigger: AgentTurn) -> str:
+    source = _source_to_dict(trigger)
+    return "present" if source["event_log_status"] == "available" else "missing"
+
+
+def _evidence_item(key: str, status: str, turn_id: int | None = None) -> dict[str, Any]:
+    item: dict[str, Any] = {"key": key, "status": status}
+    if turn_id is not None:
+        item["turn_id"] = turn_id
+    return item
+
+
+def has_trace_record(db: Session, turn: AgentTurn) -> bool:
+    message_ids = [
+        message_id
+        for message_id in (turn.user_message_id, turn.assistant_message_id)
+        if message_id is not None
+    ]
+    filters = [
+        (
+            (TraceRecord.session_id == turn.session_id)
+            & (TraceRecord.request_id == turn.request_id)
+        )
+    ]
+    if message_ids:
+        filters.append(TraceRecord.conversation_message_id.in_(message_ids))
+    return (
+        db.query(TraceRecord.id)
+        .filter(
+            TraceRecord.farm_id == turn.farm_id,
+            or_(*filters),
+        )
+        .first()
+        is not None
+    )
+
+
+def has_backfilled_event(
+    db: Session, turn: AgentTurn, events: list[dict[str, Any]]
+) -> bool:
+    if any(_event_is_backfilled(event) for event in events):
+        return True
+    return any(
+        _message_meta_is_backfilled(message) for message in _message_rows(db, turn)
+    )
+
+
+def _event_is_backfilled(event: dict[str, Any]) -> bool:
+    payload = event.get("payload") or {}
+    meta = event.get("meta") or {}
+    return (
+        isinstance(payload, dict)
+        and bool(payload.get("backfilled") or payload.get("event_backfilled"))
+    ) or (
+        isinstance(meta, dict)
+        and bool(meta.get("backfilled") or meta.get("event_backfilled"))
+    )
+
+
+def _message_meta_is_backfilled(message: ConversationMessage) -> bool:
+    meta_json = message.meta_json or {}
+    return bool(
+        isinstance(meta_json, dict)
+        and (meta_json.get("event_backfilled") or meta_json.get("backfilled"))
+    )
+
+
+def _message_rows(db: Session, turn: AgentTurn) -> list[ConversationMessage]:
+    message_ids = [
+        message_id
+        for message_id in (turn.user_message_id, turn.assistant_message_id)
+        if message_id is not None
+    ]
+    if not message_ids:
+        return []
+    return (
+        db.query(ConversationMessage)
+        .filter(ConversationMessage.id.in_(message_ids))
+        .all()
+    )
 
 
 def next_action(evidence_status_value: str) -> str:
@@ -185,7 +289,9 @@ def repair_status(status: str, sample: dict[str, Any]) -> dict[str, Any]:
 
 
 def fix_target(sample: dict[str, Any]) -> str:
-    candidate_types = {item.get("type") for item in sample.get("issue_candidates") or []}
+    candidate_types = {
+        item.get("type") for item in sample.get("issue_candidates") or []
+    }
     candidate_types.add(sample.get("judge_issue_type"))
     if candidate_types & {
         "tool_parameter_mismatch",

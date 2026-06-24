@@ -6,6 +6,8 @@ import {
   addSampleLabel,
   createCaseDraft,
   createRepairPack,
+  createReviewIssueChainCaseDraft,
+  createReviewIssueChainRepairPack,
   createSamplePrelabel,
   createSamplePrelabelBatch,
   discardRepairPack,
@@ -432,6 +434,42 @@ describe('dataFlywheel api', () => {
     expect(result.draft_id).toBe('draft:1');
   });
 
+  it('编码 chain_id 后创建问题链回归草稿并保留 chain metadata', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 13,
+        draft_id: 'chain-draft:1',
+        chain_id: 'chain:1:playground:s:1:12',
+        source_sample_id: null,
+        target_type: 'evaluation_replay',
+        status: 'draft',
+        case_json: {
+          chain_id: 'chain:1:playground:s:1:12',
+          related_turns: {
+            context_turn_ids: [10, 11],
+            result_turn_ids: [13],
+          },
+        },
+        created_by: 'admin',
+      },
+    });
+
+    const result = await createReviewIssueChainCaseDraft(
+      'chain:1:playground:s:1:12',
+      'evaluation_replay'
+    );
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/review-issue-chains/chain%3A1%3Aplayground%3As%3A1%3A12/case-draft',
+      { target_type: 'evaluation_replay' }
+    );
+    expect(result.chain_id).toBe('chain:1:playground:s:1:12');
+    expect(result.case_json.related_turns).toEqual({
+      context_turn_ids: [10, 11],
+      result_turn_ids: [13],
+    });
+  });
+
   it('按样本集合生成 repair pack', async () => {
     mockedApiClient.post.mockResolvedValueOnce({
       data: {
@@ -465,6 +503,41 @@ describe('dataFlywheel api', () => {
       body
     );
     expect(result.pack_id).toBe('repair-pending-plan-abc');
+  });
+
+  it('编码 chain_id 后导出问题链 repair pack 并保留 source_chain_ids', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        id: 2,
+        pack_id: 'repair-chain-abc',
+        fix_target: 'router',
+        labels: ['tool_parameter_mismatch'],
+        source_sample_ids: ['turn:1:s:1'],
+        source_chain_ids: ['chain:1:playground:s:1:12'],
+        status: 'exported',
+        export_path: 'data/repair-packs/repair-chain-abc',
+        manifest: {
+          source_chain_ids: ['chain:1:playground:s:1:12'],
+        },
+        payload: {
+          manifest: {
+            source_chain_ids: ['chain:1:playground:s:1:12'],
+          },
+          cases_jsonl: [],
+          readme: '# Repair Pack',
+          debug_files: {},
+          regression_drafts: {},
+        },
+      },
+    });
+
+    const result = await createReviewIssueChainRepairPack('chain:1:playground:s:1:12');
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/review-issue-chains/chain%3A1%3Aplayground%3As%3A1%3A12/repair-pack'
+    );
+    expect(result.source_chain_ids).toEqual(['chain:1:playground:s:1:12']);
+    expect(result.manifest.source_chain_ids).toEqual(['chain:1:playground:s:1:12']);
   });
 
   it('编码 pack_id 后读取 repair pack 详情', async () => {

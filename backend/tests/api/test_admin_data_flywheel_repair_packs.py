@@ -1,6 +1,7 @@
 """Admin 数据飞轮 repair pack API 测试。"""
 
 import shutil
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -303,5 +304,41 @@ def test_rebuild_repair_pack_endpoint_restores_cleaned_data(
     assert rebuild_resp.status_code == 200
     assert rebuild_resp.json()["pack_id"] == pack_id
     assert rebuild_resp.json()["cases"][0]["sample_id"] == sample_id
+    assert rebuild_resp.json()["manifest"]["asset_path"] == "compatibility_debug"
+    assert rebuild_resp.json()["manifest"]["formal_review_required"] is True
     assert (pack_dir / "manifest.json").exists()
     assert (pack_dir / "cases.jsonl").exists()
+    rebuilt_manifest = json.loads((pack_dir / "manifest.json").read_text())
+    assert rebuilt_manifest["asset_path"] == "compatibility_debug"
+    assert rebuilt_manifest["formal_review_required"] is True
+
+
+def test_sample_repair_pack_is_marked_compatibility_debug(db_session, tmp_path) -> None:
+    turn = _seed_turn(db_session, tmp_path)
+    sample_id = _sample_id(turn)
+    add_sample_label(
+        db_session, farm_id=turn.farm_id, sample_id=sample_id, label="pending_missed"
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        create_resp = client.post(
+            "/admin/data-flywheel/repair-packs",
+            json={"sample_ids": [sample_id]},
+            headers=admin_headers(),
+        )
+        detail_resp = client.get(
+            f"/admin/data-flywheel/repair-packs/{create_resp.json()['pack_id']}",
+            headers=admin_headers(),
+        )
+
+    assert create_resp.status_code == 200
+    data = create_resp.json()
+    assert data["manifest"]["asset_path"] == "compatibility_debug"
+    assert data["manifest"]["formal_review_required"] is True
+    assert "source_chain_ids" not in data["manifest"]
+    assert data["payload"]["manifest"]["asset_path"] == "compatibility_debug"
+    assert data["payload"]["manifest"]["formal_review_required"] is True
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()["manifest"]["asset_path"] == "compatibility_debug"
+    assert detail_resp.json()["manifest"]["formal_review_required"] is True
