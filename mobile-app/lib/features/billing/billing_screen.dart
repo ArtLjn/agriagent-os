@@ -1194,7 +1194,7 @@ class _SearchSortBar extends StatelessWidget {
           Expanded(
             child: Container(
               height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(12),
@@ -1204,27 +1204,28 @@ class _SearchSortBar extends StatelessWidget {
                 children: [
                   const Icon(
                     LucideIcons.search,
-                    size: 16,
+                    size: 15,
                     color: AppColors.subtle,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: TextField(
                       controller: searchController,
                       textInputAction: TextInputAction.search,
                       style: const TextStyle(
                         color: AppColors.ink,
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                       decoration: InputDecoration(
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
-                        hintText: '搜索分类、对象、备注',
+                        hintText: '搜索分类 / 对象',
                         hintStyle: const TextStyle(
                           color: AppColors.subtle,
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         border: InputBorder.none,
                       ),
@@ -1238,10 +1239,10 @@ class _SearchSortBar extends StatelessWidget {
                         onTap: onClearSearch,
                         behavior: HitTestBehavior.opaque,
                         child: const Padding(
-                          padding: EdgeInsets.only(left: 6),
+                          padding: EdgeInsets.only(left: 4),
                           child: Icon(
                             LucideIcons.x,
-                            size: 15,
+                            size: 14,
                             color: AppColors.subtle,
                           ),
                         ),
