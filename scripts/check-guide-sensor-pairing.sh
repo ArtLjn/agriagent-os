@@ -43,6 +43,7 @@ get_paired_script() {
     *print*)           echo "check-lint-expiry.sh" ;;
     *错误信息*)        echo "check-lint-expiry.sh" ;;
     *code*字段*)       echo "check-lint-expiry.sh" ;;
+    *复杂度*|*冗余*|*抽象*|*生成物*|*工作区污染*|*大文件*) echo "check-complexity-budget.sh" ;;
     *)                 echo "" ;;
   esac
 }

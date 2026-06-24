@@ -66,4 +66,7 @@ bug.todo.md
 .worktrees/
 
 farm-index/app/node_modules/
-backend/data/repair-packs
+backend/data/repair-packs/
+output/
+admin-web/dist/
+farm-index/app/dist/
