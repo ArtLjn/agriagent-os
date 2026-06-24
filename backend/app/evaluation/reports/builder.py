@@ -52,6 +52,8 @@ class EvaluationReportBuilder:
                     token_cost=result.token_cost,
                     skill_calls=[call.name for call in result.actual_skill_calls],
                     drilldown_links=result.drilldown_links,
+                    chain_id=_chain_id(result.case_metadata),
+                    metadata=result.case_metadata,
                 )
                 for result in results
             ],
@@ -93,3 +95,8 @@ class EvaluationReportBuilder:
         if not key:
             return
         bucket[str(key)] = bucket.get(str(key), 0) + 1
+
+
+def _chain_id(metadata: dict[str, Any]) -> str | None:
+    value = metadata.get("chain_id")
+    return str(value) if value else None

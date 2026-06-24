@@ -54,6 +54,18 @@ _ISSUE_TYPE_META: dict[str, dict[str, Any]] = {
         "suggested_action": "修复意图识别、工具路由和候选 skill 选择规则。",
         "expected_behavior": "router 应正确识别用户意图，并选择匹配的查询/计算类工具（如 weather.query、worker.search、wage.list）。",
     },
+    "tool_parameter_mismatch": {
+        "fix_target": "router",
+        "priority": 75,
+        "suggested_action": "修复参数抽取、批量作用域保持和 pending 确认策略。",
+        "expected_behavior": "router 应保留用户表达的对象、数量和批量作用域，确认流程不得把多对象意图收窄为单个实体。",
+    },
+    "bulk_intent_narrowed_to_single_entity": {
+        "fix_target": "router",
+        "priority": 75,
+        "suggested_action": "修复参数抽取、批量作用域保持和 pending 确认策略。",
+        "expected_behavior": "router 应保留批量操作范围，pending 确认与执行参数必须覆盖用户要求的全部对象。",
+    },
     "unsafe_write_on_question": {
         "fix_target": "pending_plan",
         "priority": 88,

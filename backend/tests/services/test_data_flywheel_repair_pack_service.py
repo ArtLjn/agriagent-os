@@ -10,6 +10,10 @@ from app.services.data_flywheel_repair_pack_service import (
     group_samples_by_fix_target,
     sanitize_debug_evidence,
 )
+from app.services.data_flywheel_repair_pack_chain import (
+    build_chain_repair_pack_payload,
+    derive_chain_repair_candidate,
+)
 
 pytestmark = pytest.mark.no_db
 
@@ -133,6 +137,42 @@ def test_derive_repair_candidate_uses_pending_prelabel_labels() -> None:
     assert candidate["labels"] == ["wrong_tool_selection"]
 
 
+def test_derive_chain_repair_candidate_routes_parameter_scope_to_router() -> None:
+    detail = {
+        "chain": {
+            "chain_id": "chain:1:sess-1:12",
+            "session_id": "sess-1",
+            "trigger_turn_id": 12,
+            "context_turn_ids": [11],
+            "result_turn_ids": [13],
+            "status": "accepted",
+            "diagnosis": {
+                "candidate_type": "tool_parameter_mismatch",
+                "suggested_labels": ["wrong_tool_selection"],
+            },
+            "human_review": {
+                "final_labels": ["needs_regression", "wrong_tool_selection"],
+                "expected_behavior": "确认批量结算时应保留所有待结算工人。",
+                "root_cause": "参数抽取收窄了批量作用域",
+            },
+        },
+        "evidence_checklist": [{"key": "event_log", "status": "present"}],
+    }
+
+    candidate = derive_chain_repair_candidate(detail)
+
+    assert candidate["fix_target"] == "router"
+    assert candidate["regression_ready"] is True
+    assert "参数抽取" in candidate["suggested_action"]
+    assert "批量作用域" in candidate["suggested_action"]
+    assert "pending 确认" in candidate["suggested_action"]
+    assert candidate["labels"] == [
+        "needs_regression",
+        "wrong_tool_selection",
+        "tool_parameter_mismatch",
+    ]
+
+
 def test_regression_ready_true_when_pending_case_has_assertions() -> None:
     candidate = derive_repair_candidate(
         _sample_detail(
@@ -224,6 +264,95 @@ def test_build_repair_pack_payload_returns_memory_files_and_vibecoding_readme() 
     assert "禁止把 bad reply 直接作为训练数据使用" in payload["readme"]
     assert "debug/turn_1_sess_1_12.json" in payload["debug_files"]
     assert "regression-drafts/case-1.json" in payload["regression_drafts"]
+
+
+def test_build_chain_repair_pack_payload_keeps_trace_fields() -> None:
+    detail = {
+        "chain": {
+            "chain_id": "chain:1:sess-1:12",
+            "session_id": "sess-1",
+            "trigger_turn_id": 12,
+            "context_turn_ids": [11],
+            "result_turn_ids": [13],
+            "status": "accepted",
+            "diagnosis": {
+                "candidate_type": "bulk_intent_narrowed_to_single_entity",
+                "summary": "批量意图被收窄",
+            },
+            "human_review": {
+                "final_labels": ["needs_regression", "wrong_tool_selection"],
+                "expected_behavior": "确认批量结算时应保留所有待结算工人。",
+                "root_cause": "参数抽取收窄了批量作用域",
+            },
+        },
+        "trigger_turn": {
+            "turn_id": 12,
+            "request_id": "req-12",
+            "user_input_preview": "把这些人工都结清",
+            "assistant_reply_preview": "已为王大妈创建结算确认。",
+        },
+        "timeline": [
+            {
+                "turn_id": 11,
+                "messages": [{"role": "assistant", "content": "王大妈、李四未结"}],
+                "tool_events": [],
+                "pending_lifecycle": [],
+            },
+            {
+                "turn_id": 12,
+                "messages": [{"role": "user", "content": "把这些人工都结清"}],
+                "tool_events": [],
+                "pending_lifecycle": [{"event_type": "pending.plan.created"}],
+            },
+            {
+                "turn_id": 13,
+                "messages": [{"role": "user", "content": "确认"}],
+                "tool_events": [{"event_type": "tool.call.finished"}],
+                "pending_lifecycle": [],
+            },
+        ],
+        "evidence_checklist": [
+            {"key": "event_log", "status": "present"},
+            {"key": "db_diff", "status": "needs_human"},
+        ],
+        "case_draft": {
+            "case_json": {
+                "case_id": "regression-chain-1",
+                "metadata": {"chain_id": "chain:1:sess-1:12"},
+                "issue_assertions": [{"type": "bulk_intent_narrowed_to_single_entity"}],
+            }
+        },
+    }
+
+    payload = build_chain_repair_pack_payload(
+        detail,
+        pack_id="repair-router-abc",
+        export_path="repair-packs/repair-router-abc",
+        created_by="admin-1",
+    )
+
+    manifest = payload["manifest"]
+    case = payload["cases_jsonl"][0]
+    assert manifest["source_chain_ids"] == ["chain:1:sess-1:12"]
+    assert manifest["source_sample_ids"] == ["turn:1:sess-1:12"]
+    assert manifest["fix_target"] == "router"
+    assert manifest["root_cause"] == "参数抽取收窄了批量作用域"
+    assert manifest["expected_behavior"] == "确认批量结算时应保留所有待结算工人。"
+    assert manifest["warnings"] == [
+        {
+            "chain_id": "chain:1:sess-1:12",
+            "reason": "EVIDENCE_NEEDS_HUMAN",
+            "evidence_key": "db_diff",
+        }
+    ]
+    assert case["chain_id"] == "chain:1:sess-1:12"
+    assert case["trigger_turn_id"] == 12
+    assert case["context_turn_ids"] == [11]
+    assert case["result_turn_ids"] == [13]
+    assert case["source_debug_json"] == "debug/chain_1_sess_1_12.json"
+    assert case["regression_draft"] == "regression-drafts/regression-chain-1.json"
+    debug = payload["debug_files"]["debug/chain_1_sess_1_12.json"]
+    assert [turn["turn_id"] for turn in debug["related_turns"]] == [11, 12, 13]
 
 
 def test_sanitize_debug_evidence_redacts_secrets_env_and_phone_numbers() -> None:

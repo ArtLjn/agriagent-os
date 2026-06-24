@@ -801,9 +801,8 @@ def _sample_row(
         "chat_record_source": CHAT_RECORD_SOURCE_MYSQL,
         "selected_tools": selected_tools,
         "actual_tools": _actual_tools(events),
-        "issue_candidates": detect_issue_candidates(
-            user_input=turn.input_preview,
-            assistant_reply=turn.reply_preview,
+        "issue_candidates": _issue_candidates_for_turn(
+            turn=turn,
             selected_tools=selected_tools,
             events=events,
             pending_lifecycle=pending_lifecycle,
@@ -840,6 +839,57 @@ def _messages_for_turn(db: Session, turn: AgentTurn) -> list[dict[str, Any]]:
         )
         if item is not None
     ]
+
+
+def _issue_candidates_for_turn(
+    *,
+    turn: AgentTurn,
+    selected_tools: list[str],
+    events: list[dict[str, Any]],
+    pending_lifecycle: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    detected = detect_issue_candidates(
+        user_input=turn.input_preview,
+        assistant_reply=turn.reply_preview,
+        selected_tools=selected_tools,
+        events=events,
+        pending_lifecycle=pending_lifecycle,
+    )
+    rule_candidates = [
+        _rule_hit_candidate(rule_hit)
+        for rule_hit in turn.rule_hits or []
+        if rule_hit in _CHAIN_RULE_HIT_EXPECTED
+    ]
+    merged: list[dict[str, str]] = []
+    for candidate in [*rule_candidates, *detected]:
+        if not any(item.get("type") == candidate.get("type") for item in merged):
+            merged.append(candidate)
+    return merged
+
+
+_CHAIN_RULE_HIT_EXPECTED = {
+    "tool_parameter_mismatch": {
+        "reason": "工具参数与用户表达的对象或作用域不一致",
+        "evidence": "router parameter extraction",
+        "suggested_label": "wrong_tool_selection",
+    },
+    "bulk_intent_narrowed_to_single_entity": {
+        "reason": "批量意图在参数抽取或确认流程中被收窄为单个实体",
+        "evidence": "bulk scope narrowed",
+        "suggested_label": "wrong_tool_selection",
+    },
+}
+
+
+def _rule_hit_candidate(rule_hit: str) -> dict[str, str]:
+    meta = _CHAIN_RULE_HIT_EXPECTED[rule_hit]
+    return {
+        "type": rule_hit,
+        "severity": "high",
+        "reason": meta["reason"],
+        "evidence": meta["evidence"],
+        "suggested_label": meta["suggested_label"],
+    }
 
 
 def _message_dict(db: Session, message_id: int | None) -> dict[str, Any] | None:

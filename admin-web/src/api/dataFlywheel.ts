@@ -200,6 +200,146 @@ export interface DataFlywheelSessionAnnotations {
   labels: DataFlywheelLabelRecord[];
 }
 
+export type ReviewIssueChainStatus =
+  | 'ready_for_review'
+  | 'needs_evidence'
+  | 'accepted'
+  | 'rejected'
+  | 'not_actionable'
+  | string;
+
+export type ReviewIssueChainEvidenceStatus = 'ready_for_review' | 'needs_evidence' | string;
+
+export interface ReviewIssueChain {
+  chain_id: string;
+  session_id: string;
+  trigger_turn_id: number;
+  context_turn_ids: number[];
+  result_turn_ids: number[];
+  status: ReviewIssueChainStatus;
+  severity: 'P0' | 'P1' | string;
+  dominant_signal: string;
+  diagnosis: {
+    title?: string | null;
+    summary?: string | null;
+    candidate_type?: string | null;
+    suggested_labels?: string[];
+    [key: string]: unknown;
+  };
+  ai_judge: {
+    bad_prob?: number | null;
+    issue_type?: string | null;
+    suggested_label?: string | null;
+    dominant_signal?: string | null;
+    [key: string]: unknown;
+  };
+  human_review: {
+    status?: string;
+    labels?: DataFlywheelLabelRecord[] | Array<Record<string, unknown>>;
+    quality_labels?: string[];
+    expected_behavior?: string | null;
+    root_cause?: string | null;
+    false_positive_reason?: string | null;
+    missing_evidence?: string[];
+    [key: string]: unknown;
+  };
+  regression: {
+    needs_regression?: boolean;
+    regression_ready?: boolean;
+    source_sample_id?: string;
+    [key: string]: unknown;
+  };
+  repair: {
+    fix_target?: string;
+    regression_ready?: boolean;
+    export_blocked_reason?: string | null;
+    [key: string]: unknown;
+  };
+}
+
+export interface DailyReviewSessionCard {
+  session_id: string;
+  summary: string;
+  latest_turn_id: number;
+  risk_score: number | null;
+  severity: 'P0' | 'P1' | string;
+}
+
+export interface DailyReviewInboxItem {
+  session_id: string;
+  session_card: DailyReviewSessionCard;
+  highest_risk_chain: ReviewIssueChain;
+  candidate_chain_count: number;
+  evidence_status: ReviewIssueChainEvidenceStatus;
+  next_action: string;
+  status: ReviewIssueChainStatus;
+  dominant_signal: string;
+  updated_at?: string | null;
+}
+
+export interface DailyReviewInboxParams {
+  session_id?: string;
+  min_risk?: number;
+  severity?: 'P0' | 'P1' | 'all';
+  limit?: number;
+  offset?: number;
+}
+
+export interface DailyReviewInboxResponse {
+  items: DailyReviewInboxItem[];
+  total: number;
+}
+
+export interface ReviewIssueChainTimelineTurn {
+  turn_id: number;
+  request_id: string | null;
+  user_input_preview: string | null;
+  assistant_reply_preview: string | null;
+  messages: DataFlywheelMessage[];
+  selected_tools: string[];
+  tool_events: Array<Record<string, unknown>>;
+  pending_lifecycle: Array<Record<string, unknown>>;
+  router_decision: Record<string, unknown>;
+  source: DataFlywheelSource;
+  event_log_status: string;
+  chain_role: 'trigger' | 'context' | 'result' | 'unrelated' | string;
+}
+
+export interface ReviewIssueChainEvidenceItem {
+  key: string;
+  status: 'present' | 'missing' | 'needs_human' | string;
+  turn_id?: number | null;
+}
+
+export interface ReviewIssueChainDetail {
+  chain: ReviewIssueChain;
+  session_id: string;
+  timeline: ReviewIssueChainTimelineTurn[];
+  trigger_turn: ReviewIssueChainTimelineTurn | null;
+  context_turns: ReviewIssueChainTimelineTurn[];
+  result_turns: ReviewIssueChainTimelineTurn[];
+  turn_debug_summaries: Record<string, ReviewIssueChainTimelineTurn | Record<string, unknown>>;
+  evidence_checklist: ReviewIssueChainEvidenceItem[];
+  evidence_status: ReviewIssueChainEvidenceStatus;
+  existing_labels: DataFlywheelLabelRecord[] | Array<Record<string, unknown>>;
+  ai_judge: ReviewIssueChain['ai_judge'];
+}
+
+export interface ReviewIssueChainReviewRequest {
+  status: 'accepted' | 'rejected' | 'not_actionable' | 'needs_evidence' | string;
+  context_turn_ids?: number[];
+  result_turn_ids?: number[];
+  final_labels?: string[];
+  root_cause?: string;
+  expected_behavior?: string;
+  false_positive_reason?: string;
+  missing_evidence?: string[];
+}
+
+export interface ReviewIssueChainReviewResponse {
+  chain: ReviewIssueChain;
+}
+
 export interface AddSampleLabelRequest {
   label: DataFlywheelLabel;
   sample_type?: string;
@@ -451,6 +591,34 @@ export async function getSessionReview(sessionId: string): Promise<DataFlywheelS
 export async function getSessionAnnotations(sessionId: string): Promise<DataFlywheelSessionAnnotations> {
   const response = await apiClient.get<DataFlywheelSessionAnnotations>(
     `/admin/data-flywheel/sessions/${encodeURIComponent(sessionId)}/annotations`
+  );
+  return response.data;
+}
+
+export async function getDailyReviewInbox(
+  params?: DailyReviewInboxParams
+): Promise<DailyReviewInboxResponse> {
+  const response = await apiClient.get<DailyReviewInboxResponse>(
+    '/admin/data-flywheel/daily-review/inbox',
+    { params }
+  );
+  return response.data;
+}
+
+export async function getReviewIssueChain(chainId: string): Promise<ReviewIssueChainDetail> {
+  const response = await apiClient.get<ReviewIssueChainDetail>(
+    `/admin/data-flywheel/review-issue-chains/${encodeURIComponent(chainId)}`
+  );
+  return response.data;
+}
+
+export async function saveReviewIssueChainReview(
+  chainId: string,
+  body: ReviewIssueChainReviewRequest
+): Promise<ReviewIssueChainReviewResponse> {
+  const response = await apiClient.post<ReviewIssueChainReviewResponse>(
+    `/admin/data-flywheel/review-issue-chains/${encodeURIComponent(chainId)}/review`,
+    body
   );
   return response.data;
 }
