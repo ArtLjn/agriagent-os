@@ -13,7 +13,7 @@ status: active
 backend/app/
 ├── bootstrap/    # 应用工厂、路由注册、中间件、异常、lifespan
 ├── api/          # HTTP 路由、请求校验、依赖注入
-├── modules/      # 已迁移模块：auth、farm
+├── modules/      # 已迁移模块：auth、farm、data_flywheel
 ├── services/     # 迁移期业务服务和应用编排
 ├── models/       # SQLAlchemy 数据模型
 ├── schemas/      # Pydantic 输入输出模型
@@ -38,6 +38,7 @@ backend/app/
 ├── core/            # config、database、logger、安全 primitives
 ├── modules/         # 已迁移业务能力模块
 │   ├── auth/
+│   ├── data_flywheel/
 │   └── farm/
 ├── agent/           # Agent 平台主域
 ├── prompt/          # Prompt 工程：版本、片段、渲染、快照
@@ -48,7 +49,7 @@ backend/app/
 └── infra/           # 外部 provider、cache、queue、vector store adapter
 ```
 
-`modules/crop`、`modules/cycle`、`modules/ledger`、`modules/weather`、`modules/conversation`、`modules/feedback`、`modules/admin` 以及平台级 `skills/` 属于后续迁移目标。当前不保留只有 `__init__.py` 的空壳目录，避免目录树和真实职责脱节。
+`modules/data_flywheel` 已承接 Agent 数据飞轮的 admin router、样本服务、问题链服务和 repair pack 闭环；`api/` 不再保留 DataFlywheel 的平铺路由入口。`modules/crop`、`modules/cycle`、`modules/ledger`、`modules/weather`、`modules/conversation`、`modules/feedback`、`modules/admin` 以及平台级 `skills/` 属于后续迁移目标。当前不保留只有 `__init__.py` 的空壳目录，避免目录树和真实职责脱节。
 
 更细的后端结构、请求链路和分图见 [backend-architecture.md](/Users/ljn/Documents/demo/explore/docs/architecture/backend-architecture.md)。
 Agent 数据飞轮的工业级完成态、AI 预标注边界和分阶段闭环路线见 [agent-data-flywheel-industrial-roadmap.md](/Users/ljn/Documents/demo/explore/docs/architecture/agent-data-flywheel-industrial-roadmap.md)。

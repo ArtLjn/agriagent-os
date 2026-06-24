@@ -259,7 +259,7 @@ def test_chain_repair_pack_exports_traceable_case_and_debug_evidence(
     db_session, tmp_path, monkeypatch
 ) -> None:
     context, trigger, result = _seed_reviewed_chain(db_session, tmp_path)
-    import app.api.admin_data_flywheel_review_issue_chains as chain_api
+    import app.modules.data_flywheel.review_issue_chains_router as chain_api
 
     monkeypatch.setattr(chain_api, "REPAIR_PACK_BASE_DIR", tmp_path / "repair-packs")
 
@@ -307,7 +307,7 @@ def test_chain_repair_pack_rejects_needs_evidence_or_missing_expected(
     _, trigger, _ = _seed_reviewed_chain(db_session, tmp_path)
     from app.models.data_flywheel import AgentReviewIssueChain
 
-    import app.api.admin_data_flywheel_review_issue_chains as chain_api
+    import app.modules.data_flywheel.review_issue_chains_router as chain_api
 
     monkeypatch.setattr(chain_api, "REPAIR_PACK_BASE_DIR", tmp_path / "repair-packs")
     saved = db_session.query(AgentReviewIssueChain).filter_by(

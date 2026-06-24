@@ -6,10 +6,6 @@ from starlette.responses import Response
 from app.api import (
     admin,
     admin_config,
-    admin_data_flywheel,
-    admin_data_flywheel_annotations,
-    admin_data_flywheel_repair_packs,
-    admin_data_flywheel_review_issue_chains,
     admin_stats,
     admin_trace,
     admin_users,
@@ -30,6 +26,16 @@ from app.api import (
 )
 from app.infra.limiter import limiter
 from app.modules.auth.router import router as auth_router
+from app.modules.data_flywheel.annotations_router import (
+    router as data_flywheel_annotations_router,
+)
+from app.modules.data_flywheel.repair_packs_router import (
+    router as data_flywheel_repair_packs_router,
+)
+from app.modules.data_flywheel.review_issue_chains_router import (
+    router as data_flywheel_review_issue_chains_router,
+)
+from app.modules.data_flywheel.router import router as data_flywheel_router
 from app.simulation.routes import router as simulation_router
 
 
@@ -47,10 +53,10 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(weather.router)
     app.include_router(locations.router)
     app.include_router(admin.router)
-    app.include_router(admin_data_flywheel.router)
-    app.include_router(admin_data_flywheel_annotations.router)
-    app.include_router(admin_data_flywheel_review_issue_chains.router)
-    app.include_router(admin_data_flywheel_repair_packs.router)
+    app.include_router(data_flywheel_router)
+    app.include_router(data_flywheel_annotations_router)
+    app.include_router(data_flywheel_review_issue_chains_router)
+    app.include_router(data_flywheel_repair_packs_router)
     app.include_router(admin_trace.router)
     app.include_router(admin_stats.router)
     app.include_router(admin_config.router)
