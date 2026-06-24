@@ -44,6 +44,8 @@ class IntentFrame:
     candidate_tools: list[str] = field(default_factory=list)
     confidence: float = 0.0
     params_hint: dict | None = None
+    planning_evidence: dict = field(default_factory=dict)
+    missing_fields: list[str] = field(default_factory=list)
     depends_on: list[str] = field(default_factory=list)
     requires_confirmation: bool = False
 

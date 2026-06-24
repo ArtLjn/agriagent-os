@@ -36,6 +36,16 @@ class RouterPolicy:
                 clarification="请补充要处理的对象、动作和必要信息。",
             )
 
+        farm_labor_clarification = self._farm_labor_clarification(frames)
+        if farm_labor_clarification is not None:
+            return RouterDecision(
+                frames=frames,
+                selected_tools=[],
+                fallback="clarify_farm_labor_work",
+                reason="农事用工输入缺少关键字段，需要先澄清",
+                clarification=farm_labor_clarification,
+            )
+
         requested_names = self._collect_candidate_names(frames)
         if not requested_names:
             safe_default = self._safe_farm_read_default(message, candidate_by_name)
@@ -122,6 +132,15 @@ class RouterPolicy:
     @staticmethod
     def _has_ambiguous_write(frames: list[IntentFrame]) -> bool:
         return any(frame.intent == "ambiguous_write" for frame in frames)
+
+    @staticmethod
+    def _farm_labor_clarification(frames: list[IntentFrame]) -> str | None:
+        for frame in frames:
+            if frame.intent != "clarify_farm_labor_work":
+                continue
+            if "operation_type" in frame.missing_fields:
+                return "请补充要记录的作业类型，例如压瓜、压蔓、采收或授粉。"
+        return None
 
     @staticmethod
     def _collect_candidate_names(frames: list[IntentFrame]) -> list[str]:

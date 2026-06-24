@@ -143,7 +143,15 @@ async def test_llm_node_records_skill_router_trace() -> None:
     )
     assert router_trace.kwargs["node_name"] == "skill_router"
     assert router_trace.kwargs["input_data"] == {"message": user_msg[:500]}
-    assert router_trace.kwargs["output_data"] == decision.to_trace_payload()
+    assert router_trace.kwargs["output_data"]["selected_tools"] == (
+        decision.to_trace_payload()["selected_tools"]
+    )
+    assert router_trace.kwargs["output_data"]["plan_draft"]["route_type"] == (
+        "read_plan"
+    )
+    assert router_trace.kwargs["output_data"]["plan_draft"]["selected_tools"] == [
+        "get_farm_status"
+    ]
     assert router_trace.kwargs["token_usage"] == {
         "schema_token_estimate": 620,
         "usage_source": "router_estimate",

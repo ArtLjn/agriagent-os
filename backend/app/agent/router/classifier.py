@@ -124,7 +124,7 @@ class RuleIntentClassifier:
         "查一下工人",
         "工人有哪些",
     )
-
+    # TODO 这里是否有代码冗余
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
         normalized = message.strip()
@@ -362,8 +362,34 @@ class RuleIntentClassifier:
                 )
             )
 
+        if self._looks_like_incomplete_farm_labor_work(normalized):
+            name = self._extract_worker_name(normalized)
+            quantity = self._extract_labor_quantity(normalized)
+            evidence = self._build_farm_labor_evidence(
+                worker=name,
+                operation_type=None,
+                quantity=quantity,
+                unit_price=None,
+            )
+            frames.append(
+                IntentFrame(
+                    domain="operation",
+                    intent="clarify_farm_labor_work",
+                    risk="write_confirm",
+                    entities=["worker", "operation_work_order"],
+                    candidate_tools=[],
+                    confidence=0.7,
+                    params_hint=None,
+                    planning_evidence=evidence,
+                    missing_fields=["operation_type"],
+                    requires_confirmation=True,
+                )
+            )
+
         if self._looks_like_create_work_order(normalized):
             work_order_params = self._extract_work_order_params(normalized)
+            work_order_evidence = self._extract_work_order_evidence(normalized)
+            work_order_missing = self._missing_work_order_fields(work_order_params)
             depends_on = (
                 ["create_worker"]
                 if any(frame.intent == "create_worker" for frame in frames)
@@ -378,6 +404,8 @@ class RuleIntentClassifier:
                     candidate_tools=["create_operation_work_order"],
                     confidence=0.76,
                     params_hint=work_order_params or None,
+                    planning_evidence=work_order_evidence,
+                    missing_fields=work_order_missing,
                     depends_on=depends_on,
                     requires_confirmation=True,
                 )
@@ -466,6 +494,14 @@ class RuleIntentClassifier:
         )
         return has_operation and has_worker and has_labor_hint
 
+    def _looks_like_incomplete_farm_labor_work(self, message: str) -> bool:
+        if self._extract_operation_type(message) is not None:
+            return False
+        has_worker = self._extract_worker_name(message) is not None
+        has_quantity = self._extract_labor_quantity(message) is not None
+        has_labor_verb = self._has_any(message, ("干了", "做了", "上了"))
+        return has_worker and has_quantity and has_labor_verb
+
     def _looks_like_cost_category_query(self, message: str) -> bool:
         return self._has_any(message, self._cost_category_hints)
 
@@ -537,6 +573,47 @@ class RuleIntentClassifier:
             params["unit_price"] = unit_price
         return params
 
+    def _extract_work_order_evidence(self, message: str) -> dict:
+        name = self._extract_worker_name(message)
+        operation_type = self._extract_operation_type(message)
+        quantity = self._extract_labor_quantity(message)
+        unit_price = self._extract_unit_price(message)
+        return self._build_farm_labor_evidence(
+            worker=name,
+            operation_type=operation_type,
+            quantity=quantity,
+            unit_price=unit_price,
+        )
+
+    @staticmethod
+    def _build_farm_labor_evidence(
+        *,
+        worker: str | None,
+        operation_type: str | None,
+        quantity: int | None,
+        unit_price: int | None,
+    ) -> dict:
+        evidence: dict = {"write_risk": "implicit_farm_labor_work"}
+        if worker:
+            evidence["worker"] = worker
+        if operation_type:
+            evidence["operation_type"] = operation_type
+        if quantity is not None:
+            evidence["quantity"] = quantity
+            evidence["pay_type"] = "daily"
+        if unit_price is not None:
+            evidence["unit_price"] = unit_price
+        return evidence
+
+    @staticmethod
+    def _missing_work_order_fields(params: dict) -> list[str]:
+        missing: list[str] = []
+        if not params.get("operation_type"):
+            missing.append("operation_type")
+        if params.get("workers") and params.get("unit_price") is None:
+            missing.append("unit_price_or_default_wage")
+        return missing
+
     @staticmethod
     def _extract_worker_name(message: str) -> str | None:
         name_chars = r"[\u4e00-\u9fa5A-Za-z0-9]{1,8}"
@@ -552,6 +629,7 @@ class RuleIntentClassifier:
             match = re.search(pattern, message)
             if match:
                 name = match.group("name")
+                name = re.sub(r"^(?:让|叫|安排)", "", name)
                 if name not in {"工人", "员工", "师傅"}:
                     return name
         return None
@@ -559,14 +637,21 @@ class RuleIntentClassifier:
     @staticmethod
     def _extract_unit_price(message: str) -> int | None:
         match = re.search(
-            r"(?:工资|日薪|每天|一天|每人|单价)\s*"
+            r"(?:工资|日薪|每天|每人|单价)\s*"
             r"(?P<price>\d+)\s*(?:元|块)?\s*(?:一?天|/天|每天)?"
-            r"|(?P<price_before>\d+)\s*(?:元|块)?\s*(?:一?天|/天|每天|每人)",
+            r"|(?P<price_before>\d+)\s*(?:元|块)\s*(?:一?天|/天|每天|每人)"
+            r"|(?P<slash_price>\d+)\s*/天"
+            r"|每天\s*(?P<daily_price>\d+)\s*(?:元|块)?",
             message,
         )
         if not match:
             return None
-        price = match.group("price") or match.group("price_before")
+        price = (
+            match.group("price")
+            or match.group("price_before")
+            or match.group("slash_price")
+            or match.group("daily_price")
+        )
         return int(price)
 
     @staticmethod

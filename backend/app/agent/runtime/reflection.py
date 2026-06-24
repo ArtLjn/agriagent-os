@@ -20,6 +20,7 @@ def apply_post_tool_reflection(
     session_id: str | None,
     intent: str,
     user_message: str = "",
+    plan_draft: dict | None = None,
 ) -> AIMessage:
     """最终文本返回前执行工具结果一致性检查。"""
     final_text = str(response.content or "")
@@ -48,6 +49,7 @@ def apply_post_tool_reflection(
             "selected_tools": selected_tool_names,
             "tool_call_ids": tool_call_ids,
             "response_preview": final_text[:200],
+            "plan_draft": plan_draft or {},
         },
     )
     if reflection_result.decision == ReflectionDecision.PASS:

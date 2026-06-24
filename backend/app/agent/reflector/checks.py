@@ -191,6 +191,8 @@ def check_no_tool_write_success_claim(
     selected_tools: list[str],
     tool_messages: list[ToolMessage],
     tool_calls: list[dict[str, Any]],
+    plan_draft: dict[str, Any] | None = None,
+    pending_created: bool | None = None,
 ) -> ReflectionResult:
     if selected_tools or tool_messages or tool_calls:
         return ReflectionResult.passed(
@@ -220,8 +222,48 @@ def check_no_tool_write_success_claim(
             "selected_tools": selected_tools,
             "tool_messages_count": len(tool_messages),
             "tool_calls_count": len(tool_calls),
+            "failure_stage": "response_quality",
+            "plan_draft": _summarize_plan_draft(plan_draft),
+            "pending_created": pending_created,
         },
     )
+
+
+def _summarize_plan_draft(plan_draft: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(plan_draft, dict):
+        return {}
+    validation = plan_draft.get("validation")
+    if not isinstance(validation, dict):
+        validation = {}
+    return {
+        "route_type": plan_draft.get("route_type", ""),
+        "validation_status": validation.get("status")
+        or plan_draft.get("validation_status", ""),
+        "missing_fields": _string_list(
+            plan_draft.get("missing_fields") or validation.get("missing_fields")
+        ),
+        "steps": _plan_step_names(plan_draft.get("steps")),
+        "evidence": plan_draft.get("evidence") or {},
+    }
+
+
+def _plan_step_names(steps: Any) -> list[str]:
+    if not isinstance(steps, list):
+        return []
+    names: list[str] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        name = step.get("tool_name") or step.get("skill_name") or step.get("name")
+        if name:
+            names.append(str(name))
+    return names
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item]
 
 
 def check_tool_result_final_contradiction(

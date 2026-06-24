@@ -39,6 +39,13 @@ Semantic Gate 是一组轻量规则和受限解析函数，放在 router/classif
 - LLM planner：理解力更强，但成本高、稳定性和测试性较差。
 - 多 Agent planner/reviewer：适合离线分析，不适合主聊天低延迟链路。
 
+长期约束：
+
+- 本 change 的轻量规则只用于安全门、高频稳定表达和已知失败样本兜底。
+- 不允许把长期自然语言理解能力建设成不断增长的正则列表。
+- 当同一业务域持续出现相似语义补丁时，应升级为 Structured Planner + Domain Validator：Planner 输出结构化 `intent_frames`、实体、缺失字段、置信度和风险；Validator 负责校验工人、地块、茬口、默认工资、金额、日期范围是否可唯一确定。
+- 即使 Planner 识别成功，写操作仍必须进入 pending action/plan；没有工具或 pending 证据时，Reflection 继续禁止“已记录/已创建/已保存”等成功话术。
+
 ### Decision 2: 农事用工输入优先收敛到 `create_operation_work_order`
 
 当输入同时包含工人、作业类型、用工数量或工资策略时，默认主 Skill 是 `create_operation_work_order`，因为它能同时表达农事作业、用工明细和人工成本。

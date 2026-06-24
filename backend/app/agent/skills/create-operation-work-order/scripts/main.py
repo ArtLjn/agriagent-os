@@ -74,6 +74,10 @@ class CreateOperationWorkOrderSkill(Skill):
                     "type": "number",
                     "description": "每名工人单价，如 200",
                 },
+                "quantity": {
+                    "type": "number",
+                    "description": "每名工人的计薪数量，如干了 15 天则传 15",
+                },
                 "payment_method": {
                     "type": "string",
                     "description": "计薪方式别名，如 daily、hourly、piece",
@@ -257,6 +261,7 @@ def _build_labor_entries(
     pay_type_param = str(params.get("pay_type") or "").strip()
     paid_worker = str(params.get("paid_worker") or "").strip()
     paid_amount = _to_decimal(params.get("paid_amount")) or Decimal("0")
+    quantity = _to_decimal(params.get("quantity")) or Decimal("1")
     entries = []
     for name in worker_names:
         worker = _find_or_create_worker(
@@ -283,7 +288,7 @@ def _build_labor_entries(
             LaborEntryCreate(
                 worker_id=worker.id,
                 pay_type=pay_type,
-                quantity=Decimal("1"),
+                quantity=quantity,
                 unit_price=unit_price,
                 paid_amount=entry_paid,
             )

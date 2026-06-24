@@ -37,11 +37,15 @@ _get_payables_mod = importlib.import_module(
 _settle_payment_mod = importlib.import_module(
     "app.agent.skills.settle-labor-payment.scripts.main"
 )
+_create_order_mod = importlib.import_module(
+    "app.agent.skills.create-operation-work-order.scripts.main"
+)
 
 GetOperationWorkOrdersSkill = _get_orders_mod.GetOperationWorkOrdersSkill
 UpdateOperationWorkOrderSkill = _update_order_mod.UpdateOperationWorkOrderSkill
 GetLaborPayablesSkill = _get_payables_mod.GetLaborPayablesSkill
 SettleLaborPaymentSkill = _settle_payment_mod.SettleLaborPaymentSkill
+CreateOperationWorkOrderSkill = _create_order_mod.CreateOperationWorkOrderSkill
 
 
 @pytest.fixture
@@ -64,6 +68,7 @@ def skill_sessions(monkeypatch, db_session):
         _update_order_mod,
         _get_payables_mod,
         _settle_payment_mod,
+        _create_order_mod,
     ):
         monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
     return db_session
@@ -279,6 +284,36 @@ def test_list_operation_work_orders_filters_payment_status_before_limit(db_sessi
     )
 
     assert [item.id for item in items] == [matching.id]
+
+
+@pytest.mark.asyncio
+async def test_create_work_order_skill_uses_labor_quantity(skill_sessions, ctx):
+    cycle = _create_cycle(skill_sessions, name="夏季西瓜", crop_name="西瓜")
+    _create_unit(skill_sessions, cycle, name="6号棚")
+    worker = _create_worker(skill_sessions, "李海")
+
+    result = await CreateOperationWorkOrderSkill().execute(
+        {
+            "operation_type": "压瓜",
+            "operation_date": "2026-06-15",
+            "unit_names": "6号棚",
+            "workers": "李海",
+            "quantity": 15,
+        },
+        ctx,
+    )
+
+    work_order = (
+        skill_sessions.query(OperationWorkOrder)
+        .filter(OperationWorkOrder.operation_type == "压瓜")
+        .one()
+    )
+    entry = work_order.labor_entries[0]
+    assert result.status.value == "success"
+    assert entry.worker_id == worker.id
+    assert entry.quantity == Decimal("15.00")
+    assert entry.unit_price == Decimal("200.00")
+    assert entry.payable_amount == Decimal("3000.00")
 
 
 def test_list_and_settle_labor_payables(db_session):
@@ -621,3 +656,36 @@ async def test_create_work_order_pending_normalizes_llm_aliases():
     assert "范围：1号棚" in message
     assert "人工：李丽" in message
     assert "应付100.00元" in message
+
+
+def test_create_work_order_confirmation_shows_default_wage_source():
+    from app.infra.pending_action_presenter import (
+        build_confirm_message,
+        build_confirmation_context,
+    )
+
+    params = {
+        "operation_type": "压瓜",
+        "workers": "李海",
+        "quantity": 15,
+        "unit_price": 200,
+        "unit_price_source": "worker_default",
+    }
+
+    context = build_confirmation_context(
+        "create_operation_work_order",
+        params,
+        original_input="李海这个月干了15天压瓜",
+    )
+    message = build_confirm_message(
+        "create_operation_work_order",
+        params,
+        original_input="李海这个月干了15天压瓜",
+    )
+
+    assert context["labor"]["unit_price_source"] == "worker_default"
+    assert context["labor"]["quantity"] == "15"
+    assert context["labor"]["payable_amount"] == "3000.00"
+    assert context["inferred_fields"]["unit_price_source"] == "worker_default"
+    assert "单价：200元（来自工人默认工资）" in message
+    assert "数量：15" in message

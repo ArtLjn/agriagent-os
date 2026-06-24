@@ -31,6 +31,9 @@ parameters:
     unit_price:
       type: number
       description: 每名工人单价。
+    quantity:
+      type: number
+      description: 每名工人的计薪数量，如干了 15 天则传 15。
     paid_worker:
       type: string
       description: 已付款工人姓名。
@@ -69,6 +72,7 @@ parameters:
 
 - “今天东大棚 4 个工人给西瓜授粉，每人 200” -> `operation_type=授粉`, `unit_names=东大棚`, `workers=待确认4人`, `unit_price=200`。
 - “记录东大棚 1-3 号压蔓” -> `operation_type=压蔓`, `unit_names=东大棚1-3号`。
+- “李海这个月干了15天压瓜” -> `operation_type=压瓜`, `workers=李海`, `quantity=15`, `payment_method=daily`，单价需要从工人默认工资推断或向用户确认。
 - “先付老王 200” -> 在 workers 中记录老王已付金额。
 - “本次不计工资” -> `no_wage=true`。
 

@@ -189,6 +189,13 @@ def build_confirm_message(
             lines.append(f"范围：{'、'.join(units)}")
         if labor.get("workers"):
             lines.append(f"人工：{'、'.join(labor['workers'])}")
+            if labor.get("quantity"):
+                lines.append(f"数量：{labor['quantity']}")
+            if labor.get("unit_price"):
+                source_suffix = ""
+                if labor.get("unit_price_source") == "worker_default":
+                    source_suffix = "（来自工人默认工资）"
+                lines.append(f"单价：{labor['unit_price']}元{source_suffix}")
             lines.append(
                 f"付款：应付{labor['payable_amount']}元，"
                 f"已付{labor['paid_amount']}元，"
@@ -352,11 +359,14 @@ def _build_create_work_order_context(
 ) -> dict:
     workers = _split_names(params.get("workers"))
     unit_price = _to_decimal(params.get("unit_price")) or Decimal("0")
+    quantity = _to_decimal(params.get("quantity")) or Decimal("1")
     paid_amount = _to_decimal(params.get("paid_amount")) or Decimal("0")
     payable = _to_decimal(params.get("payable_amount"))
-    total_payable = (payable if payable is not None else unit_price) * len(workers)
+    unit_payable = payable if payable is not None else unit_price * quantity
+    total_payable = unit_payable * len(workers)
     total_paid = paid_amount
     total_unpaid = max(total_payable - total_paid, Decimal("0"))
+    unit_price_source = params.get("unit_price_source")
     return {
         "skill_name": skill_name,
         "original_input": original_input,
@@ -372,6 +382,9 @@ def _build_create_work_order_context(
         },
         "labor": {
             "workers": workers,
+            "quantity": _decimal_text(quantity) if workers else None,
+            "unit_price": _decimal_text(unit_price) if workers else None,
+            "unit_price_source": unit_price_source,
             "payable_amount": _money_text(total_payable),
             "paid_amount": _money_text(total_paid),
             "unpaid_amount": _money_text(total_unpaid),
@@ -384,6 +397,7 @@ def _build_create_work_order_context(
             "operation_date": params.get("operation_date"),
             "cycle_id": params.get("cycle_id"),
             "paid_worker": params.get("paid_worker"),
+            "unit_price_source": unit_price_source,
         },
         "risk_notes": ["确认后会创建作业单和人工成本。"],
         "editable_fields": [
@@ -498,6 +512,13 @@ def _to_decimal(value) -> Decimal | None:
 
 def _money_text(value: Decimal) -> str:
     return str(value.quantize(Decimal("0.01")))
+
+
+def _decimal_text(value: Decimal) -> str:
+    normalized = value.normalize()
+    if normalized == normalized.to_integral():
+        return str(normalized.quantize(Decimal("1")))
+    return str(normalized)
 
 
 __all__ = [

@@ -275,6 +275,68 @@ async def test_settle_labor_pending_preview_accepts_worker_name_alias(
 
 
 @pytest.mark.asyncio
+async def test_operation_work_order_pending_uses_worker_default_wage(
+    monkeypatch, db_session
+):
+    worker = Worker(
+        farm_id=1,
+        name="李海",
+        status="active",
+        default_pay_type="daily",
+        default_unit_price=200,
+    )
+    db_session.add(worker)
+    db_session.commit()
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+    )
+    tool = SimpleNamespace(
+        name="create_operation_work_order",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            context_dependencies=["workers"],
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="李海这个月干了15天压瓜"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "create_operation_work_order",
+                        "args": {
+                            "operation_type": "压瓜",
+                            "workers": "李海",
+                            "quantity": 15,
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-default-wage",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-default-wage")
+    assert pending is not None
+    assert pending.params["unit_price"] == 200
+    assert pending.params["unit_price_source"] == "worker_default"
+    assert pending.params["pay_type"] == "daily"
+    assert pending.confirmation_context["labor"]["payable_amount"] == "3000.00"
+    assert "单价：200元（来自工人默认工资）" in result["messages"][0].content
+
+
+@pytest.mark.asyncio
 async def test_settle_labor_payment_all_workers_drops_polluted_content_param():
     """全员结算不能把上下文中的单人工人名作为待执行参数。"""
     tool = SimpleNamespace(

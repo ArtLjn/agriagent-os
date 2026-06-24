@@ -62,3 +62,40 @@ def test_report_builder_groups_coverage_dimensions() -> None:
     assert report.coverage["by_permission_level"]["write_confirm"] == 1
     assert report.coverage["by_confirmation_path"]["confirm"] == 1
     assert report.coverage["by_context_dependency"]["workers"] == 1
+
+
+def test_report_builder_counts_stage_level_failures() -> None:
+    builder = EvaluationReportBuilder()
+    report = builder.build(
+        run_id="eval-stages",
+        results=[
+            ReplayResult(
+                case_id="planning-miss",
+                passed=False,
+                errors=["bad_reply: 没有识别出压瓜作业写入意图"],
+                case_metadata={"failure_stage": "planning"},
+            ),
+            ReplayResult(
+                case_id="response-quality",
+                passed=False,
+                errors=["bad_reply: 无工具却声称已记录"],
+                case_metadata={"failure_stage": "response_quality"},
+            ),
+            ReplayResult(
+                case_id="validation",
+                passed=False,
+                errors=["missing operation_type"],
+                case_metadata={"failure_stage": "validation"},
+            ),
+        ],
+        prompt_version="system_base:v1",
+    )
+    data = builder.to_dict(report)
+
+    assert data["coverage"]["by_failure_stage"] == {
+        "planning": 1,
+        "response_quality": 1,
+        "validation": 1,
+    }
+    assert data["coverage"]["semantic_planning_failures"] == 1
+    assert data["cases"][0]["failure_stage"] == "planning"

@@ -23,6 +23,11 @@ class SkillDiagnosticReport:
     context_dependency_diagnostic: list[dict[str, Any]] = field(default_factory=list)
     reflection_checks: list[dict[str, Any]] = field(default_factory=list)
     reflection_diagnostic: dict[str, Any] = field(default_factory=dict)
+    plan_draft_summary: dict[str, Any] = field(default_factory=dict)
+    validation_status: str = ""
+    missing_fields: list[str] = field(default_factory=list)
+    inferred_fields: list[dict[str, Any]] = field(default_factory=list)
+    failure_stage: str = ""
 
 
 class SkillDiagnosticService:
@@ -36,7 +41,7 @@ class SkillDiagnosticService:
         for record in ordered_records:
             output_data = record.output_data or {}
             input_data = record.input_data or {}
-            if record.node_type in {"tool_selection", "tool_selector"}:
+            if record.node_type in {"tool_selection", "tool_selector", "skill_router"}:
                 report.tool_selection = {
                     "node_name": record.node_name,
                     "input": input_data,
@@ -60,8 +65,12 @@ class SkillDiagnosticService:
                 event = self._pending_event(record)
                 report.pending_actions.append(event)
                 report.pending_lifecycle.append(event)
+            elif record.node_type == "plan_draft":
+                self._apply_plan_draft(report, output_data or input_data)
             elif record.node_type == "reflection_check":
-                report.reflection_checks.append(self._reflection_event(record))
+                event = self._reflection_event(record)
+                report.reflection_checks.append(event)
+                self._apply_plan_draft(report, event.get("input", {}).get("plan_draft"))
             elif record.node_type in {"final_response", "assistant_response"}:
                 report.final_response = str(
                     output_data.get("reply")
@@ -88,6 +97,7 @@ class SkillDiagnosticService:
             report
         )
         report.reflection_diagnostic = self._diagnose_reflection(report)
+        report.failure_stage = self._diagnose_failure_stage(report)
         return report
 
     @staticmethod
@@ -117,6 +127,63 @@ class SkillDiagnosticService:
             "issues": output_data.get("issues") or [],
             "input": input_data,
         }
+
+    @staticmethod
+    def _apply_plan_draft(
+        report: SkillDiagnosticReport,
+        plan_draft: Any,
+    ) -> None:
+        if not isinstance(plan_draft, dict) or not plan_draft:
+            return
+        validation = plan_draft.get("validation")
+        if not isinstance(validation, dict):
+            validation = {}
+
+        if not report.plan_draft_summary:
+            report.plan_draft_summary = {
+                "route_type": str(plan_draft.get("route_type") or ""),
+                "steps": SkillDiagnosticService._plan_step_names(
+                    plan_draft.get("steps")
+                ),
+                "evidence": plan_draft.get("evidence") or {},
+            }
+
+        if not report.validation_status:
+            report.validation_status = str(
+                validation.get("status") or plan_draft.get("validation_status") or ""
+            )
+        if not report.missing_fields:
+            report.missing_fields = SkillDiagnosticService._string_list(
+                plan_draft.get("missing_fields") or validation.get("missing_fields")
+            )
+        if not report.inferred_fields:
+            inferred = plan_draft.get("inferred_fields") or validation.get(
+                "inferred_fields"
+            )
+            report.inferred_fields = [
+                item for item in inferred if isinstance(item, dict)
+            ] if isinstance(inferred, list) else []
+        if not report.failure_stage and plan_draft.get("failure_stage"):
+            report.failure_stage = str(plan_draft["failure_stage"])
+
+    @staticmethod
+    def _plan_step_names(steps: Any) -> list[str]:
+        if not isinstance(steps, list):
+            return []
+        names: list[str] = []
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            name = step.get("tool_name") or step.get("skill_name") or step.get("name")
+            if name:
+                names.append(str(name))
+        return names
+
+    @staticmethod
+    def _string_list(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [str(item) for item in value if item]
 
     @staticmethod
     def _build_drilldown_links(request_id: str, records: list[Any]) -> dict[str, str]:
@@ -238,6 +305,46 @@ class SkillDiagnosticService:
             "decisions": decisions,
             "issue_codes": issue_codes,
         }
+
+    @staticmethod
+    def _diagnose_failure_stage(report: SkillDiagnosticReport) -> str:
+        """区分语义计划、选择、pending、执行和最终回复质量失败。"""
+        if report.failure_stage:
+            return report.failure_stage
+        if report.validation_status in {"blocked", "failed", "invalid"}:
+            return "validation"
+        if report.missing_fields:
+            return "validation"
+        if report.reflection_diagnostic.get("issue_codes"):
+            return "response_quality"
+        if any(error.get("message") for error in report.errors):
+            return "execution"
+        if any(
+            (call.get("output") or {}).get("status")
+            in {"reflection_blocked", "validation_error", "need_clarify"}
+            for call in report.tool_calls
+        ):
+            return "pending_creation"
+        router_output = (report.tool_selection or {}).get("output") or {}
+        if (
+            router_output.get("fallback") == "clarify_farm_labor_work"
+            or any(
+                "missing_fields" in frame and frame.get("missing_fields")
+                for frame in router_output.get("frames", [])
+                if isinstance(frame, dict)
+            )
+        ):
+            return "planning"
+        if report.tool_not_called_reason in {
+            "tool_selection_excluded_skill",
+            "tool_selection_selected_no_skill",
+            "request_bypassed_agent_or_tool_selection_missing",
+            "llm_chose_not_to_call_tool",
+        }:
+            return "selection"
+        if report.pending_action_diagnostic.get("lost_reason"):
+            return "pending_creation"
+        return ""
 
     @staticmethod
     def _diagnose_context_dependencies(

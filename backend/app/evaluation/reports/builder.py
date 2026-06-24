@@ -52,6 +52,7 @@ class EvaluationReportBuilder:
                     token_cost=result.token_cost,
                     skill_calls=[call.name for call in result.actual_skill_calls],
                     drilldown_links=result.drilldown_links,
+                    failure_stage=self._failure_stage(result),
                 )
                 for result in results
             ],
@@ -71,6 +72,8 @@ class EvaluationReportBuilder:
             "by_permission_level": {},
             "by_confirmation_path": {},
             "by_context_dependency": {},
+            "by_failure_stage": {},
+            "semantic_planning_failures": 0,
         }
         for result in results:
             metadata = result.case_metadata
@@ -86,6 +89,10 @@ class EvaluationReportBuilder:
                 self._count(coverage["by_context_dependency"], dependency)
             for expected in result.expected_skill_calls:
                 self._count(coverage["by_skill"], expected.name)
+            failure_stage = self._failure_stage(result)
+            self._count(coverage["by_failure_stage"], failure_stage)
+            if failure_stage == "planning":
+                coverage["semantic_planning_failures"] += 1
         return coverage
 
     @staticmethod
@@ -93,3 +100,21 @@ class EvaluationReportBuilder:
         if not key:
             return
         bucket[str(key)] = bucket.get(str(key), 0) + 1
+
+    @staticmethod
+    def _failure_stage(result: ReplayResult) -> str:
+        stage = result.case_metadata.get("failure_stage")
+        if stage:
+            return str(stage)
+        for error in result.errors:
+            if "planning" in error or "语义" in error or "意图" in error:
+                return "planning"
+            if "validation" in error or "missing" in error:
+                return "validation"
+            if "pending" in error:
+                return "pending_creation"
+            if "execution" in error or "工具调用失败" in error:
+                return "execution"
+            if "bad_reply" in error:
+                return "response_quality"
+        return ""

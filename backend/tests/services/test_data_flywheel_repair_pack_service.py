@@ -206,6 +206,45 @@ def test_no_tool_success_claim_generates_actionable_regression_assertions() -> N
     assert draft["metadata"]["regression_stage"] == "assertion_generated"
 
 
+def test_repair_pack_debug_files_keep_plan_draft_validation_evidence() -> None:
+    detail = _sample_detail(
+        ["hallucinated_execution"],
+        debug_export={
+            "events": [
+                {
+                    "type": "trace",
+                    "payload": {
+                        "plan_draft": {
+                            "route_type": "write_pending_action",
+                            "validation": {"status": "blocked"},
+                            "missing_fields": ["unit_price"],
+                            "evidence": {
+                                "worker": "李海",
+                                "api_key": "sk-secret-value",
+                            },
+                        }
+                    },
+                }
+            ]
+        },
+    )
+
+    payload = build_repair_pack_payload(
+        [detail],
+        pack_id="pack-plan-draft",
+        export_path="repair-packs/pack-plan-draft",
+    )
+
+    assert len(payload["debug_files"]) == 1
+    debug_file = next(iter(payload["debug_files"].values()))
+    plan_draft = debug_file["events"][0]["payload"]["plan_draft"]
+    assert plan_draft["route_type"] == "write_pending_action"
+    assert plan_draft["validation"]["status"] == "blocked"
+    assert plan_draft["missing_fields"] == ["unit_price"]
+    assert plan_draft["evidence"]["worker"] == "李海"
+    assert plan_draft["evidence"]["api_key"].startswith("[REDACTED_SECRET]:")
+
+
 def test_build_repair_pack_payload_rejects_mixed_fix_targets() -> None:
     samples = [
         _sample_detail(["pending_missed"], sample_id="turn:1:sess-1:12"),

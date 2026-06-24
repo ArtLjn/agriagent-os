@@ -22,6 +22,8 @@ def test_router_decision_serializes_for_trace() -> None:
                 entities=["crop_cycle"],
                 candidate_tools=["get_farm_status"],
                 confidence=0.86,
+                planning_evidence={"query_entity": "crop_cycle"},
+                missing_fields=["farm_id"],
             )
         ],
         selected_tools=["get_farm_status"],
@@ -37,6 +39,10 @@ def test_router_decision_serializes_for_trace() -> None:
 
     assert payload["selected_tools"] == ["get_farm_status"]
     assert payload["frames"][0]["intent"] == "query_active_crops"
+    assert payload["frames"][0]["planning_evidence"] == {
+        "query_entity": "crop_cycle"
+    }
+    assert payload["frames"][0]["missing_fields"] == ["farm_id"]
     assert payload["fallback"] == "safe_read_default"
     assert payload["schema_token_estimate"] == 620
 

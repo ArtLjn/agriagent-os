@@ -149,6 +149,7 @@ def _build_pending_execution_args(
     execution_args = dict(args or {})
     if name == "create_operation_work_order":
         _normalize_operation_work_order_args(execution_args)
+        _fill_operation_default_wage(execution_args, farm_id)
     if name == "settle_labor_payment":
         _normalize_settle_labor_payment_args(execution_args, original_input)
     if name == "manage_workers":
@@ -164,9 +165,65 @@ def _normalize_operation_work_order_args(args: dict) -> None:
     _copy_arg_if_missing(args, "pay_type", "payment_method")
 
 
+def _fill_operation_default_wage(args: dict, farm_id: int) -> None:
+    """为单工人作业单补齐可唯一确定的默认工资。"""
+    if args.get("unit_price") not in (None, ""):
+        return
+    worker_names = _split_names_arg(args.get("workers"))
+    if len(worker_names) != 1:
+        return
+    db = SessionLocal()
+    try:
+        worker = (
+            db.query(Worker)
+            .filter(Worker.farm_id == farm_id, Worker.name == worker_names[0])
+            .order_by(Worker.id)
+            .first()
+        )
+        if worker is None:
+            return
+        default_unit_price = getattr(worker, "default_unit_price", None)
+        if default_unit_price in (None, ""):
+            return
+        args["unit_price"] = _number_arg(default_unit_price)
+        args["unit_price_source"] = "worker_default"
+        default_pay_type = getattr(worker, "default_pay_type", None)
+        if args.get("pay_type") in (None, "") and default_pay_type:
+            args["pay_type"] = str(default_pay_type)
+    except Exception as exc:
+        logger.warning(
+            "补齐作业单默认工资失败 | farm_id=%s | error=%s",
+            farm_id,
+            exc,
+        )
+    finally:
+        db.close()
+
+
 def _copy_arg_if_missing(args: dict, target: str, source: str) -> None:
     if args.get(target) in (None, "") and args.get(source) not in (None, ""):
         args[target] = args[source]
+
+
+def _split_names_arg(value) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [
+        part.strip()
+        for part in str(value).replace("，", ",").split(",")
+        if part.strip()
+    ]
+
+
+def _number_arg(value):
+    try:
+        if hasattr(value, "to_integral") and value == value.to_integral():
+            return int(value)
+    except Exception:
+        pass
+    return value
 
 
 def _normalize_settle_labor_payment_args(args: dict, original_input: str) -> None:
@@ -473,6 +530,25 @@ def _pending_plan_tool_message(
     tool_calls: list[dict],
 ) -> list[ToolMessage] | None:
     """如果 router 已生成多步骤写计划，则存储 pending plan 并返回确认消息。"""
+    plan_draft = state.get("plan_draft")
+    draft_steps = _validated_plan_draft_steps(
+        plan_draft,
+        expected_route_type="write_pending_plan",
+    )
+    if draft_steps:
+        step_tool_names = {str(step["tool_name"]) for step in draft_steps}
+        tool_call_names = {str(tool_call["name"]) for tool_call in tool_calls}
+        if tool_call_names.issubset(step_tool_names):
+            return _store_pending_plan_from_steps(
+                state=state,
+                farm_id=farm_id,
+                original_input=original_input,
+                tool_calls=tool_calls,
+                steps=draft_steps,
+                router_decision=plan_draft,
+                source="plan_draft",
+            )
+
     router_decision = state.get("router_decision")
     if router_decision is None:
         return None
@@ -485,6 +561,29 @@ def _pending_plan_tool_message(
     if not tool_call_names.issubset(step_tool_names):
         return None
 
+    return _store_pending_plan_from_steps(
+        state=state,
+        farm_id=farm_id,
+        original_input=original_input,
+        tool_calls=tool_calls,
+        steps=steps,
+        router_decision=router_decision.to_trace_payload(),
+        source="router_decision",
+    )
+
+
+def _store_pending_plan_from_steps(
+    *,
+    state: AgentState,
+    farm_id: int,
+    original_input: str,
+    tool_calls: list[dict],
+    steps: list[dict],
+    router_decision: dict,
+    source: str,
+) -> list[ToolMessage]:
+    """根据已验证步骤创建 pending plan。"""
+    step_tool_names = {str(step["tool_name"]) for step in steps}
     pending_steps = [
         PendingPlanStep(
             step_id=str(step["step_id"]),
@@ -506,6 +605,8 @@ def _pending_plan_tool_message(
             "raw_user_input": original_input,
             "tool_names": sorted(step_tool_names),
             "tool_call_ids": [str(tool_call["id"]) for tool_call in tool_calls],
+            "plan_draft": state.get("plan_draft") or {},
+            "pending_source": source,
         },
     )
     if reflection_result.decision != ReflectionDecision.PASS:
@@ -522,7 +623,7 @@ def _pending_plan_tool_message(
         farm_id=farm_id,
         session_id=session_id,
         raw_user_input=original_input,
-        router_decision=router_decision.to_trace_payload(),
+        router_decision=router_decision,
         steps=pending_steps,
     )
     messages = [
@@ -534,6 +635,59 @@ def _pending_plan_tool_message(
     ]
     messages[0].content = f"{PENDING_MARKER} {confirm_text}"
     return messages
+
+
+def _validated_plan_draft_steps(
+    plan_draft: dict | None,
+    *,
+    expected_route_type: str,
+) -> list[dict]:
+    """读取已经通过验证的 PlanDraft 步骤。"""
+    if not isinstance(plan_draft, dict):
+        return []
+    validation = plan_draft.get("validation")
+    if not isinstance(validation, dict) or validation.get("status") != "valid":
+        return []
+    if plan_draft.get("route_type") != expected_route_type:
+        return []
+    steps = plan_draft.get("steps")
+    if not isinstance(steps, list):
+        return []
+    normalized: list[dict] = []
+    for index, step in enumerate(steps):
+        if not isinstance(step, dict):
+            return []
+        tool_name = str(step.get("skill_name") or step.get("tool_name") or "")
+        params = step.get("params") or {}
+        if not tool_name or not isinstance(params, dict):
+            return []
+        normalized.append(
+            {
+                "step_id": str(step.get("step_id") or f"step-{index + 1}"),
+                "tool_name": tool_name,
+                "params": dict(params),
+                "depends_on": list(step.get("depends_on") or []),
+            }
+        )
+    return normalized
+
+
+def _validated_plan_draft_action_args(
+    plan_draft: dict | None,
+    *,
+    tool_name: str,
+) -> dict | None:
+    """读取已验证单步写 PlanDraft 的执行参数。"""
+    steps = _validated_plan_draft_steps(
+        plan_draft,
+        expected_route_type="write_pending_action",
+    )
+    if len(steps) != 1:
+        return None
+    step = steps[0]
+    if step["tool_name"] != tool_name:
+        return None
+    return dict(step["params"])
 
 
 async def _parallel_tool_node(state: AgentState) -> dict:
@@ -667,9 +821,14 @@ async def _parallel_tool_node(state: AgentState) -> dict:
 
         # 写操作 Skill 拦截：存储 pending action，不直接执行
         if permission_decision.requires_confirmation:
-            execution_args = _build_pending_execution_args(
-                name, args, farm_id, original_input
+            execution_args = _validated_plan_draft_action_args(
+                state.get("plan_draft"),
+                tool_name=name,
             )
+            if execution_args is None:
+                execution_args = _build_pending_execution_args(
+                    name, args, farm_id, original_input
+                )
             ambiguous_debt_name = _needs_debt_direction_clarification(
                 name, execution_args, original_input
             )
@@ -712,6 +871,7 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                     "session_id": state.get("session_id"),
                     "tool_name": name,
                     "tool_call_id": tool_call_id,
+                    "plan_draft": state.get("plan_draft") or {},
                 },
             )
             if reflection_result.decision != ReflectionDecision.PASS:
@@ -754,6 +914,7 @@ async def _parallel_tool_node(state: AgentState) -> dict:
                     "status": "pending",
                     "permission_level": permission_decision.permission_level,
                     "confirmation_context": confirmation_context,
+                    "plan_draft": state.get("plan_draft") or {},
                 },
                 duration_ms=0,
             )

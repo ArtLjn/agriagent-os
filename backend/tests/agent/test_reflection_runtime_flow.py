@@ -15,6 +15,7 @@ from app.agent.reflector import (
 from app.agent.reflector.models import ReflectionIssue
 from app.agent.router import RouterDecision
 from app.agent.runtime.nodes import _llm_node
+from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.context.models import ContextBundle
 
 pytestmark = pytest.mark.no_db
@@ -213,6 +214,43 @@ async def test_no_tool_write_success_claim_returns_fail_closed_reply() -> None:
     final_text = result["messages"][0].content
     assert final_text == safe_reason
     assert "已记录" not in final_text
+
+
+def test_no_tool_write_success_trace_metadata_includes_plan_draft() -> None:
+    plan_draft = {
+        "route_type": "write_pending_action",
+        "steps": [
+            {
+                "tool_name": "create_operation_work_order",
+                "params": {"worker_name": "李海", "operation_type": "压瓜"},
+            }
+        ],
+        "validation": {"status": "passed"},
+    }
+
+    with patch("app.agent.runtime.reflection.ReflectorService", create=True) as (
+        reflector_cls
+    ):
+        reflector_cls.return_value.check_tool_response.return_value = (
+            _reflection_result(
+                ReflectionDecision.FALLBACK_RESPONSE,
+                reason="没有工具写入结果或待确认动作，但最终回复声称业务数据已经写入。",
+            )
+        )
+
+        apply_post_tool_reflection(
+            response=AIMessage(content="已记录李海这个月干了15天压瓜。"),
+            tool_messages=[],
+            selected_tool_names=[],
+            farm_id=1,
+            session_id="session-plan-draft-reflection",
+            intent="agent",
+            user_message="李海这个月干了15天压瓜",
+            plan_draft=plan_draft,
+        )
+
+    call_kwargs = reflector_cls.return_value.check_tool_response.call_args.kwargs
+    assert call_kwargs["trace_metadata"]["plan_draft"] == plan_draft
 
 
 @pytest.mark.asyncio

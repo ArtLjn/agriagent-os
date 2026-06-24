@@ -47,6 +47,11 @@ from app.agent.runtime.messages import (
 from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES, check_quota
 from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.agent.runtime.tool_executor import _parallel_tool_node
+from app.agent.planning import (
+    DomainValidator,
+    attach_validation,
+    plan_draft_from_router_decision,
+)
 from app.agent.router import RouterDecision, SkillRouter
 from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
@@ -200,11 +205,22 @@ async def _llm_node(state: AgentState) -> dict:
 
     increment_round()
     collector = get_collector()
+    plan_draft = plan_draft_from_router_decision(
+        raw_user_input=user_msg,
+        decision=router_decision,
+        farm_id=farm_id,
+        session_id=state.get("session_id"),
+    )
+    plan_validation = DomainValidator().validate(plan_draft)
+    plan_draft = attach_validation(plan_draft, plan_validation)
+    plan_draft_payload = plan_draft.to_trace_payload()
+    router_trace_payload = router_decision.to_trace_payload()
+    router_trace_payload["plan_draft"] = plan_draft_payload
     collector.record(
         node_type="skill_router",
         node_name="skill_router",
         input_data={"message": user_msg[:500]},
-        output_data=router_decision.to_trace_payload(),
+        output_data=router_trace_payload,
         token_usage={
             "schema_token_estimate": router_decision.schema_token_estimate,
             "usage_source": "router_estimate",
@@ -602,6 +618,7 @@ async def _llm_node(state: AgentState) -> dict:
             session_id=state.get("session_id"),
             intent=intent,
             user_message=user_msg,
+            plan_draft=plan_draft_payload,
         )
         content = response.content or ""
         logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
@@ -616,7 +633,11 @@ async def _llm_node(state: AgentState) -> dict:
         token_usage=token_usage,
     )
 
-    return {"messages": [response], "router_decision": router_decision}
+    return {
+        "messages": [response],
+        "router_decision": router_decision,
+        "plan_draft": plan_draft_payload,
+    }
 
 
 __all__ = [

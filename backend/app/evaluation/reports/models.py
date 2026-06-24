@@ -18,6 +18,7 @@ class EvaluationCaseResult:
     token_cost: float = 0.0
     skill_calls: list[str] = field(default_factory=list)
     drilldown_links: dict[str, str] = field(default_factory=dict)
+    failure_stage: str = ""
 
 
 @dataclass

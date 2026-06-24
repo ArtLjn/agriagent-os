@@ -1,3 +1,4 @@
+import pytest
 from langchain_core.messages import ToolMessage
 from pytest import MonkeyPatch
 
@@ -17,6 +18,8 @@ from app.agent.reflector.checks import (
 )
 from app.agent.reflector.policy import ReflectionPolicy
 from app.infra.pending_actions import PendingPlanStep
+
+pytestmark = pytest.mark.no_db
 
 
 def test_reflection_result_serializes_trace_payload() -> None:
@@ -185,6 +188,61 @@ def test_no_tool_write_success_claim_is_blocked_and_traced(
         "no_tool_write_success_claim"
     )
     assert collector.records[0]["input_data"]["user_message"] == "李海这个月干了15天压瓜"
+
+
+def test_no_tool_write_success_claim_trace_includes_plan_draft_evidence(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeCollector:
+        def __init__(self) -> None:
+            self.records = []
+
+        def record(self, **kwargs) -> None:
+            self.records.append(kwargs)
+
+    collector = FakeCollector()
+    monkeypatch.setattr(
+        "app.agent.reflector.service.get_collector",
+        lambda: collector,
+    )
+    service = ReflectorService(policy=ReflectionPolicy(enabled=True))
+    plan_draft = {
+        "route_type": "write_pending_action",
+        "steps": [
+            {
+                "tool_name": "create_operation_work_order",
+                "params": {"worker_name": "李海", "operation_type": "压瓜"},
+            }
+        ],
+        "missing_fields": [],
+        "validation": {"status": "passed"},
+        "evidence": {"source": "rule_gate"},
+    }
+
+    result = service.check_tool_response(
+        tool_messages=[],
+        final_text="已记录李海这个月干了15天压瓜。",
+        selected_tools=[],
+        tool_calls=[],
+        trace_metadata={
+            "user_message": "李海这个月干了15天压瓜",
+            "plan_draft": plan_draft,
+            "pending_created": False,
+        },
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    evidence = result.issues[0].evidence
+    assert evidence["failure_stage"] == "response_quality"
+    assert evidence["plan_draft"]["route_type"] == "write_pending_action"
+    assert evidence["plan_draft"]["validation_status"] == "passed"
+    assert evidence["plan_draft"]["steps"] == ["create_operation_work_order"]
+    assert evidence["pending_created"] is False
+    trace_issue = collector.records[0]["output_data"]["issues"][0]
+    assert trace_issue["evidence"]["plan_draft"]["route_type"] == (
+        "write_pending_action"
+    )
+    assert collector.records[0]["input_data"]["plan_draft"] == plan_draft
 
 
 def test_no_tool_write_success_guard_allows_safe_non_write_replies() -> None:

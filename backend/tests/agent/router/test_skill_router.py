@@ -329,6 +329,35 @@ def test_implicit_labor_operation_routes_to_work_order_not_no_tool() -> None:
     assert work_order_frame.params_hint["operation_type"] == "压瓜"
     assert work_order_frame.params_hint["quantity"] == 15
     assert work_order_frame.params_hint["pay_type"] == "daily"
+    assert "unit_price" not in work_order_frame.params_hint
+    assert work_order_frame.planning_evidence == {
+        "worker": "李海",
+        "operation_type": "压瓜",
+        "quantity": 15,
+        "pay_type": "daily",
+        "write_risk": "implicit_farm_labor_work",
+    }
+    assert work_order_frame.missing_fields == ["unit_price_or_default_wage"]
+
+
+def test_implicit_labor_without_operation_asks_clarification() -> None:
+    tools = [
+        _tool("create_operation_work_order"),
+        _tool("get_labor_payables"),
+        _tool("manage_workers"),
+    ]
+
+    decision = SkillRouter().route("李海这个月干了15天", tools)
+
+    assert decision.selected_tools == []
+    assert decision.clarification is not None
+    assert "作业类型" in decision.clarification
+    assert len(decision.frames) == 1
+    frame = decision.frames[0]
+    assert frame.intent == "clarify_farm_labor_work"
+    assert frame.planning_evidence["worker"] == "李海"
+    assert frame.planning_evidence["quantity"] == 15
+    assert frame.missing_fields == ["operation_type"]
 
 
 def test_farm_labor_statement_extracts_worker_unit_operation_and_daily_wage() -> None:

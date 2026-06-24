@@ -301,3 +301,119 @@ def test_diagnostic_service_summarizes_reflection_checks() -> None:
         "decisions": ["ask_clarification", "require_tool"],
         "issue_codes": ["empty_write_params", "required_tool_missing"],
     }
+    assert report.failure_stage == "response_quality"
+
+
+def test_diagnostic_service_exposes_plan_draft_validation_summary() -> None:
+    report = SkillDiagnosticService().build_report(
+        "trace-plan-draft",
+        [
+            _record(
+                id=1,
+                node_type="plan_draft",
+                node_name="plan_draft",
+                output_data={
+                    "route_type": "clarification",
+                    "steps": [
+                        {
+                            "tool_name": "create_operation_work_order",
+                            "params": {"worker_name": "李海"},
+                        }
+                    ],
+                    "missing_fields": ["operation_type"],
+                    "inferred_fields": [
+                        {
+                            "field": "unit_price",
+                            "value": 100,
+                            "source": "worker_default",
+                        }
+                    ],
+                    "validation": {
+                        "status": "blocked",
+                        "missing_fields": ["operation_type"],
+                        "inferred_fields": [
+                            {
+                                "field": "unit_price",
+                                "source": "worker_default",
+                            }
+                        ],
+                    },
+                    "failure_stage": "validation",
+                },
+            )
+        ],
+    )
+
+    assert report.plan_draft_summary == {
+        "route_type": "clarification",
+        "steps": ["create_operation_work_order"],
+        "evidence": {},
+    }
+    assert report.validation_status == "blocked"
+    assert report.missing_fields == ["operation_type"]
+    assert report.inferred_fields == [
+        {"field": "unit_price", "value": 100, "source": "worker_default"}
+    ]
+    assert report.failure_stage == "validation"
+
+
+def test_diagnostic_service_distinguishes_semantic_selection_pending_execution_stages() -> None:
+    semantic = SkillDiagnosticService().build_report(
+        "trace-semantic",
+        [
+            _record(
+                id=1,
+                node_type="skill_router",
+                node_name="skill_router",
+                output_data={
+                    "selected_tools": [],
+                    "fallback": "clarify_farm_labor_work",
+                    "frames": [
+                        {
+                            "intent": "clarify_farm_labor_work",
+                            "missing_fields": ["operation_type"],
+                        }
+                    ],
+                },
+            )
+        ],
+    )
+    selection = SkillDiagnosticService().build_report(
+        "trace-selection",
+        [
+            _record(
+                id=1,
+                node_type="tool_selector",
+                node_name="selector",
+                output_data={"selected_tools": []},
+            )
+        ],
+    )
+    pending = SkillDiagnosticService().build_report(
+        "trace-pending",
+        [
+            _record(
+                id=1,
+                node_type="skill_call",
+                node_name="create_operation_work_order",
+                output_data={"status": "reflection_blocked"},
+            )
+        ],
+    )
+    execution = SkillDiagnosticService().build_report(
+        "trace-execution",
+        [
+            _record(
+                id=1,
+                node_type="skill_call",
+                node_name="create_operation_work_order",
+                status="error",
+                error_message="数据库失败",
+            )
+        ],
+    )
+
+    assert semantic.failure_stage == "planning"
+    assert selection.failure_stage == "selection"
+    assert pending.failure_stage == "pending_creation"
+    assert execution.failure_stage == "execution"

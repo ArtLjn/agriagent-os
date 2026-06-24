@@ -134,6 +134,8 @@ class ReflectorService:
                 selected_tools=selected_tools or [],
                 tool_messages=tool_messages,
                 tool_calls=tool_calls or [],
+                plan_draft=(trace_metadata or {}).get("plan_draft"),
+                pending_created=(trace_metadata or {}).get("pending_created"),
             )
             if no_tool_result.decision != ReflectionDecision.PASS:
                 return self._record(no_tool_result, trace_metadata=trace_metadata)
