@@ -9,6 +9,8 @@ import {
   acceptSamplePrelabel,
   addSampleLabel,
   createRepairPack,
+  createReviewIssueChainAiJudge,
+  createReviewIssueChainCandidate,
   createReviewIssueChainCaseDraft,
   createReviewIssueChainRepairPack,
   createSamplePrelabel,
@@ -45,6 +47,8 @@ vi.mock('../../api/dataFlywheel', () => ({
   acceptSamplePrelabel: vi.fn(),
   addSampleLabel: vi.fn(),
   createRepairPack: vi.fn(),
+  createReviewIssueChainAiJudge: vi.fn(),
+  createReviewIssueChainCandidate: vi.fn(),
   createReviewIssueChainCaseDraft: vi.fn(),
   createReviewIssueChainRepairPack: vi.fn(),
   createSamplePrelabel: vi.fn(),
@@ -92,6 +96,25 @@ const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof
   }
   return result;
 };
+
+async function findSelectOption(text: string): Promise<HTMLElement> {
+  await waitFor(() => {
+    expect(
+      Array.from(document.querySelectorAll('.ant-select-dropdown .ant-select-item-option-content'))
+        .some((node) => node.textContent === text)
+    ).toBe(true);
+  });
+  return Array.from(document.querySelectorAll('.ant-select-dropdown .ant-select-item-option-content'))
+    .find((node) => node.textContent === text) as HTMLElement;
+}
+
+function openProblemLabelSelect(): void {
+  const labelSelect = screen
+    .getAllByLabelText('问题标签')
+    .find((element) => element.querySelector('.ant-select-selector'));
+  expect(labelSelect).toBeDefined();
+  fireEvent.mouseDown(labelSelect!.querySelector('.ant-select-selector') as HTMLElement);
+}
 
 const sample: DataFlywheelSample = {
   sample_id: 'turn:session-a:3',
@@ -391,6 +414,8 @@ const mockedAddLabel = vi.mocked(addSampleLabel);
 const mockedCreateRepairPack = vi.mocked(createRepairPack);
 const mockedCreateChainDraft = vi.mocked(createReviewIssueChainCaseDraft);
 const mockedCreateChainRepairPack = vi.mocked(createReviewIssueChainRepairPack);
+const mockedCreateChainAiJudge = vi.mocked(createReviewIssueChainAiJudge);
+const mockedCreateChainCandidate = vi.mocked(createReviewIssueChainCandidate);
 const mockedCreatePrelabel = vi.mocked(createSamplePrelabel);
 const mockedMarkBadCase = vi.mocked(markBadCase);
 const mockedDeleteLabel = vi.mocked(deleteSampleLabel);
@@ -512,6 +537,15 @@ const dailyReviewInbox: DailyReviewInboxResponse = {
         status: 'ready_for_review',
         severity: 'P0',
         dominant_signal: 'judge',
+        risk_context: {
+          risk_score: 0.92,
+          rule_score: 0.8,
+          judge_bad_prob: 0.91,
+          dominant_signal: 'judge',
+          rule_hits: ['tool_parameter_mismatch'],
+          trigger_reason: '命中规则：tool_parameter_mismatch。风险分取规则分和 AI 坏例概率中的较高值。',
+          scoring_rule: 'risk_score = max(rule_score, judge_bad_prob)',
+        },
         diagnosis: {
           title: 'tool_parameter_mismatch',
           summary: '确认执行时工具参数只保留了单个工人。',
@@ -523,6 +557,11 @@ const dailyReviewInbox: DailyReviewInboxResponse = {
           issue_type: 'tool_parameter_mismatch',
           suggested_label: 'wrong_tool_selection',
           dominant_signal: 'judge',
+          root_cause: 'AI 判断确认执行阶段丢失批量对象。',
+          reason: '上下文中包含多个工人工资，工具参数只保留一个人。',
+          recommended_fix: '修正 router 参数抽取的批量作用域。',
+          judge_model: 'fake-judge',
+          prompt_version: 'data-flywheel-chain-judge-v1',
         },
         human_review: {
           status: 'unreviewed',
@@ -842,12 +881,12 @@ describe('DataFlywheel 页面', () => {
 
     expect(await screen.findByRole('tab', { name: /每日质检/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('批量结算工资时参数范围被收窄')).toBeInTheDocument();
-    expect(screen.getByText('最高风险链')).toBeInTheDocument();
-    expect(screen.getAllByText('P0').length).toBeGreaterThan(0);
-    expect(screen.getByText('候选链 2')).toBeInTheDocument();
-    expect(screen.getAllByText('ready_for_review').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('judge').length).toBeGreaterThan(0);
-    expect(screen.getByText('review_chain')).toBeInTheDocument();
+      expect(screen.getByText('最高风险链')).toBeInTheDocument();
+      expect(screen.getAllByText('P0').length).toBeGreaterThan(0);
+      expect(screen.getByText('候选链 2')).toBeInTheDocument();
+      expect(screen.getAllByText('可审核').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('AI 预判').length).toBeGreaterThan(0);
+      expect(screen.getByText('立即审核')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('risk-session-session-a'));
 
@@ -858,28 +897,42 @@ describe('DataFlywheel 页面', () => {
     const triggerArticle = document.querySelector('#turn-3');
     expect(triggerArticle).not.toBeNull();
     expect(screen.getAllByRole('link', { name: /turn #3/ })[0]).toHaveAttribute('href', '#turn-3');
+    expect(screen.getAllByText('AI 预判').length).toBeGreaterThan(0);
+      expect(screen.getByText('命中原因')).toBeInTheDocument();
+      expect(screen.getByText('最终风险')).toBeInTheDocument();
+      expect(screen.getByText('0.92')).toBeInTheDocument();
+      expect(screen.getAllByText('tool_parameter_mismatch').length).toBeGreaterThan(0);
+      expect(screen.getByText('risk_score = max(rule_score, judge_bad_prob)')).toBeInTheDocument();
+      expect(screen.getByText('置信度 91%')).toBeInTheDocument();
+      expect(screen.getByText('fake-judge')).toBeInTheDocument();
+      expect(screen.getByText('data-flywheel-chain-judge-v1')).toBeInTheDocument();
+      expect(screen.getByText('根因与正确行为')).toBeInTheDocument();
+      expect(screen.getByText('问题标签')).toBeInTheDocument();
+      expect(screen.getAllByText('修复归属').length).toBeGreaterThan(0);
+      expect(screen.getByRole('link', { name: /跳 TraceMonitor/ })).toBeInTheDocument();
 
     fireEvent.click(within(triggerArticle as HTMLElement).getAllByRole('button', { name: /展开详情/ })[0]);
-    expect(await within(triggerArticle as HTMLElement).findByText('trace_debug_summary')).toBeInTheDocument();
+    expect(await within(triggerArticle as HTMLElement).findByText('Trace 摘要')).toBeInTheDocument();
     expect(
       within(triggerArticle as HTMLElement).getByText((content) => content.includes('scope narrowed to one worker'))
     ).toBeInTheDocument();
     const contextArticle = document.querySelector('#turn-1') as HTMLElement;
     expect(contextArticle).not.toBeNull();
-    const contextCheckbox = within(contextArticle).getByRole('checkbox', { name: 'context' });
-    const resultCheckbox = within(contextArticle).getByRole('checkbox', { name: 'result' });
+      const contextCheckbox = within(contextArticle).getByRole('checkbox', { name: '设为上下文' });
+      const resultCheckbox = within(contextArticle).getByRole('checkbox', { name: '设为结果' });
     expect(contextCheckbox).toBeChecked();
     fireEvent.click(resultCheckbox);
     expect(resultCheckbox).toBeChecked();
     expect(contextCheckbox).not.toBeChecked();
 
     fireEvent.click(screen.getByLabelText('采纳坏例'));
-    fireEvent.change(screen.getByLabelText('Root cause'), { target: { value: '批量作用域被收窄为单人' } });
-    fireEvent.change(screen.getByLabelText('Expected behavior'), {
-      target: { value: '应保留张三和李四两个工人的批量结算范围' },
-    });
-    fireEvent.click(screen.getByLabelText('needs_regression'));
-    fireEvent.click(screen.getByLabelText('wrong_tool_selection'));
+      fireEvent.change(screen.getByLabelText('根因说明'), { target: { value: '批量作用域被收窄为单人' } });
+      fireEvent.change(screen.getByLabelText('正确行为'), {
+        target: { value: '应保留张三和李四两个工人的批量结算范围' },
+      });
+      fireEvent.change(screen.getByLabelText('审核备注'), {
+        target: { value: '人工采纳 AI 预判，修 router。' },
+      });
     fireEvent.click(screen.getByRole('button', { name: /保存并下一条/ }));
 
     await waitFor(() => {
@@ -890,6 +943,8 @@ describe('DataFlywheel 页面', () => {
         final_labels: ['wrong_tool_selection', 'needs_regression'],
         root_cause: '批量作用域被收窄为单人',
         expected_behavior: '应保留张三和李四两个工人的批量结算范围',
+        fix_target: 'router',
+        reviewer_comment: '人工采纳 AI 预判，修 router。',
         false_positive_reason: undefined,
         missing_evidence: undefined,
       });
@@ -900,11 +955,162 @@ describe('DataFlywheel 页面', () => {
     });
   }, 15000);
 
-  it('每日质检从 accepted 问题链生成回归草稿并显示 Case Draft', async () => {
-    mockedReviewChain.mockResolvedValue(acceptedReviewChainDetail);
+  it('每日质检筛选直接请求后端并刷新队列', async () => {
+    mockedInbox.mockReset();
+    mockedInbox.mockResolvedValue(dailyReviewInbox);
+    const user = userEvent.setup();
     render(<DataFlywheel />);
 
     await screen.findByText('批量结算工资时参数范围被收窄');
+    const severityFilter = screen.getByTestId('daily-review-severity-filter');
+    fireEvent.mouseDown(severityFilter.querySelector('.ant-select-selector') as HTMLElement);
+    await user.click(await findSelectOption('P0'));
+
+    await waitFor(() => {
+      expect(mockedInbox).toHaveBeenLastCalledWith(expect.objectContaining({
+        severity: 'P0',
+        limit: 50,
+        offset: 0,
+      }));
+    });
+  }, 15000);
+
+  it('每日质检默认请求待处理队列，已处理作为单独入口', async () => {
+    mockedInbox.mockReset();
+    mockedInbox.mockResolvedValue(dailyReviewInbox);
+    const user = userEvent.setup();
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    await waitFor(() => {
+      expect(mockedInbox).toHaveBeenCalledWith(expect.objectContaining({
+        status: 'open',
+        limit: 50,
+        offset: 0,
+      }));
+    });
+
+    const queueFilter = screen.getByTestId('daily-review-queue-filter');
+    fireEvent.mouseDown(queueFilter.querySelector('.ant-select-selector') as HTMLElement);
+    await user.click(await findSelectOption('已处理'));
+
+    await waitFor(() => {
+      expect(mockedInbox).toHaveBeenLastCalledWith(expect.objectContaining({
+        status: 'handled',
+        limit: 50,
+        offset: 0,
+      }));
+    });
+  }, 15000);
+
+  it('每日质检支持手动运行问题链 AI 预判并刷新详情', async () => {
+    const judgedDetail: ReviewIssueChainDetail = {
+      ...reviewChainDetail,
+      chain: {
+        ...reviewChainDetail.chain,
+        ai_judge: {
+          bad_prob: 0.88,
+          issue_type: 'wrong_tool_selection',
+          suggested_label: 'wrong_tool_selection',
+          root_cause: '没有结合上下文判断批量结算对象。',
+          reason: 'trigger turn 只保留单个 worker_id。',
+          recommended_fix: '让 router 保留多实体批量作用域。',
+          judge_model: 'fake-chain-judge',
+          prompt_version: 'data-flywheel-chain-judge-v1',
+        },
+      },
+      ai_judge: {
+        bad_prob: 0.88,
+        issue_type: 'wrong_tool_selection',
+        suggested_label: 'wrong_tool_selection',
+        root_cause: '没有结合上下文判断批量结算对象。',
+        reason: 'trigger turn 只保留单个 worker_id。',
+        recommended_fix: '让 router 保留多实体批量作用域。',
+        judge_model: 'fake-chain-judge',
+        prompt_version: 'data-flywheel-chain-judge-v1',
+      },
+    };
+    mockedReviewChain
+      .mockResolvedValueOnce({ ...reviewChainDetail, chain: { ...reviewChainDetail.chain, ai_judge: {} }, ai_judge: {} })
+      .mockResolvedValueOnce(judgedDetail);
+    mockedCreateChainAiJudge.mockResolvedValue({ chain: judgedDetail.chain });
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    expect(await screen.findByText('暂无 AI 预判；可以手动运行，不会写入最终结论。')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /运行 AI 预判/ }));
+
+    await waitFor(() => {
+      expect(mockedCreateChainAiJudge).toHaveBeenCalledWith(reviewChainId);
+    });
+    await waitFor(() => {
+      expect(mockedReviewChain).toHaveBeenLastCalledWith(reviewChainId);
+    });
+    expect(await screen.findByText('fake-chain-judge')).toBeInTheDocument();
+    expect(screen.getByText('置信度 88%')).toBeInTheDocument();
+  }, 15000);
+
+  it('每日质检采纳 AI 建议会切到采纳坏例并补齐人工判断草稿', async () => {
+    const needsEvidenceDetail: ReviewIssueChainDetail = {
+      ...reviewChainDetail,
+      chain: {
+        ...reviewChainDetail.chain,
+        status: 'needs_evidence',
+        human_review: {
+          ...reviewChainDetail.chain.human_review,
+          status: 'needs_evidence',
+          quality_labels: [],
+          expected_behavior: null,
+          root_cause: null,
+          fix_target: 'unknown',
+          reviewer_comment: null,
+          missing_evidence: [],
+        },
+        repair: {
+          ...reviewChainDetail.chain.repair,
+          fix_target: 'unknown',
+        },
+      },
+    };
+    mockedReviewChain.mockResolvedValue(needsEvidenceDetail);
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    expect(await screen.findByLabelText('缺失证据')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /采纳建议/ }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('采纳坏例')).toBeChecked();
+    });
+    expect(screen.queryByLabelText('缺失证据')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('根因说明')).toHaveValue('AI 判断确认执行阶段丢失批量对象。');
+    expect(screen.getByLabelText('正确行为')).toHaveValue('应修正为：修正 router 参数抽取的批量作用域。');
+    expect(screen.getByLabelText('审核备注')).toHaveValue('已采纳 AI 预判作为人工判断草稿。');
+    expect(screen.getAllByText('工具选择错误').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /保存并下一条/ }));
+    await waitFor(() => {
+      expect(mockedSaveReviewChain).toHaveBeenCalledWith(reviewChainId, expect.objectContaining({
+        status: 'accepted',
+        final_labels: expect.arrayContaining(['wrong_tool_selection']),
+        root_cause: 'AI 判断确认执行阶段丢失批量对象。',
+        expected_behavior: '应修正为：修正 router 参数抽取的批量作用域。',
+        fix_target: 'router',
+        reviewer_comment: '已采纳 AI 预判作为人工判断草稿。',
+        missing_evidence: undefined,
+      }));
+    });
+  }, 15000);
+
+    it('每日质检从 accepted 问题链生成回归草稿并显示 Case Draft', async () => {
+      mockedInbox.mockReset();
+      mockedInbox.mockResolvedValue(dailyReviewInbox);
+      mockedReviewChain.mockResolvedValue(acceptedReviewChainDetail);
+      render(<DataFlywheel />);
+
+    await screen.findByTestId('risk-session-session-a');
     fireEvent.click(screen.getByTestId('risk-session-session-a'));
     await screen.findByText('应保留张三和李四两个工人的批量结算范围');
 
@@ -914,16 +1120,18 @@ describe('DataFlywheel 页面', () => {
       expect(mockedCreateChainDraft).toHaveBeenCalledWith(reviewChainId, 'evaluation_replay');
     });
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Case Draft')).toBeInTheDocument();
+    expect(within(dialog).getByText('回归草稿')).toBeInTheDocument();
     expect(within(dialog).getByText(/chain:1:session-a:3/)).toBeInTheDocument();
     expect(within(dialog).getByText(/related_turns/)).toBeInTheDocument();
   }, 15000);
 
-  it('每日质检从 accepted 问题链导出修复包并显示 source_chain_ids 预览', async () => {
-    mockedReviewChain.mockResolvedValue(acceptedReviewChainDetail);
-    render(<DataFlywheel />);
+    it('每日质检从 accepted 问题链导出修复包并显示 source_chain_ids 预览', async () => {
+      mockedInbox.mockReset();
+      mockedInbox.mockResolvedValue(dailyReviewInbox);
+      mockedReviewChain.mockResolvedValue(acceptedReviewChainDetail);
+      render(<DataFlywheel />);
 
-    await screen.findByText('批量结算工资时参数范围被收窄');
+    await screen.findByTestId('risk-session-session-a');
     fireEvent.click(screen.getByTestId('risk-session-session-a'));
     await screen.findByText('应保留张三和李四两个工人的批量结算范围');
 
@@ -933,7 +1141,7 @@ describe('DataFlywheel 页面', () => {
       expect(mockedCreateChainRepairPack).toHaveBeenCalledWith(reviewChainId);
     });
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Repair Pack')).toBeInTheDocument();
+    expect(within(dialog).getByText('修复包详情')).toBeInTheDocument();
     expect(within(dialog).getByText('repair-chain-router-abc123')).toBeInTheDocument();
     expect(within(dialog).getByText(/source_chain_ids/)).toBeInTheDocument();
   }, 15000);
@@ -943,7 +1151,7 @@ describe('DataFlywheel 页面', () => {
 
     await screen.findByText('批量结算工资时参数范围被收窄');
     fireEvent.click(screen.getByTestId('risk-session-session-a'));
-    expect(await screen.findByText('阻断原因：问题链尚未 accepted')).toBeInTheDocument();
+    expect(await screen.findByText('阻断：问题链尚未采纳')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /生成回归草稿/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /导出修复包/ })).toBeDisabled();
 
@@ -960,11 +1168,15 @@ describe('DataFlywheel 页面', () => {
       },
     });
     const secondRender = render(<DataFlywheel />);
-    await screen.findByText('批量结算工资时参数范围被收窄');
-    fireEvent.click(screen.getByTestId('risk-session-session-a'));
-    expect(await screen.findByText('阻断原因：问题链仍需补证据')).toBeInTheDocument();
+      await screen.findByText('批量结算工资时参数范围被收窄');
+      fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    expect(await screen.findByText('阻断：问题链仍需补证据')).toBeInTheDocument();
+      expect(screen.queryByLabelText('根因说明')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('正确行为')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('缺失证据')).toBeInTheDocument();
+      expect(screen.getByLabelText('审核备注')).toBeInTheDocument();
 
-    secondRender.unmount();
+      secondRender.unmount();
     vi.clearAllMocks();
     mockedList.mockResolvedValue({ items: [sample], total: 1 });
     mockedInbox.mockResolvedValue(dailyReviewInbox);
@@ -979,36 +1191,27 @@ describe('DataFlywheel 页面', () => {
     render(<DataFlywheel />);
     await screen.findByText('批量结算工资时参数范围被收窄');
     fireEvent.click(screen.getByTestId('risk-session-session-a'));
-    expect(await screen.findByText('阻断原因：缺少 expected behavior')).toBeInTheDocument();
+    expect(await screen.findByText('阻断：缺少正确行为')).toBeInTheDocument();
     expect(mockedCreateChainDraft).not.toHaveBeenCalled();
     expect(mockedCreateChainRepairPack).not.toHaveBeenCalled();
   }, 15000);
 
-  it('IssueChain 审核面板展示完整固定标签集合', async () => {
+  it('IssueChain 审核面板展示中文标签，同时保留枚举提交值', async () => {
     render(<DataFlywheel />);
 
     await screen.findByText('批量结算工资时参数范围被收窄');
     fireEvent.click(screen.getByTestId('risk-session-session-a'));
-    fireEvent.click(screen.getByLabelText('采纳坏例'));
+    expect(screen.getAllByLabelText('问题标签').length).toBeGreaterThan(0);
 
-    [
-      'good_reply',
-      'bad_reply',
-      'wrong_tool_selection',
-      'tool_parameter_mismatch',
-      'pending_missed',
-      'hallucinated_execution',
-      'tool_error_ignored',
-      'off_topic',
-      'sensitive_info_leak',
-      'missing_wage',
-      'disabled_worker_used',
-      'unclear_intent',
-      'not_actionable',
-      'needs_regression',
-    ].forEach((label) => {
-      expect(screen.getByLabelText(label)).toBeInTheDocument();
-    });
+    const user = userEvent.setup();
+    openProblemLabelSelect();
+    await user.click(await findSelectOption('工具选择错误'));
+    await user.click(await findSelectOption('工具参数不匹配'));
+    await user.click(await findSelectOption('幻觉执行'));
+
+    expect(screen.getAllByText('工具选择错误').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('工具参数不匹配').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('幻觉执行').length).toBeGreaterThan(0);
   }, 15000);
 
   it('高级搜索中保留旧样本检索入口', async () => {
@@ -1031,7 +1234,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('680 tokens')).toBeInTheDocument();
     expect(screen.getAllByText('规则：参数/提示泄露').length).toBeGreaterThan(0);
     expect(screen.getByText('规则候选')).toBeInTheDocument();
-    expect(screen.getByText('已标注问题')).toBeInTheDocument();
+    expect(screen.getByText('历史问题引用')).toBeInTheDocument();
   });
 
   it('点击样本行后加载详情并显示工具与 pending 生命周期', async () => {
@@ -1163,7 +1366,7 @@ describe('DataFlywheel 页面', () => {
     expect(screen.getByText('规则候选：回复疑似暴露模型参数或系统提示')).toBeInTheDocument();
   });
 
-  it('点击已标注问题后按会话归档显示人工确认的问题', async () => {
+  it('点击历史问题引用后按会话归档显示人工确认的问题', async () => {
     const confirmedBadSample: DataFlywheelSample = {
       ...anotherSample,
       quality_labels: ['bad_reply'],
@@ -1310,7 +1513,7 @@ describe('DataFlywheel 页面', () => {
     expect(scrolledElements.at(-1)?.getAttribute('data-testid')).toBe('session-turn-turn:session-a:3');
   });
 
-  it('点击已标注问题后会按单个会话归档显示会话级问题标注', async () => {
+  it('点击历史问题引用后会按单个会话归档显示会话级问题标注', async () => {
     const sessionLevelBadSample: DataFlywheelSample = {
       ...sample,
       quality_labels: [],
@@ -1390,10 +1593,10 @@ describe('DataFlywheel 页面', () => {
     expect(await screen.findByText('完整对话记录')).toBeInTheDocument();
     expect(screen.getByText('帮我查一下张三这个月工资有没有漏记')).toBeInTheDocument();
     expect(screen.getAllByText('张三本月工资记录里缺少 6 月 8 日。').length).toBeGreaterThan(0);
-    expect(screen.getByText('selected: worker.search, wage.list')).toBeInTheDocument();
-    expect(screen.getByText('actual: worker.search')).toBeInTheDocument();
-    expect(screen.getByText('pending: 已创建')).toBeInTheDocument();
-    expect(screen.getAllByText('tool: 1 success / 0 failed').length).toBeGreaterThan(0);
+    expect(screen.getByText('路由选择：worker.search, wage.list')).toBeInTheDocument();
+    expect(screen.getByText('实际调用：worker.search')).toBeInTheDocument();
+    expect(screen.getByText('确认流程：已创建')).toBeInTheDocument();
+    expect(screen.getAllByText('工具结果：1 成功 / 0 失败').length).toBeGreaterThan(0);
     expect(screen.getAllByText('规则：幻觉执行').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByTestId('review-select-turn:session-a:4'));
@@ -1455,6 +1658,29 @@ describe('DataFlywheel 页面', () => {
     await user.click(screen.getByRole('button', { name: /打开每日质检/ }));
     expect(await screen.findByRole('tab', { name: /每日质检/ })).toHaveAttribute('aria-selected', 'true');
     expect(mockedAddLabel).not.toHaveBeenCalled();
+  });
+
+  it('高级搜索可以从 raw turn 创建候选链并进入审核入口', async () => {
+    const user = userEvent.setup();
+    mockedCreateChainCandidate.mockResolvedValue({
+      chain: dailyReviewInbox.items[0].highest_risk_chain,
+    });
+    render(<DataFlywheel />);
+
+    await fireEvent.click(await screen.findByTestId('sample-row-turn:session-a:3'));
+    await screen.findByText('样本详情');
+    await user.click(screen.getByRole('button', { name: /创建候选链/ }));
+
+    expect(mockedCreateChainCandidate).toHaveBeenCalledWith({
+      trigger_turn_id: 3,
+      context_turn_ids: [],
+      result_turn_ids: [],
+      severity: 'P0',
+      dominant_signal: 'rule',
+      missing_evidence: ['router_decision'],
+      suggested_labels: ['sensitive_info_leak'],
+    });
+    expect(await screen.findByRole('tab', { name: /每日质检/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('高级搜索完整会话不能保存 final label', async () => {
@@ -1587,7 +1813,7 @@ describe('DataFlywheel 页面', () => {
     expect(mockedList).toHaveBeenLastCalledWith(
       expect.objectContaining({ sort: 'risk' })
     );
-    expect(screen.getAllByText('Rule Risk: 0.88').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/规则风险 0.88/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('P0').length).toBeGreaterThan(0);
 
     await user.click(screen.getByLabelText('隐藏低风险'));

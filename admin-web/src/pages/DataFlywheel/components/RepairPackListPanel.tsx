@@ -35,6 +35,7 @@ import {
   REPAIR_PACK_STATUS_OPTIONS,
   repairPackStatusMeta,
 } from './repairPackStatusMeta';
+import { fixTargetText, qualityLabelText } from './reviewLabels';
 
 const PAGE_SIZE = 10;
 
@@ -270,7 +271,7 @@ function RepairPackRow({
             <Typography.Text copyable style={{ color: palette.text, fontSize: 13 }}>
               {pack.pack_id}
             </Typography.Text>
-            <Tag color="blue">{pack.fix_target}</Tag>
+            <Tag color="blue">{fixTargetText(pack.fix_target)}</Tag>
             <Tag color={meta.color}>{meta.label}</Tag>
             <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
               {created}
@@ -284,9 +285,9 @@ function RepairPackRow({
             {labels.length > 0 && (
               <>
                 <span>·</span>
-                <Tooltip title={labels.join(', ')}>
+                <Tooltip title={labels.map(qualityLabelText).join(', ')}>
                   <span style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {labels.join(' / ')}
+                    {labels.map(qualityLabelText).join(' / ')}
                   </span>
                 </Tooltip>
               </>

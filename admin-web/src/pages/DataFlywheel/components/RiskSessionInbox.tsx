@@ -1,16 +1,26 @@
 import { Empty, Select, Space, Spin, Tag, Typography } from 'antd';
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 
 import type { DailyReviewInboxItem } from '../../../api/dataFlywheel';
 import { cardStyle, palette } from '../../../styles/theme';
+import {
+  dominantSignalText,
+  evidenceStatusLabel,
+  nextActionText,
+  reviewStatusText,
+} from './reviewLabels';
 
-type InboxFilter = 'all' | 'p0' | 'needs_evidence' | 'ready_for_review' | 'ai_pending' | 'handled';
+type InboxFilter = 'open' | 'all' | 'p0' | 'needs_evidence' | 'ready_for_review' | 'ai_pending' | 'handled';
 type InboxSort = 'risk' | 'evidence' | 'status' | 'recent';
 
 interface RiskSessionInboxProps {
   items: DailyReviewInboxItem[];
   selectedChainId?: string;
   loading: boolean;
+  filter: InboxFilter;
+  sort: InboxSort;
+  onFilterChange: (filter: InboxFilter) => void;
+  onSortChange: (sort: InboxSort) => void;
   onSelect: (item: DailyReviewInboxItem) => void;
 }
 
@@ -18,10 +28,12 @@ export default function RiskSessionInbox({
   items,
   selectedChainId,
   loading,
+  filter,
+  sort,
+  onFilterChange,
+  onSortChange,
   onSelect,
 }: RiskSessionInboxProps) {
-  const [filter, setFilter] = useState<InboxFilter>('all');
-  const [sort, setSort] = useState<InboxSort>('risk');
   const visibleItems = useMemo(
     () => sortInboxItems(items.filter((item) => matchesFilter(item, filter)), sort),
     [filter, items, sort]
@@ -33,16 +45,18 @@ export default function RiskSessionInbox({
         <Space wrap>
           <Select
             aria-label="质检筛选"
+            data-testid="daily-review-queue-filter"
             size="small"
             value={filter}
-            onChange={setFilter}
+            onChange={onFilterChange}
             options={[
+              { label: '待处理', value: 'open' },
+              { label: '需补证据', value: 'needs_evidence' },
+              { label: '可审核', value: 'ready_for_review' },
+              { label: '未审核', value: 'ai_pending' },
+              { label: '已处理', value: 'handled' },
               { label: '全部', value: 'all' },
               { label: 'P0', value: 'p0' },
-              { label: 'needs_evidence', value: 'needs_evidence' },
-              { label: 'ready_for_review', value: 'ready_for_review' },
-              { label: 'AI 待审', value: 'ai_pending' },
-              { label: '已处理', value: 'handled' },
             ]}
             style={{ width: 150 }}
           />
@@ -50,7 +64,7 @@ export default function RiskSessionInbox({
             aria-label="质检排序"
             size="small"
             value={sort}
-            onChange={setSort}
+            onChange={onSortChange}
             options={[
               { label: '最高风险', value: 'risk' },
               { label: '证据完整度', value: 'evidence' },
@@ -80,9 +94,9 @@ export default function RiskSessionInbox({
                       {item.highest_risk_chain.severity}
                     </Tag>
                     <Tag color={item.evidence_status === 'needs_evidence' ? 'orange' : 'green'}>
-                      {item.evidence_status}
+                      {evidenceStatusLabel(item.evidence_status)}
                     </Tag>
-                    <Tag color={isHandled(item) ? 'green' : 'blue'}>{item.status}</Tag>
+                    <Tag color={isHandled(item) ? 'green' : 'blue'}>{reviewStatusText(item.status)}</Tag>
                   </Space>
                   <Typography.Text strong ellipsis style={{ color: palette.text, maxWidth: '100%' }}>
                     {item.session_id}
@@ -93,11 +107,11 @@ export default function RiskSessionInbox({
                   <Space wrap size={6}>
                     <Tag color="red">最高风险链</Tag>
                     <Tag>候选链 {item.candidate_chain_count}</Tag>
-                    <Tag color="purple">{item.dominant_signal}</Tag>
-                    <Tag>{item.next_action}</Tag>
+                    <Tag color="purple">{dominantSignalText(item.dominant_signal)}</Tag>
+                    <Tag>{nextActionText(item.next_action)}</Tag>
                   </Space>
                   <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-                    risk {formatRisk(item.session_card.risk_score)} / trigger #
+                    风险 {formatRisk(item.session_card.risk_score)} / 触发 turn #
                     {item.highest_risk_chain.trigger_turn_id}
                   </Typography.Text>
                 </Space>
@@ -111,6 +125,7 @@ export default function RiskSessionInbox({
 }
 
 function matchesFilter(item: DailyReviewInboxItem, filter: InboxFilter): boolean {
+  if (filter === 'open') return !isHandled(item);
   if (filter === 'all') return true;
   if (filter === 'p0') return item.highest_risk_chain.severity === 'P0';
   if (filter === 'needs_evidence') return item.evidence_status === 'needs_evidence' || item.status === 'needs_evidence';

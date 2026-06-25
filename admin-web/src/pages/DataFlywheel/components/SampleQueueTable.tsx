@@ -3,6 +3,7 @@ import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 
 import type { DataFlywheelSample } from '../../../api/dataFlywheel';
 import { palette } from '../../../styles/theme';
+import { reviewStatusText } from './reviewLabels';
 
 interface SampleQueueTableProps {
   samples: DataFlywheelSample[];
@@ -58,7 +59,7 @@ export default function SampleQueueTable({
       render: (status: string, record) => (
         <div style={statusStackStyle}>
           <Tag color={labelColor(status)} style={statusTagStyle}>
-            {status}
+            {reviewStatusText(status)}
           </Tag>
           {record.quality_labels.slice(0, 1).map((label) => (
             <Tag key={label} color="blue" style={statusTagStyle} title={labelText[label] ?? label}>
@@ -82,7 +83,7 @@ export default function SampleQueueTable({
               title={riskSignalTitle(record.risk_dominant_signal)}
             >
               {riskSignalLabel(record.risk_dominant_signal)}
-              Risk: {record.risk_score.toFixed(2)}
+              风险 {record.risk_score.toFixed(2)}
             </Tag>
           )}
           {record.risk_severity === 'P0' && (
@@ -203,7 +204,7 @@ function riskSignalTitle(signal?: string | null) {
 }
 
 function riskSignalLabel(signal?: string | null) {
-  if (signal === 'rule') return 'Rule ';
-  if (signal === 'judge') return 'Judge ';
+  if (signal === 'rule') return '规则';
+  if (signal === 'judge') return 'AI';
   return '';
 }

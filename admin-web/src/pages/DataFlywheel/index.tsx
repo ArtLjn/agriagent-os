@@ -9,6 +9,7 @@ import {
 import {
   acceptSamplePrelabel,
   addSampleLabel,
+  createReviewIssueChainCandidate,
   createSamplePrelabel,
   createSamplePrelabelBatch,
   deleteSampleLabel,
@@ -48,6 +49,7 @@ import SessionArchivePanel, { type SessionArchiveItem } from './components/Sessi
 import RepairPackListPanel from './components/RepairPackListPanel';
 import ReviewEvidencePanel from './components/ReviewEvidencePanel';
 import RepairPackPreview from './components/RepairPackPreview';
+import { eventStatusText, reviewStatusText } from './components/reviewLabels';
 
 const DEFAULT_LABEL: DataFlywheelLabel = 'good_reply';
 const ALL_ARCHIVE_KEY = '__all__';
@@ -571,6 +573,30 @@ export default function DataFlywheel() {
     message.info('正式修复包需要在每日质检中从 accepted 问题链导出');
   };
 
+  const handleCreateCandidateChain = async () => {
+    if (!selectedSample) return;
+    setActing(true);
+    try {
+      await createReviewIssueChainCandidate({
+        trigger_turn_id: selectedSample.turn_id,
+        context_turn_ids: [],
+        result_turn_ids: [],
+        severity: candidateSeverity(selectedSample),
+        dominant_signal: selectedSample.risk_dominant_signal ?? 'manual_triage',
+        suggested_labels: selectedSample.issue_candidates
+          .map((candidate) => candidate.suggested_label)
+          .filter((label): label is string => Boolean(label)),
+        missing_evidence: ['router_decision'],
+      });
+      message.success('已创建候选链，请在每日质检完成最终审核');
+      setActiveTab('daily-review');
+    } catch {
+      message.error('创建候选链失败');
+    } finally {
+      setActing(false);
+    }
+  };
+
   const handleOpenRepairPackDetail = useCallback((pack: DataFlywheelRepairPack) => {
     setRepairPack(pack);
     setRepairPackOpen(true);
@@ -1026,6 +1052,7 @@ export default function DataFlywheel() {
         onResolveLabel={handleResolveLabel}
         onCopyDebug={handleCopyDebug}
         onExportJsonl={handleExportJsonl}
+        onCreateCandidateChain={handleCreateCandidateChain}
         onOpenDailyReview={() => setActiveTab('daily-review')}
         onMarkBadCase={handleMarkBadCase}
         onCreateRegressionCase={handleCreateRegressionCase}
@@ -1096,7 +1123,7 @@ export default function DataFlywheel() {
         stats={[
           { label: '会话归档', value: archiveGroups.length },
           { label: '问题会话', value: confirmedIssueGroups.length },
-          { label: '已标注问题', value: confirmedIssueCount },
+          { label: '历史问题引用', value: confirmedIssueCount },
         ]}
         flow="选择 session -> 看完整上下文 -> 下钻 turn -> 打开每日质检"
       />
@@ -1217,6 +1244,8 @@ export default function DataFlywheel() {
               <DailyReviewWorkbench
                 onCaseDraftCreated={handleDailyReviewCaseDraftCreated}
                 onRepairPackCreated={handleDailyReviewRepairPackCreated}
+                onSyncSessions={handleSyncSessions}
+                syncingSessions={syncingSessions}
               />
             ),
           },
@@ -1619,10 +1648,10 @@ function CandidateCard({
       <Space direction="vertical" size={8} style={{ width: '100%', textAlign: 'left' }}>
         <Space wrap size={6}>
           <Tag color={sample.risk_severity === 'P0' ? 'red' : 'purple'}>
-            {sample.risk_severity ?? 'risk'} {sample.risk_score?.toFixed(2) ?? '-'}
+            {sample.risk_severity ?? '风险'} {sample.risk_score?.toFixed(2) ?? '-'}
           </Tag>
           <Tag color={sample.annotation_status === 'labeled' ? 'success' : 'warning'}>
-            {sample.annotation_status}
+            {reviewStatusText(sample.annotation_status)}
           </Tag>
           {prelabel && hasPendingAiPrelabel(sample) && <Tag color="blue">AI {prelabel.confidence.toFixed(2)}</Tag>}
         </Space>
@@ -1667,13 +1696,13 @@ function TurnReviewWorkbench({
         <Space direction="vertical" size={10} style={{ width: '100%' }}>
           <Space wrap>
             <Tag color={sample.risk_severity === 'P0' ? 'red' : 'purple'}>
-              {sample.risk_severity ?? 'risk'} {sample.risk_score?.toFixed(2) ?? '-'}
+              {sample.risk_severity ?? '风险'} {sample.risk_score?.toFixed(2) ?? '-'}
             </Tag>
             <Tag color={sample.annotation_status === 'labeled' ? 'success' : 'warning'}>
-              {sample.annotation_status}
+              {reviewStatusText(sample.annotation_status)}
             </Tag>
             <Tag color={sample.event_log_status === 'missing' ? 'orange' : 'default'}>
-              {sample.event_log_status ?? 'event'}
+              {eventStatusText(sample.event_log_status)}
             </Tag>
           </Space>
           <div style={turnAuditGridStyle}>
@@ -1722,6 +1751,11 @@ function sleep(ms: number) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function candidateSeverity(sample: DataFlywheelSample): 'P0' | 'P1' | string {
+  if (sample.risk_severity) return sample.risk_severity;
+  return (sample.risk_score ?? 0) >= 0.7 ? 'P0' : 'P1';
 }
 
 function isProblemCandidateSample(sample: DataFlywheelSample) {

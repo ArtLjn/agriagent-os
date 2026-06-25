@@ -3,6 +3,7 @@ import { type CSSProperties } from 'react';
 
 import type { ReviewIssueChainDetail, ReviewIssueChainTimelineTurn } from '../../../api/dataFlywheel';
 import { cardStyle, palette } from '../../../styles/theme';
+import { evidenceStatusLabel, timelineRoleText } from './reviewLabels';
 
 interface ReviewIssueChainTimelineProps {
   detail: ReviewIssueChainDetail | null;
@@ -23,7 +24,7 @@ export default function ReviewIssueChainTimeline({
 }: ReviewIssueChainTimelineProps) {
   if (!detail && !loading) {
     return (
-      <Card title="Session Timeline" style={timelineCardStyle}>
+        <Card title="会话时间线" style={timelineCardStyle}>
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择左侧 session 后查看问题链" />
       </Card>
     );
@@ -31,42 +32,44 @@ export default function ReviewIssueChainTimeline({
 
   return (
     <Card
-      title="Session Timeline"
+        title="会话时间线"
       loading={loading}
       style={timelineCardStyle}
-      styles={{ body: { padding: 12, minHeight: 0, overflow: 'auto', scrollbarGutter: 'stable' } }}
+      styles={{ body: timelineBodyStyle }}
     >
       <Space direction="vertical" size={10} style={{ width: '100%' }}>
-        {detail?.timeline.map((turn) => (
+        {detail?.timeline.map((turn) => {
+          const role = roleForTurn(turn, detail, contextTurnIds, resultTurnIds);
+          return (
           <article
             key={turn.turn_id}
             id={`turn-${turn.turn_id}`}
-            style={turnCardStyle(roleForTurn(turn, detail, contextTurnIds, resultTurnIds))}
+            style={turnCardStyle(role)}
           >
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <Space wrap size={6}>
-                <Tag color={roleColor(roleForTurn(turn, detail, contextTurnIds, resultTurnIds))}>
-                  {roleForTurn(turn, detail, contextTurnIds, resultTurnIds)}
-                </Tag>
-                <Tag>turn #{turn.turn_id}</Tag>
-                <Tag color={turn.event_log_status === 'missing' ? 'orange' : 'green'}>
-                  event {turn.event_log_status}
-                </Tag>
+                  <Tag color={roleColor(role)}>
+                    {timelineRoleText(role)}
+                  </Tag>
+                  <Tag>turn #{turn.turn_id}</Tag>
+                  <Tag color={turn.event_log_status === 'missing' ? 'orange' : 'green'}>
+                    事件 {evidenceStatusLabel(turn.event_log_status)}
+                  </Tag>
                 <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
                   {turn.request_id || '-'}
                 </Typography.Text>
               </Space>
-              <Typography.Text style={{ color: palette.text }}>
-                user: {turn.user_input_preview || userMessage(turn) || '无用户摘要'}
+              <Typography.Text style={{ ...lineClampStyle(role), color: palette.text }}>
+                  用户：{turn.user_input_preview || userMessage(turn) || '无用户摘要'}
               </Typography.Text>
-              <Typography.Text style={{ color: palette.textMuted }}>
-                assistant: {turn.assistant_reply_preview || assistantMessage(turn) || '无回复摘要'}
+              <Typography.Text style={{ ...lineClampStyle(role), color: palette.textMuted }}>
+                  助手：{turn.assistant_reply_preview || assistantMessage(turn) || '无回复摘要'}
               </Typography.Text>
               <Space wrap size={6}>
-                <Tag>selected: {turn.selected_tools.length > 0 ? turn.selected_tools.join(', ') : '-'}</Tag>
-                <Tag>actual: {actualTools(turn).length > 0 ? actualTools(turn).join(', ') : '-'}</Tag>
-                <Tag color={turn.pending_lifecycle.length > 0 ? 'blue' : 'default'}>
-                  pending: {turn.pending_lifecycle.length > 0 ? '有' : '无'}
+                  <Tag>路由选择：{turn.selected_tools.length > 0 ? turn.selected_tools.join(', ') : '-'}</Tag>
+                  <Tag>实际调用：{actualTools(turn).length > 0 ? actualTools(turn).join(', ') : '-'}</Tag>
+                  <Tag color={turn.pending_lifecycle.length > 0 ? 'blue' : 'default'}>
+                    确认流程：{turn.pending_lifecycle.length > 0 ? '有' : '无'}
                 </Tag>
               </Space>
               <Space wrap>
@@ -81,7 +84,7 @@ export default function ReviewIssueChainTimeline({
                         }
                       }}
                     >
-                      context
+                        设为上下文
                     </Checkbox>
                     <Checkbox
                       checked={resultTurnIds.includes(turn.turn_id)}
@@ -92,7 +95,7 @@ export default function ReviewIssueChainTimeline({
                         }
                       }}
                     >
-                      result
+                        设为结果
                     </Checkbox>
                   </>
                 )}
@@ -104,7 +107,8 @@ export default function ReviewIssueChainTimeline({
               />
             </Space>
           </article>
-        ))}
+          );
+        })}
       </Space>
     </Card>
   );
@@ -117,12 +121,12 @@ function debugItems(turn: ReviewIssueChainTimelineTurn, traceDebugSummary: unkno
       label: <Button type="link" size="small">展开详情</Button>,
       children: (
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
-          <DebugBlock title="messages" value={turn.messages} />
-          <DebugBlock title="tool_events" value={turn.tool_events} />
-          <DebugBlock title="pending_lifecycle" value={turn.pending_lifecycle} />
-          <DebugBlock title="router_decision" value={turn.router_decision} />
-          <DebugBlock title="trace_debug_summary" value={traceDebugSummary} />
-          <DebugBlock title="source" value={turn.source} />
+            <DebugBlock title="对话消息" value={turn.messages} />
+            <DebugBlock title="工具事件" value={turn.tool_events} />
+            <DebugBlock title="确认流程" value={turn.pending_lifecycle} />
+            <DebugBlock title="路由决策" value={turn.router_decision} />
+            <DebugBlock title="Trace 摘要" value={traceDebugSummary} />
+            <DebugBlock title="来源事件" value={turn.source} />
         </Space>
       ),
     },
@@ -193,12 +197,32 @@ function roleColor(role: string): string {
   return 'default';
 }
 
+function lineClampStyle(role: string): CSSProperties {
+  return {
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: role === 'trigger' ? 4 : 2,
+    overflow: 'hidden',
+    wordBreak: 'break-word',
+  };
+}
+
 const timelineCardStyle: CSSProperties = {
   ...cardStyle,
   height: '100%',
   minHeight: 0,
   display: 'flex',
   flexDirection: 'column',
+  overflow: 'hidden',
+};
+
+const timelineBodyStyle: CSSProperties = {
+  padding: 12,
+  minHeight: 0,
+  flex: 1,
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  scrollbarGutter: 'stable',
 };
 
 function turnCardStyle(role: string): CSSProperties {
