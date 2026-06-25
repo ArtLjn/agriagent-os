@@ -76,6 +76,81 @@ _WORK_ORDER_CLARIFICATION_RE = re.compile(
 )
 
 
+def _build_data_source_payload(tool_calls: list[dict] | None) -> dict:
+    """构造 final_reply_data_source trace payload。
+
+    判定 data_source：
+    - 有 tool_calls → tool:<最后一个 tool 的 name>
+    - 无 tool_calls → context_bundle（回复来自 ContextBundle 或 LLM 自身知识）
+    """
+    if tool_calls:
+        last_tool = tool_calls[-1]
+        tool_name = (
+            last_tool.get("name", "unknown") if isinstance(last_tool, dict) else "unknown"
+        )
+        return {
+            "data_source": f"tool:{tool_name}",
+            "has_tool_results": True,
+        }
+    return {
+        "data_source": "context_bundle",
+        "has_tool_results": False,
+    }
+
+
+def _record_tool_call_forced_trace(
+    *,
+    collector,
+    user_msg: str,
+    selected_names: list[str],
+    tool_choice: str,
+) -> None:
+    """记录 tool_call_forced trace（LLM bind_tools 前）。失败静默。"""
+    try:
+        selection = _select_tools(user_msg, [])
+        forced = selection.force_binding & set(selected_names)
+        _now = _time.time()
+        collector.record(
+            node_type="tool_selection",
+            node_name="tool_call_forced",
+            input_data={"user_message": user_msg[:200] if user_msg else ""},
+            output_data={
+                "forced_skills": sorted(forced),
+                "tool_choice": tool_choice,
+                "selected_tools": list(selected_names),
+            },
+            start_time=_now,
+            duration_ms=0,
+        )
+    except Exception:
+        return
+
+
+def _record_final_reply_data_source_trace(
+    *,
+    collector,
+    normal_msgs: list[ToolMessage],
+) -> None:
+    """记录 final_reply_data_source trace。失败静默。"""
+    try:
+        tool_calls_for_trace: list[dict] | None = None
+        if normal_msgs:
+            last_tool_msg = normal_msgs[-1]
+            tool_name = getattr(last_tool_msg, "name", None) or "unknown"
+            tool_calls_for_trace = [{"name": tool_name}]
+        _now = _time.time()
+        collector.record(
+            node_type="response",
+            node_name="final_reply_data_source",
+            input_data={"has_tool_results": bool(tool_calls_for_trace)},
+            output_data=_build_data_source_payload(tool_calls_for_trace),
+            start_time=_now,
+            duration_ms=0,
+        )
+    except Exception:
+        return
+
+
 def _should_continue(state: AgentState) -> str:
     """判断是否需要继续调用工具。"""
     last = state["messages"][-1]
@@ -833,6 +908,12 @@ async def _llm_node(state: AgentState) -> dict:
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     selected_tools = [t for t in tools if t.name in selected_names]
     tool_choice = router_decision.tool_choice
+    _record_tool_call_forced_trace(
+        collector=collector,
+        user_msg=user_msg,
+        selected_names=selected_names,
+        tool_choice=tool_choice,
+    )
     llm = _bind_llm_for_tools(raw_llm, selected_tools, tool_choice=tool_choice)
 
     selected_tool_names = [t.name for t in selected_tools] if selected_tools else []
@@ -925,6 +1006,11 @@ async def _llm_node(state: AgentState) -> dict:
         user_msg=user_msg,
         plan_draft_payload=plan_draft_payload,
         input_summary=input_summary,
+    )
+
+    _record_final_reply_data_source_trace(
+        collector=collector,
+        normal_msgs=normal_msgs,
     )
 
     return {
