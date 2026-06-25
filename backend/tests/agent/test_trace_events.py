@@ -38,6 +38,36 @@ class TestTraceEvents:
         assert payload["tool_choice"] == "required"
         assert "get_weather_forecast" in payload["selected_tools"]
 
+    def test_force_binding_trace_records_actual_skills(self):
+        """regression: 调用实际 trace 函数，传入真实 force_binding，断言 forced_skills 非空。
+
+        历史 bug：原实现 _record_tool_call_forced_trace 内部调用 _select_tools(user_msg, [])
+        传入空工具列表，导致 select_tools 内部 force_binding 推断永远为空（因为
+        `enabled_tool_names` 为空），最终 trace 中 forced_skills 始终为空列表，
+        违反 §5.9.5 设计意图。
+
+        修复后：force_binding 由 _route_tools 基于真实工具列表派生并透传至本函数。
+        """
+        from app.agent.runtime import nodes as nodes_mod
+
+        collector = MagicMock()
+        nodes_mod._record_tool_call_forced_trace(
+            collector=collector,
+            user_msg="今天天气如何",
+            selected_names=["get_weather_forecast"],
+            tool_choice="required",
+            force_binding=("get_weather_forecast",),
+        )
+        assert collector.record.called, "trace 函数必须调用 collector.record"
+        call_kwargs = collector.record.call_args.kwargs
+        assert call_kwargs.get("node_name") == "tool_call_forced"
+        output_data = call_kwargs.get("output_data", {})
+        assert output_data.get("forced_skills") == ["get_weather_forecast"], (
+            "forced_skills 必须包含真实 skill 名，不能为空列表"
+        )
+        assert output_data.get("tool_choice") == "required"
+        assert "get_weather_forecast" in output_data.get("selected_tools", [])
+
     def test_data_source_payload_from_tool(self):
         """当有 tool_messages 时，data_source 必须是 tool:<skill_name>。"""
         from app.agent.runtime.nodes import _build_data_source_payload

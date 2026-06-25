@@ -86,7 +86,9 @@ def _build_data_source_payload(tool_calls: list[dict] | None) -> dict:
     if tool_calls:
         last_tool = tool_calls[-1]
         tool_name = (
-            last_tool.get("name", "unknown") if isinstance(last_tool, dict) else "unknown"
+            last_tool.get("name", "unknown")
+            if isinstance(last_tool, dict)
+            else "unknown"
         )
         return {
             "data_source": f"tool:{tool_name}",
@@ -104,11 +106,15 @@ def _record_tool_call_forced_trace(
     user_msg: str,
     selected_names: list[str],
     tool_choice: str,
+    force_binding: tuple[str, ...] = (),
 ) -> None:
-    """记录 tool_call_forced trace（LLM bind_tools 前）。失败静默。"""
+    """记录 tool_call_forced trace（LLM bind_tools 前）。失败静默。
+
+    `force_binding` 来自 _route_tools 派生的 RouterDecision（基于真实工具列表计算），
+    不在此处重新计算，避免传入空工具导致 force_binding 永远为空。
+    """
     try:
-        selection = _select_tools(user_msg, [])
-        forced = selection.force_binding & set(selected_names)
+        forced = set(force_binding) & set(selected_names)
         _now = _time.time()
         collector.record(
             node_type="tool_selection",
@@ -133,17 +139,17 @@ def _record_final_reply_data_source_trace(
 ) -> None:
     """记录 final_reply_data_source trace。失败静默。"""
     try:
-        tool_calls_for_trace: list[dict] | None = None
+        last_tool_messages_for_trace: list[dict] | None = None
         if normal_msgs:
             last_tool_msg = normal_msgs[-1]
             tool_name = getattr(last_tool_msg, "name", None) or "unknown"
-            tool_calls_for_trace = [{"name": tool_name}]
+            last_tool_messages_for_trace = [{"name": tool_name}]
         _now = _time.time()
         collector.record(
             node_type="response",
             node_name="final_reply_data_source",
-            input_data={"has_tool_results": bool(tool_calls_for_trace)},
-            output_data=_build_data_source_payload(tool_calls_for_trace),
+            input_data={"has_tool_results": bool(last_tool_messages_for_trace)},
+            output_data=_build_data_source_payload(last_tool_messages_for_trace),
             start_time=_now,
             duration_ms=0,
         )
@@ -198,12 +204,17 @@ def _route_tools(user_msg: str, tools: list) -> RouterDecision:
             return RouterDecision(
                 selected_tools=list(selection.tools),
                 tool_choice=_resolve_tool_choice(selection),
+                force_binding=tuple(sorted(selection.force_binding)),
             )
         return RouterDecision(selected_tools=list(selection))
     decision = SkillRouter().route(user_msg, tools)
-    # SkillRouter 不感知 force_binding，复用 select_tools rule gate 推断 tool_choice
+    # SkillRouter 不感知 force_binding，复用 select_tools rule gate 推断 tool_choice 与 force_binding
     selection = _select_tools(user_msg, tools)
-    return replace(decision, tool_choice=_resolve_tool_choice(selection))
+    return replace(
+        decision,
+        tool_choice=_resolve_tool_choice(selection),
+        force_binding=tuple(sorted(selection.force_binding)),
+    )
 
 
 def _direct_tool_message_response(
@@ -913,6 +924,7 @@ async def _llm_node(state: AgentState) -> dict:
         user_msg=user_msg,
         selected_names=selected_names,
         tool_choice=tool_choice,
+        force_binding=router_decision.force_binding,
     )
     llm = _bind_llm_for_tools(raw_llm, selected_tools, tool_choice=tool_choice)
 
