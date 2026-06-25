@@ -187,14 +187,7 @@ def run_judge_batch(
             if parsed.bad_prob is None:
                 failed += 1
                 continue
-            turn.judge_bad_prob = parsed.bad_prob
-            turn.judge_issue_type = parsed.issue_type
-            turn.judge_suggested_label = parsed.suggested_label
-            apply_risk_score(
-                turn,
-                rule_score=turn.rule_score,
-                judge_bad_prob=turn.judge_bad_prob,
-            )
+            _apply_judge_result(turn, parsed)
             estimated_cost += estimate_usage_cost_usd(raw.get("usage") or {})
             updated += 1
         except Exception:
@@ -298,6 +291,44 @@ def _turn_payload(turn: AgentTurn) -> dict[str, Any]:
         "rule_score": turn.rule_score,
         "rule_hits": turn.rule_hits or [],
     }
+
+
+def _apply_judge_result(turn: AgentTurn, parsed: JudgeParseResult) -> None:
+    if _is_low_risk_chitchat_turn(turn):
+        turn.judge_bad_prob = 0.0
+        turn.judge_issue_type = "benign_chitchat"
+        turn.judge_suggested_label = "not_actionable"
+    else:
+        turn.judge_bad_prob = parsed.bad_prob
+        turn.judge_issue_type = parsed.issue_type
+        turn.judge_suggested_label = parsed.suggested_label
+    apply_risk_score(
+        turn,
+        rule_score=turn.rule_score,
+        judge_bad_prob=turn.judge_bad_prob,
+    )
+
+
+def _is_low_risk_chitchat_turn(turn: AgentTurn) -> bool:
+    if turn.rule_hits or (turn.rule_score or 0.0) > 0:
+        return False
+    if (turn.selected_tools_count or 0) > 0 or (turn.tool_calls_count or 0) > 0:
+        return False
+    user_text = str(turn.input_preview or "").strip().lower()
+    reply_text = str(turn.reply_preview or "").strip()
+    return _is_greeting_text(user_text) and _looks_like_greeting_reply(reply_text)
+
+
+def _is_greeting_text(text: str) -> bool:
+    return text in {"hi", "hello", "hey", "你好", "您好", "嗨", "哈喽"}
+
+
+def _looks_like_greeting_reply(text: str) -> bool:
+    if not text:
+        return False
+    if any(term in text for term in ("工具", "已", "工资", "成本", "删除", "创建", "结算")):
+        return False
+    return any(term in text for term in ("你好", "您好", "帮", "看看", "记一笔", "农场"))
 
 
 def _parse_judge_raw(raw: Any) -> JudgeParseResult:

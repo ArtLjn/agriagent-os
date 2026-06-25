@@ -7,7 +7,7 @@ import threading
 from datetime import date
 
 from app.agent.prompt_cache import get_farm_ctx_cache
-from app.agent.tool_selector import LLMIntentClassifier
+from app.agent.tool_selector import LLMIntentClassifier, ToolSelectionResult
 from app.context.models import ContextBundle
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -270,5 +270,17 @@ __all__ = [
     "_get_season",
     "_record_llm_failure",
     "_record_llm_success",
+    "_resolve_tool_choice",
     "_warm_tool_caches",
 ]
+
+
+def _resolve_tool_choice(selection: ToolSelectionResult) -> str:
+    """根据 select_tools 结果决定 tool_choice。
+
+    有强制绑定时返回 "required"，LLM 必须调用工具；
+    否则返回 "auto" 让模型自主决定。
+    """
+    if selection.force_binding:
+        return "required"
+    return "auto"

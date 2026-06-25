@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import type { DataFlywheelRepairPack, RepairPackCase } from '../../../api/dataFlywheel';
 import { palette } from '../../../styles/theme';
 import { repairPackStatusMeta } from './repairPackStatusMeta';
+import { fixTargetText, qualityLabelText } from './reviewLabels';
 
 interface RepairPackPreviewProps {
   pack: DataFlywheelRepairPack | null;
@@ -35,7 +36,7 @@ export default function RepairPackPreview({
 
   return (
     <Modal
-      title="Repair Pack"
+      title="修复包详情"
       open={open}
       onCancel={onClose}
       width={880}
@@ -56,7 +57,7 @@ export default function RepairPackPreview({
       {pack && (
         <Space direction="vertical" size={14} style={{ width: '100%' }}>
           <Space size={8} wrap align="center">
-            <Tag color="blue">{pack.fix_target}</Tag>
+            <Tag color="blue">{fixTargetText(pack.fix_target)}</Tag>
             <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
             <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
               {pack.pack_id}
@@ -74,7 +75,7 @@ export default function RepairPackPreview({
               <Space size={6} wrap>
                 {pack.labels.map((label) => (
                   <Tag key={label} color="purple">
-                    {label}
+                    {qualityLabelText(label)}
                   </Tag>
                 ))}
               </Space>

@@ -1,8 +1,9 @@
-import { Modal, Typography } from 'antd';
+import { Modal, Space, Tag, Typography } from 'antd';
 import type { CSSProperties } from 'react';
 
 import type { CaseDraft } from '../../../api/dataFlywheel';
 import { palette } from '../../../styles/theme';
+import { reviewStatusText, targetTypeText } from './reviewLabels';
 
 interface CaseDraftPreviewProps {
   draft: CaseDraft | null;
@@ -13,7 +14,7 @@ interface CaseDraftPreviewProps {
 export default function CaseDraftPreview({ draft, open, onClose }: CaseDraftPreviewProps) {
   return (
     <Modal
-      title="Case Draft"
+      title="回归草稿"
       open={open}
       onCancel={onClose}
       footer={null}
@@ -26,9 +27,11 @@ export default function CaseDraftPreview({ draft, open, onClose }: CaseDraftPrev
     >
       {draft && (
         <div>
-          <Typography.Text style={{ color: palette.textMuted }}>
-            {draft.draft_id} · {draft.target_type} · {draft.status}
-          </Typography.Text>
+          <Space size={8} wrap>
+            <Typography.Text style={{ color: palette.textMuted }}>{draft.draft_id}</Typography.Text>
+            <Tag color="blue">{targetTypeText(draft.target_type)}</Tag>
+            <Tag>{reviewStatusText(draft.status)}</Tag>
+          </Space>
           <pre style={jsonBlockStyle}>{JSON.stringify({ case_json: draft.case_json }, null, 2)}</pre>
         </div>
       )}

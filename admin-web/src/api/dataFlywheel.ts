@@ -220,6 +220,16 @@ export interface ReviewIssueChain {
   status: ReviewIssueChainStatus;
   severity: 'P0' | 'P1' | string;
   dominant_signal: string;
+  risk_context?: {
+    risk_score?: number | null;
+    rule_score?: number | null;
+    judge_bad_prob?: number | null;
+    dominant_signal?: string | null;
+    rule_hits?: string[];
+    trigger_reason?: string | null;
+    scoring_rule?: string | null;
+    [key: string]: unknown;
+  };
   diagnosis: {
     title?: string | null;
     summary?: string | null;
@@ -240,6 +250,8 @@ export interface ReviewIssueChain {
     quality_labels?: string[];
     expected_behavior?: string | null;
     root_cause?: string | null;
+    fix_target?: string | null;
+    reviewer_comment?: string | null;
     false_positive_reason?: string | null;
     missing_evidence?: string[];
     [key: string]: unknown;
@@ -282,6 +294,9 @@ export interface DailyReviewInboxParams {
   session_id?: string;
   min_risk?: number;
   severity?: 'P0' | 'P1' | 'all';
+  status?: string;
+  evidence_status?: string;
+  dominant_signal?: string;
   limit?: number;
   offset?: number;
 }
@@ -333,11 +348,31 @@ export interface ReviewIssueChainReviewRequest {
   final_labels?: string[];
   root_cause?: string;
   expected_behavior?: string;
+  fix_target?: string;
+  reviewer_comment?: string;
   false_positive_reason?: string;
   missing_evidence?: string[];
 }
 
 export interface ReviewIssueChainReviewResponse {
+  chain: ReviewIssueChain;
+}
+
+export interface ReviewIssueChainAiJudgeResponse {
+  chain: ReviewIssueChain;
+}
+
+export interface CreateReviewIssueChainCandidateRequest {
+  trigger_turn_id: number;
+  context_turn_ids?: number[];
+  result_turn_ids?: number[];
+  severity?: 'P0' | 'P1' | string;
+  dominant_signal?: string;
+  suggested_labels?: string[];
+  missing_evidence?: string[];
+}
+
+export interface CreateReviewIssueChainCandidateResponse {
   chain: ReviewIssueChain;
 }
 
@@ -623,6 +658,25 @@ export async function saveReviewIssueChainReview(
 ): Promise<ReviewIssueChainReviewResponse> {
   const response = await apiClient.post<ReviewIssueChainReviewResponse>(
     `${reviewIssueChainPath(chainId)}/review`,
+    body
+  );
+  return response.data;
+}
+
+export async function createReviewIssueChainAiJudge(
+  chainId: string
+): Promise<ReviewIssueChainAiJudgeResponse> {
+  const response = await apiClient.post<ReviewIssueChainAiJudgeResponse>(
+    `${reviewIssueChainPath(chainId)}/ai-judge`
+  );
+  return response.data;
+}
+
+export async function createReviewIssueChainCandidate(
+  body: CreateReviewIssueChainCandidateRequest
+): Promise<CreateReviewIssueChainCandidateResponse> {
+  const response = await apiClient.post<CreateReviewIssueChainCandidateResponse>(
+    '/admin/data-flywheel/review-issue-chains/candidates',
     body
   );
   return response.data;

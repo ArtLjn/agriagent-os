@@ -52,6 +52,8 @@ def save_review_issue_chain(
     final_labels: list[str] | None = None,
     root_cause: str | None = None,
     expected_behavior: str | None = None,
+    fix_target: str | None = None,
+    reviewer_comment: str | None = None,
     false_positive_reason: str | None = None,
     missing_evidence: list[str] | None = None,
     reviewer_id: str | None = None,
@@ -71,6 +73,8 @@ def save_review_issue_chain(
                 final_labels=final_labels,
                 root_cause=root_cause,
                 expected_behavior=expected_behavior,
+                fix_target=fix_target,
+                reviewer_comment=reviewer_comment,
                 false_positive_reason=false_positive_reason,
                 missing_evidence=missing_evidence,
                 reviewer_id=reviewer_id,
@@ -99,6 +103,8 @@ def _save_review_issue_chain(
     final_labels: list[str] | None,
     root_cause: str | None,
     expected_behavior: str | None,
+    fix_target: str | None,
+    reviewer_comment: str | None,
     false_positive_reason: str | None,
     missing_evidence: list[str] | None,
     reviewer_id: str | None,
@@ -107,6 +113,8 @@ def _save_review_issue_chain(
     final_labels = _clean_list(final_labels)
     root_cause = _clean_text(root_cause)
     expected_behavior = _clean_text(expected_behavior)
+    fix_target = _clean_fix_target(fix_target) or str(base_chain["repair"]["fix_target"])
+    reviewer_comment = _clean_text(reviewer_comment)
     false_positive_reason = _clean_text(false_positive_reason)
     missing_evidence = _clean_list(missing_evidence)
     _validate_required_fields(
@@ -114,10 +122,11 @@ def _save_review_issue_chain(
         final_labels=final_labels,
         root_cause=root_cause,
         expected_behavior=expected_behavior,
+        reviewer_comment=reviewer_comment,
         false_positive_reason=false_positive_reason,
         missing_evidence=missing_evidence,
     )
-    _validate_final_labels(status=status, final_labels=final_labels)
+    _validate_final_labels(final_labels=final_labels)
 
     context_ids, result_ids = _final_related_turn_ids(
         db,
@@ -146,9 +155,11 @@ def _save_review_issue_chain(
     row.status = status
     row.severity = str(base_chain["severity"])
     row.dominant_signal = str(base_chain["dominant_signal"])
-    row.final_labels = final_labels if status == "accepted" else []
+    row.final_labels = final_labels
     row.root_cause = root_cause
     row.expected_behavior = expected_behavior
+    row.fix_target = fix_target
+    row.reviewer_comment = reviewer_comment
     row.false_positive_reason = false_positive_reason
     row.missing_evidence = missing_evidence or None
     row.reviewer_id = reviewer_id
@@ -196,6 +207,8 @@ def chain_review_to_dict(row: AgentReviewIssueChain) -> dict[str, Any]:
         "source_label_ids": row.source_label_ids or [],
         "root_cause": row.root_cause,
         "expected_behavior": row.expected_behavior,
+        "fix_target": row.fix_target,
+        "reviewer_comment": row.reviewer_comment,
         "false_positive_reason": row.false_positive_reason,
         "missing_evidence": row.missing_evidence or [],
         "reviewer_id": row.reviewer_id,
@@ -212,10 +225,50 @@ def overlay_saved_review(
     chain["context_turn_ids"] = row.context_turn_ids or []
     chain["result_turn_ids"] = row.result_turn_ids or []
     chain["status"] = row.status
+    chain["severity"] = row.severity
+    chain["dominant_signal"] = row.dominant_signal
     chain["human_review"] = _human_review_from_row(chain, row)
     chain["regression"] = _regression_from_row(chain, row)
     chain["repair"] = _repair_from_row(chain, row)
+    if isinstance(row.ai_judge, dict) and row.ai_judge:
+        chain["ai_judge"] = dict(row.ai_judge)
     return chain
+
+
+def save_review_issue_chain_ai_judge(
+    db: Session,
+    *,
+    farm_id: int,
+    chain_id: str,
+    trigger: AgentTurn,
+    base_chain: dict[str, Any],
+    ai_judge: dict[str, Any],
+) -> AgentReviewIssueChain:
+    """保存问题链级 AI 预判，不写人工最终结论。"""
+    row = get_saved_review_issue_chain(db, farm_id=farm_id, chain_id=chain_id)
+    now = datetime.now()
+    if row is None:
+        row = AgentReviewIssueChain(
+            farm_id=farm_id,
+            chain_id=chain_id,
+            session_id=trigger.session_id,
+            trigger_turn_id=trigger.id,
+            context_turn_ids=base_chain["context_turn_ids"],
+            result_turn_ids=base_chain["result_turn_ids"],
+            status=base_chain["status"],
+            severity=str(base_chain["severity"]),
+            dominant_signal="judge",
+            final_labels=[],
+            source_label_ids=[],
+            created_at=now,
+        )
+        db.add(row)
+    row.ai_judge = dict(ai_judge)
+    row.dominant_signal = "judge"
+    row.updated_at = now
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def _validate_status(status: str) -> None:
@@ -229,6 +282,7 @@ def _validate_required_fields(
     final_labels: list[str],
     root_cause: str | None,
     expected_behavior: str | None,
+    reviewer_comment: str | None,
     false_positive_reason: str | None,
     missing_evidence: list[str],
 ) -> None:
@@ -243,18 +297,20 @@ def _validate_required_fields(
         raise ValueError("CHAIN_REVIEW_FALSE_POSITIVE_REASON_REQUIRED")
     if status == "needs_evidence" and not missing_evidence:
         raise ValueError("CHAIN_REVIEW_MISSING_EVIDENCE_REQUIRED")
+    if status == "needs_evidence" and not reviewer_comment:
+        raise ValueError("CHAIN_REVIEW_EVIDENCE_COMMENT_REQUIRED")
 
 
-def _validate_final_labels(*, status: str, final_labels: list[str]) -> None:
-    if status != "accepted" and final_labels:
-        raise ValueError(
-            {
-                "code": "CHAIN_REVIEW_FINAL_LABELS_NOT_ALLOWED",
-                "field": "final_labels",
-            }
-        )
+def _validate_final_labels(*, final_labels: list[str]) -> None:
     if any(label not in ALLOWED_LABELS for label in final_labels):
         raise ValueError({"code": "INVALID_LABEL", "field": "final_labels"})
+
+
+def _clean_fix_target(value: str | None) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    return text[:40]
 
 
 def _final_related_turn_ids(
@@ -408,6 +464,8 @@ def _regression_from_row(
 def _repair_from_row(chain: dict[str, Any], row: AgentReviewIssueChain) -> dict[str, Any]:
     repair = dict(chain.get("repair") or {})
     regression_ready = bool(row.status == "accepted" and row.expected_behavior)
+    if row.fix_target:
+        repair["fix_target"] = row.fix_target
     repair["regression_ready"] = regression_ready
     repair["export_blocked_reason"] = _export_blocked_reason(row, regression_ready)
     return repair

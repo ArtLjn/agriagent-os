@@ -6,6 +6,7 @@ import {
   addSampleLabel,
   createCaseDraft,
   createRepairPack,
+  createReviewIssueChainCandidate,
   createReviewIssueChainCaseDraft,
   createReviewIssueChainRepairPack,
   createSamplePrelabel,
@@ -290,6 +291,8 @@ describe('dataFlywheel api', () => {
       final_labels: ['needs_regression', 'wrong_tool_selection'],
       root_cause: '批量意图被收窄',
       expected_behavior: '应保留批量结算范围',
+      fix_target: 'router',
+      reviewer_comment: '人工采纳 AI 预判。',
     };
     const result = await saveReviewIssueChainReview('chain:1:playground:s:1:12', body);
 
@@ -298,6 +301,36 @@ describe('dataFlywheel api', () => {
       body
     );
     expect(result.chain.status).toBe('accepted');
+  });
+
+  it('从 raw turn 创建问题链候选', async () => {
+    mockedApiClient.post.mockResolvedValueOnce({
+      data: {
+        chain: {
+          chain_id: 'chain:1:playground:s:1:12',
+          session_id: 'playground:s:1',
+          trigger_turn_id: 12,
+          context_turn_ids: [],
+          result_turn_ids: [],
+          status: 'needs_evidence',
+        },
+      },
+    });
+
+    const body = {
+      trigger_turn_id: 12,
+      severity: 'P0',
+      dominant_signal: 'rule',
+      suggested_labels: ['wrong_tool_selection'],
+      missing_evidence: ['router_decision'],
+    };
+    const result = await createReviewIssueChainCandidate(body);
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      '/admin/data-flywheel/review-issue-chains/candidates',
+      body
+    );
+    expect(result.chain.status).toBe('needs_evidence');
   });
 
   it('编码 session_id 后读取会话级标注', async () => {

@@ -10,6 +10,7 @@ from app.agent.assistant_roles import (
     assistant_role_prompt,
     normalize_assistant_role,
 )
+from app.context.allowlist import is_allowed_key
 from app.context.budget import TokenBudget
 from app.context.models import ContextBlock, ContextBundle
 from app.context.selectors import (
@@ -107,8 +108,14 @@ class ContextBuilder:
                     }
                 )
 
+        # 白名单过滤：违禁字段不进入 prompt（设计意图见 13_Agent范式规范化设计.md §5.9.2）
+        original_keys = {b.key for b in blocks}
+        blocks = self._apply_allowlist_filter(blocks)
+        filtered_keys = original_keys - {b.key for b in blocks}
+
         bundle = self.budget.apply(blocks)
         bundle.metadata["selector_errors"] = selector_errors
+        bundle.metadata["allowlist_filtered_keys"] = sorted(filtered_keys)
         self._attach_dependency_summary(
             bundle,
             kwargs.get("context_dependency_map") or {},
@@ -221,6 +228,17 @@ class ContextBuilder:
             else:
                 annotated.append(block)
         return annotated
+
+    @staticmethod
+    def _apply_allowlist_filter(
+        blocks: list[ContextBlock],
+    ) -> list[ContextBlock]:
+        """按白名单过滤 blocks，违禁字段不进入 prompt。
+
+        设计意图见 13_Agent范式规范化设计.md §5.9.2。
+        未在白名单中的 key 视为违禁，过滤掉。
+        """
+        return [block for block in blocks if is_allowed_key(block.key)]
 
     @staticmethod
     def _attach_dependency_summary(

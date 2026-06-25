@@ -21,6 +21,7 @@ import type {
   DataFlywheelSample,
 } from '../../../api/dataFlywheel';
 import { cardStyle, palette } from '../../../styles/theme';
+import { fixTargetText, reviewStatusText } from './reviewLabels';
 
 export interface SessionProblemItem {
   sample: DataFlywheelSample;
@@ -54,6 +55,7 @@ interface AnnotationPanelProps {
   onResolveLabel: (label: DataFlywheelLabelRecord) => void;
   onCopyDebug: () => void;
   onExportJsonl: () => void;
+  onCreateCandidateChain?: () => void;
   onOpenDailyReview?: () => void;
   onMarkBadCase: () => void;
   onCreateRegressionCase: () => void;
@@ -108,6 +110,7 @@ export default function AnnotationPanel({
   onResolveLabel,
   onCopyDebug,
   onExportJsonl,
+  onCreateCandidateChain,
   onOpenDailyReview,
   onMarkBadCase,
   onCreateRegressionCase,
@@ -148,7 +151,7 @@ export default function AnnotationPanel({
                 <Space size={8}>
                   <RobotOutlined style={{ color: palette.accent }} />
                   <Typography.Text style={{ color: palette.text }}>AI 预判</Typography.Text>
-                  {latestPrelabel && <Tag>{latestPrelabel.status}</Tag>}
+                  {latestPrelabel && <Tag>{reviewStatusText(latestPrelabel.status)}</Tag>}
                 </Space>
                 {!isEvidenceMode && (
                   <Button
@@ -247,7 +250,7 @@ export default function AnnotationPanel({
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <Space size={8} wrap>
                 <Typography.Text style={{ color: palette.text }}>修复候选</Typography.Text>
-                <Tag color="blue">{repairCandidate.fix_target}</Tag>
+                <Tag color="blue">{fixTargetText(repairCandidate.fix_target)}</Tag>
                 <Tag>优先级 {repairCandidate.priority}</Tag>
                 <Tag color={repairCandidate.regression_ready ? 'green' : 'orange'}>
                   {repairCandidate.regression_ready ? '可回归' : '需补证据'}
@@ -403,9 +406,14 @@ export default function AnnotationPanel({
             跳转 TraceMonitor
           </Button>
           {isEvidenceMode && (
-            <Button icon={<FolderOpenOutlined />} disabled={disabled} onClick={onOpenDailyReview}>
-              打开每日质检
-            </Button>
+            <>
+              <Button icon={<FolderOpenOutlined />} disabled={disabled} loading={acting} onClick={onCreateCandidateChain}>
+                创建候选链
+              </Button>
+              <Button icon={<FolderOpenOutlined />} disabled={disabled} onClick={onOpenDailyReview}>
+                打开每日质检
+              </Button>
+            </>
           )}
         </div>
       </Space>

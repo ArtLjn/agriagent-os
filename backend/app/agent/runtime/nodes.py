@@ -4,6 +4,7 @@ import asyncio
 import logging
 import re
 import time as _time
+from dataclasses import replace
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END
@@ -20,6 +21,7 @@ from app.agent.runtime.llm_support import (
     _get_classifier as _runtime_get_classifier,
     _record_llm_failure,
     _record_llm_success,
+    _resolve_tool_choice,
     _warm_tool_caches,
 )
 from app.agent.runtime.chat_fallbacks import (
@@ -57,6 +59,7 @@ from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.tool_selector import expand_by_chain as _expand_by_chain
 from app.agent.tool_selector import select_tools as _select_tools
+from app.agent.tool_selector import ToolSelectionResult
 from app.core.config import settings
 from app.core.date_context import get_request_date
 from app.context.models import ContextBundle
@@ -71,6 +74,87 @@ select_tools = _select_tools
 _WORK_ORDER_CLARIFICATION_RE = re.compile(
     r"(?:创建|生成|安排|记录).{0,12}(?:农事)?作业单|创建农事作业单"
 )
+
+
+def _build_data_source_payload(tool_calls: list[dict] | None) -> dict:
+    """构造 final_reply_data_source trace payload。
+
+    判定 data_source：
+    - 有 tool_calls → tool:<最后一个 tool 的 name>
+    - 无 tool_calls → context_bundle（回复来自 ContextBundle 或 LLM 自身知识）
+    """
+    if tool_calls:
+        last_tool = tool_calls[-1]
+        tool_name = (
+            last_tool.get("name", "unknown")
+            if isinstance(last_tool, dict)
+            else "unknown"
+        )
+        return {
+            "data_source": f"tool:{tool_name}",
+            "has_tool_results": True,
+        }
+    return {
+        "data_source": "context_bundle",
+        "has_tool_results": False,
+    }
+
+
+def _record_tool_call_forced_trace(
+    *,
+    collector,
+    user_msg: str,
+    selected_names: list[str],
+    tool_choice: str,
+    force_binding: tuple[str, ...] = (),
+) -> None:
+    """记录 tool_call_forced trace（LLM bind_tools 前）。失败静默。
+
+    `force_binding` 来自 _route_tools 派生的 RouterDecision（基于真实工具列表计算），
+    不在此处重新计算，避免传入空工具导致 force_binding 永远为空。
+    """
+    try:
+        forced = set(force_binding) & set(selected_names)
+        _now = _time.time()
+        collector.record(
+            node_type="tool_selection",
+            node_name="tool_call_forced",
+            input_data={"user_message": user_msg[:200] if user_msg else ""},
+            output_data={
+                "forced_skills": sorted(forced),
+                "tool_choice": tool_choice,
+                "selected_tools": list(selected_names),
+            },
+            start_time=_now,
+            duration_ms=0,
+        )
+    except Exception:
+        return
+
+
+def _record_final_reply_data_source_trace(
+    *,
+    collector,
+    normal_msgs: list[ToolMessage],
+) -> None:
+    """记录 final_reply_data_source trace。失败静默。"""
+    try:
+        last_tool_messages_for_trace: list[dict] | None = None
+        if normal_msgs:
+            last_tool_msg = normal_msgs[-1]
+            tool_name = getattr(last_tool_msg, "name", None) or "unknown"
+            last_tool_messages_for_trace = [{"name": tool_name}]
+        _now = _time.time()
+        collector.record(
+            node_type="response",
+            node_name="final_reply_data_source",
+            input_data={"has_tool_results": bool(last_tool_messages_for_trace)},
+            output_data=_build_data_source_payload(last_tool_messages_for_trace),
+            start_time=_now,
+            duration_ms=0,
+        )
+    except Exception:
+        return
 
 
 def _should_continue(state: AgentState) -> str:
@@ -114,8 +198,23 @@ def _get_classifier():
 def _route_tools(user_msg: str, tools: list) -> RouterDecision:
     """使用 SkillRouter，兼容测试/旧入口 patch select_tools 的场景。"""
     if select_tools is not _select_tools:
-        return RouterDecision(selected_tools=list(select_tools(user_msg, tools)))
-    return SkillRouter().route(user_msg, tools)
+        # 旧入口/测试可能 patch select_tools 返回 list（无 force_binding）
+        selection = select_tools(user_msg, tools)
+        if isinstance(selection, ToolSelectionResult):
+            return RouterDecision(
+                selected_tools=list(selection.tools),
+                tool_choice=_resolve_tool_choice(selection),
+                force_binding=tuple(sorted(selection.force_binding)),
+            )
+        return RouterDecision(selected_tools=list(selection))
+    decision = SkillRouter().route(user_msg, tools)
+    # SkillRouter 不感知 force_binding，复用 select_tools rule gate 推断 tool_choice 与 force_binding
+    selection = _select_tools(user_msg, tools)
+    return replace(
+        decision,
+        tool_choice=_resolve_tool_choice(selection),
+        force_binding=tuple(sorted(selection.force_binding)),
+    )
 
 
 def _direct_tool_message_response(
@@ -300,13 +399,21 @@ def _direct_query_response(
     return {"messages": [AIMessage(content="", tool_calls=tool_calls)]}
 
 
-def _bind_llm_for_tools(raw_llm, selected_tools: list, *, log_no_tools: bool = True):
+def _bind_llm_for_tools(
+    raw_llm,
+    selected_tools: list,
+    *,
+    log_no_tools: bool = True,
+    tool_choice: str = "auto",
+):
     """按配置绑定可用工具。"""
     if selected_tools:
-        parallel = (
-            {"parallel_tool_calls": True} if settings.ai.parallel_tool_calls else {}
-        )
-        return raw_llm.bind_tools(selected_tools, **parallel)
+        kwargs: dict = {}
+        if settings.ai.parallel_tool_calls:
+            kwargs["parallel_tool_calls"] = True
+        if tool_choice == "required":
+            kwargs["tool_choice"] = "required"
+        return raw_llm.bind_tools(selected_tools, **kwargs)
     if log_no_tools:
         logger.info("无匹配工具，LLM 直接回复（闲聊模式）")
     return raw_llm
@@ -461,6 +568,7 @@ async def _invoke_llm_with_retry(
     messages: list,
     collector,
     input_summary: str,
+    tool_choice: str = "auto",
 ):
     """执行 LLM 调用和请求内重试。"""
     start = _time.perf_counter()
@@ -478,6 +586,7 @@ async def _invoke_llm_with_retry(
                         raw_llm,
                         selected_tools,
                         log_no_tools=False,
+                        tool_choice=tool_choice,
                     )
                 response = await llm.ainvoke([system] + messages)
                 _record_llm_success(circuit_key)
@@ -564,7 +673,9 @@ async def _normalize_content_tool_calls(
     if not parsed_tool_calls:
         return response
 
-    filtered_tool_calls = filter_tool_calls_by_selected(parsed_tool_calls, selected_tools)
+    filtered_tool_calls = filter_tool_calls_by_selected(
+        parsed_tool_calls, selected_tools
+    )
     if not filtered_tool_calls:
         return response
 
@@ -613,7 +724,9 @@ async def _retry_missed_tool_call(
     try:
         retry_response = await llm.ainvoke(retry_messages)
         retry_calls = getattr(retry_response, "tool_calls", None) or []
-        filtered_retry_calls = filter_tool_calls_by_selected(retry_calls, selected_tools)
+        filtered_retry_calls = filter_tool_calls_by_selected(
+            retry_calls, selected_tools
+        )
         retry_parsed = None
         if not filtered_retry_calls:
             retry_parsed = _extract_tool_calls_from_content(
@@ -805,7 +918,15 @@ async def _llm_node(state: AgentState) -> dict:
     raw_llm = get_llm(role=model_role)
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     selected_tools = [t for t in tools if t.name in selected_names]
-    llm = _bind_llm_for_tools(raw_llm, selected_tools)
+    tool_choice = router_decision.tool_choice
+    _record_tool_call_forced_trace(
+        collector=collector,
+        user_msg=user_msg,
+        selected_names=selected_names,
+        tool_choice=tool_choice,
+        force_binding=router_decision.force_binding,
+    )
+    llm = _bind_llm_for_tools(raw_llm, selected_tools, tool_choice=tool_choice)
 
     selected_tool_names = [t.name for t in selected_tools] if selected_tools else []
     context_bundle, farm_ctx = await _prepare_context_bundle(
@@ -845,17 +966,23 @@ async def _llm_node(state: AgentState) -> dict:
         )
     )
 
-    response, raw_llm, llm, circuit_key, duration_ms, model_name = (
-        await _invoke_llm_with_retry(
-            model_role=model_role,
-            raw_llm=raw_llm,
-            llm=llm,
-            selected_tools=selected_tools,
-            system=system,
-            messages=messages,
-            collector=collector,
-            input_summary=input_summary,
-        )
+    (
+        response,
+        raw_llm,
+        llm,
+        circuit_key,
+        duration_ms,
+        model_name,
+    ) = await _invoke_llm_with_retry(
+        model_role=model_role,
+        raw_llm=raw_llm,
+        llm=llm,
+        selected_tools=selected_tools,
+        system=system,
+        messages=messages,
+        collector=collector,
+        input_summary=input_summary,
+        tool_choice=tool_choice,
     )
 
     await _wait_for_preload(preload_task)
@@ -891,6 +1018,11 @@ async def _llm_node(state: AgentState) -> dict:
         user_msg=user_msg,
         plan_draft_payload=plan_draft_payload,
         input_summary=input_summary,
+    )
+
+    _record_final_reply_data_source_trace(
+        collector=collector,
+        normal_msgs=normal_msgs,
     )
 
     return {

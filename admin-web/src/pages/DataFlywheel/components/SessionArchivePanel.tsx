@@ -116,8 +116,8 @@ export default function SessionArchivePanel({
     {
       testId: 'archive-confirmed-issues',
       key: confirmedIssueKey,
-      title: '已标注问题',
-      description: '人工确认并保存的问题样本',
+      title: '历史问题引用',
+      description: '仅用于查证历史人工标注',
       count: confirmedIssueCount,
       color: palette.danger,
     },

@@ -63,6 +63,8 @@ class RouterDecision:
     schema_token_estimate: int = 0
     policy_violations: list[str] = field(default_factory=list)
     clarification: str | None = None
+    tool_choice: str = "auto"
+    force_binding: tuple[str, ...] = ()
 
     def to_trace_payload(self) -> dict:
         return asdict(self)

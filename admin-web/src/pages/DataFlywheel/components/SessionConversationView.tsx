@@ -168,11 +168,11 @@ function TurnReviewCard({
         <MessageBlock role="assistant" content={assistantMessage} />
 
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
-          <EvidenceLine text={`selected: ${toolText(turn.sample.selected_tools)}`} />
-          <EvidenceLine text={`actual: ${toolText(turn.sample.actual_tools)}`} />
-          <EvidenceLine text={`pending: ${pendingStatus(turn.pending_lifecycle)}`} />
-          <EvidenceLine text={`tool: ${toolSummary(turn.tool_events)}`} />
-          {routerReason && <EvidenceLine text={`router: ${routerReason}`} />}
+          <EvidenceLine text={`路由选择：${toolText(turn.sample.selected_tools)}`} />
+          <EvidenceLine text={`实际调用：${toolText(turn.sample.actual_tools)}`} />
+          <EvidenceLine text={`确认流程：${pendingStatus(turn.pending_lifecycle)}`} />
+          <EvidenceLine text={`工具结果：${toolSummary(turn.tool_events)}`} />
+          {routerReason && <EvidenceLine text={`路由原因：${routerReason}`} />}
         </Space>
 
         <ReflectionTraceView diagnostics={diagnostics} loading={diagnosticsLoading} compact />
@@ -201,7 +201,7 @@ function TurnReviewCard({
             标注这一轮
           </Button>
           <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-            source: {turn.source.event_file || '-'}
+            事件来源：{turn.source.event_file || '-'}
           </Typography.Text>
         </Space>
       </Space>
@@ -267,7 +267,7 @@ function pendingStatus(events: Array<Record<string, unknown>>) {
 function toolSummary(events: Array<Record<string, unknown>>) {
   const success = events.filter((event) => event.event_type === 'tool.call.finished').length;
   const failed = events.filter((event) => event.event_type === 'tool.call.failed').length;
-  return `${success} success / ${failed} failed`;
+  return `${success} 成功 / ${failed} 失败`;
 }
 
 function routerReasonText(routerDecision: Record<string, unknown> | null) {

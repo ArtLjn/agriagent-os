@@ -10,6 +10,7 @@ ALLOWED_JUDGE_LABELS = {
     "good_reply",
     "bad_reply",
     "wrong_tool_selection",
+    "tool_parameter_mismatch",
     "pending_missed",
     "hallucinated_execution",
     "tool_error_ignored",
@@ -32,6 +33,7 @@ LABEL_DEFINITIONS = {
     "good_reply": "好回复：回答准确、完整，工具使用和事实依据都没有明显问题。",
     "bad_reply": "坏回复：整体回答不可接受，但无法归入更具体的问题标签。",
     "wrong_tool_selection": "工具选错：该用工具未用、用了错误工具，或实时/外部数据问题未选择查询工具。",
+    "tool_parameter_mismatch": "工具参数不匹配：工具参数、实体、数量或作用域与用户意图/上下文不一致。",
     "pending_missed": "pending 漏拦截：写操作缺少用户确认计划或确认流程。",
     "hallucinated_execution": "幻觉执行：没有成功写操作证据却声称已经创建、安排、保存、删除等。",
     "tool_error_ignored": "工具错误被忽略：工具失败后回复仍当作成功处理。",
@@ -50,6 +52,7 @@ LABEL_SELECTION_RULES = (
     "只有在没有明确质量问题、也没有可执行改进方向时才选择 not_actionable。"
     "如果回复本身失败或泛化道歉导致用户意图未解决，至少选择 bad_reply；"
     "若根因是工具未选或选错，则同时选择 wrong_tool_selection。"
+    "如果问题是批量范围、实体、数量、金额或指代上下文被错误收窄，选择 tool_parameter_mismatch。"
 )
 
 
