@@ -32,6 +32,7 @@ def public_chain(chain: dict[str, Any]) -> dict[str, Any]:
             "status",
             "severity",
             "dominant_signal",
+            "risk_context",
             "diagnosis",
             "ai_judge",
             "human_review",
@@ -244,10 +245,37 @@ def diagnosis(sample: dict[str, Any]) -> dict[str, Any]:
     primary = candidates[0] if candidates else {}
     return {
         "title": primary.get("type") or sample.get("judge_issue_type") or "risk_turn",
-        "summary": primary.get("reason") or "该 turn 被风险评分纳入每日质检。",
+        "summary": primary.get("reason") or _risk_summary(sample),
         "candidate_type": primary.get("type"),
         "suggested_labels": suggested_labels(sample, primary),
     }
+
+
+def risk_context(sample: dict[str, Any]) -> dict[str, Any]:
+    rule_hits = [str(item) for item in sample.get("rule_hits") or []]
+    rule_score = sample.get("rule_score")
+    judge_bad_prob = sample.get("judge_bad_prob")
+    risk_score = sample.get("risk_score")
+    dominant_signal_value = sample.get("risk_dominant_signal")
+    return {
+        "risk_score": risk_score,
+        "rule_score": rule_score,
+        "judge_bad_prob": judge_bad_prob,
+        "dominant_signal": dominant_signal_value,
+        "rule_hits": rule_hits,
+        "trigger_reason": _risk_summary(sample),
+        "scoring_rule": "risk_score = max(rule_score, judge_bad_prob)",
+    }
+
+
+def _risk_summary(sample: dict[str, Any]) -> str:
+    rule_hits = [str(item) for item in sample.get("rule_hits") or []]
+    if rule_hits:
+        return f"命中规则：{', '.join(rule_hits)}。风险分取规则分和 AI 坏例概率中的较高值。"
+    judge_bad_prob = sample.get("judge_bad_prob")
+    if isinstance(judge_bad_prob, int | float):
+        return f"AI Judge 坏例概率 {judge_bad_prob:.2f}，风险分取规则分和 AI 坏例概率中的较高值。"
+    return "该 turn 被风险评分纳入每日质检。"
 
 
 def ai_judge(sample: dict[str, Any]) -> dict[str, Any]:
