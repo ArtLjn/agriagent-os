@@ -13,7 +13,8 @@ def plan_tool_candidates(
 ) -> ToolCandidatePlan:
     """生成意图和工具候选计划。"""
     intent = classify_intent(user_message).value
-    selected = select_tools(user_message, all_tools, top_k, intent_classifier)
+    selection = select_tools(user_message, all_tools, top_k, intent_classifier)
+    selected = list(selection.tools)
     expanded = list(expand_by_chain(set(selected), max_tools=max(top_k, len(selected))))
     return ToolCandidatePlan(
         intent=intent,
