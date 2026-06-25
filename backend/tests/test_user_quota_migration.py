@@ -51,3 +51,20 @@ def test_labor_entries_dedupe_update_avoids_mysql_direct_self_reference():
 
     assert "SELECT MIN(id)" in source
     assert "FROM (\n                              SELECT MIN(id)" in source
+
+
+def test_review_issue_chain_ai_judge_has_schema_repair_migration():
+    """ReviewIssueChain AI 预判字段必须有独立幂等修复迁移。"""
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "20260625_fix_review_issue_chain_ai_judge_column.py"
+    )
+
+    source = migration_path.read_text()
+
+    assert "agent_review_issue_chains" in source
+    assert "ai_judge" in source
+    assert "op.add_column" in source
+    assert "sa.JSON()" in source
