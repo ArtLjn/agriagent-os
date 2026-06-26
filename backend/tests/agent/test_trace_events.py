@@ -84,3 +84,29 @@ class TestTraceEvents:
         payload = _build_data_source_payload(tool_calls=None)
         assert payload["data_source"] == "context_bundle"
         assert payload["has_tool_results"] is False
+
+    def test_final_reply_data_source_uses_tool_call_id_when_tool_message_has_no_name(
+        self,
+    ):
+        """ToolMessage 无 name 时，应从上一条 AIMessage.tool_calls 反查 skill 名。"""
+        from langchain_core.messages import AIMessage, ToolMessage
+
+        from app.agent.runtime.nodes import _tool_messages_for_data_source
+
+        messages = [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call-cycles",
+                        "name": "get_crop_cycles",
+                        "args": {},
+                    }
+                ],
+            ),
+            ToolMessage(content="茬口列表", tool_call_id="call-cycles"),
+        ]
+
+        tool_calls = _tool_messages_for_data_source(messages)
+
+        assert tool_calls == [{"name": "get_crop_cycles"}]

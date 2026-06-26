@@ -28,13 +28,18 @@ mongodb:
   server_selection_timeout_ms: 2000 # 服务选择超时，单位毫秒。
   max_pool_size: 20           # AsyncIOMotorClient 连接池上限。
 
-# 第 1 期五类对象存储后端。可选：mysql、dual、mongo-read、mongo；默认全部保持 MySQL。
+# MongoDB 迁移对象存储后端。可选：mysql、dual、mongo-read、mongo；默认全部保持 MySQL。
 storage:
-  trace: "mysql"               # trace_records。
-  case_drafts: "mysql"         # agent_case_drafts。
-  repair_packs: "mysql"        # agent_repair_packs。
-  review_issue_chains: "mysql" # agent_review_issue_chains。
-  prelabels: "mysql"           # agent_data_flywheel_prelabels。
+  # 第 1 期五类离线/异步对象。
+  trace: "mysql"               # trace_records -> traceRecords。
+  case_drafts: "mysql"         # agent_case_drafts -> caseDrafts。
+  repair_packs: "mysql"        # agent_repair_packs -> repairPacks。
+  review_issue_chains: "mysql" # agent_review_issue_chains -> reviewIssueChains。
+  prelabels: "mysql"           # agent_data_flywheel_prelabels -> prelabels。
+  # 第 2 期三类在线追加对象，真实灰度只改 config.yaml 或环境变量，不提交密钥。
+  conversation_messages: "mysql" # conversation_messages -> conversationMessages。
+  agent_records: "mysql"         # agent_records -> agentRecords。
+  guardrails_logs: "mysql"       # guardrails_logs -> guardrailsLogs；保留应用层 30 天清理策略。
   mongo_write_failure_rate_threshold: 0.001       # Mongo 二级写失败率阈值，超过需停止扩大 dual。
   mongo_read_error_rate_threshold: 0.01           # Mongo 读错误率阈值，超过需回退 mysql/dual。
   mongo_consistency_mismatch_rate_threshold: 0.0001 # 一致性不一致率阈值，超过禁止切读。

@@ -100,6 +100,30 @@ def _build_data_source_payload(tool_calls: list[dict] | None) -> dict:
     }
 
 
+def _tool_messages_for_data_source(messages: list) -> list[dict] | None:
+    """从消息历史里提取 final reply 真实依赖的最后一个工具名。"""
+    tool_call_names: dict[str, str] = {}
+    last_tool_msg: ToolMessage | None = None
+    for message in messages:
+        if isinstance(message, AIMessage):
+            for tool_call in message.tool_calls or []:
+                tool_call_id = str(tool_call.get("id") or "")
+                tool_name = str(tool_call.get("name") or "")
+                if tool_call_id and tool_name:
+                    tool_call_names[tool_call_id] = tool_name
+        elif isinstance(message, ToolMessage):
+            last_tool_msg = message
+
+    if last_tool_msg is None:
+        return None
+
+    tool_name = getattr(last_tool_msg, "name", None)
+    if not tool_name:
+        tool_call_id = str(getattr(last_tool_msg, "tool_call_id", "") or "")
+        tool_name = tool_call_names.get(tool_call_id)
+    return [{"name": tool_name or "unknown"}]
+
+
 def _record_tool_call_forced_trace(
     *,
     collector,
@@ -135,15 +159,11 @@ def _record_tool_call_forced_trace(
 def _record_final_reply_data_source_trace(
     *,
     collector,
-    normal_msgs: list[ToolMessage],
+    messages: list,
 ) -> None:
     """记录 final_reply_data_source trace。失败静默。"""
     try:
-        last_tool_messages_for_trace: list[dict] | None = None
-        if normal_msgs:
-            last_tool_msg = normal_msgs[-1]
-            tool_name = getattr(last_tool_msg, "name", None) or "unknown"
-            last_tool_messages_for_trace = [{"name": tool_name}]
+        last_tool_messages_for_trace = _tool_messages_for_data_source(messages)
         _now = _time.time()
         collector.record(
             node_type="response",
@@ -1022,7 +1042,7 @@ async def _llm_node(state: AgentState) -> dict:
 
     _record_final_reply_data_source_trace(
         collector=collector,
-        normal_msgs=normal_msgs,
+        messages=messages,
     )
 
     return {
