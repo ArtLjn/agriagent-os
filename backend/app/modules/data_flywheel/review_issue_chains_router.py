@@ -173,6 +173,8 @@ def run_admin_data_flywheel_review_issue_chain_ai_judge(
         )
     except ValueError as exc:
         raise _http_error(exc, chain_id=chain_id) from exc
+    except Exception as exc:
+        raise _ai_judge_upstream_error(chain_id=chain_id) from exc
 
 
 @router.post("/review-issue-chains/{chain_id}/case-draft")
@@ -231,3 +233,14 @@ def _http_error(
     code = str(payload.get("code") or "")
     status_code = 404 if code in {"CHAIN_NOT_FOUND", "REPAIR_PACK_NOT_FOUND"} else 400
     return HTTPException(status_code=status_code, detail=payload)
+
+
+def _ai_judge_upstream_error(*, chain_id: str) -> HTTPException:
+    return HTTPException(
+        status_code=502,
+        detail={
+            "code": "AI_JUDGE_UPSTREAM_ERROR",
+            "chain_id": chain_id,
+            "message": "AI 预判服务暂不可用，请稍后重试。",
+        },
+    )

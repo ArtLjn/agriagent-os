@@ -193,6 +193,11 @@ def normalize_judge_output(raw: Any) -> dict[str, Any]:
         "confidence": _clamp_confidence(raw.get("confidence")),
         "reason": reason,
         "recommended_fix": _text(raw.get("recommended_fix")),
+        "missing_evidence": [
+            str(item)
+            for item in _list_value(raw.get("missing_evidence"))
+            if str(item).strip()
+        ],
     }
 
 

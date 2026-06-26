@@ -560,6 +560,7 @@ const dailyReviewInbox: DailyReviewInboxResponse = {
           root_cause: 'AI 判断确认执行阶段丢失批量对象。',
           reason: '上下文中包含多个工人工资，工具参数只保留一个人。',
           recommended_fix: '修正 router 参数抽取的批量作用域。',
+          missing_evidence: ['router_decision', 'tool_result'],
           judge_model: 'fake-judge',
           prompt_version: 'data-flywheel-chain-judge-v1',
         },
@@ -1088,7 +1089,9 @@ describe('DataFlywheel 页面', () => {
     expect(screen.queryByLabelText('缺失证据')).not.toBeInTheDocument();
     expect(screen.getByLabelText('根因说明')).toHaveValue('AI 判断确认执行阶段丢失批量对象。');
     expect(screen.getByLabelText('正确行为')).toHaveValue('应修正为：修正 router 参数抽取的批量作用域。');
-    expect(screen.getByLabelText('审核备注')).toHaveValue('已采纳 AI 预判作为人工判断草稿。');
+    expect(screen.getByLabelText('审核备注')).toHaveValue(
+      '已采纳 AI 预判：上下文中包含多个工人工资，工具参数只保留一个人。'
+    );
     expect(screen.getAllByText('工具选择错误').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: /保存并下一条/ }));
     await waitFor(() => {
@@ -1098,8 +1101,59 @@ describe('DataFlywheel 页面', () => {
         root_cause: 'AI 判断确认执行阶段丢失批量对象。',
         expected_behavior: '应修正为：修正 router 参数抽取的批量作用域。',
         fix_target: 'router',
-        reviewer_comment: '已采纳 AI 预判作为人工判断草稿。',
+        reviewer_comment: '已采纳 AI 预判：上下文中包含多个工人工资，工具参数只保留一个人。',
         missing_evidence: undefined,
+      }));
+    });
+  }, 15000);
+
+  it('每日质检采纳补证据类 AI 建议会自动填缺失证据和审核备注', async () => {
+    const evidenceAdviceDetail: ReviewIssueChainDetail = {
+      ...reviewChainDetail,
+      chain: {
+        ...reviewChainDetail.chain,
+        status: 'needs_evidence',
+        ai_judge: {
+          suggested_label: 'not_actionable',
+          suggested_labels: ['not_actionable'],
+          bad_prob: 0.62,
+          root_cause: '缺少工具调用证据，暂不能确认是否误报。',
+          reason: '当前问题链缺少 router 决策和工具结果，无法判断是否真实坏例。',
+          recommended_fix: '先补齐 router 决策与工具结果证据。',
+          missing_evidence: ['router_decision', 'tool_result'],
+          judge_model: 'fake-chain-judge',
+          prompt_version: 'data-flywheel-chain-judge-v1',
+        },
+        human_review: {
+          ...reviewChainDetail.chain.human_review,
+          status: 'needs_evidence',
+          quality_labels: [],
+          reviewer_comment: null,
+          missing_evidence: [],
+        },
+      },
+    };
+    mockedReviewChain.mockResolvedValue(evidenceAdviceDetail);
+    render(<DataFlywheel />);
+
+    await screen.findByText('批量结算工资时参数范围被收窄');
+    fireEvent.click(screen.getByTestId('risk-session-session-a'));
+    fireEvent.click(screen.getByRole('button', { name: /采纳建议/ }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('补证据')).toBeChecked();
+    });
+    expect(screen.getAllByText('路由决策').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('工具结果').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('审核备注')).toHaveValue(
+      '采纳 AI 补证据建议：当前问题链缺少 router 决策和工具结果，无法判断是否真实坏例。'
+    );
+    fireEvent.click(screen.getByRole('button', { name: /保存并下一条/ }));
+    await waitFor(() => {
+      expect(mockedSaveReviewChain).toHaveBeenCalledWith(reviewChainId, expect.objectContaining({
+        status: 'needs_evidence',
+        missing_evidence: ['router_decision', 'tool_result'],
+        reviewer_comment: '采纳 AI 补证据建议：当前问题链缺少 router 决策和工具结果，无法判断是否真实坏例。',
       }));
     });
   }, 15000);

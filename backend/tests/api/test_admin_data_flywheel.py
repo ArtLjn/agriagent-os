@@ -40,7 +40,16 @@ class FakeJudgeClient:
             "confidence": 0.91,
             "reason": "回复声称已安排，但证据中缺少写操作确认链路。",
             "recommended_fix": "补齐 pending 确认后再执行写工具。",
+            "missing_evidence": ["pending_lifecycle", "tool_result"],
         }
+
+
+class FailingJudgeClient:
+    judge_model = "fake-judge"
+    prompt_version = "data-flywheel-chain-judge-v1"
+
+    def judge(self, payload):
+        raise RuntimeError("upstream 502")
 
 
 class DiscoveryJudgeClient:
@@ -981,6 +990,10 @@ def test_review_issue_chain_ai_judge_persists_chain_advice(
     assert chain["ai_judge"]["suggested_label"] == "bad_reply"
     assert chain["ai_judge"]["bad_prob"] == 0.91
     assert chain["ai_judge"]["root_cause"] == "缺少 pending 确认"
+    assert chain["ai_judge"]["missing_evidence"] == [
+        "pending_lifecycle",
+        "tool_result",
+    ]
     assert chain["ai_judge"]["judge_model"] == "fake-judge"
     assert chain["ai_judge"]["prompt_version"] == "data-flywheel-chain-judge-v1"
     assert detail_resp.status_code == 200
@@ -993,6 +1006,34 @@ def test_review_issue_chain_ai_judge_persists_chain_advice(
         .one()
     )
     assert stored_chain.dominant_signal == "judge"
+
+
+def test_review_issue_chain_ai_judge_returns_structured_gateway_error(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    trigger = _seed_turn(db_session, tmp_path)
+    trigger.risk_score = 0.92
+    trigger.risk_severity = "P0"
+    db_session.commit()
+    monkeypatch.setattr(
+        review_chain_api,
+        "build_data_flywheel_judge_client",
+        lambda: FailingJudgeClient(),
+    )
+
+    auth_scope, client = _admin_client()
+    with auth_scope:
+        resp = client.post(
+            f"/admin/data-flywheel/review-issue-chains/{_chain_id(trigger)}/ai-judge",
+            headers=admin_headers(),
+        )
+
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == {
+        "code": "AI_JUDGE_UPSTREAM_ERROR",
+        "chain_id": _chain_id(trigger),
+        "message": "AI 预判服务暂不可用，请稍后重试。",
+    }
 
 
 def test_review_issue_chain_detail_excludes_followup_without_result_evidence(

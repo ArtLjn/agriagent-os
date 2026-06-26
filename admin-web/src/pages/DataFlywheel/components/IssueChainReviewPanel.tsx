@@ -402,6 +402,7 @@ interface AiAdvice {
   rootCause?: string | null;
   reason?: string | null;
   recommendedFix?: string | null;
+  missingEvidence?: string[];
   model?: string | null;
   promptVersion?: string | null;
 }
@@ -424,6 +425,7 @@ function buildAiAdvice(detail: ReviewIssueChainDetail): AiAdvice | null {
   const rootCause = stringValue(judge.root_cause);
   const reason = stringValue(judge.reason);
   const recommendedFix = stringValue(judge.recommended_fix);
+  const missingEvidence = normalizedMissingEvidence(arrayValue(judge.missing_evidence));
   const model = stringValue(judge.judge_model);
   const promptVersion = stringValue(judge.prompt_version);
   if (
@@ -432,25 +434,34 @@ function buildAiAdvice(detail: ReviewIssueChainDetail): AiAdvice | null {
     && !rootCause
     && !reason
     && !recommendedFix
+    && missingEvidence.length === 0
     && !model
     && !promptVersion
   ) {
     return null;
   }
-  return { labels, confidence, rootCause, reason, recommendedFix, model, promptVersion };
+  return { labels, confidence, rootCause, reason, recommendedFix, missingEvidence, model, promptVersion };
 }
 
 function applyAiAdvice(form: FormInstance<ReviewFormValues>, advice: AiAdvice | null) {
   if (!advice) return;
   const current = form.getFieldsValue();
-  const finalLabels = uniqueStrings([...(current.final_labels ?? []), ...advice.labels]);
+  const acceptedLabels = advice.labels.filter((label) => label !== 'not_actionable');
+  const shouldCollectEvidence = acceptedLabels.length === 0 && advice.missingEvidence?.length;
+  const finalLabels = uniqueStrings([
+    ...(current.final_labels ?? []),
+    ...acceptedLabels,
+  ]);
   form.setFieldsValue({
-    status: 'accepted',
-    final_labels: finalLabels,
-    root_cause: current.root_cause || advice.rootCause || advice.reason || undefined,
-    expected_behavior: current.expected_behavior || expectedBehaviorFromAdvice(advice),
-    fix_target: usableFixTarget(current.fix_target) || inferFixTarget(finalLabels, advice),
-    reviewer_comment: current.reviewer_comment || '已采纳 AI 预判作为人工判断草稿。',
+    status: shouldCollectEvidence ? 'needs_evidence' : 'accepted',
+    final_labels: shouldCollectEvidence ? current.final_labels ?? [] : finalLabels,
+    root_cause: shouldCollectEvidence ? current.root_cause : current.root_cause || advice.rootCause || advice.reason || undefined,
+    expected_behavior: shouldCollectEvidence ? current.expected_behavior : current.expected_behavior || expectedBehaviorFromAdvice(advice),
+    fix_target: shouldCollectEvidence ? current.fix_target : usableFixTarget(current.fix_target) || inferFixTarget(finalLabels, advice),
+    missing_evidence: shouldCollectEvidence
+      ? uniqueStrings([...(current.missing_evidence ?? []), ...(advice.missingEvidence ?? [])])
+      : current.missing_evidence,
+    reviewer_comment: current.reviewer_comment || reviewerCommentFromAdvice(advice, Boolean(shouldCollectEvidence)),
   });
 }
 
@@ -480,6 +491,19 @@ function inferFixTarget(labels: string[], advice: AiAdvice): string {
   if (text.includes('数据') || text.includes('工资') || text.includes('工人')) return 'data';
   if (text.includes('提示词') || text.includes('回复') || text.includes('意图')) return 'prompt';
   return 'manual_triage';
+}
+
+function reviewerCommentFromAdvice(advice: AiAdvice, collectEvidence: boolean): string {
+  const reason = advice.reason || advice.rootCause || advice.recommendedFix;
+  if (collectEvidence) {
+    return reason ? `采纳 AI 补证据建议：${reason}` : '采纳 AI 补证据建议。';
+  }
+  return reason ? `已采纳 AI 预判：${reason}` : '已采纳 AI 预判作为人工判断草稿。';
+}
+
+function normalizedMissingEvidence(values: string[]): string[] {
+  const allowed = new Set(missingEvidenceOptions.map((item) => item.value));
+  return uniqueStrings(values.filter((value) => allowed.has(value)));
 }
 
 function uniqueStrings(values: Array<string | null | undefined>): string[] {

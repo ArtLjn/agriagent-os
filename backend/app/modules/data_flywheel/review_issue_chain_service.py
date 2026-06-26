@@ -890,6 +890,7 @@ def _chain_ai_judge_result(
         "root_cause": normalized.get("root_cause") or None,
         "reason": normalized.get("reason"),
         "recommended_fix": normalized.get("recommended_fix") or None,
+        "missing_evidence": normalized.get("missing_evidence") or [],
         "evidence_status": evidence_status_value,
         "judge_model": judge_client.judge_model,
         "prompt_version": judge_client.prompt_version,
