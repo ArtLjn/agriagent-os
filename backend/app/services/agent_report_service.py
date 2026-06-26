@@ -12,6 +12,10 @@ from sqlalchemy.orm import Session
 from app.agent.guardrails import filter_output
 from app.agent.llm import get_llm
 from app.core.json_repair import safe_parse_json
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.models.agent_record import AgentRecord
 from app.schemas.agent import ReportResponse
 from app.schemas.structured_report import (
@@ -169,7 +173,9 @@ def _cycle_metric_facts(report_data) -> dict:
     labor_cost = _sum_amounts(
         entry["payable_amount"] for entry in report_data.labor_entries
     )
-    paid_amount = _sum_amounts(entry["paid_amount"] for entry in report_data.labor_entries)
+    paid_amount = _sum_amounts(
+        entry["paid_amount"] for entry in report_data.labor_entries
+    )
     unpaid_amount = _sum_amounts(
         entry["unpaid_amount"] for entry in report_data.labor_entries
     )
@@ -223,7 +229,11 @@ def _sum_amounts(values) -> Decimal:
 
 
 def _format_number(value: Decimal) -> str:
-    return str(int(value)) if value == value.to_integral_value() else str(value.normalize())
+    return (
+        str(int(value))
+        if value == value.to_integral_value()
+        else str(value.normalize())
+    )
 
 
 async def _generate_llm_report(report_data) -> str:
@@ -437,10 +447,8 @@ def _save_report_record(
         meta=json.dumps(structured_data.model_dump(mode="json"), ensure_ascii=False),
         farm_id=farm_id,
     )
-    db.add(record)
     try:
-        db.commit()
-        db.refresh(record)
+        record = run_maybe_awaitable(get_agent_record_repository(db).create(record))
     except Exception:
         db.rollback()
         raise

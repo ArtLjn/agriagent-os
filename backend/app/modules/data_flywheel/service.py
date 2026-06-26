@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.infra.agent_events import read_event_segment
 from app.infra.repository_runtime import (
+    get_conversation_message_repository,
     get_data_flywheel_repository,
     run_maybe_awaitable,
 )
@@ -848,14 +849,23 @@ def _sample_row(
 
 
 def _messages_for_turn(db: Session, turn: AgentTurn) -> list[dict[str, Any]]:
-    return [
-        item
-        for item in (
-            _message_dict(db, turn.user_message_id),
-            _message_dict(db, turn.assistant_message_id),
-        )
-        if item is not None
-    ]
+    repo = get_conversation_message_repository(db)
+    rows = run_maybe_awaitable(
+        repo.list_by_turn_ids(farm_id=turn.farm_id, turn_ids=[turn.id])
+    )
+    rows_by_id = {row.id: row for row in rows}
+    items: list[dict[str, Any]] = []
+    for message_id in (turn.user_message_id, turn.assistant_message_id):
+        if message_id is None:
+            continue
+        row = rows_by_id.get(message_id)
+        if row is None:
+            row = run_maybe_awaitable(
+                repo.get_by_mysql_id(farm_id=turn.farm_id, mysql_id=message_id)
+            )
+        if row is not None:
+            items.append(_message_to_dict(row))
+    return items
 
 
 def _issue_candidates_for_turn(
@@ -909,12 +919,7 @@ def _rule_hit_candidate(rule_hit: str) -> dict[str, str]:
     }
 
 
-def _message_dict(db: Session, message_id: int | None) -> dict[str, Any] | None:
-    if message_id is None:
-        return None
-    message = db.query(ConversationMessage).filter_by(id=message_id).first()
-    if not message:
-        return None
+def _message_to_dict(message: ConversationMessage) -> dict[str, Any]:
     return {
         "id": message.id,
         "role": message.role,

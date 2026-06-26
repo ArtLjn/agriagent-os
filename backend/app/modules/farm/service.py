@@ -4,8 +4,11 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.infra.skill_cache import clear_cache as clear_skill_cache
-from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 from app.models.user_setting import UserSetting
 from app.modules.farm.city_coords import resolve_city_coords
@@ -117,15 +120,9 @@ def invalidate_farm_location_caches(
 
 def clear_daily_advice_cache(db: Session, farm_id: int) -> int:
     """删除该农场已有每日建议缓存。"""
-    deleted = (
-        db.query(AgentRecord)
-        .filter(
-            AgentRecord.farm_id == farm_id,
-            AgentRecord.record_type == "daily",
-        )
-        .delete(synchronize_session=False)
+    deleted = run_maybe_awaitable(
+        get_agent_record_repository(db).delete_daily_cache(farm_id=farm_id)
     )
-    db.flush()
     return int(deleted or 0)
 
 

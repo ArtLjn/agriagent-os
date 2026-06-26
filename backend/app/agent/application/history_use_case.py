@@ -2,10 +2,12 @@
 
 import json
 
-from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
-from app.models.agent_record import AgentRecord
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.models.farm import Farm
 from app.schemas.agent import (
     ConversationListItem,
@@ -206,12 +208,12 @@ def list_report_page(
     db: Session, farm: Farm, page: int, size: int
 ) -> ReportListResponse:
     """获取报告历史分页列表。"""
-    offset = (page - 1) * size
-    query = db.query(AgentRecord).filter(AgentRecord.farm_id == farm.id)
-    query = query.filter(AgentRecord.record_type.in_(["report", "weekly", "monthly"]))
-    total = query.with_entities(sqlfunc.count(AgentRecord.id)).scalar() or 0
-    records = (
-        query.order_by(AgentRecord.created_at.desc()).offset(offset).limit(size).all()
+    page_data = run_maybe_awaitable(
+        get_agent_record_repository(db).list_report_page(
+            farm_id=farm.id,
+            page=page,
+            size=size,
+        )
     )
     items = [
         ReportHistoryItem(
@@ -222,20 +224,26 @@ def list_report_page(
             structured_data=parse_structured_data(record.meta),
             created_at=record.created_at,
         )
-        for record in records
+        for record in page_data.items
     ]
-    return ReportListResponse(items=items, total=total)
+    return ReportListResponse(items=items, total=page_data.total)
 
 
 def delete_report_item(db: Session, farm: Farm, report_id: int) -> None:
     """删除当前 farm 下的一条报告历史。"""
-    record = (
-        db.query(AgentRecord)
-        .filter(AgentRecord.id == report_id, AgentRecord.farm_id == farm.id)
-        .filter(AgentRecord.record_type.in_(["report", "weekly", "monthly"]))
-        .first()
+    record = run_maybe_awaitable(
+        get_agent_record_repository(db).get_report_by_id(
+            farm_id=farm.id,
+            report_id=report_id,
+        )
     )
     if record is None:
         raise ValueError("报告不存在")
-    db.delete(record)
-    db.commit()
+    deleted = run_maybe_awaitable(
+        get_agent_record_repository(db).delete_report(
+            farm_id=farm.id,
+            report_id=report_id,
+        )
+    )
+    if not deleted:
+        raise ValueError("报告不存在")

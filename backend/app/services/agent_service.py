@@ -14,6 +14,10 @@ from app.agent.prompt_composer import get_composer
 from app.infra.pending_actions import (
     get_pending,
 )
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 from app.schemas.agent import (
@@ -176,12 +180,10 @@ async def refresh_daily_advice(
 ) -> DailyAdviceResponse:
     """强制刷新每日农事建议：删除今日旧记录后重新生成。"""
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    db.query(AgentRecord).filter(
-        AgentRecord.farm_id == farm_id,
-        AgentRecord.record_type == "daily",
-        AgentRecord.cycle_id == cycle_id if cycle_id is not None else True,
-        AgentRecord.created_at >= today_start,
-    ).delete(synchronize_session=False)
+    repo = get_agent_record_repository(db)
+    run_maybe_awaitable(
+        repo.delete_daily_cache(farm_id=farm_id, cycle_id=cycle_id, since=today_start)
+    )
     try:
         db.commit()
     except Exception:
@@ -215,28 +217,26 @@ def get_advice_history(
     db: Session, farm_id: int, cycle_id: int | None = None, limit: int = 20
 ) -> list[AgentRecord]:
     """查询建议历史。"""
-    query = (
-        db.query(AgentRecord)
-        .filter(AgentRecord.farm_id == farm_id)
-        .filter(AgentRecord.record_type.in_(["chat", "daily"]))
+    return run_maybe_awaitable(
+        get_agent_record_repository(db).list_advice_history(
+            farm_id=farm_id,
+            cycle_id=cycle_id,
+            limit=limit,
+        )
     )
-    if cycle_id is not None:
-        query = query.filter(AgentRecord.cycle_id == cycle_id)
-    return query.order_by(AgentRecord.created_at.desc()).limit(limit).all()
 
 
 def get_report_history(
     db: Session, farm_id: int, cycle_id: int | None = None, limit: int = 20
 ) -> list[AgentRecord]:
     """查询报告历史。"""
-    query = (
-        db.query(AgentRecord)
-        .filter(AgentRecord.farm_id == farm_id)
-        .filter(AgentRecord.record_type.in_(["report", "weekly", "monthly"]))
+    return run_maybe_awaitable(
+        get_agent_record_repository(db).list_report_history(
+            farm_id=farm_id,
+            cycle_id=cycle_id,
+            limit=limit,
+        )
     )
-    if cycle_id is not None:
-        query = query.filter(AgentRecord.cycle_id == cycle_id)
-    return query.order_by(AgentRecord.created_at.desc()).limit(limit).all()
 
 
 __all__ = [

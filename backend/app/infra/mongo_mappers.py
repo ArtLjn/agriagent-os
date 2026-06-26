@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from collections.abc import Mapping
 from typing import Any, TypeVar
 
+from app.models.agent_record import AgentRecord
+from app.models.conversation import ConversationMessage
 from app.models.data_flywheel import (
     AgentCaseDraft,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,
     AgentReviewIssueChain,
 )
+from app.models.guardrails_log import GuardrailsLog
 from app.models.trace import TraceRecord
 
 ModelT = TypeVar("ModelT")
@@ -24,6 +28,23 @@ def _json_value(value: Any) -> Any:
         except json.JSONDecodeError:
             return value
     return value
+
+
+def _json_document(value: Any) -> tuple[Any, str | None]:
+    if value is None:
+        return None, None
+    if isinstance(value, str):
+        try:
+            return json.loads(value), None
+        except json.JSONDecodeError:
+            return None, value
+    return value, None
+
+
+def _sha256_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _model_from_doc(
@@ -90,6 +111,120 @@ def trace_record_from_mongo_doc(doc: Mapping[str, Any]) -> TraceRecord:
             "createdAt": "created_at",
         },
         json_fields={"input", "output", "tokenUsage"},
+    )
+
+
+def conversation_message_to_mongo_doc(
+    message: ConversationMessage,
+    *,
+    farm_id: int | None = None,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    conversation = getattr(message, "conversation", None)
+    resolved_farm_id = farm_id
+    if resolved_farm_id is None and conversation is not None:
+        resolved_farm_id = getattr(conversation, "farm_id", None)
+    resolved_session_id = session_id
+    if resolved_session_id is None and conversation is not None:
+        resolved_session_id = getattr(conversation, "session_id", None)
+    meta_value = message.meta_json if message.meta_json is not None else message.meta
+    meta_doc, legacy_meta_text = _json_document(meta_value)
+    return {
+        "mysqlId": message.id,
+        "farmId": resolved_farm_id,
+        "conversationId": message.conversation_id,
+        "sessionId": resolved_session_id,
+        "role": message.role,
+        "content": message.content,
+        "contentHash": message.content_hash or _sha256_text(message.content),
+        "turnId": message.turn_id,
+        "meta": meta_doc,
+        "legacyMetaText": legacy_meta_text,
+        "createdAt": message.created_at,
+    }
+
+
+def conversation_message_from_mongo_doc(
+    doc: Mapping[str, Any],
+) -> ConversationMessage:
+    message = _model_from_doc(
+        ConversationMessage,
+        doc,
+        {
+            "conversationId": "conversation_id",
+            "role": "role",
+            "content": "content",
+            "contentHash": "content_hash",
+            "turnId": "turn_id",
+            "meta": "meta_json",
+            "legacyMetaText": "meta",
+            "createdAt": "created_at",
+        },
+    )
+    if message.meta is None and message.meta_json is not None:
+        message.meta = json.dumps(message.meta_json, ensure_ascii=False)
+    return message
+
+
+def agent_record_to_mongo_doc(record: AgentRecord) -> dict[str, Any]:
+    meta_doc, legacy_meta_text = _json_document(record.meta)
+    return {
+        "mysqlId": record.id,
+        "farmId": record.farm_id,
+        "userId": record.user_id,
+        "conversationId": record.conversation_id,
+        "cycleId": record.cycle_id,
+        "recordType": record.record_type,
+        "content": record.content,
+        "meta": meta_doc,
+        "legacyMetaText": legacy_meta_text,
+        "createdAt": record.created_at,
+    }
+
+
+def agent_record_from_mongo_doc(doc: Mapping[str, Any]) -> AgentRecord:
+    record = _model_from_doc(
+        AgentRecord,
+        doc,
+        {
+            "farmId": "farm_id",
+            "userId": "user_id",
+            "conversationId": "conversation_id",
+            "cycleId": "cycle_id",
+            "recordType": "record_type",
+            "content": "content",
+            "legacyMetaText": "meta",
+            "createdAt": "created_at",
+        },
+    )
+    if record.meta is None and "meta" in doc:
+        record.meta = json.dumps(doc.get("meta"), ensure_ascii=False)
+    return record
+
+
+def guardrails_log_to_mongo_doc(log: GuardrailsLog) -> dict[str, Any]:
+    return {
+        "mysqlId": log.id,
+        "farmId": log.farm_id,
+        "triggerType": log.trigger_type,
+        "triggerDetail": log.trigger_detail,
+        "sourceText": log.source_text,
+        "sourceTextHash": _sha256_text(log.source_text),
+        "createdAt": log.created_at,
+    }
+
+
+def guardrails_log_from_mongo_doc(doc: Mapping[str, Any]) -> GuardrailsLog:
+    return _model_from_doc(
+        GuardrailsLog,
+        doc,
+        {
+            "farmId": "farm_id",
+            "triggerType": "trigger_type",
+            "triggerDetail": "trigger_detail",
+            "sourceText": "source_text",
+            "createdAt": "created_at",
+        },
     )
 
 

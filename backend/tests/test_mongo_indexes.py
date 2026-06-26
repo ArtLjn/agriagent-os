@@ -1,5 +1,6 @@
 """MongoDB 索引初始化脚本测试。"""
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -29,7 +30,7 @@ class FakeDatabase:
 
 
 @pytest.mark.no_db
-def test_mongo_index_plan_contains_phase_one_collections_and_tenant_indexes():
+def test_mongo_index_plan_contains_document_collections_and_tenant_indexes():
     from scripts.init_mongo_indexes import get_index_plan
 
     plan = get_index_plan()
@@ -40,6 +41,9 @@ def test_mongo_index_plan_contains_phase_one_collections_and_tenant_indexes():
         "repairPacks",
         "reviewIssueChains",
         "prelabels",
+        "conversationMessages",
+        "agentRecords",
+        "guardrailsLogs",
     }
 
     for indexes in plan.values():
@@ -84,6 +88,55 @@ def test_mongo_index_plan_contains_phase_one_collections_and_tenant_indexes():
         index.keys == (("sampleId", 1), ("source", 1)) for index in plan["prelabels"]
     )
 
+    assert any(
+        index.keys
+        == (
+            ("farmId", 1),
+            ("conversationId", 1),
+            ("createdAt", 1),
+            ("mysqlId", 1),
+        )
+        for index in plan["conversationMessages"]
+    )
+    assert any(
+        index.keys
+        == (("farmId", 1), ("sessionId", 1), ("createdAt", 1), ("mysqlId", 1))
+        for index in plan["conversationMessages"]
+    )
+    assert any(
+        index.keys == (("farmId", 1), ("turnId", 1))
+        for index in plan["conversationMessages"]
+    )
+
+    assert any(
+        index.keys == (("farmId", 1), ("recordType", 1), ("createdAt", -1))
+        for index in plan["agentRecords"]
+    )
+    assert any(
+        index.keys
+        == (
+            ("farmId", 1),
+            ("cycleId", 1),
+            ("recordType", 1),
+            ("createdAt", -1),
+        )
+        for index in plan["agentRecords"]
+    )
+    assert any(
+        index.keys == (("farmId", 1), ("conversationId", 1), ("createdAt", -1))
+        for index in plan["agentRecords"]
+    )
+
+    guardrails_indexes = plan["guardrailsLogs"]
+    assert any(
+        index.keys == (("farmId", 1), ("triggerType", 1), ("createdAt", -1))
+        for index in guardrails_indexes
+    )
+    assert any(index.keys == (("sourceTextHash", 1),) for index in guardrails_indexes)
+    assert all(
+        "expireAfterSeconds" not in index.options for index in guardrails_indexes
+    )
+
 
 @pytest.mark.no_db
 @pytest.mark.asyncio
@@ -118,11 +171,14 @@ def test_dry_run_index_plan_is_stable_and_has_named_indexes():
 
 @pytest.mark.no_db
 def test_script_non_dry_run_reports_disabled_mongo_instead_of_import_error():
+    env = os.environ.copy()
+    env["MONGODB__ENABLED"] = "false"
     result = subprocess.run(
         [sys.executable, "scripts/init_mongo_indexes.py"],
         capture_output=True,
         check=False,
         cwd=BACKEND_DIR,
+        env=env,
         text=True,
     )
 

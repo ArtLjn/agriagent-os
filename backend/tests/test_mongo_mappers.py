@@ -10,6 +10,9 @@ from app.models.data_flywheel import (
     AgentRepairPack,
     AgentReviewIssueChain,
 )
+from app.models.agent_record import AgentRecord
+from app.models.conversation import Conversation, ConversationMessage
+from app.models.guardrails_log import GuardrailsLog
 from app.models.trace import TraceRecord
 
 
@@ -226,6 +229,76 @@ def test_data_flywheel_mappers_preserve_business_ids_and_json_documents():
     assert restored_prelabel.id == 204
     assert restored_prelabel.raw_response == {"choices": [{"text": "bad"}]}
     assert restored_prelabel.reviewed_at == reviewed_at
+
+
+@pytest.mark.no_db
+def test_phase_two_online_document_mappers_preserve_mysql_ids_and_legacy_meta():
+    from app.infra.mongo_mappers import (
+        agent_record_from_mongo_doc,
+        agent_record_to_mongo_doc,
+        conversation_message_from_mongo_doc,
+        conversation_message_to_mongo_doc,
+        guardrails_log_from_mongo_doc,
+        guardrails_log_to_mongo_doc,
+    )
+
+    created_at = datetime(2026, 6, 26, 13, 0, 0)
+    conversation = Conversation(id=10, farm_id=7, session_id="sess-1")
+    message = ConversationMessage(
+        id=301,
+        conversation_id=10,
+        role="assistant",
+        content="已完成",
+        meta='{"skills": ["crop-cycle"]}',
+        turn_id=88,
+        created_at=created_at,
+    )
+    message.conversation = conversation
+    record = AgentRecord(
+        id=302,
+        farm_id=7,
+        user_id="user-1",
+        conversation_id=10,
+        cycle_id=12,
+        record_type="daily",
+        content="{}",
+        meta="not-json",
+        created_at=created_at,
+    )
+    log = GuardrailsLog(
+        id=303,
+        farm_id=7,
+        trigger_type="input_injection",
+        trigger_detail="blocked",
+        source_text="secret text",
+        created_at=created_at,
+    )
+
+    message_doc = conversation_message_to_mongo_doc(message)
+    record_doc = agent_record_to_mongo_doc(record)
+    log_doc = guardrails_log_to_mongo_doc(log)
+
+    assert message_doc["mysqlId"] == 301
+    assert message_doc["farmId"] == 7
+    assert message_doc["sessionId"] == "sess-1"
+    assert message_doc["meta"] == {"skills": ["crop-cycle"]}
+    assert message_doc["legacyMetaText"] is None
+    assert record_doc["mysqlId"] == 302
+    assert record_doc["meta"] is None
+    assert record_doc["legacyMetaText"] == "not-json"
+    assert log_doc["mysqlId"] == 303
+    assert log_doc["sourceTextHash"]
+
+    restored_message = conversation_message_from_mongo_doc(message_doc)
+    restored_record = agent_record_from_mongo_doc(record_doc)
+    restored_log = guardrails_log_from_mongo_doc(log_doc)
+
+    assert restored_message.id == 301
+    assert restored_message.meta_json == {"skills": ["crop-cycle"]}
+    assert restored_record.id == 302
+    assert restored_record.meta == "not-json"
+    assert restored_log.id == 303
+    assert restored_log.source_text == "secret text"
 
 
 @pytest.mark.no_db

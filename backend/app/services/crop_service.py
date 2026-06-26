@@ -5,7 +5,10 @@ from typing import Iterable, Protocol
 
 from sqlalchemy.orm import Session
 
-from app.models.agent_record import AgentRecord
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.models.cost import CostRecord
 from app.models.crop import CropTemplate, GrowthStage
 from app.models.cycle import CropCycle
@@ -285,8 +288,8 @@ def delete_crop_template(db: Session, template_id: int, farm_id: int) -> None:
         db.query(CropCycle).filter(CropCycle.crop_template_id == template_id).all()
     )
     for cycle in related_cycles:
-        db.query(AgentRecord).filter(AgentRecord.cycle_id == cycle.id).update(
-            {"cycle_id": None}, synchronize_session=False
+        run_maybe_awaitable(
+            get_agent_record_repository(db).clear_cycle_reference(cycle_id=cycle.id)
         )
         db.query(FarmLog).filter(FarmLog.cycle_id == cycle.id).delete(
             synchronize_session=False

@@ -8,6 +8,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.infra.repository_runtime import (
+    get_conversation_message_repository,
+    run_maybe_awaitable,
+)
 from app.models.conversation import (
     Conversation,
     ConversationMessage,
@@ -94,15 +98,17 @@ def save_message(
     meta: str | None = None,
 ) -> ConversationMessage:
     """持久化单条消息并更新会话最后活跃时间。"""
+    conversation = db.get(Conversation, conversation_id)
     msg = ConversationMessage(
         conversation_id=conversation_id,
         role=role,
         content=content,
         meta=meta,
     )
-    db.add(msg)
-    db.commit()
-    db.refresh(msg)
+    if conversation is not None:
+        msg.conversation = conversation
+    repo = get_conversation_message_repository(db)
+    msg = run_maybe_awaitable(repo.save_one(msg))
 
     # 更新会话最后活跃时间
     db.query(Conversation).filter(Conversation.id == conversation_id).update(
@@ -122,6 +128,7 @@ def save_messages_batch(
     messages: list[dict[str, Any]],
 ) -> list[ConversationMessage]:
     """在一次事务中保存多条消息并更新会话活跃时间。"""
+    conversation = db.get(Conversation, conversation_id)
     rows: list[ConversationMessage] = []
     for item in messages:
         meta_json = item.get("meta_json")
@@ -137,15 +144,15 @@ def save_messages_batch(
             content_hash=_content_hash(item["content"]),
             meta_json=meta_json,
         )
-        db.add(row)
+        if conversation is not None:
+            row.conversation = conversation
         rows.append(row)
-    db.flush()
+    repo = get_conversation_message_repository(db)
+    rows = run_maybe_awaitable(repo.save_batch(rows))
     db.query(Conversation).filter(Conversation.id == conversation_id).update(
         {"last_active_at": datetime.now()}
     )
     db.commit()
-    for row in rows:
-        db.refresh(row)
     return rows
 
 
@@ -153,13 +160,17 @@ def get_recent_messages(
     db: Session, conversation_id: int, limit: int = _MAX_INJECT_MESSAGES
 ) -> list[ConversationMessage]:
     """获取最近 N 条消息，按创建时间正序排列。"""
-    return (
-        db.query(ConversationMessage)
-        .filter(ConversationMessage.conversation_id == conversation_id)
-        .order_by(ConversationMessage.created_at.desc(), ConversationMessage.id.desc())
-        .limit(limit)
-        .all()
-    )[::-1]
+    conversation = db.get(Conversation, conversation_id)
+    if conversation is None:
+        return []
+    repo = get_conversation_message_repository(db)
+    return run_maybe_awaitable(
+        repo.get_recent(
+            farm_id=conversation.farm_id,
+            conversation_id=conversation_id,
+            limit=limit,
+        )
+    )
 
 
 def list_conversations(
@@ -192,11 +203,9 @@ def get_conversation_messages(
     conv = get_conversation_by_session(db, session_id, farm_id=farm_id)
     if not conv:
         return []
-    return (
-        db.query(ConversationMessage)
-        .filter(ConversationMessage.conversation_id == conv.id)
-        .order_by(ConversationMessage.created_at.asc(), ConversationMessage.id.asc())
-        .all()
+    repo = get_conversation_message_repository(db)
+    return run_maybe_awaitable(
+        repo.list_by_session(farm_id=conv.farm_id, session_id=session_id)
     )
 
 

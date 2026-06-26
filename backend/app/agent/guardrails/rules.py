@@ -104,13 +104,15 @@ def cleanup_old_logs(db=None, days: int = 30) -> None:
     try:
         from datetime import datetime, timedelta
 
-        from app.models.guardrails_log import GuardrailsLog
+        from app.infra.repository_runtime import (
+            get_guardrails_log_repository,
+            run_maybe_awaitable,
+        )
 
         cutoff = datetime.now() - timedelta(days=days)
-        db.query(GuardrailsLog).filter(GuardrailsLog.created_at < cutoff).delete(
-            synchronize_session=False
+        run_maybe_awaitable(
+            get_guardrails_log_repository(db).cleanup_before(cutoff=cutoff)
         )
-        db.commit()
         logger.info("Guardrails 日志清理完成 | cutoff=%s", cutoff)
     except Exception:
         logger.exception("Guardrails 日志清理失败")

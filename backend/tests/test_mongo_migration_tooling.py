@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from app.models.conversation import Conversation, ConversationMessage
 from app.models.data_flywheel import AgentRepairPack
+from app.models.farm import Farm
+from app.models.user import User
 
 
 class FakeCursor:
@@ -74,6 +77,48 @@ def _repair_pack(**overrides) -> AgentRepairPack:
     }
     values.update(overrides)
     return AgentRepairPack(**values)
+
+
+@pytest.mark.no_db
+def test_table_names_include_phase_two_online_document_tables():
+    from scripts.migrate_mysql_to_mongo import table_names
+
+    assert "conversation_messages" in table_names()
+    assert "agent_records" in table_names()
+    assert "guardrails_logs" in table_names()
+
+
+@pytest.mark.asyncio
+async def test_backfill_conversation_messages_joins_conversation_for_farm_and_session(
+    db_session,
+):
+    from scripts.migrate_mysql_to_mongo import backfill_table
+
+    db_session.add(
+        User(id="user-1", phone="13900000007", password_hash="x", nickname="测试用户")
+    )
+    db_session.add(Farm(id=7, name="迁移测试农场", user_id="user-1"))
+    db_session.flush()
+    conversation = Conversation(farm_id=7, session_id="sess-1", user_id="user-1")
+    db_session.add(conversation)
+    db_session.flush()
+    db_session.add(
+        ConversationMessage(
+            conversation_id=conversation.id,
+            role="assistant",
+            content="hello",
+            meta='{"skills": []}',
+        )
+    )
+    db_session.commit()
+    database = FakeDatabase({"conversationMessages": FakeCollection()})
+
+    stats = await backfill_table(db_session, database, table="conversation_messages")
+
+    assert stats.written == 1
+    _filter_doc, doc, _upsert = database["conversationMessages"].replacements[0]
+    assert doc["farmId"] == 7
+    assert doc["sessionId"] == "sess-1"
 
 
 @pytest.mark.asyncio

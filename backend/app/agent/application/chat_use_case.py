@@ -19,6 +19,10 @@ from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.llm import LlmNotConfiguredError
 from app.core.database import SessionLocal
 from app.core.logger import request_id_var
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.memory.service import get_memory_service
 from app.models.agent_record import AgentRecord
 from app.models.conversation import Conversation
@@ -110,9 +114,8 @@ async def chat(
         user_id=farm.user_id,
         conversation_id=conversation.id if conversation else None,
     )
-    db.add(record)
     try:
-        db.commit()
+        record = run_maybe_awaitable(get_agent_record_repository(db).create(record))
     except Exception:
         db.rollback()
         raise
@@ -468,6 +471,5 @@ def _save_stream_reply(
         user_id=user.id,
         conversation_id=conversation.id if conversation else None,
     )
-    db.add(record)
-    db.commit()
+    run_maybe_awaitable(get_agent_record_repository(db).create(record))
     return conversation

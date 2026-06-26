@@ -24,6 +24,9 @@ def test_mongo_config_defaults_disable_client_and_keep_mysql_backends():
     assert settings.storage.repair_packs == "mysql"
     assert settings.storage.review_issue_chains == "mysql"
     assert settings.storage.prelabels == "mysql"
+    assert settings.storage.conversation_messages == "mysql"
+    assert settings.storage.agent_records == "mysql"
+    assert settings.storage.guardrails_logs == "mysql"
     assert settings.storage.mongo_write_failure_rate_threshold == 0.001
     assert settings.storage.mongo_read_error_rate_threshold == 0.01
     assert settings.storage.mongo_consistency_mismatch_rate_threshold == 0.0001
@@ -51,6 +54,9 @@ def test_mongo_and_storage_config_load_from_yaml(tmp_path):
                     "repair_packs": "mongo",
                     "review_issue_chains": "mysql",
                     "prelabels": "dual",
+                    "conversation_messages": "dual",
+                    "agent_records": "mongo-read",
+                    "guardrails_logs": "mongo",
                     "mongo_write_failure_rate_threshold": 0.002,
                     "mongo_read_error_rate_threshold": 0.02,
                     "mongo_consistency_mismatch_rate_threshold": 0.0002,
@@ -75,6 +81,9 @@ def test_mongo_and_storage_config_load_from_yaml(tmp_path):
     assert settings.storage.repair_packs == "mongo"
     assert settings.storage.review_issue_chains == "mysql"
     assert settings.storage.prelabels == "dual"
+    assert settings.storage.conversation_messages == "dual"
+    assert settings.storage.agent_records == "mongo-read"
+    assert settings.storage.guardrails_logs == "mongo"
     assert settings.storage.mongo_write_failure_rate_threshold == 0.002
     assert settings.storage.mongo_read_error_rate_threshold == 0.02
     assert settings.storage.mongo_consistency_mismatch_rate_threshold == 0.0002

@@ -1,4 +1,4 @@
-"""初始化第 1 期 MongoDB 集合索引。"""
+"""初始化 MongoDB 集合索引。"""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def _index(
 
 
 def get_index_plan() -> IndexPlan:
-    """返回五个集合的稳定索引计划。"""
+    """返回 MongoDB 文档集合的稳定索引计划。"""
     return {
         "traceRecords": (
             _index((("mysqlId", 1),), "uniq_trace_records_mysql_id", unique=True),
@@ -149,6 +149,66 @@ def get_index_plan() -> IndexPlan:
                 "idx_prelabels_judge_model_prompt_version",
             ),
         ),
+        "conversationMessages": (
+            _index(
+                (("mysqlId", 1),),
+                "uniq_conversation_messages_mysql_id",
+                unique=True,
+            ),
+            _index(
+                (
+                    ("farmId", 1),
+                    ("conversationId", 1),
+                    ("createdAt", 1),
+                    ("mysqlId", 1),
+                ),
+                "idx_conversation_messages_farm_conversation_timeline",
+            ),
+            _index(
+                (("farmId", 1), ("sessionId", 1), ("createdAt", 1), ("mysqlId", 1)),
+                "idx_conversation_messages_farm_session_timeline",
+            ),
+            _index(
+                (("farmId", 1), ("turnId", 1)),
+                "idx_conversation_messages_farm_turn_id",
+            ),
+            _index((("contentHash", 1),), "idx_conversation_messages_content_hash"),
+        ),
+        "agentRecords": (
+            _index((("mysqlId", 1),), "uniq_agent_records_mysql_id", unique=True),
+            _index(
+                (("farmId", 1), ("recordType", 1), ("createdAt", -1)),
+                "idx_agent_records_farm_record_type_created_at",
+            ),
+            _index(
+                (
+                    ("farmId", 1),
+                    ("cycleId", 1),
+                    ("recordType", 1),
+                    ("createdAt", -1),
+                ),
+                "idx_agent_records_farm_cycle_record_type_created_at",
+            ),
+            _index(
+                (("farmId", 1), ("conversationId", 1), ("createdAt", -1)),
+                "idx_agent_records_farm_conversation_created_at",
+            ),
+            _index(
+                (("userId", 1), ("createdAt", -1)), "idx_agent_records_user_created_at"
+            ),
+        ),
+        "guardrailsLogs": (
+            _index((("mysqlId", 1),), "uniq_guardrails_logs_mysql_id", unique=True),
+            _index(
+                (("farmId", 1), ("createdAt", -1)),
+                "idx_guardrails_logs_farm_created_at",
+            ),
+            _index(
+                (("farmId", 1), ("triggerType", 1), ("createdAt", -1)),
+                "idx_guardrails_logs_farm_trigger_type_created_at",
+            ),
+            _index((("sourceTextHash", 1),), "idx_guardrails_logs_source_text_hash"),
+        ),
     }
 
 
@@ -225,7 +285,7 @@ async def _run(dry_run: bool) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="初始化第 1 期 MongoDB 集合索引")
+    parser = argparse.ArgumentParser(description="初始化 MongoDB 集合索引")
     parser.add_argument(
         "--dry-run", action="store_true", help="仅输出索引计划，不连接 MongoDB"
     )

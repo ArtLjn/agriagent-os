@@ -1,8 +1,8 @@
-# MongoDB 第 1 期迁移 Runbook
+# MongoDB 迁移 Runbook
 
 ## 范围
 
-本次只迁移以下五类高 JSON 密度对象：
+第 1 期迁移以下五类高 JSON 密度对象：
 
 - `trace_records` -> `traceRecords`
 - `agent_case_drafts` -> `caseDrafts`
@@ -10,7 +10,13 @@
 - `agent_review_issue_chains` -> `reviewIssueChains`
 - `agent_data_flywheel_prelabels` -> `prelabels`
 
-不迁移对话消息、`agent_turns.rule_hits`、`agent_records`、`guardrails_logs`。
+第 2 期迁移以下三类在线追加对象：
+
+- `conversation_messages` -> `conversationMessages`
+- `agent_records` -> `agentRecords`
+- `guardrails_logs` -> `guardrailsLogs`
+
+第 2 期不迁移 `agent_turns.rule_hits`，只保留拆分迁移评估；不迁移 `conversations`、`feedback_records`、`token_daily_stats` 和 `agent_data_flywheel_labels`。
 
 ## 前置检查
 
@@ -34,6 +40,9 @@ storage:
   repair_packs: "mysql"
   review_issue_chains: "mysql"
   prelabels: "mysql"
+  conversation_messages: "mysql"
+  agent_records: "mysql"
+  guardrails_logs: "mysql"
 ```
 
 逐类切换顺序：
@@ -53,12 +62,18 @@ python scripts/migrate_mysql_to_mongo.py backfill --table agent_case_drafts --ba
 python scripts/migrate_mysql_to_mongo.py backfill --table agent_repair_packs --batch-size 500
 python scripts/migrate_mysql_to_mongo.py backfill --table agent_review_issue_chains --batch-size 500
 python scripts/migrate_mysql_to_mongo.py backfill --table agent_data_flywheel_prelabels --batch-size 500
+python scripts/migrate_mysql_to_mongo.py backfill --table guardrails_logs --batch-size 500
+python scripts/migrate_mysql_to_mongo.py backfill --table agent_records --batch-size 500
+python scripts/migrate_mysql_to_mongo.py backfill --table conversation_messages --batch-size 500
 ```
 
 一致性校验：
 
 ```bash
 python scripts/migrate_mysql_to_mongo.py verify --table trace_records --report reports/mongo-trace-verify.json
+python scripts/migrate_mysql_to_mongo.py verify --table guardrails_logs --mismatch-threshold 0
+python scripts/migrate_mysql_to_mongo.py verify --table agent_records --mismatch-threshold 0
+python scripts/migrate_mysql_to_mongo.py verify --table conversation_messages --mismatch-threshold 0
 ```
 
 校验不一致率超过 `storage.mongo_consistency_mismatch_rate_threshold` 时脚本返回非零退出码，禁止继续切到 `mongo-read` 或 `mongo`。
@@ -66,6 +81,14 @@ python scripts/migrate_mysql_to_mongo.py verify --table trace_records --report r
 ## 补偿重放
 
 双写失败会写入 `mongo_compensation_tasks`。重放服务入口在 `app.infra.mongo_compensation.MongoCompensationReplayService`，通过 MySQL source of truth 重新加载对象并幂等写入 Mongo。
+
+第 2 期回填校验结果：
+
+| 表 | MySQL 数量 | Mongo 数量 | 缺失 | 不一致 |
+| --- | ---: | ---: | ---: | ---: |
+| `guardrails_logs` | 0 | 0 | 0 | 0 |
+| `agent_records` | 221 | 221 | 0 | 0 |
+| `conversation_messages` | 308 | 308 | 0 | 0 |
 
 ## 回滚
 
@@ -75,6 +98,7 @@ python scripts/migrate_mysql_to_mongo.py verify --table trace_records --report r
 
 ```bash
 python scripts/migrate_mysql_to_mongo.py reverse-sync --table agent_repair_packs --limit 100
+python scripts/migrate_mysql_to_mongo.py reverse-sync --table conversation_messages --limit 100
 ```
 
 ## 回滚阈值
@@ -87,3 +111,10 @@ python scripts/migrate_mysql_to_mongo.py reverse-sync --table agent_repair_packs
 ## 多租户要求
 
 Mongo Repository 的业务查询必须接收 `farm_id` 并在实际 filter 中包含 `farmId`。迁移脚本是唯一允许按 `mysqlId` 批处理的入口。
+
+## 第 2 期清理策略
+
+- 不删除 MySQL 表，不关闭 MySQL 写入。
+- `conversation_messages` 和 `agent_records` 在双写、切读观察期完整保留 MySQL 数据。
+- `guardrails_logs` 可继续按既有 30 天应用层清理策略删除过期行；Mongo 侧暂不创建 TTL 索引，避免与应用清理策略叠加造成不可审计差异。
+- 灰度顺序为 `guardrails_logs -> agent_records -> conversation_messages`。

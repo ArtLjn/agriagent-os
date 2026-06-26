@@ -1,4 +1,4 @@
-"""MySQL 与 MongoDB 第 1 期文档迁移工具。"""
+"""MySQL 与 MongoDB 文档迁移工具。"""
 
 # ruff: noqa: E402
 
@@ -17,24 +17,30 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.infra.mongo import create_mongo_client
 from app.infra.mongo_mappers import (
+    agent_record_to_mongo_doc,
     case_draft_to_mongo_doc,
+    conversation_message_to_mongo_doc,
+    guardrails_log_to_mongo_doc,
     prelabel_to_mongo_doc,
     repair_pack_to_mongo_doc,
     review_issue_chain_to_mongo_doc,
     trace_record_to_mongo_doc,
 )
+from app.models.agent_record import AgentRecord
+from app.models.conversation import ConversationMessage
 from app.models.data_flywheel import (
     AgentCaseDraft,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,
     AgentReviewIssueChain,
 )
+from app.models.guardrails_log import GuardrailsLog
 from app.models.trace import TraceRecord
 
 
@@ -82,6 +88,24 @@ TABLE_PLANS: dict[str, TablePlan] = {
         prelabel_to_mongo_doc,
         "sampleId",
         "status",
+    ),
+    "conversation_messages": TablePlan(
+        ConversationMessage,
+        "conversationMessages",
+        conversation_message_to_mongo_doc,
+        "conversationId",
+    ),
+    "agent_records": TablePlan(
+        AgentRecord,
+        "agentRecords",
+        agent_record_to_mongo_doc,
+        "recordType",
+    ),
+    "guardrails_logs": TablePlan(
+        GuardrailsLog,
+        "guardrailsLogs",
+        guardrails_log_to_mongo_doc,
+        "triggerType",
     ),
 }
 
@@ -261,6 +285,8 @@ def _next_batch(
     until: datetime | None,
 ) -> list[Any]:
     query = db.query(plan.model).filter(plan.model.id > last_id)
+    if plan.model is ConversationMessage:
+        query = query.options(joinedload(ConversationMessage.conversation))
     if end_id is not None:
         query = query.filter(plan.model.id <= end_id)
     if since is not None and hasattr(plan.model, "created_at"):
@@ -303,7 +329,7 @@ def _sample_mismatches(
         doc = mongo_by_id.get(mysql_id)
         if doc is None:
             continue
-        row = db.get(plan.model, mysql_id)
+        row = _get_row_for_mapper(db, plan, mysql_id)
         if row is None:
             continue
         expected = _key_fields(plan.mapper(row), plan)
@@ -320,6 +346,17 @@ def _key_fields(doc: dict[str, Any], plan: TablePlan) -> dict[str, Any]:
     if plan.status_field:
         keys.append(plan.status_field)
     return {key: _json_normalized(doc.get(key)) for key in keys}
+
+
+def _get_row_for_mapper(db: Session, plan: TablePlan, mysql_id: int) -> Any | None:
+    if plan.model is ConversationMessage:
+        return (
+            db.query(ConversationMessage)
+            .options(joinedload(ConversationMessage.conversation))
+            .filter(ConversationMessage.id == mysql_id)
+            .first()
+        )
+    return db.get(plan.model, mysql_id)
 
 
 def _json_normalized(value: Any) -> Any:
@@ -393,7 +430,7 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="MySQL 与 MongoDB 第 1 期迁移工具")
+    parser = argparse.ArgumentParser(description="MySQL 与 MongoDB 文档迁移工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     backfill = subparsers.add_parser("backfill", help="从 MySQL 幂等回填到 MongoDB")

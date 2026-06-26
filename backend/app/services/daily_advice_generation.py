@@ -14,6 +14,10 @@ from app.agent.reflector.daily_advice import check_daily_advice_generation
 from app.agent.reflector.models import ReflectionDecision, ReflectionResult
 from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES
 from app.core.json_repair import safe_parse_json
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.models.agent_record import AgentRecord
 from app.schemas.agent import DailyAdviceGeneration, DailyAdviceResponse
 from app.services.daily_advice_models import (
@@ -117,15 +121,11 @@ def _load_matching_cache(
     today_start: datetime,
     candidate_fingerprint: str,
 ) -> DailyAdviceResponse | None:
-    cached = (
-        db.query(AgentRecord)
-        .filter(
-            AgentRecord.farm_id == farm_id,
-            AgentRecord.record_type == "daily",
-            AgentRecord.created_at >= today_start,
+    cached = run_maybe_awaitable(
+        get_agent_record_repository(db).find_daily_cache(
+            farm_id=farm_id,
+            since=today_start,
         )
-        .order_by(AgentRecord.created_at.desc())
-        .first()
     )
     if cached is None:
         return None
@@ -142,7 +142,9 @@ def _load_matching_cache(
         payload = safe_parse_json(cached.content)
         response = DailyAdviceResponse.model_validate(payload)
     except (TypeError, ValueError) as exc:
-        logger.warning("忽略无法解析的 v2 今日建议缓存 | record_id=%s error=%s", cached.id, exc)
+        logger.warning(
+            "忽略无法解析的 v2 今日建议缓存 | record_id=%s error=%s", cached.id, exc
+        )
         return None
 
     response.items = _limit_homepage_items(response.items)
@@ -187,7 +189,9 @@ async def _run_generation_attempts(
         try:
             payload, parse_repair_instruction = _parse_llm_payload(raw)
         except _DailyAdvicePayloadTruncated as exc:
-            logger.warning("DailyAdvice v2 JSON 明显截断，直接进入 fallback | error=%s", exc)
+            logger.warning(
+                "DailyAdvice v2 JSON 明显截断，直接进入 fallback | error=%s", exc
+            )
             validation_errors.append("llm_json_truncated")
             break
         if payload is None:
@@ -281,7 +285,9 @@ def _parse_llm_payload(raw: str) -> tuple[dict[str, Any] | None, str]:
     except ValueError as exc:
         if _looks_like_truncated_json(text):
             raise _DailyAdvicePayloadTruncated(str(exc)) from exc
-        logger.warning("DailyAdvice v2 JSON 解析失败，将进入 fallback/retry | error=%s", exc)
+        logger.warning(
+            "DailyAdvice v2 JSON 解析失败，将进入 fallback/retry | error=%s", exc
+        )
         return None, _build_json_parse_repair_instruction(exc)
     return (parsed, "") if isinstance(parsed, dict) else (None, "")
 
@@ -399,10 +405,8 @@ def _save_daily_advice_record(
         farm_id=farm_id,
         meta=json.dumps(meta, ensure_ascii=False),
     )
-    db.add(record)
     try:
-        db.commit()
-        db.refresh(record)
+        record = run_maybe_awaitable(get_agent_record_repository(db).create(record))
     except Exception:
         db.rollback()
         raise

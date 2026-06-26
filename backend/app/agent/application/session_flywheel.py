@@ -7,6 +7,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.infra.agent_events import AgentEventWriter
+from app.infra.repository_runtime import (
+    get_conversation_message_repository,
+    run_maybe_awaitable,
+)
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import save_message
 
@@ -94,6 +98,9 @@ class SessionFlywheelRecorder:
         if user_row is not None:
             user_row.turn_id = turn.id
             db.commit()
+            run_maybe_awaitable(
+                get_conversation_message_repository(db).save_one(user_row)
+            )
         event = self._writer.write(
             event_type="message.user",
             farm_id=farm_id,
@@ -162,6 +169,9 @@ class SessionFlywheelRecorder:
             assistant_row.meta_json = meta
             db.commit()
             db.refresh(assistant_row)
+            run_maybe_awaitable(
+                get_conversation_message_repository(db).save_one(assistant_row)
+            )
         event = self._writer.write(
             event_type="message.assistant",
             farm_id=turn.farm_id,
@@ -195,6 +205,9 @@ class SessionFlywheelRecorder:
                 "event_seq_range": [seq_start, seq_end],
             }
             db.commit()
+            run_maybe_awaitable(
+                get_conversation_message_repository(db).save_one(assistant_row)
+            )
         finish_turn(
             db,
             turn.id,

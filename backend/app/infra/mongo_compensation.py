@@ -138,12 +138,28 @@ class MongoCompensationReplayService:
                 farm_id=task.farm_id,
                 chain_id=str(task.business_id),
             )
+        if task.object_type == "conversation_message":
+            if task.mysql_id is None:
+                return None
+            return repo.get_by_mysql_id(farm_id=task.farm_id, mysql_id=task.mysql_id)
+        if task.object_type == "agent_record":
+            rows = repo.list_advice_history(farm_id=task.farm_id, limit=1000)
+            row = _match_mysql_id(rows, task.mysql_id)
+            if row is not None:
+                return row
+            rows = repo.list_report_history(farm_id=task.farm_id, limit=1000)
+            return _match_mysql_id(rows, task.mysql_id)
+        if task.object_type == "guardrails_log":
+            page = repo.list_admin_page(trigger_type=None, page=1, size=1000)
+            return _match_mysql_id(page.items, task.mysql_id)
         raise ValueError(f"unsupported_object_type:{task.object_type}")
 
     async def _write_mongo(self, task: MongoCompensationTask, row: Any) -> None:
         repo = self._mongo_repositories[task.object_type]
         operation = task.operation or DEFAULT_OPERATION
         method_name = "save" if task.object_type == "review_issue_chain" else operation
+        if task.object_type == "conversation_message" and method_name == "create":
+            method_name = "save_one"
         method = getattr(repo, method_name)
         await method(row)
 

@@ -5,11 +5,15 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, update
+from sqlalchemy import update
 
 from app.agent.llm import get_llm
 from app.core.compat import UTC
 from app.core.config import settings
+from app.infra.repository_runtime import (
+    get_conversation_message_repository,
+    run_maybe_awaitable,
+)
 from app.infra.trace_collector import get_collector
 from app.memory.consolidation import InMemoryObservationEventSink
 from app.memory.long_term import EmptyLongTermMemoryStore
@@ -17,7 +21,7 @@ from app.memory.models import MemoryContext, MemoryHit, MemoryMessage
 from app.memory.retrieval import EmptyMemoryRetrievalStore
 from app.memory.schemas import MemoryObservationEvent, MemorySearchQuery
 from app.memory.short_term import InMemoryShortTermMemory
-from app.models.conversation import Conversation, ConversationMessage
+from app.models.conversation import Conversation
 from app.observability.metrics import increment_counter
 
 TraceRecorder = Callable[..., None]
@@ -157,12 +161,13 @@ class InMemoryMemoryService:
                 )
                 return
 
-            message_count = (
-                db.query(func.count(ConversationMessage.id))
-                .filter(ConversationMessage.conversation_id == conversation_id)
-                .scalar()
-                or 0
+            summary_messages = _load_summary_messages(
+                db=db,
+                farm_id=farm_id,
+                session_id=conversation.session_id,
+                fallback_messages=messages,
             )
+            message_count = len(summary_messages)
             if message_count < settings.ai.session_summary_message_threshold:
                 self._record_summary_skipped_trace(
                     farm_id=farm_id,
@@ -186,11 +191,6 @@ class InMemoryMemoryService:
                 )
                 return
 
-            summary_messages = _load_summary_messages(
-                db=db,
-                conversation_id=conversation_id,
-                fallback_messages=messages,
-            )
             _log_summary_event(
                 "会话摘要开始生成",
                 code="MEMORY_SUMMARY_STARTED",
@@ -394,14 +394,15 @@ def _as_aware_utc(value: datetime) -> datetime:
 def _load_summary_messages(
     *,
     db,
-    conversation_id: int,
+    farm_id: int,
+    session_id: str,
     fallback_messages: list[Any] | None,
 ) -> list[Any]:
-    stored_messages = (
-        db.query(ConversationMessage)
-        .filter(ConversationMessage.conversation_id == conversation_id)
-        .order_by(ConversationMessage.id.asc())
-        .all()
+    stored_messages = run_maybe_awaitable(
+        get_conversation_message_repository(db).list_by_session(
+            farm_id=farm_id,
+            session_id=session_id,
+        )
     )
     return stored_messages or list(fallback_messages or [])
 

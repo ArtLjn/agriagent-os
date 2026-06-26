@@ -5,6 +5,10 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.infra.repository_runtime import (
+    get_conversation_message_repository,
+    run_maybe_awaitable,
+)
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import ConversationMessage
 from app.models.trace import TraceRecord
@@ -225,11 +229,21 @@ def _message_rows(db: Session, turn: AgentTurn) -> list[ConversationMessage]:
     ]
     if not message_ids:
         return []
-    return (
-        db.query(ConversationMessage)
-        .filter(ConversationMessage.id.in_(message_ids))
-        .all()
+    repo = get_conversation_message_repository(db)
+    rows = run_maybe_awaitable(
+        repo.list_by_turn_ids(farm_id=turn.farm_id, turn_ids=[turn.id])
     )
+    rows_by_id = {row.id: row for row in rows}
+    result: list[ConversationMessage] = []
+    for message_id in message_ids:
+        row = rows_by_id.get(message_id)
+        if row is None:
+            row = run_maybe_awaitable(
+                repo.get_by_mysql_id(farm_id=turn.farm_id, mysql_id=message_id)
+            )
+        if row is not None:
+            result.append(row)
+    return result
 
 
 def next_action(evidence_status_value: str) -> str:

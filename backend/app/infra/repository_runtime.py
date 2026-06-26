@@ -12,6 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.infra.mongo import get_mongo_database
 from app.infra.mongo_compensation import MongoCompensationRecorder
+from app.infra.online_document_repositories import (
+    build_agent_record_repository,
+    build_conversation_message_repository,
+    build_guardrails_log_repository,
+)
 from app.infra.trace_repository import build_trace_repository
 from app.modules.data_flywheel.document_repositories import (
     build_data_flywheel_repository,
@@ -23,6 +28,9 @@ COLLECTION_NAMES = {
     "repair_packs": "repairPacks",
     "review_issue_chains": "reviewIssueChains",
     "prelabels": "prelabels",
+    "conversation_messages": "conversationMessages",
+    "agent_records": "agentRecords",
+    "guardrails_logs": "guardrailsLogs",
 }
 
 
@@ -66,6 +74,42 @@ def get_data_flywheel_repository(db: Session, object_name: str) -> Any:
         db,
         collection=collection,
         on_secondary_failure=MongoCompensationRecorder(db).record_failure,
+    )
+
+
+def get_conversation_message_repository(db: Session) -> Any:
+    """按配置创建 ConversationMessage Repository。"""
+    backend = settings.storage.conversation_messages
+    collection = _collection_for_backend(backend, "conversation_messages")
+    return build_conversation_message_repository(
+        backend,
+        db,
+        collection=collection,
+        hook=MongoCompensationRecorder(db).record_failure,
+    )
+
+
+def get_agent_record_repository(db: Session) -> Any:
+    """按配置创建 AgentRecord Repository。"""
+    backend = settings.storage.agent_records
+    collection = _collection_for_backend(backend, "agent_records")
+    return build_agent_record_repository(
+        backend,
+        db,
+        collection=collection,
+        hook=MongoCompensationRecorder(db).record_failure,
+    )
+
+
+def get_guardrails_log_repository(db: Session) -> Any:
+    """按配置创建 GuardrailsLog Repository。"""
+    backend = settings.storage.guardrails_logs
+    collection = _collection_for_backend(backend, "guardrails_logs")
+    return build_guardrails_log_repository(
+        backend,
+        db,
+        collection=collection,
+        hook=MongoCompensationRecorder(db).record_failure,
     )
 
 

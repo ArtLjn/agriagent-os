@@ -3,7 +3,10 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.models.agent_record import AgentRecord
+from app.infra.repository_runtime import (
+    get_agent_record_repository,
+    run_maybe_awaitable,
+)
 from app.models.cost import CostRecord
 from app.models.crop import CropTemplate
 from app.models.cycle import CropCycle, CycleStage
@@ -175,8 +178,8 @@ def delete_crop_cycle(db: Session, cycle_id: int, farm_id: int) -> None:
     if not cycle:
         raise ValueError(f"茬口 {cycle_id} 不存在")
 
-    db.query(AgentRecord).filter(AgentRecord.cycle_id == cycle_id).update(
-        {"cycle_id": None}, synchronize_session=False
+    run_maybe_awaitable(
+        get_agent_record_repository(db).clear_cycle_reference(cycle_id=cycle_id)
     )
     db.query(FarmLog).filter(FarmLog.cycle_id == cycle_id).delete(
         synchronize_session=False

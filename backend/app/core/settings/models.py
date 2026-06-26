@@ -57,6 +57,9 @@ class StorageConfig(BaseModel):
     repair_packs: StorageBackend = "mysql"
     review_issue_chains: StorageBackend = "mysql"
     prelabels: StorageBackend = "mysql"
+    conversation_messages: StorageBackend = "mysql"
+    agent_records: StorageBackend = "mysql"
+    guardrails_logs: StorageBackend = "mysql"
     mongo_write_failure_rate_threshold: float = Field(default=0.001, ge=0)
     mongo_read_error_rate_threshold: float = Field(default=0.01, ge=0)
     mongo_consistency_mismatch_rate_threshold: float = Field(default=0.0001, ge=0)
