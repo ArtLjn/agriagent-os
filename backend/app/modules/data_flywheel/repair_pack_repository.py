@@ -7,9 +7,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.infra.repository_runtime import (
+    get_data_flywheel_repository,
+    run_maybe_awaitable,
+)
 from app.models.data_flywheel import AgentDataFlywheelLabel, AgentRepairPack
 from app.modules.data_flywheel.repair_pack_service import (
     build_repair_pack_payload,
@@ -219,9 +222,7 @@ def create_repair_pack(
         export_error=None,
         created_by=created_by,
     )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(_repair_pack_repo(db).create, row)
     return {
         **_pack_to_dict(row),
         "cases": payload.get("cases_jsonl", []),
@@ -269,11 +270,16 @@ def rebuild_repair_pack_files(
     if isinstance(existing_manifest.get("dedup_inputs"), dict):
         manifest["dedup_inputs"] = existing_manifest["dedup_inputs"]
     _write_repair_pack_files(Path(export_path), payload)
-    row.export_path = export_path
-    row.manifest_json = manifest
-    row.export_error = None
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(
+        _repair_pack_repo(db).update_fields,
+        farm_id=farm_id,
+        pack_id=pack_id,
+        export_path=export_path,
+        manifest_json=manifest,
+        export_error=None,
+    )
+    if row is None:
+        raise ValueError("REPAIR_PACK_NOT_FOUND")
     return {
         **_pack_to_dict(row),
         "cases": payload.get("cases_jsonl", []),
@@ -314,14 +320,19 @@ def mark_repair_pack_resolved(
 ) -> dict[str, Any]:
     """标记 repair pack 已修复，并 resolve 关联 open labels。"""
     row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
-    row.status = REPAIR_PACK_STATUS_RESOLVED
-    row.repair_note = repair_note
-    row.verification_summary = verification_summary
-    row.resolved_by = resolved_by
-    row.resolved_at = datetime.now()
     _resolve_open_labels(db, farm_id=farm_id, label_ids=row.source_label_ids or [])
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(
+        _repair_pack_repo(db).update_fields,
+        farm_id=farm_id,
+        pack_id=pack_id,
+        status=REPAIR_PACK_STATUS_RESOLVED,
+        repair_note=repair_note,
+        verification_summary=verification_summary,
+        resolved_by=resolved_by,
+        resolved_at=datetime.now(),
+    )
+    if row is None:
+        raise ValueError("REPAIR_PACK_NOT_FOUND")
     return _pack_to_dict(row)
 
 
@@ -334,10 +345,15 @@ def record_repair_pack_verification_failure(
 ) -> dict[str, Any]:
     """记录 repair pack 验证失败，不 resolve 标签。"""
     row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
-    row.status = REPAIR_PACK_STATUS_VERIFICATION_FAILED
-    row.verification_summary = verification_summary
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(
+        _repair_pack_repo(db).update_fields,
+        farm_id=farm_id,
+        pack_id=pack_id,
+        status=REPAIR_PACK_STATUS_VERIFICATION_FAILED,
+        verification_summary=verification_summary,
+    )
+    if row is None:
+        raise ValueError("REPAIR_PACK_NOT_FOUND")
     return _pack_to_dict(row)
 
 
@@ -358,26 +374,20 @@ def list_repair_packs(
         page_size = DEFAULT_REPAIR_PACK_PAGE_SIZE
     if page_size > MAX_REPAIR_PACK_PAGE_SIZE:
         page_size = MAX_REPAIR_PACK_PAGE_SIZE
-    query = db.query(AgentRepairPack).filter(AgentRepairPack.farm_id == farm_id)
-    if status:
-        query = query.filter(AgentRepairPack.status == status)
-    elif not include_discarded:
-        query = query.filter(AgentRepairPack.status != REPAIR_PACK_STATUS_DISCARDED)
-    if fix_target:
-        query = query.filter(AgentRepairPack.fix_target == fix_target)
-    total = query.count()
-    offset = (page - 1) * page_size
-    rows = (
-        query.order_by(desc(AgentRepairPack.created_at))
-        .offset(offset)
-        .limit(page_size)
-        .all()
+    page_result = _repo_call(
+        _repair_pack_repo(db).list,
+        farm_id=farm_id,
+        status=status,
+        fix_target=fix_target,
+        include_discarded=include_discarded,
+        page=page,
+        page_size=page_size,
     )
     return {
-        "items": [_pack_to_dict(row) for row in rows],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
+        "items": [_pack_to_dict(row) for row in page_result.items],
+        "total": page_result.total,
+        "page": page_result.page,
+        "page_size": page_result.page_size,
     }
 
 
@@ -391,15 +401,20 @@ def mark_repair_pack_discarded(
 ) -> dict[str, Any]:
     """标记 repair pack 为已废弃（软删除），不删 DB 行和磁盘文件。"""
     row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
-    row.status = REPAIR_PACK_STATUS_DISCARDED
+    repair_note = row.repair_note
     if reason:
-        row.repair_note = (
-            reason if not row.repair_note else f"{row.repair_note}\n{reason}"
-        )
-    row.resolved_by = resolved_by
-    row.resolved_at = datetime.now()
-    db.commit()
-    db.refresh(row)
+        repair_note = reason if not repair_note else f"{repair_note}\n{reason}"
+    row = _repo_call(
+        _repair_pack_repo(db).update_fields,
+        farm_id=farm_id,
+        pack_id=pack_id,
+        status=REPAIR_PACK_STATUS_DISCARDED,
+        repair_note=repair_note,
+        resolved_by=resolved_by,
+        resolved_at=datetime.now(),
+    )
+    if row is None:
+        raise ValueError("REPAIR_PACK_NOT_FOUND")
     return _pack_to_dict(row)
 
 
@@ -411,9 +426,14 @@ def mark_repair_pack_exported(
 ) -> dict[str, Any]:
     """把 repair pack 状态重置为 exported（撤销已修复 / 恢复已废弃）。"""
     row = _repair_pack_row(db, farm_id=farm_id, pack_id=pack_id)
-    row.status = REPAIR_PACK_STATUS_EXPORTED
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(
+        _repair_pack_repo(db).update_fields,
+        farm_id=farm_id,
+        pack_id=pack_id,
+        status=REPAIR_PACK_STATUS_EXPORTED,
+    )
+    if row is None:
+        raise ValueError("REPAIR_PACK_NOT_FOUND")
     return _pack_to_dict(row)
 
 
@@ -455,13 +475,10 @@ def _details_for_selection(
 
 
 def _repair_pack_row(db: Session, *, farm_id: int, pack_id: str) -> AgentRepairPack:
-    row = (
-        db.query(AgentRepairPack)
-        .filter(
-            AgentRepairPack.farm_id == farm_id,
-            AgentRepairPack.pack_id == pack_id,
-        )
-        .first()
+    row = _repo_call(
+        _repair_pack_repo(db).get_by_pack_id,
+        farm_id=farm_id,
+        pack_id=pack_id,
     )
     if row is None:
         raise ValueError("REPAIR_PACK_NOT_FOUND")
@@ -553,15 +570,10 @@ def _find_existing_active_pack(
     db: Session, *, farm_id: int, dedup_key: str
 ) -> AgentRepairPack | None:
     """查找同 dedup_key 的非废弃 pack，命中则复用而非重复导出。"""
-    return (
-        db.query(AgentRepairPack)
-        .filter(
-            AgentRepairPack.farm_id == farm_id,
-            AgentRepairPack.dedup_key == dedup_key,
-            AgentRepairPack.status != REPAIR_PACK_STATUS_DISCARDED,
-        )
-        .order_by(desc(AgentRepairPack.created_at))
-        .first()
+    return _repo_call(
+        _repair_pack_repo(db).find_active_by_dedup_key,
+        farm_id=farm_id,
+        dedup_key=dedup_key,
     )
 
 
@@ -606,8 +618,7 @@ def _record_export_failed_pack(
         export_error=export_error,
         created_by=created_by,
     )
-    db.add(row)
-    db.commit()
+    _repo_call(_repair_pack_repo(db).create, row)
 
 
 def _write_repair_pack_files(export_path: Path, payload: dict[str, Any]) -> None:
@@ -641,3 +652,11 @@ def _write_json(path: Path, content: Any) -> None:
 def _mark_compatibility_debug_manifest(manifest: dict[str, Any]) -> None:
     manifest["asset_path"] = COMPATIBILITY_DEBUG_ASSET_PATH
     manifest["formal_review_required"] = True
+
+
+def _repair_pack_repo(db: Session):
+    return get_data_flywheel_repository(db, "repair_packs")
+
+
+def _repo_call(method, *args, **kwargs):
+    return run_maybe_awaitable(method(*args, **kwargs))

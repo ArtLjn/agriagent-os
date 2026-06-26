@@ -72,6 +72,45 @@ class TestGetTraces:
             assert "items" in data
             assert "total" in data
 
+    def test_list_traces_with_farm_id_uses_repository_fallback(
+        self, db_session, monkeypatch
+    ) -> None:
+        import app.api.admin_trace as admin_trace
+
+        admin_user = ensure_admin_user(db_session)
+        mock_record = MagicMock()
+        mock_record.id = 7
+        mock_record.request_id = "abc12345"
+        mock_record.session_id = "sess-admin"
+        mock_record.farm_id = 1
+        mock_record.round_index = 0
+        mock_record.node_type = "llm_call"
+        mock_record.node_name = "planner"
+        mock_record.duration_ms = 12
+        mock_record.status = "success"
+        mock_record.token_usage = {"total_tokens": 10}
+        mock_record.error_message = None
+        mock_record.created_at = datetime(2026, 6, 26, 12, 0, 0)
+
+        class Repo:
+            async def get_by_request_id(self, **kwargs):
+                assert kwargs == {"farm_id": 1, "request_id": "abc12345"}
+                return [mock_record]
+
+        mock_db = _mock_db(admin_user)
+        monkeypatch.setattr(admin_trace, "get_trace_repository", lambda db: Repo())
+
+        with auth_override_scope(app), _db_override(mock_db):
+            resp = TestClient(app).get(
+                "/admin/traces?farm_id=1&request_id=abc12345",
+                headers=admin_headers(),
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["items"][0]["request_id"] == "abc12345"
+
 
 class TestGetTimeline:
     def test_timeline_returns_rounds(self, db_session) -> None:

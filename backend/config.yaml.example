@@ -18,6 +18,27 @@ project_name: "Farm Manager API"  # FastAPI 应用标题，会显示在 OpenAPI/
 database:
   url: "mysql+pymysql://farm_manager:password@localhost:3306/farm_manager?charset=utf8mb4"  # 格式：mysql+pymysql://用户:密码@主机:端口/库名?charset=utf8mb4
 
+# MongoDB 文档存储。第 1 期用于 trace 和数据飞轮文档化迁移；默认关闭。
+mongodb:
+  enabled: false              # true 时应用启动会初始化共享 MongoDB client。
+  uri: "mongodb://farm_user:***@mongo.example.internal:27017/farm_manager?authSource=admin" # 脱敏示例；真实密码只放 config.yaml 或环境变量。
+  database: "farm_manager"    # MongoDB 数据库名。
+  tls: true                   # 生产建议启用 TLS；本地无证书环境可改 false。
+  connect_timeout_ms: 2000    # 建连超时，单位毫秒。
+  server_selection_timeout_ms: 2000 # 服务选择超时，单位毫秒。
+  max_pool_size: 20           # AsyncIOMotorClient 连接池上限。
+
+# 第 1 期五类对象存储后端。可选：mysql、dual、mongo-read、mongo；默认全部保持 MySQL。
+storage:
+  trace: "mysql"               # trace_records。
+  case_drafts: "mysql"         # agent_case_drafts。
+  repair_packs: "mysql"        # agent_repair_packs。
+  review_issue_chains: "mysql" # agent_review_issue_chains。
+  prelabels: "mysql"           # agent_data_flywheel_prelabels。
+  mongo_write_failure_rate_threshold: 0.001       # Mongo 二级写失败率阈值，超过需停止扩大 dual。
+  mongo_read_error_rate_threshold: 0.01           # Mongo 读错误率阈值，超过需回退 mysql/dual。
+  mongo_consistency_mismatch_rate_threshold: 0.0001 # 一致性不一致率阈值，超过禁止切读。
+
 # 默认 LLM 配置。providers.json 不可用或 fallback 时会回退到这里；
 # 数据飞轮 AI 预判也会复用这组模型配置。
 ai:

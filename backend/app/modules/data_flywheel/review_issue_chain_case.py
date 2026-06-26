@@ -6,6 +6,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.infra.repository_runtime import (
+    get_data_flywheel_repository,
+    run_maybe_awaitable,
+)
 from app.models.data_flywheel import AgentCaseDraft
 from app.modules.data_flywheel.review_issue_chain_service import (
     get_review_issue_chain_detail,
@@ -44,9 +48,7 @@ def build_case_draft_from_review_issue_chain(
         case_json=case_json,
         created_by=created_by,
     )
-    db.add(draft)
-    db.commit()
-    db.refresh(draft)
+    draft = _repo_call(_case_draft_repo(db).create, draft)
     return _draft_to_dict(draft)
 
 
@@ -238,3 +240,11 @@ def _draft_to_dict(draft: AgentCaseDraft) -> dict[str, Any]:
         "case_json": draft.case_json,
         "created_by": draft.created_by,
     }
+
+
+def _case_draft_repo(db: Session):
+    return get_data_flywheel_repository(db, "case_drafts")
+
+
+def _repo_call(method, *args, **kwargs):
+    return run_maybe_awaitable(method(*args, **kwargs))

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 DEFAULT_DATABASE_URL = (
@@ -34,6 +36,30 @@ class ServerConfig(BaseModel):
 
 class DatabaseConfig(BaseModel):
     url: str = DEFAULT_DATABASE_URL
+
+
+class MongoConfig(BaseModel):
+    enabled: bool = False
+    uri: str = ""
+    database: str = "farm_manager"
+    tls: bool = False
+    connect_timeout_ms: int = Field(default=2000, gt=0)
+    server_selection_timeout_ms: int = Field(default=2000, gt=0)
+    max_pool_size: int = Field(default=20, gt=0)
+
+
+StorageBackend = Literal["mysql", "dual", "mongo-read", "mongo"]
+
+
+class StorageConfig(BaseModel):
+    trace: StorageBackend = "mysql"
+    case_drafts: StorageBackend = "mysql"
+    repair_packs: StorageBackend = "mysql"
+    review_issue_chains: StorageBackend = "mysql"
+    prelabels: StorageBackend = "mysql"
+    mongo_write_failure_rate_threshold: float = Field(default=0.001, ge=0)
+    mongo_read_error_rate_threshold: float = Field(default=0.01, ge=0)
+    mongo_consistency_mismatch_rate_threshold: float = Field(default=0.0001, ge=0)
 
 
 class SecretsConfig(BaseModel):

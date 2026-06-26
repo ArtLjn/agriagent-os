@@ -229,9 +229,5 @@ def _http_error(
     if status is not None:
         payload["status"] = status
     code = str(payload.get("code") or "")
-    status_code = (
-        404
-        if code in {"CHAIN_NOT_FOUND", "REPAIR_PACK_NOT_FOUND"}
-        else 400
-    )
+    status_code = 404 if code in {"CHAIN_NOT_FOUND", "REPAIR_PACK_NOT_FOUND"} else 400
     return HTTPException(status_code=status_code, detail=payload)

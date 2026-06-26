@@ -4,6 +4,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.infra.repository_runtime import (
+    get_data_flywheel_repository,
+    run_maybe_awaitable,
+)
 from app.models.agent_turn import AgentTurn
 from app.models.data_flywheel import AgentReviewIssueChain
 from app.modules.data_flywheel.service import (
@@ -182,7 +186,8 @@ def _filter_cards(
     dominant_signal_value: str,
 ) -> list[dict[str, Any]]:
     return [
-        card for card in cards
+        card
+        for card in cards
         if _matches_card_filters(
             card,
             status=status,
@@ -192,7 +197,9 @@ def _filter_cards(
     ]
 
 
-def _page_cards(cards: list[dict[str, Any]], *, limit: int, offset: int) -> dict[str, Any]:
+def _page_cards(
+    cards: list[dict[str, Any]], *, limit: int, offset: int
+) -> dict[str, Any]:
     start = max(offset, 0)
     end = start + max(limit, 0)
     return {"items": cards[start:end], "total": len(cards)}
@@ -251,24 +258,31 @@ def _all_persisted_chains(
     session_id: str | None,
     severity: str,
 ) -> list[AgentReviewIssueChain]:
+    if session_id:
+        page = _repo_call(
+            _review_chain_repo(db).list_by_session,
+            farm_id=farm_id,
+            session_id=session_id,
+            limit=1000,
+            offset=0,
+        )
+        rows = page.items
+        if severity != "all":
+            rows = [row for row in rows if row.severity == severity]
+        return [row for row in rows if not _is_saved_chain_benign_chitchat(db, row)]
+
     query = _persisted_chain_filter(
         db.query(AgentReviewIssueChain),
         farm_id=farm_id,
         session_id=session_id,
         severity=severity,
     )
-    rows = (
-        query.order_by(
-            AgentReviewIssueChain.severity.asc(),
-            AgentReviewIssueChain.updated_at.desc(),
-            AgentReviewIssueChain.id.desc(),
-        )
-        .all()
-    )
-    return [
-        row for row in rows
-        if not _is_saved_chain_benign_chitchat(db, row)
-    ]
+    rows = query.order_by(
+        AgentReviewIssueChain.severity.asc(),
+        AgentReviewIssueChain.updated_at.desc(),
+        AgentReviewIssueChain.id.desc(),
+    ).all()
+    return [row for row in rows if not _is_saved_chain_benign_chitchat(db, row)]
 
 
 def _persisted_chain_filter(
@@ -288,9 +302,7 @@ def _persisted_chain_filter(
     return query
 
 
-def _is_saved_chain_benign_chitchat(
-    db: Session, row: AgentReviewIssueChain
-) -> bool:
+def _is_saved_chain_benign_chitchat(db: Session, row: AgentReviewIssueChain) -> bool:
     trigger = _turn_by_id(
         db,
         farm_id=row.farm_id,
@@ -314,9 +326,15 @@ def _matches_card_filters(
         return False
     if status not in {"all", "open", "handled"} and card_status != status:
         return False
-    if evidence_status_value != "all" and card.get("evidence_status") != evidence_status_value:
+    if (
+        evidence_status_value != "all"
+        and card.get("evidence_status") != evidence_status_value
+    ):
         return False
-    if dominant_signal_value != "all" and card.get("dominant_signal") != dominant_signal_value:
+    if (
+        dominant_signal_value != "all"
+        and card.get("dominant_signal") != dominant_signal_value
+    ):
         return False
     return True
 
@@ -572,16 +590,18 @@ def _risk_session_total(
     min_risk: float,
     severity: str,
 ) -> int:
-    return len({
-        turn.session_id
-        for turn in _risk_candidate_turns(
-            db,
-            farm_id=farm_id,
-            session_id=session_id,
-            min_risk=min_risk,
-            severity=severity,
-        )
-    })
+    return len(
+        {
+            turn.session_id
+            for turn in _risk_candidate_turns(
+                db,
+                farm_id=farm_id,
+                session_id=session_id,
+                min_risk=min_risk,
+                severity=severity,
+            )
+        }
+    )
 
 
 def _paged_highest_risk_triggers(
@@ -603,7 +623,9 @@ def _paged_highest_risk_triggers(
         severity=severity,
     ):
         existing = turns_by_session.get(turn.session_id)
-        if existing is None or _risk_turn_sort_key(turn) < _risk_turn_sort_key(existing):
+        if existing is None or _risk_turn_sort_key(turn) < _risk_turn_sort_key(
+            existing
+        ):
             turns_by_session[turn.session_id] = turn
     turns = sorted(turns_by_session.values(), key=_risk_turn_sort_key)
     start = max(offset, 0)
@@ -626,10 +648,7 @@ def _risk_candidate_turns(
         min_risk=min_risk,
         severity=severity,
     )
-    return [
-        turn for turn in query.all()
-        if not _is_benign_chitchat_turn(turn)
-    ]
+    return [turn for turn in query.all() if not _is_benign_chitchat_turn(turn)]
 
 
 def _risk_turn_sort_key(turn: AgentTurn) -> tuple[float, str, int]:
@@ -745,14 +764,14 @@ def _candidate_chain_count(db: Session, *, farm_id: int, session_id: str) -> int
 def _persisted_session_chain_count(
     db: Session, *, farm_id: int, session_id: str
 ) -> int:
-    return (
-        db.query(AgentReviewIssueChain.id)
-        .filter(
-            AgentReviewIssueChain.farm_id == farm_id,
-            AgentReviewIssueChain.session_id == session_id,
-        )
-        .count()
+    page = _repo_call(
+        _review_chain_repo(db).list_by_session,
+        farm_id=farm_id,
+        session_id=session_id,
+        limit=1,
+        offset=0,
     )
+    return page.total
 
 
 def _chain_for_turn(
@@ -933,3 +952,11 @@ def _related_turns_from_chain(
 
 def _chain_id(turn: AgentTurn) -> str:
     return f"chain:{turn.farm_id}:{turn.session_id}:{turn.id}"
+
+
+def _review_chain_repo(db: Session):
+    return get_data_flywheel_repository(db, "review_issue_chains")
+
+
+def _repo_call(method, *args, **kwargs):
+    return run_maybe_awaitable(method(*args, **kwargs))

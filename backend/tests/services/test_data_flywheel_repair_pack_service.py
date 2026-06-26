@@ -201,9 +201,7 @@ def test_no_tool_success_claim_generates_actionable_regression_assertions() -> N
         sample_id="turn:1:sess-no-tool:21",
     )
     detail["sample"]["user_input_preview"] = "李海这个月干了15天压瓜"
-    detail["sample"]["assistant_reply_preview"] = (
-        "已为您记录：李海这个月干了15天压瓜。"
-    )
+    detail["sample"]["assistant_reply_preview"] = "已为您记录：李海这个月干了15天压瓜。"
     detail["sample"]["selected_tools"] = []
     detail["messages"] = [
         {"role": "user", "content": "李海这个月干了15天压瓜"},

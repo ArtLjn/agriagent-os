@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any
 
 from app.core.database import SessionLocal
+from app.infra.repository_runtime import get_trace_repository, resolve_maybe_awaitable
 from app.models.token_stats import TokenDailyStats
 from app.models.trace import TraceRecord
 
@@ -34,7 +35,7 @@ class TraceDAO:
         self._queue.append(trace_data)
 
     async def flush_now(self) -> int:
-        """立即将队列中的所有数据写入 SQLite。"""
+        """立即将队列中的所有数据写入 Trace Repository。"""
         if not self._queue:
             return 0
 
@@ -43,10 +44,10 @@ class TraceDAO:
 
         db = SessionLocal()
         try:
+            repo = get_trace_repository(db)
             for item in items:
                 record = TraceRecord(**item)
-                db.add(record)
-            db.commit()
+                await resolve_maybe_awaitable(repo.insert(record))
             self._total_flushed += len(items)
             return len(items)
         except Exception:

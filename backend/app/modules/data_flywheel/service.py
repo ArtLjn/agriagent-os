@@ -11,6 +11,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.infra.agent_events import read_event_segment
+from app.infra.repository_runtime import (
+    get_data_flywheel_repository,
+    run_maybe_awaitable,
+)
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import ConversationMessage
 from app.models.data_flywheel import (
@@ -139,17 +143,10 @@ def _prelabels_by_sample(
 ) -> dict[str, list[AgentDataFlywheelPrelabel]]:
     if not sample_ids:
         return {}
-    rows = (
-        db.query(AgentDataFlywheelPrelabel)
-        .filter(
-            AgentDataFlywheelPrelabel.farm_id == farm_id,
-            AgentDataFlywheelPrelabel.sample_id.in_(sample_ids),
-        )
-        .order_by(
-            AgentDataFlywheelPrelabel.created_at.desc(),
-            AgentDataFlywheelPrelabel.id.desc(),
-        )
-        .all()
+    rows = _repo_call(
+        _prelabel_repo(db).list_by_samples,
+        farm_id=farm_id,
+        sample_ids=sample_ids,
     )
     grouped: dict[str, list[AgentDataFlywheelPrelabel]] = defaultdict(list)
     for row in rows:
@@ -587,9 +584,7 @@ def create_sample_prelabel(
         prompt_version=judge_client.prompt_version,
         raw_response=raw,
     )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(_prelabel_repo(db).create, row)
     return _prelabel_to_dict(row)
 
 
@@ -631,12 +626,18 @@ def accept_sample_prelabel(
         db.flush()
         accepted_label_ids.append(int(label_row.id))
 
-    row.status = PRELABEL_STATUS_ACCEPTED
-    row.accepted_label_ids = accepted_label_ids
-    row.reviewed_by = annotator_id
-    row.reviewed_at = datetime.now()
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(
+        _prelabel_repo(db).update_review_fields,
+        farm_id=farm_id,
+        prelabel_id=prelabel_id,
+        sample_id=sample_id,
+        status=PRELABEL_STATUS_ACCEPTED,
+        reviewed_by=annotator_id,
+        reviewed_at=datetime.now(),
+        accepted_label_ids=accepted_label_ids,
+    )
+    if row is None:
+        raise ValueError("PRELABEL_NOT_FOUND")
     return _prelabel_to_dict(row)
 
 
@@ -654,11 +655,18 @@ def reject_sample_prelabel(
     )
     if row.status != PRELABEL_STATUS_PENDING:
         raise ValueError("PRELABEL_ALREADY_REVIEWED")
-    row.status = PRELABEL_STATUS_REJECTED
-    row.reviewed_by = annotator_id
-    row.reviewed_at = datetime.now()
-    db.commit()
-    db.refresh(row)
+    row = _repo_call(
+        _prelabel_repo(db).update_review_fields,
+        farm_id=farm_id,
+        prelabel_id=prelabel_id,
+        sample_id=sample_id,
+        status=PRELABEL_STATUS_REJECTED,
+        reviewed_by=annotator_id,
+        reviewed_at=datetime.now(),
+        accepted_label_ids=None,
+    )
+    if row is None:
+        raise ValueError("PRELABEL_NOT_FOUND")
     return _prelabel_to_dict(row)
 
 
@@ -724,9 +732,7 @@ def build_case_draft(
         case_json=case_json,
         created_by=created_by,
     )
-    db.add(draft)
-    db.commit()
-    db.refresh(draft)
+    draft = _repo_call(_case_draft_repo(db).create, draft)
     return _draft_to_dict(draft)
 
 
@@ -751,18 +757,27 @@ def _turn_for_sample(db: Session, *, farm_id: int, sample_id: str) -> AgentTurn:
 def _prelabel_for_sample(
     db: Session, *, farm_id: int, sample_id: str, prelabel_id: int
 ) -> AgentDataFlywheelPrelabel:
-    row = (
-        db.query(AgentDataFlywheelPrelabel)
-        .filter(
-            AgentDataFlywheelPrelabel.id == prelabel_id,
-            AgentDataFlywheelPrelabel.farm_id == farm_id,
-            AgentDataFlywheelPrelabel.sample_id == sample_id,
-        )
-        .first()
+    row = _repo_call(
+        _prelabel_repo(db).get_by_id_and_sample,
+        farm_id=farm_id,
+        prelabel_id=prelabel_id,
+        sample_id=sample_id,
     )
     if row is None:
         raise ValueError("PRELABEL_NOT_FOUND")
     return row
+
+
+def _prelabel_repo(db: Session):
+    return get_data_flywheel_repository(db, "prelabels")
+
+
+def _case_draft_repo(db: Session):
+    return get_data_flywheel_repository(db, "case_drafts")
+
+
+def _repo_call(method, *args, **kwargs):
+    return run_maybe_awaitable(method(*args, **kwargs))
 
 
 def _session_exists(db: Session, *, farm_id: int, session_id: str) -> bool:

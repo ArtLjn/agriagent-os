@@ -203,6 +203,8 @@ def _http_error(exc: ValueError) -> HTTPException:
         return HTTPException(status_code=400, detail=exc.args[0])
     code = str(exc)
     status_code = (
-        404 if code in {"SAMPLE_NOT_FOUND", "LABEL_NOT_FOUND", "PRELABEL_NOT_FOUND"} else 400
+        404
+        if code in {"SAMPLE_NOT_FOUND", "LABEL_NOT_FOUND", "PRELABEL_NOT_FOUND"}
+        else 400
     )
     return HTTPException(status_code=status_code, detail={"code": code})

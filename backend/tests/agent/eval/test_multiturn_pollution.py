@@ -8,8 +8,6 @@
 - trace 的 data_source 字段必须能反映数据真实来源
 - 当 LLM 调用了 Skill，data_source 必须是 tool:xxx
 """
-from unittest.mock import MagicMock
-
 import pytest
 
 from app.agent.tool_selector import select_tools
