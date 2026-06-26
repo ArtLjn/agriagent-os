@@ -7,9 +7,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.infra.repository_runtime import (
+    get_data_flywheel_repository,
+    run_maybe_awaitable,
+)
 from app.models.data_flywheel import AgentRepairPack
 from app.modules.data_flywheel.repair_pack_chain import (
     build_chain_repair_pack_payload,
@@ -17,7 +20,6 @@ from app.modules.data_flywheel.repair_pack_chain import (
     validate_chain_repair_export_ready,
 )
 from app.modules.data_flywheel.repair_pack_repository import (
-    REPAIR_PACK_STATUS_DISCARDED,
     REPAIR_PACK_STATUS_EXPORTED,
     _open_label_ids_for_samples,
     _pack_to_dict,
@@ -94,10 +96,8 @@ def create_repair_pack_from_review_issue_chain(
         export_error=None,
         created_by=created_by,
     )
-    db.add(row)
     try:
-        db.commit()
-        db.refresh(row)
+        row = _repo_call(_repair_pack_repo(db).create, row)
     except Exception:
         db.rollback()
         shutil.rmtree(export_dir, ignore_errors=True)
@@ -129,13 +129,16 @@ def _compute_chain_dedup_key(
 def _find_existing_active_pack(
     db: Session, *, farm_id: int, dedup_key: str
 ) -> AgentRepairPack | None:
-    return (
-        db.query(AgentRepairPack)
-        .filter(
-            AgentRepairPack.farm_id == farm_id,
-            AgentRepairPack.dedup_key == dedup_key,
-            AgentRepairPack.status != REPAIR_PACK_STATUS_DISCARDED,
-        )
-        .order_by(desc(AgentRepairPack.created_at))
-        .first()
+    return _repo_call(
+        _repair_pack_repo(db).find_active_by_dedup_key,
+        farm_id=farm_id,
+        dedup_key=dedup_key,
     )
+
+
+def _repair_pack_repo(db: Session):
+    return get_data_flywheel_repository(db, "repair_packs")
+
+
+def _repo_call(method, *args, **kwargs):
+    return run_maybe_awaitable(method(*args, **kwargs))

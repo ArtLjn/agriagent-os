@@ -19,3 +19,4 @@ PyJWT==2.9.0
 bcrypt==5.0.0
 pymysql>=1.1.0
 alembic>=1.13.0
+motor==3.6.0

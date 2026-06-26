@@ -25,6 +25,7 @@ from app.api import (
     weather,
 )
 from app.infra.limiter import limiter
+from app.infra.mongo import check_mongo_health
 from app.modules.auth.router import router as auth_router
 from app.modules.data_flywheel.annotations_router import (
     router as data_flywheel_annotations_router,
@@ -69,5 +70,7 @@ def register_routes(app: FastAPI) -> None:
 
     @app.get("/health")
     @limiter.limit("30/minute")
-    def health_check(request: Request, response: Response):
-        return {"status": "ok"}
+    async def health_check(request: Request, response: Response):
+        mongo = await check_mongo_health()
+        status = "degraded" if mongo["status"] == "error" else "ok"
+        return {"status": status, "mongo": mongo}

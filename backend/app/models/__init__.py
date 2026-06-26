@@ -8,6 +8,7 @@ from app.models.agent_record import AgentRecord
 from app.models.guardrails_log import GuardrailsLog
 from app.models.idempotency_key import IdempotencyKey
 from app.models.trace import TraceRecord
+from app.models.mongo_compensation import MongoCompensationTask
 from app.models.token_stats import TokenDailyStats
 from app.models.user import User
 from app.models.conversation import (
@@ -48,6 +49,7 @@ __all__ = [
     "GuardrailsLog",
     "IdempotencyKey",
     "TraceRecord",
+    "MongoCompensationTask",
     "TokenDailyStats",
     "User",
     "Conversation",

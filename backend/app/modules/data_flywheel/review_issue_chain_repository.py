@@ -6,6 +6,10 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.infra.repository_runtime import (
+    get_data_flywheel_repository,
+    run_maybe_awaitable,
+)
 from app.models.agent_turn import AgentTurn
 from app.models.data_flywheel import AgentDataFlywheelLabel, AgentReviewIssueChain
 from app.modules.data_flywheel.service import (
@@ -29,13 +33,10 @@ def get_saved_review_issue_chain(
     db: Session, *, farm_id: int, chain_id: str
 ) -> AgentReviewIssueChain | None:
     """按当前 farm 和 chain_id 读取已保存的问题链。"""
-    return (
-        db.query(AgentReviewIssueChain)
-        .filter(
-            AgentReviewIssueChain.farm_id == farm_id,
-            AgentReviewIssueChain.chain_id == chain_id,
-        )
-        .first()
+    return _repo_call(
+        _review_chain_repo(db).get_by_chain_id,
+        farm_id=farm_id,
+        chain_id=chain_id,
     )
 
 
@@ -113,7 +114,9 @@ def _save_review_issue_chain(
     final_labels = _clean_list(final_labels)
     root_cause = _clean_text(root_cause)
     expected_behavior = _clean_text(expected_behavior)
-    fix_target = _clean_fix_target(fix_target) or str(base_chain["repair"]["fix_target"])
+    fix_target = _clean_fix_target(fix_target) or str(
+        base_chain["repair"]["fix_target"]
+    )
     reviewer_comment = _clean_text(reviewer_comment)
     false_positive_reason = _clean_text(false_positive_reason)
     missing_evidence = _clean_list(missing_evidence)
@@ -192,9 +195,7 @@ def _save_review_issue_chain(
     else:
         _resolve_source_labels(db, row=row, trigger=trigger)
 
-    db.commit()
-    db.refresh(row)
-    return row
+    return _repo_call(_review_chain_repo(db).save, row)
 
 
 def chain_review_to_dict(row: AgentReviewIssueChain) -> dict[str, Any]:
@@ -266,9 +267,7 @@ def save_review_issue_chain_ai_judge(
     row.ai_judge = dict(ai_judge)
     row.dominant_signal = "judge"
     row.updated_at = now
-    db.commit()
-    db.refresh(row)
-    return row
+    return _repo_call(_review_chain_repo(db).save, row)
 
 
 def _validate_status(status: str) -> None:
@@ -329,7 +328,9 @@ def _final_related_turn_ids(
         else base_chain["context_turn_ids"]
     )
     result_ids = _unique_ints(
-        result_turn_ids if result_turn_ids is not None else base_chain["result_turn_ids"]
+        result_turn_ids
+        if result_turn_ids is not None
+        else base_chain["result_turn_ids"]
     )
     if set(context_ids) & set(result_ids):
         raise ValueError("CHAIN_REVIEW_RELATED_TURN_OVERLAP")
@@ -397,7 +398,9 @@ def _resolve_source_labels(
     trigger: AgentTurn,
     source_label_ids: list[int] | None = None,
 ) -> None:
-    label_ids = source_label_ids if source_label_ids is not None else row.source_label_ids
+    label_ids = (
+        source_label_ids if source_label_ids is not None else row.source_label_ids
+    )
     if not label_ids:
         return
     sample_id = _sample_id(trigger)
@@ -439,6 +442,14 @@ def _find_sample_label(
     )
 
 
+def _review_chain_repo(db: Session):
+    return get_data_flywheel_repository(db, "review_issue_chains")
+
+
+def _repo_call(method, *args, **kwargs):
+    return run_maybe_awaitable(method(*args, **kwargs))
+
+
 def _human_review_from_row(
     chain: dict[str, Any], row: AgentReviewIssueChain
 ) -> dict[str, Any]:
@@ -461,7 +472,9 @@ def _regression_from_row(
     return regression
 
 
-def _repair_from_row(chain: dict[str, Any], row: AgentReviewIssueChain) -> dict[str, Any]:
+def _repair_from_row(
+    chain: dict[str, Any], row: AgentReviewIssueChain
+) -> dict[str, Any]:
     repair = dict(chain.get("repair") or {})
     regression_ready = bool(row.status == "accepted" and row.expected_behavior)
     if row.fix_target:

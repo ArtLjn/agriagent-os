@@ -112,9 +112,7 @@ _DEFAULT_ROUTE = {
 
 # label → issue_type 路由：同名直接复用 meta；非 detector 产出的 label 也映射到合适的 issue_type。
 # 留空（不在字典里）的 label 走 _DEFAULT_ROUTE。
-_LABEL_TO_ISSUE_TYPE: dict[str, str] = {
-    label: label for label in _ISSUE_TYPE_META
-}
+_LABEL_TO_ISSUE_TYPE: dict[str, str] = {label: label for label in _ISSUE_TYPE_META}
 
 _VERIFY_BY_TARGET = {
     "guardrail": [

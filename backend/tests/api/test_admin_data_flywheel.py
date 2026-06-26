@@ -649,7 +649,9 @@ def test_daily_review_inbox_status_group_filters_open_and_handled(
                 dominant_signal="manual_triage",
                 final_labels=[],
                 source_label_ids=[],
-                missing_evidence=["router_decision"] if status == "needs_evidence" else [],
+                missing_evidence=["router_decision"]
+                if status == "needs_evidence"
+                else [],
             )
         )
     db_session.commit()
@@ -724,7 +726,9 @@ def test_daily_review_inbox_excludes_judge_only_greeting_false_positive(
         )
 
     assert resp.status_code == 200
-    chain_ids = [item["highest_risk_chain"]["chain_id"] for item in resp.json()["items"]]
+    chain_ids = [
+        item["highest_risk_chain"]["chain_id"] for item in resp.json()["items"]
+    ]
     assert _chain_id(risk_turn) in chain_ids
     assert _chain_id(greeting) not in chain_ids
 
@@ -971,12 +975,8 @@ def test_review_issue_chain_ai_judge_persists_chain_advice(
     assert evidence_pack["task"] == "judge_review_issue_chain"
     assert evidence_pack["chain"]["chain_id"] == _chain_id(trigger)
     assert evidence_pack["trigger_turn"]["turn_id"] == trigger.id
-    assert [turn["turn_id"] for turn in evidence_pack["context_turns"]] == [
-        turns[0].id
-    ]
-    assert [turn["turn_id"] for turn in evidence_pack["result_turns"]] == [
-        turns[2].id
-    ]
+    assert [turn["turn_id"] for turn in evidence_pack["context_turns"]] == [turns[0].id]
+    assert [turn["turn_id"] for turn in evidence_pack["result_turns"]] == [turns[2].id]
     chain = judge_resp.json()["chain"]
     assert chain["ai_judge"]["suggested_label"] == "bad_reply"
     assert chain["ai_judge"]["bad_prob"] == 0.91

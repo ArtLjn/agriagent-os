@@ -12,6 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_admin
 from app.evaluation.diagnostics import SkillDiagnosticService
+from app.infra.repository_runtime import (
+    get_trace_repository,
+    resolve_maybe_awaitable,
+)
+from app.infra.trace_repository import TracePage
 from app.models.trace import TraceRecord
 
 logger = logging.getLogger(__name__)
@@ -46,7 +51,7 @@ class TimelineResponse(BaseModel):
 
 
 @router.get("/traces")
-def list_traces(
+async def list_traces(
     request_id: str | None = Query(None),
     session_id: str | None = Query(None),
     farm_id: int | None = Query(None),
@@ -55,6 +60,17 @@ def list_traces(
     db: Session = Depends(get_db),
 ) -> dict:
     """查询 trace 记录列表。"""
+    if farm_id is not None:
+        page = await _list_traces_from_repository(
+            db,
+            farm_id=farm_id,
+            request_id=request_id,
+            session_id=session_id,
+            limit=limit,
+            offset=offset,
+        )
+        return _trace_page_response(page)
+
     query = db.query(TraceRecord)
     if request_id:
         query = query.filter(TraceRecord.request_id == request_id)
@@ -68,26 +84,7 @@ def list_traces(
         query.order_by(TraceRecord.created_at.desc()).offset(offset).limit(limit).all()
     )
 
-    return {
-        "items": [
-            {
-                "id": r.id,
-                "request_id": r.request_id,
-                "session_id": r.session_id,
-                "farm_id": r.farm_id,
-                "round_index": r.round_index,
-                "node_type": r.node_type,
-                "node_name": r.node_name,
-                "duration_ms": r.duration_ms,
-                "status": r.status,
-                "token_usage": r.token_usage,
-                "error_message": r.error_message,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in items
-        ],
-        "total": total,
-    }
+    return _trace_page_response(TracePage(items=items, total=total))
 
 
 @router.get("/traces/{request_id}/timeline", response_model=TimelineResponse)
@@ -174,6 +171,61 @@ def _coerce_token_usage(value: Any) -> dict | None:
             return None
         return parsed if isinstance(parsed, dict) else None
     return None
+
+
+async def _list_traces_from_repository(
+    db: Session,
+    *,
+    farm_id: int,
+    request_id: str | None,
+    session_id: str | None,
+    limit: int,
+    offset: int,
+) -> TracePage:
+    repo = get_trace_repository(db)
+    if request_id:
+        rows = await resolve_maybe_awaitable(
+            repo.get_by_request_id(farm_id=farm_id, request_id=request_id)
+        )
+        return TracePage(items=rows[offset : offset + limit], total=len(rows))
+    if session_id:
+        return await resolve_maybe_awaitable(
+            repo.list_by_session(
+                farm_id=farm_id,
+                session_id=session_id,
+                limit=limit,
+                offset=offset,
+            )
+        )
+    query = db.query(TraceRecord).filter(TraceRecord.farm_id == farm_id)
+    total = query.count()
+    items = (
+        query.order_by(TraceRecord.created_at.desc()).offset(offset).limit(limit).all()
+    )
+    return TracePage(items=items, total=total)
+
+
+def _trace_page_response(page: TracePage) -> dict[str, Any]:
+    return {
+        "items": [
+            {
+                "id": r.id,
+                "request_id": r.request_id,
+                "session_id": r.session_id,
+                "farm_id": r.farm_id,
+                "round_index": r.round_index,
+                "node_type": r.node_type,
+                "node_name": r.node_name,
+                "duration_ms": r.duration_ms,
+                "status": r.status,
+                "token_usage": r.token_usage,
+                "error_message": r.error_message,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in page.items
+        ],
+        "total": page.total,
+    }
 
 
 @router.get("/traces/{request_id}/nodes/{node_id}")

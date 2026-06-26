@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logger import get_logger, setup_logging
 from app.core.seed import seed_admin_user, seed_default_farm
+from app.infra.mongo import close_mongo_client, init_mongo_client
 from app.infra.trace_cleaner import clean_expired_traces
 from app.infra.trace_collector import start_trace_system, stop_trace_system
 
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
     _seed_initial_data()
     _load_prompts()
 
+    init_mongo_client(settings.mongodb)
     await start_trace_system()
     await asyncio.to_thread(clean_expired_traces)
     cleanup_task = asyncio.create_task(_daily_trace_cleanup())
@@ -113,3 +115,4 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         await stop_trace_system()
+        await close_mongo_client()

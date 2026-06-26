@@ -15,9 +15,7 @@ _ROUTER_SCOPE_TYPES = {
     "tool_parameter_mismatch",
     "bulk_intent_narrowed_to_single_entity",
 }
-_ROUTER_SCOPE_ACTION = (
-    "修复 router 的参数抽取、批量作用域保持和 pending 确认策略，避免把多对象意图收窄为单个实体。"
-)
+_ROUTER_SCOPE_ACTION = "修复 router 的参数抽取、批量作用域保持和 pending 确认策略，避免把多对象意图收窄为单个实体。"
 
 
 def derive_chain_repair_candidate(detail: dict[str, Any]) -> dict[str, Any]:
@@ -117,7 +115,9 @@ def validate_chain_repair_export_ready(detail: dict[str, Any]) -> None:
     human = chain.get("human_review") or {}
     missing_evidence = human.get("missing_evidence") or []
     if chain.get("status") == "needs_evidence":
-        raise ValueError({"code": "CHAIN_NEEDS_EVIDENCE", "missing_evidence": missing_evidence})
+        raise ValueError(
+            {"code": "CHAIN_NEEDS_EVIDENCE", "missing_evidence": missing_evidence}
+        )
     if chain.get("status") != "accepted":
         raise ValueError({"code": "CHAIN_NOT_ACCEPTED", "status": chain.get("status")})
     if not _expected_behavior(chain):

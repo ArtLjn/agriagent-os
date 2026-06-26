@@ -274,9 +274,7 @@ def test_create_repair_pack_allows_manual_fix_target_override(tmp_path):
     assert pack["fix_target"] == "router"
     assert pack["pack_id"].startswith("repair-router-")
     assert pack["source_sample_ids"] == [first_id, second_id]
-    assert {case["fix_target"] for case in pack["payload"]["cases_jsonl"]} == {
-        "router"
-    }
+    assert {case["fix_target"] for case in pack["payload"]["cases_jsonl"]} == {"router"}
     db.close()
 
 

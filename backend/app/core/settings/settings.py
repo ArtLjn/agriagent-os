@@ -15,10 +15,12 @@ from app.core.settings.models import (
     DataFlywheelConfig,
     DatabaseConfig,
     LangSmithConfig,
+    MongoConfig,
     RateLimitConfig,
     ReflectionConfig,
     SecretsConfig,
     ServerConfig,
+    StorageConfig,
     TokenQuotaConfig,
     TraceConfig,
     WeatherConfig,
@@ -33,6 +35,8 @@ class Settings(BaseSettings):
 
     server: ServerConfig = ServerConfig()
     database: DatabaseConfig = DatabaseConfig()
+    mongodb: MongoConfig = MongoConfig()
+    storage: StorageConfig = StorageConfig()
     ai: AIConfig = AIConfig()
     weather: WeatherConfig = WeatherConfig()
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
