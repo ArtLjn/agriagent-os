@@ -43,6 +43,7 @@ storage:
   mongo_write_failure_rate_threshold: 0.001       # Mongo 二级写失败率阈值，超过需停止扩大 dual。
   mongo_read_error_rate_threshold: 0.01           # Mongo 读错误率阈值，超过需回退 mysql/dual。
   mongo_consistency_mismatch_rate_threshold: 0.0001 # 一致性不一致率阈值，超过禁止切读。
+  # 三期 MySQL 清库只允许在对应对象切到 mongo 后执行；清库后如需回退 mysql，先运行 rollback-import。
 
 # 默认 LLM 配置。providers.json 不可用或 fallback 时会回退到这里；
 # 数据飞轮 AI 预判也会复用这组模型配置。

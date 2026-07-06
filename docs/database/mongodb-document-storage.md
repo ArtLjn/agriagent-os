@@ -69,9 +69,36 @@ API 影响面与兼容性：
 - Data Flywheel 四个集合不设置默认 TTL。
 - `guardrailsLogs` 暂不设置 Mongo TTL，先与现有应用层 30 天清理保持一致。
 
+## 生命周期阶段
+
+MongoDB 文档存储按对象逐类推进：
+
+1. `mysql`：MySQL 为唯一读写来源。
+2. `dual`：MySQL 主写，Mongo 二级写；失败写入 `mongo_compensation_tasks`。
+3. `mongo-read`：优先读 Mongo，失败或未命中回退 MySQL。
+4. `mongo`：Mongo 主读写；进入前三方回填、校验、补偿重放必须完成。
+5. `mysql-cleanup`：Mongo 已稳定作为 source of truth，MySQL 文档型历史数据按清库 runbook 删除或瘦身。
+
+进入 `mysql-cleanup` 后，MySQL 不再作为已清理对象的实时回滚基准；回滚依赖 Mongo 主存储和清理前 JSONL 备份，通过 `rollback-import` 恢复 MySQL 后才能把对应对象切回 `mysql` 或 `dual`。
+
+三期候选清理范围：
+
+- 第 1 期：`trace_records`、`agent_case_drafts`、`agent_repair_packs`、`agent_review_issue_chains`、`agent_data_flywheel_prelabels`。
+- 第 2 期：`conversation_messages`、`agent_records`、`guardrails_logs`。
+
+三期禁止清理范围：
+
+- `conversations`
+- `agent_turns`
+- `feedback_records`
+- `token_daily_stats`
+- `agent_data_flywheel_labels`
+
+`conversation_messages` 默认只执行大字段瘦身，保留 `id`、`conversation_id`、`role`、`turn_id`、`content_hash` 和 `created_at`。原因是 `agent_turns`、`feedback_records`、`trace_records` 和部分调试/数据飞轮路径仍依赖稳定消息 ID；只有未来所有引用迁出后，才允许单独提出 drop 行或 drop 表方案。
+
 ## 暂缓项
 
 - 不迁移 `conversations`。
 - 不迁移 `agent_turns.rule_hits`，评估结论见 `docs/database/mongodb-agent-turn-rule-hits-evaluation.md`。
-- 第 1 期和第 2 期均保留 MySQL 表和 MySQL 写入作为回滚基准。
-- 第 2 期不删 MySQL 表；只允许 `guardrails_logs` 按既有 30 天保留策略清理过期行。
+- 三期不 drop MySQL 表结构，只清理或瘦身已迁移对象的数据行。
+- 三期前第 1 期和第 2 期保留 MySQL 表和 MySQL 写入作为回滚基准；三期清理后按备份导入回滚。

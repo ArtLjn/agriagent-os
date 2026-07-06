@@ -67,6 +67,7 @@ bug.todo.md
 
 farm-index/app/node_modules/
 backend/data/repair-packs/
+backend/var/mongodb-cleanup/
 output/
 admin-web/dist/
 farm-index/app/dist/
