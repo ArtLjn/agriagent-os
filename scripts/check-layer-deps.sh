@@ -16,6 +16,8 @@ is_size_baseline_file() {
     backend/app/agent/application/smart_fill.py|\
     backend/app/agent/router/classifier.py|\
     backend/app/modules/data_flywheel/router.py|\
+    backend/app/modules/data_flywheel/review_issue_chain_repository.py|\
+    backend/app/modules/data_flywheel/review_issue_chain_service.py|\
     backend/app/evaluation/discovery/rule_engine.py|\
     backend/app/modules/data_flywheel/repair_pack_repository.py|\
     backend/app/modules/data_flywheel/service.py|\
