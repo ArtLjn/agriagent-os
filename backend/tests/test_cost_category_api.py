@@ -3,7 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_current_farm, get_db
+from app.core.dependencies import get_db
+from app.modules.farm.dependencies import get_current_farm
 from app.models.farm import Farm
 
 

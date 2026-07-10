@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.main import app
-from app.agent.prompt_registry import get_registry
+from app.prompt.registry import get_registry
 from app.models.cost import CostRecord
 from app.schemas.cost import CostRecordUpdate
 from app.services.report_data_service import _build_report_data

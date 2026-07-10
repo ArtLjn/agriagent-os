@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.agent.prompt_registry import get_registry
+from app.prompt.registry import get_registry
 from app.main import app
 from app.schemas.crop import CropTemplateParseResponse, GrowthStageCreate
 
