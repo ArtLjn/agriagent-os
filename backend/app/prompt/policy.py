@@ -21,6 +21,7 @@ _NAME_LAYER_MAP: dict[str, PromptLayer] = {
     "language": PromptLayer.SAFETY,
     "tool-guardrails": PromptLayer.SAFETY,
     "parallel-tool": PromptLayer.TOOL,
+    "tool-result-guardrails": PromptLayer.SAFETY,
     "role": PromptLayer.ROLE,
     "capability": PromptLayer.CAPABILITY,
     "tool-guide": PromptLayer.TOOL,

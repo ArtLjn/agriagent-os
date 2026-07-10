@@ -259,16 +259,11 @@ async def test_stream_query_capability_menu_uses_stream_advisor():
         ),
         patch(
             "app.agent.application.stream_chat_use_case._get_skill_names",
+            new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.agent.application.stream_chat_use_case._save_stream_reply",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-        patch(
-            "app.agent.application.stream_chat_use_case._observe_chat_completion",
-            new_callable=AsyncMock,
+            "app.agent.application.stream_chat_use_case._schedule_stream_background_finalization",
         ),
     ):
         from app.agent.executor.models import PendingActionDecision

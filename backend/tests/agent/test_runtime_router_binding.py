@@ -253,3 +253,53 @@ async def test_final_answer_with_tool_result_binds_no_tools_by_default() -> None
         )
 
     assert fake_llm.bound_tool_names == []
+
+
+@pytest.mark.asyncio
+async def test_final_answer_with_tool_result_reuses_plan_and_context_trace() -> None:
+    """已有工具结果的 final answer 轮不重复记录路由节点，并复用上下文。"""
+    fake_llm = _FakeLLM()
+    tools = [_FakeTool("get_weather_forecast")]
+    collector = MagicMock()
+    prepared_context = ContextBundle(blocks=[], token_budget=0, token_estimate=0)
+    plan_draft = {
+        "route_type": "read_plan",
+        "selected_tools": ["get_weather_forecast"],
+    }
+
+    with ExitStack() as stack:
+        entered = _enter_runtime_patches(stack, fake_llm, tools)
+        context_loader = entered[6]
+        entered[10].return_value = collector
+        result = await _llm_node(
+            {
+                "messages": [
+                    HumanMessage(content="天气怎么样"),
+                    ToolMessage(
+                        content="苏州晴，气温 32 度",
+                        tool_call_id="tool-1",
+                    ),
+                ],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-1",
+                "router_decision": RouterDecision(
+                    selected_tools=["get_weather_forecast"],
+                ),
+                "plan_draft": plan_draft,
+                "context_bundle": prepared_context,
+            }
+        )
+
+    node_names = [
+        call.kwargs.get("node_name") for call in collector.record.call_args_list
+    ]
+    assert "skill_router" not in node_names
+    assert "tool_call_forced" not in node_names
+    context_loader.assert_not_called()
+    assert result["plan_draft"] is plan_draft
+    assert result["context_bundle"] is prepared_context
+    assert result["selected_tool_names"] == []
+    assert isinstance(result["trace_round_index"], int)

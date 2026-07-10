@@ -12,6 +12,7 @@ __all__ = [
     "clear_trace",
     "get_round_index",
     "increment_round",
+    "set_round_index",
 ]
 
 
@@ -77,3 +78,10 @@ def increment_round() -> int:
     new_val = _round_ctx.get() + 1
     _round_ctx.set(new_val)
     return new_val
+
+
+def set_round_index(round_index: int | None) -> None:
+    """设置当前 trace 轮次，用于跨 LangGraph node 传递 trace 分组。"""
+    if round_index is None:
+        return
+    _round_ctx.set(round_index)

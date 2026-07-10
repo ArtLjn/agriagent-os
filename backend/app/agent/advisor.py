@@ -15,7 +15,7 @@ from app.agent.intent_router import IntentType, classify_intent, get_greeting_re
 from app.agent.llm import get_llm
 from app.agent.application.response_trace import record_agent_response
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
-from app.infra.trace_context import clear_trace, init_trace
+from app.infra.trace_context import clear_trace, init_trace, set_round_index
 from app.models.farm import Farm
 from app.services.conversation_service import (
     async_get_recent_messages,
@@ -236,6 +236,7 @@ async def invoke_advisor(
         )
         reply = result["messages"][-1].content
         filtered = filter_output(reply)
+        set_round_index(result.get("trace_round_index"))
         record_agent_response(
             node_name="final_reply",
             user_input=user_input,
@@ -384,6 +385,7 @@ async def stream_advisor(
                                 len(msg.content),
                             )
                             filtered = filter_output(msg.content)
+                            set_round_index(state.get("trace_round_index"))
                             record_agent_response(
                                 node_name="final_reply",
                                 user_input=user_input,

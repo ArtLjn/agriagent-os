@@ -45,6 +45,16 @@ interface TraceItem {
   timelineLoading: boolean;
 }
 
+interface TraceSessionGroup {
+  key: string;
+  session_id: string | null;
+  request_count: number;
+  node_count: number;
+  total_duration_ms: number;
+  created_at: string;
+  items: TraceItem[];
+}
+
 const aggregateTraces = (records: TraceRecord[]): TraceItem[] => {
   const groups = new Map<string, TraceRecord[]>();
   records.forEach((item) => {
@@ -62,6 +72,29 @@ const aggregateTraces = (records: TraceRecord[]): TraceItem[] => {
     created_at: records[0].created_at,
     timeline: null,
     timelineLoading: true,
+  }));
+};
+
+const aggregateSessionGroups = (items: TraceItem[]): TraceSessionGroup[] => {
+  const groups = new Map<string, TraceItem[]>();
+  items.forEach((item) => {
+    const key = item.session_id || `request:${item.request_id}`;
+    const arr = groups.get(key) || [];
+    arr.push(item);
+    groups.set(key, arr);
+  });
+
+  return Array.from(groups.entries()).map(([key, groupItems]) => ({
+    key,
+    session_id: groupItems[0].session_id,
+    request_count: groupItems.length,
+    node_count: groupItems.reduce((sum, item) => sum + item.node_count, 0),
+    total_duration_ms: groupItems.reduce(
+      (sum, item) => sum + item.total_duration_ms,
+      0
+    ),
+    created_at: groupItems[0].created_at,
+    items: groupItems,
   }));
 };
 
@@ -86,6 +119,7 @@ export default function TraceMonitor() {
   const [cleanupDate, setCleanupDate] = useState<Dayjs | null>(null);
   const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const sessionGroups = useMemo(() => aggregateSessionGroups(items), [items]);
   const didInitialFetch = useRef(false);
 
   const loadTimeline = useCallback(async (requestId: string) => {
@@ -296,112 +330,154 @@ export default function TraceMonitor() {
 
       {/* Trace 列表 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-        {items.map((item) => (
-          <div
-            key={item.request_id}
-            style={{
-              background: CARD,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 8,
-              overflow: 'hidden',
-            }}
-          >
-            {/* Trace 头部信息 - 可点击折叠/展开 */}
+        {sessionGroups.map((group) => (
+          <div key={group.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div
-              onClick={() => toggleCard(item.request_id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                padding: '12px 16px',
-                borderBottom: expandedCards.has(item.request_id)
-                  ? `1px solid ${BORDER}`
-                  : 'none',
-                gap: 24,
+                gap: 18,
+                padding: '8px 12px',
                 fontSize: 13,
-                cursor: 'pointer',
-                transition: 'background 0.2s',
+                color: TEXT_DIM,
+                borderLeft: `3px solid ${ACCENT}`,
+                background: '#0d1117',
               }}
             >
+              <span style={{ color: TEXT, fontWeight: 600 }}>
+                Session 组次
+              </span>
               <span>
-                <span style={{ color: TEXT_DIM }}>Request ID: </span>
+                <span style={{ color: TEXT_DIM }}>Session: </span>
                 <span style={{ fontFamily: 'monospace', color: ACCENT }}>
-                  {item.request_id.slice(0, 16)}...
+                  {group.session_id ? `${group.session_id.slice(0, 24)}...` : '未绑定'}
                 </span>
               </span>
-              {item.session_id && (
-                <span>
-                  <span style={{ color: TEXT_DIM }}>Session: </span>
-                  <span style={{ fontFamily: 'monospace', color: TEXT_DIM }}>
-                    {item.session_id.slice(0, 16)}...
-                  </span>
-                </span>
-              )}
               <span>
-                <span style={{ color: TEXT_DIM }}>Farm: </span>
-                <span style={{ color: TEXT }}>{item.farm_id}</span>
+                <span style={{ color: TEXT_DIM }}>请求: </span>
+                <span style={{ color: TEXT }}>{group.request_count}</span>
               </span>
               <span>
                 <span style={{ color: TEXT_DIM }}>节点: </span>
-                <span style={{ color: TEXT }}>{item.node_count}</span>
+                <span style={{ color: TEXT }}>{group.node_count}</span>
               </span>
               <span>
-                <span style={{ color: TEXT_DIM }}>耗时: </span>
-                <span style={{ color: TEXT }}>{item.total_duration_ms}ms</span>
+                <span style={{ color: TEXT_DIM }}>累计耗时: </span>
+                <span style={{ color: TEXT }}>{group.total_duration_ms}ms</span>
               </span>
-              <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {expandedCards.has(item.request_id) && item.timeline && (
-                  <Button
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={(e) => { e.stopPropagation(); copyTimingReport(item.timeline!); }}
-                    style={{ background: 'transparent', borderColor: BORDER, color: TEXT_DIM, fontSize: 12 }}
-                  >
-                    复制耗时
-                  </Button>
-                )}
-                <span>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
-                <span style={{ color: ACCENT }}>
-                  {expandedCards.has(item.request_id) ? '收起 ▲' : '展开 ▼'}
-                </span>
+              <span style={{ marginLeft: 'auto' }}>
+                {new Date(group.created_at).toLocaleString('zh-CN')}
               </span>
             </div>
 
-            {/* Gantt 图 - 展开时显示 */}
-            {expandedCards.has(item.request_id) && (
-            <div style={{ padding: 16 }}>
-              {item.timelineLoading ? (
-                <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
-                  加载 Timeline...
+            {group.items.map((item) => (
+              <div
+                key={item.request_id}
+                style={{
+                  background: CARD,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Trace 头部信息 - 可点击折叠/展开 */}
+                <div
+                  onClick={() => toggleCard(item.request_id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    borderBottom: expandedCards.has(item.request_id)
+                      ? `1px solid ${BORDER}`
+                      : 'none',
+                    gap: 24,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  <span>
+                    <span style={{ color: TEXT_DIM }}>Request ID: </span>
+                    <span style={{ fontFamily: 'monospace', color: ACCENT }}>
+                      {item.request_id.slice(0, 16)}...
+                    </span>
+                  </span>
+                  {item.session_id && (
+                    <span>
+                      <span style={{ color: TEXT_DIM }}>Session: </span>
+                      <span style={{ fontFamily: 'monospace', color: TEXT_DIM }}>
+                        {item.session_id.slice(0, 16)}...
+                      </span>
+                    </span>
+                  )}
+                  <span>
+                    <span style={{ color: TEXT_DIM }}>Farm: </span>
+                    <span style={{ color: TEXT }}>{item.farm_id}</span>
+                  </span>
+                  <span>
+                    <span style={{ color: TEXT_DIM }}>节点: </span>
+                    <span style={{ color: TEXT }}>{item.node_count}</span>
+                  </span>
+                  <span>
+                    <span style={{ color: TEXT_DIM }}>耗时: </span>
+                    <span style={{ color: TEXT }}>{item.total_duration_ms}ms</span>
+                  </span>
+                  <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {expandedCards.has(item.request_id) && item.timeline && (
+                      <Button
+                        size="small"
+                        icon={<CopyOutlined />}
+                        onClick={(e) => { e.stopPropagation(); copyTimingReport(item.timeline!); }}
+                        style={{ background: 'transparent', borderColor: BORDER, color: TEXT_DIM, fontSize: 12 }}
+                      >
+                        复制耗时
+                      </Button>
+                    )}
+                    <span>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
+                    <span style={{ color: ACCENT }}>
+                      {expandedCards.has(item.request_id) ? '收起 ▲' : '展开 ▼'}
+                    </span>
+                  </span>
                 </div>
-              ) : item.timeline ? (
-                <GanttTimeline
-                  rounds={item.timeline.rounds.map((r) => ({
-                    round_index: r.round_index,
-                    nodes: r.nodes.map((n) => ({
-                      node_type: n.node_type,
-                      node_name: n.node_name,
-                      duration_ms: n.duration_ms,
-                      status: n.status,
-                      start_time: n.start_time,
-                      input_data: n.input_data,
-                      output_data: n.output_data,
-                      error_message: n.error_message,
-                    })),
-                  }))}
-                  onNodeClick={(roundIdx, nodeIdx, node) =>
-                    handleNodeClick(item.request_id, roundIdx, nodeIdx, node)
-                  }
-                />
-              ) : (
-                <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
-                  <div style={{ marginBottom: 8 }}>暂无 Timeline 数据（可能该 Trace 已过期或未记录链路）</div>
-                  <Button size="small" onClick={() => loadTimeline(item.request_id)}>
-                    重试加载
-                  </Button>
+
+                {/* Gantt 图 - 展开时显示 */}
+                {expandedCards.has(item.request_id) && (
+                <div style={{ padding: 16 }}>
+                  {item.timelineLoading ? (
+                    <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
+                      加载 Timeline...
+                    </div>
+                  ) : item.timeline ? (
+                    <GanttTimeline
+                      rounds={item.timeline.rounds.map((r) => ({
+                        round_index: r.round_index,
+                        nodes: r.nodes.map((n) => ({
+                          node_type: n.node_type,
+                          node_name: n.node_name,
+                          duration_ms: n.duration_ms,
+                          status: n.status,
+                          start_time: n.start_time,
+                          input_data: n.input_data,
+                          output_data: n.output_data,
+                          error_message: n.error_message,
+                        })),
+                      }))}
+                      onNodeClick={(roundIdx, nodeIdx, node) =>
+                        handleNodeClick(item.request_id, roundIdx, nodeIdx, node)
+                      }
+                    />
+                  ) : (
+                    <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
+                      <div style={{ marginBottom: 8 }}>暂无 Timeline 数据（可能该 Trace 已过期或未记录链路）</div>
+                      <Button size="small" onClick={() => loadTimeline(item.request_id)}>
+                        重试加载
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            )}
+                )}
+              </div>
+            ))}
           </div>
         ))}
       </div>

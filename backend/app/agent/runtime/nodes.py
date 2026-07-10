@@ -61,7 +61,7 @@ from app.core.date_context import get_request_date
 from app.context.models import ContextBundle
 from app.infra.pending_actions import PENDING_MARKER, is_pending_tool_message
 from app.infra.trace_collector import get_collector
-from app.infra.trace_context import increment_round
+from app.infra.trace_context import increment_round, set_round_index
 
 logger = logging.getLogger(__name__)
 expand_by_chain = _expand_by_chain
@@ -255,10 +255,13 @@ def _route_tools(user_msg: str, tools: list) -> RouterDecision:
 
 
 def _direct_tool_message_response(
+    state: AgentState,
     pending_msgs: list[ToolMessage],
     normal_msgs: list[ToolMessage],
 ) -> dict | None:
     """处理无需再次进入 LLM 的 ToolMessage 结果。"""
+    trace_round_index = state.get("trace_round_index")
+    set_round_index(trace_round_index)
     if pending_msgs and normal_msgs:
         summaries = []
         for m in normal_msgs:
@@ -275,12 +278,18 @@ def _direct_tool_message_response(
             len(pending_msgs),
             len(normal_msgs),
         )
-        return {"messages": [AIMessage(content=combined)]}
+        return {
+            "messages": [AIMessage(content=combined)],
+            "trace_round_index": trace_round_index,
+        }
 
     if pending_msgs:
         confirm = pending_msgs[-1].content.replace(PENDING_MARKER, "").strip()
         logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
-        return {"messages": [AIMessage(content=confirm)]}
+        return {
+            "messages": [AIMessage(content=confirm)],
+            "trace_round_index": trace_round_index,
+        }
 
     if normal_msgs and can_return_direct_tool_messages(normal_msgs):
         content = "\n\n".join(str(msg.content or "") for msg in normal_msgs).strip()
@@ -288,7 +297,10 @@ def _direct_tool_message_response(
             "检测到确定性直达 ToolMessage，跳过 LLM 直接返回 | count=%d",
             len(normal_msgs),
         )
-        return {"messages": [AIMessage(content=content)]}
+        return {
+            "messages": [AIMessage(content=content)],
+            "trace_round_index": trace_round_index,
+        }
 
     return None
 
@@ -370,6 +382,12 @@ def _record_router_plan_trace(
         },
     )
     return plan_draft_payload
+
+
+def _existing_plan_draft_payload(state: AgentState) -> dict | None:
+    """读取上一轮 LLM 已生成的 plan_draft trace payload。"""
+    payload = state.get("plan_draft")
+    return payload if isinstance(payload, dict) else None
 
 
 def _resolve_selected_names(
@@ -853,7 +871,11 @@ async def _llm_node(state: AgentState) -> dict:
     pending_msgs = [m for m in tool_msgs if is_pending_tool_message(m)]
     normal_msgs = [m for m in tool_msgs if not is_pending_tool_message(m)]
 
-    direct_tool_response = _direct_tool_message_response(pending_msgs, normal_msgs)
+    direct_tool_response = _direct_tool_message_response(
+        state,
+        pending_msgs,
+        normal_msgs,
+    )
     if direct_tool_response is not None:
         return direct_tool_response
 
@@ -882,16 +904,19 @@ async def _llm_node(state: AgentState) -> dict:
         tools=tools,
     )
 
-    increment_round()
+    trace_round_index = increment_round()
     collector = get_collector()
     session_id = state.get("session_id")
-    plan_draft_payload = _record_router_plan_trace(
-        collector=collector,
-        router_decision=router_decision,
-        user_msg=user_msg,
-        farm_id=farm_id,
-        session_id=session_id,
-    )
+    plan_draft_payload = _existing_plan_draft_payload(state)
+    should_record_router_trace = not has_tool_results
+    if plan_draft_payload is None or should_record_router_trace:
+        plan_draft_payload = _record_router_plan_trace(
+            collector=collector,
+            router_decision=router_decision,
+            user_msg=user_msg,
+            farm_id=farm_id,
+            session_id=session_id,
+        )
 
     selected_names = _resolve_selected_names(
         router_decision=router_decision,
@@ -906,13 +931,14 @@ async def _llm_node(state: AgentState) -> dict:
     logger.info("模型路由 | intent=%s | role=%s", intent, model_role)
     selected_tools = [t for t in tools if t.name in selected_names]
     tool_choice = router_decision.tool_choice
-    _record_tool_call_forced_trace(
-        collector=collector,
-        user_msg=user_msg,
-        selected_names=selected_names,
-        tool_choice=tool_choice,
-        force_binding=router_decision.force_binding,
-    )
+    if should_record_router_trace:
+        _record_tool_call_forced_trace(
+            collector=collector,
+            user_msg=user_msg,
+            selected_names=selected_names,
+            tool_choice=tool_choice,
+            force_binding=router_decision.force_binding,
+        )
     llm = _bind_llm_for_tools(raw_llm, selected_tools, tool_choice=tool_choice)
 
     selected_tool_names = [t.name for t in selected_tools] if selected_tools else []
@@ -1016,6 +1042,9 @@ async def _llm_node(state: AgentState) -> dict:
         "messages": [response],
         "router_decision": router_decision,
         "plan_draft": plan_draft_payload,
+        "context_bundle": context_bundle,
+        "selected_tool_names": selected_tool_names,
+        "trace_round_index": trace_round_index,
     }
 
 

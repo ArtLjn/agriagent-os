@@ -16,6 +16,7 @@ farm-manager，FastAPI 后端 + React+TS 前端
 | 了解兼容入口保留理由 | docs/architecture/compatibility-entries.md |
 | 了解 Python 编码规范 | .claude/rules/python-style.md |
 | 了解前端编码规范 | .claude/rules/frontend-style.md |
+| 了解 Codex 编码行为规范 | docs/conventions/codex-coding-standard.md |
 | 了解安全规范 | .claude/rules/security.md |
 | 了解文档同步规则 | .claude/rules/docs-sync.md |
 | 了解 Skill 书写规范 | .claude/rules/skill-writing.md |
@@ -32,6 +33,11 @@ farm-manager，FastAPI 后端 + React+TS 前端
 5. 使用结构化日志，禁止 console.log / print 调试
 6. 错误信息必须含 code 字段和上下文
 7. 修改代码后必须运行复杂度预算检查；新增抽象、生成物入库、大文件和工作区污染由 check-complexity-budget.sh 拦截
+
+## Codex 写代码前必须确认
+- 关键业务、兼容、协议、并发、安全逻辑必须写“为什么”的注释；普通代码不写复述性注释
+- 默认不新增碎片文件；只有边界清晰、超过文件阈值、3 处以上复用或隔离外部依赖时才拆
+- 新增文件或抽象时，最终说明必须交代调用方、边界和不能留在原文件的理由
 
 ## 可测试性分级
 开发新功能前，先判断需求类型再选验证策略：

@@ -40,7 +40,6 @@ def test_composer_exposes_layered_snippets_in_policy_order():
 
     assert PromptLayer.SAFETY in layers
     assert PromptLayer.ROLE in layers
-    assert PromptLayer.CAPABILITY in layers
     assert PromptLayer.TOOL in layers
     assert PromptLayer.CONTEXT in layers
     assert PromptLayer.OUTPUT in layers
@@ -86,8 +85,9 @@ def test_system_prompt_snapshot_covers_layered_output():
     assert "【角色定义】" in result
     assert "芽芽" in result
     assert "轻松闲聊" in result
-    assert "【能力范围】" in result
-    assert "【工具调用规范】" in result
+    assert "【能力范围】" not in result
+    assert "代表性可调用 Skill" not in result
+    assert "【工具调用规范】" not in result
     assert result.index("【时间信息】") < result.index("【回复格式】")
     assert "<location>苏州</location>" in result
     assert "称呼用户为" not in result
@@ -95,9 +95,9 @@ def test_system_prompt_snapshot_covers_layered_output():
     assert result.count("【语言规则】") == 1
 
 
-def test_system_prompt_defines_truthful_capability_boundaries():
+def test_capability_snippet_defines_truthful_boundaries_without_skill_list():
     result = _composer().compose(
-        "system_base",
+        "system_chat",
         PromptInput(
             variables={
                 "display_name": "老李",
@@ -108,13 +108,28 @@ def test_system_prompt_defines_truthful_capability_boundaries():
         ),
     )
 
-    assert "只能承诺已注册、已启用、并且当前可调用的 Skill 能力" in result
-    assert "不要把路线图、后台 API、前端页面或系统规划说成自己已经能直接办理" in result
-    assert "没有对应 Skill" in result
-    assert "manage_workers" in result
-    assert "manage_wages" in result
-    assert "get_labor_payables" in result
-    assert "create_operation_work_order" in result
+    assert "代表性可调用 Skill" not in result
+    assert "manage_workers" not in result
+    assert "create_operation_work_order" not in result
+
+
+def test_tool_result_prompt_is_compact_and_omits_capability_catalog():
+    result = _composer().compose(
+        "system_tool_result",
+        PromptInput(
+            variables={
+                "display_name": "老李",
+                "farm_location": "苏州",
+                "current_season": "夏季",
+            },
+            current_date=date(2026, 5, 29),
+        ),
+    )
+
+    assert "【工具结果回复规则】" in result
+    assert "【能力范围】" not in result
+    assert "代表性可调用 Skill" not in result
+    assert "【工具调用规范】" not in result
 
 
 def test_business_parse_prompt_snapshot_covers_cost_parse():

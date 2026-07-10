@@ -143,6 +143,60 @@ class TestGetTraces:
 
 
 class TestGetTimeline:
+    def test_timeline_orders_rounds_by_first_node_time(self, db_session) -> None:
+        from app.core.config import settings
+        from pytest import MonkeyPatch
+
+        admin_user = ensure_admin_user(db_session)
+
+        early_record = MagicMock()
+        early_record.id = 2
+        early_record.request_id = "abc12345"
+        early_record.round_index = 1
+        early_record.node_type = "routing"
+        early_record.node_name = "skill_router"
+        early_record.duration_ms = 0
+        early_record.status = "success"
+        early_record.token_usage = None
+        early_record.start_time = datetime(2026, 7, 10, 16, 32, 46)
+        early_record.end_time = None
+        early_record.error_message = None
+        early_record.input_data = None
+        early_record.output_data = None
+
+        late_record = MagicMock()
+        late_record.id = 1
+        late_record.request_id = "abc12345"
+        late_record.round_index = 0
+        late_record.node_type = "final_reply"
+        late_record.node_name = "final_reply"
+        late_record.duration_ms = 0
+        late_record.status = "success"
+        late_record.token_usage = None
+        late_record.start_time = datetime(2026, 7, 10, 16, 32, 54)
+        late_record.end_time = None
+        late_record.error_message = None
+        late_record.input_data = None
+        late_record.output_data = None
+
+        mock_db = _mock_db(admin_user)
+        mock_db.trace_query.all.return_value = [late_record, early_record]
+        monkeypatch = MonkeyPatch()
+        monkeypatch.setattr(settings.storage, "trace", "mysql")
+
+        try:
+            with auth_override_scope(app), _db_override(mock_db):
+                resp = TestClient(app).get(
+                    "/admin/traces/abc12345/timeline",
+                    headers=admin_headers(),
+                )
+
+            assert resp.status_code == 200
+            rounds = resp.json()["rounds"]
+            assert [round_item["round_index"] for round_item in rounds] == [1, 0]
+        finally:
+            monkeypatch.undo()
+
     def test_timeline_returns_rounds(self, db_session) -> None:
         from app.core.config import settings
 
@@ -226,6 +280,9 @@ class TestGetDiagnostics:
     def test_diagnostics_returns_structured_pending_and_context(
         self, db_session
     ) -> None:
+        from app.core.config import settings
+        from pytest import MonkeyPatch
+
         admin_user = ensure_admin_user(db_session)
         context_record = MagicMock()
         context_record.id = 1
@@ -282,12 +339,17 @@ class TestGetDiagnostics:
             pending_record,
             reflection_record,
         ]
+        monkeypatch = MonkeyPatch()
+        monkeypatch.setattr(settings.storage, "trace", "mysql")
 
-        with auth_override_scope(app), _db_override(mock_db):
-            resp = TestClient(app).get(
-                "/admin/traces/abc12345/diagnostics",
-                headers=admin_headers(),
-            )
+        try:
+            with auth_override_scope(app), _db_override(mock_db):
+                resp = TestClient(app).get(
+                    "/admin/traces/abc12345/diagnostics",
+                    headers=admin_headers(),
+                )
+        finally:
+            monkeypatch.undo()
 
         assert resp.status_code == 200
         data = resp.json()

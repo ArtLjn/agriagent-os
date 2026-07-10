@@ -143,3 +143,16 @@ def test_direct_tool_messages_can_still_return_without_final_llm():
     ]
 
     assert can_return_direct_tool_messages(messages) is True
+
+
+def test_weather_tool_message_should_go_through_final_llm():
+    """天气 Skill 原始结果需要最终 LLM 组织语言。"""
+    messages = [
+        ToolMessage(
+            content="城市: 苏州\n未来天数: 3天\n7/10: 天气☀️, 最高35℃",
+            tool_call_id="call-random",
+            name="get_weather_forecast",
+        )
+    ]
+
+    assert can_return_direct_tool_messages(messages) is False
