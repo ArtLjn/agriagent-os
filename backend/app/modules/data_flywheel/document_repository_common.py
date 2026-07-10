@@ -119,6 +119,16 @@ class ReviewIssueChainRepository(Protocol):
         offset: int = 0,
     ) -> RepositoryPage[AgentReviewIssueChain]: ...
 
+    def list(
+        self,
+        *,
+        farm_id: int,
+        session_id: str | None = None,
+        severity: str = "all",
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> RepositoryPage[AgentReviewIssueChain]: ...
+
     def update_review_fields(
         self, *, farm_id: int, chain_id: str, **fields: Any
     ) -> AgentReviewIssueChain | None: ...

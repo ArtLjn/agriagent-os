@@ -3,6 +3,8 @@
 import logging
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import ProgrammingError
+
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.token_stats import TokenDailyStats
@@ -18,11 +20,7 @@ def clean_expired_traces() -> dict[str, int]:
 
     db = SessionLocal()
     try:
-        trace_deleted = (
-            db.query(TraceRecord)
-            .filter(TraceRecord.created_at < trace_cutoff)
-            .delete(synchronize_session=False)
-        )
+        trace_deleted = _delete_expired_trace_records(db, trace_cutoff)
         stats_deleted = (
             db.query(TokenDailyStats)
             .filter(TokenDailyStats.created_at < stats_cutoff)
@@ -44,6 +42,34 @@ def clean_expired_traces() -> dict[str, int]:
         return {"trace_records_deleted": 0, "token_stats_deleted": 0}
     finally:
         db.close()
+
+
+def _delete_expired_trace_records(db, trace_cutoff: datetime) -> int:
+    try:
+        return int(
+            db.query(TraceRecord)
+            .filter(TraceRecord.created_at < trace_cutoff)
+            .delete(synchronize_session=False)
+            or 0
+        )
+    except ProgrammingError as exc:
+        if not _is_missing_table_error(exc):
+            raise
+        db.rollback()
+        logger.warning(
+            "Trace TTL 跳过缺失的 MySQL 表 | code=trace_records_table_missing"
+        )
+        return 0
+
+
+def _is_missing_table_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "trace_records" in message and (
+        "doesn't exist" in message
+        or "does not exist" in message
+        or "no such table" in message
+        or "missing table" in message
+    )
 
 
 __all__ = ["clean_expired_traces"]

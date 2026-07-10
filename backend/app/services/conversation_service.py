@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.infra.repository_runtime import (
     get_conversation_message_repository,
+    resolve_maybe_awaitable,
     run_maybe_awaitable,
 )
 from app.models.conversation import (
@@ -98,19 +99,40 @@ def save_message(
     meta: str | None = None,
 ) -> ConversationMessage:
     """持久化单条消息并更新会话最后活跃时间。"""
-    conversation = db.get(Conversation, conversation_id)
     msg = ConversationMessage(
         conversation_id=conversation_id,
         role=role,
         content=content,
         meta=meta,
     )
-    if conversation is not None:
-        msg.conversation = conversation
     repo = get_conversation_message_repository(db)
     msg = run_maybe_awaitable(repo.save_one(msg))
 
     # 更新会话最后活跃时间
+    db.query(Conversation).filter(Conversation.id == conversation_id).update(
+        {"last_active_at": datetime.now()}
+    )
+    db.commit()
+    return msg
+
+
+async def async_save_message(
+    db: Session,
+    conversation_id: int,
+    role: str,
+    content: str,
+    meta: str | None = None,
+) -> ConversationMessage:
+    """在 async 请求链路中保存消息，避免 Motor coroutine 跨事件循环执行。"""
+    msg = ConversationMessage(
+        conversation_id=conversation_id,
+        role=role,
+        content=content,
+        meta=meta,
+    )
+    repo = get_conversation_message_repository(db)
+    msg = await resolve_maybe_awaitable(repo.save_one(msg))
+
     db.query(Conversation).filter(Conversation.id == conversation_id).update(
         {"last_active_at": datetime.now()}
     )
@@ -128,7 +150,6 @@ def save_messages_batch(
     messages: list[dict[str, Any]],
 ) -> list[ConversationMessage]:
     """在一次事务中保存多条消息并更新会话活跃时间。"""
-    conversation = db.get(Conversation, conversation_id)
     rows: list[ConversationMessage] = []
     for item in messages:
         meta_json = item.get("meta_json")
@@ -144,8 +165,6 @@ def save_messages_batch(
             content_hash=_content_hash(item["content"]),
             meta_json=meta_json,
         )
-        if conversation is not None:
-            row.conversation = conversation
         rows.append(row)
     repo = get_conversation_message_repository(db)
     rows = run_maybe_awaitable(repo.save_batch(rows))
@@ -165,6 +184,23 @@ def get_recent_messages(
         return []
     repo = get_conversation_message_repository(db)
     return run_maybe_awaitable(
+        repo.get_recent(
+            farm_id=conversation.farm_id,
+            conversation_id=conversation_id,
+            limit=limit,
+        )
+    )
+
+
+async def async_get_recent_messages(
+    db: Session, conversation_id: int, limit: int = _MAX_INJECT_MESSAGES
+) -> list[ConversationMessage]:
+    """async 链路获取最近消息，避免 Motor coroutine 跨事件循环执行。"""
+    conversation = db.get(Conversation, conversation_id)
+    if conversation is None:
+        return []
+    repo = get_conversation_message_repository(db)
+    return await resolve_maybe_awaitable(
         repo.get_recent(
             farm_id=conversation.farm_id,
             conversation_id=conversation_id,
@@ -213,6 +249,8 @@ __all__ = [
     "ConversationAccessError",
     "get_or_create_conversation",
     "close_expired_conversations",
+    "async_get_recent_messages",
+    "async_save_message",
     "save_message",
     "save_messages_batch",
     "get_recent_messages",

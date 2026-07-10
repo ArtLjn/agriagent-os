@@ -8,10 +8,15 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.core.dependencies import get_db
+from app.core.config import settings
+from app.modules.auth.dependencies import require_admin
 from app.evaluation.diagnostics import SkillDiagnosticService
+from app.infra.mongo import get_mongo_database
+from app.infra.mongo_mappers import trace_record_from_mongo_doc
 from app.infra.repository_runtime import (
     get_trace_repository,
     resolve_maybe_awaitable,
@@ -60,6 +65,16 @@ async def list_traces(
     db: Session = Depends(get_db),
 ) -> dict:
     """查询 trace 记录列表。"""
+    if _trace_storage_is_mongo() or not _trace_table_exists(db):
+        page = await _list_traces_from_mongo(
+            request_id=request_id,
+            session_id=session_id,
+            farm_id=farm_id,
+            limit=limit,
+            offset=offset,
+        )
+        return _trace_page_response(page)
+
     if farm_id is not None:
         page = await _list_traces_from_repository(
             db,
@@ -88,14 +103,11 @@ async def list_traces(
 
 
 @router.get("/traces/{request_id}/timeline", response_model=TimelineResponse)
-def get_timeline(request_id: str, db: Session = Depends(get_db)) -> TimelineResponse:
+async def get_timeline(
+    request_id: str, db: Session = Depends(get_db)
+) -> TimelineResponse:
     """获取某次请求的 Gantt 时间线数据。"""
-    records = (
-        db.query(TraceRecord)
-        .filter(TraceRecord.request_id == request_id)
-        .order_by(TraceRecord.round_index, TraceRecord.id)
-        .all()
-    )
+    records = await _records_by_request_id(request_id, db)
     if not records:
         return TimelineResponse(request_id=request_id, rounds=[])
 
@@ -123,14 +135,9 @@ def get_timeline(request_id: str, db: Session = Depends(get_db)) -> TimelineResp
 
 
 @router.get("/traces/{request_id}/diagnostics")
-def get_trace_diagnostics(request_id: str, db: Session = Depends(get_db)) -> dict:
+async def get_trace_diagnostics(request_id: str, db: Session = Depends(get_db)) -> dict:
     """获取 Skill 诊断汇总。"""
-    records = (
-        db.query(TraceRecord)
-        .filter(TraceRecord.request_id == request_id)
-        .order_by(TraceRecord.round_index, TraceRecord.id)
-        .all()
-    )
+    records = await _records_by_request_id(request_id, db)
     report = SkillDiagnosticService().build_report(request_id, records)
     return {
         "request_id": report.request_id,
@@ -205,6 +212,59 @@ async def _list_traces_from_repository(
     return TracePage(items=items, total=total)
 
 
+async def _list_traces_from_mongo(
+    *,
+    request_id: str | None,
+    session_id: str | None,
+    farm_id: int | None,
+    limit: int,
+    offset: int,
+) -> TracePage:
+    database = get_mongo_database()
+    if database is None:
+        return TracePage(items=[], total=0)
+    filter_doc: dict[str, Any] = {}
+    if request_id:
+        filter_doc["requestId"] = request_id
+    if session_id:
+        filter_doc["sessionId"] = session_id
+    if farm_id is not None:
+        filter_doc["farmId"] = farm_id
+    collection = database["traceRecords"]
+    total = await collection.count_documents(filter_doc)
+    cursor = (
+        collection.find(filter_doc)
+        .sort([("createdAt", -1), ("mysqlId", -1)])
+        .skip(max(offset, 0))
+        .limit(max(limit, 0))
+    )
+    docs = await cursor.to_list(None)
+    return TracePage(
+        items=[trace_record_from_mongo_doc(doc) for doc in docs],
+        total=total,
+    )
+
+
+async def _records_by_request_id(request_id: str, db: Session) -> list[TraceRecord]:
+    if _trace_storage_is_mongo() or not _trace_table_exists(db):
+        database = get_mongo_database()
+        if database is None:
+            return []
+        cursor = (
+            database["traceRecords"]
+            .find({"requestId": request_id})
+            .sort([("roundIndex", 1), ("mysqlId", 1)])
+        )
+        docs = await cursor.to_list(None)
+        return [trace_record_from_mongo_doc(doc) for doc in docs]
+    return (
+        db.query(TraceRecord)
+        .filter(TraceRecord.request_id == request_id)
+        .order_by(TraceRecord.round_index, TraceRecord.id)
+        .all()
+    )
+
+
 def _trace_page_response(page: TracePage) -> dict[str, Any]:
     return {
         "items": [
@@ -229,15 +289,11 @@ def _trace_page_response(page: TracePage) -> dict[str, Any]:
 
 
 @router.get("/traces/{request_id}/nodes/{node_id}")
-def get_node_detail(
+async def get_node_detail(
     request_id: str, node_id: int, db: Session = Depends(get_db)
 ) -> dict:
     """获取节点详情（完整 input/output）。"""
-    record = (
-        db.query(TraceRecord)
-        .filter(TraceRecord.request_id == request_id, TraceRecord.id == node_id)
-        .first()
-    )
+    record = await _node_by_request_and_id(request_id, node_id, db)
     if not record:
         return {"error": "节点不存在"}
     return {
@@ -258,12 +314,16 @@ def get_node_detail(
 
 
 @router.delete("/traces")
-def delete_traces(
+async def delete_traces(
     before: str = Query(..., description="删除此日期之前的 trace (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
 ) -> dict:
     """按日期清理历史 trace。"""
     cutoff = datetime.fromisoformat(before)
+    if _trace_storage_is_mongo() or not _trace_table_exists(db):
+        deleted = await _delete_mongo_traces_before(cutoff)
+        logger.info("Admin 删除 Mongo trace | before=%s deleted=%d", before, deleted)
+        return {"deleted": deleted}
     deleted = (
         db.query(TraceRecord)
         .filter(TraceRecord.created_at < cutoff)
@@ -272,6 +332,53 @@ def delete_traces(
     db.commit()
     logger.info("Admin 删除 trace | before=%s deleted=%d", before, deleted)
     return {"deleted": deleted}
+
+
+async def _node_by_request_and_id(
+    request_id: str, node_id: int, db: Session
+) -> TraceRecord | None:
+    if _trace_storage_is_mongo() or not _trace_table_exists(db):
+        database = get_mongo_database()
+        if database is None:
+            return None
+        doc = await database["traceRecords"].find_one(
+            {"requestId": request_id, "mysqlId": node_id}
+        )
+        return trace_record_from_mongo_doc(doc) if doc is not None else None
+    return (
+        db.query(TraceRecord)
+        .filter(TraceRecord.request_id == request_id, TraceRecord.id == node_id)
+        .first()
+    )
+
+
+async def _delete_mongo_traces_before(cutoff: datetime) -> int:
+    database = get_mongo_database()
+    if database is None:
+        return 0
+    result = await database["traceRecords"].delete_many({"createdAt": {"$lt": cutoff}})
+    return int(getattr(result, "deleted_count", 0) or 0)
+
+
+def _trace_table_exists(db: Session) -> bool:
+    try:
+        bind = db.get_bind()
+    except Exception:
+        bind = getattr(db, "bind", None)
+    if bind is None:
+        return True
+    try:
+        return bool(sa_inspect(bind).has_table("trace_records"))
+    except Exception as exc:
+        logger.debug(
+            "Trace 表存在性检查跳过 | code=trace_table_check_skipped error=%s",
+            exc,
+        )
+        return True
+
+
+def _trace_storage_is_mongo() -> bool:
+    return settings.storage.trace == "mongo"
 
 
 __all__ = ["router"]

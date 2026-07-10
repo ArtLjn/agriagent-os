@@ -8,7 +8,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_farm, get_current_user, get_db, require_admin
+from app.core.dependencies import get_db
+from app.modules.auth.dependencies import get_current_user, require_admin
+from app.modules.farm.dependencies import get_current_farm
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.farm import Farm

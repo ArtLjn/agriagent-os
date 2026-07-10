@@ -1,5 +1,6 @@
 """MemoryService 会话摘要触发测试。"""
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
@@ -105,9 +106,7 @@ async def test_maybe_summarize_消息数低于阈值时跳过并记录_trace(
 
     assert _skip_reasons(records) == ["below_threshold"]
     log_record = next(
-        record
-        for record in caplog.records
-        if record.message == "会话摘要跳过"
+        record for record in caplog.records if record.message == "会话摘要跳过"
     )
     assert log_record.code == "MEMORY_SUMMARY_SKIPPED"
     assert log_record.reason == "below_threshold"
@@ -118,6 +117,38 @@ async def test_maybe_summarize_消息数低于阈值时跳过并记录_trace(
     assert event["input_data"]["session_id"] == "summary-session"
     assert event["output_data"]["reason"] == "below_threshold"
     assert session_summary_skipped_total("below_threshold") == 1
+    generate_summary.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_maybe_summarize_awaits_async_conversation_repository(
+    db_session, monkeypatch
+):
+    from app.memory import service as service_module
+
+    conversation = _新建会话(db_session)
+    _配置摘要(monkeypatch, service_module, threshold=2)
+    records = _收集_trace(monkeypatch, service_module)
+    generate_summary = AsyncMock()
+    monkeypatch.setattr(service_module, "generate_summary", generate_summary)
+    expected_loop = asyncio.get_running_loop()
+
+    class AsyncRepo:
+        async def list_by_session(self, **kwargs):
+            assert asyncio.get_running_loop() is expected_loop
+            assert kwargs == {"farm_id": 1, "session_id": "summary-session"}
+            return [ConversationMessage(role="user", content="一条消息")]
+
+    monkeypatch.setattr(
+        service_module,
+        "get_conversation_message_repository",
+        lambda _db: AsyncRepo(),
+    )
+
+    service = InMemoryMemoryService()
+    await service.maybe_summarize(db_session, conversation.id, 1, "summary-session", [])
+
+    assert _skip_reasons(records) == ["below_threshold"]
     generate_summary.assert_not_awaited()
 
 
@@ -307,17 +338,13 @@ async def test_maybe_summarize_正常生成后写入数据库并同步短时缓�
     assert generate_summary.await_args.kwargs["persona"] is None
     assert _skip_reasons(records) == []
     started_record = next(
-        record
-        for record in caplog.records
-        if record.message == "会话摘要开始生成"
+        record for record in caplog.records if record.message == "会话摘要开始生成"
     )
     assert started_record.code == "MEMORY_SUMMARY_STARTED"
     assert started_record.message_count == 12
     assert started_record.summary_message_count == 12
     success_record = next(
-        record
-        for record in caplog.records
-        if record.message == "会话摘要写入成功"
+        record for record in caplog.records if record.message == "会话摘要写入成功"
     )
     assert success_record.code == "MEMORY_SUMMARY_UPDATED"
     assert success_record.summary_length == len("新增摘要：西棚黄瓜预算 200 元。")

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from app.infra.trace_repository import _handle_secondary_failure, _log_read_fallback
+from app.infra.mongo_identity import ensure_doc_mysql_id
 from app.models.agent_record import AgentRecord
 from app.models.conversation import ConversationMessage
 from app.models.guardrails_log import GuardrailsLog
@@ -118,8 +119,7 @@ class DualWriteBase:
 
 
 async def replace_doc(collection: Any, doc: dict[str, Any]) -> None:
-    if doc.get("mysqlId") is None:
-        raise ValueError("MONGO_MYSQL_ID_REQUIRED")
+    ensure_doc_mysql_id(doc)
     await collection.replace_one({"mysqlId": doc["mysqlId"]}, doc, upsert=True)
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -15,8 +17,12 @@ from app.models.agent_record import AgentRecord
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.crop import CropTemplate
 from app.models.cycle import CropCycle
+from app.models.data_flywheel import AgentReviewIssueChain
 from app.models.guardrails_log import GuardrailsLog
 from app.models.user import User
+from app.modules.data_flywheel.document_repository_selector import (
+    build_data_flywheel_repository,
+)
 
 
 class FakeResult:
@@ -129,6 +135,59 @@ def _seed_user_and_conversation(db_session):
     return conversation
 
 
+def test_run_maybe_awaitable_uses_registered_main_loop_from_worker_thread():
+    from app.infra import repository_runtime
+
+    async def _worker_loop_id():
+        return id(asyncio.get_running_loop())
+
+    async def _main():
+        main_loop = asyncio.get_running_loop()
+        repository_runtime.set_main_event_loop(main_loop)
+        result: dict[str, Any] = {}
+
+        def _worker():
+            result["loop_id"] = run_maybe_awaitable(_worker_loop_id())
+
+        thread = threading.Thread(target=_worker)
+        thread.start()
+        await asyncio.to_thread(thread.join)
+        return result["loop_id"], id(main_loop)
+
+    loop_id, main_loop_id = asyncio.run(_main())
+
+    assert loop_id == main_loop_id
+    repository_runtime.set_main_event_loop(None)
+
+
+def test_run_maybe_awaitable_prefers_main_loop_from_worker_event_loop():
+    from app.infra import repository_runtime
+
+    async def _worker_loop_id():
+        return id(asyncio.get_running_loop())
+
+    async def _main():
+        main_loop = asyncio.get_running_loop()
+        repository_runtime.set_main_event_loop(main_loop)
+        result: dict[str, Any] = {}
+
+        async def _worker_async():
+            result["loop_id"] = run_maybe_awaitable(_worker_loop_id())
+
+        def _worker():
+            asyncio.run(_worker_async())
+
+        thread = threading.Thread(target=_worker)
+        thread.start()
+        await asyncio.to_thread(thread.join)
+        return result["loop_id"], id(main_loop)
+
+    loop_id, main_loop_id = asyncio.run(_main())
+
+    assert loop_id == main_loop_id
+    repository_runtime.set_main_event_loop(None)
+
+
 def test_conversation_repository_mysql_dual_mongo_read_and_mongo(db_session):
     conversation = _seed_user_and_conversation(db_session)
     mysql_repo = build_conversation_message_repository("mysql", db_session)
@@ -186,6 +245,21 @@ def test_conversation_repository_mysql_dual_mongo_read_and_mongo(db_session):
     )
     assert [row.content for row in mongo_rows] == ["dual 消息"]
 
+    mongo_only = run_maybe_awaitable(
+        mongo_repo.save_one(
+            ConversationMessage(
+                conversation_id=conversation.id,
+                role="user",
+                content="mongo only",
+            )
+        )
+    )
+    assert mongo_only.id is not None
+    assert collection.docs[-1]["mysqlId"] == mongo_only.id
+    assert collection.docs[-1]["farmId"] == 1
+    assert collection.docs[-1]["sessionId"] == "repo-session"
+    assert collection.docs[-1]["createdAt"] is not None
+
 
 def test_agent_record_repository_modes_cache_paging_and_cycle_cleanup(db_session):
     collection = FakeCollection()
@@ -224,10 +298,19 @@ def test_agent_record_repository_modes_cache_paging_and_cycle_cleanup(db_session
     mongo_repo = build_agent_record_repository(
         "mongo", db_session, collection=collection
     )
+    mongo_only_record = run_maybe_awaitable(
+        mongo_repo.create(AgentRecord(farm_id=1, record_type="chat", content="mongo"))
+    )
+    assert mongo_only_record.id is not None
+    assert collection.docs[-1]["mysqlId"] == mongo_only_record.id
+
     mongo_chat_rows = run_maybe_awaitable(
         mongo_repo.list_advice_history(farm_id=1, limit=5)
     )
-    assert [row.id for row in mongo_chat_rows] == [dual_record.id]
+    assert [row.id for row in mongo_chat_rows] == [
+        mongo_only_record.id,
+        dual_record.id,
+    ]
 
     mongo_read_repo = build_agent_record_repository(
         "mongo-read",
@@ -244,6 +327,59 @@ def test_agent_record_repository_modes_cache_paging_and_cycle_cleanup(db_session
     db_session.refresh(report)
     assert daily.cycle_id is None
     assert report.cycle_id is None
+
+
+def test_review_issue_chain_repository_lists_from_mongo(db_session):
+    collection = FakeCollection()
+    repo = build_data_flywheel_repository(
+        "review_issue_chains",
+        "mongo",
+        db_session,
+        collection=collection,
+    )
+    first = run_maybe_awaitable(
+        repo.save(
+            AgentReviewIssueChain(
+                farm_id=1,
+                chain_id="chain:1:s1:1",
+                session_id="s1",
+                trigger_turn_id=1,
+                status="needs_evidence",
+                severity="P1",
+                dominant_signal="rule",
+                context_turn_ids=[],
+                result_turn_ids=[],
+                final_labels=[],
+                source_label_ids=[],
+                created_at=datetime(2026, 7, 1, 9, 0, 0),
+                updated_at=datetime(2026, 7, 1, 9, 0, 0),
+            )
+        )
+    )
+    second = run_maybe_awaitable(
+        repo.save(
+            AgentReviewIssueChain(
+                farm_id=1,
+                chain_id="chain:1:s2:2",
+                session_id="s2",
+                trigger_turn_id=2,
+                status="needs_evidence",
+                severity="P0",
+                dominant_signal="judge",
+                context_turn_ids=[],
+                result_turn_ids=[],
+                final_labels=[],
+                source_label_ids=[],
+                created_at=datetime(2026, 7, 1, 10, 0, 0),
+                updated_at=datetime(2026, 7, 1, 10, 0, 0),
+            )
+        )
+    )
+
+    page = run_maybe_awaitable(repo.list(farm_id=1, severity="all"))
+
+    assert page.total == 2
+    assert [row.id for row in page.items] == [second.id, first.id]
 
 
 def test_guardrails_repository_filters_cleanup_and_mongo_read_fallback(db_session):
@@ -288,10 +424,23 @@ def test_guardrails_repository_filters_cleanup_and_mongo_read_fallback(db_sessio
     mongo_repo = build_guardrails_log_repository(
         "mongo", db_session, collection=collection
     )
+    mongo_only_log = run_maybe_awaitable(
+        mongo_repo.create(
+            GuardrailsLog(
+                farm_id=1,
+                trigger_type="input",
+                trigger_detail="mongo",
+                source_text="mongo text",
+            )
+        )
+    )
+    assert mongo_only_log.id is not None
+    assert collection.docs[-1]["mysqlId"] == mongo_only_log.id
+
     mongo_page = run_maybe_awaitable(
         mongo_repo.list_admin_page(trigger_type="input", farm_id=1, page=1, size=10)
     )
-    assert mongo_page.total == 1
+    assert mongo_page.total == 2
 
     mongo_read_repo = build_guardrails_log_repository(
         "mongo-read",

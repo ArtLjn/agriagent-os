@@ -6,7 +6,9 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_current_user, get_db
+from app.core.dependencies import get_db
+from app.infra.mongo import set_mongo_client
+from app.modules.auth.dependencies import get_current_user
 from app.main import app
 from app.models.farm import Farm
 from app.models.trace import TraceRecord
@@ -16,6 +18,53 @@ from app.models.user import User
 def _mock_db():
     """创建 mock 数据库会话。"""
     return MagicMock()
+
+
+class FakeMongoCursor:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def sort(self, *_args):
+        return self
+
+    async def to_list(self, _length=None):
+        return list(self._docs)
+
+
+class FakeMongoCollection:
+    def __init__(self, docs):
+        self.docs = docs
+        self.filters = []
+
+    def find(self, filter_doc):
+        self.filters.append(dict(filter_doc))
+        docs = []
+        for doc in self.docs:
+            if doc.get("nodeType") != filter_doc.get("nodeType"):
+                continue
+            start_range = filter_doc.get("startTime", {})
+            start_time = doc.get("startTime")
+            if "$gte" in start_range and start_time < start_range["$gte"]:
+                continue
+            if "$lt" in start_range and start_time >= start_range["$lt"]:
+                continue
+            if "farmId" in filter_doc and doc.get("farmId") != filter_doc["farmId"]:
+                continue
+            if (
+                "nodeName" in filter_doc
+                and doc.get("nodeName") != filter_doc["nodeName"]
+            ):
+                continue
+            docs.append(doc)
+        return FakeMongoCursor(docs)
+
+
+class FakeMongoClient:
+    def __init__(self, collection):
+        self.collection = collection
+
+    def __getitem__(self, _database_name):
+        return {"traceRecords": self.collection}
 
 
 @pytest.fixture
@@ -237,3 +286,75 @@ class TestTokenHourly:
             assert first["request_count"] == 2
         finally:
             app.dependency_overrides.clear()
+
+    def test_returns_hourly_usage_from_mongo_when_trace_table_missing(
+        self, client, db_session, admin_user
+    ) -> None:
+        import app.api.admin_stats as admin_stats
+
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
+        farm.user_id = "hourly-mongo-user"
+        db_session.add(
+            User(
+                id="hourly-mongo-user",
+                phone="18800000003",
+                password_hash="h",
+                nickname="Mongo 小时用户",
+                role="user",
+                status="active",
+            )
+        )
+        db_session.commit()
+        collection = FakeMongoCollection(
+            [
+                {
+                    "farmId": 1,
+                    "nodeType": "llm_call",
+                    "nodeName": "qwen3.6-flash",
+                    "startTime": datetime(2026, 6, 30, 9, 15),
+                    "tokenUsage": {
+                        "prompt_tokens": 100,
+                        "completion_tokens": 50,
+                        "usage_source": "provider",
+                    },
+                },
+                {
+                    "farmId": 1,
+                    "nodeType": "skill_call",
+                    "nodeName": "ignored",
+                    "startTime": datetime(2026, 6, 30, 9, 30),
+                    "tokenUsage": {
+                        "prompt_tokens": 1000,
+                        "completion_tokens": 1000,
+                        "usage_source": "provider",
+                    },
+                },
+            ]
+        )
+
+        def _override_get_db():
+            yield db_session
+
+        def _override_current_user():
+            return admin_user
+
+        app.dependency_overrides[get_db] = _override_get_db
+        app.dependency_overrides[get_current_user] = _override_current_user
+        set_mongo_client(FakeMongoClient(collection), "farm_manager")
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr(admin_stats, "_trace_table_exists", lambda _db: False)
+        try:
+            resp = client.get(
+                "/admin/stats/tokens/hourly?start_date=2026-06-30&end_date=2026-06-30"
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["total_tokens"] == 150
+            assert data["total_requests"] == 1
+            assert data["hours"] == ["09"]
+            assert data["items"][0]["user_id"] == "hourly-mongo-user"
+            assert collection.filters[0]["nodeType"] == "llm_call"
+        finally:
+            app.dependency_overrides.clear()
+            set_mongo_client(None)
+            monkeypatch.undo()

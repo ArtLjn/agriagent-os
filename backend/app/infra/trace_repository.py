@@ -15,6 +15,7 @@ from app.infra.mongo_mappers import (
     trace_record_from_mongo_doc,
     trace_record_to_mongo_doc,
 )
+from app.infra.mongo_identity import ensure_row_mysql_id
 from app.models.trace import TraceRecord
 
 logger = logging.getLogger(__name__)
@@ -144,9 +145,8 @@ class TraceMongoRepository:
         self._collection = collection
 
     async def insert(self, record: TraceRecord) -> TraceRecord:
+        ensure_row_mysql_id(record)
         doc = trace_record_to_mongo_doc(record)
-        if doc.get("mysqlId") is None:
-            raise ValueError("MONGO_TRACE_MYSQL_ID_REQUIRED")
         await self._collection.replace_one(
             {"mysqlId": doc["mysqlId"]},
             doc,

@@ -11,6 +11,7 @@ from app.infra.mongo_mappers import (
     guardrails_log_from_mongo_doc,
     guardrails_log_to_mongo_doc,
 )
+from app.infra.mongo_identity import ensure_row_mysql_id
 from app.infra.online_document_common import (
     DualWriteBase,
     RepositoryPage,
@@ -68,6 +69,7 @@ class MongoGuardrailsLogRepository:
         self._collection = collection
 
     async def create(self, row: GuardrailsLog) -> GuardrailsLog:
+        ensure_row_mysql_id(row)
         await replace_doc(self._collection, guardrails_log_to_mongo_doc(row))
         return row
 

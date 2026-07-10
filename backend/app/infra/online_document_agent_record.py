@@ -12,6 +12,7 @@ from app.infra.mongo_mappers import (
     agent_record_from_mongo_doc,
     agent_record_to_mongo_doc,
 )
+from app.infra.mongo_identity import ensure_row_mysql_id
 from app.infra.online_document_common import (
     DualWriteBase,
     RepositoryPage,
@@ -128,6 +129,7 @@ class MongoAgentRecordRepository:
         self._collection = collection
 
     async def create(self, row: AgentRecord) -> AgentRecord:
+        ensure_row_mysql_id(row)
         await replace_doc(self._collection, agent_record_to_mongo_doc(row))
         return row
 

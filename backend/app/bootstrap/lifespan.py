@@ -7,12 +7,13 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from app.agent.prompt_registry import get_registry
+from app.prompt.registry import get_registry
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logger import get_logger, setup_logging
 from app.core.seed import seed_admin_user, seed_default_farm
 from app.infra.mongo import close_mongo_client, init_mongo_client
+from app.infra.repository_runtime import set_main_event_loop
 from app.infra.trace_cleaner import clean_expired_traces
 from app.infra.trace_collector import start_trace_system, stop_trace_system
 
@@ -78,7 +79,7 @@ def _load_prompts() -> None:
     registry.reload(settings.prompts_dir)
     logger.info("Prompt 模板已加载 | dir=%s", settings.prompts_dir)
 
-    from app.agent.prompt_composer import get_composer
+    from app.prompt.composer import get_composer
 
     get_composer()
     logger.info("PromptComposer 初始化完成")
@@ -94,6 +95,7 @@ async def _daily_trace_cleanup() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期。"""
+    set_main_event_loop(asyncio.get_running_loop())
     setup_logging()
     _configure_langsmith()
     await _run_migrations()
@@ -109,6 +111,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        set_main_event_loop(None)
         cleanup_task.cancel()
         try:
             await cleanup_task

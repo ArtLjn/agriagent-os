@@ -8,9 +8,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.models.conversation import ConversationStatus
+from app.models.conversation import ConversationMessage
 from app.models.farm import Farm
 from app.services.conversation_service import (
     ConversationAccessError,
+    async_get_recent_messages,
     close_expired_conversations,
     get_conversation_messages,
     get_or_create_conversation,
@@ -137,6 +139,26 @@ class TestSaveAndGetMessages:
         assert len(recent) == 6
         # 从第 3 轮开始的最后 6 条
         assert recent[0].content == "msg-2"
+        db.close()
+
+    async def test_async_get_recent_messages_awaits_async_repository(self, monkeypatch):
+        """async 链路获取历史消息时直接 await 文档仓储。"""
+        db = _TestSession()
+        conv = get_or_create_conversation(db, farm_id=1, session_id="sess-async-recent")
+
+        class AsyncRepo:
+            async def get_recent(self, **kwargs):
+                assert kwargs == {"farm_id": 1, "conversation_id": conv.id, "limit": 3}
+                return [ConversationMessage(role="user", content="历史")]
+
+        monkeypatch.setattr(
+            "app.services.conversation_service.get_conversation_message_repository",
+            lambda _db: AsyncRepo(),
+        )
+
+        recent = await async_get_recent_messages(db, conv.id, limit=3)
+
+        assert [item.content for item in recent] == ["历史"]
         db.close()
 
 

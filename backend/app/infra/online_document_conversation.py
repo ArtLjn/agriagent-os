@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -10,6 +11,7 @@ from app.infra.mongo_mappers import (
     conversation_message_from_mongo_doc,
     conversation_message_to_mongo_doc,
 )
+from app.infra.mongo_identity import ensure_row_mysql_id
 from app.infra.online_document_common import DualWriteBase, mongo_read_many, replace_doc
 from app.models.conversation import Conversation, ConversationMessage
 
@@ -96,11 +98,23 @@ class MySQLConversationMessageRepository:
 
 
 class MongoConversationMessageRepository:
-    def __init__(self, collection: Any) -> None:
+    def __init__(self, db: Session, collection: Any) -> None:
+        self._db = db
         self._collection = collection
 
     async def save_one(self, row: ConversationMessage) -> ConversationMessage:
-        await replace_doc(self._collection, conversation_message_to_mongo_doc(row))
+        ensure_row_mysql_id(row)
+        if row.created_at is None:
+            row.created_at = datetime.now()
+        farm_id, session_id = self._resolve_conversation_context(row)
+        await replace_doc(
+            self._collection,
+            conversation_message_to_mongo_doc(
+                row,
+                farm_id=farm_id,
+                session_id=session_id,
+            ),
+        )
         return row
 
     async def save_batch(
@@ -148,6 +162,16 @@ class MongoConversationMessageRepository:
     ) -> ConversationMessage | None:
         doc = await self._collection.find_one({"farmId": farm_id, "mysqlId": mysql_id})
         return conversation_message_from_mongo_doc(doc) if doc is not None else None
+
+    def _resolve_conversation_context(
+        self, row: ConversationMessage
+    ) -> tuple[int | None, str | None]:
+        conversation = getattr(row, "conversation", None)
+        if conversation is None and row.conversation_id is not None:
+            conversation = self._db.get(Conversation, row.conversation_id)
+        if conversation is None:
+            return None, None
+        return conversation.farm_id, conversation.session_id
 
 
 class DualWriteConversationMessageRepository(DualWriteBase):
@@ -210,7 +234,7 @@ def build_conversation_message_repository(
         return mysql
     if collection is None:
         raise ValueError("MONGO_COLLECTION_REQUIRED")
-    mongo = MongoConversationMessageRepository(collection)
+    mongo = MongoConversationMessageRepository(db, collection)
     if backend == "dual":
         return DualWriteConversationMessageRepository(mysql, mongo, hook)
     if backend == "mongo-read":

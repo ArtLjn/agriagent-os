@@ -302,6 +302,26 @@ def test_phase_two_online_document_mappers_preserve_mysql_ids_and_legacy_meta():
 
 
 @pytest.mark.no_db
+def test_conversation_message_from_mongo_doc_falls_back_to_object_id_time():
+    from bson import ObjectId
+
+    from app.infra.mongo_mappers import conversation_message_from_mongo_doc
+
+    object_id = ObjectId()
+    restored_message = conversation_message_from_mongo_doc(
+        {
+            "_id": object_id,
+            "mysqlId": 1,
+            "conversationId": 2,
+            "role": "user",
+            "content": "你好",
+        }
+    )
+
+    assert restored_message.created_at == object_id.generation_time.replace(tzinfo=None)
+
+
+@pytest.mark.no_db
 def test_reverse_mappers_tolerate_missing_optional_fields():
     from app.infra.mongo_mappers import trace_record_from_mongo_doc
 

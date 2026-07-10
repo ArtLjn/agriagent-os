@@ -15,6 +15,7 @@ from app.infra.mongo_mappers import (
     review_issue_chain_from_mongo_doc,
     review_issue_chain_to_mongo_doc,
 )
+from app.infra.mongo_identity import ensure_row_mysql_id
 from app.models.data_flywheel import (
     AgentCaseDraft,
     AgentDataFlywheelPrelabel,
@@ -39,9 +40,8 @@ class _MongoBaseRepository(Generic[ModelT]):
         self._from_doc = from_doc
 
     async def _upsert_row(self, row: ModelT) -> ModelT:
+        ensure_row_mysql_id(row)
         doc = self._to_doc(row)
-        if doc.get("mysqlId") is None:
-            raise ValueError("MONGO_MYSQL_ID_REQUIRED")
         await self._collection.replace_one(
             {"mysqlId": doc["mysqlId"]},
             doc,
@@ -264,6 +264,30 @@ class MongoReviewIssueChainRepository(_MongoBaseRepository[AgentReviewIssueChain
         conditions = {"sessionId": session_id}
         if status:
             conditions["status"] = status
+        total = await self._count(farm_id, **conditions)
+        items = await self._find_many(
+            farm_id,
+            limit=limit,
+            offset=offset,
+            sort=[("severity", 1), ("updatedAt", -1), ("mysqlId", -1)],
+            **conditions,
+        )
+        return RepositoryPage(items=items, total=total, page_size=limit)
+
+    async def list(
+        self,
+        *,
+        farm_id: int,
+        session_id: str | None = None,
+        severity: str = "all",
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> RepositoryPage[AgentReviewIssueChain]:
+        conditions: dict[str, Any] = {}
+        if session_id:
+            conditions["sessionId"] = session_id
+        if severity != "all":
+            conditions["severity"] = severity
         total = await self._count(farm_id, **conditions)
         items = await self._find_many(
             farm_id,

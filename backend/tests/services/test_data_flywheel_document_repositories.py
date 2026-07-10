@@ -225,6 +225,21 @@ async def test_data_flywheel_mongo_repositories_always_filter_by_farm_id():
         )  # type: ignore[arg-type]
 
 
+@pytest.mark.asyncio
+async def test_data_flywheel_mongo_repository_assigns_id_without_mysql_row():
+    from app.modules.data_flywheel.document_repositories import MongoCaseDraftRepository
+
+    collection = FakeCollection()
+    repo = MongoCaseDraftRepository(collection)
+    row = _case_draft()
+
+    saved = await repo.create(row)
+
+    assert saved.id is not None
+    assert collection.filters == [{"mysqlId": saved.id}]
+    assert collection.replacements[0]["mysqlId"] == saved.id
+
+
 def test_data_flywheel_mysql_repositories_cover_core_crud(db_session):
     from app.modules.data_flywheel.document_repositories import (
         MySQLCaseDraftRepository,

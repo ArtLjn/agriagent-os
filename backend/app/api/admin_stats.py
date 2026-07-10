@@ -4,10 +4,13 @@ import logging
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func
+from sqlalchemy import func, inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.core.dependencies import get_db
+from app.infra.mongo import get_mongo_database
+from app.infra.repository_runtime import run_maybe_awaitable
+from app.modules.auth.dependencies import require_admin
 from app.models.farm import Farm
 from app.models.token_stats import TokenDailyStats
 from app.models.trace import TraceRecord
@@ -26,6 +29,14 @@ def _int_from_usage(usage: dict | None, key: str) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _date_value(value) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
 
 
 @router.get("/tokens")
@@ -137,6 +148,17 @@ def token_hourly(
     start = date.fromisoformat(start_date) if start_date else end
     start_dt = datetime.combine(start, time.min)
     end_dt = datetime.combine(end + timedelta(days=1), time.min)
+    if not _trace_table_exists(db):
+        return _token_hourly_from_mongo(
+            db=db,
+            user_id=user_id,
+            farm_id=farm_id,
+            model=model,
+            start=start,
+            end=end,
+            start_dt=start_dt,
+            end_dt=end_dt,
+        )
 
     query = (
         db.query(TraceRecord, Farm.user_id.label("user_id"))
@@ -217,6 +239,139 @@ def token_hourly(
         "total_tokens": sum(item["total_tokens"] for item in items),
         "total_requests": sum(item["request_count"] for item in items),
     }
+
+
+def _token_hourly_from_mongo(
+    *,
+    db: Session,
+    user_id: str | None,
+    farm_id: int | None,
+    model: str | None,
+    start: date,
+    end: date,
+    start_dt: datetime,
+    end_dt: datetime,
+) -> dict:
+    database = get_mongo_database()
+    if database is None:
+        return _empty_hourly_response(start, end)
+    farm_user_ids = _farm_user_id_map(db, user_id=user_id)
+    filter_doc: dict = {
+        "nodeType": "llm_call",
+        "startTime": {"$gte": start_dt, "$lt": end_dt},
+    }
+    if farm_id is not None:
+        filter_doc["farmId"] = farm_id
+    if model is not None:
+        filter_doc["nodeName"] = model
+    cursor = database["traceRecords"].find(filter_doc).sort([("startTime", 1)])
+    docs = run_maybe_awaitable(cursor.to_list(None))
+    rows = []
+    for doc in docs:
+        doc_farm_id = doc.get("farmId")
+        farm_user_id = farm_user_ids.get(doc_farm_id)
+        if user_id is not None and farm_user_id != user_id:
+            continue
+        rows.append(
+            {
+                "farm_id": doc_farm_id,
+                "user_id": farm_user_id,
+                "model": doc.get("nodeName"),
+                "start_time": doc.get("startTime"),
+                "token_usage": doc.get("tokenUsage") or {},
+            }
+        )
+    return _hourly_response_from_rows(start, end, rows)
+
+
+def _hourly_response_from_rows(start: date, end: date, rows: list[dict]) -> dict:
+    buckets: dict[tuple[str, str | None, int, str, str], dict] = {}
+    for row in rows:
+        usage = row["token_usage"] or {}
+        usage_source = usage.get("usage_source")
+        if usage_source not in {"provider", "usage_metadata"}:
+            continue
+        prompt_tokens = _int_from_usage(usage, "prompt_tokens")
+        completion_tokens = _int_from_usage(usage, "completion_tokens")
+        total_tokens = prompt_tokens + completion_tokens
+        if total_tokens <= 0:
+            continue
+
+        start_time = row.get("start_time")
+        hour = start_time.strftime("%H") if start_time else "00"
+        day = _date_value(start_time).isoformat() if start_time else start.isoformat()
+        item_key = (
+            day,
+            row.get("user_id"),
+            row.get("farm_id"),
+            row.get("model"),
+            hour,
+        )
+        item = buckets.setdefault(
+            item_key,
+            {
+                "date": day,
+                "hour": hour,
+                "user_id": row.get("user_id"),
+                "farm_id": row.get("farm_id"),
+                "model": row.get("model"),
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "request_count": 0,
+            },
+        )
+        item["prompt_tokens"] += prompt_tokens
+        item["completion_tokens"] += completion_tokens
+        item["total_tokens"] += total_tokens
+        item["request_count"] += 1
+    items = sorted(
+        buckets.values(),
+        key=lambda item: (
+            item["date"],
+            item["hour"],
+            item["user_id"] or "",
+            item["model"] or "",
+        ),
+    )
+    hours = sorted({item["hour"] for item in items})
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "items": items,
+        "hours": hours,
+        "total_tokens": sum(item["total_tokens"] for item in items),
+        "total_requests": sum(item["request_count"] for item in items),
+    }
+
+
+def _empty_hourly_response(start: date, end: date) -> dict:
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "items": [],
+        "hours": [],
+        "total_tokens": 0,
+        "total_requests": 0,
+    }
+
+
+def _farm_user_id_map(db: Session, *, user_id: str | None = None) -> dict[int, str]:
+    query = db.query(Farm.id, Farm.user_id)
+    if user_id is not None:
+        query = query.filter(Farm.user_id == user_id)
+    return {farm_id: farm_user_id for farm_id, farm_user_id in query.all()}
+
+
+def _trace_table_exists(db: Session) -> bool:
+    try:
+        return bool(sa_inspect(db.get_bind()).has_table("trace_records"))
+    except Exception as exc:
+        logger.debug(
+            "Trace 表存在性检查跳过 | code=trace_table_check_skipped error=%s",
+            exc,
+        )
+        return True
 
 
 __all__ = ["router"]

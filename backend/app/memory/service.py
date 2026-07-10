@@ -12,13 +12,16 @@ from app.core.compat import UTC
 from app.core.config import settings
 from app.infra.repository_runtime import (
     get_conversation_message_repository,
-    run_maybe_awaitable,
+    resolve_maybe_awaitable,
 )
 from app.infra.trace_collector import get_collector
 from app.memory.consolidation import InMemoryObservationEventSink
-from app.memory.long_term import EmptyLongTermMemoryStore
-from app.memory.models import MemoryContext, MemoryHit, MemoryMessage
-from app.memory.retrieval import EmptyMemoryRetrievalStore
+from app.memory.models import (
+    LongTermMemoryContext,
+    MemoryContext,
+    MemoryHit,
+    MemoryMessage,
+)
 from app.memory.schemas import MemoryObservationEvent, MemorySearchQuery
 from app.memory.short_term import InMemoryShortTermMemory
 from app.models.conversation import Conversation
@@ -26,6 +29,24 @@ from app.observability.metrics import increment_counter
 
 TraceRecorder = Callable[..., None]
 logger = logging.getLogger(__name__)
+
+
+class EmptyLongTermMemoryStore:
+    """长期记忆尚未启用时的空实现。"""
+
+    async def build_context(
+        self,
+        user_id: str,
+        farm_id: int,
+    ) -> LongTermMemoryContext:
+        return LongTermMemoryContext()
+
+
+class EmptyMemoryRetrievalStore:
+    """检索后端未接入时返回空结果。"""
+
+    async def search(self, query: MemorySearchQuery) -> list[MemoryHit]:
+        return []
 
 
 class InMemoryMemoryService:
@@ -161,7 +182,7 @@ class InMemoryMemoryService:
                 )
                 return
 
-            summary_messages = _load_summary_messages(
+            summary_messages = await _load_summary_messages(
                 db=db,
                 farm_id=farm_id,
                 session_id=conversation.session_id,
@@ -391,14 +412,14 @@ def _as_aware_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-def _load_summary_messages(
+async def _load_summary_messages(
     *,
     db,
     farm_id: int,
     session_id: str,
     fallback_messages: list[Any] | None,
 ) -> list[Any]:
-    stored_messages = run_maybe_awaitable(
+    stored_messages = await resolve_maybe_awaitable(
         get_conversation_message_repository(db).list_by_session(
             farm_id=farm_id,
             session_id=session_id,

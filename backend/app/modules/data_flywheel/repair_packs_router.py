@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_farm, get_current_user, get_db, require_admin
+from app.core.dependencies import get_db
+from app.modules.auth.dependencies import get_current_user, require_admin
+from app.modules.farm.dependencies import get_current_farm
 from app.models.farm import Farm
 from app.models.user import User
 from app.modules.data_flywheel.service import SAMPLE_TYPE_SESSION_TURN

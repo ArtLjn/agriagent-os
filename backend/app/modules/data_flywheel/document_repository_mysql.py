@@ -263,6 +263,35 @@ class MySQLReviewIssueChainRepository:
         )
         return RepositoryPage(items=items, total=total, page_size=limit)
 
+    def list(
+        self,
+        *,
+        farm_id: int,
+        session_id: str | None = None,
+        severity: str = "all",
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> RepositoryPage[AgentReviewIssueChain]:
+        query = self._db.query(AgentReviewIssueChain).filter(
+            AgentReviewIssueChain.farm_id == farm_id,
+        )
+        if session_id:
+            query = query.filter(AgentReviewIssueChain.session_id == session_id)
+        if severity != "all":
+            query = query.filter(AgentReviewIssueChain.severity == severity)
+        total = query.count()
+        items = (
+            query.order_by(
+                AgentReviewIssueChain.severity.asc(),
+                desc(AgentReviewIssueChain.updated_at),
+                desc(AgentReviewIssueChain.id),
+            )
+            .offset(max(offset, 0))
+            .limit(max(limit, 0))
+            .all()
+        )
+        return RepositoryPage(items=items, total=total, page_size=limit)
+
     def update_review_fields(
         self, *, farm_id: int, chain_id: str, **fields: Any
     ) -> AgentReviewIssueChain | None:

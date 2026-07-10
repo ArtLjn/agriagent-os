@@ -1188,8 +1188,17 @@ def test_review_issue_chain_detail_marks_backfilled_event_from_payload_and_meta(
 
 
 def test_review_issue_chain_review_accepts_and_overrides_related_turns(
-    db_session, tmp_path
+    db_session, tmp_path, monkeypatch
 ) -> None:
+    from app.infra import repository_runtime
+
+    for object_name in (
+        "review_issue_chains",
+        "prelabels",
+        "case_drafts",
+        "repair_packs",
+    ):
+        monkeypatch.setattr(repository_runtime.settings.storage, object_name, "mysql")
     turns = [_seed_turn(db_session, tmp_path) for _ in range(5)]
     trigger = turns[3]
     trigger.risk_score = 0.95
@@ -1244,6 +1253,15 @@ def test_review_issue_chain_review_accepts_and_overrides_related_turns(
     assert detail_chain["human_review"]["expected_behavior"] == (
         "确认批量结算时应保留所有待结算工人。"
     )
+    detail_payload = detail_resp.json()
+    issue_entry = detail_payload["issue_repository_entry"]
+    rule_candidate = detail_payload["rule_candidate_package"]
+    assert issue_entry["chain_id"] == _chain_id(trigger)
+    assert issue_entry["closure_state"] == "triaged"
+    assert issue_entry["expected_behavior"] == "确认批量结算时应保留所有待结算工人。"
+    assert rule_candidate["source_issue_ids"] == [issue_entry["issue_entry_id"]]
+    assert rule_candidate["status"] == "draft"
+    assert rule_candidate["promotion_gate"]["negative_cases_must_not_match"] is True
     labels = (
         db_session.query(AgentDataFlywheelLabel)
         .filter_by(sample_id=_sample_id(trigger))

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_db
+from app.core.dependencies import get_db
 from app.main import app
 from app.models.trace import TraceRecord
 from app.models.user import User
@@ -76,6 +76,7 @@ class TestGetTraces:
         self, db_session, monkeypatch
     ) -> None:
         import app.api.admin_trace as admin_trace
+        from app.core.config import settings
 
         admin_user = ensure_admin_user(db_session)
         mock_record = MagicMock()
@@ -98,6 +99,7 @@ class TestGetTraces:
                 return [mock_record]
 
         mock_db = _mock_db(admin_user)
+        monkeypatch.setattr(settings.storage, "trace", "mysql")
         monkeypatch.setattr(admin_trace, "get_trace_repository", lambda db: Repo())
 
         with auth_override_scope(app), _db_override(mock_db):
@@ -111,9 +113,39 @@ class TestGetTraces:
         assert data["total"] == 1
         assert data["items"][0]["request_id"] == "abc12345"
 
+    def test_list_traces_uses_mongo_when_storage_is_mongo_even_if_mysql_table_exists(
+        self, db_session, monkeypatch
+    ) -> None:
+        import app.api.admin_trace as admin_trace
+
+        admin_user = ensure_admin_user(db_session)
+        mock_db = _mock_db(admin_user)
+
+        async def _mongo_page(**kwargs):
+            assert kwargs["limit"] == 5
+            return admin_trace.TracePage(items=[], total=3)
+
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings.storage, "trace", "mongo")
+        monkeypatch.setattr(admin_trace, "_list_traces_from_mongo", _mongo_page)
+        monkeypatch.setattr(admin_trace, "_trace_table_exists", lambda _db: True)
+
+        with auth_override_scope(app), _db_override(mock_db):
+            resp = TestClient(app).get(
+                "/admin/traces?limit=5",
+                headers=admin_headers(),
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 3
+        mock_db.trace_query.count.assert_not_called()
+
 
 class TestGetTimeline:
     def test_timeline_returns_rounds(self, db_session) -> None:
+        from app.core.config import settings
+
         admin_user = ensure_admin_user(db_session)
         mock_record = MagicMock()
         mock_record.request_id = "abc12345"
@@ -132,18 +164,27 @@ class TestGetTimeline:
         # 配置 mock_db 的查询链
         mock_db = _mock_db(admin_user)
         mock_db.trace_query.all.return_value = [mock_record]
+        from pytest import MonkeyPatch
 
-        with auth_override_scope(app), _db_override(mock_db):
-            resp = TestClient(app).get(
-                "/admin/traces/abc12345/timeline",
-                headers=admin_headers(),
-            )
-            assert resp.status_code == 200
-            data = resp.json()
-            assert "request_id" in data
-            assert "rounds" in data
+        monkeypatch = MonkeyPatch()
+        monkeypatch.setattr(settings.storage, "trace", "mysql")
+
+        try:
+            with auth_override_scope(app), _db_override(mock_db):
+                resp = TestClient(app).get(
+                    "/admin/traces/abc12345/timeline",
+                    headers=admin_headers(),
+                )
+                assert resp.status_code == 200
+                data = resp.json()
+                assert "request_id" in data
+                assert "rounds" in data
+        finally:
+            monkeypatch.undo()
 
     def test_timeline_serializes_trace_json_and_datetime(self, db_session) -> None:
+        from app.core.config import settings
+
         admin_user = ensure_admin_user(db_session)
         mock_record = MagicMock()
         mock_record.request_id = "abc12345"
@@ -161,17 +202,24 @@ class TestGetTimeline:
 
         mock_db = _mock_db(admin_user)
         mock_db.trace_query.all.return_value = [mock_record]
+        from pytest import MonkeyPatch
 
-        with auth_override_scope(app), _db_override(mock_db):
-            resp = TestClient(app).get(
-                "/admin/traces/abc12345/timeline",
-                headers=admin_headers(),
-            )
-            assert resp.status_code == 200
-            node = resp.json()["rounds"][0]["nodes"][0]
-            assert node["start_time"] == "2026-06-04T14:03:22"
-            assert node["input_data"] == {"block_count": 6}
-            assert node["output_data"] == {"blocks": [{"key": "farm"}]}
+        monkeypatch = MonkeyPatch()
+        monkeypatch.setattr(settings.storage, "trace", "mysql")
+
+        try:
+            with auth_override_scope(app), _db_override(mock_db):
+                resp = TestClient(app).get(
+                    "/admin/traces/abc12345/timeline",
+                    headers=admin_headers(),
+                )
+                assert resp.status_code == 200
+                node = resp.json()["rounds"][0]["nodes"][0]
+                assert node["start_time"] == "2026-06-04T14:03:22"
+                assert node["input_data"] == {"block_count": 6}
+                assert node["output_data"] == {"blocks": [{"key": "farm"}]}
+        finally:
+            monkeypatch.undo()
 
 
 class TestGetDiagnostics:

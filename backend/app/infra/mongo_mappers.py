@@ -147,23 +147,36 @@ def conversation_message_to_mongo_doc(
 def conversation_message_from_mongo_doc(
     doc: Mapping[str, Any],
 ) -> ConversationMessage:
+    fields = {
+        "conversationId": "conversation_id",
+        "role": "role",
+        "content": "content",
+        "contentHash": "content_hash",
+        "turnId": "turn_id",
+        "meta": "meta_json",
+        "legacyMetaText": "meta",
+        "createdAt": "created_at",
+    }
+    doc_values = dict(doc)
+    if doc_values.get("createdAt") is None:
+        fallback_time = _object_id_generation_time(doc_values.get("_id"))
+        if fallback_time is not None:
+            doc_values["createdAt"] = fallback_time
     message = _model_from_doc(
         ConversationMessage,
-        doc,
-        {
-            "conversationId": "conversation_id",
-            "role": "role",
-            "content": "content",
-            "contentHash": "content_hash",
-            "turnId": "turn_id",
-            "meta": "meta_json",
-            "legacyMetaText": "meta",
-            "createdAt": "created_at",
-        },
+        doc_values,
+        fields,
     )
     if message.meta is None and message.meta_json is not None:
         message.meta = json.dumps(message.meta_json, ensure_ascii=False)
     return message
+
+
+def _object_id_generation_time(value: Any) -> Any:
+    generation_time = getattr(value, "generation_time", None)
+    if generation_time is None:
+        return None
+    return generation_time.replace(tzinfo=None)
 
 
 def agent_record_to_mongo_doc(record: AgentRecord) -> dict[str, Any]:

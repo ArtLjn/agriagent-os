@@ -23,6 +23,10 @@ from app.modules.data_flywheel.judge_service import (
     LABEL_SELECTION_RULES,
     normalize_judge_output,
 )
+from app.modules.data_flywheel.issue_repository import (
+    build_issue_repository_entry,
+    build_rule_candidate_package,
+)
 from app.modules.data_flywheel.review_issue_chain_helpers import (
     ai_judge,
     chain_id,
@@ -258,30 +262,15 @@ def _all_persisted_chains(
     session_id: str | None,
     severity: str,
 ) -> list[AgentReviewIssueChain]:
-    if session_id:
-        page = _repo_call(
-            _review_chain_repo(db).list_by_session,
-            farm_id=farm_id,
-            session_id=session_id,
-            limit=1000,
-            offset=0,
-        )
-        rows = page.items
-        if severity != "all":
-            rows = [row for row in rows if row.severity == severity]
-        return [row for row in rows if not _is_saved_chain_benign_chitchat(db, row)]
-
-    query = _persisted_chain_filter(
-        db.query(AgentReviewIssueChain),
+    page = _repo_call(
+        _review_chain_repo(db).list,
         farm_id=farm_id,
         session_id=session_id,
         severity=severity,
+        limit=1000,
+        offset=0,
     )
-    rows = query.order_by(
-        AgentReviewIssueChain.severity.asc(),
-        AgentReviewIssueChain.updated_at.desc(),
-        AgentReviewIssueChain.id.desc(),
-    ).all()
+    rows = page.items
     return [row for row in rows if not _is_saved_chain_benign_chitchat(db, row)]
 
 
@@ -390,6 +379,7 @@ def get_review_issue_chain_detail(
         "evidence_status": evidence_status(evidence),
         "existing_labels": chain["human_review"]["labels"],
         "ai_judge": chain["ai_judge"],
+        **_issue_repository_projection(db, saved=saved, trigger=trigger),
     }
 
 
@@ -772,6 +762,67 @@ def _persisted_session_chain_count(
         offset=0,
     )
     return page.total
+
+
+def _issue_repository_projection(
+    db: Session,
+    *,
+    saved: AgentReviewIssueChain | None,
+    trigger: AgentTurn,
+) -> dict[str, Any]:
+    if saved is None or saved.status != "accepted":
+        return {
+            "issue_repository_entry": None,
+            "rule_candidate_package": None,
+        }
+    summary = turn_debug_summary(db, trigger)
+    issue_entry = build_issue_repository_entry(
+        saved,
+        user_input=trigger.input_preview,
+        assistant_reply=trigger.reply_preview,
+        actual_skill=_actual_skill(summary),
+        expected_skill=_expected_skill(saved=saved, trigger=trigger),
+        source="manual_test",
+    )
+    return {
+        "issue_repository_entry": issue_entry,
+        "rule_candidate_package": build_rule_candidate_package(issue_entry),
+    }
+
+
+def _actual_skill(summary: dict[str, Any]) -> str | None:
+    selected_tools = summary.get("selected_tools") or []
+    if not selected_tools:
+        return None
+    return str(selected_tools[0])
+
+
+def _expected_skill(
+    *,
+    saved: AgentReviewIssueChain,
+    trigger: AgentTurn,
+) -> str | None:
+    text = " ".join(
+        item
+        for item in (trigger.input_preview, saved.expected_behavior)
+        if isinstance(item, str)
+    )
+    if _looks_like_crop_inventory_issue(text):
+        return "get_crop_cycles"
+    return None
+
+
+def _looks_like_crop_inventory_issue(text: str) -> bool:
+    inventory_terms = (
+        "我的作物",
+        "作物栽种",
+        "种了哪些作物",
+        "种植哪些作物",
+        "地里都种",
+        "茬口列表",
+        "茬口",
+    )
+    return any(term in text for term in inventory_terms)
 
 
 def _chain_for_turn(

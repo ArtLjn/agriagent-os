@@ -2,16 +2,15 @@
 
 from typing import Any
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.infra.repository_runtime import (
     get_conversation_message_repository,
+    get_trace_repository,
     run_maybe_awaitable,
 )
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import ConversationMessage
-from app.models.trace import TraceRecord
 from app.modules.data_flywheel.service import (
     _events_for_turn,
     _label_to_dict,
@@ -167,28 +166,20 @@ def _evidence_item(key: str, status: str, turn_id: int | None = None) -> dict[st
 
 
 def has_trace_record(db: Session, turn: AgentTurn) -> bool:
-    message_ids = [
+    rows = run_maybe_awaitable(
+        get_trace_repository(db).get_by_request_id(
+            farm_id=turn.farm_id,
+            request_id=turn.request_id,
+        )
+    )
+    if any(row.session_id == turn.session_id for row in rows):
+        return True
+    message_ids = {
         message_id
         for message_id in (turn.user_message_id, turn.assistant_message_id)
         if message_id is not None
-    ]
-    filters = [
-        (
-            (TraceRecord.session_id == turn.session_id)
-            & (TraceRecord.request_id == turn.request_id)
-        )
-    ]
-    if message_ids:
-        filters.append(TraceRecord.conversation_message_id.in_(message_ids))
-    return (
-        db.query(TraceRecord.id)
-        .filter(
-            TraceRecord.farm_id == turn.farm_id,
-            or_(*filters),
-        )
-        .first()
-        is not None
-    )
+    }
+    return any(row.conversation_message_id in message_ids for row in rows)
 
 
 def has_backfilled_event(

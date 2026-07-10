@@ -117,6 +117,9 @@ class DualWriteReviewIssueChainRepository(_DualWriteBase[AgentReviewIssueChain])
     def list_by_session(self, **kwargs):
         return self._mysql.list_by_session(**kwargs)
 
+    def list(self, **kwargs):
+        return self._mysql.list(**kwargs)
+
     async def update_review_fields(self, **kwargs):
         row = self._mysql.update_review_fields(**kwargs)
         if row is not None:
@@ -215,6 +218,15 @@ class MongoReadReviewIssueChainRepository(DualWriteReviewIssueChainRepository):
             self._mysql.list_by_session,
             self.object_type,
             str(kwargs.get("session_id")),
+            kwargs,
+        )
+
+    async def list(self, **kwargs):
+        return await _mongo_read_page(
+            self._mongo.list,
+            self._mysql.list,
+            self.object_type,
+            "list",
             kwargs,
         )
 

@@ -139,6 +139,21 @@ async def test_trace_mongo_repository_requires_farm_id_and_filters_by_farm():
 
 
 @pytest.mark.asyncio
+async def test_trace_mongo_repository_assigns_id_without_mysql_row():
+    from app.infra.trace_repository import TraceMongoRepository
+
+    collection = FakeCollection()
+    repo = TraceMongoRepository(collection)
+    row = _trace()
+
+    saved = await repo.insert(row)
+
+    assert saved.id is not None
+    assert collection.filters == [{"mysqlId": saved.id}]
+    assert collection.replacements[0]["mysqlId"] == saved.id
+
+
+@pytest.mark.asyncio
 async def test_trace_dual_write_keeps_mysql_success_when_mongo_fails(db_session):
     from app.infra.trace_repository import (
         TraceDualWriteRepository,
