@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Input, Button, Space, Typography, Drawer, Tag, Tooltip, message, Select } from 'antd';
-import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined } from '@ant-design/icons';
+import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
-import { listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
+import { getSessionDebugExport, listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
 import type { PendingAction } from '../../api/agent';
 import type { PendingPlan } from '../../api/agent';
 import { getNodeLabel } from '../../constants/trace';
@@ -16,6 +16,8 @@ import { chooseDefaultUserId } from './currentUser';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
 import { canConfirmAssistantMessage } from './pendingPlanControls';
 import { buildPlaygroundTraceMetrics, hasAutomaticCompression } from './traceMetrics';
+import { copyAsyncText } from './clipboard';
+import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -230,18 +232,6 @@ async function* streamPlaygroundChat(message: string, sessionId: string, simulat
 }
 
 /* ── Trace 查询 ── */
-async function fetchLatestTimeline(): Promise<TraceTimeline | null> {
-  try {
-    const listRes = await listTraces({ limit: 1 });
-    if (!listRes.items || listRes.items.length === 0) return null;
-    const requestId = listRes.items[0].request_id;
-    const timelineRes = await getTimeline(requestId);
-    return timelineRes;
-  } catch {
-    return null;
-  }
-}
-
 async function fetchSessionTimeline(sid: string): Promise<TraceTimeline | null> {
   try {
     const listRes = await listTraces({ session_id: sid, limit: 1 });
@@ -356,44 +346,74 @@ export default function Playground() {
     ensureSession(sid);
   }, [ensureSession]);
 
-  const copySessionJson = useCallback(async (sid: string) => {
+  const buildFallbackSessionDebugJson = useCallback(async (sid: string) => {
+    const state = sessions[sid] ?? emptySessionState();
+    let sourceMessages: DebugExportMessage[] = state.messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+      skills: m.skills,
+      pendingAction: m.pendingAction,
+      pendingPlan: m.pendingPlan,
+    }));
     try {
-      const state = sessions[sid] ?? emptySessionState();
-      let sourceMessages: DebugExportMessage[] = state.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        skills: m.skills,
-        pendingAction: m.pendingAction,
-        pendingPlan: m.pendingPlan,
-      }));
-      try {
-        const persistedMessages = await getConversationMessages(sid, selectedUserId);
-        if (persistedMessages.length > 0) {
-          sourceMessages = persistedMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-            skills: m.skills,
-            pendingAction: m.pending_action,
-            pendingPlan: m.pending_plan,
-          }));
-        }
-      } catch {
-        // 历史消息读取失败时，使用当前本地状态继续导出。
+      const persistedMessages = await getConversationMessages(sid, selectedUserId);
+      if (persistedMessages.length > 0) {
+        sourceMessages = persistedMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          skills: m.skills,
+          pendingAction: m.pending_action,
+          pendingPlan: m.pending_plan,
+        }));
       }
-      const timeline = state.timeline ?? await fetchSessionTimeline(sid);
-      const debugExport = buildSessionDebugExport({
-        sessionId: sid,
-        simulateUserId: selectedUserId,
-        copiedAt: new Date().toISOString(),
-        messages: sourceMessages,
-        timeline,
-      });
-      await navigator.clipboard.writeText(JSON.stringify(debugExport, null, 2));
-      message.success('已复制调试 JSON 到剪贴板');
     } catch {
+      // 历史消息读取失败时，使用当前本地状态继续导出。
+    }
+    const timeline = state.timeline ?? await fetchSessionTimeline(sid);
+    const debugExport = buildSessionDebugExport({
+      sessionId: sid,
+      simulateUserId: selectedUserId,
+      copiedAt: new Date().toISOString(),
+      messages: sourceMessages,
+      timeline,
+    });
+    return JSON.stringify(debugExport, null, 2);
+  }, [selectedUserId, sessions]);
+
+  const copySessionJson = useCallback(async (sid: string) => {
+    const ok = await copyAsyncText({
+      placeholder: `正在准备调试 JSON...\nsession_id: ${sid}`,
+      loadText: async () => {
+        try {
+          const debugExport = await getSessionDebugExport(sid, selectedUserId);
+          return JSON.stringify(debugExport, null, 2);
+        } catch {
+          return buildFallbackSessionDebugJson(sid);
+        }
+      },
+    });
+    if (ok) {
+      message.success('已复制调试 JSON 到剪贴板');
+    } else {
       message.error('复制失败');
     }
-  }, [selectedUserId, sessions]);
+  }, [buildFallbackSessionDebugJson, selectedUserId]);
+
+  const openTraceMonitor = useCallback(async (sid: string) => {
+    const state = sessions[sid];
+    const requestIdFromTimeline = state?.timeline?.request_id;
+    if (requestIdFromTimeline) {
+      window.open(buildTraceMonitorUrl({ sessionId: sid, requestId: requestIdFromTimeline }), '_blank');
+      return;
+    }
+    try {
+      const listRes = await listTraces({ session_id: sid, limit: 1 });
+      const requestId = selectLatestTraceRequestId(listRes.items);
+      window.open(buildTraceMonitorUrl({ sessionId: sid, requestId }), '_blank');
+    } catch {
+      window.open(buildTraceMonitorUrl({ sessionId: sid }), '_blank');
+    }
+  }, [sessions]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -465,7 +485,7 @@ export default function Playground() {
       }
 
       updateSession(targetSessionId, (state) => ({ ...state, traceLoading: true }));
-      const latestTimeline = await fetchLatestTimeline();
+      const latestTimeline = await fetchSessionTimeline(targetSessionId);
       updateSession(targetSessionId, (state) => ({
         ...state,
         timeline: latestTimeline,
@@ -579,15 +599,26 @@ export default function Playground() {
                       {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
-                  <Tooltip title="复制调试 JSON">
-                    <Button
-                      type="text"
-                      size="small"
-                      icon={<CopyOutlined />}
-                      onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
-                      style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24 }}
-                    />
-                  </Tooltip>
+                  <Space size={0}>
+                    <Tooltip title="跳转链路追踪">
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<LinkOutlined />}
+                        onClick={(e) => { e.stopPropagation(); openTraceMonitor(conv.session_id); }}
+                        style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24 }}
+                      />
+                    </Tooltip>
+                    <Tooltip title="复制调试 JSON">
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<CopyOutlined />}
+                        onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
+                        style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24 }}
+                      />
+                    </Tooltip>
+                  </Space>
                 </div>
               </div>
             );
@@ -749,7 +780,7 @@ export default function Playground() {
               type="primary"
               ghost
               onClick={() => {
-                window.open('/dev/traces', '_blank');
+                window.open(buildTraceMonitorUrl({ sessionId, requestId: timeline?.request_id }), '_blank');
               }}
               style={{ borderColor: ACCENT, color: ACCENT }}
             >

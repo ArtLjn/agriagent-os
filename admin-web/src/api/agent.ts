@@ -183,6 +183,16 @@ export interface ConversationMessage {
   created_at: string;
 }
 
+export interface SessionDebugExportV2 {
+  format: 'farm-manager.chat-session-debug.v2';
+  session: Record<string, unknown>;
+  messages: Record<string, unknown>[];
+  turns: Record<string, unknown>[];
+  pending_plans: Record<string, unknown>[];
+  events: Record<string, unknown>[];
+  missing_event_segments: Record<string, unknown>[];
+}
+
 export async function listConversations(limit?: number, simulateUserId?: string | null): Promise<ConversationItem[]> {
   const res = await apiClient.get<ConversationItem[]>("/agent/conversations", {
     params: { limit, simulate_user_id: simulateUserId || undefined },
@@ -192,6 +202,16 @@ export async function listConversations(limit?: number, simulateUserId?: string 
 
 export async function getConversationMessages(sessionId: string, simulateUserId?: string | null): Promise<ConversationMessage[]> {
   const res = await apiClient.get<ConversationMessage[]>(`/agent/conversations/${sessionId}/messages`, {
+    params: { simulate_user_id: simulateUserId || undefined },
+  });
+  return res.data;
+}
+
+export async function getSessionDebugExport(
+  sessionId: string,
+  simulateUserId?: string | null,
+): Promise<SessionDebugExportV2> {
+  const res = await apiClient.get<SessionDebugExportV2>(`/agent/conversations/${sessionId}/debug-export`, {
     params: { simulate_user_id: simulateUserId || undefined },
   });
   return res.data;

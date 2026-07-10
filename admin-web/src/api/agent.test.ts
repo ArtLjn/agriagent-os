@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import apiClient from './client';
-import { listAppSkills, refreshDailyAdvice } from './agent';
+import { getSessionDebugExport, listAppSkills, refreshDailyAdvice } from './agent';
 
 vi.mock('./client', () => ({
   default: {
@@ -53,5 +53,26 @@ describe('agent api', () => {
       params: { cycle_id: 7 },
     });
     expect(result.advice).toBe('重新生成的建议');
+  });
+
+  it('读取会话 debug export v2 并透传模拟用户', async () => {
+    mockedApiClient.get.mockResolvedValueOnce({
+      data: {
+        format: 'farm-manager.chat-session-debug.v2',
+        session: { session_id: 'sess-1' },
+        messages: [],
+        turns: [],
+        pending_plans: [],
+        events: [],
+        missing_event_segments: [],
+      },
+    });
+
+    const result = await getSessionDebugExport('sess-1', 'user-1');
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith('/agent/conversations/sess-1/debug-export', {
+      params: { simulate_user_id: 'user-1' },
+    });
+    expect(result.format).toBe('farm-manager.chat-session-debug.v2');
   });
 });
