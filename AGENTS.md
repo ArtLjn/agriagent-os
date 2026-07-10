@@ -11,13 +11,14 @@ farm-manager，FastAPI 后端 + React+TS 前端
 | 了解系统架构 | docs/architecture/overview.md |
 | 了解系统演进路线图 | docs/architecture/evolution-roadmap.md |
 | 了解 Agent 平台目标架构 | docs/architecture/overview.md#agent-平台边界 |
+| 了解 Agent 开发硬规范 | docs/agent/agent-development-standard.md |
 | 了解模块边界和依赖规则 | docs/architecture/boundaries.md |
 | 了解兼容入口保留理由 | docs/architecture/compatibility-entries.md |
-| 了解 Python 编码规范 | .Codex/rules/python-style.md |
-| 了解前端编码规范 | .Codex/rules/frontend-style.md |
-| 了解安全规范 | .Codex/rules/security.md |
-| 了解文档同步规则 | .Codex/rules/docs-sync.md |
-| 了解 Skill 书写规范 | .Codex/rules/skill-writing.md |
+| 了解 Python 编码规范 | .claude/rules/python-style.md |
+| 了解前端编码规范 | .claude/rules/frontend-style.md |
+| 了解安全规范 | .claude/rules/security.md |
+| 了解文档同步规则 | .claude/rules/docs-sync.md |
+| 了解 Skill 书写规范 | .claude/rules/skill-writing.md |
 | 了解当前迭代任务 | docs/plans/current-sprint.md |
 | 了解设计文档模板 | docs/design/TEMPLATE.md |
 

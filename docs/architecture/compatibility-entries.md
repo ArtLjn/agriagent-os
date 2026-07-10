@@ -7,17 +7,6 @@
 | 旧入口 | 新入口 | 保留理由 | 删除条件 |
 | --- | --- | --- | --- |
 | `app.agent.graph` | `app.agent.runtime` | 保持既有测试和外部调用兼容 | 下游全部迁移到 `app.agent.runtime` 后删除 |
-| `app.agent.prompt_registry` | `app.prompt.registry` | Prompt 工程化迁移兼容 | Prompt 相关 import 全部切换后删除 |
-| `app.agent.prompt_renderer` | `app.prompt.renderer` | Prompt 工程化迁移兼容 | Prompt 相关 import 全部切换后删除 |
-| `app.agent.prompt_composer` | `app.prompt.composer` | Prompt 工程化迁移兼容 | Prompt 相关 import 全部切换后删除 |
-| `app.agent.prompt_cache` | `app.prompt.cache` | Prompt 工程化迁移兼容 | Runtime 与 API 全部改用 `app.prompt` 后删除 |
-
-## Auth
-
-| 旧入口 | 新入口 | 保留理由 | 删除条件 |
-| --- | --- | --- | --- |
-| `app.core.security` | `app.modules.auth.password`、`app.modules.auth.tokens` | 保持历史安全工具 import 兼容 | 业务代码和测试全部迁移到 `app.modules.auth` 后删除 |
-| `app.api.deps` | `app.modules.auth.dependencies`、`app.modules.farm.dependencies` | 保持 FastAPI 依赖 import 兼容 | API 路由全部迁移到模块依赖后删除 |
 
 ## 维护规则
 

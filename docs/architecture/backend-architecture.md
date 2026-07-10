@@ -114,7 +114,7 @@ flowchart LR
     Skills --> Trace
 ```
 
-当前 `app.agent.graph`、`app.agent.prompt_*`、`app.agent.prompt_cache` 仍是兼容入口；新增实现应优先进入 `agent/runtime`、`prompt/`、`context/`、`memory/` 对应边界。
+当前 `app.agent.graph` 仍是 Runtime 兼容入口；Prompt 相关调用已迁移到 `app.prompt`。新增实现应优先进入 `agent/runtime`、`prompt/`、`context/`、`memory/` 对应边界。
 
 ## 5. Context、Prompt、Memory 链路
 
