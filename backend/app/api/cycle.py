@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from langchain_core.messages import HumanMessage
-from app.api.deps import get_db, get_current_farm
+from app.core.dependencies import get_db
+from app.modules.farm.dependencies import get_current_farm
 from app.core.json_repair import safe_parse_json
 from app.models.farm import Farm
 from app.schemas.common import PaginatedResponse

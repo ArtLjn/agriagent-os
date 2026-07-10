@@ -7,14 +7,10 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.api.deps import (
-    get_current_farm,
-    get_current_user,
-    get_db,
-    require_admin,
-    verify_resource_owner,
-)
-from app.core.security import create_access_token
+from app.core.dependencies import get_db
+from app.modules.auth.dependencies import get_current_user, require_admin
+from app.modules.farm.dependencies import get_current_farm, verify_resource_owner
+from app.modules.auth.tokens import create_access_token
 from app.models.farm import Farm
 from app.models.user import User
 

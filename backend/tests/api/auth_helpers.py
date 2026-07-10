@@ -6,8 +6,9 @@ from contextlib import contextmanager
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_farm, get_current_user
-from app.core.security import create_access_token
+from app.modules.auth.dependencies import get_current_user
+from app.modules.farm.dependencies import get_current_farm
+from app.modules.auth.tokens import create_access_token
 from app.models.farm import Farm
 from app.models.user import User
 

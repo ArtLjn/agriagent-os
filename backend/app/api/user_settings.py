@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.agent.application.context_invalidation import invalidate_user_farm_context
 from app.agent.assistant_roles import DEFAULT_ASSISTANT_ROLE, normalize_assistant_role
-from app.api.deps import get_current_user, get_db
+from app.core.dependencies import get_db
+from app.modules.auth.dependencies import get_current_user
 from app.models.user import User
 from app.models.user_setting import UserSetting
 from app.schemas.settings import UserSettingsResponse, UserSettingsUpdate

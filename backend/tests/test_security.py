@@ -1,11 +1,7 @@
 """安全模块测试 — JWT + bcrypt。"""
 
-from app.core.security import (
-    create_access_token,
-    verify_token,
-    hash_password,
-    verify_password,
-)
+from app.modules.auth.password import hash_password, verify_password
+from app.modules.auth.tokens import create_access_token, verify_token
 
 
 def test_hash_and_verify_password():

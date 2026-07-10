@@ -13,7 +13,6 @@ from app.modules.auth.errors import (
     user_disabled_error,
     user_not_found_error,
 )
-from app.modules.auth.permissions import is_admin
 from app.modules.auth.tokens import (
     TokenExpiredError,
     TokenInvalidError,
@@ -46,6 +45,6 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
     """校验当前用户是否为管理员。"""
-    if not is_admin(user):
+    if user.role != "admin":
         raise admin_required_error()
     return user

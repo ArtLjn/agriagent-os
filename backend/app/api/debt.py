@@ -5,7 +5,8 @@ from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_farm, get_db
+from app.core.dependencies import get_db
+from app.modules.farm.dependencies import get_current_farm
 from app.models.farm import Farm
 from app.schemas.cost import CostRecordCreate, CostRecordResponse, DebtListResponse
 from app.services import debt_service
