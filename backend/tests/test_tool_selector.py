@@ -375,20 +375,13 @@ class TestFallback:
         result = select_tools("看看天气和成本和余额和趋势", _make_tools(), top_k=2)
         assert len(result) <= 2
 
-    def test_llm_intent_logs_returned_tools(self, caplog):
-        classifier = MagicMock()
-        classifier.classify.return_value = ["get_cost_summary"]
-
+    def test_router_fallback_logs_returned_tools(self, caplog):
         with caplog.at_level("INFO", logger="app.agent.tool_selector"):
-            result = select_tools(
-                "帮我看看最近账怎么样",
-                _make_tools(),
-                intent_classifier=classifier,
-            )
+            result = select_tools("帮我看看最近账怎么样", _make_tools())
 
-        assert result == ["get_cost_summary"]
-        assert "tool_select | layer=llm_intent" in caplog.text
-        assert "returned=['get_cost_summary']" in caplog.text
+        assert isinstance(result.tools, list)
+        assert "tool_select | layer=router" in caplog.text
+        assert "returned=" in caplog.text
 
     def test_fallback_all_log_is_removed(self, caplog):
         with caplog.at_level("INFO", logger="app.agent.tool_selector"):

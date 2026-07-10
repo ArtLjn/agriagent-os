@@ -84,3 +84,49 @@ async def test_stream_advisor_refuses_unsupported_delete_cost_request():
     assert "暂不支持" in "".join(chunks)
     assert "删除账单" in "".join(chunks)
     mock_graph.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stream_advisor_records_trace_for_greeting_reply():
+    with (
+        patch("app.agent.advisor.record_agent_response") as mock_record_response,
+        patch("app.agent.advisor.clear_trace") as mock_clear_trace,
+    ):
+        chunks = [
+            chunk
+            async for chunk in stream_advisor(
+                "你好",
+                farm_id=1,
+                session_id="sess-greeting",
+                request_id="req-greeting",
+                user_id="user-1",
+            )
+        ]
+
+    assert "".join(chunks)
+    mock_record_response.assert_called_once()
+    assert mock_record_response.call_args.kwargs["node_name"] == "greeting_reply"
+    mock_clear_trace.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_advisor_records_trace_for_unsupported_capability_reply():
+    with (
+        patch("app.agent.advisor.record_agent_response") as mock_record_response,
+        patch("app.agent.advisor.clear_trace") as mock_clear_trace,
+    ):
+        reply = await invoke_advisor(
+            "清理所有账单",
+            farm_id=1,
+            session_id="sess-unsupported",
+            request_id="req-unsupported",
+            user_id="user-1",
+        )
+
+    assert "暂不支持" in reply
+    mock_record_response.assert_called_once()
+    assert (
+        mock_record_response.call_args.kwargs["node_name"]
+        == "unsupported_capability_reply"
+    )
+    mock_clear_trace.assert_called_once_with()

@@ -3,6 +3,7 @@
 执行：pytest tests/agent/eval/test_baseline.py -v -s
 观察 stdout 输出的指标，记录到 spec 文档作为 baseline。
 """
+
 import pytest
 
 from tests.agent.eval.cases import all_eval_cases, B_QUERY_CASES, B_CHITCHAT_CASES
@@ -12,28 +13,25 @@ def _select_tools_safe(user_message, tools):
     """安全调用 select_tools，捕获异常返回 None。"""
     try:
         from app.agent.tool_selector import select_tools
+
         return select_tools(user_message, tools)
     except Exception:
         return None
 
 
 @pytest.mark.parametrize("case", B_QUERY_CASES, ids=lambda c: c.case_id)
-class TestBaselineQueryIntentForceBinding:
-    """Baseline：B_QUERY 用例的 force_binding 命中情况。"""
+class TestBaselineQueryIntentNoForceBinding:
+    """Baseline：B_QUERY 用例不再使用查询类 force_binding。"""
 
-    def test_force_binding_for_query_intent(self, case, fake_tool_factory):
-        """B_QUERY 用例应该命中 force_binding（改造后）。
-
-        Baseline 阶段可能大量失败，这正是 baseline 的价值。
-        """
+    def test_no_force_binding_for_query_intent(self, case, fake_tool_factory):
         tools = [fake_tool_factory(case.expected_skill)]
         result = _select_tools_safe(case.user_message, tools)
 
         if result is None:
             pytest.fail(f"{case.case_id}: select_tools raised exception")
 
-        assert case.expected_skill in result.force_binding, (
-            f"{case.case_id}: expected force_binding={case.expected_skill}, "
+        assert not result.force_binding, (
+            f"{case.case_id}: query should not force_bind, "
             f"got force_binding={result.force_binding}, tools={result.tools}"
         )
 
@@ -45,8 +43,11 @@ class TestBaselineChitchatNoFalsePositive:
     def test_no_force_binding_for_chitchat(self, case, fake_tool_factory):
         # 给所有可能的 query skill 作为候选
         all_query_skills = [
-            "get_weather_forecast", "get_crop_cycles", "get_workers",
-            "get_labor_payables", "get_debt_summary",
+            "get_weather_forecast",
+            "get_crop_cycles",
+            "get_workers",
+            "get_labor_payables",
+            "get_debt_summary",
         ]
         tools = [fake_tool_factory(name) for name in all_query_skills]
         result = _select_tools_safe(case.user_message, tools)
@@ -70,25 +71,36 @@ class TestEvalCaseCoverage:
     def test_category_distribution(self):
         cases = all_eval_cases()
         categories = {c.category for c in cases}
-        expected = {"B_QUERY", "B_WRITE", "B_MULTI_INTENT", "B_CHITCHAT", "E2_MULTITURN"}
+        expected = {
+            "B_QUERY",
+            "B_WRITE",
+            "B_MULTI_INTENT",
+            "B_CHITCHAT",
+            "E2_MULTITURN",
+        }
         assert categories == expected
 
     def test_b_query_has_20_cases(self):
         from tests.agent.eval.cases import B_QUERY_CASES
+
         assert len(B_QUERY_CASES) == 20
 
     def test_b_write_has_10_cases(self):
         from tests.agent.eval.cases import B_WRITE_CASES
+
         assert len(B_WRITE_CASES) == 10
 
     def test_b_multi_intent_has_5_cases(self):
         from tests.agent.eval.cases import B_MULTI_INTENT_CASES
+
         assert len(B_MULTI_INTENT_CASES) == 5
 
     def test_b_chitchat_has_8_cases(self):
         from tests.agent.eval.cases import B_CHITCHAT_CASES
+
         assert len(B_CHITCHAT_CASES) == 8
 
     def test_e2_multiturn_has_5_cases(self):
         from tests.agent.eval.cases import E2_MULTITURN_CASES
+
         assert len(E2_MULTITURN_CASES) == 5

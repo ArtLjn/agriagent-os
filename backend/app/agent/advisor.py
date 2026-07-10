@@ -13,10 +13,14 @@ from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
 from app.agent.intent_router import IntentType, classify_intent, get_greeting_reply
 from app.agent.llm import get_llm
+from app.agent.application.response_trace import record_agent_response
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.infra.trace_context import clear_trace, init_trace
 from app.models.farm import Farm
-from app.services.conversation_service import get_recent_messages
+from app.services.conversation_service import (
+    async_get_recent_messages,
+    get_recent_messages,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +58,7 @@ def _build_history_messages(
     if db is None or conversation_id is None:
         return []
     records = get_recent_messages(db, conversation_id, limit=limit)
-    messages: list[HumanMessage | AIMessage] = []
-    for rec in records:
-        if rec.role == "user":
-            messages.append(HumanMessage(content=rec.content))
-        elif rec.role == "assistant":
-            messages.append(AIMessage(content=rec.content))
+    messages = _records_to_history_messages(records)
     if (
         current_user_input is not None
         and messages
@@ -68,6 +67,40 @@ def _build_history_messages(
     ):
         messages = messages[:-1]
     messages = _summarize_history_messages(messages, recent_message_limit)
+    return messages
+
+
+async def _async_build_history_messages(
+    db: Session | None,
+    conversation_id: int | None,
+    limit: int = 20,
+    current_user_input: str | None = None,
+    recent_message_limit: int = 10,
+) -> list[HumanMessage | AIMessage]:
+    """async 请求链路构建历史消息。"""
+    if db is None or conversation_id is None:
+        return []
+    records = await async_get_recent_messages(db, conversation_id, limit=limit)
+    messages = _records_to_history_messages(records)
+    if (
+        current_user_input is not None
+        and messages
+        and isinstance(messages[-1], HumanMessage)
+        and messages[-1].content == current_user_input
+    ):
+        messages = messages[:-1]
+    return _summarize_history_messages(messages, recent_message_limit)
+
+
+def _records_to_history_messages(
+    records,
+) -> list[HumanMessage | AIMessage]:
+    messages: list[HumanMessage | AIMessage] = []
+    for rec in records:
+        if rec.role == "user":
+            messages.append(HumanMessage(content=rec.content))
+        elif rec.role == "assistant":
+            messages.append(AIMessage(content=rec.content))
     return messages
 
 
@@ -114,18 +147,6 @@ async def invoke_advisor(
         logger.warning("Agent 输入被拦截 | farm_id=%s, reason=%s", farm_id, reason)
         return f"输入内容包含不安全信息，已被拦截。原因：{reason}"
 
-    # 意图路由：问候语直接回复，跳过 LangGraph
-    intent = classify_intent(user_input)
-    if intent == IntentType.GREETING:
-        return filter_output(get_greeting_reply(user_input))
-
-    unsupported_reply = _unsupported_capability_reply(user_input)
-    if unsupported_reply:
-        return unsupported_reply
-
-    if call_type == "daily_advice":
-        return await _invoke_direct_daily_advice_llm(user_input)
-
     init_trace(
         farm_id=farm_id,
         session_id=session_id,
@@ -134,9 +155,42 @@ async def invoke_advisor(
         call_type=call_type,
     )
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
+
+    # 意图路由：问候语直接回复，跳过 LangGraph
+    intent = classify_intent(user_input)
     farm_uid = _resolve_farm_uid(db, farm_id)
 
     try:
+        if intent == IntentType.GREETING:
+            reply = filter_output(get_greeting_reply(user_input))
+            record_agent_response(
+                node_name="greeting_reply",
+                user_input=user_input,
+                reply=reply,
+                reason="greeting_shortcut",
+            )
+            return reply
+
+        unsupported_reply = _unsupported_capability_reply(user_input)
+        if unsupported_reply:
+            record_agent_response(
+                node_name="unsupported_capability_reply",
+                user_input=user_input,
+                reply=unsupported_reply,
+                reason="unsupported_capability",
+            )
+            return unsupported_reply
+
+        if call_type == "daily_advice":
+            reply = await _invoke_direct_daily_advice_llm(user_input)
+            record_agent_response(
+                node_name="daily_advice_reply",
+                user_input=user_input,
+                reply=reply,
+                reason="direct_daily_advice",
+            )
+            return reply
+
         pending_decision = await handle_pending_action(
             farm_id=farm_id,
             message=user_input,
@@ -144,12 +198,19 @@ async def invoke_advisor(
             session_id=session_id,
         )
         if pending_decision.handled:
-            return filter_output(pending_decision.reply)
+            reply = filter_output(pending_decision.reply)
+            record_agent_response(
+                node_name="pending_action_reply",
+                user_input=user_input,
+                reply=reply,
+                reason="pending_action_handled",
+            )
+            return reply
 
         graph = _get_advisor_graph()
 
         # 构建历史消息 + 当前消息
-        history = _build_history_messages(
+        history = await _async_build_history_messages(
             db, conversation_id, current_user_input=user_input
         )
         messages = history + [HumanMessage(content=user_input)]
@@ -173,16 +234,21 @@ async def invoke_advisor(
                 },
             },
         )
+        reply = result["messages"][-1].content
+        filtered = filter_output(reply)
+        record_agent_response(
+            node_name="final_reply",
+            user_input=user_input,
+            reply=filtered,
+            reason="graph_final_response",
+        )
+        logger.info("Agent 回复完成 | farm_id=%s, 长度 %d 字符", farm_id, len(filtered))
+        return filtered
     except GraphRecursionError:
         logger.error("Agent 步数超限 | farm_id=%s", farm_id)
         return "Agent 处理步数超出限制，请简化您的问题后重试。"
     finally:
         clear_trace()
-
-    reply = result["messages"][-1].content
-    filtered = filter_output(reply)
-    logger.info("Agent 回复完成 | farm_id=%s, 长度 %d 字符", farm_id, len(filtered))
-    return filtered
 
 
 async def _invoke_direct_daily_advice_llm(prompt: str) -> str:
@@ -210,17 +276,6 @@ async def stream_advisor(
         yield f"输入内容包含不安全信息，已被拦截。原因：{reason}"
         return
 
-    # 意图路由：问候语直接回复，跳过 LangGraph
-    intent = classify_intent(user_input)
-    if intent == IntentType.GREETING:
-        yield filter_output(get_greeting_reply(user_input))
-        return
-
-    unsupported_reply = _unsupported_capability_reply(user_input)
-    if unsupported_reply:
-        yield unsupported_reply
-        return
-
     init_trace(
         farm_id=farm_id,
         session_id=session_id,
@@ -229,10 +284,35 @@ async def stream_advisor(
         call_type=call_type,
     )
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
+
+    # 意图路由：问候语直接回复，跳过 LangGraph
+    intent = classify_intent(user_input)
     farm_uid = _resolve_farm_uid(db, farm_id)
 
     step = 0
     try:
+        if intent == IntentType.GREETING:
+            reply = filter_output(get_greeting_reply(user_input))
+            record_agent_response(
+                node_name="greeting_reply",
+                user_input=user_input,
+                reply=reply,
+                reason="greeting_shortcut",
+            )
+            yield reply
+            return
+
+        unsupported_reply = _unsupported_capability_reply(user_input)
+        if unsupported_reply:
+            record_agent_response(
+                node_name="unsupported_capability_reply",
+                user_input=user_input,
+                reply=unsupported_reply,
+                reason="unsupported_capability",
+            )
+            yield unsupported_reply
+            return
+
         pending_decision = await handle_pending_action(
             farm_id=farm_id,
             message=user_input,
@@ -240,13 +320,20 @@ async def stream_advisor(
             session_id=session_id,
         )
         if pending_decision.handled:
-            yield filter_output(pending_decision.reply)
+            reply = filter_output(pending_decision.reply)
+            record_agent_response(
+                node_name="pending_action_reply",
+                user_input=user_input,
+                reply=reply,
+                reason="pending_action_handled",
+            )
+            yield reply
             return
 
         graph = _get_advisor_graph()
 
         # 构建历史消息 + 当前消息
-        history = _build_history_messages(
+        history = await _async_build_history_messages(
             db, conversation_id, current_user_input=user_input
         )
         messages = history + [HumanMessage(content=user_input)]
@@ -297,6 +384,12 @@ async def stream_advisor(
                                 len(msg.content),
                             )
                             filtered = filter_output(msg.content)
+                            record_agent_response(
+                                node_name="final_reply",
+                                user_input=user_input,
+                                reply=filtered,
+                                reason="graph_final_response",
+                            )
                             chunk_size = 3
                             delay = 0.02
                             for i in range(0, len(filtered), chunk_size):

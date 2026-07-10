@@ -2,7 +2,7 @@
 
 import time
 
-from app.agent.prompt_cache import (
+from app.prompt.cache import (
     PromptCache,
     FarmContextCache,
     clear_all_caches,

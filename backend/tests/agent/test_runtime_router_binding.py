@@ -158,6 +158,73 @@ async def test_llm_node_returns_router_decision_for_tool_node_state() -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_query_exposes_read_tools_for_model_choice() -> None:
+    """普通读请求应交给主模型在只读工具中选择，不再由规则窄绑单个读工具。"""
+    fake_llm = _FakeLLM()
+    tools = [
+        _FakeTool("get_crop_cycle_info"),
+        _FakeTool("get_farm_status"),
+        _FakeTool("get_weather_forecast"),
+        _FakeTool("create_operation_work_order"),
+    ]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我在种植哪些作物")],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-1",
+            }
+        )
+
+    assert result["router_decision"].tool_choice == "auto"
+    assert fake_llm.bound_tool_names == [
+        "get_crop_cycle_info",
+        "get_farm_status",
+        "get_weather_forecast",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_llm_node_keeps_planting_planning_intent_in_read_tool_pool() -> None:
+    """裸种植意向应先进入规划对话，不直接绑定创建茬口写工具。"""
+    fake_llm = _FakeLLM()
+    tools = [
+        _FakeTool("get_farm_status"),
+        _FakeTool("get_crop_cycles"),
+        _FakeTool("get_crop_templates"),
+        _FakeTool("create_crop_cycle"),
+        _FakeTool("create_crop_template"),
+    ]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我想种黑布林的")],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-planting",
+            }
+        )
+
+    assert fake_llm.bound_tool_names == [
+        "get_farm_status",
+        "get_crop_cycles",
+        "get_crop_templates",
+    ]
+    router_decision = result["router_decision"]
+    assert "create_crop_cycle" not in router_decision.selected_tools
+    assert router_decision.fallback == "model_choice_read_default"
+
+
+@pytest.mark.asyncio
 async def test_final_answer_with_tool_result_binds_no_tools_by_default() -> None:
     """已有普通 ToolMessage 的 final answer 轮默认不重新绑定工具。"""
     fake_llm = _FakeLLM()

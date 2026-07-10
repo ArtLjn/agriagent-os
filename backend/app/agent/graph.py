@@ -22,7 +22,7 @@ from app.agent.runtime.nodes import (
     _warm_tool_caches,
     sliding_window_compact,
 )
-from app.agent.runtime.state import AgentState
+from app.agent.state import AgentState
 
 __all__ = [
     "AgentState",

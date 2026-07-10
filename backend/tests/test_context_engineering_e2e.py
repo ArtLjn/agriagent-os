@@ -19,8 +19,8 @@ _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 @pytest.fixture()
 def _composer():
     """从 prompts/ 目录初始化的 PromptComposer。"""
-    from app.agent.prompt_composer import PromptComposer
-    from app.agent.prompt_registry import PromptRegistry
+    from app.prompt.composer import PromptComposer
+    from app.prompt.registry import PromptRegistry
 
     reg = PromptRegistry()
     reg.reload(_PROMPTS_DIR)

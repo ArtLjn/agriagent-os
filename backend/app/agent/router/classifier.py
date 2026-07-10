@@ -105,7 +105,17 @@ class RuleIntentClassifier:
         "有哪些模板",
         "生长阶段模板",
     )
-    _crop_cycle_list_hints = ("我的茬口", "有哪些茬口", "茬口列表", "种植批次")
+    _crop_cycle_list_hints = (
+        "我的茬口",
+        "有哪些茬口",
+        "茬口列表",
+        "种植批次",
+        "我的作物",
+        "有哪些作物栽种",
+        "种了哪些作物",
+        "种植哪些作物",
+        "地里都种着什么",
+    )
     _planting_unit_hints = ("种植单元", "地块", "大棚", "棚区", "有哪些棚")
     _user_settings_hints = (
         "用户设置",
@@ -124,6 +134,7 @@ class RuleIntentClassifier:
         "查一下工人",
         "工人有哪些",
     )
+
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
         normalized = message.strip()
@@ -215,7 +226,7 @@ class RuleIntentClassifier:
                     risk="read",
                     entities=["crop_cycle"],
                     candidate_tools=["get_crop_cycles"],
-                    confidence=0.86,
+                    confidence=0.88,
                 )
             ]
         if self._looks_like_crop_cycle_detail_query(message):
@@ -247,7 +258,7 @@ class RuleIntentClassifier:
                     intent="query_active_crops",
                     risk="read",
                     entities=["farm", "crop_cycle"],
-                    candidate_tools=["get_farm_status", "get_crop_cycle_info"],
+                    candidate_tools=["get_crop_cycle_info", "get_farm_status"],
                     confidence=0.85,
                 )
             ]
@@ -346,6 +357,17 @@ class RuleIntentClassifier:
                     confidence=0.8,
                 )
             ]
+        if self._looks_like_weather_crop_impact_query(message):
+            return [
+                IntentFrame(
+                    domain="operation",
+                    intent="query_weather_crop_impact",
+                    risk="read",
+                    entities=["weather", "farm", "crop_cycle"],
+                    candidate_tools=["get_weather_forecast", "get_farm_status"],
+                    confidence=0.84,
+                )
+            ]
         if self._looks_like_weather_query(message):
             return [
                 IntentFrame(
@@ -367,6 +389,10 @@ class RuleIntentClassifier:
         frames: list[IntentFrame] = []
         if self._looks_like_create_worker(message):
             frames.append(self._build_create_worker_frame(message))
+        if self._looks_like_create_crop_template(message):
+            frames.append(self._build_create_crop_template_frame(message))
+        if self._looks_like_create_crop_cycle(message):
+            frames.append(self._build_create_crop_cycle_frame(message))
         if self._looks_like_incomplete_farm_labor_work(message):
             frames.append(self._build_clarify_farm_labor_frame(message))
         if self._looks_like_create_work_order(message):
@@ -385,6 +411,28 @@ class RuleIntentClassifier:
             candidate_tools=["manage_workers"],
             confidence=0.78,
             params_hint=worker_params or None,
+            requires_confirmation=True,
+        )
+
+    def _build_create_crop_template_frame(self, message: str) -> IntentFrame:
+        return IntentFrame(
+            domain="planting",
+            intent="create_crop_template",
+            risk="write_confirm",
+            entities=["crop_template"],
+            candidate_tools=["create_crop_template"],
+            confidence=0.78,
+            requires_confirmation=True,
+        )
+
+    def _build_create_crop_cycle_frame(self, message: str) -> IntentFrame:
+        return IntentFrame(
+            domain="planting",
+            intent="create_crop_cycle",
+            risk="write_confirm",
+            entities=["crop_cycle"],
+            candidate_tools=["create_crop_cycle"],
+            confidence=0.76,
             requires_confirmation=True,
         )
 
@@ -456,6 +504,13 @@ class RuleIntentClassifier:
     def _looks_like_weather_query(self, message: str) -> bool:
         return self._has_any(message, self._weather_hints)
 
+    def _looks_like_weather_crop_impact_query(self, message: str) -> bool:
+        return (
+            self._looks_like_weather_query(message)
+            and self._has_any(message, self._crop_hints)
+            and self._has_any(message, ("影响", "适合", "建议", "要不要"))
+        )
+
     def _looks_like_daily_operation_advice(self, message: str) -> bool:
         has_time = self._has_any(message, self._daily_advice_time_hints)
         has_advice_action = self._has_any(message, self._daily_advice_action_hints)
@@ -473,6 +528,18 @@ class RuleIntentClassifier:
         has_create_action = self._has_any(message, self._worker_create_hints)
         has_pay_hint = self._has_any(message, self._worker_pay_hints)
         return has_create_action or has_pay_hint
+
+    def _looks_like_create_crop_template(self, message: str) -> bool:
+        return "模板" in message and self._looks_like_create_action(message)
+
+    def _looks_like_create_crop_cycle(self, message: str) -> bool:
+        if self._has_any(message, self._read_blockers):
+            return False
+        if self._looks_like_planting_advice(message):
+            return False
+        if "茬口" in message and self._looks_like_create_action(message):
+            return True
+        return False
 
     def _looks_like_query_work_orders(self, message: str) -> bool:
         return self._has_any(message, self._read_blockers) and self._has_any(
@@ -494,7 +561,8 @@ class RuleIntentClassifier:
         return self._has_any(message, self._cost_summary_hints)
 
     def _looks_like_finance_overview_query(self, message: str) -> bool:
-        return message.lower() in self._finance_overview_hints
+        normalized = message.strip().lower()
+        return normalized in self._finance_overview_hints
 
     def _looks_like_debt_summary_query(self, message: str) -> bool:
         if self._looks_like_labor_payable_query(message):
@@ -530,12 +598,16 @@ class RuleIntentClassifier:
         return self._has_any(message, self._cost_category_hints)
 
     def _looks_like_crop_template_query(self, message: str) -> bool:
+        if self._looks_like_create_crop_template(message):
+            return False
         return self._has_any(message, self._crop_template_hints)
 
     def _looks_like_crop_cycle_list_query(self, message: str) -> bool:
         return self._has_any(message, self._crop_cycle_list_hints)
 
     def _looks_like_crop_cycle_detail_query(self, message: str) -> bool:
+        if self._looks_like_create_crop_cycle(message):
+            return False
         return bool(
             re.search(
                 r"(?:看一下|查询|查一下|看看).{0,8}(?:\d+\s*号)?茬口"
@@ -637,6 +709,10 @@ class RuleIntentClassifier:
         if params.get("workers") and params.get("unit_price") is None:
             missing.append("unit_price_or_default_wage")
         return missing
+
+    @staticmethod
+    def _looks_like_create_action(message: str) -> bool:
+        return bool(re.search(r"创建|新增|新建|建(?:个|一个)?|添加", message))
 
     @staticmethod
     def _extract_worker_name(message: str) -> str | None:

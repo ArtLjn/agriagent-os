@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.agent.prompt_registry import PromptRegistry
+from app.prompt.registry import PromptRegistry
 
 
 class TestPromptRegistry:

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.agent.graph import _llm_node
-from app.agent.prompt_cache import clear_all_caches
+from app.prompt.cache import clear_all_caches
 from app.context.models import ContextBundle
 from app.memory.models import MemoryContext, MemoryMessage
 

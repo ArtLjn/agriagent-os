@@ -6,7 +6,9 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.api.agent import router
-from app.api.deps import get_current_farm, get_current_user, get_db
+from app.core.dependencies import get_db
+from app.modules.auth.dependencies import get_current_user
+from app.modules.farm.dependencies import get_current_farm
 from app.core.database import Base
 from app.infra.limiter import limiter
 from app.models.farm import Farm

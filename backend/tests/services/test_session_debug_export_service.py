@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import settings
 from app.core.database import Base
 from app.infra.pending_actions import store_pending_plan
 from app.infra.agent_events import AgentEventWriter
@@ -31,6 +32,7 @@ Session = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
 def setup_function():
+    settings.storage.conversation_messages = "mysql"
     Base.metadata.drop_all(bind=_engine)
     Base.metadata.create_all(bind=_engine)
     db = Session()
@@ -101,6 +103,53 @@ def test_build_session_debug_export_includes_messages_turns_pending_and_events(
     assert result["turns"][0]["request_id"] == "abcd1234"
     assert result["events"][0]["event_type"] == "message.user"
     assert result["pending_plans"][0]["raw_user_input"] == "停用李一凡"
+    db.close()
+
+
+def test_debug_export_reads_backend_relative_event_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "app.infra.repository_runtime.settings.storage.conversation_messages",
+        "mysql",
+    )
+    db = Session()
+    conv = get_or_create_conversation(
+        db, farm_id=1, session_id="sess-backend-events", user_id="user-1"
+    )
+    user_msg = save_message(db, conv.id, "user", "nihao")
+    turn = create_turn(
+        db,
+        farm_id=1,
+        session_id="sess-backend-events",
+        conversation_id=conv.id,
+        request_id="hello1",
+        user_message_id=user_msg.id,
+        input_text="nihao",
+    )
+    backend_dir = tmp_path / "backend"
+    writer = AgentEventWriter(base_dir=backend_dir / "data/agent-events")
+    first = writer.write(
+        event_type="message.user",
+        farm_id=1,
+        user_id="user-1",
+        session_id="sess-backend-events",
+        turn_id=turn.id,
+        request_id="hello1",
+        payload={"content": "nihao"},
+    )
+    mark_event_range(
+        db,
+        turn.id,
+        event_file=str(first.event_file).replace(str(backend_dir) + "/", ""),
+        seq_start=first.seq,
+        seq_end=first.seq,
+        write_status="success",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    result = build_session_debug_export(db, farm_id=1, session_id="sess-backend-events")
+
+    assert result["events"][0]["event_type"] == "message.user"
+    assert result["missing_event_segments"] == []
     db.close()
 
 

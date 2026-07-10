@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.agent.prompt_registry import get_registry
+from app.prompt.registry import get_registry
 from app.agent.application.smart_fill import _build_cache_key, parse_with_llm
 from app.main import app
 from app.schemas.cost import CostParseResult

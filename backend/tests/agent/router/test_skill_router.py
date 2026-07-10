@@ -119,39 +119,92 @@ def test_catalog_handles_magicmock_tool_metadata() -> None:
     assert candidate.schema_token_estimate >= 80
 
 
-def test_session5_active_crop_query_selects_at_most_two_tools() -> None:
+@pytest.mark.parametrize(
+    "message",
+    ["我的作物", "我家有哪些作物栽种", "当前种了哪些作物", "现在地里都种着什么"],
+)
+def test_crop_inventory_query_routes_to_crop_cycles(message: str) -> None:
     tools = [
         _tool("get_farm_status"),
+        _tool("get_crop_cycles"),
         _tool("get_crop_cycle_info"),
         _tool("create_crop_cycle"),
         _tool("manage_workers"),
         _tool("create_operation_work_order"),
     ]
 
-    decision = SkillRouter().route("我家有哪些作物栽种", tools)
+    decision = SkillRouter().route(message, tools)
 
     assert len(decision.selected_tools) <= 2
-    assert set(decision.selected_tools) <= {"get_farm_status", "get_crop_cycle_info"}
+    assert decision.selected_tools[0] == "get_crop_cycles"
+    assert set(decision.selected_tools) <= {"get_crop_cycles", "get_farm_status"}
     assert decision.fallback != "fallback_all"
     assert "create_operation_work_order" not in decision.selected_tools
 
 
-def test_greeting_binds_no_tools() -> None:
+@pytest.mark.parametrize(
+    ("message", "expected_tools"),
+    [
+        ("今日天气对作物有什么影响", ["get_weather_forecast", "get_farm_status"]),
+        ("今天适合给作物打药吗", ["get_weather_forecast", "get_farm_status"]),
+    ],
+)
+def test_crop_inventory_rule_does_not_capture_advice_or_overview(
+    message: str, expected_tools: list[str]
+) -> None:
+    tools = [
+        _tool("get_weather_forecast"),
+        _tool("get_farm_status"),
+        _tool("get_crop_cycles"),
+        _tool("get_crop_cycle_info"),
+    ]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == expected_tools
+
+
+def test_farm_overview_read_exposes_read_pool_to_model() -> None:
+    tools = [
+        _tool("get_weather_forecast"),
+        _tool("get_farm_status"),
+        _tool("get_crop_cycles"),
+        _tool("get_crop_cycle_info"),
+    ]
+
+    decision = SkillRouter().route("农场整体状态怎么样", tools)
+
+    assert decision.selected_tools == [
+        "get_weather_forecast",
+        "get_farm_status",
+        "get_crop_cycles",
+        "get_crop_cycle_info",
+    ]
+    assert decision.frames[0].intent == "model_choice_read"
+
+
+@pytest.mark.parametrize("message", ["你好", "nihao", "ni hao"])
+def test_greeting_binds_no_tools(message: str) -> None:
     tools = [_tool("get_farm_status"), _tool("create_cost_record")]
 
-    decision = SkillRouter().route("你好", tools)
+    decision = SkillRouter().route(message, tools)
 
     assert decision.selected_tools == []
     assert decision.fallback == "no_tools"
 
 
-def test_unknown_farm_read_uses_safe_default() -> None:
-    tools = [_tool("get_farm_status"), _tool("create_crop_cycle")]
+def test_unknown_farm_read_uses_model_choice_read() -> None:
+    tools = [
+        _tool("get_farm_status"),
+        _tool("get_crop_cycles"),
+        _tool("create_crop_cycle"),
+    ]
 
     decision = SkillRouter().route("农场最近怎么样", tools)
 
-    assert decision.selected_tools == ["get_farm_status"]
-    assert decision.fallback == "safe_read_default"
+    assert decision.selected_tools == ["get_farm_status", "get_crop_cycles"]
+    assert decision.fallback == "model_choice_read_default"
+    assert decision.frames[0].intent == "model_choice_read"
 
 
 @pytest.mark.parametrize("message", ["明天苏州什么天气", "今天天气", "明天会下雨吗"])
@@ -205,6 +258,82 @@ def test_english_money_query_binds_finance_read_tools() -> None:
     assert decision.selected_tools == ["get_cost_summary", "get_debt_summary"]
     assert decision.frames[0].intent == "query_finance_overview"
     assert decision.frames[0].risk == "read"
+
+
+@pytest.mark.parametrize("message", ["查询我的财务", "查一下账务", "我的财务情况"])
+def test_chinese_finance_query_exposes_read_pool_to_model(message: str) -> None:
+    tools = [
+        _tool("get_cost_summary"),
+        _tool("get_debt_summary"),
+        _tool("get_farm_status"),
+        _tool("create_cost_record"),
+    ]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == [
+        "get_cost_summary",
+        "get_debt_summary",
+        "get_farm_status",
+    ]
+    assert decision.frames[0].intent == "model_choice_read"
+    assert decision.frames[0].risk == "read"
+
+
+@pytest.mark.parametrize(
+    "message", ["你可以查询哪些", "你能查什么", "你的功能是啥", "你可以做啥"]
+)
+def test_capability_question_exposes_read_tool_pool_to_model(message: str) -> None:
+    tools = [
+        _tool("get_cost_summary"),
+        _tool("get_debt_summary"),
+        _tool("get_farm_status"),
+        _tool("get_weather_forecast"),
+        _tool("create_cost_record"),
+    ]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == [
+        "get_cost_summary",
+        "get_debt_summary",
+        "get_farm_status",
+        "get_weather_forecast",
+    ]
+    assert decision.frames[0].intent == "model_choice_read"
+    assert decision.frames[0].risk == "read"
+
+
+@pytest.mark.parametrize(
+    "message", ["帮我检查代码", "排查一下这个问题", "为什么会这样"]
+)
+def test_non_business_debug_or_explanation_keeps_no_tools(
+    message: str,
+) -> None:
+    tools = [_tool("get_cost_summary"), _tool("get_farm_status")]
+
+    decision = SkillRouter().route(message, tools)
+
+    assert decision.selected_tools == []
+    assert decision.fallback == "no_tools"
+
+
+def test_uncategorized_business_read_exposes_read_pool_to_model() -> None:
+    tools = [
+        _tool("get_cost_summary"),
+        _tool("get_debt_summary"),
+        _tool("get_farm_status"),
+        _tool("create_cost_record"),
+    ]
+
+    decision = SkillRouter().route("我要看一下经营数据", tools)
+
+    assert decision.selected_tools == [
+        "get_cost_summary",
+        "get_debt_summary",
+        "get_farm_status",
+    ]
+    assert decision.frames[0].intent == "model_choice_read"
 
 
 def test_unknown_write_asks_clarification_without_write_tool() -> None:
@@ -384,9 +513,13 @@ def test_farm_labor_statement_extracts_worker_unit_operation_and_daily_wage() ->
 def test_new_worker_and_work_order_keeps_two_step_dependency() -> None:
     tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
 
-    decision = SkillRouter().route("新来一个工人李丽工资100一天，今天去6号棚收水稻", tools)
+    decision = SkillRouter().route(
+        "新来一个工人李丽工资100一天，今天去6号棚收水稻", tools
+    )
 
-    assert [frame.intent for frame in decision.frames if frame.requires_confirmation] == [
+    assert [
+        frame.intent for frame in decision.frames if frame.requires_confirmation
+    ] == [
         "create_worker",
         "create_work_order",
     ]

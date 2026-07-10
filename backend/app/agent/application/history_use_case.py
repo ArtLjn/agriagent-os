@@ -2,6 +2,7 @@
 
 import json
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.infra.repository_runtime import (
@@ -26,6 +27,7 @@ from app.services.conversation_service import (
 
 _DEFAULT_CONVERSATION_TITLE = "历史对话"
 _DEFAULT_CONVERSATION_PREVIEW = "点击查看这轮农事对话"
+_EMPTY_CONVERSATION_SUMMARY: tuple[str, str, str] | None = None
 
 
 def _truncate_text(text: str, limit: int) -> str:
@@ -63,7 +65,7 @@ def _infer_category(text: str) -> str:
 
 def _build_conversation_summary(
     db: Session, session_id: str, farm_id: int
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str] | None:
     """从会话消息生成列表标题、预览和分类。"""
     conversation = get_conversation_by_session(db, session_id, farm_id=farm_id)
     meta = conversation.meta_json if conversation else None
@@ -79,13 +81,18 @@ def _build_conversation_summary(
             _truncate_text(conversation.summary, 24),
             "对话",
         )
-    messages = get_conversation_messages(db, session_id, farm_id=farm_id)
-    if not messages:
+    try:
+        messages = get_conversation_messages(db, session_id, farm_id=farm_id)
+    except SQLAlchemyError:
         return (
             _DEFAULT_CONVERSATION_TITLE,
             _DEFAULT_CONVERSATION_PREVIEW,
             "对话",
         )
+    except RuntimeError:
+        messages = []
+    if not messages:
+        return _EMPTY_CONVERSATION_SUMMARY
     first_user = next((message for message in messages if message.role == "user"), None)
     title_source = first_user.content if first_user else messages[0].content
     preview_source = messages[-1].content
@@ -103,9 +110,10 @@ def list_conversation_items(
     conversations = list_conversations(db, farm_id=farm.id, limit=limit)
     items: list[ConversationListItem] = []
     for c in conversations:
-        title, preview, category = _build_conversation_summary(
-            db, c.session_id, farm.id
-        )
+        summary = _build_conversation_summary(db, c.session_id, farm.id)
+        if summary is None:
+            continue
+        title, preview, category = summary
         items.append(
             ConversationListItem(
                 id=c.id,

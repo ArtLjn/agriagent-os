@@ -6,7 +6,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.graph import compile_advisor_graph
-from app.agent.prompt_registry import get_registry
+from app.prompt.registry import get_registry
 
 
 @pytest.fixture(autouse=True)

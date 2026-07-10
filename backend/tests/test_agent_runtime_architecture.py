@@ -22,7 +22,7 @@ def test_agent_graph_is_compatibility_facade():
 
 def test_agent_state_exposes_prepared_runtime_inputs():
     """Runtime state 暴露 Application 预构建输入口。"""
-    from app.agent.runtime.state import AgentState
+    from app.agent.state import AgentState
 
     annotations = AgentState.__annotations__
 
@@ -418,15 +418,11 @@ def test_current_architecture_has_no_empty_placeholder_directories():
         "agent/runtime",
         "agent/planner",
         "agent/executor",
-        "agent/response",
         "agent/guardrails",
-        "agent/sessions",
         "prompt",
         "context/selectors",
         "context/compressors",
         "memory/short_term",
-        "memory/long_term",
-        "memory/retrieval",
         "memory/consolidation",
         "evaluation/cases",
         "evaluation/runners",
@@ -469,10 +465,13 @@ def test_guardrails_package_keeps_legacy_import_contract():
 
 
 def test_agent_platform_subdomains_expose_domain_models():
-    """Planner/Executor/Response/Sessions 暴露可演进的边界模型。"""
+    """Planner/Executor/Memory 暴露可演进的边界模型。"""
     from app.agent.executor import build_tool_execution_plan
-    from app.agent.response import ResponseEvent, format_sse_event
-    from app.agent.sessions import PendingActionSnapshot, TemporaryTaskState
+    from app.agent.application.stream_chat_use_case import (
+        ResponseEvent,
+        format_sse_event,
+    )
+    from app.memory.models import PendingActionSnapshot, TemporaryTaskState
 
     write_plan = build_tool_execution_plan("create_cost_record", {"amount": 10})
     read_plan = build_tool_execution_plan("get_farm_status", {})

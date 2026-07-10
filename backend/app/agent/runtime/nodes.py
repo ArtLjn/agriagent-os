@@ -10,15 +10,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.graph import END
 
 from app.agent.llm import get_llm
-from app.agent.prompt_cache import get_prompt_cache
-from app.agent.prompt_composer import get_composer
+from app.prompt.cache import get_prompt_cache  # harness-exempt: 迁移期 prompt fallback
+from app.prompt.composer import get_composer  # harness-exempt: 迁移期 prompt fallback
 from app.agent.runtime.llm_support import (
     _LLM_SEMAPHORE,
     _build_circuit_key,
     _get_farm_context,
     _get_runtime_context_bundle,
     _get_season,
-    _get_classifier as _runtime_get_classifier,
     _record_llm_failure,
     _record_llm_success,
     _resolve_tool_choice,
@@ -31,11 +30,7 @@ from app.agent.runtime.chat_fallbacks import (
 )
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.agent.runtime.direct_routing import (
-    can_direct_route,
     can_return_direct_tool_messages,
-    can_skip_llm_tool_selection,
-    direct_query_tool_args,
-    direct_query_tool_names,
     filter_tool_calls_by_selected,
 )
 from app.agent.runtime.messages import (
@@ -55,6 +50,7 @@ from app.agent.planning import (
     plan_draft_from_router_decision,
 )
 from app.agent.router import RouterDecision, SkillRouter
+from app.agent.router.catalog import SkillCatalog
 from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.tool_selector import expand_by_chain as _expand_by_chain
@@ -210,9 +206,28 @@ def _append_tool_name_once(names: list[str], tool_name: str, tools: list) -> lis
     return [*names, tool_name]
 
 
+def _enabled_read_tool_names(tools: list) -> list[str]:
+    """返回可交给主模型选择的只读工具名。"""
+    return [
+        candidate.name
+        for candidate in SkillCatalog.from_tools(tools).enabled()
+        if candidate.risk == "read"
+    ]
+
+
+def _is_model_choice_read_decision(decision: RouterDecision) -> bool:
+    """判断是否为可交给主模型自行选工具的普通读决策。"""
+    if not decision.frames:
+        return False
+    return all(
+        frame.risk == "read" and not frame.requires_confirmation
+        for frame in decision.frames
+    )
+
+
 def _get_classifier():
     """兼容旧 graph 入口导出的 classifier 工厂。"""
-    return _runtime_get_classifier()
+    return None
 
 
 def _route_tools(user_msg: str, tools: list) -> RouterDecision:
@@ -228,12 +243,14 @@ def _route_tools(user_msg: str, tools: list) -> RouterDecision:
             )
         return RouterDecision(selected_tools=list(selection))
     decision = SkillRouter().route(user_msg, tools)
-    # SkillRouter 不感知 force_binding，复用 select_tools rule gate 推断 tool_choice 与 force_binding
-    selection = _select_tools(user_msg, tools)
+    selected_tools = list(decision.selected_tools)
+    if _is_model_choice_read_decision(decision):
+        selected_tools = _enabled_read_tool_names(tools)
     return replace(
         decision,
-        tool_choice=_resolve_tool_choice(selection),
-        force_binding=tuple(sorted(selection.force_binding)),
+        selected_tools=selected_tools,
+        tool_choice="auto",
+        force_binding=(),
     )
 
 
@@ -376,47 +393,6 @@ def _resolve_selected_names(
     if has_tool_results:
         selected_names = []
     return selected_names
-
-
-def _direct_query_response(
-    *,
-    intent: str,
-    has_tool_results: bool,
-    user_msg: str,
-    tools: list,
-    selected_names: list[str],
-) -> dict | None:
-    """构造确定性 query 工具直达响应。"""
-    direct_names = direct_query_tool_names(user_msg, selected_names)
-    if not (
-        intent == "query"
-        and not has_tool_results
-        and direct_names
-        and can_skip_llm_tool_selection(
-            user_msg=user_msg,
-            tools=tools,
-            selected_names=selected_names,
-            direct_names=direct_names,
-        )
-        and can_direct_route(user_msg, selected_names, direct_names)
-    ):
-        return None
-
-    tool_calls = [
-        {
-            "name": name,
-            "args": direct_query_tool_args(user_msg, name),
-            "id": f"direct_{name}",
-            "type": "tool_call",
-        }
-        for name in direct_names
-    ]
-    logger.info(
-        "确定性工具直达 | input=%r | tool_calls=%s | skipped_llm=true",
-        user_msg[:80],
-        direct_names,
-    )
-    return {"messages": [AIMessage(content="", tool_calls=tool_calls)]}
 
 
 def _bind_llm_for_tools(
@@ -924,15 +900,6 @@ async def _llm_node(state: AgentState) -> dict:
         prepared_selected_tool_names=prepared_selected_tool_names,
         has_tool_results=has_tool_results,
     )
-    direct_response = _direct_query_response(
-        intent=intent,
-        has_tool_results=has_tool_results,
-        user_msg=user_msg,
-        tools=tools,
-        selected_names=selected_names,
-    )
-    if direct_response is not None:
-        return direct_response
 
     model_role = "lightweight" if intent == "query" else "generation"
     raw_llm = get_llm(role=model_role)

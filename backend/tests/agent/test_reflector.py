@@ -149,6 +149,78 @@ def test_check_required_tool_missing_requests_retry() -> None:
     assert result.issues[0].code == "required_tool_missing"
 
 
+def test_check_required_tool_missing_still_blocks_business_fact() -> None:
+    result = check_required_tool_missing(
+        selected_tools=["get_debt_summary"],
+        tool_calls=[],
+        final_text="当前共有欠款 100 元。",
+    )
+
+    assert result.decision == ReflectionDecision.REQUIRE_TOOL
+    assert result.issues[0].code == "required_tool_missing"
+
+
+def test_check_required_tool_missing_allows_planting_planning_advice() -> None:
+    result = check_required_tool_missing(
+        selected_tools=["get_crop_cycles", "get_crop_templates"],
+        tool_calls=[],
+        final_text=(
+            "十几亩可以先按 15 亩左右做试种规划。建议先确认地块排水、"
+            "租期和预算，再决定是否建茬口。"
+        ),
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
+def test_check_required_tool_missing_allows_currently_framed_advice() -> None:
+    result = check_required_tool_missing(
+        selected_tools=["get_crop_cycles"],
+        tool_calls=[],
+        final_text="目前建议先把地块排水和租期确认清楚，后面再决定要不要建茬口。",
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
+def test_check_required_tool_missing_allows_no_need_advice() -> None:
+    result = check_required_tool_missing(
+        selected_tools=["get_crop_cycles"],
+        tool_calls=[],
+        final_text="没有必要马上建茬口，先把地块和租期聊清楚更稳。",
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
+def test_check_required_tool_missing_blocks_template_availability_claim() -> None:
+    result = check_required_tool_missing(
+        selected_tools=["get_crop_templates"],
+        tool_calls=[],
+        final_text="目前没有黑布林模板，可以新建一个。",
+    )
+
+    assert result.decision == ReflectionDecision.REQUIRE_TOOL
+    assert result.issues[0].code == "required_tool_missing"
+
+
+@pytest.mark.parametrize(
+    "final_text",
+    [
+        "我可以查天气、看农场情况，也可以帮你记录账务；写操作会先让你确认。",
+        "当前可协助的方向包括账务、种植、农事、用工和天气。",
+    ],
+)
+def test_check_required_tool_missing_allows_capability_intro(final_text: str) -> None:
+    result = check_required_tool_missing(
+        selected_tools=["get_farm_status", "get_weather_forecast"],
+        tool_calls=[],
+        final_text=final_text,
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
 def test_no_tool_write_success_claim_is_blocked_and_traced(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -187,7 +259,9 @@ def test_no_tool_write_success_claim_is_blocked_and_traced(
     assert collector.records[0]["output_data"]["issues"][0]["code"] == (
         "no_tool_write_success_claim"
     )
-    assert collector.records[0]["input_data"]["user_message"] == "李海这个月干了15天压瓜"
+    assert (
+        collector.records[0]["input_data"]["user_message"] == "李海这个月干了15天压瓜"
+    )
 
 
 def test_no_tool_write_success_claim_trace_includes_plan_draft_evidence(
@@ -265,6 +339,25 @@ def test_no_tool_write_success_guard_allows_safe_non_write_replies() -> None:
 
     assert greeting.decision == ReflectionDecision.PASS
     assert explanation.decision == ReflectionDecision.PASS
+
+
+def test_no_tool_write_success_guard_allows_query_options_with_recorded_logs() -> None:
+    service = ReflectorService(policy=ReflectionPolicy(enabled=True))
+
+    result = service.check_tool_response(
+        tool_messages=[],
+        final_text=(
+            "你可以选：\n"
+            "1. 天气与环境\n"
+            "2. 查看已记录的农事操作日志\n"
+            "3. 查看当前作物的生长阶段详情"
+        ),
+        selected_tools=[],
+        tool_calls=[],
+        trace_metadata={"user_message": "给我几个选项我选择查啥"},
+    )
+
+    assert result.decision == ReflectionDecision.PASS
 
 
 def test_check_tool_result_final_contradiction_blocks_number_mismatch() -> None:

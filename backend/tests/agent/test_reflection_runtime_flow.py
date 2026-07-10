@@ -194,7 +194,6 @@ async def test_low_risk_chitchat_does_not_instantiate_reflector() -> None:
 @pytest.mark.asyncio
 async def test_no_tool_write_success_claim_returns_fail_closed_reply() -> None:
     fake_llm = _FakeLLM("已记录李海这个月干了15天压瓜。")
-    safe_reason = "没有工具写入结果或待确认动作，但最终回复声称业务数据已经写入。"
 
     with ExitStack() as stack:
         _enter_runtime_patches(stack, fake_llm, [])
@@ -212,8 +211,12 @@ async def test_no_tool_write_success_claim_returns_fail_closed_reply() -> None:
         )
 
     final_text = result["messages"][0].content
-    assert final_text == safe_reason
+    assert (
+        final_text
+        == "这条操作还没有执行。请重新描述要记录或修改的内容，我会先生成待确认操作，确认后再执行。"
+    )
     assert "已记录" not in final_text
+    assert "没有工具写入结果" not in final_text
 
 
 def test_no_tool_write_success_trace_metadata_includes_plan_draft() -> None:
@@ -291,6 +294,41 @@ async def test_required_selected_tool_missing_returns_safe_fallback() -> None:
     assert call_kwargs["tool_calls"] == []
     assert call_kwargs["trace_metadata"]["tool_call_ids"] == []
     assert call_kwargs["trace_metadata"]["response_preview"] == "你现在有两个茬口。"
+
+
+@pytest.mark.asyncio
+async def test_planning_reply_with_read_tools_is_not_rewritten() -> None:
+    planning_reply = (
+        "十几亩可以先按 15 亩左右做试种规划。建议先确认地块位置、排水、"
+        "租期和投入预算，再决定是否建茬口。"
+    )
+    fake_llm = _FakeLLM(planning_reply)
+    tools = [
+        _FakeTool("get_crop_cycles"),
+        _FakeTool("get_crop_templates"),
+    ]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我打算租个十几亩种种")],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-planting-planning",
+                "router_decision": RouterDecision(
+                    selected_tools=["get_crop_cycles", "get_crop_templates"],
+                ),
+            }
+        )
+
+    assert result["messages"][0].content == planning_reply
+    assert fake_llm.bound_tool_names == [
+        "get_crop_cycles",
+        "get_crop_templates",
+    ]
 
 
 @pytest.mark.asyncio

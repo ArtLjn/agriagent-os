@@ -6,7 +6,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.graph import compile_advisor_graph
-from app.agent.prompt_registry import get_registry
+from app.prompt.registry import get_registry
 from app.core.config import AIConfig
 
 
@@ -107,13 +107,13 @@ class TestParallelToolSnippet:
     """并行调用引导 snippet 加载与渲染。"""
 
     def test_snippet_loaded(self):
-        from app.agent.prompt_composer import get_composer
+        from app.prompt.composer import get_composer
 
         composer = get_composer()
         assert "p1-parallel-tool" in composer.list_snippets()
 
     def test_system_base_contains_parallel_guidance(self):
-        from app.agent.prompt_composer import get_composer
+        from app.prompt.composer import get_composer
 
         composer = get_composer()
         rendered = composer.compose(

@@ -1,15 +1,20 @@
 """Agent history use case 测试。"""
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import sessionmaker
+import pytest
+from datetime import datetime
 
+import app.agent.application.history_use_case as history_use_case
 from app.agent.application.history_use_case import (
     list_conversation_items,
     list_message_items,
 )
 from app.core.database import Base
+from app.models.conversation import ConversationMessage
 from app.models.farm import Farm
-from app.services.conversation_service import get_or_create_conversation, save_message
+from app.services.conversation_service import get_or_create_conversation
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -53,13 +58,74 @@ def test_list_conversation_items_uses_summary_without_full_scan():
     db.close()
 
 
-def test_list_message_items_prefers_meta_json_over_text_meta():
+def test_list_conversation_items_skips_empty_shell_conversations(monkeypatch):
+    db = Session()
+    farm = db.query(Farm).filter_by(id=1).one()
+    get_or_create_conversation(db, farm_id=1, session_id="sess-empty", user_id="user-1")
+    conv_with_message = get_or_create_conversation(
+        db, farm_id=1, session_id="sess-message", user_id="user-1"
+    )
+    db.add(
+        ConversationMessage(
+            conversation_id=conv_with_message.id,
+            role="user",
+            content="你好",
+        )
+    )
+    db.commit()
+
+    def _messages(_db, session_id, farm_id):
+        if session_id == "sess-message":
+            return [ConversationMessage(role="user", content="你好")]
+        return []
+
+    monkeypatch.setattr(history_use_case, "get_conversation_messages", _messages)
+
+    items = list_conversation_items(db, farm=farm, limit=10)
+
+    assert [item.session_id for item in items] == ["sess-message"]
+    db.close()
+
+
+@pytest.mark.no_db
+def test_list_conversation_items_uses_default_summary_when_messages_table_missing(
+    monkeypatch,
+):
+    db = Session()
+    farm = db.query(Farm).filter_by(id=1).one()
+    get_or_create_conversation(db, farm_id=1, session_id="sess-drop", user_id="user-1")
+
+    def _missing_messages(*_args, **_kwargs):
+        raise ProgrammingError(
+            "SELECT conversation_messages", {}, Exception("missing table")
+        )
+
+    monkeypatch.setattr(
+        history_use_case,
+        "get_conversation_messages",
+        _missing_messages,
+    )
+
+    items = list_conversation_items(db, farm=farm, limit=10)
+
+    assert items[0].title == "历史对话"
+    assert items[0].preview == "点击查看这轮农事对话"
+    db.close()
+
+
+def test_list_message_items_prefers_meta_json_over_text_meta(monkeypatch):
     db = Session()
     farm = db.query(Farm).filter_by(id=1).one()
     conv = get_or_create_conversation(
         db, farm_id=1, session_id="sess-meta", user_id="user-1"
     )
-    msg = save_message(db, conv.id, "assistant", "确认吗？")
+    msg = ConversationMessage(
+        id=1,
+        conversation_id=conv.id,
+        role="assistant",
+        content="确认吗？",
+        created_at=datetime(2026, 7, 6, 16, 0, 0),
+    )
     msg.meta_json = {
         "skills": ["manage_workers"],
         "pending_action": {
@@ -73,7 +139,12 @@ def test_list_message_items_prefers_meta_json_over_text_meta():
             },
         },
     }
-    db.commit()
+
+    monkeypatch.setattr(
+        history_use_case,
+        "get_conversation_messages",
+        lambda *_args, **_kwargs: [msg],
+    )
 
     items = list_message_items(db, farm=farm, session_id="sess-meta")
 

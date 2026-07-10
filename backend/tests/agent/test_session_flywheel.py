@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.agent.application.session_flywheel import (
     SessionFlywheelRecorder,
+    _mysql_message_fk_id,
     build_message_meta,
 )
 from app.core.database import Base
@@ -58,6 +59,12 @@ def test_build_message_meta_keeps_only_light_fields():
         "event_file": "events.jsonl",
         "event_seq_range": [1, 4],
     }
+
+
+def test_mysql_message_fk_id_ignores_mongo_synthetic_ids():
+    row = ConversationMessage(id=1_783_324_842_869_965_000)
+
+    assert _mysql_message_fk_id(row) is None
 
 
 def test_recorder_records_user_and_assistant_messages_turn_and_events(tmp_path):

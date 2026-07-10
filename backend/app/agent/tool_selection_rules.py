@@ -303,26 +303,3 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_farm_status": [],
     "web_search": [],
 }
-
-# 查询型意图 -> 强制绑定 Skill 映射。
-# 设计意图（见 13_Agent范式规范化设计.md §5.9.3）：
-# Rule Gate 识别到这些意图时，对应 Skill 必须进 selected_tools 并设 tool_choice=required。
-# 不被 select_tools 的 difference_update 裁剪逻辑吃掉。
-QUERY_INTENT_FORCE_BINDING: dict[str, set[str]] = {
-    "天气": {"get_weather_forecast"},
-    "下雨": {"get_weather_forecast"},
-    "气温": {"get_weather_forecast"},
-    "预报": {"get_weather_forecast"},
-    "我的茬口": {"get_crop_cycles"},
-    "当前种什么": {"get_crop_cycles"},
-    "几号棚": {"get_crop_cycles"},
-    "农场状态": {"get_farm_status"},
-    "整体情况": {"get_farm_status"},
-    "我的工人": {"get_workers"},
-    "有哪些工人": {"get_workers"},
-    "工人列表": {"get_workers"},
-    "欠款": {"get_debt_summary"},
-    "应付": {"get_labor_payables"},
-    "未付人工": {"get_labor_payables"},
-    "还欠多少人工": {"get_labor_payables"},
-}

@@ -5,8 +5,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.agent.prompt_renderer import render_prompt
-from app.agent.prompt_registry import PromptRegistry
+from app.prompt.renderer import render_prompt
+from app.prompt.registry import PromptRegistry
 
 
 class TestPromptRenderer:

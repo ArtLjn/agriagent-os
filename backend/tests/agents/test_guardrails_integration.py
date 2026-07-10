@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.agent.advisor import invoke_advisor, stream_advisor
-from app.agent.prompt_registry import get_registry
+from app.prompt.registry import get_registry
 from app.agent.report import generate_cycle_report
 
 

@@ -18,7 +18,35 @@ from app.infra.pending_actions import PendingPlanStep, is_write_skill
 
 _SUCCESS_HINTS = ("已执行", "成功", "已创建", "已保存", "已更新", "完成")
 _FAILURE_HINTS = ("失败", "错误", "异常", "validation", "参数校验失败", "工具调用失败")
-_BUSINESS_FACT_HINTS = ("有", "共", "当前", "总", "金额", "茬口", "工人", "欠款")
+_BUSINESS_ENTITY_HINTS = ("茬口", "工人", "欠款", "金额", "模板")
+_BUSINESS_DATA_ASSERTION_HINTS = (
+    "现有",
+    "已有",
+    "现在有",
+    "当前有",
+    "目前有",
+    "当前共有",
+    "目前共有",
+    "共有",
+    "总共",
+    "合计",
+    "当前没有",
+    "目前没有",
+    "没有模板",
+    "没有茬口",
+    "没有欠款",
+    "没有工人",
+    "暂无",
+    "未找到",
+    "查到",
+    "查询到",
+    "系统里",
+    "记录里",
+    "数据库",
+    "列表里",
+    "模板库",
+)
+_BUSINESS_QUANTITY_HINTS = ("共", "总", "当前共有", "现在有")
 _WRITE_PLAN_CHECK = "write_plan_consistency"
 _PENDING_PLAN_CHECK = "pending_plan_consistency"
 _TOOL_RESPONSE_CHECK = "tool_failure_success_reply"
@@ -26,16 +54,15 @@ _TOOL_CONCLUSION_CHECK = "tool_result_final_contradiction"
 _REQUIRED_TOOL_CHECK = "required_tool_missing"
 _NO_TOOL_WRITE_SUCCESS_CHECK = "no_tool_write_success_claim"
 _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9.])\d+(?:\.\d+)?(?![A-Za-z0-9.])")
-_WRITE_SUCCESS_PHRASES = (
-    "已记录",
-    "已为您记录",
-    "已经记录",
-    "已创建",
-    "已经创建",
-    "已保存",
-    "已经保存",
-    "已执行",
-    "已经执行",
+_WRITE_SUCCESS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("已为您记录", re.compile(r"已为(?:你|您)?记录")),
+    (
+        "已记录",
+        re.compile(r"(?:^|[，,。；;！!\n])\s*(?:已|已经)(?:帮你|为你|为您)?记录"),
+    ),
+    ("已创建", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?创建")),
+    ("已保存", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?保存")),
+    ("已执行", re.compile(r"(?:已|已经)(?:帮你|为你|为您)?执行")),
 )
 
 
@@ -168,7 +195,7 @@ def check_required_tool_missing(
             ReflectionTrigger.PRE_FINAL_RESPONSE,
             checks=[_REQUIRED_TOOL_CHECK],
         )
-    if not _contains_any(final_text, _BUSINESS_FACT_HINTS):
+    if not _looks_like_business_fact(final_text):
         return ReflectionResult.passed(
             ReflectionTrigger.PRE_FINAL_RESPONSE,
             checks=[_REQUIRED_TOOL_CHECK],
@@ -212,9 +239,7 @@ def check_no_tool_write_success_claim(
         decision=ReflectionDecision.FALLBACK_RESPONSE,
         checks=[_NO_TOOL_WRITE_SUCCESS_CHECK],
         code="no_tool_write_success_claim",
-        message=(
-            "没有工具写入结果或待确认动作，但最终回复声称业务数据已经写入。"
-        ),
+        message=("没有工具写入结果或待确认动作，但最终回复声称业务数据已经写入。"),
         evidence={
             "user_message": user_message[:160],
             "final_text": final_text[:160],
@@ -352,8 +377,21 @@ def _contains_any(text: str, hints: Iterable[str]) -> bool:
     return any(hint.lower() in lowered for hint in hints)
 
 
+def _looks_like_business_fact(text: str) -> bool:
+    if not _contains_any(text, _BUSINESS_ENTITY_HINTS):
+        return False
+    if _contains_any(text, _BUSINESS_DATA_ASSERTION_HINTS):
+        return True
+    return bool(_extract_numbers(text)) and _contains_any(
+        text, _BUSINESS_QUANTITY_HINTS
+    )
+
+
 def first_write_success_phrase(text: str) -> str | None:
-    return next((phrase for phrase in _WRITE_SUCCESS_PHRASES if phrase in text), None)
+    for phrase, pattern in _WRITE_SUCCESS_PATTERNS:
+        if pattern.search(text):
+            return phrase
+    return None
 
 
 def _single_issue(

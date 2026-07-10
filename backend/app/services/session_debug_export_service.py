@@ -1,7 +1,9 @@
 """Session debug export v2 组装服务。"""
 
+from pathlib import Path
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.infra.agent_events import read_event_segment
@@ -20,8 +22,12 @@ def build_session_debug_export(
     session_id: str,
 ) -> dict[str, Any]:
     """组装包含热数据和事件证据的调试 JSON。"""
-    conversation = get_conversation_by_session(db, session_id, farm_id=farm_id)
-    messages = get_conversation_messages(db, session_id, farm_id=farm_id)
+    try:
+        conversation = get_conversation_by_session(db, session_id, farm_id=farm_id)
+        messages = get_conversation_messages(db, session_id, farm_id=farm_id)
+    except SQLAlchemyError:
+        conversation = None
+        messages = []
     turns = get_turns_for_session(db, farm_id=farm_id, session_id=session_id)
     pending_plans = (
         db.query(AgentPendingPlan)
@@ -37,9 +43,7 @@ def build_session_debug_export(
     for turn in turns:
         if not turn.event_file:
             continue
-        rows = read_event_segment(
-            turn.event_file, turn.event_seq_start, turn.event_seq_end
-        )
+        rows = _read_turn_event_segment(turn)
         if rows:
             events.extend(rows)
         else:
@@ -106,6 +110,24 @@ def build_session_debug_export(
         "events": events,
         "missing_event_segments": missing_segments,
     }
+
+
+def _read_turn_event_segment(turn) -> list[dict[str, Any]]:
+    for event_file in _event_file_candidates(turn.event_file):
+        rows = read_event_segment(event_file, turn.event_seq_start, turn.event_seq_end)
+        if rows:
+            return rows
+    return []
+
+
+def _event_file_candidates(event_file: str) -> list[Path]:
+    path = Path(event_file)
+    if path.is_absolute():
+        return [path]
+    candidates = [path]
+    if not str(path).startswith("backend/"):
+        candidates.append(Path("backend") / path)
+    return candidates
 
 
 def _pending_plan_to_dict(plan: AgentPendingPlan) -> dict[str, Any]:

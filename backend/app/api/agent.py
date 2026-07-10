@@ -5,13 +5,19 @@ from starlette.responses import Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_farm, get_current_user
+from app.core.dependencies import get_db
+from app.modules.auth.dependencies import get_current_user
+from app.modules.farm.dependencies import get_current_farm
 from app.models.user import User
 from app.infra.limiter import limiter
 from app.agent.llm import LlmNotConfiguredError
 from app.models.farm import Farm
 from app.agent.application.chat_use_case import chat, new_request_id
-from app.agent.application.daily_advice_use_case import get_daily, refresh_daily
+from app.agent.application.advice_use_case import (
+    create_report,
+    get_daily,
+    refresh_daily,
+)
 from app.agent.application.history_use_case import (
     delete_report_item,
     list_conversation_items,
@@ -19,7 +25,6 @@ from app.agent.application.history_use_case import (
     list_report_history_items,
     list_report_page,
 )
-from app.agent.application.report_use_case import create_report
 from app.agent.application.skill_catalog import list_app_skills
 from app.agent.application.stream_chat_use_case import (
     resolve_stream_user_and_farm,
@@ -229,7 +234,7 @@ def report_history(
 
 
 @router.get("/reports", response_model=ReportListResponse)
-async def list_reports(
+def list_reports(
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),

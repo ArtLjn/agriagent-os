@@ -56,7 +56,7 @@ def apply_post_tool_reflection(
         return response
 
     if reflection_result.decision == ReflectionDecision.FALLBACK_RESPONSE:
-        safe_text = _reflection_reason(reflection_result)
+        safe_text = _fallback_guard_response(reflection_result)
     elif reflection_result.decision in {
         ReflectionDecision.REQUIRE_TOOL,
         ReflectionDecision.RETRY_GENERATION,
@@ -98,8 +98,16 @@ def _is_write_fail_closed_text(text: str) -> bool:
     return "还没有执行" in text or "没有生成可确认" in text
 
 
-def _reflection_reason(reflection_result: ReflectionResult) -> str:
-    """优先使用稳定 reason，没有时退回首个 issue message。"""
+def _fallback_guard_response(reflection_result: ReflectionResult) -> str:
+    """把内部反思原因转换为用户可读的安全回复。"""
+    if any(
+        issue.code == "no_tool_write_success_claim"
+        for issue in reflection_result.issues
+    ):
+        return (
+            "这条操作还没有执行。请重新描述要记录或修改的内容，"
+            "我会先生成待确认操作，确认后再执行。"
+        )
     if reflection_result.reason:
         return reflection_result.reason
     if reflection_result.issues:

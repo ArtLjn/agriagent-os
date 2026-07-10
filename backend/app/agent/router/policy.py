@@ -11,8 +11,51 @@ from app.agent.router.models import (
 class RouterPolicy:
     """对候选工具应用 stop-loss、写入和 schema 预算。"""
 
-    _farm_read_hints = ("农场", "作物", "栽种", "茬口", "种植")
-    _read_hints = ("哪些", "有哪些", "看看", "查询", "查一下", "最近", "怎么样")
+    _no_tool_prefixes = ("你好", "您好", "hello", "hi", "nihao", "ni hao")
+    _no_tool_hints = (
+        "为什么",
+        "如何",
+        "检查",
+        "排查",
+        "审查",
+        "随便聊",
+        "闲聊",
+        "聊聊",
+    )
+    _write_action_hints = (
+        "买",
+        "卖",
+        "采购",
+        "购入",
+        "销售",
+        "新增",
+        "添加",
+        "创建",
+        "记录",
+        "记一笔",
+        "删除",
+        "删掉",
+        "修改",
+        "更新",
+        "安排",
+        "支付",
+        "结算",
+    )
+    _query_hints = (
+        "什么",
+        "哪些",
+        "有哪些",
+        "看看",
+        "查询",
+        "查一下",
+        "最近",
+        "怎么样",
+        "多少",
+        "统计",
+        "汇总",
+        "列表",
+        "明细",
+    )
 
     def __init__(self, budget: DisclosureBudget | None = None) -> None:
         self._budget = budget or DisclosureBudget()
@@ -48,9 +91,9 @@ class RouterPolicy:
 
         requested_names = self._collect_candidate_names(frames)
         if not requested_names:
-            safe_default = self._safe_farm_read_default(message, candidate_by_name)
-            if safe_default is not None:
-                return safe_default
+            general_read = self._model_choice_read_decision(message, candidate_by_name)
+            if general_read is not None:
+                return general_read
             return RouterDecision(
                 frames=frames,
                 selected_tools=[],
@@ -108,20 +151,37 @@ class RouterPolicy:
             policy_violations=policy_violations,
         )
 
-    def _safe_farm_read_default(
+    def _model_choice_read_decision(
         self,
         message: str,
         candidate_by_name: dict[str, ToolCandidate],
     ) -> RouterDecision | None:
-        candidate = candidate_by_name.get("get_farm_status")
-        if candidate is None or not self._looks_like_farm_read(message):
+        if self._looks_like_no_tool_message(message):
             return None
+        selected = [
+            candidate
+            for candidate in candidate_by_name.values()
+            if candidate.risk == "read"
+        ]
+        if not selected:
+            return None
+        frame = IntentFrame(
+            domain="general",
+            intent="model_choice_read",
+            risk="read",
+            entities=["query"],
+            candidate_tools=[],
+            confidence=0.55,
+        )
         return RouterDecision(
-            selected_tools=[candidate.name],
-            context_dependencies=self._dedupe(candidate.context_dependencies),
-            fallback="safe_read_default",
-            reason="泛化农场读取默认绑定农场状态查询",
-            schema_token_estimate=candidate.schema_token_estimate,
+            frames=[frame],
+            selected_tools=[candidate.name for candidate in selected],
+            context_dependencies=self._dedupe_context_dependencies(selected, [frame]),
+            fallback="model_choice_read_default",
+            reason="无显式规则候选时交给主模型在只读工具池中选择",
+            schema_token_estimate=sum(
+                candidate.schema_token_estimate for candidate in selected
+            ),
         )
 
     def _max_tools_for_frames(self, frames: list[IntentFrame]) -> int:
@@ -182,9 +242,18 @@ class RouterPolicy:
         if violation not in violations:
             violations.append(violation)
 
-    def _looks_like_farm_read(self, message: str) -> bool:
-        return self._has_any(message, self._farm_read_hints) and self._has_any(
-            message, self._read_hints
+    def _looks_like_no_tool_message(self, message: str) -> bool:
+        normalized = message.strip().lower()
+        if not normalized:
+            return True
+        if "怎么" in normalized and "怎么样" not in normalized:
+            return True
+        if self._has_any(normalized, self._write_action_hints) and not self._has_any(
+            normalized, self._query_hints
+        ):
+            return True
+        return normalized.startswith(self._no_tool_prefixes) or self._has_any(
+            normalized, self._no_tool_hints
         )
 
     @staticmethod

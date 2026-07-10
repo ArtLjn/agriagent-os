@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage
 
 from app.agent.guardrails import filter_output
 from app.agent.llm import get_llm
-from app.agent.prompt_composer import get_composer
+from app.prompt.composer import get_composer
 from app.core.date_context import get_request_date
 from app.agent.skills import get_langchain_tools
 
@@ -18,6 +18,7 @@ def _get_report_llm(farm_id: int = 1):
     """获取绑定了工具的报告 LLM 实例（每次返回新实例）。"""
     tools = get_langchain_tools(farm_id=farm_id)
     return get_llm().bind_tools(tools)
+
 
 # TODO prompt 是否迁移
 async def generate_cycle_report(cycle_id: int, farm_id: int = 1) -> str:

@@ -17,6 +17,20 @@ def test_system_base_prompt_contains_tool_calling_rule():
         assert "写操作必须通过工具完成" in content
 
 
+def test_system_base_prompt_guides_planting_planning_dialogue():
+    """种植意向应先规划和澄清，不把裸意向当作写入完成。"""
+    from pathlib import Path
+
+    prompts_dir = Path(__file__).resolve().parent.parent / "prompts"
+    snippet = prompts_dir / "snippets" / "p1-tool-guardrails.j2"
+    content = snippet.read_text()
+
+    assert "用户只是表达种植意向" in content
+    assert "不要直接创建茬口或模板" in content
+    assert "没有调用作物模板工具" in content
+    assert "不要说已找到或未找到模板" in content
+
+
 class TestUserContextInPrompt:
     """用户上下文（farm_location / display_name / current_season）注入测试。"""
 
@@ -25,8 +39,8 @@ class TestUserContextInPrompt:
         """从 prompts/ 目录初始化的 PromptComposer。"""
         from pathlib import Path
 
-        from app.agent.prompt_composer import PromptComposer
-        from app.agent.prompt_registry import PromptRegistry
+        from app.prompt.composer import PromptComposer
+        from app.prompt.registry import PromptRegistry
 
         prompts_dir = Path(__file__).resolve().parent.parent / "prompts"
         reg = PromptRegistry()
@@ -105,7 +119,7 @@ class TestPromptRegistry:
 
     def test_list_names_returns_registered_templates(self):
         """list_names 返回所有已注册模板名称。"""
-        from app.agent.prompt_registry import PromptRegistry
+        from app.prompt.registry import PromptRegistry
 
         reg = PromptRegistry()
         reg.register("cost_parse", "1.0", "test content")
@@ -116,7 +130,7 @@ class TestPromptRegistry:
 
     def test_list_names_returns_empty_when_no_templates(self):
         """list_names 在无模板时返回空列表。"""
-        from app.agent.prompt_registry import PromptRegistry
+        from app.prompt.registry import PromptRegistry
 
         reg = PromptRegistry()
         assert reg.list_names() == []

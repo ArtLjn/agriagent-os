@@ -5,8 +5,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import require_admin
-from app.agent.prompt_registry import get_registry
+from app.modules.auth.dependencies import require_admin
+from app.agent.application.admin_config_use_case import (
+    list_prompt_templates,
+    reload_prompt_templates,
+)
 from app.agent.skills import clear_skill_cache, get_skill_manager
 from app.agent.skills.metadata import (
     SkillPermissionLevel,
@@ -108,21 +111,7 @@ def _skill_status(metadata: dict) -> str:
 @router.get("/prompts")
 def list_prompts() -> dict:
     """列出所有 Prompt 模板。"""
-    registry = get_registry()
-    items = []
-    for name in registry.list_names():
-        content = registry.get(name)
-        versions = registry.list_versions(name)
-        items.append(
-            {
-                "name": name,
-                "version": versions[0] if versions else "unknown",
-                "active": True,
-                "content_length": len(content),
-                "content": content,
-            }
-        )
-    return {"items": items, "total": len(items)}
+    return list_prompt_templates()
 
 
 @router.get("/config")
@@ -173,9 +162,7 @@ def clear_all_cache() -> dict:
 @router.post("/prompts/reload")
 def reload_prompts() -> dict:
     """热加载 Prompt 模板。"""
-    registry = get_registry()
-    registry.reload(settings.prompts_dir)
-    return {"status": "ok", "message": "模板已重新加载"}
+    return reload_prompt_templates(settings.prompts_dir)
 
 
 __all__ = ["router"]

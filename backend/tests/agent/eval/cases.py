@@ -5,6 +5,7 @@
 - D 类：同意图不同表达方式
 - E2 类：多轮污染场景
 """
+
 from dataclasses import dataclass, field
 
 
@@ -13,7 +14,7 @@ class EvalCase:
     case_id: str
     category: str  # B_QUERY / B_WRITE / B_MULTI_INTENT / B_CHITCHAT / E2_MULTITURN
     user_message: str
-    expected_skill: str | None  # 期望强制绑定的 Skill；闲聊负例为 None
+    expected_skill: str | None  # 期望工具；闲聊负例为 None
     pollution_data: dict[str, str] | None = None  # 注入 ContextBundle 的污染数据
     skill_mock_return: dict | None = None  # Skill mock 返回值（与污染不同）
     previous_turns: list[str] = field(default_factory=list)  # E2 多轮历史
@@ -57,11 +58,15 @@ B_WRITE_CASES: list[EvalCase] = [
     EvalCase("w-worker-1", "B_WRITE", "新来工人李丽日薪100", "manage_workers"),
     EvalCase("w-wage-1", "B_WRITE", "给李海记15天压瓜工资每天180", "manage_wages"),
     EvalCase("w-settle-1", "B_WRITE", "把李海这笔工资结了", "settle_labor_payment"),
-    EvalCase("w-order-1", "B_WRITE", "李海今天去6号棚压蔓", "create_operation_work_order"),
+    EvalCase(
+        "w-order-1", "B_WRITE", "李海今天去6号棚压蔓", "create_operation_work_order"
+    ),
 ]
 
 B_MULTI_INTENT_CASES: list[EvalCase] = [
-    EvalCase("m-1", "B_MULTI_INTENT", "新来工人李丽工资100一天，今天去6号棚收水稻", None),
+    EvalCase(
+        "m-1", "B_MULTI_INTENT", "新来工人李丽工资100一天，今天去6号棚收水稻", None
+    ),
     EvalCase("m-2", "B_MULTI_INTENT", "记一笔化肥200元，顺便看看还欠多少钱", None),
     EvalCase("m-3", "B_MULTI_INTENT", "李海这个月干了15天压瓜", None),
     EvalCase("m-4", "B_MULTI_INTENT", "浇水了，同时给李海结一下工资", None),
@@ -114,7 +119,9 @@ E2_MULTITURN_CASES: list[EvalCase] = [
         "get_workers",
         previous_turns=["你好", "今天天气不错"],
         pollution_data={"worker_list_snapshot": "李海、王五"},
-        skill_mock_return={"workers": [{"name": "李海"}, {"name": "王五"}, {"name": "赵六"}]},
+        skill_mock_return={
+            "workers": [{"name": "李海"}, {"name": "王五"}, {"name": "赵六"}]
+        },
     ),
     EvalCase(
         "e2-5",

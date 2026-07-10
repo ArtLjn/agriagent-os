@@ -3,67 +3,21 @@
 import asyncio
 import importlib
 import logging
-import threading
 from datetime import date
 
-from app.agent.prompt_cache import get_farm_ctx_cache
-from app.agent.tool_selector import LLMIntentClassifier, ToolSelectionResult
+from app.prompt.cache import get_farm_ctx_cache
+from app.agent.tool_selector import ToolSelectionResult
 from app.context.models import ContextBundle
-from app.core.config import settings
 from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
 _LLM_SEMAPHORE = asyncio.Semaphore(5)
 
-_classifier: LLMIntentClassifier | None = None
-_classifier_lock = threading.Lock()
 
-
-def _get_classifier() -> LLMIntentClassifier | None:
-    global _classifier
-    if _classifier is not None:
-        return _classifier
-
-    api_key = settings.ai_api_key
-    base_url = settings.ai_base_url
-    model = settings.ai_model
-
-    # 优先从 Manager 获取轻量模型（tool-selection 角色）
-    try:
-        from app.core.llm_client_manager import get_llm_manager
-
-        manager = get_llm_manager()
-        if not manager.fallback_mode:
-            client, info = manager.get_sync_client_with_info(role="tool-selection")
-            api_key = client.api_key
-            base_url = client.base_url
-            model = info["model"]
-            provider = str(info["provider"])
-            logger.info(
-                "tool_select 模型选择 | provider=%s | model=%s | role=%s | base_url=%s",
-                provider,
-                model,
-                info["role"],
-                info["base_url"],
-            )
-        else:
-            provider = "config.yaml"
-    except Exception as e:
-        logger.debug("从 Manager 获取 classifier 参数失败 | error=%s", e)
-        provider = "config.yaml"
-
-    if api_key:
-        with _classifier_lock:
-            if _classifier is None:
-                _classifier = LLMIntentClassifier(
-                    api_key=api_key,
-                    base_url=base_url,
-                    model=model,
-                    provider=provider,
-                    role="tool-selection",
-                )
-    return _classifier
+def _get_classifier() -> None:
+    """兼容旧 patch 入口；工具选择小模型已下线。"""
+    return None
 
 
 def _get_season(current_date: date | None = None) -> str:
