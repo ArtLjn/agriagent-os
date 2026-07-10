@@ -190,16 +190,13 @@ if [ -f farm_manager.db ]; then
     cp farm_manager.db "farm_manager.db.bak.${TIMESTAMP}"
 fi
 
-# --- 自动建表 ---
-rlog "自动建表..."
-python3 -c "
-import sys
-sys.path.insert(0, '.')
-from app.core.database import engine, Base
-import app.models
-Base.metadata.create_all(bind=engine)
-print('  数据库表已同步')
-" || { rollback; rdie "建表失败，已回滚"; }
+# --- 数据库迁移 ---
+rlog "执行 Alembic 迁移..."
+if [ -f alembic.ini ] && [ -d alembic ]; then
+    alembic upgrade head || { rollback; rdie "Alembic 迁移失败，已回滚"; }
+else
+    rlog "未发现 alembic 配置，跳过迁移"
+fi
 
 # --- 注册 systemd unit（首次部署或 unit 缺失时）---
 SYSTEMD_UNIT="/etc/systemd/system/${SERVICE_NAME}.service"
