@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_BASE_SCENE = "system_base"
 SYSTEM_CHAT_SCENE = "system_chat"
+SYSTEM_TOOL_RESULT_SCENE = "system_tool_result"
 
 _NO_TOOL_JSON_RETRY_SUFFIX = (
     "\n\n【重要提醒】当前没有绑定任何工具。上一条回复不能输出工具调用 JSON。"
@@ -29,7 +30,7 @@ def select_system_prompt_scene(
 ) -> str:
     """选择 system prompt 场景，避免 no-tools 闲聊暴露工具协议。"""
     if has_tool_results:
-        return SYSTEM_BASE_SCENE
+        return SYSTEM_TOOL_RESULT_SCENE
     if selected_tool_names:
         return SYSTEM_BASE_SCENE
     if router_decision.fallback in {"no_tools", None}:

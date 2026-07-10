@@ -7,6 +7,7 @@ import pytest
 
 from app.agent.application import (
     chat_use_case,
+    stream_chat_finalization,
     stream_chat_persistence,
     stream_chat_use_case,
 )
@@ -365,16 +366,12 @@ async def test_stream_chat_handles_pending_without_legacy_service_or_advisor():
         ) as mock_flush,
         patch(
             "app.agent.application.stream_chat_use_case._get_skill_names",
+            new_callable=AsyncMock,
             return_value=[],
         ) as mock_get_skills,
         patch(
-            "app.agent.application.stream_chat_use_case._save_stream_reply",
-            return_value=None,
-        ) as mock_save_reply,
-        patch(
-            "app.agent.application.stream_chat_use_case._observe_chat_completion",
-            new_callable=AsyncMock,
-        ) as mock_observe,
+            "app.agent.application.stream_chat_use_case._schedule_stream_background_finalization",
+        ) as mock_schedule_background,
         patch(
             "app.agent.application.stream_chat_use_case.build_pending_action_response",
             return_value=None,
@@ -404,45 +401,45 @@ async def test_stream_chat_handles_pending_without_legacy_service_or_advisor():
     )
     mock_stream_advisor.assert_not_called()
     mock_flush.assert_awaited_once()
-    mock_get_skills.assert_called_once_with(db, "req-stream-1")
-    mock_save_reply.assert_called_once()
-    mock_observe.assert_awaited_once_with(
-        user_id=user.id,
-        farm_id=farm.id,
-        session_id=None,
-        user_input="确认",
-        assistant_reply="已执行：已记账",
-        skills_called=[],
-        request_id="req-stream-1",
-    )
+    mock_get_skills.assert_awaited_once_with(db, farm.id, "req-stream-1")
+    mock_schedule_background.assert_called_once()
+    payload = mock_schedule_background.call_args.args[0]
+    assert payload.user_input == "确认"
+    assert payload.full_reply == "已执行：已记账"
+    assert payload.skill_names == []
 
 
-async def test_get_skill_names_falls_back_to_fresh_session(db_session, monkeypatch):
-    """trace flush 使用独立 session 写入时，读取 skills 不受当前事务快照影响。"""
-    from app.agent.application import stream_chat_use_case
+async def test_get_skill_names_reads_trace_repository(monkeypatch):
+    """stream skill 统计从统一 trace repository 读取，支持 Mongo-read 后端。"""
     from app.models.trace import TraceRecord
 
-    db_session.add(
+    records = [
         TraceRecord(
             request_id="req-fresh-trace",
             farm_id=1,
             node_type="skill_call",
             node_name="get_weather_forecast",
             status="success",
-        )
-    )
-    db_session.commit()
-    empty_current_db = MagicMock()
-    empty_current_db.query.return_value.filter.return_value.filter.return_value.distinct.return_value.all.return_value = []
-    monkeypatch.setattr(
-        stream_chat_persistence,
-        "SessionLocal",
-        lambda: db_session,
-        raising=False,
-    )
+        ),
+        TraceRecord(
+            request_id="req-fresh-trace",
+            farm_id=1,
+            node_type="llm_call",
+            node_name="qwen",
+            status="success",
+        ),
+    ]
 
-    assert stream_chat_use_case._get_skill_names(
-        empty_current_db, "req-fresh-trace"
+    class Repo:
+        async def get_by_request_id(self, *, farm_id, request_id):
+            assert farm_id == 1
+            assert request_id == "req-fresh-trace"
+            return records
+
+    monkeypatch.setattr(stream_chat_persistence, "get_trace_repository", lambda _db: Repo())
+
+    assert await stream_chat_use_case._get_skill_names(
+        MagicMock(), 1, "req-fresh-trace"
     ) == ["get_weather_forecast"]
 
 
@@ -478,21 +475,17 @@ async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():
         ),
         patch(
             "app.agent.application.stream_chat_use_case._get_skill_names",
+            new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.agent.application.stream_chat_use_case._save_stream_reply",
-            return_value=None,
-        ),
-        patch(
-            "app.agent.application.stream_chat_use_case._observe_chat_completion",
-            new_callable=AsyncMock,
+            "app.agent.application.stream_chat_use_case._schedule_stream_background_finalization",
         ),
         patch(
             "app.agent.application.stream_chat_use_case.build_pending_action_response",
             return_value=None,
         ),
-        patch("app.agent.application.stream_chat_use_case.schedule_session_summary"),
+        patch("app.agent.application.stream_chat_finalization.schedule_session_summary"),
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -636,10 +629,13 @@ async def test_chat_records_turn_and_event_metadata(db_session, monkeypatch):
 
 
 async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch):
+    from app.core.config import settings
     from app.models.agent_turn import AgentTurn
     from app.models.farm import Farm
     from app.models.user import User
     from app.schemas.agent import ChatRequest
+
+    monkeypatch.setattr(settings.storage, "conversation_messages", "mysql")
 
     user = User(
         id="stream-user-1",
@@ -665,11 +661,22 @@ async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch
     monkeypatch.setattr(
         stream_chat_use_case, "_flush_trace_queue", fake_flush_trace_queue
     )
+    async def fake_get_skill_names(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(stream_chat_use_case, "_get_skill_names", fake_get_skill_names)
+    scheduled_turn_payloads = []
     monkeypatch.setattr(
-        stream_chat_use_case, "_get_skill_names", lambda *_args, **_kwargs: []
+        stream_chat_use_case,
+        "_schedule_stream_background_finalization",
+        lambda *_args, **kwargs: scheduled_turn_payloads.append(
+            kwargs.get("turn_payload")
+        ),
     )
     monkeypatch.setattr(
-        stream_chat_use_case, "schedule_session_summary", lambda **_kwargs: None
+        stream_chat_finalization,
+        "schedule_session_summary",
+        lambda **_kwargs: None,
     )
 
     chunks = []
@@ -683,12 +690,18 @@ async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch
         chunks.append(chunk)
 
     assert any("当前" in chunk for chunk in chunks)
+    assert scheduled_turn_payloads and scheduled_turn_payloads[0] is not None
+    await stream_chat_finalization.finish_stream_turn_payload(
+        db_session,
+        scheduled_turn_payloads[0],
+        request_id="abcd1234",
+    )
     turn = db_session.query(AgentTurn).filter_by(session_id="sess-stream").one()
     assert turn.reply_preview == "当前有水稻"
 
 
 async def test_stream_chat_completion_schedules_session_summary():
-    """流式回复落库后触发会话摘要后台任务。"""
+    """流式回复通过后台 turn payload 触发会话摘要任务。"""
     db = MagicMock()
     user = _mock_user()
     farm = _mock_farm()
@@ -724,19 +737,12 @@ async def test_stream_chat_completion_schedules_session_summary():
         ),
         patch(
             "app.agent.application.stream_chat_use_case._get_skill_names",
+            new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.agent.application.stream_chat_use_case._save_stream_reply",
-            return_value=conversation,
-        ),
-        patch(
-            "app.agent.application.stream_chat_use_case._observe_chat_completion",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "app.agent.application.stream_chat_use_case.schedule_session_summary",
-        ) as mock_schedule_summary,
+            "app.agent.application.stream_chat_use_case._schedule_stream_background_finalization",
+        ) as mock_schedule_background,
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -754,12 +760,22 @@ async def test_stream_chat_completion_schedules_session_summary():
         ]
 
     assert events[-1] == "data: [DONE]\n\n"
+    mock_schedule_background.assert_called_once()
+    turn_payload = mock_schedule_background.call_args.kwargs["turn_payload"]
+    with patch(
+        "app.agent.application.stream_chat_finalization.schedule_session_summary",
+    ) as mock_schedule_summary:
+        await stream_chat_finalization.finish_stream_turn_payload(
+            db,
+            turn_payload,
+            request_id="req-stream-3",
+        )
     recorder.finish_turn.assert_called_once()
     mock_schedule_summary.assert_called_once_with(
         conversation_id=88,
         farm_id=farm.id,
         session_id="sess-stream",
-        memory_service_provider=stream_chat_use_case.get_memory_service,
+        memory_service_provider=stream_chat_finalization.get_memory_service,
     )
 
 

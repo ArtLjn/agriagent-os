@@ -8,15 +8,36 @@ const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
 const BAR_HEIGHT = 20;
 
+function getPhaseLabel(nodes: GanttNode[], displayIndex: number): string {
+  const names = new Set(nodes.map((node) => node.node_name));
+  const types = new Set(nodes.map((node) => node.node_type));
+  const hasToolSelection = names.has('skill_router') || names.has('tool_call_forced');
+  const hasSkillExecution =
+    types.has('skill_call') || nodes.some((node) => node.node_name.startsWith('get_'));
+  const hasFinalReply = names.has('final_reply');
+  const hasPreFinal = names.has('pre_final_response');
+
+  if (hasFinalReply && nodes.length === 1) {
+    return '直接回复阶段';
+  }
+  if (hasToolSelection && hasSkillExecution && !hasPreFinal) {
+    return '工具选择与执行';
+  }
+  if (hasPreFinal || hasFinalReply) {
+    return '最终回复阶段';
+  }
+  return `执行阶段 ${displayIndex + 1}`;
+}
+
 /* ── 统计信息条 ── */
 function StatsBar({
   totalNodes,
-  totalRounds,
+  totalPhases,
   success,
   error,
 }: {
   totalNodes: number;
-  totalRounds: number;
+  totalPhases: number;
   success: number;
   error: number;
 }) {
@@ -34,7 +55,7 @@ function StatsBar({
         总节点数: <strong style={{ color: TEXT }}>{totalNodes}</strong>
       </span>
       <span style={{ color: TEXT_DIM }}>
-        总轮次: <strong style={{ color: TEXT }}>{totalRounds}</strong>
+        总阶段: <strong style={{ color: TEXT }}>{totalPhases}</strong>
       </span>
       <span style={{ color: TEXT_DIM }}>
         成功: <strong style={{ color: '#52c41a' }}>{success}</strong>
@@ -72,6 +93,8 @@ function TimelineHeader() {
 
 /* ── 轮次分隔线（可点击展开/收起） ── */
 function RoundDivider({
+  phaseLabel,
+  displayIndex,
   roundIndex,
   recordId,
   nodeCount,
@@ -81,6 +104,8 @@ function RoundDivider({
   isExpanded,
   onToggle,
 }: {
+  phaseLabel: string;
+  displayIndex: number;
   roundIndex: number;
   recordId: string;
   nodeCount: number;
@@ -117,7 +142,10 @@ function RoundDivider({
           marginRight: 15,
         }}
       >
-        第 {roundIndex + 1} 轮
+        {phaseLabel}
+      </span>
+      <span style={{ fontSize: 12, color: TEXT_DIM, marginRight: 12 }}>
+        阶段 {displayIndex + 1} / trace round {roundIndex}
       </span>
       <span
         style={{
@@ -438,7 +466,7 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
     }
     return {
       totalNodes,
-      totalRounds: rounds.length,
+      totalPhases: rounds.length,
       success,
       error,
     };
@@ -478,11 +506,14 @@ export function GanttTimeline({ rounds, onNodeClick }: GanttTimelineProps) {
         const roundDur = round.nodes.reduce((s, n) => s + (n.duration_ms || 0), 0);
         const successCount = round.nodes.filter((n) => n.status === 'success').length;
         const errorCount = round.nodes.filter((n) => n.status === 'error').length;
+        const phaseLabel = getPhaseLabel(round.nodes, rIdx);
 
         return (
           <div key={rIdx}>
             <RoundDivider
-              roundIndex={rIdx}
+              phaseLabel={phaseLabel}
+              displayIndex={rIdx}
+              roundIndex={round.round_index}
               recordId=""
               nodeCount={round.nodes.length}
               roundDuration={roundDur}

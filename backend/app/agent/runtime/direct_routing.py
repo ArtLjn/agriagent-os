@@ -15,10 +15,12 @@ DIRECT_RETURN_TOOLS: set[str] = {
 def can_return_direct_tool_messages(messages: list[ToolMessage]) -> bool:
     """判断直达工具结果是否可以绕过最终 LLM。"""
     for msg in messages:
-        tool_call_id = str(getattr(msg, "tool_call_id", ""))
-        if not tool_call_id.startswith("direct_"):
-            return False
-        tool_name = tool_call_id.removeprefix("direct_")
+        tool_name = getattr(msg, "name", None)
+        if not tool_name:
+            tool_call_id = str(getattr(msg, "tool_call_id", ""))
+            if not tool_call_id.startswith("direct_"):
+                return False
+            tool_name = tool_call_id.removeprefix("direct_")
         if tool_name not in DIRECT_RETURN_TOOLS:
             return False
     return True

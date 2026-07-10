@@ -11,10 +11,8 @@ from app.agent.advisor import stream_advisor
 from app.agent.application.chat_use_case_helpers import (
     flush_trace_queue as _flush_trace_queue,
     merge_skill_names as _merge_skill_names,
-    observe_chat_completion as _observe_chat_completion,
     skill_names_from_pending_decision as _skill_names_from_pending_decision,
     skill_names_from_pending_plan as _skill_names_from_pending_plan,
-    stream_finish_turn as _stream_finish_turn,
     stream_start_turn as _stream_start_turn,
 )
 from app.agent.application.pending_responses import (
@@ -22,13 +20,18 @@ from app.agent.application.pending_responses import (
     build_pending_plan_response,
 )
 from app.agent.application.stream_chat_persistence import (
+    StreamReplyPersistencePayload,
     get_skill_names as _get_skill_names,
     save_stream_reply as _save_stream_reply,
+)
+from app.agent.application.stream_chat_finalization import (
+    build_stream_turn_finalization_payload as _build_stream_turn_finalization_payload,
+    log_stream_stage as _log_stream_stage,
+    schedule_stream_background_finalization as _schedule_stream_background_finalization,
 )
 from app.agent.application.query_capability_menu import resolve_query_menu_or_message
 from app.agent.application.response_trace import record_agent_response
 from app.agent.application.session_flywheel import SessionFlywheelRecorder
-from app.agent.application.session_summary import schedule_session_summary
 from app.agent.application.stream_chat_tail import (
     log_stream_completed as _log_stream_completed,
     yield_metadata_events as _yield_metadata_events,
@@ -164,8 +167,10 @@ async def _stream_chat_success_events(
         chat_request=chat_request,
         reply_state=reply_state,
     )
-    conversation = await _finalize_stream_chat(
-        db,
+    async for event in _yield_metadata_events(request_id, metadata):
+        yield event
+
+    _schedule_and_log_background_tail(
         chat_request=chat_request,
         user=user,
         farm=farm,
@@ -174,15 +179,55 @@ async def _stream_chat_success_events(
         reply_state=reply_state,
         metadata=metadata,
     )
-    async for event in _yield_metadata_events(request_id, metadata):
-        yield event
 
+
+def _schedule_and_log_background_tail(
+    *,
+    chat_request: ChatRequest,
+    user: User,
+    farm: Farm,
+    request_id: str,
+    turn_context: StreamTurnContext,
+    reply_state: StreamReplyState,
+    metadata: StreamMetadata,
+) -> None:
+    """调度非关键后台收尾，并记录本次 SSE 可见链路完成。"""
+    _schedule_stream_background_finalization(
+        _build_stream_persistence_payload(chat_request, user, farm, reply_state, metadata),
+        request_id=request_id,
+        turn_payload=_build_stream_turn_finalization_payload(
+            chat_request=chat_request,
+            farm=farm,
+            turn_context=turn_context,
+            reply_state=reply_state,
+            metadata=metadata,
+        ),
+    )
     _log_stream_completed(
         request_id=request_id,
         started_at=turn_context.started_at,
         reply_state=reply_state,
         metadata=metadata,
-        conversation=conversation,
+        conversation=turn_context.conversation,
+    )
+
+
+def _build_stream_persistence_payload(
+    chat_request: ChatRequest,
+    user: User,
+    farm: Farm,
+    reply_state: StreamReplyState,
+    metadata: StreamMetadata,
+) -> StreamReplyPersistencePayload:
+    return StreamReplyPersistencePayload(
+        cycle_id=chat_request.cycle_id,
+        session_id=chat_request.session_id,
+        user_id=user.id,
+        farm_id=farm.id,
+        user_input=chat_request.message,
+        full_reply=reply_state.full_reply,
+        skill_names=metadata.skill_names,
+        pending_action=metadata.pending_action,
     )
 
 
@@ -370,10 +415,13 @@ async def _collect_stream_metadata(
     reply_state: StreamReplyState,
 ) -> StreamMetadata:
     """刷新 trace 后汇总技能名和待确认结构。"""
+    started_at = time.perf_counter()
     await _flush_trace_queue()
+    _log_stream_stage(request_id, "trace_flush", started_at)
     if not reply_state.used_advisor:
         clear_trace()
 
+    pending_started_at = time.perf_counter()
     pending_action = build_pending_action_response(
         farm.id,
         session_id=chat_request.session_id,
@@ -382,109 +430,29 @@ async def _collect_stream_metadata(
         farm.id,
         session_id=chat_request.session_id,
     )
+    _log_stream_stage(request_id, "pending_metadata", pending_started_at)
+    skill_started_at = time.perf_counter()
     skill_names = _merge_skill_names(
-        _get_skill_names(db, request_id),
+        await _get_skill_names(db, farm.id, request_id),
         _skill_names_from_pending_decision(reply_state.decision),
         _skill_names_from_pending_plan(pending_plan),
     )
+    _log_stream_stage(
+        request_id,
+        "skill_metadata",
+        skill_started_at,
+        extra="skills=%s" % skill_names,
+    )
+    _log_stream_stage(request_id, "metadata_total", started_at)
     return StreamMetadata(
         skill_names=skill_names,
         pending_action=pending_action,
         pending_plan=pending_plan,
     )
 
-
-async def _finalize_stream_chat(
-    db: Session,
-    *,
-    chat_request: ChatRequest,
-    user: User,
-    farm: Farm,
-    request_id: str,
-    turn_context: StreamTurnContext,
-    reply_state: StreamReplyState,
-    metadata: StreamMetadata,
-) -> Conversation | None:
-    """保存助手回复、AgentRecord、Memory observation，并调度摘要。"""
-    await _finish_stream_turn_if_needed(
-        db,
-        chat_request=chat_request,
-        farm=farm,
-        request_id=request_id,
-        turn_context=turn_context,
-        reply_state=reply_state,
-        metadata=metadata,
-    )
-    conversation = await _save_stream_reply(
-        db,
-        chat_request=chat_request,
-        user=user,
-        farm=farm,
-        full_reply=reply_state.full_reply,
-        skill_names=metadata.skill_names,
-        pending_action=metadata.pending_action,
-    )
-    await _observe_chat_completion(
-        user_id=user.id,
-        farm_id=farm.id,
-        session_id=chat_request.session_id,
-        user_input=chat_request.message,
-        assistant_reply=reply_state.full_reply,
-        skills_called=metadata.skill_names,
-        request_id=request_id,
-    )
-    return conversation
-
-
-async def _finish_stream_turn_if_needed(
-    db: Session,
-    *,
-    chat_request: ChatRequest,
-    farm: Farm,
-    request_id: str,
-    turn_context: StreamTurnContext,
-    reply_state: StreamReplyState,
-    metadata: StreamMetadata,
-) -> None:
-    """有会话和回复时写 assistant message、turn 聚合和摘要任务。"""
-    if not (
-        turn_context.conversation
-        and turn_context.started_turn
-        and reply_state.full_reply
-    ):
-        return
-
-    await _stream_finish_turn(
-        turn_context.recorder,
-        db,
-        turn_context.started_turn,
-        assistant_reply=reply_state.full_reply,
-        skills=metadata.skill_names,
-        pending_action=metadata.pending_action.model_dump(mode="json")
-        if metadata.pending_action
-        else None,
-        pending_plan=metadata.pending_plan.model_dump(mode="json")
-        if metadata.pending_plan
-        else None,
-        pending_plan_id=metadata.pending_plan.plan_id
-        if metadata.pending_plan
-        else None,
-        selected_tools_count=None,
-        tool_calls_count=len(metadata.skill_names) or None,
-        token_total=None,
-        latency_ms=int((time.perf_counter() - turn_context.started_at) * 1000),
-        status="success",
-    )
-    schedule_session_summary(
-        conversation_id=turn_context.conversation.id,
-        farm_id=farm.id,
-        session_id=chat_request.session_id,
-        memory_service_provider=get_memory_service,
-    )
-
-
 __all__ = [
     "ResponseEvent",
+    "_save_stream_reply",
     "format_sse_event",
     "format_text_response",
     "resolve_stream_user_and_farm",

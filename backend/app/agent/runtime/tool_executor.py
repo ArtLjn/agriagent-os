@@ -26,6 +26,7 @@ from app.infra.pending_actions import (
     store_pending_plan,
 )
 from app.infra.trace_collector import get_collector
+from app.infra.trace_context import set_round_index
 from app.models.cycle import CropCycle
 from app.models.planting import Worker
 
@@ -1088,7 +1089,7 @@ async def _invoke_read_tool_message(
             ),
             duration_ms=duration_ms,
         )
-        return ToolMessage(content=str(result), tool_call_id=tool_call_id)
+        return ToolMessage(content=str(result), tool_call_id=tool_call_id, name=name)
     except Exception as e:
         duration_ms = int((_time.perf_counter() - start) * 1000)
         logger.error(
@@ -1182,6 +1183,7 @@ async def _call_one(
 
 async def _parallel_tool_node(state: AgentState) -> dict:
     """并行执行多个 tool_calls 的节点。写操作 Skill 拦截为 pending action。"""
+    set_round_index(state.get("trace_round_index"))
     last = state["messages"][-1]
     if not isinstance(last, AIMessage) or not last.tool_calls:
         return {"messages": []}

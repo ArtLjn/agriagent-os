@@ -22,6 +22,65 @@ def clean_pending_action():
 
 
 @pytest.mark.asyncio
+async def test_parallel_tool_node_restores_trace_round_before_execution():
+    """工具节点执行前必须恢复触发它的 LLM 轮次。"""
+    state = {
+        "messages": [HumanMessage(content="无需工具")],
+        "farm_id": 1,
+        "trace_round_index": 3,
+    }
+
+    with patch("app.agent.runtime.tool_executor.set_round_index") as set_round_index:
+        result = await _parallel_tool_node(state)
+
+    set_round_index.assert_called_once_with(3)
+    assert result == {"messages": []}
+
+
+@pytest.mark.asyncio
+async def test_read_tool_message_preserves_tool_name_for_direct_return():
+    """读工具成功后应在 ToolMessage 上保留工具名，供直返策略判断。"""
+    tool = SimpleNamespace(
+        name="get_weather_forecast",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="城市: 苏州\n未来天数: 3天"),
+        skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.READ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="天气怎么样"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call-random",
+                        "name": "get_weather_forecast",
+                        "args": {"location": "苏州"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=MagicMock(),
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    message = result["messages"][0]
+    assert message.name == "get_weather_forecast"
+    assert message.tool_call_id == "call-random"
+
+
+@pytest.mark.asyncio
 async def test_write_confirm_metadata_creates_pending_action():
     tool = SimpleNamespace(
         name="metadata_write_tool",

@@ -24,3 +24,4 @@ class AgentState(TypedDict):
     selected_tool_names: NotRequired[list[str] | None]
     router_decision: NotRequired[RouterDecision | None]
     plan_draft: NotRequired[dict | None]
+    trace_round_index: NotRequired[int | None]

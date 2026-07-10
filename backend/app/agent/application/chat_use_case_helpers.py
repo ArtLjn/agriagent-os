@@ -91,6 +91,18 @@ def get_skill_names(
         fresh_db.close()
 
 
+def skill_names_from_trace_records(records) -> list[str]:
+    """从 trace records 中按出现顺序提取 skill_call 名称。"""
+    skill_names: list[str] = []
+    for record in records:
+        if getattr(record, "node_type", None) != "skill_call":
+            continue
+        name = getattr(record, "node_name", None)
+        if name and name not in skill_names:
+            skill_names.append(name)
+    return skill_names
+
+
 def _query_skill_names(db: Session, request_id: str) -> list[str]:
     """从指定 DB session 查询 skill_call 名称。"""
     if not _trace_table_exists(db):
@@ -168,23 +180,49 @@ async def save_stream_reply(
     repository_factory=get_agent_record_repository,
 ) -> Conversation | None:
     """保存流式回复和 AgentRecord。"""
+    return await save_stream_reply_by_ids(
+        db,
+        cycle_id=chat_request.cycle_id,
+        session_id=chat_request.session_id,
+        user_id=user.id,
+        farm_id=farm.id,
+        full_reply=full_reply,
+        skill_names=skill_names,
+        pending_action=pending_action,
+        repository_factory=repository_factory,
+    )
+
+
+async def save_stream_reply_by_ids(
+    db: Session,
+    *,
+    cycle_id: int | None,
+    session_id: str | None,
+    user_id: str,
+    farm_id: int,
+    full_reply: str,
+    skill_names: list[str],
+    pending_action: PendingActionResponse | None = None,
+    repository_factory=get_agent_record_repository,
+) -> Conversation | None:
+    """按轻量 ID 保存流式回复和 AgentRecord，便于后台独立 DB 使用。"""
     conversation = None
-    if chat_request.session_id:
+    if session_id:
         conversation = (
             db.query(Conversation)
             .filter(
-                Conversation.session_id == chat_request.session_id,
-                Conversation.farm_id == farm.id,
+                Conversation.session_id == session_id,
+                Conversation.farm_id == farm_id,
             )
             .first()
         )
 
     record = AgentRecord(
-        cycle_id=chat_request.cycle_id,
+        cycle_id=cycle_id,
         record_type="chat",
         content=full_reply,
-        farm_id=farm.id,
-        user_id=user.id,
+        farm_id=farm_id,
+        user_id=user_id,
         conversation_id=conversation.id if conversation else None,
     )
     await resolve_maybe_awaitable(repository_factory(db).create(record))

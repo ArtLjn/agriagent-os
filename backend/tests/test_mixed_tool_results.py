@@ -127,6 +127,7 @@ class TestPureNormalPath:
             "messages": [normal_msg],
             "farm_id": 1,
             "intent": "query",
+            "trace_round_index": 2,
         }
 
         with patch("app.agent.runtime.nodes.get_llm") as mock_get_llm:
@@ -136,6 +137,7 @@ class TestPureNormalPath:
         assert isinstance(ai_msg, AIMessage)
         assert "刘俊男" in ai_msg.content
         assert "猪八戒" in ai_msg.content
+        assert result["trace_round_index"] == 2
         mock_get_llm.assert_not_called()
 
     @pytest.mark.asyncio
@@ -201,6 +203,62 @@ class TestPureNormalPath:
         assert ai_msg.content == normal_msg.content
         assert "| 欠款类型 |" not in ai_msg.content
         mock_get_llm.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_weather_tool_result_goes_through_llm(self):
+        """天气结果需要最终 LLM 组织成自然语言。"""
+        normal_msg = ToolMessage(
+            content=(
+                "城市: 苏州虎丘区\n"
+                "未来天数: 3天\n"
+                "7/10: 天气☀️, 最高35℃, 最低28℃, 降水0mm"
+            ),
+            tool_call_id="call-random",
+            name="get_weather_forecast",
+        )
+        state = {
+            "messages": [normal_msg],
+            "farm_id": 1,
+            "intent": "query",
+        }
+
+        with (
+            patch("app.agent.runtime.nodes.check_quota", return_value=True),
+            patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
+            patch("app.agent.runtime.nodes.get_langchain_tools", return_value=[]),
+            patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+            patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+            patch("app.agent.runtime.nodes.get_collector") as mock_collector,
+            patch("app.agent.runtime.nodes.select_tools", return_value=[]),
+            patch("app.agent.runtime.nodes._get_classifier", return_value=None),
+            patch("app.agent.runtime.llm_support.SessionLocal") as mock_session,
+        ):
+            mock_get_date.return_value = __import__("datetime").date(2026, 7, 10)
+            mock_composer = MagicMock()
+            mock_composer.compose.return_value = "system prompt"
+            mock_get_composer.return_value = mock_composer
+            mock_collector.return_value = MagicMock()
+
+            mock_db = MagicMock()
+            mock_db.query.return_value.filter.return_value.first.return_value = None
+            mock_session.return_value = mock_db
+
+            llm = MagicMock()
+            llm.model_name = "test-model"
+            response = AIMessage(
+                content="苏州虎丘区今天晴热，最高35℃，基本无降水。",
+                response_metadata={"token_usage": {"total_tokens": 10}},
+            )
+            llm.ainvoke = AsyncMock(return_value=response)
+            mock_get_llm.return_value = llm
+
+            result = await _llm_node(state)
+
+        ai_msg = result["messages"][0]
+        assert isinstance(ai_msg, AIMessage)
+        assert "苏州虎丘区" in ai_msg.content
+        assert "最高35℃" in ai_msg.content
+        llm.ainvoke.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_direct_normal_tool_result_goes_through_llm(self):

@@ -123,7 +123,7 @@ class TestFunctionCallingE2E:
         mock_get_tools,
         mock_executor_tools,
     ):
-        """天气查询应只绑定 get_weather_forecast，不应绑定其他工具。"""
+        """天气查询可绑定只读工具池，但不应绑定写工具。"""
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
             display_name="老李"
@@ -152,7 +152,7 @@ class TestFunctionCallingE2E:
         bound_names = [t.name for t in bound_tools]
         assert "get_weather_forecast" in bound_names
         assert "create_cost_record" not in bound_names
-        assert "get_cost_summary" not in bound_names
+        assert "get_cost_summary" in bound_names
 
     @patch("app.agent.runtime.tool_executor.get_langchain_tools")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
@@ -199,5 +199,5 @@ class TestFunctionCallingE2E:
         bind_calls = mock_llm.bind_tools.call_args_list
         assert len(bind_calls) == 1
         first_bound = [t.name for t in bind_calls[0][0][0]]
-        assert first_bound == ["get_farm_status"]
+        assert "get_farm_status" in first_bound
         assert mock_llm.ainvoke.await_count == 2

@@ -112,7 +112,7 @@ async def get_timeline(
         return TimelineResponse(request_id=request_id, rounds=[])
 
     rounds_map: dict[int, list[TimelineNode]] = defaultdict(list)
-    for r in records:
+    for r in sorted(records, key=_trace_record_sort_key):
         rounds_map[r.round_index].append(
             TimelineNode(
                 node_type=r.node_type,
@@ -129,7 +129,9 @@ async def get_timeline(
 
     rounds = [
         TimelineRound(round_index=idx, nodes=nodes)
-        for idx, nodes in sorted(rounds_map.items())
+        for idx, nodes in sorted(
+            rounds_map.items(), key=lambda item: _round_first_node_sort_key(item[1])
+        )
     ]
     return TimelineResponse(request_id=request_id, rounds=rounds)
 
@@ -178,6 +180,51 @@ def _coerce_token_usage(value: Any) -> dict | None:
             return None
         return parsed if isinstance(parsed, dict) else None
     return None
+
+
+def _trace_record_sort_key(record: TraceRecord) -> tuple[datetime, int, str]:
+    """按真实发生时间排序 trace 节点，避免历史 round_index 脏数据误导 UI。"""
+    occurred_at = _coerce_sort_datetime(
+        getattr(record, "start_time", None)
+    ) or _coerce_sort_datetime(getattr(record, "created_at", None))
+    return (
+        occurred_at or datetime.min,
+        _coerce_sort_int(getattr(record, "id", None)),
+        str(getattr(record, "node_name", "")),
+    )
+
+
+def _round_first_node_sort_key(nodes: list[TimelineNode]) -> tuple[datetime, str]:
+    if not nodes:
+        return (datetime.min, "")
+    first = nodes[0]
+    return (
+        _coerce_sort_datetime(first.start_time) or datetime.min,
+        first.node_name,
+    )
+
+
+def _coerce_sort_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _strip_tzinfo(value)
+    if isinstance(value, str):
+        try:
+            return _strip_tzinfo(datetime.fromisoformat(value.replace("Z", "+00:00")))
+        except ValueError:
+            return None
+    return None
+
+
+def _strip_tzinfo(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
+
+
+def _coerce_sort_int(value: Any) -> int:
+    return value if isinstance(value, int) else 0
 
 
 async def _list_traces_from_repository(
@@ -253,14 +300,14 @@ async def _records_by_request_id(request_id: str, db: Session) -> list[TraceReco
         cursor = (
             database["traceRecords"]
             .find({"requestId": request_id})
-            .sort([("roundIndex", 1), ("mysqlId", 1)])
+            .sort([("startTime", 1), ("createdAt", 1), ("mysqlId", 1)])
         )
         docs = await cursor.to_list(None)
         return [trace_record_from_mongo_doc(doc) for doc in docs]
     return (
         db.query(TraceRecord)
         .filter(TraceRecord.request_id == request_id)
-        .order_by(TraceRecord.round_index, TraceRecord.id)
+        .order_by(TraceRecord.start_time, TraceRecord.created_at, TraceRecord.id)
         .all()
     )
 
