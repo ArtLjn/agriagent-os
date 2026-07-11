@@ -1,0 +1,699 @@
+capabilities:
+  - name: manage_cost
+    domain: finance
+    capability: cost_management
+    description: 管理农场账务，支持新增账单、查询收支、查看欠款、删除记录和结清赊账。
+    examples:
+      - 今天买了100元化肥
+      - 这个月花了多少钱
+      - 查一下我还欠老王多少钱
+      - 删除昨天那笔支出
+      - 把老王农资店的账结清
+    anti_examples:
+      - 给老王补付300人工
+      - 查询最近农事作业单
+      - 新增一个工人
+      - 西瓜进入膨大期
+      - 修改天气城市
+    tags:
+      - 成本
+      - 支出
+      - 收入
+      - 赊账
+      - 还款
+      - 欠款
+      - 账单
+      - 化肥
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm
+      - cost_records
+      - cost_categories
+    cache_invalidation:
+      - cost_analytics
+      - cost_summary
+      - get_farm_status
+    operations:
+      create_record:
+        risk: write_confirm
+        description: 新增一笔支出、收入或赊账记录。
+        legacy_aliases:
+          - create_cost_record
+        cache_invalidation:
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+      query_summary:
+        risk: read
+        description: 查询账单、收支、成本、收入、利润和流水明细。
+        legacy_aliases:
+          - get_cost_summary
+      query_debt:
+        risk: read
+        description: 查询赊账和欠款统计。
+        legacy_aliases:
+          - get_debt_summary
+      delete_record:
+        risk: write_high
+        description: 删除或撤销一条账务记录。
+        legacy_aliases:
+          - delete_cost_record
+        cache_invalidation:
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+      settle_debt:
+        risk: write_confirm
+        description: 部分还款或结清赊账。
+        legacy_aliases:
+          - settle_debt
+        cache_invalidation:
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+  - name: analyze_cost
+    domain: finance
+    capability: cost_analysis
+    description: 分析农场收支趋势、同比、环比和变化幅度。
+    examples:
+      - 这个月比上个月多花多少
+      - 最近三个月成本趋势
+      - 今年化肥支出同比怎么样
+      - 收入环比变化多少
+      - 哪类成本涨得最快
+    anti_examples:
+      - 今天买了100元化肥
+      - 删除一笔支出
+      - 还老王200块
+      - 查询有哪些茬口
+      - 新增账务分类
+    tags:
+      - 趋势
+      - 同比
+      - 环比
+      - 分析
+      - 变化
+      - 成本分析
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm
+      - cost_records
+    operations:
+      analyze_trend:
+        risk: read
+        description: 查询收支趋势、同比和环比分析。
+        legacy_aliases:
+          - get_cost_analytics
+  - name: manage_cost_categories
+    domain: finance
+    capability: cost_category_management
+    description: 查询、创建或删除农场账务分类。
+    examples:
+      - 有哪些支出分类
+      - 查一下收入分类
+      - 新增一个农资分类
+      - 删除自定义分类包装费
+      - 创建一个销售收入分类
+    anti_examples:
+      - 今天买了100元化肥
+      - 这个月花了多少钱
+      - 查询作物模板
+      - 新增工人
+      - 修改农事日志
+    tags:
+      - 分类
+      - 账务分类
+      - 成本分类
+      - 收入分类
+      - 支出分类
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - cost_categories
+    cache_invalidation:
+      - cost_analytics
+      - cost_summary
+      - get_farm_status
+    operations:
+      query_categories:
+        risk: read
+        description: 查询支出分类和收入分类。
+        legacy_aliases:
+          - get_cost_categories
+      manage_category:
+        risk: write_confirm
+        description: 创建或删除农场账务分类。
+        legacy_aliases:
+          - manage_cost_categories
+        cache_invalidation:
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+  - name: manage_crop_cycle
+    domain: crop
+    capability: crop_cycle_management
+    description: 管理种植周期和茬口，支持创建、查询、修改阶段、调整日期和高风险删除。
+    examples:
+      - 帮我建个黑布林茬口30亩
+      - 我的茬口有哪些
+      - 看一下3号茬口
+      - 西瓜进入膨大期了
+      - 删除这个茬口
+    anti_examples:
+      - 创建作物模板
+      - 查询棚和地块
+      - 今天买了种子100元
+      - 记录一次浇水
+      - 查询工人工资
+    tags:
+      - 茬口
+      - 种植周期
+      - 阶段
+      - 生长阶段
+      - 播种
+      - 采收
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm
+      - active_cycles
+      - crop_cycles
+      - crop_templates
+      - planting_units
+    cache_invalidation:
+      - crop_cycle
+      - get_farm_status
+    operations:
+      create_cycle:
+        risk: write_confirm
+        description: 创建种植周期并生成阶段计划。
+        legacy_aliases:
+          - create_crop_cycle
+        cache_invalidation:
+          - crop_cycle
+          - get_farm_status
+      query_cycles:
+        risk: read
+        description: 查询茬口列表。
+        legacy_aliases:
+          - get_crop_cycles
+      query_cycle_info:
+        risk: read
+        description: 查询单个茬口详情、阶段安排和进度。
+        legacy_aliases:
+          - get_crop_cycle_info
+      update_cycle:
+        risk: write_confirm
+        description: 修改茬口开始日期、播种期或起始日期。
+        legacy_aliases:
+          - update_crop_cycle
+        cache_invalidation:
+          - crop_cycle
+          - get_farm_status
+      update_stage:
+        risk: write_confirm
+        description: 更新茬口当前生长阶段。
+        legacy_aliases:
+          - update_crop_stage
+        cache_invalidation:
+          - crop_cycle
+          - get_farm_status
+      delete_cycle:
+        risk: write_high
+        description: 删除茬口并级联删除相关阶段、日志、成本记录和种植单元。
+        legacy_aliases:
+          - delete_crop_cycle
+        cache_invalidation:
+          - crop_cycle
+          - farm_logs
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+  - name: manage_crop_template
+    domain: crop
+    capability: crop_template_management
+    description: 管理作物模板，支持查询、创建、更新和级联删除。
+    examples:
+      - 有哪些作物模板
+      - 帮我创建黑布林种植模板
+      - 修改西瓜模板阶段
+      - 删除这个作物模板
+      - 查询模板里的生长阶段
+    anti_examples:
+      - 创建一个西瓜茬口
+      - 西瓜进入膨大期
+      - 查询棚列表
+      - 记录施肥
+      - 这个月成本趋势
+    tags:
+      - 作物模板
+      - 模板
+      - 阶段模板
+      - 生长阶段
+      - 作物
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm
+      - crop_templates
+      - crop_cycles
+    cache_invalidation:
+      - crop_cycle
+      - farm_logs
+      - cost_analytics
+      - cost_summary
+      - get_farm_status
+    operations:
+      create_template:
+        risk: write_confirm
+        description: 创建作物模板。
+        legacy_aliases:
+          - create_crop_template
+      query_templates:
+        risk: read
+        description: 查询作物模板和阶段定义。
+        legacy_aliases:
+          - get_crop_templates
+      manage_template:
+        risk: write_high
+        description: 更新或删除作物模板。
+        legacy_aliases:
+          - manage_crop_templates
+        cache_invalidation:
+          - crop_cycle
+          - farm_logs
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+  - name: manage_planting_units
+    domain: farm
+    capability: planting_unit_management
+    description: 查询、创建、更新或删除棚、地块和区域等种植单元。
+    examples:
+      - 查询有哪些棚
+      - 5号棚现在种了什么
+      - 新增一个6号棚
+      - 删除空闲地块
+      - 修改东区面积
+    anti_examples:
+      - 查询茬口列表
+      - 创建水稻茬口
+      - 记录浇水
+      - 新增工人
+      - 查账单流水
+    tags:
+      - 棚
+      - 地块
+      - 区域
+      - 种植单元
+      - 面积
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm
+      - crop_cycles
+      - planting_units
+    cache_invalidation:
+      - get_farm_status
+    operations:
+      query_units:
+        risk: read
+        description: 查询种植单元、棚、地块或区域。
+        legacy_aliases:
+          - get_planting_units
+      manage_units:
+        risk: write_confirm
+        description: 创建、更新或删除种植单元。
+        legacy_aliases:
+          - manage_planting_units
+        cache_invalidation:
+          - get_farm_status
+  - name: get_farm_status
+    domain: farm
+    capability: farm_status_query
+    description: 查询农场综合状态摘要，包括活跃茬口、近期农事、欠账、月度花费和天气。
+    examples:
+      - 农场现在是什么情况
+      - 我家有哪些作物栽种
+      - 最近农场状态怎么样
+      - 看一下整体经营情况
+      - 今天农场有什么需要注意
+    anti_examples:
+      - 创建茬口
+      - 新增账单
+      - 修改工人信息
+      - 搜索农业新闻
+      - 删除农事日志
+    tags:
+      - 农场状态
+      - 概览
+      - 摘要
+      - 活跃茬口
+      - 经营情况
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm
+    operations:
+      query_status:
+        risk: read
+        description: 查询当前农场综合状态。
+        legacy_aliases:
+          - get_farm_status
+  - name: manage_work_orders
+    domain: operation
+    capability: work_order_management
+    description: 管理农事作业单，支持创建、查询、纠正作业范围和维护用工付款信息。
+    examples:
+      - 今天李树去6号棚收水稻
+      - 最近玉米授粉作业有哪些
+      - 修改昨天的作业单备注
+      - 查询未付款作业单
+      - 把5号棚采收作业改到明天
+    anti_examples:
+      - 新增工人王大妈
+      - 给老王补付300人工
+      - 记录账单支出
+      - 查询农事日志
+      - 西瓜进入膨大期
+    tags:
+      - 作业单
+      - 农事作业
+      - 用工
+      - 付款状态
+      - 作业范围
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - crop_cycles
+      - planting_units
+      - workers
+      - operation_work_orders
+    cache_invalidation:
+      - farm_logs
+      - cost_analytics
+      - cost_summary
+      - get_farm_status
+    operations:
+      create_work_order:
+        risk: write_confirm
+        description: 创建农事作业单并可同步记录用工和人工成本。
+        legacy_aliases:
+          - create_operation_work_order
+        cache_invalidation:
+          - farm_logs
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+      query_work_orders:
+        risk: read
+        description: 查询农事作业单。
+        legacy_aliases:
+          - get_operation_work_orders
+      update_work_order:
+        risk: write_confirm
+        description: 修改或纠正农事作业单。
+        legacy_aliases:
+          - update_operation_work_order
+        cache_invalidation:
+          - farm_logs
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+  - name: manage_workers
+    domain: labor
+    capability: worker_management
+    description: 管理工人档案，支持查询、创建、更新、停用和恢复。
+    examples:
+      - 我的工人有哪些
+      - 看看离职工人
+      - 新来一个工人李丽工资100一天
+      - 删除工人李四
+      - 把王大妈恢复为在职
+    anti_examples:
+      - 给老王补付300人工
+      - 查询未付工资
+      - 创建作业单
+      - 今天买了化肥
+      - 查询棚列表
+    tags:
+      - 工人
+      - 员工
+      - 劳务
+      - 离职
+      - 工资标准
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - workers
+      - unpaid_labor
+    cache_invalidation:
+      - get_farm_status
+    operations:
+      query_workers:
+        risk: read
+        description: 查询工人档案。
+        legacy_aliases:
+          - get_workers
+      manage_worker:
+        risk: write_confirm
+        description: 创建、更新、停用或恢复工人档案。
+        legacy_aliases:
+          - manage_workers
+        cache_invalidation:
+          - get_farm_status
+  - name: manage_labor_payment
+    domain: labor
+    capability: labor_payment_management
+    description: 管理人工付款，支持查询未付人工、保存工资记录和结算人工。
+    examples:
+      - 查询未付人工
+      - 给老王补付300人工
+      - 结算李丽这个月工资
+      - 保存张三工资记录
+      - 查看某个作业单的人工欠款
+    anti_examples:
+      - 新增工人王大妈
+      - 查询农资赊账
+      - 创建作业单
+      - 今天买了化肥
+      - 修改天气城市
+    tags:
+      - 人工
+      - 工资
+      - 未付人工
+      - 结算
+      - 付款
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - workers
+      - unpaid_labor
+      - crop_cycles
+      - operation_work_orders
+    cache_invalidation:
+      - cost_analytics
+      - cost_summary
+      - get_farm_status
+    operations:
+      query_payables:
+        risk: read
+        description: 查询未付人工明细和汇总。
+        legacy_aliases:
+          - get_labor_payables
+      settle_payment:
+        risk: write_confirm
+        description: 结算或部分支付未付人工。
+        legacy_aliases:
+          - settle_labor_payment
+        cache_invalidation:
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+      manage_wage:
+        risk: write_confirm
+        description: 保存或更新独立工资记录。
+        legacy_aliases:
+          - manage_wages
+        cache_invalidation:
+          - cost_analytics
+          - cost_summary
+          - get_farm_status
+  - name: manage_farm_logs
+    domain: log
+    capability: farm_log_management
+    description: 管理农事日志，支持记录、查询、更新和删除农事操作。
+    examples:
+      - 记录今天给西瓜浇水
+      - 查询最近7天农事日志
+      - 修改昨天的施肥记录
+      - 删除一条农事日志
+      - 3号棚今天打药了
+    anti_examples:
+      - 创建作业单
+      - 查询工人工资
+      - 新增成本账单
+      - 更新茬口阶段
+      - 搜索农业政策
+    tags:
+      - 农事日志
+      - 浇水
+      - 施肥
+      - 打药
+      - 除草
+      - 操作记录
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm_logs
+      - crop_cycles
+      - active_cycles
+    cache_invalidation:
+      - farm_logs
+      - get_farm_status
+    operations:
+      create_log:
+        risk: write_confirm
+        description: 记录农事操作。
+        legacy_aliases:
+          - log_farm_activity
+        cache_invalidation:
+          - farm_logs
+          - get_farm_status
+      query_logs:
+        risk: read
+        description: 查询最近农事操作记录。
+        legacy_aliases:
+          - get_recent_farm_logs
+      manage_log:
+        risk: write_confirm
+        description: 更新或删除已有农事日志。
+        legacy_aliases:
+          - manage_farm_logs
+        cache_invalidation:
+          - farm_logs
+          - get_farm_status
+  - name: manage_settings
+    domain: settings
+    capability: user_settings_management
+    description: 查询或更新当前用户显示名、默认天气城市、经纬度和助手回复角色。
+    examples:
+      - 查询我的设置
+      - 我的默认天气城市是什么
+      - 把天气城市改成苏州
+      - 修改助手回复角色
+      - 设置默认经纬度
+    anti_examples:
+      - 查询天气预报
+      - 搜索苏州农业新闻
+      - 查询农场状态
+      - 新增工人
+      - 今天买了化肥
+    tags:
+      - 设置
+      - 用户设置
+      - 天气城市
+      - 经纬度
+      - 助手角色
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - user
+    cache_invalidation:
+      - get_farm_status
+    operations:
+      query_settings:
+        risk: read
+        description: 查询用户显示名、天气位置和助手角色设置。
+        legacy_aliases:
+          - get_user_settings
+      update_settings:
+        risk: write_confirm
+        description: 更新用户显示名、天气位置和助手角色设置。
+        legacy_aliases:
+          - manage_user_settings
+        cache_invalidation:
+          - get_farm_status
+  - name: get_weather_forecast
+    domain: external
+    capability: weather_forecast_query
+    description: 获取未来天气预报和灾害预警。
+    examples:
+      - 明天苏州什么天气
+      - 最近会不会下雨
+      - 未来7天天气预报
+      - 有没有大风预警
+      - 这周适合打药吗
+    anti_examples:
+      - 搜索天气新闻
+      - 修改默认天气城市
+      - 查询农场账单
+      - 记录浇水
+      - 查询茬口列表
+    tags:
+      - 天气
+      - 预报
+      - 降雨
+      - 气温
+      - 预警
+    version: v2
+    owner: agent-platform
+    status: active
+    context_dependencies:
+      - farm
+      - weather_location
+    operations:
+      query_forecast:
+        risk: external_network
+        description: 查询天气预报和灾害预警。
+        legacy_aliases:
+          - get_weather_forecast
+  - name: web_search
+    domain: external
+    capability: web_search
+    description: 搜索实时网络信息，适合农业政策、新闻、价格、上市时间和热点资料。
+    examples:
+      - 最近西瓜价格怎么样
+      - 最新农业政策有什么
+      - 今年农业补贴政策
+      - 网上查一下行情
+      - 番茄什么时候上市
+    anti_examples:
+      - 查询本农场账单
+      - 农场现在是什么情况
+      - 明天默认城市天气
+      - 查询茬口详情
+      - 新增一笔支出
+    tags:
+      - 搜索
+      - 新闻
+      - 政策
+      - 价格
+      - 行情
+      - 实时
+    version: v2
+    owner: agent-platform
+    status: hidden
+    disabled_reason: SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用
+    context_dependencies:
+      - external_search
+    operations:
+      search:
+        risk: external_network
+        description: 搜索外部实时信息。
+        legacy_aliases:
+          - web_search

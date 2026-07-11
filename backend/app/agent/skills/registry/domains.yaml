@@ -1,0 +1,82 @@
+domains:
+  - name: finance
+    owner: agent-platform
+    description: 账务、成本、收入、欠款和分类治理。
+    default_context_dependencies:
+      - farm
+      - cost_records
+    default_policy:
+      read_risk: read
+      write_risk: write_confirm
+      high_risk_requires_confirmation: true
+  - name: crop
+    owner: agent-platform
+    description: 作物模板、种植周期、茬口阶段和高风险删除。
+    default_context_dependencies:
+      - farm
+      - crop_cycles
+      - crop_templates
+    default_policy:
+      read_risk: read
+      write_risk: write_confirm
+      high_risk_requires_confirmation: true
+  - name: farm
+    owner: agent-platform
+    description: 农场状态、棚、地块、区域和种植单元。
+    default_context_dependencies:
+      - farm
+      - planting_units
+    default_policy:
+      read_risk: read
+      write_risk: write_confirm
+      high_risk_requires_confirmation: true
+  - name: operation
+    owner: agent-platform
+    description: 农事作业单、作业纠正、用工和付款状态维护。
+    default_context_dependencies:
+      - crop_cycles
+      - planting_units
+      - workers
+    default_policy:
+      read_risk: read
+      write_risk: write_confirm
+      high_risk_requires_confirmation: true
+  - name: labor
+    owner: agent-platform
+    description: 工人档案、工资记录、未付人工和人工结算。
+    default_context_dependencies:
+      - workers
+      - unpaid_labor
+    default_policy:
+      read_risk: read
+      write_risk: write_confirm
+      high_risk_requires_confirmation: true
+  - name: log
+    owner: agent-platform
+    description: 农事日志记录、查询、修改和删除。
+    default_context_dependencies:
+      - farm_logs
+      - crop_cycles
+    default_policy:
+      read_risk: read
+      write_risk: write_confirm
+      high_risk_requires_confirmation: true
+  - name: settings
+    owner: agent-platform
+    description: 用户显示名、天气位置和助手角色设置。
+    default_context_dependencies:
+      - user
+    default_policy:
+      read_risk: read
+      write_risk: write_confirm
+      high_risk_requires_confirmation: false
+  - name: external
+    owner: agent-platform
+    description: 天气、网络搜索等外部网络能力。
+    default_context_dependencies:
+      - external_search
+      - weather_location
+    default_policy:
+      read_risk: external_network
+      write_risk: external_network
+      external_network_enabled_required: true

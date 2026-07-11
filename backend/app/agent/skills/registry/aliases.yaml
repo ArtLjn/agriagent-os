@@ -1,0 +1,106 @@
+aliases:
+  - legacy_name: create_cost_record
+    capability: manage_cost
+    operation: create_record
+  - legacy_name: get_cost_summary
+    capability: manage_cost
+    operation: query_summary
+  - legacy_name: get_debt_summary
+    capability: manage_cost
+    operation: query_debt
+  - legacy_name: delete_cost_record
+    capability: manage_cost
+    operation: delete_record
+  - legacy_name: settle_debt
+    capability: manage_cost
+    operation: settle_debt
+  - legacy_name: get_cost_analytics
+    capability: analyze_cost
+    operation: analyze_trend
+  - legacy_name: get_cost_categories
+    capability: manage_cost_categories
+    operation: query_categories
+  - legacy_name: manage_cost_categories
+    capability: manage_cost_categories
+    operation: manage_category
+  - legacy_name: create_crop_cycle
+    capability: manage_crop_cycle
+    operation: create_cycle
+  - legacy_name: get_crop_cycles
+    capability: manage_crop_cycle
+    operation: query_cycles
+  - legacy_name: get_crop_cycle_info
+    capability: manage_crop_cycle
+    operation: query_cycle_info
+  - legacy_name: update_crop_cycle
+    capability: manage_crop_cycle
+    operation: update_cycle
+  - legacy_name: update_crop_stage
+    capability: manage_crop_cycle
+    operation: update_stage
+  - legacy_name: delete_crop_cycle
+    capability: manage_crop_cycle
+    operation: delete_cycle
+  - legacy_name: create_crop_template
+    capability: manage_crop_template
+    operation: create_template
+  - legacy_name: get_crop_templates
+    capability: manage_crop_template
+    operation: query_templates
+  - legacy_name: manage_crop_templates
+    capability: manage_crop_template
+    operation: manage_template
+  - legacy_name: get_planting_units
+    capability: manage_planting_units
+    operation: query_units
+  - legacy_name: manage_planting_units
+    capability: manage_planting_units
+    operation: manage_units
+  - legacy_name: get_farm_status
+    capability: get_farm_status
+    operation: query_status
+  - legacy_name: create_operation_work_order
+    capability: manage_work_orders
+    operation: create_work_order
+  - legacy_name: get_operation_work_orders
+    capability: manage_work_orders
+    operation: query_work_orders
+  - legacy_name: update_operation_work_order
+    capability: manage_work_orders
+    operation: update_work_order
+  - legacy_name: get_workers
+    capability: manage_workers
+    operation: query_workers
+  - legacy_name: manage_workers
+    capability: manage_workers
+    operation: manage_worker
+  - legacy_name: get_labor_payables
+    capability: manage_labor_payment
+    operation: query_payables
+  - legacy_name: settle_labor_payment
+    capability: manage_labor_payment
+    operation: settle_payment
+  - legacy_name: manage_wages
+    capability: manage_labor_payment
+    operation: manage_wage
+  - legacy_name: log_farm_activity
+    capability: manage_farm_logs
+    operation: create_log
+  - legacy_name: get_recent_farm_logs
+    capability: manage_farm_logs
+    operation: query_logs
+  - legacy_name: manage_farm_logs
+    capability: manage_farm_logs
+    operation: manage_log
+  - legacy_name: get_user_settings
+    capability: manage_settings
+    operation: query_settings
+  - legacy_name: manage_user_settings
+    capability: manage_settings
+    operation: update_settings
+  - legacy_name: get_weather_forecast
+    capability: get_weather_forecast
+    operation: query_forecast
+  - legacy_name: web_search
+    capability: web_search
+    operation: search

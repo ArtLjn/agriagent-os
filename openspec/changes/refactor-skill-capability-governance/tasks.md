@@ -1,11 +1,11 @@
 ## 1. Registry Skeleton
 
-- [ ] 1.1 新增 `backend/app/agent/skills/registry/domains.yaml`，定义 finance、crop、farm、operation、labor、log、settings、external 等 domain、owner 和默认策略。
-- [ ] 1.2 新增 `backend/app/agent/skills/registry/skills.yaml`，迁移第一版 capability metadata、examples、anti_examples、tags、operations、risk、context dependencies 和 cache invalidation。
-- [ ] 1.3 新增 `backend/app/agent/skills/registry/aliases.yaml`，覆盖所有现有 legacy tool name 到 capability/operation 的映射。
-- [ ] 1.4 新增 Registry loader 模块，解析 YAML 并输出 capability、operation、alias、domain 的结构化对象。
-- [ ] 1.5 新增 Registry validation，检查必填字段、无效 domain、缺失 owner、缺失 anti_examples、operation 无 risk、alias 指向不存在目标。
-- [ ] 1.6 增加 `backend/tests/skills/test_skill_registry.py`，覆盖 loader、validation 和 alias 解析。
+- [x] 1.1 新增 `backend/app/agent/skills/registry/domains.yaml`，定义 finance、crop、farm、operation、labor、log、settings、external 等 domain、owner 和默认策略。
+- [x] 1.2 新增 `backend/app/agent/skills/registry/skills.yaml`，迁移第一版 capability metadata、examples、anti_examples、tags、operations、risk、context dependencies 和 cache invalidation。
+- [x] 1.3 新增 `backend/app/agent/skills/registry/aliases.yaml`，覆盖所有现有 legacy tool name 到 capability/operation 的映射。
+- [x] 1.4 新增 Registry loader 模块，解析 YAML 并输出 capability、operation、alias、domain 的结构化对象。
+- [x] 1.5 新增 Registry validation，检查必填字段、无效 domain、缺失 owner、缺失 anti_examples、operation 无 risk、alias 指向不存在目标。
+- [x] 1.6 增加 `backend/tests/skills/test_skill_registry.py`，覆盖 loader、validation 和 alias 解析。
 
 ## 2. Catalog And Metadata Integration
 
