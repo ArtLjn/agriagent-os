@@ -24,6 +24,10 @@ class ToolCandidate:
     domain: str
     intents: list[str]
     risk: RiskLevel
+    capability: str | None = None
+    operation: str | None = None
+    legacy_alias: str | None = None
+    operation_risk: str | None = None
     entities: list[str] = field(default_factory=list)
     trigger_examples: list[str] = field(default_factory=list)
     anti_examples: list[str] = field(default_factory=list)
@@ -31,6 +35,8 @@ class ToolCandidate:
     candidate_group: str = ""
     schema_token_estimate: int = 0
     enabled: bool = True
+    score: float = 0.0
+    evidence: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -40,9 +46,14 @@ class IntentFrame:
     domain: str
     intent: str
     risk: RiskLevel
+    capability: str | None = None
+    operation: str | None = None
+    operation_hint: str | None = None
     entities: list[str] = field(default_factory=list)
     candidate_tools: list[str] = field(default_factory=list)
     confidence: float = 0.0
+    score: float = 0.0
+    evidence: dict = field(default_factory=dict)
     params_hint: dict | None = None
     planning_evidence: dict = field(default_factory=dict)
     missing_fields: list[str] = field(default_factory=list)
@@ -56,15 +67,20 @@ class RouterDecision:
 
     frames: list[IntentFrame] = field(default_factory=list)
     selected_tools: list[str] = field(default_factory=list)
+    selected_operations: dict[str, list[str]] = field(default_factory=dict)
     context_dependencies: list[str] = field(default_factory=list)
     fallback: str | None = None
+    fallback_reason: str | None = None
     reason: str = ""
     rejected_tools: list[str] = field(default_factory=list)
+    rejected_candidates: list[dict] = field(default_factory=list)
     schema_token_estimate: int = 0
     policy_violations: list[str] = field(default_factory=list)
     clarification: str | None = None
     tool_choice: str = "auto"
     force_binding: tuple[str, ...] = ()
+    scores: dict = field(default_factory=dict)
+    evidence: dict = field(default_factory=dict)
 
     def to_trace_payload(self) -> dict:
         return asdict(self)

@@ -93,21 +93,51 @@ def test_router_decision_trace_payload_includes_diagnostics() -> None:
                 domain="planting",
                 intent="query_active_crops",
                 risk="read",
+                capability="manage_crop_cycle",
+                operation="query_cycles",
                 candidate_tools=["get_farm_status"],
                 confidence=0.86,
+                evidence={
+                    "domain_scores": {"crop": 0.9},
+                    "capability_scores": {"manage_crop_cycle": 0.88},
+                    "operation_scores": {"query_cycles": 0.87},
+                },
             )
         ],
         selected_tools=["get_farm_status"],
+        selected_operations={"manage_crop_cycle": ["query_cycles"]},
         rejected_tools=["create_crop_cycle"],
+        rejected_candidates=[
+            {
+                "name": "create_crop_cycle",
+                "reason": "read_intent_write_operation",
+            }
+        ],
         policy_violations=["write_tool_blocked"],
+        fallback_reason="test_reason",
+        scores={
+            "domain": {"crop": 0.9},
+            "capability": {"manage_crop_cycle": 0.88},
+            "operation": {"query_cycles": 0.87},
+        },
+        evidence={"selected_candidates": [{"name": "get_farm_status"}]},
     )
 
     payload = decision.to_trace_payload()
 
     assert payload["frames"][0]["intent"] == "query_active_crops"
     assert payload["selected_tools"] == ["get_farm_status"]
+    assert payload["selected_operations"] == {"manage_crop_cycle": ["query_cycles"]}
     assert payload["rejected_tools"] == ["create_crop_cycle"]
+    assert payload["rejected_candidates"][0]["reason"] == (
+        "read_intent_write_operation"
+    )
     assert payload["policy_violations"] == ["write_tool_blocked"]
+    assert payload["fallback_reason"] == "test_reason"
+    assert payload["scores"]["domain"] == {"crop": 0.9}
+    assert payload["scores"]["capability"] == {"manage_crop_cycle": 0.88}
+    assert payload["scores"]["operation"] == {"query_cycles": 0.87}
+    assert payload["evidence"]["selected_candidates"] == [{"name": "get_farm_status"}]
 
 
 @pytest.mark.asyncio
@@ -117,9 +147,19 @@ async def test_llm_node_records_skill_router_trace() -> None:
     user_msg = "查询农场状态" * 80
     decision = RouterDecision(
         selected_tools=["get_farm_status"],
+        selected_operations={"get_farm_status": ["query_status"]},
         rejected_tools=["create_cost_record"],
+        rejected_candidates=[
+            {
+                "name": "create_cost_record",
+                "reason": "read_intent_write_operation",
+            }
+        ],
         schema_token_estimate=620,
         policy_violations=["write_tool_blocked"],
+        fallback_reason="test_reason",
+        scores={"domain": {"farm": 0.85}},
+        evidence={"selected_candidates": [{"name": "get_farm_status"}]},
     )
 
     with ExitStack() as stack:
@@ -143,9 +183,20 @@ async def test_llm_node_records_skill_router_trace() -> None:
     )
     assert router_trace.kwargs["node_name"] == "skill_router"
     assert router_trace.kwargs["input_data"] == {"message": user_msg[:500]}
-    assert router_trace.kwargs["output_data"]["selected_tools"] == (
-        decision.to_trace_payload()["selected_tools"]
+    assert (
+        router_trace.kwargs["output_data"]["selected_tools"]
+        == (decision.to_trace_payload()["selected_tools"])
     )
+    assert (
+        router_trace.kwargs["output_data"]["selected_operations"]
+        == (decision.to_trace_payload()["selected_operations"])
+    )
+    assert (
+        router_trace.kwargs["output_data"]["rejected_candidates"]
+        == (decision.to_trace_payload()["rejected_candidates"])
+    )
+    assert router_trace.kwargs["output_data"]["fallback_reason"] == "test_reason"
+    assert router_trace.kwargs["output_data"]["scores"] == {"domain": {"farm": 0.85}}
     assert router_trace.kwargs["output_data"]["plan_draft"]["route_type"] == (
         "read_plan"
     )

@@ -106,3 +106,19 @@ def test_summary_reports_classified_statuses():
 
     assert summary[CoverageStatus.COVERED_BY_SKILL.value] >= 1
     assert summary[CoverageStatus.ADMIN_SKILL.value] >= 1
+
+
+def test_coverage_matrix_exposes_capability_operations():
+    entries = list_skill_coverage_entries()
+    worker_entry = next(
+        entry
+        for entry in entries
+        if entry.domain == "worker" and entry.operation == "query_crud"
+    )
+
+    assert worker_entry.legacy_skill_names == ["get_workers", "manage_workers"]
+    assert worker_entry.capability_name == "manage_workers"
+    assert worker_entry.capability_operations == [
+        "manage_workers.query_workers",
+        "manage_workers.manage_worker",
+    ]

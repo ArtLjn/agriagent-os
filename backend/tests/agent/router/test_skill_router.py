@@ -32,6 +32,9 @@ def test_catalog_enriches_work_order_metadata() -> None:
 
     assert candidate is not None
     assert candidate.domain == "operation"
+    assert candidate.capability == "manage_work_orders"
+    assert candidate.operation == "create_work_order"
+    assert candidate.legacy_alias == "create_operation_work_order"
     assert candidate.risk == "write_confirm"
     assert "create_work_order" in candidate.intents
     assert "workers" in candidate.context_dependencies
@@ -71,6 +74,18 @@ def test_explicit_web_search_selects_enabled_search_tool() -> None:
     assert decision.selected_tools == ["web_search"]
     assert decision.frames[0].intent == "query_web_search"
     assert decision.frames[0].risk == "read"
+
+
+def test_disabled_web_search_is_rejected_without_selection() -> None:
+    decision = SkillRouter().route(
+        "搜索一下天气新闻",
+        [_tool("web_search"), _tool("get_farm_status")],
+    )
+
+    assert decision.selected_tools == []
+    assert decision.rejected_tools == ["web_search"]
+    assert decision.rejected_candidates[0]["reason"] == "disabled"
+    assert "disabled_candidate_rejected" in decision.policy_violations
 
 
 def test_catalog_defaults_write_skill_risk() -> None:
@@ -164,7 +179,7 @@ def test_crop_inventory_rule_does_not_capture_advice_or_overview(
     assert decision.selected_tools == expected_tools
 
 
-def test_farm_overview_read_exposes_read_pool_to_model() -> None:
+def test_farm_overview_read_exposes_shortlisted_read_pool_to_model() -> None:
     tools = [
         _tool("get_weather_forecast"),
         _tool("get_farm_status"),
@@ -178,9 +193,10 @@ def test_farm_overview_read_exposes_read_pool_to_model() -> None:
         "get_weather_forecast",
         "get_farm_status",
         "get_crop_cycles",
-        "get_crop_cycle_info",
     ]
     assert decision.frames[0].intent == "model_choice_read"
+    assert decision.fallback != "fallback_all"
+    assert decision.fallback_reason == "no_explicit_candidate"
 
 
 @pytest.mark.parametrize("message", ["你好", "nihao", "ni hao"])
@@ -283,7 +299,9 @@ def test_chinese_finance_query_exposes_read_pool_to_model(message: str) -> None:
 @pytest.mark.parametrize(
     "message", ["你可以查询哪些", "你能查什么", "你的功能是啥", "你可以做啥"]
 )
-def test_capability_question_exposes_read_tool_pool_to_model(message: str) -> None:
+def test_capability_question_exposes_shortlisted_read_pool_to_model(
+    message: str,
+) -> None:
     tools = [
         _tool("get_cost_summary"),
         _tool("get_debt_summary"),
@@ -298,10 +316,10 @@ def test_capability_question_exposes_read_tool_pool_to_model(message: str) -> No
         "get_cost_summary",
         "get_debt_summary",
         "get_farm_status",
-        "get_weather_forecast",
     ]
     assert decision.frames[0].intent == "model_choice_read"
     assert decision.frames[0].risk == "read"
+    assert decision.fallback != "fallback_all"
 
 
 @pytest.mark.parametrize(
@@ -648,3 +666,45 @@ def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
 
     assert decision.selected_tools == ["get_operation_work_orders"]
     assert "create_operation_work_order" not in decision.selected_tools
+
+
+@pytest.mark.parametrize(
+    ("message", "tool_name", "capability", "operation"),
+    [
+        ("这个月花了多少钱", "get_cost_summary", "manage_cost", "query_summary"),
+        ("我的茬口有哪些", "get_crop_cycles", "manage_crop_cycle", "query_cycles"),
+        ("我的工人有哪些", "get_workers", "manage_workers", "query_workers"),
+        (
+            "我的作业单有哪些",
+            "get_operation_work_orders",
+            "manage_work_orders",
+            "query_work_orders",
+        ),
+        (
+            "还欠多少人工钱",
+            "get_labor_payables",
+            "manage_labor_payment",
+            "query_payables",
+        ),
+        (
+            "我的默认天气城市是什么",
+            "get_user_settings",
+            "manage_settings",
+            "query_settings",
+        ),
+    ],
+)
+def test_registry_capability_routing_metadata_is_preserved(
+    message: str,
+    tool_name: str,
+    capability: str,
+    operation: str,
+) -> None:
+    decision = SkillRouter().route(message, [_tool(tool_name)])
+
+    assert decision.selected_tools == [tool_name]
+    assert decision.selected_operations == {capability: [operation]}
+    assert decision.scores["capability"][capability] >= 0.85
+    assert decision.scores["operation"][operation] >= 0.85
+    assert decision.frames[0].capability == capability
+    assert decision.frames[0].operation == operation

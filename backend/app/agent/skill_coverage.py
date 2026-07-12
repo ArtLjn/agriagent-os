@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections import Counter
 
+from app.agent.skills.registry import load_skill_registry
 from app.core.compat import StrEnum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CoverageStatus(StrEnum):
@@ -34,6 +35,9 @@ class SkillCoverageEntry(BaseModel):
     source: str
     status: CoverageStatus
     skill_name: str | None = None
+    legacy_skill_names: list[str] = Field(default_factory=list)
+    capability_name: str | None = None
+    capability_operations: list[str] = Field(default_factory=list)
     permission_level: str | None = None
     risk_level: str | None = None
     rationale: str
@@ -289,7 +293,7 @@ _COVERAGE_ENTRIES: tuple[SkillCoverageEntry, ...] = (
 
 def list_skill_coverage_entries() -> list[SkillCoverageEntry]:
     """返回完整 Skill 覆盖矩阵。"""
-    return list(_COVERAGE_ENTRIES)
+    return [_enrich_with_registry(entry) for entry in _COVERAGE_ENTRIES]
 
 
 def summarize_skill_coverage() -> dict[str, int]:
@@ -313,3 +317,37 @@ def high_priority_unclassified_entries() -> list[SkillCoverageEntry]:
             CoverageStatus.NO_SKILL_REQUIRED,
         }
     ]
+
+
+def _enrich_with_registry(entry: SkillCoverageEntry) -> SkillCoverageEntry:
+    legacy_names = _split_skill_names(entry.skill_name)
+    if not legacy_names:
+        return entry
+    try:
+        registry = load_skill_registry()
+    except (OSError, ValueError):
+        return entry.model_copy(update={"legacy_skill_names": legacy_names})
+
+    capability_operations = []
+    capability_names = []
+    for legacy_name in legacy_names:
+        alias = registry.resolve_alias(legacy_name)
+        if alias is None:
+            continue
+        capability_operations.append(alias.target)
+        if alias.capability not in capability_names:
+            capability_names.append(alias.capability)
+
+    return entry.model_copy(
+        update={
+            "legacy_skill_names": legacy_names,
+            "capability_name": "|".join(capability_names) if capability_names else None,
+            "capability_operations": capability_operations,
+        }
+    )
+
+
+def _split_skill_names(skill_name: str | None) -> list[str]:
+    if not skill_name:
+        return []
+    return [name for name in skill_name.split("|") if name]

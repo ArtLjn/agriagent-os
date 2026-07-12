@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.core.compat import StrEnum
 from app.infra.pending_actions import WRITE_SKILLS, get_cache_groups_for_skill
+from app.agent.skills.registry import load_skill_registry
 
 
 class SkillPermissionLevel(StrEnum):
@@ -219,6 +220,12 @@ _EXTERNAL_NETWORK_SKILL_METADATA: dict[str, dict[str, Any]] = {
 }
 
 _RUNTIME_ENABLEMENT_OVERRIDES: dict[str, dict[str, Any]] = {}
+_REGISTRY_RISK_TO_METADATA: dict[str, tuple[SkillPermissionLevel, SkillRiskLevel]] = {
+    "read": (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
+    "write_confirm": (SkillPermissionLevel.WRITE_CONFIRM, SkillRiskLevel.MEDIUM),
+    "write_high": (SkillPermissionLevel.WRITE_CONFIRM, SkillRiskLevel.HIGH),
+    "external_network": (SkillPermissionLevel.EXTERNAL_NETWORK, SkillRiskLevel.LOW),
+}
 
 
 def get_skill_metadata(skill: Any) -> SkillMetadata:
@@ -227,16 +234,7 @@ def get_skill_metadata(skill: Any) -> SkillMetadata:
     default_metadata = _get_known_default_metadata(skill_name)
     raw_metadata = _call_metadata(skill)
     if raw_metadata is not None:
-        if default_metadata is not None and isinstance(raw_metadata, Mapping):
-            raw_metadata = {**default_metadata, **raw_metadata}
-            if skill_name in _WRITE_CONFIRM_SKILLS:
-                raw_metadata["cache_invalidation"] = get_cache_groups_for_skill(
-                    skill_name
-                )
-        raw_metadata = _apply_runtime_enablement(skill_name, raw_metadata)
-        metadata = SkillMetadata.model_validate(raw_metadata)
-        metadata.metadata_incomplete = False
-        return metadata
+        return _metadata_from_explicit(skill_name, raw_metadata, default_metadata)
 
     if default_metadata is not None:
         return SkillMetadata.model_validate(
@@ -244,20 +242,43 @@ def get_skill_metadata(skill: Any) -> SkillMetadata:
         )
 
     if skill_name in WRITE_SKILLS:
-        return SkillMetadata.model_validate(
-            _apply_runtime_enablement(
-                skill_name,
-                {
-                    "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
-                    "risk_level": SkillRiskLevel.MEDIUM,
-                    "cache_invalidation": get_cache_groups_for_skill(skill_name),
-                    "confirmation_schema": _DEFAULT_WRITE_CONFIRMATION,
-                    "evaluation_tags": ["write"],
-                    "metadata_incomplete": True,
-                },
-            )
-        )
+        return _metadata_from_legacy_write(skill_name)
 
+    return _metadata_from_legacy_read(skill_name)
+
+
+def _metadata_from_explicit(
+    skill_name: str,
+    raw_metadata: Any,
+    default_metadata: dict[str, Any] | None,
+) -> SkillMetadata:
+    if default_metadata is not None and isinstance(raw_metadata, Mapping):
+        raw_metadata = {**default_metadata, **raw_metadata}
+        if skill_name in _WRITE_CONFIRM_SKILLS:
+            raw_metadata["cache_invalidation"] = get_cache_groups_for_skill(skill_name)
+    raw_metadata = _apply_runtime_enablement(skill_name, raw_metadata)
+    metadata = SkillMetadata.model_validate(raw_metadata)
+    metadata.metadata_incomplete = False
+    return metadata
+
+
+def _metadata_from_legacy_write(skill_name: str) -> SkillMetadata:
+    return SkillMetadata.model_validate(
+        _apply_runtime_enablement(
+            skill_name,
+            {
+                "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
+                "risk_level": SkillRiskLevel.MEDIUM,
+                "cache_invalidation": get_cache_groups_for_skill(skill_name),
+                "confirmation_schema": _DEFAULT_WRITE_CONFIRMATION,
+                "evaluation_tags": ["write"],
+                "metadata_incomplete": True,
+            },
+        )
+    )
+
+
+def _metadata_from_legacy_read(skill_name: str) -> SkillMetadata:
     permission_level = (
         SkillPermissionLevel.EXTERNAL_NETWORK
         if skill_name in _EXTERNAL_NETWORK_SKILLS
@@ -290,7 +311,9 @@ def set_skill_enabled_state(
             "enabled": False,
             "disabled_reason": disabled_reason or "管理员手动禁用",
         }
-    return get_skill_metadata(type("_SkillRef", (), {"name": lambda _self: skill_name})())
+    return get_skill_metadata(
+        type("_SkillRef", (), {"name": lambda _self: skill_name})()
+    )
 
 
 def clear_skill_enabled_state(skill_name: str | None = None) -> None:
@@ -312,6 +335,7 @@ def _apply_runtime_enablement(
 
 
 def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
+    registry_metadata = _get_registry_default_metadata(skill_name)
     if skill_name in _WRITE_CONFIRM_SKILLS:
         metadata = {
             "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
@@ -321,25 +345,66 @@ def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
             "metadata_incomplete": False,
         }
         metadata.update(_WRITE_SKILL_METADATA.get(skill_name, {}))
+        if registry_metadata is not None:
+            metadata.update(registry_metadata)
         return metadata
 
     if skill_name in _READ_SKILL_METADATA:
-        return {
+        metadata = {
             "permission_level": SkillPermissionLevel.READ,
             "risk_level": SkillRiskLevel.LOW,
             "metadata_incomplete": False,
             **_READ_SKILL_METADATA[skill_name],
         }
+        if registry_metadata is not None:
+            metadata.update(registry_metadata)
+        return metadata
 
     if skill_name in _EXTERNAL_NETWORK_SKILL_METADATA:
-        return {
+        metadata = {
             "permission_level": SkillPermissionLevel.EXTERNAL_NETWORK,
             "risk_level": SkillRiskLevel.LOW,
             "metadata_incomplete": False,
             **_EXTERNAL_NETWORK_SKILL_METADATA[skill_name],
         }
+        if registry_metadata is not None:
+            metadata.update(registry_metadata)
+        return metadata
 
-    return None
+    return registry_metadata
+
+
+def _get_registry_default_metadata(skill_name: str) -> dict[str, Any] | None:
+    try:
+        registry = load_skill_registry()
+    except (OSError, ValueError):
+        return None
+    alias = registry.resolve_alias(skill_name)
+    if alias is None:
+        return None
+    capability = registry.capabilities.get(alias.capability)
+    operation = registry.get_operation(alias.capability, alias.operation)
+    if capability is None or operation is None:
+        return None
+    permission_level, risk_level = _REGISTRY_RISK_TO_METADATA.get(
+        operation.risk,
+        (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
+    )
+    cache_invalidation = list(
+        operation.cache_invalidation or capability.cache_invalidation
+    )
+    return {
+        "permission_level": permission_level,
+        "risk_level": risk_level,
+        "context_dependencies": list(capability.context_dependencies),
+        "cache_invalidation": cache_invalidation,
+        "evaluation_tags": list(capability.tags),
+        "enabled": capability.status == "active",
+        "disabled_reason": (
+            capability.disabled_reason if capability.status != "active" else None
+        ),
+        "metadata_incomplete": False,
+    }
 
 
 def metadata_to_dict(skill: Any) -> dict[str, Any]:

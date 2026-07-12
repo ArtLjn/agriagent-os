@@ -9,23 +9,23 @@
 
 ## 2. Catalog And Metadata Integration
 
-- [ ] 2.1 修改 `backend/app/agent/router/catalog.py`，优先从 Registry 构建 `ToolCandidate`，保留现有 Python registry 作为 fallback。
-- [ ] 2.2 修改 `backend/app/agent/router/registry.py`，降级为兼容迁移桥，并避免继续新增业务能力配置。
-- [ ] 2.3 修改 `backend/app/agent/skills/metadata.py`，让 runtime metadata 可从 Registry 合并 permission、risk、context、cache、enabled 和 disabled reason。
-- [ ] 2.4 修改 `backend/app/agent/skill_coverage.py`，将覆盖矩阵对齐到 capability/operation，同时保留 legacy skill 展示。
-- [ ] 2.5 扩展 `backend/tests/skills/test_skill_metadata.py` 和 `backend/tests/skills/test_skill_coverage_matrix.py`。
-- [ ] 2.6 扩展 `backend/tests/skills/test_skill_docs.py`，校验 `skill.md` 与 Registry name/domain/capability 不冲突。
+- [x] 2.1 修改 `backend/app/agent/router/catalog.py`，优先从 Registry 构建 `ToolCandidate`，保留现有 Python registry 作为 fallback。
+- [x] 2.2 修改 `backend/app/agent/router/registry.py`，降级为兼容迁移桥，并避免继续新增业务能力配置。
+- [x] 2.3 修改 `backend/app/agent/skills/metadata.py`，让 runtime metadata 可从 Registry 合并 permission、risk、context、cache、enabled 和 disabled reason。
+- [x] 2.4 修改 `backend/app/agent/skill_coverage.py`，将覆盖矩阵对齐到 capability/operation，同时保留 legacy skill 展示。
+- [x] 2.5 扩展 `backend/tests/skills/test_skill_metadata.py` 和 `backend/tests/skills/test_skill_coverage_matrix.py`。
+- [x] 2.6 扩展 `backend/tests/skills/test_skill_docs.py`，校验 `skill.md` 与 Registry name/domain/capability 不冲突。
 
 ## 3. Router Decision And Policy
 
-- [ ] 3.1 扩展 `backend/app/agent/router/models.py`，为 `IntentFrame`、`ToolCandidate`、`RouterDecision` 增加 capability、operation、score、evidence、legacy_alias、selected_operations 字段。
-- [ ] 3.2 修改 `backend/app/agent/router/service.py`，实现 domain shortlist、capability retrieval、operation hint 的编排。
-- [ ] 3.3 修改 `backend/app/agent/router/classifier.py`，减少业务硬编码，只保留轻量 frame 抽取、无工具保护、写风险保护和兼容规则。
-- [ ] 3.4 修改 `backend/app/agent/router/policy.py`，按 capability/operation 风险做读写隔离、schema 预算、高风险澄清和 fallback all 禁止。
-- [ ] 3.5 更新 Router trace payload，记录 domain score、capability score、operation score、evidence、rejected candidates 和 fallback reason。
-- [ ] 3.6 更新 `backend/tests/agent/router/test_skill_router.py`，覆盖成本、茬口、工人、作业单、人工结算、设置等 capability routing。
-- [ ] 3.7 更新 `backend/tests/agent/router/test_router_policy.py`，覆盖读写隔离、高风险、schema 预算、disabled skill 和 fallback all 禁止。
-- [ ] 3.8 更新 `backend/tests/agent/router/test_router_trace.py` 和 `backend/tests/agent/router/test_router_models.py`。
+- [x] 3.1 扩展 `backend/app/agent/router/models.py`，为 `IntentFrame`、`ToolCandidate`、`RouterDecision` 增加 capability、operation、score、evidence、legacy_alias、selected_operations 字段。
+- [x] 3.2 修改 `backend/app/agent/router/service.py`，实现 domain shortlist、capability retrieval、operation hint 的编排。
+- [x] 3.3 修改 `backend/app/agent/router/classifier.py`，减少业务硬编码，只保留轻量 frame 抽取、无工具保护、写风险保护和兼容规则。
+- [x] 3.4 修改 `backend/app/agent/router/policy.py`，按 capability/operation 风险做读写隔离、schema 预算、高风险澄清和 fallback all 禁止。
+- [x] 3.5 更新 Router trace payload，记录 domain score、capability score、operation score、evidence、rejected candidates 和 fallback reason。
+- [x] 3.6 更新 `backend/tests/agent/router/test_skill_router.py`，覆盖成本、茬口、工人、作业单、人工结算、设置等 capability routing。
+- [x] 3.7 更新 `backend/tests/agent/router/test_router_policy.py`，覆盖读写隔离、高风险、schema 预算、disabled skill 和 fallback all 禁止。
+- [x] 3.8 更新 `backend/tests/agent/router/test_router_trace.py` 和 `backend/tests/agent/router/test_router_models.py`。
 
 ## 4. Runtime Binding And Execution Compatibility
 

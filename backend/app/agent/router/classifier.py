@@ -6,7 +6,11 @@ from app.agent.router.models import IntentFrame
 
 
 class RuleIntentClassifier:
-    """基于中文触发词生成轻量意图帧。"""
+    """基于中文触发词生成轻量意图帧。
+
+    迁移期只保留兼容规则、无工具保护和写风险保护；Registry
+    capability/operation enrichment 由 service 与 policy 接管。
+    """
 
     _query_hints = ("哪些", "有哪些", "看看", "查询", "查一下", "最近", "怎么样")
     _farm_hints = ("作物", "栽种", "农场", "茬口", "种植")

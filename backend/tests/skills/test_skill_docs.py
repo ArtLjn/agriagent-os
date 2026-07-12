@@ -3,7 +3,9 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
+from app.agent.skills.registry import load_skill_registry
 from app.agent.skills.doc_validator import validate_skill_doc
 
 pytestmark = pytest.mark.no_db
@@ -256,6 +258,25 @@ def test_all_existing_skill_docs_are_valid():
         if result.errors:
             relative_path = skill_doc.relative_to(skills_dir)
             failures.append(f"{relative_path}: {', '.join(result.errors)}")
+
+    assert failures == []
+
+
+def test_all_existing_skill_docs_resolve_registry_aliases():
+    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
+    registry = load_skill_registry()
+    failures = []
+
+    for skill_doc in sorted(skills_dir.glob("*/skill.md")):
+        front_matter = skill_doc.read_text(encoding="utf-8").split("---", 2)[1]
+        metadata = yaml.safe_load(front_matter) or {}
+        tool_name = str(metadata.get("tool_name") or metadata["name"])
+        alias = registry.resolve_alias(tool_name)
+        if alias is None:
+            failures.append(f"{skill_doc.parent.name}: 缺少 alias {tool_name}")
+            continue
+        if registry.get_operation(alias.capability, alias.operation) is None:
+            failures.append(f"{skill_doc.parent.name}: alias 目标不存在 {alias.target}")
 
     assert failures == []
 

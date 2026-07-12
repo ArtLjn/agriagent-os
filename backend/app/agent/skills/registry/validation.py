@@ -62,7 +62,9 @@ def _validate_domains(registry: SkillRegistry) -> list[RegistryValidationIssue]:
     for name, domain in registry.domains.items():
         if not name:
             issues.append(
-                _issue("missing_required_field", "domains.<empty>.name", "缺少 domain 名称")
+                _issue(
+                    "missing_required_field", "domains.<empty>.name", "缺少 domain 名称"
+                )
             )
         if not domain.owner:
             issues.append(
@@ -74,69 +76,100 @@ def _validate_domains(registry: SkillRegistry) -> list[RegistryValidationIssue]:
 def _validate_capabilities(registry: SkillRegistry) -> list[RegistryValidationIssue]:
     issues = []
     for name, capability in registry.capabilities.items():
-        for field_name in REQUIRED_CAPABILITY_FIELDS:
-            value = getattr(capability, field_name)
-            if not value:
-                issues.append(
-                    _issue(
-                        "missing_required_field",
-                        f"capabilities.{name}.{field_name}",
-                        f"capability 缺少必填字段 {field_name}",
-                    )
-                )
-        if capability.domain and capability.domain not in registry.domains:
+        issues.extend(_validate_capability_required_fields(name, capability))
+        issues.extend(_validate_capability_domain(registry, name, capability))
+        issues.extend(_validate_capability_state(name, capability))
+        issues.extend(_validate_operations(name, capability))
+    return issues
+
+
+def _validate_capability_required_fields(
+    name: str,
+    capability,
+) -> list[RegistryValidationIssue]:
+    issues = []
+    for field_name in REQUIRED_CAPABILITY_FIELDS:
+        value = getattr(capability, field_name)
+        if value:
+            continue
+        issues.append(
+            _issue(
+                "missing_required_field",
+                f"capabilities.{name}.{field_name}",
+                f"capability 缺少必填字段 {field_name}",
+            )
+        )
+    if not capability.owner:
+        issues.append(
+            _issue("missing_owner", f"capabilities.{name}.owner", "缺少 owner")
+        )
+    if not capability.anti_examples:
+        issues.append(
+            _issue(
+                "missing_anti_examples",
+                f"capabilities.{name}.anti_examples",
+                "缺少 anti_examples",
+            )
+        )
+    return issues
+
+
+def _validate_capability_domain(
+    registry: SkillRegistry,
+    name: str,
+    capability,
+) -> list[RegistryValidationIssue]:
+    if not capability.domain or capability.domain in registry.domains:
+        return []
+    return [
+        _issue(
+            "invalid_domain",
+            f"capabilities.{name}.domain",
+            f"domain 不存在：{capability.domain}",
+        )
+    ]
+
+
+def _validate_capability_state(name: str, capability) -> list[RegistryValidationIssue]:
+    issues = []
+    if capability.status in DISABLED_STATUSES and not capability.disabled_reason:
+        issues.append(
+            _issue(
+                "missing_disabled_reason",
+                f"capabilities.{name}.disabled_reason",
+                "禁用 capability 缺少 disabled_reason",
+            )
+        )
+    if capability.status == "active" and capability.disabled_reason:
+        issues.append(
+            _issue(
+                "active_capability_has_disabled_reason",
+                f"capabilities.{name}.disabled_reason",
+                "active capability 不应声明 disabled_reason",
+            )
+        )
+    return issues
+
+
+def _validate_operations(name: str, capability) -> list[RegistryValidationIssue]:
+    issues = []
+    for operation_name, operation in capability.operations.items():
+        if not operation.risk:
             issues.append(
                 _issue(
-                    "invalid_domain",
-                    f"capabilities.{name}.domain",
-                    f"domain 不存在：{capability.domain}",
+                    "operation_missing_risk",
+                    f"capabilities.{name}.operations.{operation_name}.risk",
+                    "operation 缺少 risk",
                 )
             )
-        if not capability.owner:
-            issues.append(
-                _issue("missing_owner", f"capabilities.{name}.owner", "缺少 owner")
-            )
-        if not capability.anti_examples:
+        if not operation.legacy_aliases:
             issues.append(
                 _issue(
-                    "missing_anti_examples",
-                    f"capabilities.{name}.anti_examples",
-                    "缺少 anti_examples",
+                    "operation_missing_legacy_aliases",
+                    f"capabilities.{name}.operations.{operation_name}.legacy_aliases",
+                    "operation 缺少 legacy_aliases",
                 )
             )
-        if capability.status in DISABLED_STATUSES and not capability.disabled_reason:
-            issues.append(
-                _issue(
-                    "missing_disabled_reason",
-                    f"capabilities.{name}.disabled_reason",
-                    "禁用 capability 缺少 disabled_reason",
-                )
-            )
-        if capability.status == "active" and capability.disabled_reason:
-            issues.append(
-                _issue(
-                    "active_capability_has_disabled_reason",
-                    f"capabilities.{name}.disabled_reason",
-                    "active capability 不应声明 disabled_reason",
-                )
-            )
-        for operation_name, operation in capability.operations.items():
-            if not operation.risk:
-                issues.append(
-                    _issue(
-                        "operation_missing_risk",
-                        f"capabilities.{name}.operations.{operation_name}.risk",
-                        "operation 缺少 risk",
-                    )
-                )
-            if not operation.legacy_aliases:
-                issues.append(
-                    _issue(
-                        "operation_missing_legacy_aliases",
-                        f"capabilities.{name}.operations.{operation_name}.legacy_aliases",
-                        "operation 缺少 legacy_aliases",
-                    )
-                )
     return issues
 
 

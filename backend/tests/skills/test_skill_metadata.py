@@ -46,6 +46,19 @@ class _WriteSkillWithMetadata:
         }
 
 
+class _WriteSkillWithExplicitRegistryOverlap:
+    def name(self):
+        return "create_cost_record"
+
+    def metadata(self):
+        return {
+            "permission_level": "write_confirm",
+            "risk_level": "medium",
+            "context_dependencies": ["explicit_context"],
+            "evaluation_tags": ["explicit_tag"],
+        }
+
+
 class _ExternalNetworkSkill:
     def name(self):
         return "web_search"
@@ -114,6 +127,7 @@ def test_default_write_skill_metadata():
 
     assert metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
     assert metadata.risk_level == SkillRiskLevel.MEDIUM
+    assert "cost_records" in metadata.context_dependencies
     assert "get_farm_status" in metadata.cache_invalidation
     assert metadata.confirmation_schema.risk_notes == []
     assert metadata.enabled is True
@@ -129,6 +143,25 @@ def test_known_write_skill_metadata_uses_governed_cache_invalidation():
         "cost_summary",
         "get_farm_status",
     ]
+
+
+def test_explicit_skill_metadata_overrides_registry_defaults():
+    metadata = get_skill_metadata(_WriteSkillWithExplicitRegistryOverlap())
+
+    assert metadata.context_dependencies == ["explicit_context"]
+    assert metadata.evaluation_tags == ["explicit_tag"]
+    assert metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
+def test_registry_operation_risk_maps_to_runtime_risk():
+    class _DeleteCropCycleSkill:
+        def name(self):
+            return "delete_crop_cycle"
+
+    metadata = get_skill_metadata(_DeleteCropCycleSkill())
+
+    assert metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+    assert metadata.risk_level == SkillRiskLevel.HIGH
 
 
 def test_default_external_network_skill_metadata():
