@@ -29,13 +29,13 @@
 
 ## 4. Runtime Binding And Execution Compatibility
 
-- [ ] 4.1 修改 `backend/app/agent/skills/__init__.py`，为 LangChain Tool 附加 capability、operation 和 alias metadata；第一阶段仍允许旧工具执行。
-- [ ] 4.2 修改 `backend/app/agent/runtime/nodes.py`，消费新的 `RouterDecision`，绑定 capability-aware 候选工具，并保持 final answer round 不 fallback all。
-- [ ] 4.3 修改 `backend/app/agent/runtime/tool_executor.py`，按 operation risk 处理 read、write_confirm、write_high、external_network 和 disabled 状态。
-- [ ] 4.4 修改 `backend/app/agent/executor/pending_actions.py`，执行 pending action 前解析 legacy alias，并在 trace 中记录 legacy name 和 resolved capability operation。
-- [ ] 4.5 更新 `backend/tests/agent/test_runtime_router_binding.py`，覆盖 capability-aware binding 和 no fallback all。
-- [ ] 4.6 更新 `backend/tests/agent/test_tool_executor_metadata.py`，覆盖 operation-level risk 和 disabled behavior。
-- [ ] 4.7 更新 `backend/tests/agent/test_pending_action_executor.py`，覆盖 legacy alias pending action replay。
+- [x] 4.1 修改 `backend/app/agent/skills/__init__.py`，为 LangChain Tool 附加 capability、operation 和 alias metadata；第一阶段仍允许旧工具执行。
+- [x] 4.2 修改 `backend/app/agent/runtime/nodes.py`，消费新的 `RouterDecision`，绑定 capability-aware 候选工具，并保持 final answer round 不 fallback all。
+- [x] 4.3 修改 `backend/app/agent/runtime/tool_executor.py`，按 operation risk 处理 read、write_confirm、write_high、external_network 和 disabled 状态。
+- [x] 4.4 修改 `backend/app/agent/executor/pending_actions.py`，执行 pending action 前解析 legacy alias，并在 trace 中记录 legacy name 和 resolved capability operation。
+- [x] 4.5 更新 `backend/tests/agent/test_runtime_router_binding.py`，覆盖 capability-aware binding 和 no fallback all。
+- [x] 4.6 更新 `backend/tests/agent/test_tool_executor_metadata.py`，覆盖 operation-level risk 和 disabled behavior。
+- [x] 4.7 更新 `backend/tests/agent/test_pending_action_executor.py`，覆盖 legacy alias pending action replay。
 
 ## 5. Governance Checks And Evaluation
 

@@ -1,4 +1,5 @@
-from unittest.mock import AsyncMock, call, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -56,12 +57,85 @@ async def test_handle_pending_confirm_executes_skill_and_removes_pending():
     assert decision.status == "confirmed"
     assert decision.reply == "已执行：已记账：化肥 100元"
     assert get_pending(1) is None
+    assert decision.metadata["legacy_tool_name"] == "create_cost_record"
+    assert decision.metadata["resolved_capability"] == "manage_cost"
+    assert decision.metadata["resolved_operation"] == "create_record"
+    assert decision.metadata["operation_risk"] == "write_confirm"
     mock_execute.assert_awaited_once_with(
         farm_id=1,
         skill_name="create_cost_record",
         params={"amount": 100, "category": "化肥", "record_type": "cost"},
         farm_uid="farm-uid-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_handle_pending_legacy_replay_records_resolved_alias_trace():
+    store_pending(
+        1,
+        "create_cost_record",
+        {"amount": 100, "category": "化肥", "record_type": "cost"},
+        original_input="买了100块化肥",
+    )
+    tool = SimpleNamespace(
+        name="create_cost_record",
+        ainvoke=AsyncMock(return_value="已记账：化肥 100元"),
+        skill_metadata=SimpleNamespace(cache_invalidation=[]),
+    )
+    collector = MagicMock()
+
+    with (
+        patch(
+            "app.agent.executor.pending_actions.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.executor.pending_actions.get_collector",
+            return_value=collector,
+        ),
+    ):
+        decision = await handle_pending_action(
+            farm_id=1,
+            message="确认",
+            farm_uid="farm-uid-1",
+        )
+
+    assert decision.status == "confirmed"
+    tool.ainvoke.assert_awaited_once_with(
+        {"amount": 100, "category": "化肥", "record_type": "cost"}
+    )
+    output_data = collector.record.call_args.kwargs["output_data"]
+    assert output_data["legacy_tool_name"] == "create_cost_record"
+    assert output_data["resolved_capability"] == "manage_cost"
+    assert output_data["resolved_operation"] == "create_record"
+    assert output_data["operation_risk"] == "write_confirm"
+
+
+@pytest.mark.asyncio
+async def test_handle_pending_unknown_legacy_alias_fails_closed_with_trace():
+    store_pending(
+        1,
+        "removed_legacy_tool",
+        {"amount": 100},
+        original_input="旧工具确认",
+    )
+    collector = MagicMock()
+
+    with patch(
+        "app.agent.executor.pending_aliases.get_collector",
+        return_value=collector,
+    ):
+        decision = await handle_pending_action(farm_id=1, message="确认")
+
+    assert decision.status == "failed"
+    assert "未知 legacy alias" in decision.reply
+    assert get_pending(1) is None
+    output_data = collector.record.call_args.kwargs["output_data"]
+    assert output_data == {
+        "status": "failed",
+        "legacy_tool_name": "removed_legacy_tool",
+        "alias_resolution": "missing",
+    }
 
 
 @pytest.mark.asyncio

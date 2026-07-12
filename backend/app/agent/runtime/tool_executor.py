@@ -12,7 +12,10 @@ from app.agent.reflector import ReflectorService
 from app.agent.reflector.models import ReflectionDecision, ReflectionTrigger
 from app.agent.router import SkillRouter
 from app.agent.skills import get_langchain_tools
-from app.agent.skills.metadata import SkillPermissionLevel
+from app.agent.skills.metadata import (
+    SkillPermissionLevel,
+    resolve_skill_capability_metadata,
+)
 from app.agent.state import AgentState
 from app.core.database import SessionLocal
 from app.infra.pending_actions import (
@@ -40,6 +43,12 @@ class _PermissionDecision:
     reject_message: str | None = None
     disabled: bool = False
     disabled_reason: str | None = None
+    legacy_alias: str | None = None
+    capability: str | None = None
+    operation: str | None = None
+    operation_risk: str | None = None
+    registry_enabled: bool | None = None
+    registry_disabled_reason: str | None = None
 
     @property
     def is_disabled(self) -> bool:
@@ -74,58 +83,229 @@ def _permission_decision(
 ) -> _PermissionDecision:
     """根据 metadata 权限等级做执行决策，未知权限按 fail closed 处理。"""
     metadata = getattr(tool, "skill_metadata", None)
-    if metadata is not None:
-        permission_level = getattr(metadata, "permission_level", None)
-        permission_value = getattr(permission_level, "value", permission_level)
-        enabled = getattr(metadata, "enabled", None)
-        disabled_reason = getattr(metadata, "disabled_reason", None)
-        if enabled is False:
-            if permission_value in _KNOWN_PERMISSION_LEVELS:
-                permission_level_value = permission_value
-            elif is_write_skill(skill_name):
-                permission_level_value = SkillPermissionLevel.WRITE_CONFIRM.value
-            elif isinstance(permission_value, str):
-                permission_level_value = permission_value
-            else:
-                permission_level_value = SkillPermissionLevel.READ.value
-            return _PermissionDecision(
-                permission_level=permission_level_value,
-                disabled=True,
-                disabled_reason=disabled_reason,
-            )
-        if permission_value in _KNOWN_PERMISSION_LEVELS:
-            if permission_value == SkillPermissionLevel.WRITE_CONFIRM.value:
-                return _PermissionDecision(
-                    permission_level=permission_value,
-                    requires_confirmation=True,
-                )
-            if permission_value == SkillPermissionLevel.ADMIN.value:
-                if state.get("user_role") == "admin":
-                    return _PermissionDecision(permission_level=permission_value)
-                return _PermissionDecision(
-                    permission_level=permission_value,
-                    reject_message="工具调用失败：需要管理员权限。",
-                )
-            return _PermissionDecision(permission_level=permission_value)
+    capability_metadata = _capability_metadata_from_runtime(metadata, skill_name)
+    permission_value = (
+        _metadata_permission_value(metadata) if metadata is not None else None
+    )
+    if capability_metadata.get("registry_enabled") is False:
+        return _registry_disabled_permission_decision(
+            permission_value,
+            skill_name,
+            capability_metadata,
+        )
+    if metadata is None:
+        return _legacy_permission_decision(skill_name, capability_metadata)
 
-        if isinstance(permission_value, str):
-            if is_write_skill(skill_name):
-                return _PermissionDecision(
-                    permission_level=SkillPermissionLevel.WRITE_CONFIRM.value,
-                    requires_confirmation=True,
-                )
+    if getattr(metadata, "enabled", None) is False:
+        return _disabled_permission_decision(
+            permission_value,
+            skill_name,
+            getattr(metadata, "disabled_reason", None),
+            capability_metadata,
+        )
+    if _must_honor_metadata_permission_before_operation(
+        permission_value,
+        skill_name,
+    ):
+        return _metadata_permission_decision(
+            permission_value,
+            skill_name,
+            state,
+            capability_metadata,
+        )
+    operation_decision = _operation_risk_decision(capability_metadata)
+    if operation_decision is not None:
+        return operation_decision
+    return _metadata_permission_decision(
+        permission_value,
+        skill_name,
+        state,
+        capability_metadata,
+    )
+
+
+def _metadata_permission_value(metadata):
+    permission_level = getattr(metadata, "permission_level", None)
+    return getattr(permission_level, "value", permission_level)
+
+
+def _must_honor_metadata_permission_before_operation(
+    permission_value,
+    skill_name: str,
+) -> bool:
+    if permission_value in {
+        SkillPermissionLevel.ADMIN.value,
+        SkillPermissionLevel.WRITE_CONFIRM.value,
+    }:
+        return True
+    return isinstance(permission_value, str) and (
+        permission_value not in _KNOWN_PERMISSION_LEVELS
+        and not is_write_skill(skill_name)
+    )
+
+
+def _registry_disabled_permission_decision(
+    permission_value,
+    skill_name: str,
+    capability_metadata: dict,
+) -> _PermissionDecision:
+    return _disabled_permission_decision(
+        permission_value,
+        skill_name,
+        capability_metadata.get("registry_disabled_reason") or "Registry disabled",
+        capability_metadata,
+    )
+
+
+def _disabled_permission_decision(
+    permission_value,
+    skill_name: str,
+    disabled_reason: str | None,
+    capability_metadata: dict,
+) -> _PermissionDecision:
+    return _PermissionDecision(
+        permission_level=_permission_value_for_disabled(
+            permission_value,
+            skill_name,
+            capability_metadata.get("operation_risk"),
+        ),
+        disabled=True,
+        disabled_reason=disabled_reason,
+        **capability_metadata,
+    )
+
+
+def _metadata_permission_decision(
+    permission_value,
+    skill_name: str,
+    state: AgentState,
+    capability_metadata: dict,
+) -> _PermissionDecision:
+    if permission_value in _KNOWN_PERMISSION_LEVELS:
+        return _known_permission_decision(permission_value, state, capability_metadata)
+    if isinstance(permission_value, str):
+        if is_write_skill(skill_name):
+            return _write_confirm_decision(capability_metadata)
+        return _PermissionDecision(
+            permission_level=permission_value,
+            reject_message="工具调用失败：未知权限等级。",
+            **capability_metadata,
+        )
+    return _legacy_permission_decision(skill_name, capability_metadata)
+
+
+def _known_permission_decision(
+    permission_value: str,
+    state: AgentState,
+    capability_metadata: dict,
+) -> _PermissionDecision:
+    if permission_value == SkillPermissionLevel.WRITE_CONFIRM.value:
+        return _write_confirm_decision(capability_metadata)
+    if permission_value == SkillPermissionLevel.ADMIN.value:
+        if state.get("user_role") == "admin":
             return _PermissionDecision(
                 permission_level=permission_value,
-                reject_message="工具调用失败：未知权限等级。",
+                **capability_metadata,
             )
+        return _PermissionDecision(
+            permission_level=permission_value,
+            reject_message="工具调用失败：需要管理员权限。",
+            **capability_metadata,
+        )
+    return _PermissionDecision(permission_level=permission_value, **capability_metadata)
 
+
+def _legacy_permission_decision(
+    skill_name: str,
+    capability_metadata: dict,
+) -> _PermissionDecision:
     if is_write_skill(skill_name):
+        return _write_confirm_decision(capability_metadata)
+
+    return _PermissionDecision(
+        permission_level=SkillPermissionLevel.READ.value,
+        **capability_metadata,
+    )
+
+
+def _write_confirm_decision(capability_metadata: dict) -> _PermissionDecision:
+    return _PermissionDecision(
+        permission_level=SkillPermissionLevel.WRITE_CONFIRM.value,
+        requires_confirmation=True,
+        **capability_metadata,
+    )
+
+
+def _capability_metadata_from_runtime(metadata, skill_name: str) -> dict:
+    """读取 Tool metadata；缺失时用 Registry alias 做兼容解析。"""
+    resolved = resolve_skill_capability_metadata(skill_name) or {}
+    return {
+        "legacy_alias": getattr(metadata, "legacy_alias", None)
+        or resolved.get("legacy_alias"),
+        "capability": getattr(metadata, "capability", None)
+        or resolved.get("capability"),
+        "operation": getattr(metadata, "operation", None) or resolved.get("operation"),
+        "operation_risk": getattr(metadata, "operation_risk", None)
+        or resolved.get("operation_risk"),
+        "registry_enabled": resolved.get("enabled"),
+        "registry_disabled_reason": resolved.get("disabled_reason"),
+    }
+
+
+def _permission_value_for_disabled(
+    permission_value,
+    skill_name: str,
+    operation_risk: str | None,
+) -> str:
+    if permission_value in _KNOWN_PERMISSION_LEVELS:
+        return permission_value
+    if operation_risk == SkillPermissionLevel.EXTERNAL_NETWORK.value:
+        return SkillPermissionLevel.EXTERNAL_NETWORK.value
+    if operation_risk in {"write_confirm", "write_high"}:
+        return SkillPermissionLevel.WRITE_CONFIRM.value
+    if operation_risk == SkillPermissionLevel.READ.value:
+        return SkillPermissionLevel.READ.value
+    if is_write_skill(skill_name):
+        return SkillPermissionLevel.WRITE_CONFIRM.value
+    if isinstance(permission_value, str):
+        return permission_value
+    return SkillPermissionLevel.READ.value
+
+
+def _operation_risk_decision(
+    capability_metadata: dict,
+) -> _PermissionDecision | None:
+    operation_risk = capability_metadata.get("operation_risk")
+    if operation_risk == SkillPermissionLevel.EXTERNAL_NETWORK.value:
+        return _PermissionDecision(
+            permission_level=SkillPermissionLevel.EXTERNAL_NETWORK.value,
+            **capability_metadata,
+        )
+    if operation_risk in {"write_confirm", "write_high"}:
         return _PermissionDecision(
             permission_level=SkillPermissionLevel.WRITE_CONFIRM.value,
             requires_confirmation=True,
+            **capability_metadata,
         )
+    if operation_risk == SkillPermissionLevel.READ.value:
+        return _PermissionDecision(
+            permission_level=SkillPermissionLevel.READ.value,
+            **capability_metadata,
+        )
+    return None
 
-    return _PermissionDecision(permission_level=SkillPermissionLevel.READ.value)
+
+def _permission_trace_output(permission_decision: _PermissionDecision) -> dict:
+    payload = {"permission_level": permission_decision.permission_level}
+    if permission_decision.legacy_alias:
+        payload["legacy_tool_name"] = permission_decision.legacy_alias
+    if permission_decision.capability:
+        payload["resolved_capability"] = permission_decision.capability
+    if permission_decision.operation:
+        payload["resolved_operation"] = permission_decision.operation
+    if permission_decision.operation_risk:
+        payload["operation_risk"] = permission_decision.operation_risk
+    return payload
 
 
 def _build_pending_confirmation_args(name: str, args: dict, farm_id: int) -> dict:
@@ -723,7 +903,7 @@ def _disabled_tool_message(
 
     output_data = {
         "status": "disabled",
-        "permission_level": permission_decision.permission_level,
+        **_permission_trace_output(permission_decision),
     }
     content = "工具调用失败：工具已禁用。"
     if permission_decision.disabled_reason:
@@ -770,7 +950,7 @@ def _validation_error_message(
             input_data=args,
             output_data={
                 "status": "validation_error",
-                "permission_level": permission_decision.permission_level,
+                **_permission_trace_output(permission_decision),
             },
             duration_ms=0,
             error_message=str(e),
@@ -805,7 +985,7 @@ def _permission_reject_message(
         input_data=args,
         output_data={
             "status": "rejected",
-            "permission_level": permission_decision.permission_level,
+            **_permission_trace_output(permission_decision),
         },
         duration_ms=0,
     )
@@ -857,8 +1037,8 @@ def _ambiguous_pending_message(
         input_data=execution_args,
         output_data={
             "status": "need_clarify",
-            "permission_level": permission_decision.permission_level,
             "reason": "ambiguous_debt_direction",
+            **_permission_trace_output(permission_decision),
         },
         duration_ms=0,
     )
@@ -875,9 +1055,7 @@ def _build_pending_confirmation(
     farm_id: int,
     original_input: str,
 ) -> tuple[dict, str]:
-    confirmation_args = _build_pending_confirmation_args(
-        name, execution_args, farm_id
-    )
+    confirmation_args = _build_pending_confirmation_args(name, execution_args, farm_id)
     confirmation_context = build_confirmation_context(
         name, confirmation_args, original_input=original_input
     )
@@ -920,8 +1098,8 @@ def _reflection_block_message(
         input_data=execution_args,
         output_data={
             "status": "reflection_blocked",
-            "permission_level": permission_decision.permission_level,
             "reflection": reflection_result.to_trace_payload(),
+            **_permission_trace_output(permission_decision),
         },
         duration_ms=0,
     )
@@ -965,9 +1143,9 @@ def _store_pending_action_message(
         input_data=execution_args,
         output_data={
             "status": "pending",
-            "permission_level": permission_decision.permission_level,
             "confirmation_context": confirmation_context,
             "plan_draft": state.get("plan_draft") or {},
+            **_permission_trace_output(permission_decision),
         },
         duration_ms=0,
     )
@@ -1043,7 +1221,7 @@ def _pending_action_message(
     )
 
 
-def _success_trace_output(result, permission_level: str) -> dict:
+def _success_trace_output(result, permission_decision: _PermissionDecision) -> dict:
     """组装工具成功 trace metadata。"""
     trace_output = getattr(result, "trace_data", None)
     if not trace_output:
@@ -1053,7 +1231,7 @@ def _success_trace_output(result, permission_level: str) -> dict:
         }
     else:
         trace_output["reply_preview"] = str(result)[:500]
-    trace_output["permission_level"] = permission_level
+    trace_output.update(_permission_trace_output(permission_decision))
     return trace_output
 
 
@@ -1084,9 +1262,7 @@ async def _invoke_read_tool_message(
             node_type="skill_call",
             node_name=name,
             input_data=args,
-            output_data=_success_trace_output(
-                result, permission_decision.permission_level
-            ),
+            output_data=_success_trace_output(result, permission_decision),
             duration_ms=duration_ms,
         )
         return ToolMessage(content=str(result), tool_call_id=tool_call_id, name=name)
@@ -1207,9 +1383,7 @@ async def _parallel_tool_node(state: AgentState) -> dict:
 
     original_input = _latest_human_input(state)
 
-    tool_calls = _collapse_all_labor_payment_tool_calls(
-        last.tool_calls, original_input
-    )
+    tool_calls = _collapse_all_labor_payment_tool_calls(last.tool_calls, original_input)
     plan_messages = _pending_plan_tool_message(
         state=state,
         farm_id=farm_id,

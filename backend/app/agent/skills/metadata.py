@@ -44,6 +44,12 @@ class SkillMetadata(BaseModel):
 
     permission_level: SkillPermissionLevel = SkillPermissionLevel.READ
     risk_level: SkillRiskLevel = SkillRiskLevel.LOW
+    domain: str | None = None
+    capability: str | None = None
+    operation: str | None = None
+    legacy_alias: str | None = None
+    operation_risk: str | None = None
+    alias_status: str | None = None
     context_dependencies: list[str] = Field(default_factory=list)
     cache_invalidation: list[str] = Field(default_factory=list)
     confirmation_schema: ConfirmationSchema = Field(default_factory=ConfirmationSchema)
@@ -375,6 +381,11 @@ def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
 
 
 def _get_registry_default_metadata(skill_name: str) -> dict[str, Any] | None:
+    return resolve_skill_capability_metadata(skill_name)
+
+
+def resolve_skill_capability_metadata(skill_name: str) -> dict[str, Any] | None:
+    """从 Registry 解析 legacy tool name 对应的 capability operation。"""
     try:
         registry = load_skill_registry()
     except (OSError, ValueError):
@@ -396,6 +407,12 @@ def _get_registry_default_metadata(skill_name: str) -> dict[str, Any] | None:
     return {
         "permission_level": permission_level,
         "risk_level": risk_level,
+        "domain": capability.domain,
+        "capability": alias.capability,
+        "operation": alias.operation,
+        "legacy_alias": alias.legacy_name,
+        "operation_risk": operation.risk,
+        "alias_status": alias.status,
         "context_dependencies": list(capability.context_dependencies),
         "cache_invalidation": cache_invalidation,
         "evaluation_tags": list(capability.tags),
@@ -437,5 +454,6 @@ __all__ = [
     "clear_skill_enabled_state",
     "get_skill_metadata",
     "metadata_to_dict",
+    "resolve_skill_capability_metadata",
     "set_skill_enabled_state",
 ]

@@ -195,8 +195,12 @@ def _build_registry() -> dict:
 
 
 def _attach_skill_metadata(target: Any, skill: Any) -> None:
-    """为 Skill 或 Pydantic Tool 对象挂载 runtime metadata。"""
-    object.__setattr__(target, "skill_metadata", get_skill_metadata(skill))
+    """为 Skill 或 Pydantic Tool 对象挂载 capability-aware runtime metadata。"""
+    metadata = get_skill_metadata(skill)
+    object.__setattr__(target, "skill_metadata", metadata)
+    object.__setattr__(target, "skill_capability", metadata.capability)
+    object.__setattr__(target, "skill_operation", metadata.operation)
+    object.__setattr__(target, "skill_legacy_alias", metadata.legacy_alias)
 
 
 def clear_skill_cache():

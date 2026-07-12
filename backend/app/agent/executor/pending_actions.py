@@ -5,6 +5,10 @@ import re
 import time
 
 from app.agent.executor.models import PendingActionDecision
+from app.agent.executor.pending_aliases import (
+    pending_alias_metadata,
+    pending_alias_metadata_or_trace,
+)
 from app.agent.reflector import (
     ReflectionDecision,
     ReflectionTrigger,
@@ -52,7 +56,9 @@ async def _execute_write_skill(
     start = time.time()
     error_msg = None
     result_str = ""
+    alias_metadata: dict = {}
     try:
+        alias_metadata = pending_alias_metadata(skill_name)
         tool_map = {
             tool.name: tool
             for tool in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
@@ -68,11 +74,19 @@ async def _execute_write_skill(
         error_msg = str(exc)
         raise
     finally:
+        output_data = {
+            "status": "success" if result_str else "failed",
+            "reply_preview": result_str[:500] if result_str else "",
+            **alias_metadata,
+        }
+        if not alias_metadata:
+            output_data["legacy_tool_name"] = skill_name
+            output_data["alias_resolution"] = "missing"
         get_collector().record(
             node_type="skill_call",
             node_name=skill_name,
             input_data=params,
-            output_data=result_str or None,
+            output_data=output_data,
             start_time=start,
             end_time=time.time(),
             error_message=error_msg,
@@ -156,6 +170,10 @@ async def _confirm_pending(
     session_id: str | None = None,
 ) -> PendingActionDecision:
     """执行已确认的 pending action，并处理缺模板和链式动作。"""
+    alias_metadata = pending_alias_metadata_or_trace(
+        pending.skill_name,
+        pending.params,
+    )
     reflection_result = ReflectorService().check_write_plan(
         trigger=ReflectionTrigger.PRE_EXECUTION,
         skill_name=pending.skill_name,
@@ -171,6 +189,7 @@ async def _confirm_pending(
             "phase": "confirm_pending_action",
             "action_id": pending.action_id,
             "tool_name": pending.skill_name,
+            **alias_metadata,
         },
     )
     if reflection_result.decision != ReflectionDecision.PASS:
@@ -189,7 +208,7 @@ async def _confirm_pending(
     )
     cleared_groups = _clear_cache_groups(pending.skill_name, cache_groups)
     remove_pending(farm_id, session_id=session_id)
-    metadata = {"cache_groups_cleared": cleared_groups}
+    metadata = {"cache_groups_cleared": cleared_groups, **alias_metadata}
 
     if (
         pending.skill_name == "create_crop_cycle"
@@ -251,6 +270,10 @@ async def _confirm_pending_plan(
     session_id: str | None = None,
 ) -> PendingActionDecision:
     """按顺序执行 pending plan 中的所有写操作步骤。"""
+    plan_alias_metadata = [
+        pending_alias_metadata_or_trace(step.tool_name, step.params)
+        for step in plan.steps
+    ]
     reflection_result = ReflectorService().check_pending_plan(
         trigger=ReflectionTrigger.PRE_EXECUTION,
         steps=plan.steps,
@@ -261,6 +284,7 @@ async def _confirm_pending_plan(
             "phase": "confirm_pending_plan",
             "plan_id": plan.plan_id,
             "tool_names": [step.tool_name for step in plan.steps],
+            "resolved_operations": plan_alias_metadata,
         },
     )
     if reflection_result.decision != ReflectionDecision.PASS:
@@ -270,6 +294,7 @@ async def _confirm_pending_plan(
     cleared_groups_by_step: list[dict] = []
 
     for step in sorted(plan.steps, key=lambda item: item.step_index):
+        alias_metadata = pending_alias_metadata_or_trace(step.tool_name, step.params)
         params = _normalize_pending_plan_step_params(step.tool_name, step.params)
         try:
             result = await _execute_write_skill(
@@ -294,6 +319,7 @@ async def _confirm_pending_plan(
                 "step_id": step.step_id,
                 "tool_name": step.tool_name,
                 "cache_groups_cleared": cleared_groups,
+                **alias_metadata,
             }
         )
 

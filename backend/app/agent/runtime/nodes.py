@@ -50,7 +50,6 @@ from app.agent.planning import (
     plan_draft_from_router_decision,
 )
 from app.agent.router import RouterDecision, SkillRouter
-from app.agent.router.catalog import SkillCatalog
 from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.tool_selector import expand_by_chain as _expand_by_chain
@@ -206,25 +205,6 @@ def _append_tool_name_once(names: list[str], tool_name: str, tools: list) -> lis
     return [*names, tool_name]
 
 
-def _enabled_read_tool_names(tools: list) -> list[str]:
-    """返回可交给主模型选择的只读工具名。"""
-    return [
-        candidate.name
-        for candidate in SkillCatalog.from_tools(tools).enabled()
-        if candidate.risk == "read"
-    ]
-
-
-def _is_model_choice_read_decision(decision: RouterDecision) -> bool:
-    """判断是否为可交给主模型自行选工具的普通读决策。"""
-    if not decision.frames:
-        return False
-    return all(
-        frame.risk == "read" and not frame.requires_confirmation
-        for frame in decision.frames
-    )
-
-
 def _get_classifier():
     """兼容旧 graph 入口导出的 classifier 工厂。"""
     return None
@@ -243,12 +223,9 @@ def _route_tools(user_msg: str, tools: list) -> RouterDecision:
             )
         return RouterDecision(selected_tools=list(selection))
     decision = SkillRouter().route(user_msg, tools)
-    selected_tools = list(decision.selected_tools)
-    if _is_model_choice_read_decision(decision):
-        selected_tools = _enabled_read_tool_names(tools)
     return replace(
         decision,
-        selected_tools=selected_tools,
+        selected_tools=list(decision.selected_tools),
         tool_choice="auto",
         force_binding=(),
     )
@@ -410,7 +387,24 @@ def _resolve_selected_names(
         selected_names = list(prepared_selected_tool_names)
     if has_tool_results:
         selected_names = []
-    return selected_names
+    return _enabled_selected_tool_names(selected_names, tools)
+
+
+def _enabled_selected_tool_names(selected_names: list[str], tools: list) -> list[str]:
+    """按 Router allowlist 过滤实际可绑定工具，disabled 工具不进入 LLM。"""
+    tool_by_name = {tool.name: tool for tool in tools}
+    enabled_names: list[str] = []
+    for name in selected_names:
+        tool = tool_by_name.get(name)
+        if tool is None:
+            continue
+        metadata = getattr(tool, "skill_metadata", None)
+        if getattr(metadata, "enabled", True) is False:
+            logger.warning("跳过 disabled Skill 绑定 | name=%s", name)
+            continue
+        if name not in enabled_names:
+            enabled_names.append(name)
+    return enabled_names
 
 
 def _bind_llm_for_tools(

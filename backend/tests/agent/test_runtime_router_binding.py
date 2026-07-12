@@ -124,6 +124,34 @@ async def test_llm_node_uses_prepared_router_selected_tools() -> None:
 
 
 @pytest.mark.asyncio
+async def test_llm_node_does_not_bind_disabled_selected_tool() -> None:
+    fake_llm = _FakeLLM()
+    disabled_tool = _FakeTool("web_search")
+    disabled_tool.skill_metadata = type(
+        "SkillMetadataStub",
+        (),
+        {"enabled": False},
+    )()
+    tools = [disabled_tool, _FakeTool("get_farm_status")]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        await _llm_node(
+            {
+                "messages": [HumanMessage(content="搜索一下天气新闻")],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-disabled",
+                "router_decision": RouterDecision(selected_tools=["web_search"]),
+            }
+        )
+
+    assert fake_llm.bound_tool_names == []
+
+
+@pytest.mark.asyncio
 async def test_llm_node_returns_router_decision_for_tool_node_state() -> None:
     """LLM 节点应把本轮 RouterDecision 写回 state，供工具节点生成 pending plan。"""
     fake_llm = _FakeLLM()
@@ -158,10 +186,11 @@ async def test_llm_node_returns_router_decision_for_tool_node_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_read_query_exposes_read_tools_for_model_choice() -> None:
-    """普通读请求应交给主模型在只读工具中选择，不再由规则窄绑单个读工具。"""
+async def test_read_query_binds_router_selected_legacy_tool_only() -> None:
+    """普通读请求只绑定 Router shortlist，且 tool name 仍为 legacy name。"""
     fake_llm = _FakeLLM()
     tools = [
+        _FakeTool("get_crop_cycles"),
         _FakeTool("get_crop_cycle_info"),
         _FakeTool("get_farm_status"),
         _FakeTool("get_weather_forecast"),
@@ -182,11 +211,42 @@ async def test_read_query_exposes_read_tools_for_model_choice() -> None:
         )
 
     assert result["router_decision"].tool_choice == "auto"
-    assert fake_llm.bound_tool_names == [
-        "get_crop_cycle_info",
-        "get_farm_status",
-        "get_weather_forecast",
+    assert result["router_decision"].selected_tools == ["get_crop_cycles"]
+    assert result["router_decision"].selected_operations == {
+        "manage_crop_cycle": ["query_cycles"]
+    }
+    assert fake_llm.bound_tool_names == ["get_crop_cycles"]
+
+
+@pytest.mark.asyncio
+async def test_model_choice_read_runtime_does_not_expand_to_all_read_tools() -> None:
+    """fallback read 也只绑定 Router 预算内候选，不在 runtime fallback all。"""
+    fake_llm = _FakeLLM()
+    tools = [
+        _FakeTool("get_cost_summary"),
+        _FakeTool("get_debt_summary"),
+        _FakeTool("get_farm_status"),
+        _FakeTool("get_weather_forecast"),
+        _FakeTool("create_cost_record"),
     ]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="我要看一下经营数据")],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-model-choice",
+            }
+        )
+
+    assert result["router_decision"].fallback == "model_choice_read_default"
+    assert len(fake_llm.bound_tool_names) == 3
+    assert "create_cost_record" not in fake_llm.bound_tool_names
+    assert "get_weather_forecast" not in fake_llm.bound_tool_names
 
 
 @pytest.mark.asyncio
