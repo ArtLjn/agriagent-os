@@ -78,6 +78,25 @@ class RuleIntentClassifier:
         "收入多少",
         "支出多少",
     )
+    _cost_record_write_hints = (
+        "买",
+        "采购",
+        "购入",
+        "花了",
+        "支出",
+        "记一笔",
+        "记录",
+    )
+    _cost_record_entities = (
+        "化肥",
+        "肥料",
+        "种子",
+        "农药",
+        "农资",
+        "成本",
+        "费用",
+        "支出",
+    )
     _debt_summary_hints = (
         "还欠",
         "欠款",
@@ -397,6 +416,10 @@ class RuleIntentClassifier:
             frames.append(self._build_create_crop_template_frame(message))
         if self._looks_like_create_crop_cycle(message):
             frames.append(self._build_create_crop_cycle_frame(message))
+        if self._looks_like_delete_crop_cycle(message):
+            frames.append(self._build_delete_crop_cycle_frame())
+        if self._looks_like_create_cost_record(message):
+            frames.append(self._build_create_cost_record_frame())
         if self._looks_like_incomplete_farm_labor_work(message):
             frames.append(self._build_clarify_farm_labor_frame(message))
         if self._looks_like_create_work_order(message):
@@ -437,6 +460,28 @@ class RuleIntentClassifier:
             entities=["crop_cycle"],
             candidate_tools=["create_crop_cycle"],
             confidence=0.76,
+            requires_confirmation=True,
+        )
+
+    def _build_delete_crop_cycle_frame(self) -> IntentFrame:
+        return IntentFrame(
+            domain="crop",
+            intent="delete_cycle",
+            risk="write_high",
+            entities=["crop_cycle"],
+            candidate_tools=["delete_crop_cycle"],
+            confidence=0.78,
+            requires_confirmation=True,
+        )
+
+    def _build_create_cost_record_frame(self) -> IntentFrame:
+        return IntentFrame(
+            domain="finance",
+            intent="create_cost_record",
+            risk="write_confirm",
+            entities=["cost"],
+            candidate_tools=["create_cost_record"],
+            confidence=0.78,
             requires_confirmation=True,
         )
 
@@ -544,6 +589,21 @@ class RuleIntentClassifier:
         if "茬口" in message and self._looks_like_create_action(message):
             return True
         return False
+
+    def _looks_like_delete_crop_cycle(self, message: str) -> bool:
+        if self._has_any(message, self._read_blockers):
+            return False
+        return "茬口" in message and self._has_any(message, ("删除", "删掉", "删"))
+
+    def _looks_like_create_cost_record(self, message: str) -> bool:
+        if self._has_any(message, self._read_blockers):
+            return False
+        if re.search(r"\d+\s*(?:元|块)", message) is None:
+            return False
+        return self._has_any(message, self._cost_record_write_hints) and self._has_any(
+            message,
+            self._cost_record_entities,
+        )
 
     def _looks_like_query_work_orders(self, message: str) -> bool:
         return self._has_any(message, self._read_blockers) and self._has_any(

@@ -99,6 +99,13 @@ else
 fi
 
 # ── Skill 文档契约 ──
+if [ -f "scripts/check-skill-registry.sh" ]; then
+  run_check "Skill Registry 治理" "bash scripts/check-skill-registry.sh"
+else
+  echo "⏭️  Skill Registry 治理: 跳过"
+  SKIP=$((SKIP + 1))
+fi
+
 if [ -f "scripts/check-skill-docs.sh" ]; then
   run_check "Skill 文档契约" "bash scripts/check-skill-docs.sh"
 else

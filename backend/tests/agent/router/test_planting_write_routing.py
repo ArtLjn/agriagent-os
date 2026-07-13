@@ -23,7 +23,9 @@ def test_catalog_enriches_create_crop_cycle_metadata() -> None:
     candidate = catalog.get("create_crop_cycle")
 
     assert candidate is not None
-    assert candidate.domain == "planting"
+    assert candidate.domain == "crop"
+    assert candidate.capability == "manage_crop_cycle"
+    assert candidate.operation == "create_cycle"
     assert candidate.risk == "write_confirm"
     assert "create_crop_cycle" in candidate.intents
     assert "crop_templates" in candidate.context_dependencies

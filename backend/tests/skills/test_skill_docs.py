@@ -281,6 +281,64 @@ def test_all_existing_skill_docs_resolve_registry_aliases():
     assert failures == []
 
 
+def test_registry_aliases_have_skill_docs():
+    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
+    registry = load_skill_registry()
+    tool_names = _skill_doc_tool_names(skills_dir)
+
+    missing_docs = sorted(set(registry.aliases) - tool_names)
+
+    assert missing_docs == []
+
+
+def test_skill_docs_do_not_conflict_with_registry_domain_or_capability():
+    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
+    registry = load_skill_registry()
+    failures = []
+
+    for skill_doc in sorted(skills_dir.glob("*/skill.md")):
+        metadata = _skill_doc_metadata(skill_doc)
+        tool_name = str(metadata.get("tool_name") or metadata["name"])
+        alias = registry.resolve_alias(tool_name)
+        assert alias is not None
+        capability = registry.capabilities[alias.capability]
+        if metadata.get("domain") and metadata["domain"] != capability.domain:
+            failures.append(
+                f"{skill_doc.parent.name}: domain {metadata['domain']} "
+                f"!= Registry {capability.domain}"
+            )
+        if metadata.get("capability") and metadata["capability"] != alias.capability:
+            failures.append(
+                f"{skill_doc.parent.name}: capability {metadata['capability']} "
+                f"!= Registry {alias.capability}"
+            )
+
+    assert failures == []
+
+
+def test_hidden_or_disabled_skill_docs_disclose_disabled_state():
+    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
+    registry = load_skill_registry()
+    failures = []
+
+    for skill_doc in sorted(skills_dir.glob("*/skill.md")):
+        metadata = _skill_doc_metadata(skill_doc)
+        tool_name = str(metadata.get("tool_name") or metadata["name"])
+        alias = registry.resolve_alias(tool_name)
+        assert alias is not None
+        capability = registry.capabilities[alias.capability]
+        if capability.status == "active":
+            continue
+        text = skill_doc.read_text(encoding="utf-8")
+        if "禁用" not in text and "disabled" not in text.lower():
+            failures.append(
+                f"{skill_doc.parent.name}: Registry status={capability.status} "
+                "但 skill.md 未说明禁用状态"
+            )
+
+    assert failures == []
+
+
 def test_validator_rejects_empty_properties_when_parameter_inference_has_params(
     tmp_path,
 ):
@@ -383,3 +441,16 @@ parameters:
     result = validate_skill_doc(doc)
 
     assert "tool_name 必须是严格 snake_case" in result.errors
+
+
+def _skill_doc_tool_names(skills_dir: Path) -> set[str]:
+    tool_names = set()
+    for skill_doc in sorted(skills_dir.glob("*/skill.md")):
+        metadata = _skill_doc_metadata(skill_doc)
+        tool_names.add(str(metadata.get("tool_name") or metadata["name"]))
+    return tool_names
+
+
+def _skill_doc_metadata(skill_doc: Path) -> dict:
+    front_matter = skill_doc.read_text(encoding="utf-8").split("---", 2)[1]
+    return yaml.safe_load(front_matter) or {}

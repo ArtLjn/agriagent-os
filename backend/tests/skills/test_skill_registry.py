@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from app.agent.skills.registry import load_skill_registry, validate_skill_registry
+from app.agent.skills.registry.governance import check_skill_registry
 
 pytestmark = pytest.mark.no_db
 
@@ -111,6 +112,107 @@ aliases:
         "location": "aliases.missing_legacy_tool",
         "message": "缺少 legacy tool alias：missing_legacy_tool",
     } in issue_payloads
+
+
+def test_default_registry_governance_check_passes():
+    issues = check_skill_registry()
+
+    assert issues == []
+
+
+def test_registry_governance_reports_duplicate_alias_and_key_guardrails(tmp_path):
+    _write_registry_files(
+        tmp_path,
+        domains="""
+domains:
+  - name: external
+    owner: agent-platform
+  - name: finance
+    owner: agent-platform
+""",
+        skills="""
+capabilities:
+  - name: web_search
+    domain: external
+    capability: web_search
+    description: 网络搜索。
+    examples: [搜索新闻]
+    anti_examples: [查询农场账单]
+    tags: [搜索]
+    version: v1
+    owner: agent-platform
+    status: active
+    context_dependencies: [external_search]
+    operations:
+      search:
+        risk: read
+        legacy_aliases: [web_search]
+  - name: get_weather_forecast
+    domain: external
+    capability: weather_forecast_query
+    description: 查询天气。
+    examples: [明天天气]
+    anti_examples: [搜索新闻]
+    tags: [天气]
+    version: v1
+    owner: agent-platform
+    status: hidden
+    disabled_reason: 测试禁用
+    context_dependencies: [weather_location]
+    operations:
+      query_forecast:
+        risk: read
+        legacy_aliases: [get_weather_forecast]
+  - name: manage_cost
+    domain: finance
+    capability: cost_management
+    description: 成本管理。
+    examples: [记账]
+    anti_examples: [查天气]
+    tags: [成本]
+    version: v1
+    owner: agent-platform
+    status: active
+    context_dependencies: [farm]
+    operations:
+      create_record:
+        risk: write_confirm
+        legacy_aliases: [create_cost_record]
+""",
+        aliases="""
+aliases:
+  - legacy_name: web_search
+    capability: web_search
+    operation: search
+  - legacy_name: web_search
+    capability: web_search
+    operation: search
+  - legacy_name: get_weather_forecast
+    capability: get_weather_forecast
+    operation: query_forecast
+  - legacy_name: create_cost_record
+    capability: manage_cost
+    operation: create_record
+""",
+    )
+    skills_dir = tmp_path / "skills"
+    for tool_name in ("web_search", "get_weather_forecast", "create_cost_record"):
+        skill_dir = skills_dir / tool_name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "skill.md").write_text(
+            f"---\nname: {tool_name}\n---\n",
+            encoding="utf-8",
+        )
+
+    issues = check_skill_registry(registry_dir=tmp_path, skills_dir=skills_dir)
+    codes = {issue.code for issue in issues}
+
+    assert "duplicate_alias" in codes
+    assert "web_search_must_stay_disabled" in codes
+    assert "web_search_missing_disabled_reason" in codes
+    assert "web_search_invalid_risk" in codes
+    assert "weather_must_stay_active" in codes
+    assert "weather_invalid_risk" in codes
 
 
 def _skill_doc_tool_names() -> set[str]:

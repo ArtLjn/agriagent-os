@@ -39,13 +39,13 @@
 
 ## 5. Governance Checks And Evaluation
 
-- [ ] 5.1 新增 `scripts/check-skill-registry.sh`，运行 Registry validation 和关键 alias 覆盖检查。
-- [ ] 5.2 更新 `scripts/check-skill-docs.sh`，纳入 Registry 与 skill.md 一致性检查。
-- [ ] 5.3 更新 `scripts/harness-check.sh`，加入 Skill Registry 检查。
-- [ ] 5.4 新增或扩展 Router eval cases，覆盖 Top-1 capability accuracy、Top-3 recall、读意图写暴露、高风险误暴露和 selected tools 数量。
-- [ ] 5.5 运行最小验证：`ruff check backend/app/agent backend/tests/agent backend/tests/skills`。
-- [ ] 5.6 运行 Router 和 Skill 相关测试：`pytest backend/tests/agent/router backend/tests/agent/test_runtime_router_binding.py backend/tests/agent/test_tool_executor_metadata.py backend/tests/agent/test_pending_action_executor.py backend/tests/skills/test_skill_metadata.py backend/tests/skills/test_skill_docs.py -q`。
-- [ ] 5.7 运行治理检查：`bash scripts/check-skill-registry.sh && bash scripts/check-skill-docs.sh && bash scripts/check-complexity-budget.sh`。
+- [x] 5.1 新增 `scripts/check-skill-registry.sh`，运行 Registry validation 和关键 alias 覆盖检查。
+- [x] 5.2 更新 `scripts/check-skill-docs.sh`，纳入 Registry 与 skill.md 一致性检查。
+- [x] 5.3 更新 `scripts/harness-check.sh`，加入 Skill Registry 检查。
+- [x] 5.4 新增或扩展 Router eval cases，覆盖 Top-1 capability accuracy、Top-3 recall、读意图写暴露、高风险误暴露和 selected tools 数量。
+- [x] 5.5 运行最小验证：`ruff check backend/app/agent backend/tests/agent backend/tests/skills`。
+- [x] 5.6 运行 Router 和 Skill 相关测试：`pytest backend/tests/agent/router backend/tests/agent/test_runtime_router_binding.py backend/tests/agent/test_tool_executor_metadata.py backend/tests/agent/test_pending_action_executor.py backend/tests/skills/test_skill_metadata.py backend/tests/skills/test_skill_docs.py -q`。
+- [x] 5.7 运行治理检查：`bash scripts/check-skill-registry.sh && bash scripts/check-skill-docs.sh && bash scripts/check-complexity-budget.sh`。
 
 ## 6. Optional Capability Consolidation
 
