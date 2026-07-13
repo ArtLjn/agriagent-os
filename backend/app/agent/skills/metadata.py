@@ -384,35 +384,50 @@ def _get_registry_default_metadata(skill_name: str) -> dict[str, Any] | None:
     return resolve_skill_capability_metadata(skill_name)
 
 
-def resolve_skill_capability_metadata(skill_name: str) -> dict[str, Any] | None:
-    """从 Registry 解析 legacy tool name 对应的 capability operation。"""
+def resolve_skill_capability_metadata(
+    skill_name: str,
+    operation_name: str | None = None,
+) -> dict[str, Any] | None:
+    """从 Registry 解析 legacy alias 或 canonical capability metadata。"""
     try:
         registry = load_skill_registry()
     except (OSError, ValueError):
         return None
     alias = registry.resolve_alias(skill_name)
-    if alias is None:
+    if alias is not None:
+        capability_name = alias.capability
+        resolved_operation = alias.operation
+        legacy_alias = alias.legacy_name
+        alias_status = alias.status
+    else:
+        capability_name = skill_name
+        resolved_operation = operation_name
+        legacy_alias = None
+        alias_status = None
+    capability = registry.capabilities.get(capability_name)
+    if capability is None:
         return None
-    capability = registry.capabilities.get(alias.capability)
-    operation = registry.get_operation(alias.capability, alias.operation)
-    if capability is None or operation is None:
-        return None
+    operation = (
+        registry.get_operation(capability_name, resolved_operation)
+        if resolved_operation
+        else None
+    )
     permission_level, risk_level = _REGISTRY_RISK_TO_METADATA.get(
-        operation.risk,
+        operation.risk if operation is not None else "read",
         (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
     )
-    cache_invalidation = list(
-        operation.cache_invalidation or capability.cache_invalidation
-    )
+    cache_invalidation = list(capability.cache_invalidation)
+    if operation is not None and operation.cache_invalidation:
+        cache_invalidation = list(operation.cache_invalidation)
     return {
         "permission_level": permission_level,
         "risk_level": risk_level,
         "domain": capability.domain,
-        "capability": alias.capability,
-        "operation": alias.operation,
-        "legacy_alias": alias.legacy_name,
-        "operation_risk": operation.risk,
-        "alias_status": alias.status,
+        "capability": capability.name,
+        "operation": operation.name if operation is not None else None,
+        "legacy_alias": legacy_alias,
+        "operation_risk": operation.risk if operation is not None else None,
+        "alias_status": alias_status,
         "context_dependencies": list(capability.context_dependencies),
         "cache_invalidation": cache_invalidation,
         "evaluation_tags": list(capability.tags),

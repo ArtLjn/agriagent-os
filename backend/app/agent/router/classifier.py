@@ -140,6 +140,9 @@ class RuleIntentClassifier:
         "赊账还欠",
         "总欠款",
     )
+    _cost_analytics_hints = ("趋势", "同比", "环比", "比上个月", "比去年", "分析")
+    _delete_cost_hints = ("删除账务", "删除账单", "删除流水", "撤销账单", "撤销账务")
+    _settle_debt_hints = ("还钱", "还账", "还款", "清账", "结清", "全还")
     _labor_payable_hints = (
         "人工钱",
         "工钱",
@@ -449,6 +452,17 @@ class RuleIntentClassifier:
                     confidence=0.84,
                 )
             )
+        if self._looks_like_cost_analytics_query(message):
+            frames.append(
+                IntentFrame(
+                    domain="finance",
+                    intent="analyze_cost",
+                    risk="read",
+                    entities=["cost", "income", "trend"],
+                    candidate_tools=["get_cost_analytics"],
+                    confidence=0.84,
+                )
+            )
         if self._looks_like_debt_summary_query(message):
             frames.append(
                 IntentFrame(
@@ -531,6 +545,10 @@ class RuleIntentClassifier:
             frames.append(self._build_delete_crop_cycle_frame())
         if self._looks_like_create_cost_record(message):
             frames.append(self._build_create_cost_record_frame())
+        if self._looks_like_delete_cost_record(message):
+            frames.append(self._build_delete_cost_record_frame())
+        if self._looks_like_settle_debt(message):
+            frames.append(self._build_settle_debt_frame())
         if self._looks_like_update_user_settings(message):
             frames.append(self._build_update_user_settings_frame())
         if self._looks_like_manage_cost_category(message):
@@ -611,6 +629,28 @@ class RuleIntentClassifier:
             risk="write_confirm",
             entities=["cost"],
             candidate_tools=["create_cost_record"],
+            confidence=0.78,
+            requires_confirmation=True,
+        )
+
+    def _build_delete_cost_record_frame(self) -> IntentFrame:
+        return IntentFrame(
+            domain="finance",
+            intent="delete_record",
+            risk="write_high",
+            entities=["cost"],
+            candidate_tools=["delete_cost_record"],
+            confidence=0.78,
+            requires_confirmation=True,
+        )
+
+    def _build_settle_debt_frame(self) -> IntentFrame:
+        return IntentFrame(
+            domain="finance",
+            intent="settle_debt",
+            risk="write_confirm",
+            entities=["debt"],
+            candidate_tools=["settle_debt"],
             confidence=0.78,
             requires_confirmation=True,
         )
@@ -826,6 +866,17 @@ class RuleIntentClassifier:
         if self._looks_like_labor_payable_query(message):
             return False
         return self._has_any(message, self._debt_summary_hints)
+
+    def _looks_like_cost_analytics_query(self, message: str) -> bool:
+        return self._has_any(message, self._cost_analytics_hints)
+
+    def _looks_like_delete_cost_record(self, message: str) -> bool:
+        return self._has_any(message, self._delete_cost_hints)
+
+    def _looks_like_settle_debt(self, message: str) -> bool:
+        if self._looks_like_debt_summary_query(message):
+            return False
+        return self._has_any(message, self._settle_debt_hints)
 
     def _looks_like_labor_payable_query(self, message: str) -> bool:
         if self._looks_like_create_worker(message):

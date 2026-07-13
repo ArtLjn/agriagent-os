@@ -9,11 +9,7 @@ from app.agent.tool_selector import select_tools
 pytestmark = pytest.mark.no_db
 
 ALL_TOOL_NAMES = [
-    "get_cost_analytics",
-    "get_cost_summary",
-    "get_debt_summary",
-    "create_cost_record",
-    "delete_cost_record",
+    "manage_cost",
     "create_crop_cycle",
     "delete_crop_cycle",
     "create_crop_template",
@@ -35,7 +31,6 @@ ALL_TOOL_NAMES = [
     "get_user_settings",
     "manage_user_settings",
     "log_farm_activity",
-    "settle_debt",
     "settle_labor_payment",
     "update_crop_cycle",
     "update_crop_stage",
@@ -75,35 +70,35 @@ def _make_tools_with_enabled(overrides: dict[str, bool]):
 class TestWritePatternMatching:
     def test_cost_record_with_amount(self):
         result = select_tools("卖了西瓜5000块", _make_tools())
-        assert "create_cost_record" in result
+        assert "manage_cost" in result
 
     def test_cost_record_explicit_trigger(self):
         result = select_tools("记一笔，买了化肥", _make_tools())
-        assert "create_cost_record" in result
+        assert "manage_cost" in result
 
     def test_cost_record_colloquial_5w(self):
         result = select_tools("卖西瓜收入5w", _make_tools())
-        assert "create_cost_record" in result
+        assert "manage_cost" in result
 
     def test_cost_record_no_amount(self):
         result = select_tools("买了化肥", _make_tools())
-        assert "create_cost_record" in result
+        assert "manage_cost" in result
 
     def test_purchase_debt_record_wins_over_debt_summary(self):
         result = select_tools("今天买橘子种子130张三赊账", _make_tools())
-        assert result == ["create_cost_record"]
+        assert result == ["manage_cost"]
 
-    def test_settle_debt_standard(self):
+    def test_settle_debt_uses_manage_cost(self):
         result = select_tools("还了老王200", _make_tools())
-        assert "settle_debt" in result
+        assert "manage_cost" in result
 
-    def test_settle_debt_without_le_particle_wins_over_cost_record(self):
+    def test_repayment_without_le_particle_uses_manage_cost(self):
         result = select_tools("还张三500", _make_tools())
-        assert result == ["settle_debt"]
+        assert result == ["manage_cost"]
 
-    def test_settle_debt_variant(self):
+    def test_settle_debt_variant_uses_manage_cost(self):
         result = select_tools("把欠老王的账结了", _make_tools())
-        assert "settle_debt" in result
+        assert "manage_cost" in result
 
     def test_create_crop_cycle_with_crop(self):
         result = select_tools("创建春茬种植西瓜", _make_tools())
@@ -195,9 +190,9 @@ class TestWritePatternMatching:
         result = select_tools("新来一个工人李丽工资100一天", _make_tools())
         assert result == ["manage_workers"]
 
-    def test_delete_cost_record_uses_delete_cost_record(self):
+    def test_delete_cost_operation_uses_manage_cost(self):
         result = select_tools("删除账务记录12", _make_tools())
-        assert result == ["delete_cost_record"]
+        assert result == ["manage_cost"]
 
     def test_manage_cost_category_uses_category_skill(self):
         result = select_tools("新增成本分类农机", _make_tools())
@@ -231,46 +226,45 @@ class TestQueryKeywordMatching:
 
     def test_balance_query(self):
         result = select_tools("我的余额", _make_tools())
-        assert "get_cost_summary" in result
+        assert "manage_cost" in result
 
     def test_monthly_quota_query(self):
         result = select_tools("我的月额", _make_tools())
-        assert "get_cost_summary" in result
+        assert "manage_cost" in result
 
     def test_weekly_bill_query(self):
         result = select_tools("查一下本周账单", _make_tools())
-        assert "get_cost_summary" in result
+        assert "manage_cost" in result
 
     def test_yearly_bill_query(self):
         result = select_tools("今年账单汇总", _make_tools())
-        assert "get_cost_summary" in result
+        assert "manage_cost" in result
 
     def test_detail_ledger_query(self):
         result = select_tools("看一下这个月流水明细", _make_tools())
-        assert "get_cost_summary" in result
+        assert "manage_cost" in result
 
     def test_debt_bill_query(self):
         result = select_tools("老王那边赊账还欠多少", _make_tools())
-        assert result[0] == "get_debt_summary"
-        assert "get_cost_summary" not in result
+        assert result[0] == "manage_cost"
 
     def test_payable_debt_summary_query(self):
         result = select_tools("我欠别人多少钱", _make_tools())
-        assert result[0] == "get_debt_summary"
+        assert result[0] == "manage_cost"
         assert "get_labor_payables" not in result
 
     def test_total_payable_query_uses_debt_summary(self):
         result = select_tools("我还欠多少钱", _make_tools())
-        assert result[0] == "get_debt_summary"
+        assert result[0] == "manage_cost"
 
     def test_trend_analytics(self):
         result = select_tools("比去年赚得多吗", _make_tools())
-        assert "get_cost_analytics" in result
+        assert "manage_cost" in result
 
     def test_multi_intent(self):
         result = select_tools("看看天气和成本", _make_tools())
         assert "get_weather_forecast" in result
-        assert "get_cost_summary" in result
+        assert "manage_cost" in result
 
     def test_keyword_match_logs_tool_select_layer(self, caplog):
         with caplog.at_level("INFO", logger="app.agent.tool_selector"):
@@ -284,7 +278,7 @@ class TestQueryKeywordMatching:
     def test_labor_payable_query_prefers_labor_skill(self):
         result = select_tools("老王还欠多少人工钱", _make_tools())
         assert result[0] == "get_labor_payables"
-        assert "get_cost_summary" not in result
+        assert "manage_cost" not in result
 
     def test_operation_work_order_query(self):
         result = select_tools("最近玉米授粉作业有哪些", _make_tools())

@@ -9,6 +9,8 @@ capabilities:
       - 查一下我还欠老王多少钱
       - 删除昨天那笔支出
       - 把老王农资店的账结清
+      - 这个月比上个月多花多少
+      - 最近三个月成本趋势
     anti_examples:
       - 给老王补付300人工
       - 查询最近农事作业单
@@ -24,6 +26,10 @@ capabilities:
       - 欠款
       - 账单
       - 化肥
+      - 趋势
+      - 同比
+      - 环比
+      - 分析
     version: v2
     owner: agent-platform
     status: active
@@ -55,6 +61,11 @@ capabilities:
         description: 查询赊账和欠款统计。
         legacy_aliases:
           - get_debt_summary
+      analyze_cost:
+        risk: read
+        description: 查询收支趋势、同比和环比分析。
+        legacy_aliases:
+          - get_cost_analytics
       delete_record:
         risk: write_high
         description: 删除或撤销一条账务记录。
@@ -73,41 +84,6 @@ capabilities:
           - cost_analytics
           - cost_summary
           - get_farm_status
-  - name: analyze_cost
-    domain: finance
-    capability: cost_analysis
-    description: 分析农场收支趋势、同比、环比和变化幅度。
-    examples:
-      - 这个月比上个月多花多少
-      - 最近三个月成本趋势
-      - 今年化肥支出同比怎么样
-      - 收入环比变化多少
-      - 哪类成本涨得最快
-    anti_examples:
-      - 今天买了100元化肥
-      - 删除一笔支出
-      - 还老王200块
-      - 查询有哪些茬口
-      - 新增账务分类
-    tags:
-      - 趋势
-      - 同比
-      - 环比
-      - 分析
-      - 变化
-      - 成本分析
-    version: v2
-    owner: agent-platform
-    status: active
-    context_dependencies:
-      - farm
-      - cost_records
-    operations:
-      analyze_trend:
-        risk: read
-        description: 查询收支趋势、同比和环比分析。
-        legacy_aliases:
-          - get_cost_analytics
   - name: manage_cost_categories
     domain: finance
     capability: manage_cost_categories

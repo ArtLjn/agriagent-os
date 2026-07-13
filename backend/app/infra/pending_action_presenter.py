@@ -147,6 +147,7 @@ def build_confirmation_context(
         }
 
     if skill_name in {
+        "manage_cost",
         "delete_cost_record",
         "manage_cost_categories",
         "manage_planting_units",
@@ -283,6 +284,7 @@ def build_confirm_message(
         return "\n".join(lines)
 
     if skill_name in {
+        "manage_cost",
         "delete_cost_record",
         "manage_cost_categories",
         "manage_planting_units",
@@ -423,6 +425,8 @@ def _build_generic_business_context(
     risk_notes = []
     if skill_name == "delete_crop_cycle":
         risk_notes.append("删除茬口会级联删除阶段、农事日志、成本记录和种植单元。")
+    elif skill_name == "manage_cost" and params.get("operation") == "delete_record":
+        risk_notes.append("确认后会软删除该账务记录，并影响统计结果。")
     elif skill_name == "manage_crop_templates" and params.get("action") == "delete":
         risk_notes.append("删除模板会级联删除相关茬口、农事日志和成本记录。")
     elif skill_name == "delete_cost_record":

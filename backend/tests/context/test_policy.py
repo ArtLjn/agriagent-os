@@ -28,7 +28,7 @@ def test_cost_summary_tool_enables_ledger_selector() -> None:
     result = ContextPolicy().resolve(
         ContextBuildRequest(
             intent="chat",
-            selected_tool_names=["get_cost_summary"],
+            selected_tool_names=["manage_cost"],
         )
     )
 
@@ -40,7 +40,7 @@ def test_debt_summary_tool_enables_ledger_selector() -> None:
     result = ContextPolicy().resolve(
         ContextBuildRequest(
             intent="chat",
-            selected_tool_names=["get_debt_summary"],
+            selected_tool_names=["manage_cost"],
         )
     )
 

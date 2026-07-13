@@ -58,16 +58,25 @@ async def _execute_write_skill(
     result_str = ""
     alias_metadata: dict = {}
     try:
-        alias_metadata = pending_alias_metadata(skill_name)
+        alias_metadata = pending_alias_metadata(skill_name, params)
         tool_map = {
             tool.name: tool
             for tool in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
         }
-        tool = tool_map.get(skill_name)
+        resolved_tool_name = alias_metadata.get("resolved_capability") or skill_name
+        execution_params = dict(params)
+        if resolved_tool_name != skill_name and alias_metadata.get(
+            "resolved_operation"
+        ):
+            execution_params.setdefault(
+                "operation",
+                alias_metadata["resolved_operation"],
+            )
+        tool = tool_map.get(resolved_tool_name) or tool_map.get(skill_name)
         if tool is None:
             return f"未知工具: {skill_name}"
 
-        result = await tool.ainvoke(params)
+        result = await tool.ainvoke(execution_params)
         result_str = str(result)
         return result_str
     except Exception as exc:

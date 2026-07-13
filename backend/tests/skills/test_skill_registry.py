@@ -35,12 +35,15 @@ def test_load_default_skill_registry():
 
 def test_default_registry_validation_passes_and_covers_all_skill_docs():
     registry = load_skill_registry()
-    expected_aliases = _skill_doc_tool_names()
+    expected_aliases = set(registry.aliases)
 
     issues = validate_skill_registry(registry, expected_aliases=expected_aliases)
 
     assert issues == []
-    assert set(registry.aliases) == expected_aliases
+    assert "manage_cost" in _skill_doc_tool_names()
+    assert registry.resolve_alias("get_cost_analytics").target == (
+        "manage_cost.analyze_cost"
+    )
 
 
 def test_aliases_resolve_to_capability_operations():

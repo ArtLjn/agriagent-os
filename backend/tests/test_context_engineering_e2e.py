@@ -64,8 +64,8 @@ class TestBasePromptNoFarmContext:
         )
         assert "farm_context_summary" not in text
 
-    def test_base_prompt_contains_tool_routing(self, _composer):
-        """Composer 组合结果包含工具路由引导，且不含旧 farm_context_summary。"""
+    def test_base_prompt_contains_capability_routing(self, _composer):
+        """Composer 组合结果包含 capability 路由引导，且不含旧 farm_context_summary。"""
         text = _composer.compose(
             "system_base",
             variables={
@@ -75,8 +75,9 @@ class TestBasePromptNoFarmContext:
             },
             current_date=date(2026, 5, 29),
         )
-        assert "get_farm_status" in text
-        assert "get_weather_forecast" in text
+        assert "实时数据必须先调用工具" in text
+        assert "天气" in text
+        assert "账务" in text
         assert "farm_context_summary" not in text
 
     def test_base_prompt_renders_with_minimal_vars(self, _composer):
@@ -162,19 +163,18 @@ class TestToolChainExpansion:
         """账务查询不应隐式扩展到 get_farm_status。"""
         from app.agent.tool_selector import expand_by_chain
 
-        result = expand_by_chain({"get_cost_summary"})
-        assert result == {"get_cost_summary"}
+        result = expand_by_chain({"manage_cost"})
+        assert result == {"manage_cost"}
 
     def test_write_skills_no_chain(self):
         """写操作 Skill 不会被扩展。"""
         from app.agent.tool_selector import expand_by_chain
 
         write_tools = [
-            "create_cost_record",
+            "manage_cost",
             "create_crop_cycle",
             "log_farm_activity",
             "update_crop_stage",
-            "settle_debt",
         ]
         for tool in write_tools:
             result = expand_by_chain({tool})
@@ -198,7 +198,7 @@ class TestToolChainExpansion:
         """扩展后保留所有原始工具。"""
         from app.agent.tool_selector import expand_by_chain
 
-        original = {"get_weather_forecast", "get_cost_summary"}
+        original = {"get_weather_forecast", "manage_cost"}
         result = expand_by_chain(original)
         for tool in original:
             assert tool in result
@@ -213,8 +213,7 @@ class TestCrossCuttingIntegration:
 
         query_tools = [
             "get_weather_forecast",
-            "get_cost_summary",
-            "get_cost_analytics",
+            "manage_cost",
             "get_crop_cycle_info",
             "get_recent_farm_logs",
         ]
@@ -234,11 +233,13 @@ class TestCrossCuttingIntegration:
             variables={"display_name": "农友"},
             current_date=date(2026, 5, 29),
         )
-        # prompt 保留工具引导，但不再使用旧 farm_context_summary。
-        assert "get_farm_status" in text
+        # prompt 保留 capability 级工具引导，但不再硬编码旧工具名或旧 farm_context_summary。
+        assert "实时数据必须先调用工具" in text
+        assert "账务" in text
+        assert "天气" in text
         assert "farm_context_summary" not in text
         # 查询工具需要上下文时由 ContextBundle 注入，不通过额外 Skill 调用解决。
-        for tool in ["get_weather_forecast", "get_cost_summary", "get_crop_cycle_info"]:
+        for tool in ["get_weather_forecast", "manage_cost", "get_crop_cycle_info"]:
             expanded = expand_by_chain({tool})
             assert expanded == {tool}
 

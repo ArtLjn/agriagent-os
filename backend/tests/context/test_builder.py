@@ -100,7 +100,7 @@ def test_builder_builds_runtime_context_bundle_with_policy_and_memory(
         db=db_session,
         request=ContextBuildRequest(
             intent="query",
-            selected_tool_names=["get_cost_summary"],
+            selected_tool_names=["manage_cost"],
             farm_id=1,
             user_id="test-user-001",
             session_id="session-1",
@@ -117,7 +117,7 @@ def test_builder_builds_runtime_context_bundle_with_policy_and_memory(
         "short_term_recent",
     }.issubset(block_keys)
     assert bundle.metadata["policy"]["intent"] == "query"
-    assert bundle.metadata["policy"]["selected_tool_names"] == ["get_cost_summary"]
+    assert bundle.metadata["policy"]["selected_tool_names"] == ["manage_cost"]
 
 
 def test_builder_trace_records_skill_dependency_context_status(db_session) -> None:

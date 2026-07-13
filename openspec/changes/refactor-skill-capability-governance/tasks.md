@@ -53,4 +53,5 @@
 - [x] 6.2 低风险合并 `manage_workers`，把 `get_workers` 和 `manage_workers` 通过 capability operation 统一。
 - [x] 6.3 低风险合并 `manage_planting_units`，把查询和管理 operation 统一。
 - [x] 6.4 低风险合并 `manage_cost_categories`，把分类查询和管理 operation 统一。
-- [ ] 6.5 在低风险合并稳定后，再为 `manage_cost`、`manage_crop_cycle`、`manage_work_orders`、`manage_labor_payment` 单独拆后续 OpenSpec change。
+- [x] 6.5 成本域进入物理合并阶段：将 `create_cost_record`、`delete_cost_record`、`get_cost_summary`、`get_cost_analytics`、`get_debt_summary`、`settle_debt` 合并到 canonical `manage_cost`，旧名保留 alias 兼容但不再作为独立 Skill 目录暴露。
+- [ ] 6.6 在成本域稳定后，再为 `manage_crop_cycle`、`manage_work_orders`、`manage_labor_payment` 单独拆后续 OpenSpec change。

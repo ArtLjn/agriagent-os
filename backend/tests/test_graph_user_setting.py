@@ -232,7 +232,7 @@ class TestRuntimeContextBundleHelper:
             bundle, farm_ctx = await _get_runtime_context_bundle(
                 farm_id=1,
                 intent="query",
-                selected_tool_names=["get_cost_summary"],
+                selected_tool_names=["manage_cost"],
                 user_id="test-user-001",
                 session_id="session-1",
                 memory_context_loader=memory_service.build_context,
@@ -244,7 +244,7 @@ class TestRuntimeContextBundleHelper:
         assert "助手角色：冷静专业型" in bundle.render_text()
         assert "上次说要控水" in bundle.render_text()
         assert bundle.metadata["policy"]["intent"] == "query"
-        assert bundle.metadata["policy"]["selected_tool_names"] == ["get_cost_summary"]
+        assert bundle.metadata["policy"]["selected_tool_names"] == ["manage_cost"]
         assert farm_ctx["farm_location"] == "广州"
         assert farm_ctx["farm_coords"] == "23.1291,113.2644"
         assert farm_ctx["assistant_role"] == "professional"

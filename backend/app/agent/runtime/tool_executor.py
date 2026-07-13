@@ -79,11 +79,14 @@ _SETTLE_LABOR_PAYMENT_ALLOWED_ARGS = {
 
 
 def _permission_decision(
-    tool, skill_name: str, state: AgentState
+    tool,
+    skill_name: str,
+    state: AgentState,
+    args: dict | None = None,
 ) -> _PermissionDecision:
     """根据 metadata 权限等级做执行决策，未知权限按 fail closed 处理。"""
     metadata = getattr(tool, "skill_metadata", None)
-    capability_metadata = _capability_metadata_from_runtime(metadata, skill_name)
+    capability_metadata = _capability_metadata_from_runtime(metadata, skill_name, args)
     permission_value = (
         _metadata_permission_value(metadata) if metadata is not None else None
     )
@@ -236,9 +239,16 @@ def _write_confirm_decision(capability_metadata: dict) -> _PermissionDecision:
     )
 
 
-def _capability_metadata_from_runtime(metadata, skill_name: str) -> dict:
+def _capability_metadata_from_runtime(
+    metadata,
+    skill_name: str,
+    args: dict | None = None,
+) -> dict:
     """读取 Tool metadata；缺失时用 Registry alias 做兼容解析。"""
-    resolved = resolve_skill_capability_metadata(skill_name) or {}
+    operation_name = None
+    if isinstance(args, dict):
+        operation_name = args.get("operation")
+    resolved = resolve_skill_capability_metadata(skill_name, operation_name) or {}
     return {
         "legacy_alias": getattr(metadata, "legacy_alias", None)
         or resolved.get("legacy_alias"),
@@ -465,7 +475,11 @@ def _needs_debt_direction_clarification(
     args: dict,
     original_input: str,
 ) -> str | None:
-    if name != "create_cost_record":
+    is_create_cost_alias = name == "create_cost_record"
+    is_manage_cost_create = (
+        name == "manage_cost" and args.get("operation") == "create_record"
+    )
+    if not (is_create_cost_alias or is_manage_cost_create):
         return None
     if args.get("record_subtype") != "赊账":
         return None
@@ -1251,12 +1265,11 @@ async def _invoke_read_tool_message(
     try:
         result = await tool.ainvoke(args)
         duration_ms = int((_time.perf_counter() - start) * 1000)
-        summary = str(result)[:120].replace("\n", " ")
         logger.info(
             "Skill 完成 | name=%s | duration_ms=%d | result=%s",
             name,
             duration_ms,
-            summary,
+            str(result)[:120].replace("\n", " "),
         )
         collector.record(
             node_type="skill_call",
@@ -1265,7 +1278,12 @@ async def _invoke_read_tool_message(
             output_data=_success_trace_output(result, permission_decision),
             duration_ms=duration_ms,
         )
-        return ToolMessage(content=str(result), tool_call_id=tool_call_id, name=name)
+        return ToolMessage(
+            content=str(result),
+            tool_call_id=tool_call_id,
+            name=name,
+            additional_kwargs=_tool_message_kwargs(name, args),
+        )
     except Exception as e:
         duration_ms = int((_time.perf_counter() - start) * 1000)
         logger.error(
@@ -1281,6 +1299,12 @@ async def _invoke_read_tool_message(
             error_message=str(e),
         )
         return ToolMessage(content=f"工具调用失败: {e}", tool_call_id=tool_call_id)
+
+
+def _tool_message_kwargs(name: str, args: dict) -> dict:
+    if name == "manage_cost" and args.get("operation"):
+        return {"operation": str(args["operation"])}
+    return {}
 
 
 async def _call_one(
@@ -1300,7 +1324,7 @@ async def _call_one(
     start = _time.perf_counter()
 
     tool = tool_map.get(name)
-    permission_decision = _permission_decision(tool, name, state)
+    permission_decision = _permission_decision(tool, name, state, args)
 
     message = _disabled_tool_message(
         name=name,

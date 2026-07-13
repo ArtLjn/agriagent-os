@@ -8,16 +8,12 @@ WRITE_INTENT_HINTS = {"创建", "新建", "记录", "记下", "添加"}
 QUERY_INTENT_HINTS = {"查询", "查看", "最近", "有哪些", "多少", "还欠", "统计"}
 
 WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
-    "create_cost_record": [
+    "manage_cost": [
         re.compile(r"(?:买了|卖了|花了|收入|支出|赊账|记账|记一笔|付了|收了)"),
         re.compile(r"\d+\s*(?:元|块|万|w|W|千|百)"),
-    ],
-    "settle_debt": [
         re.compile(r"(?:还[了钱账给]|清账|还款)"),
         re.compile(r"还(?!欠).{1,20}\d+\s*(?:元|块|万|w|W|千|百)?"),
         re.compile(r"(?:账[结清]|结了.*账|欠.*结)"),
-    ],
-    "delete_cost_record": [
         re.compile(r"(?:删除|撤销|删掉|移除).*(?:账务|账单|流水|收支|成本|收入|费用)"),
         re.compile(
             r"(?:账务|账单|流水|收支|成本|收入|费用).*#?\d+.*(?:删除|撤销|删掉|移除)"
@@ -150,7 +146,7 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
 
 QUERY_TRIGGERS: dict[str, set[str]] = {
     "get_weather_forecast": {"天气", "预报", "降雨", "温度", "极端天气"},
-    "get_cost_summary": {
+    "manage_cost": {
         "余额",
         "收支",
         "成本",
@@ -169,8 +165,6 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "明细",
         "分类汇总",
         "月额",
-    },
-    "get_debt_summary": {
         "欠款",
         "赊账",
         "还欠",
@@ -183,8 +177,12 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "赊账统计",
         "欠款汇总",
         "赊账汇总",
+        "趋势",
+        "对比",
+        "比去年",
+        "比上月",
+        "收支分析",
     },
-    "get_cost_analytics": {"趋势", "对比", "比去年", "比上月", "收支分析"},
     "get_cost_categories": {
         "账务分类",
         "成本分类",
@@ -268,9 +266,7 @@ DISABLED_SKILLS: set[str] = {
 }
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_weather_forecast": [],
-    "get_cost_summary": [],
-    "get_debt_summary": [],
-    "get_cost_analytics": [],
+    "manage_cost": [],
     "get_crop_cycles": [],
     "get_crop_cycle_info": [],
     "get_recent_farm_logs": [],
@@ -281,8 +277,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_planting_units": [],
     "get_crop_templates": [],
     "get_user_settings": [],
-    "create_cost_record": [],
-    "delete_cost_record": [],
     "create_crop_cycle": [],
     "delete_crop_cycle": [],
     "create_crop_template": [],
@@ -290,7 +284,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "create_operation_work_order": [],
     "log_farm_activity": [],
     "manage_farm_logs": [],
-    "settle_debt": [],
     "settle_labor_payment": [],
     "update_crop_cycle": [],
     "update_crop_stage": [],

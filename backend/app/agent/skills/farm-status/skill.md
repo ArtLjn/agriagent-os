@@ -22,7 +22,7 @@ parameters:
 用户问农场整体情况、当前种植状态、最近农事、活跃茬口、综合建议或需要上下文概览时使用本 Skill。
 
 ## 不要使用
-- 用户只问精确账单或流水时，应使用 `get_cost_summary`。
+- 用户只问精确账单或流水时，应使用 `manage_cost(operation="query_summary")`。
 - 用户只问天气时，应使用 `get_weather_forecast`。
 - 用户要新增记录或创建茬口时，不要使用本 Skill 代替写入 Skill。
 

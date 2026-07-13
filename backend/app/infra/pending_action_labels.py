@@ -4,6 +4,7 @@ from __future__ import annotations
 
 _SKILL_DISPLAY: dict[str, str] = {
     "create_cost_record": "记账",
+    "manage_cost": "管理账务",
     "create_crop_cycle": "创建茬口",
     "create_crop_template": "创建作物模板",
     "log_farm_activity": "记录农事",
@@ -25,6 +26,7 @@ _SKILL_DISPLAY: dict[str, str] = {
 
 _SKILL_EMOJI: dict[str, str] = {
     "create_cost_record": "💰",
+    "manage_cost": "💰",
     "create_crop_cycle": "🌱",
     "create_crop_template": "📋",
     "log_farm_activity": "📝",
@@ -46,11 +48,21 @@ _SKILL_EMOJI: dict[str, str] = {
 
 _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
     "create_cost_record": [
+        "operation",
         "category",
         "amount",
         "record_type",
         "record_subtype",
         "counterparty",
+    ],
+    "manage_cost": [
+        "operation",
+        "category",
+        "amount",
+        "record_type",
+        "record_subtype",
+        "counterparty",
+        "record_id",
     ],
     "create_crop_cycle": ["crop_name", "season"],
     "create_crop_template": ["crop_name"],

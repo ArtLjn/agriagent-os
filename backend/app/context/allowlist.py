@@ -10,9 +10,12 @@ ALLOWED_CONTEXT_KEYS: frozenset[str] = frozenset(
     {
         # 身份/指针
         "farm_profile",
+        "farm",
         "user_profile",
         "session_meta",
         "current_crop_cycle_pointer",  # 只放 ID，不放详情
+        "cycle",
+        "ledger",
         # 状态
         "pending_action_pointer",
         "pending_plan_pointer",
@@ -20,6 +23,7 @@ ALLOWED_CONTEXT_KEYS: frozenset[str] = frozenset(
         # 偏好
         "user_settings",
         "assistant_role",
+        "short_term_recent",
     }
 )
 

@@ -1,6 +1,7 @@
 """Skill Catalog 构建。"""
 
 import json
+from dataclasses import replace
 
 from langchain_core.tools import BaseTool
 
@@ -103,10 +104,54 @@ def _registry_parts(
     return registry, alias, capability, operation
 
 
+def _capability_parts(name: str) -> tuple[SkillRegistry, CapabilityDefinition] | None:
+    registry = _load_registry()
+    if registry is None:
+        return None
+    capability = registry.capabilities.get(name)
+    if capability is None:
+        return None
+    return registry, capability
+
+
 def _catalog_payload(name: str) -> dict:
     parts = _registry_parts(name)
     if parts is None:
-        return CATALOG_REGISTRY.get(name, {})
+        capability_parts = _capability_parts(name)
+        if capability_parts is None:
+            return CATALOG_REGISTRY.get(name, {})
+        _registry, capability = capability_parts
+        return {
+            "domain": capability.domain,
+            "intents": [
+                capability.name,
+                capability.capability,
+                *list(capability.tags),
+                *list(capability.operations),
+                *[
+                    legacy
+                    for operation in capability.operations.values()
+                    for legacy in operation.legacy_aliases
+                ],
+            ],
+            "risk": "read",
+            "capability": capability.name,
+            "operation": None,
+            "legacy_alias": None,
+            "operation_risk": None,
+            "entities": list(capability.tags),
+            "trigger_examples": list(capability.examples),
+            "anti_examples": list(capability.anti_examples),
+            "context_dependencies": list(capability.context_dependencies),
+            "candidate_group": f"{capability.domain}_capability",
+            "enabled": capability.status == "active",
+            "score": 1.0,
+            "evidence": {
+                "source": "skill_registry",
+                "domain": capability.domain,
+                "capability": capability.name,
+            },
+        }
     _registry, alias, capability, operation = parts
     risk = _router_risk(operation.risk)
     return {
@@ -158,6 +203,44 @@ class SkillCatalog:
 
     def __init__(self, candidates: list[ToolCandidate]) -> None:
         self._by_name = {candidate.name: candidate for candidate in candidates}
+        self._by_alias = self._build_alias_index(candidates)
+
+    @staticmethod
+    def _build_alias_index(
+        candidates: list[ToolCandidate],
+    ) -> dict[str, ToolCandidate]:
+        registry = _load_registry()
+        if registry is None:
+            return {}
+        by_alias: dict[str, ToolCandidate] = {}
+        by_capability = {
+            candidate.capability: candidate
+            for candidate in candidates
+            if candidate.capability
+        }
+        for capability_name, candidate in by_capability.items():
+            capability = registry.capabilities.get(capability_name)
+            if capability is None:
+                continue
+            for operation in capability.operations.values():
+                for legacy_alias in operation.legacy_aliases:
+                    by_alias[legacy_alias] = replace(
+                        candidate,
+                        operation=operation.name,
+                        legacy_alias=legacy_alias,
+                        operation_risk=operation.risk,
+                        risk=_router_risk(operation.risk),
+                        candidate_group=(
+                            f"{capability.domain}_{_router_risk(operation.risk)}"
+                        ),
+                        evidence={
+                            **candidate.evidence,
+                            "operation": operation.name,
+                            "legacy_alias": legacy_alias,
+                            "operation_risk": operation.risk,
+                        },
+                    )
+        return by_alias
 
     @classmethod
     def from_tools(cls, tools: list[BaseTool]) -> "SkillCatalog":
@@ -189,7 +272,7 @@ class SkillCatalog:
         return cls(candidates)
 
     def get(self, name: str) -> ToolCandidate | None:
-        return self._by_name.get(name)
+        return self._by_name.get(name) or self._by_alias.get(name)
 
     def enabled(self) -> list[ToolCandidate]:
         return [candidate for candidate in self._by_name.values() if candidate.enabled]

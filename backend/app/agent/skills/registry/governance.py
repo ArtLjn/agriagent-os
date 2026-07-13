@@ -49,7 +49,10 @@ def check_skill_registry(
             )
         ]
 
-    expected_aliases = skill_doc_tool_names(skill_docs_dir)
+    skill_doc_names = skill_doc_tool_names(skill_docs_dir)
+    expected_aliases = {
+        name for name in skill_doc_names if name not in registry.capabilities
+    }
     issues = [
         GovernanceIssue(issue.code, issue.location, issue.message)
         for issue in validate_skill_registry(
@@ -58,7 +61,7 @@ def check_skill_registry(
         )
     ]
     issues.extend(_duplicate_alias_issues(base_dir / "aliases.yaml"))
-    issues.extend(_alias_skill_doc_issues(registry, expected_aliases))
+    issues.extend(_alias_skill_doc_issues(registry, skill_doc_names))
     issues.extend(_key_guardrail_issues(registry))
     return issues
 
@@ -100,17 +103,17 @@ def _duplicate_alias_issues(path: Path) -> list[GovernanceIssue]:
 
 def _alias_skill_doc_issues(
     registry: SkillRegistry,
-    skill_doc_aliases: Iterable[str],
+    skill_doc_names: Iterable[str],
 ) -> list[GovernanceIssue]:
-    known_aliases = set(skill_doc_aliases)
+    known_docs = set(skill_doc_names)
     return [
         GovernanceIssue(
             code="alias_without_skill_doc",
             location=f"aliases.{legacy_name}",
             message=f"Registry alias 找不到对应 skill.md：{legacy_name}",
         )
-        for legacy_name in sorted(registry.aliases)
-        if legacy_name not in known_aliases
+        for legacy_name, alias in sorted(registry.aliases.items())
+        if legacy_name not in known_docs and alias.capability not in known_docs
     ]
 
 

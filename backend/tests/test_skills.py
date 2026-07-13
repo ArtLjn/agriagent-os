@@ -9,51 +9,39 @@ from skillify.core.context import SkillContext
 pytestmark = pytest.mark.no_db
 
 # 目录名含连字符，无法直接 import，使用 importlib 动态加载
+_manage_cost_mod = importlib.import_module("app.agent.skills.manage-cost.scripts.main")
 _cost_summary_mod = importlib.import_module(
-    "app.agent.skills.cost-summary.scripts.main"
+    "app.agent.skills.manage-cost.scripts.summary"
 )
 _cost_analytics_mod = importlib.import_module(
-    "app.agent.skills.cost-analytics.scripts.main"
+    "app.agent.skills.manage-cost.scripts.analytics"
 )
 _crop_cycle_mod = importlib.import_module("app.agent.skills.crop-cycle.scripts.main")
-CostSummarySkill = _cost_summary_mod.CostSummarySkill
-CostAnalyticsSkill = _cost_analytics_mod.CostAnalyticsSkill
+ManageCostSkill = _manage_cost_mod.ManageCostSkill
 CropCycleSkill = _crop_cycle_mod.CropCycleSkill
 
 
-class TestCostSummarySkillMeta:
+class TestManageCostSkillMeta:
     def test_name(self):
-        skill = CostSummarySkill()
-        assert skill.name() == "get_cost_summary"
+        skill = ManageCostSkill()
+        assert skill.name() == "manage_cost"
 
     def test_description_contains_trigger_words(self):
-        skill = CostSummarySkill()
+        skill = ManageCostSkill()
         desc = skill.description()
-        assert "余额" in desc
-        assert "花了" in desc
-        assert "收支" in desc
+        assert "记账" in desc
+        assert "查账" in desc
+        assert "趋势分析" in desc
+        assert "欠款查询" in desc
 
     def test_parameters_schema(self):
-        skill = CostSummarySkill()
+        skill = ManageCostSkill()
         schema = skill.parameters_schema()
+        assert schema["required"] == ["operation"]
+        assert "query_summary" in schema["properties"]["operation"]["enum"]
+        assert "analyze_cost" in schema["properties"]["operation"]["enum"]
         assert "cycle_id" in schema["properties"]
         assert "group_by" in schema["properties"]
-
-
-class TestCostAnalyticsSkillMeta:
-    def test_name(self):
-        skill = CostAnalyticsSkill()
-        assert skill.name() == "get_cost_analytics"
-
-    def test_description_contains_trigger_words(self):
-        skill = CostAnalyticsSkill()
-        desc = skill.description()
-        assert "趋势" in desc
-        assert "对比" in desc
-
-    def test_parameters_schema(self):
-        skill = CostAnalyticsSkill()
-        schema = skill.parameters_schema()
         assert "compare_period" in schema["properties"]
 
 
@@ -91,8 +79,11 @@ class TestCostSummarySkill:
         mock_db.query.return_value = chain
         mock_session.return_value = mock_db
 
-        skill = CostSummarySkill()
-        result = await skill.execute({"cycle_id": 99999}, ctx)
+        skill = ManageCostSkill()
+        result = await skill.execute(
+            {"operation": "query_summary", "cycle_id": 99999},
+            ctx,
+        )
 
         assert "暂无成本或收入记录" in result.reply
         mock_db.close.assert_called_once()
@@ -125,10 +116,10 @@ class TestCostSummarySkill:
         fresh_db.query.return_value = fresh_chain
         mock_session.side_effect = [empty_db, fresh_db]
 
-        skill = CostSummarySkill()
+        skill = ManageCostSkill()
 
-        first = await skill.execute({}, ctx)
-        second = await skill.execute({}, ctx)
+        first = await skill.execute({"operation": "query_summary"}, ctx)
+        second = await skill.execute({"operation": "query_summary"}, ctx)
 
         assert "暂无成本或收入记录" in first.reply
         assert "总收入：100.00 元" in second.reply
@@ -171,9 +162,10 @@ class TestCostSummarySkill:
         mock_db.query.return_value = chain
         mock_session.return_value = mock_db
 
-        skill = CostSummarySkill()
+        skill = ManageCostSkill()
         result = await skill.execute(
             {
+                "operation": "query_summary",
                 "date_from": "2025-01-01",
                 "date_to": "2025-12-31",
                 "record_type": "all",
@@ -216,9 +208,10 @@ class TestCostSummarySkill:
         mock_db.query.return_value = chain
         mock_session.return_value = mock_db
 
-        skill = CostSummarySkill()
+        skill = ManageCostSkill()
         result = await skill.execute(
             {
+                "operation": "query_summary",
                 "date_from": "2025-01-01",
                 "date_to": "2025-12-31",
                 "group_by": "month",
@@ -251,8 +244,11 @@ class TestCostSummarySkill:
         mock_db.query.return_value = chain
         mock_session.return_value = mock_db
 
-        skill = CostSummarySkill()
-        result = await skill.execute({"group_by": "none"}, ctx)
+        skill = ManageCostSkill()
+        result = await skill.execute(
+            {"operation": "query_summary", "group_by": "none"},
+            ctx,
+        )
 
         assert "收支汇总" in result.reply
         assert "100.00" in result.reply
@@ -289,9 +285,10 @@ class TestCostAnalyticsSkill:
         mock_db.query.return_value = chain
         mock_session.return_value = mock_db
 
-        skill = CostAnalyticsSkill()
+        skill = ManageCostSkill()
         result = await skill.execute(
             {
+                "operation": "analyze_cost",
                 "date_from": "2025-01-01",
                 "date_to": "2025-01-31",
                 "compare_period": "none",
@@ -325,9 +322,10 @@ class TestCostAnalyticsSkill:
         mock_db.query.return_value = chain
         mock_session.return_value = mock_db
 
-        skill = CostAnalyticsSkill()
+        skill = ManageCostSkill()
         result = await skill.execute(
             {
+                "operation": "analyze_cost",
                 "date_from": "2025-02-01",
                 "date_to": "2025-02-28",
                 "compare_period": "last_month",

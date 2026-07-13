@@ -141,8 +141,8 @@ class TestPureNormalPath:
         mock_get_llm.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_direct_debt_summary_returns_without_llm(self):
-        """欠款汇总结果应直达返回，避免最终 LLM 改写成坏表格。"""
+    async def test_direct_debt_query_returns_without_llm(self):
+        """manage_cost 欠款查询结果应直达返回，避免最终 LLM 改写成坏表格。"""
         from unittest.mock import AsyncMock, patch
 
         normal_msg = ToolMessage(
@@ -158,7 +158,9 @@ class TestPureNormalPath:
                 "- 刘俊男：未付 300.00 元，2笔\n"
                 "- 哈哈哈：未付 100.00 元，1笔"
             ),
-            tool_call_id="direct_get_debt_summary",
+            tool_call_id="call-manage-cost",
+            name="manage_cost",
+            additional_kwargs={"operation": "query_debt"},
         )
         state = {
             "messages": [normal_msg],
@@ -313,12 +315,14 @@ class TestPureNormalPath:
 
     @pytest.mark.asyncio
     async def test_direct_cost_summary_result_goes_through_llm(self):
-        """账单 Skill 的原始结果必须经过 LLM 最终表达，避免暴露内部格式。"""
+        """manage_cost 查账结果必须经过 LLM 最终表达，避免暴露内部格式。"""
         from unittest.mock import AsyncMock, patch
 
         normal_msg = ToolMessage(
             content="收支汇总：\n  总成本：100.00 元\n  明细：\n    2026-06-05: income - 销售收入 10000000.00 元",
-            tool_call_id="direct_get_cost_summary",
+            tool_call_id="call-manage-cost",
+            name="manage_cost",
+            additional_kwargs={"operation": "query_summary"},
         )
         state = {
             "messages": [HumanMessage(content="我的余额"), normal_msg],

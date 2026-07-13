@@ -63,7 +63,7 @@ class ContextPolicyResult:
 class ContextPolicy:
     """根据意图和工具选择 Context 构建策略。"""
 
-    COST_TOOLS = frozenset({"get_cost_summary", "get_debt_summary"})
+    COST_TOOLS = frozenset({"manage_cost"})
     WEATHER_TOOLS = frozenset({"get_weather_forecast"})
     CROP_CYCLE_TOOLS = frozenset(
         {"update_crop_cycle", "create_crop_cycle", "update_crop_stage"}
@@ -76,9 +76,7 @@ class ContextPolicy:
         }
     )
     LABOR_TOOLS = frozenset({"get_labor_payables", "settle_labor_payment"})
-    COST_CATEGORY_TOOLS = frozenset(
-        {"create_cost_record", "update_cost_record", "correct_cost_record"}
-    )
+    COST_CATEGORY_TOOLS = frozenset({"get_cost_categories", "manage_cost_categories"})
 
     DEPENDENCY_SELECTORS = {
         "crop_cycle": (CycleSelector, "cycle"),
@@ -185,6 +183,8 @@ class ContextPolicy:
             raw_dependencies = metadata.get("context_dependencies", [])
             add(raw_dependencies)
 
+        if selected_tool_names & self.COST_TOOLS:
+            add(["farm", "crop_cycle", "ledger"])
         if selected_tool_names & self.CROP_CYCLE_TOOLS:
             add(["crop_cycle"])
         if selected_tool_names & self.WORK_ORDER_TOOLS:

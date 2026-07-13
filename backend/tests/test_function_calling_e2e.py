@@ -133,11 +133,9 @@ class TestFunctionCallingE2E:
         weather_tool = MagicMock()
         weather_tool.name = "get_weather_forecast"
         cost_tool = MagicMock()
-        cost_tool.name = "get_cost_summary"
-        record_tool = MagicMock()
-        record_tool.name = "create_cost_record"
-        mock_get_tools.return_value = [weather_tool, cost_tool, record_tool]
-        mock_executor_tools.return_value = [weather_tool, cost_tool, record_tool]
+        cost_tool.name = "manage_cost"
+        mock_get_tools.return_value = [weather_tool, cost_tool]
+        mock_executor_tools.return_value = [weather_tool, cost_tool]
 
         mock_llm = MagicMock()
         mock_llm.bind_tools.return_value = mock_llm
@@ -152,7 +150,7 @@ class TestFunctionCallingE2E:
         bound_names = [t.name for t in bound_tools]
         assert "get_weather_forecast" in bound_names
         assert "create_cost_record" not in bound_names
-        assert "get_cost_summary" in bound_names
+        assert "get_cost_summary" not in bound_names
 
     @patch("app.agent.runtime.tool_executor.get_langchain_tools")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
@@ -178,7 +176,7 @@ class TestFunctionCallingE2E:
         status_tool = MagicMock()
         status_tool.name = "get_farm_status"
         cost_tool = MagicMock()
-        cost_tool.name = "get_cost_summary"
+        cost_tool.name = "manage_cost"
         mock_get_tools.return_value = [status_tool, cost_tool]
         mock_executor_tools.return_value = [status_tool, cost_tool]
 

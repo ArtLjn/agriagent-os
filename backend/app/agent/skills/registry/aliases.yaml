@@ -15,8 +15,8 @@ aliases:
     capability: manage_cost
     operation: settle_debt
   - legacy_name: get_cost_analytics
-    capability: analyze_cost
-    operation: analyze_trend
+    capability: manage_cost
+    operation: analyze_cost
   - legacy_name: get_cost_categories
     capability: manage_cost_categories
     operation: query_categories

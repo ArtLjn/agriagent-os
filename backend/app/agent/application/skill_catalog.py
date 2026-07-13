@@ -24,11 +24,10 @@ class SkillDisplay:
 
 _APP_SKILL_ORDER = [
     "get_farm_status",
-    "create_cost_record",
+    "manage_cost",
     "log_farm_activity",
     "manage_wages",
     "create_crop_cycle",
-    "get_cost_analytics",
     "get_weather_forecast",
     "manage_user_settings",
 ]
@@ -44,14 +43,14 @@ _DISPLAY_BY_SKILL: dict[str, SkillDisplay] = {
         examples=("今天农场怎么样", "最近有什么风险", "帮我看下今日待办"),
         recommended=True,
     ),
-    "create_cost_record": SkillDisplay(
-        title="智能记账",
-        category="记录",
+    "manage_cost": SkillDisplay(
+        title="智能账务",
+        category="经营",
         icon="receipt-yuan",
         icon_color="green",
-        summary="一句话记录支出、收入和赊账。",
-        details="把买肥料、卖货收款、农资赊账等口语描述整理成账本记录，执行前会让你确认关键信息。",
-        examples=("买化肥花了200元", "今天卖西瓜收入3000", "赊了老王农资500"),
+        summary="智能记账、查账、成本分析和欠款还款。",
+        details="聚合账务经营能力，支持一句话记录支出、收入和赊账，查询账单与欠款，分析收支趋势，并在确认后处理还款或删账。",
+        examples=("买化肥花了200元", "本月成本怎么看", "还欠老王农资多少钱"),
         recommended=True,
     ),
     "create_crop_cycle": SkillDisplay(
@@ -62,16 +61,6 @@ _DISPLAY_BY_SKILL: dict[str, SkillDisplay] = {
         summary="创建新的种植茬口或批次。",
         details="根据作物、季节、面积和地块信息创建种植批次，方便后续关联农事、账本和工人投入。",
         examples=("春茬种西瓜", "帮我建一个黄瓜批次", "6号棚开始种番茄"),
-        recommended=True,
-    ),
-    "get_cost_analytics": SkillDisplay(
-        title="成本分析",
-        category="经营",
-        icon="pie-chart",
-        icon_color="blue",
-        summary="查看收支趋势、利润和成本结构。",
-        details="分析农场收入、支出、利润和分类占比，帮助你判断哪个环节花费高、哪段时间收益更好。",
-        examples=("本月成本怎么看", "今年利润怎么样", "人工和肥料哪个花得多"),
         recommended=True,
     ),
     "get_weather_forecast": SkillDisplay(

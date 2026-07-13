@@ -58,14 +58,15 @@ def test_agent_skills_only_returns_app_level_capabilities(db_session) -> None:
 
     assert keys == {
         "get_farm_status",
-        "create_cost_record",
+        "manage_cost",
         "log_farm_activity",
         "manage_wages",
         "create_crop_cycle",
-        "get_cost_analytics",
         "get_weather_forecast",
         "manage_user_settings",
     }
+    assert "create_cost_record" not in keys
+    assert "get_cost_analytics" not in keys
     assert "get_cost_summary" not in keys
     assert "get_debt_summary" not in keys
     assert "settle_debt" not in keys

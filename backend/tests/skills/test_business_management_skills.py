@@ -16,8 +16,9 @@ from app.models.planting import PlantingUnit
 from app.models.user import User
 from app.models.user_setting import UserSetting
 
-_delete_cost_mod = importlib.import_module(
-    "app.agent.skills.delete-cost-record.scripts.main"
+_manage_cost_mod = importlib.import_module("app.agent.skills.manage-cost.scripts.main")
+_manage_cost_records_mod = importlib.import_module(
+    "app.agent.skills.manage-cost.scripts.records"
 )
 _get_categories_mod = importlib.import_module(
     "app.agent.skills.get-cost-categories.scripts.main"
@@ -53,7 +54,7 @@ _manage_settings_mod = importlib.import_module(
     "app.agent.skills.manage-user-settings.scripts.main"
 )
 
-DeleteCostRecordSkill = _delete_cost_mod.DeleteCostRecordSkill
+ManageCostSkill = _manage_cost_mod.ManageCostSkill
 GetCostCategoriesSkill = _get_categories_mod.GetCostCategoriesSkill
 ManageCostCategoriesSkill = _manage_categories_mod.ManageCostCategoriesSkill
 GetPlantingUnitsSkill = _get_units_mod.GetPlantingUnitsSkill
@@ -75,7 +76,7 @@ def ctx():
 @pytest.fixture
 def patched_skill_sessions(monkeypatch, db_session):
     for module in (
-        _delete_cost_mod,
+        _manage_cost_records_mod,
         _get_categories_mod,
         _manage_categories_mod,
         _get_units_mod,
@@ -191,7 +192,10 @@ async def test_delete_cost_record_soft_deletes_record(patched_skill_sessions, ct
     patched_skill_sessions.add(record)
     patched_skill_sessions.commit()
 
-    result = await DeleteCostRecordSkill().execute({"record_id": record.id}, ctx)
+    result = await ManageCostSkill().execute(
+        {"operation": "delete_record", "record_id": record.id},
+        ctx,
+    )
 
     assert result.status.value == "success"
     saved = patched_skill_sessions.get(CostRecord, record.id)

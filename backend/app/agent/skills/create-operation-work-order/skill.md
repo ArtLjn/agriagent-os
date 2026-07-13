@@ -65,7 +65,7 @@ parameters:
 ## 不要使用
 
 - 用户只是查询已有作业单时，不要创建新作业单。
-- 用户只是记录普通成本且不涉及农事作业时，应使用 `create_cost_record`。
+- 用户只是记录普通成本且不涉及农事作业时，应使用 `manage_cost(operation="create_record")`。
 - 用户只是查询茬口阶段或农场状态时，应使用读操作 Skill。
 
 ## 参数推断

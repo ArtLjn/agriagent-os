@@ -17,11 +17,7 @@ pytestmark = pytest.mark.no_db
 
 
 EXPECTED_REGISTERED_SKILLS = {
-    "get_cost_analytics",
-    "get_cost_summary",
-    "get_debt_summary",
-    "create_cost_record",
-    "delete_cost_record",
+    "manage_cost",
     "create_crop_cycle",
     "delete_crop_cycle",
     "create_crop_template",
@@ -43,7 +39,6 @@ EXPECTED_REGISTERED_SKILLS = {
     "get_user_settings",
     "manage_user_settings",
     "log_farm_activity",
-    "settle_debt",
     "settle_labor_payment",
     "update_crop_cycle",
     "update_crop_stage",
@@ -55,8 +50,6 @@ EXPECTED_REGISTERED_SKILLS = {
 }
 
 EXPECTED_WRITE_SKILLS = {
-    "create_cost_record",
-    "delete_cost_record",
     "create_crop_cycle",
     "delete_crop_cycle",
     "create_crop_template",
@@ -64,7 +57,6 @@ EXPECTED_WRITE_SKILLS = {
     "create_operation_work_order",
     "log_farm_activity",
     "manage_farm_logs",
-    "settle_debt",
     "settle_labor_payment",
     "update_crop_cycle",
     "update_crop_stage",
@@ -74,6 +66,12 @@ EXPECTED_WRITE_SKILLS = {
     "manage_cost_categories",
     "manage_planting_units",
     "manage_user_settings",
+}
+OPERATION_AWARE_WRITE_DOCS = {"manage_cost"}
+RETIRED_COST_WRITE_ALIASES = {
+    "create_cost_record",
+    "delete_cost_record",
+    "settle_debt",
 }
 
 SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
@@ -147,7 +145,10 @@ def test_write_skills_use_write_confirm_permission() -> None:
 
 
 def test_write_skill_docs_are_registered_for_pending_confirmation() -> None:
-    assert _write_skill_docs() == WRITE_SKILLS
+    assert (
+        _write_skill_docs()
+        == (WRITE_SKILLS - RETIRED_COST_WRITE_ALIASES) | OPERATION_AWARE_WRITE_DOCS
+    )
 
 
 def test_disabled_skills_have_disabled_reason() -> None:

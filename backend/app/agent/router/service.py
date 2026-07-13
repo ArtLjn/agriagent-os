@@ -86,6 +86,7 @@ class SkillRouter:
             enriched.append(
                 replace(
                     frame,
+                    candidate_tools=SkillRouter._canonical_candidate_names(matched),
                     capability=frame.capability or best.capability,
                     operation=frame.operation or best.operation,
                     operation_hint=frame.operation_hint or best.operation,
@@ -103,6 +104,17 @@ class SkillRouter:
                 )
             )
         return enriched
+
+    @staticmethod
+    def _canonical_candidate_names(candidates: list[ToolCandidate]) -> list[str]:
+        names: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if candidate.name in seen:
+                continue
+            names.append(candidate.name)
+            seen.add(candidate.name)
+        return names
 
     @staticmethod
     def _best_candidate_for_frame(

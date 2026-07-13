@@ -273,7 +273,8 @@ def test_all_existing_skill_docs_resolve_registry_aliases():
         tool_name = str(metadata.get("tool_name") or metadata["name"])
         alias = registry.resolve_alias(tool_name)
         if alias is None:
-            failures.append(f"{skill_doc.parent.name}: 缺少 alias {tool_name}")
+            if tool_name not in registry.capabilities:
+                failures.append(f"{skill_doc.parent.name}: 缺少 alias {tool_name}")
             continue
         if registry.get_operation(alias.capability, alias.operation) is None:
             failures.append(f"{skill_doc.parent.name}: alias 目标不存在 {alias.target}")
@@ -285,8 +286,18 @@ def test_registry_aliases_have_skill_docs():
     skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
     registry = load_skill_registry()
     tool_names = _skill_doc_tool_names(skills_dir)
+    capability_doc_names = {
+        alias.capability
+        for alias in registry.aliases.values()
+        if alias.capability in tool_names
+    }
 
-    missing_docs = sorted(set(registry.aliases) - tool_names)
+    missing_docs = sorted(
+        legacy_name
+        for legacy_name, alias in registry.aliases.items()
+        if legacy_name not in tool_names
+        and alias.capability not in capability_doc_names
+    )
 
     assert missing_docs == []
 
@@ -300,17 +311,17 @@ def test_skill_docs_do_not_conflict_with_registry_domain_or_capability():
         metadata = _skill_doc_metadata(skill_doc)
         tool_name = str(metadata.get("tool_name") or metadata["name"])
         alias = registry.resolve_alias(tool_name)
-        assert alias is not None
-        capability = registry.capabilities[alias.capability]
+        capability = _doc_capability(registry, tool_name, alias)
         if metadata.get("domain") and metadata["domain"] != capability.domain:
             failures.append(
                 f"{skill_doc.parent.name}: domain {metadata['domain']} "
                 f"!= Registry {capability.domain}"
             )
-        if metadata.get("capability") and metadata["capability"] != alias.capability:
+        capability_name = alias.capability if alias is not None else capability.name
+        if metadata.get("capability") and metadata["capability"] != capability_name:
             failures.append(
                 f"{skill_doc.parent.name}: capability {metadata['capability']} "
-                f"!= Registry {alias.capability}"
+                f"!= Registry {capability_name}"
             )
 
     assert failures == []
@@ -325,8 +336,7 @@ def test_hidden_or_disabled_skill_docs_disclose_disabled_state():
         metadata = _skill_doc_metadata(skill_doc)
         tool_name = str(metadata.get("tool_name") or metadata["name"])
         alias = registry.resolve_alias(tool_name)
-        assert alias is not None
-        capability = registry.capabilities[alias.capability]
+        capability = _doc_capability(registry, tool_name, alias)
         if capability.status == "active":
             continue
         text = skill_doc.read_text(encoding="utf-8")
@@ -449,6 +459,12 @@ def _skill_doc_tool_names(skills_dir: Path) -> set[str]:
         metadata = _skill_doc_metadata(skill_doc)
         tool_names.add(str(metadata.get("tool_name") or metadata["name"]))
     return tool_names
+
+
+def _doc_capability(registry, tool_name: str, alias):
+    if alias is not None:
+        return registry.capabilities[alias.capability]
+    return registry.capabilities[tool_name]
 
 
 def _skill_doc_metadata(skill_doc: Path) -> dict:

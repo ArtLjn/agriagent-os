@@ -61,6 +61,8 @@ def _build_pending_display_params(skill_name: str, params: dict) -> dict[str, st
     label_map = {
         "amount": "金额",
         "category": "类别",
+        "operation": "操作",
+        "record_id": "记录ID",
         "record_type": "类型",
         "crop_name": "作物",
         "season": "季节",
@@ -72,6 +74,14 @@ def _build_pending_display_params(skill_name: str, params: dict) -> dict[str, st
         "variety": "品种",
     }
     order_map = {
+        "manage_cost": [
+            "operation",
+            "category",
+            "amount",
+            "record_type",
+            "counterparty",
+            "record_id",
+        ],
         "create_cost_record": ["category", "amount", "record_type"],
         "create_crop_cycle": ["crop_name", "season", "start_date", "field_name"],
         "create_crop_template": ["crop_name", "variety"],

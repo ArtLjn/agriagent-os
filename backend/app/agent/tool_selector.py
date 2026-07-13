@@ -61,57 +61,12 @@ class ToolSelectionResult:
         return hash((tuple(self.tools), self.force_binding))
 
 
-_DEBT_SUMMARY_QUERY_HINTS = (
-    "还欠",
-    "欠多少",
-    "多少钱",
-    "统计",
-    "汇总",
-    "查询",
-    "查看",
-    "看看",
-    "看一下",
-    "明细",
-    "列表",
-)
-
-_COST_RECORD_DEBT_WRITE_HINTS = (
-    "买",
-    "采购",
-    "购入",
-    "卖",
-    "销售",
-    "花了",
-    "收入",
-    "支出",
-    "记账",
-    "记一笔",
-    "付了",
-    "收了",
-)
-
-
 def _tool_enabled(tool: BaseTool) -> bool:
     metadata = getattr(tool, "skill_metadata", None)
     enabled = getattr(metadata, "enabled", None)
     if isinstance(enabled, bool):
         return enabled
     return tool.name not in DISABLED_SKILLS
-
-
-def _debt_summary_should_yield_to_cost_record(
-    user_message: str,
-    *,
-    has_write_intent: bool,
-    has_query_intent: bool,
-) -> bool:
-    if has_query_intent or any(
-        hint in user_message for hint in _DEBT_SUMMARY_QUERY_HINTS
-    ):
-        return False
-    return has_write_intent or any(
-        hint in user_message for hint in _COST_RECORD_DEBT_WRITE_HINTS
-    )
 
 
 def select_tools(
@@ -167,23 +122,13 @@ def select_tools(
         candidates.difference_update({"get_planting_units", "get_farm_status"})
 
     if "manage_cost_categories" in candidates:
-        candidates.difference_update(
-            {"get_cost_categories", "get_cost_summary", "get_cost_analytics"}
-        )
+        candidates.difference_update({"get_cost_categories", "manage_cost"})
 
-    if "delete_cost_record" in candidates:
-        candidates.difference_update(
-            {
-                "create_cost_record",
-                "get_cost_summary",
-                "get_cost_analytics",
-                "get_recent_farm_logs",
-                "settle_debt",
-            }
-        )
+    if "manage_cost" in candidates:
+        candidates.discard("get_recent_farm_logs")
 
     if "get_cost_categories" in candidates:
-        candidates.difference_update({"get_cost_summary", "get_cost_analytics"})
+        candidates.discard("manage_cost")
 
     if "get_crop_cycles" in candidates:
         candidates.difference_update({"get_crop_cycle_info", "get_farm_status"})
@@ -192,21 +137,8 @@ def select_tools(
         candidates.discard("get_user_settings")
 
     if "get_labor_payables" in candidates:
-        candidates.difference_update({"get_cost_summary"})
         if has_labor_hint:
-            candidates.discard("get_debt_summary")
-
-    if "get_debt_summary" in candidates:
-        candidates.discard("get_cost_summary")
-        if "create_cost_record" in candidates:
-            if _debt_summary_should_yield_to_cost_record(
-                user_message,
-                has_write_intent=has_write_intent,
-                has_query_intent=has_query_intent,
-            ):
-                candidates.discard("get_debt_summary")
-            else:
-                candidates.discard("create_cost_record")
+            candidates.discard("manage_cost")
 
     if (
         "get_operation_work_orders" in candidates
@@ -225,12 +157,7 @@ def select_tools(
             candidates.remove("create_operation_work_order")
 
     if "settle_labor_payment" in candidates:
-        candidates.difference_update(
-            {"settle_debt", "create_cost_record", "get_labor_payables"}
-        )
-
-    if "settle_debt" in candidates:
-        candidates.discard("create_cost_record")
+        candidates.difference_update({"manage_cost", "get_labor_payables"})
 
     if "create_operation_work_order" in candidates:
         candidates.discard("manage_workers")
@@ -243,8 +170,7 @@ def select_tools(
     if "manage_wages" in candidates:
         candidates.difference_update(
             {
-                "create_cost_record",
-                "get_cost_summary",
+                "manage_cost",
                 "get_labor_payables",
                 "get_recent_farm_logs",
                 "manage_workers",

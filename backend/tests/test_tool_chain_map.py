@@ -15,11 +15,7 @@ class TestToolChainMap:
 
     def test_map_contains_all_known_tools(self):
         expected_keys = {
-            "get_cost_analytics",
-            "get_cost_summary",
-            "get_debt_summary",
-            "create_cost_record",
-            "delete_cost_record",
+            "manage_cost",
             "create_crop_cycle",
             "delete_crop_cycle",
             "create_crop_template",
@@ -41,7 +37,6 @@ class TestToolChainMap:
             "get_user_settings",
             "manage_user_settings",
             "log_farm_activity",
-            "settle_debt",
             "settle_labor_payment",
             "update_crop_cycle",
             "update_crop_stage",
@@ -56,9 +51,7 @@ class TestToolChainMap:
     def test_only_daily_advice_support_tools_link_to_farm_status(self):
         """普通查询工具不应隐式关联 get_farm_status。"""
         query_tools_without_farm_status = [
-            "get_cost_summary",
-            "get_debt_summary",
-            "get_cost_analytics",
+            "manage_cost",
             "get_crop_cycle_info",
             "get_crop_cycles",
             "get_recent_farm_logs",
@@ -78,8 +71,7 @@ class TestToolChainMap:
     def test_write_tools_have_no_chain(self):
         """写操作工具不应关联额外工具。"""
         write_tools = [
-            "create_cost_record",
-            "delete_cost_record",
+            "manage_cost",
             "create_crop_cycle",
             "delete_crop_cycle",
             "create_crop_template",
@@ -87,7 +79,6 @@ class TestToolChainMap:
             "create_operation_work_order",
             "log_farm_activity",
             "manage_farm_logs",
-            "settle_debt",
             "settle_labor_payment",
             "update_crop_cycle",
             "update_crop_stage",
@@ -107,12 +98,8 @@ class TestExpandByChain:
     """expand_by_chain 函数测试。"""
 
     def test_cost_chain(self):
-        result = expand_by_chain({"get_cost_summary"})
-        assert result == {"get_cost_summary"}
-
-    def test_debt_chain(self):
-        result = expand_by_chain({"get_debt_summary"})
-        assert result == {"get_debt_summary"}
+        result = expand_by_chain({"manage_cost"})
+        assert result == {"manage_cost"}
 
     def test_crop_chain(self):
         result = expand_by_chain({"get_crop_cycle_info"})
@@ -131,16 +118,16 @@ class TestExpandByChain:
         assert result == {"get_workers"}
 
     def test_write_skill_no_chain(self):
-        result = expand_by_chain({"create_cost_record"})
-        assert result == {"create_cost_record"}
+        result = expand_by_chain({"manage_cost"})
+        assert result == {"manage_cost"}
 
     def test_empty_input(self):
         result = expand_by_chain(set())
         assert result == set()
 
     def test_multiple_inputs(self):
-        result = expand_by_chain({"get_weather_forecast", "get_cost_summary"})
-        assert result == {"get_weather_forecast", "get_cost_summary"}
+        result = expand_by_chain({"get_weather_forecast", "manage_cost"})
+        assert result == {"get_weather_forecast", "manage_cost"}
 
     def test_max_tools_capped(self):
         result = expand_by_chain({"get_weather_forecast"}, max_tools=1)
@@ -148,7 +135,7 @@ class TestExpandByChain:
 
     def test_original_tools_preserved(self):
         """扩展后的集合必须保留原始工具。"""
-        original = {"get_cost_analytics", "get_crop_cycle_info"}
+        original = {"manage_cost", "get_crop_cycle_info"}
         result = expand_by_chain(original)
         for tool in original:
             assert tool in result

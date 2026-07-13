@@ -145,6 +145,46 @@ def test_direct_tool_messages_can_still_return_without_final_llm():
     assert can_return_direct_tool_messages(messages) is True
 
 
+def test_direct_manage_cost_query_result_can_return_without_final_llm():
+    """manage_cost 的查询类直返沿用工具名白名单，operation 由上游路由保证。"""
+    messages = [
+        ToolMessage(
+            content="您目前总欠款为 630.00 元，构成如下：\n- 普通赊账：230.00 元",
+            tool_call_id="call-manage-cost",
+            name="manage_cost",
+            additional_kwargs={"operation": "query_debt"},
+        )
+    ]
+
+    assert can_return_direct_tool_messages(messages) is True
+
+
+def test_direct_manage_cost_summary_result_goes_through_final_llm():
+    """manage_cost 非欠款查询 operation 仍需最终 LLM 组织表达。"""
+    messages = [
+        ToolMessage(
+            content="收支汇总：\n  总成本：100.00 元",
+            tool_call_id="call-manage-cost",
+            name="manage_cost",
+            additional_kwargs={"operation": "query_summary"},
+        )
+    ]
+
+    assert can_return_direct_tool_messages(messages) is False
+
+
+def test_legacy_debt_summary_direct_name_is_not_allowed():
+    """旧 get_debt_summary 目录已退役，直返白名单不能继续接受旧工具名。"""
+    messages = [
+        ToolMessage(
+            content="您目前总欠款为 630.00 元",
+            tool_call_id="direct_get_debt_summary",
+        )
+    ]
+
+    assert can_return_direct_tool_messages(messages) is False
+
+
 def test_weather_tool_message_should_go_through_final_llm():
     """天气 Skill 原始结果需要最终 LLM 组织语言。"""
     messages = [

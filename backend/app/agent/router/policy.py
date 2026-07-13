@@ -1,6 +1,6 @@
 """Skill Router stop-loss policy。"""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from app.agent.router.models import (
     DisclosureBudget,
@@ -190,6 +190,7 @@ class RouterPolicy:
         if candidate is None:
             self._reject(state, name, "candidate_not_found", None)
             return None
+        candidate = self._candidate_for_frame(candidate, frame_by_name.get(name))
 
         reject_reason = self._candidate_reject_reason(
             candidate,
@@ -206,6 +207,22 @@ class RouterPolicy:
 
         self._select(candidate, state)
         return None
+
+    @staticmethod
+    def _candidate_for_frame(
+        candidate: ToolCandidate,
+        frame: IntentFrame | None,
+    ) -> ToolCandidate:
+        if frame is None or not frame.operation:
+            return candidate
+        if candidate.capability and frame.capability != candidate.capability:
+            return candidate
+        return replace(
+            candidate,
+            operation=frame.operation,
+            operation_risk=frame.risk,
+            risk=frame.risk,
+        )
 
     def _candidate_reject_reason(
         self,
