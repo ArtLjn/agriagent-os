@@ -208,6 +208,50 @@ def test_manage_workers_legacy_metadata_uses_shared_capability_operations():
     assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
 
 
+def test_manage_planting_units_legacy_metadata_uses_shared_capability_operations():
+    class _GetPlantingUnitsSkill:
+        def name(self):
+            return "get_planting_units"
+
+    class _ManagePlantingUnitsSkill:
+        def name(self):
+            return "manage_planting_units"
+
+    query_metadata = get_skill_metadata(_GetPlantingUnitsSkill())
+    manage_metadata = get_skill_metadata(_ManagePlantingUnitsSkill())
+
+    assert query_metadata.capability == "manage_planting_units"
+    assert query_metadata.operation == "query_units"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert manage_metadata.capability == "manage_planting_units"
+    assert manage_metadata.operation == "manage_units"
+    assert manage_metadata.operation_risk == "write_confirm"
+    assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
+def test_manage_cost_categories_legacy_metadata_uses_shared_capability_operations():
+    class _GetCostCategoriesSkill:
+        def name(self):
+            return "get_cost_categories"
+
+    class _ManageCostCategoriesSkill:
+        def name(self):
+            return "manage_cost_categories"
+
+    query_metadata = get_skill_metadata(_GetCostCategoriesSkill())
+    manage_metadata = get_skill_metadata(_ManageCostCategoriesSkill())
+
+    assert query_metadata.capability == "manage_cost_categories"
+    assert query_metadata.operation == "query_categories"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert manage_metadata.capability == "manage_cost_categories"
+    assert manage_metadata.operation == "manage_category"
+    assert manage_metadata.operation_risk == "write_confirm"
+    assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
 def test_default_external_network_skill_metadata():
     metadata = get_skill_metadata(_ExternalNetworkSkill())
 

@@ -110,7 +110,7 @@ capabilities:
           - get_cost_analytics
   - name: manage_cost_categories
     domain: finance
-    capability: cost_category_management
+    capability: manage_cost_categories
     description: 查询、创建或删除农场账务分类。
     examples:
       - 有哪些支出分类
@@ -294,7 +294,7 @@ capabilities:
           - get_farm_status
   - name: manage_planting_units
     domain: farm
-    capability: planting_unit_management
+    capability: manage_planting_units
     description: 查询、创建、更新或删除棚、地块和区域等种植单元。
     examples:
       - 查询有哪些棚

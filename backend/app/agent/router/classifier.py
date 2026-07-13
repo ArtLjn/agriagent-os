@@ -12,7 +12,16 @@ class RuleIntentClassifier:
     capability/operation enrichment 由 service 与 policy 接管。
     """
 
-    _query_hints = ("哪些", "有哪些", "看看", "查询", "查一下", "最近", "怎么样")
+    _query_hints = (
+        "哪些",
+        "有哪些",
+        "看看",
+        "查询",
+        "查一下",
+        "最近",
+        "怎么样",
+        "列表",
+    )
     _farm_hints = ("作物", "栽种", "农场", "茬口", "种植")
     _crop_hints = ("作物", "栽种", "茬口", "种植")
     _daily_advice_time_hints = ("今天", "明天", "这几天", "最近")
@@ -46,7 +55,17 @@ class RuleIntentClassifier:
         "停用",
         "禁用",
     )
-    _write_entity_hints = ("工人", "作业", "账")
+    _write_entity_hints = (
+        "工人",
+        "作业",
+        "账",
+        "分类",
+        "种植单元",
+        "地块",
+        "大棚",
+        "棚区",
+        "号棚",
+    )
     _worker_create_hints = ("新来", "招了", "新增", "创建", "添加")
     _worker_update_hints = ("改", "修改", "更新", "设置", "设为")
     _worker_deactivate_hints = ("删除", "删掉", "删", "停用", "离职", "不用了")
@@ -136,7 +155,25 @@ class RuleIntentClassifier:
         "收入分类",
         "费用分类",
         "有哪些分类",
+        "查询分类",
     )
+    _cost_category_entity_hints = (
+        "账务分类",
+        "成本分类",
+        "收入分类",
+        "费用分类",
+        "支出分类",
+        "分类",
+    )
+    _cost_category_scope_hints = (
+        "账务分类",
+        "成本分类",
+        "收入分类",
+        "费用分类",
+        "支出分类",
+        "自定义分类",
+    )
+    _cost_category_delete_hints = ("删除", "删掉", "删")
     _crop_template_hints = (
         "作物模板",
         "模板列表",
@@ -155,6 +192,34 @@ class RuleIntentClassifier:
         "地里都种着什么",
     )
     _planting_unit_hints = ("种植单元", "地块", "大棚", "棚区", "有哪些棚")
+    _planting_unit_entity_hints = (
+        "种植单元",
+        "地块",
+        "大棚",
+        "棚区",
+        "号棚",
+        "区域",
+    )
+    _ambiguous_planting_unit_targets = (
+        "这个地块",
+        "这个大棚",
+        "这个棚区",
+        "这个种植单元",
+        "该地块",
+        "该大棚",
+        "该棚区",
+        "该种植单元",
+    )
+    _planting_unit_update_hints = (
+        "改",
+        "修改",
+        "更新",
+        "调整",
+        "改成",
+        "设为",
+        "面积",
+    )
+    _planting_unit_delete_hints = ("删除", "删掉", "删")
     _user_settings_hints = (
         "用户设置",
         "我的设置",
@@ -468,6 +533,10 @@ class RuleIntentClassifier:
             frames.append(self._build_create_cost_record_frame())
         if self._looks_like_update_user_settings(message):
             frames.append(self._build_update_user_settings_frame())
+        if self._looks_like_manage_cost_category(message):
+            frames.append(self._build_manage_cost_category_frame(message))
+        if self._looks_like_manage_planting_unit(message):
+            frames.append(self._build_manage_planting_unit_frame(message))
         if self._looks_like_incomplete_farm_labor_work(message):
             frames.append(self._build_clarify_farm_labor_frame(message))
         if self._looks_like_create_work_order(message):
@@ -554,6 +623,30 @@ class RuleIntentClassifier:
             entities=["user_settings"],
             candidate_tools=["manage_user_settings"],
             confidence=0.8,
+            requires_confirmation=True,
+        )
+
+    def _build_manage_cost_category_frame(self, message: str) -> IntentFrame:
+        return IntentFrame(
+            domain="finance",
+            intent="manage_cost_category",
+            risk="write_confirm",
+            entities=["cost_category"],
+            candidate_tools=["manage_cost_categories"],
+            confidence=0.8,
+            params_hint={"action": self._cost_category_action(message)},
+            requires_confirmation=True,
+        )
+
+    def _build_manage_planting_unit_frame(self, message: str) -> IntentFrame:
+        return IntentFrame(
+            domain="farm",
+            intent="manage_planting_units",
+            risk="write_confirm",
+            entities=["planting_unit"],
+            candidate_tools=["manage_planting_units"],
+            confidence=0.8,
+            params_hint={"action": self._planting_unit_action(message)},
             requires_confirmation=True,
         )
 
@@ -657,6 +750,26 @@ class RuleIntentClassifier:
             or self._looks_like_restore_worker(message)
         )
 
+    def _looks_like_manage_cost_category(self, message: str) -> bool:
+        if self._has_any(message, self._query_hints):
+            return False
+        if not self._has_cost_category_target(message):
+            return False
+        return self._looks_like_create_action(
+            message
+        ) or self._looks_like_delete_cost_category(message)
+
+    def _looks_like_manage_planting_unit(self, message: str) -> bool:
+        if self._looks_like_planting_unit_query(message):
+            return False
+        if not self._has_planting_unit_target(message):
+            return False
+        return (
+            self._looks_like_create_action(message)
+            or self._looks_like_update_planting_unit(message)
+            or self._looks_like_delete_planting_unit(message)
+        )
+
     def _looks_like_create_crop_template(self, message: str) -> bool:
         return "模板" in message and self._looks_like_create_action(message)
 
@@ -701,6 +814,8 @@ class RuleIntentClassifier:
     def _looks_like_cost_summary_query(self, message: str) -> bool:
         if self._looks_like_cost_category_query(message):
             return False
+        if self._looks_like_manage_cost_category(message):
+            return False
         return self._has_any(message, self._cost_summary_hints)
 
     def _looks_like_finance_overview_query(self, message: str) -> bool:
@@ -738,7 +853,11 @@ class RuleIntentClassifier:
         return has_worker and has_quantity and has_labor_verb
 
     def _looks_like_cost_category_query(self, message: str) -> bool:
-        return self._has_any(message, self._cost_category_hints)
+        if self._looks_like_manage_cost_category(message):
+            return False
+        return self._has_any(message, self._cost_category_hints) or (
+            "分类" in message and self._has_any(message, self._query_hints)
+        )
 
     def _looks_like_crop_template_query(self, message: str) -> bool:
         if self._looks_like_create_crop_template(message):
@@ -787,6 +906,10 @@ class RuleIntentClassifier:
     def _looks_like_ambiguous_write(self, message: str) -> bool:
         if self._looks_like_manage_worker(message):
             return False
+        if self._looks_like_manage_cost_category(message):
+            return False
+        if self._looks_like_manage_planting_unit(message):
+            return False
         return self._has_any(message, self._write_action_hints) and self._has_any(
             message, self._write_entity_hints
         )
@@ -808,6 +931,50 @@ class RuleIntentClassifier:
 
     def _has_worker_target(self, message: str) -> bool:
         return self._extract_worker_name(message) is not None
+
+    def _looks_like_delete_cost_category(self, message: str) -> bool:
+        has_delete_action = self._has_any(message, self._cost_category_delete_hints)
+        return has_delete_action and self._has_explicit_cost_category_scope(message)
+
+    def _has_cost_category_target(self, message: str) -> bool:
+        return self._has_any(message, self._cost_category_entity_hints)
+
+    def _has_explicit_cost_category_scope(self, message: str) -> bool:
+        return self._has_any(message, self._cost_category_scope_hints) or bool(
+            re.search(r"(?:分类|category)\s*#?\s*\d+", message, flags=re.IGNORECASE)
+        )
+
+    def _cost_category_action(self, message: str) -> str:
+        if self._looks_like_delete_cost_category(message):
+            return "delete"
+        return "create"
+
+    def _looks_like_update_planting_unit(self, message: str) -> bool:
+        has_update_action = self._has_any(message, self._planting_unit_update_hints)
+        return has_update_action and self._has_planting_unit_target(message)
+
+    def _looks_like_delete_planting_unit(self, message: str) -> bool:
+        has_delete_action = self._has_any(message, self._planting_unit_delete_hints)
+        return has_delete_action and self._has_planting_unit_target(message)
+
+    def _has_planting_unit_target(self, message: str) -> bool:
+        if self._has_any(message, self._ambiguous_planting_unit_targets):
+            return False
+        return bool(
+            re.search(
+                r"[一二三四五六七八九十\d]+\s*号棚"
+                r"|[A-Za-z]\s*区"
+                r"|(?:地块|大棚|棚区|种植单元)\s*[\u4e00-\u9fa5A-Za-z0-9]{1,8}",
+                message,
+            )
+        )
+
+    def _planting_unit_action(self, message: str) -> str:
+        if self._looks_like_delete_planting_unit(message):
+            return "delete"
+        if self._looks_like_update_planting_unit(message):
+            return "update"
+        return "create"
 
     @staticmethod
     def _has_any(message: str, hints: tuple[str, ...]) -> bool:

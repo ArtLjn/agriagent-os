@@ -804,3 +804,141 @@ def test_worker_management_uses_write_confirm_operation(message: str) -> None:
     assert decision.selected_operations == {"manage_workers": ["manage_worker"]}
     assert decision.frames[0].risk == "write_confirm"
     assert decision.frames[0].requires_confirmation is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "有哪些地块",
+        "地块列表",
+        "有哪些大棚",
+        "看看种植单元",
+        "查询种植单元",
+    ],
+)
+def test_planting_unit_read_query_does_not_expose_write_tool(
+    message: str,
+) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_planting_units"), _tool("manage_planting_units")],
+    )
+
+    assert decision.selected_tools == ["get_planting_units"]
+    assert decision.selected_operations == {"manage_planting_units": ["query_units"]}
+    assert "manage_planting_units" not in decision.selected_tools
+    assert decision.frames[0].risk == "read"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "新增地块一号棚",
+        "添加一个大棚A区",
+        "把一号棚面积改成20亩",
+        "删除地块一号棚",
+    ],
+)
+def test_planting_unit_management_uses_write_confirm_operation(
+    message: str,
+) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_planting_units"), _tool("manage_planting_units")],
+    )
+
+    assert decision.selected_tools == ["manage_planting_units"]
+    assert decision.selected_operations == {"manage_planting_units": ["manage_units"]}
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].requires_confirmation is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "处理一下这个地块",
+        "删除地块",
+        "删除这个地块",
+        "删除大棚",
+        "把这个地块面积改成20亩",
+    ],
+)
+def test_ambiguous_planting_unit_management_asks_clarification(
+    message: str,
+) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_planting_units"), _tool("manage_planting_units")],
+    )
+
+    assert decision.selected_tools == []
+    assert decision.clarification is not None
+    assert "请补充" in decision.clarification
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "有哪些成本分类",
+        "成本分类列表",
+        "有哪些收入分类",
+        "费用分类有哪些",
+        "查询分类",
+    ],
+)
+def test_cost_category_read_query_does_not_expose_write_tool(
+    message: str,
+) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_cost_categories"), _tool("manage_cost_categories")],
+    )
+
+    assert decision.selected_tools == ["get_cost_categories"]
+    assert decision.selected_operations == {
+        "manage_cost_categories": ["query_categories"]
+    }
+    assert "manage_cost_categories" not in decision.selected_tools
+    assert decision.frames[0].risk == "read"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "新增成本分类农药",
+        "添加一个收入分类销售收入",
+        "删除成本分类农药",
+        "删除分类 12",
+    ],
+)
+def test_cost_category_management_uses_write_confirm_operation(
+    message: str,
+) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_cost_categories"), _tool("manage_cost_categories")],
+    )
+
+    assert decision.selected_tools == ["manage_cost_categories"]
+    assert decision.selected_operations == {
+        "manage_cost_categories": ["manage_category"]
+    }
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].requires_confirmation is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["处理一下这个分类", "删除分类", "把化肥分类改成农资"],
+)
+def test_ambiguous_cost_category_management_asks_clarification(
+    message: str,
+) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_cost_categories"), _tool("manage_cost_categories")],
+    )
+
+    assert decision.selected_tools == []
+    assert decision.clarification is not None
+    assert "请补充" in decision.clarification

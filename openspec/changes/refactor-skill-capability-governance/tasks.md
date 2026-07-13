@@ -51,6 +51,6 @@
 
 - [x] 6.1 低风险合并 `manage_settings`，把 `get_user_settings` 和 `manage_user_settings` 通过 capability operation 统一。
 - [x] 6.2 低风险合并 `manage_workers`，把 `get_workers` 和 `manage_workers` 通过 capability operation 统一。
-- [ ] 6.3 低风险合并 `manage_planting_units`，把查询和管理 operation 统一。
-- [ ] 6.4 低风险合并 `manage_cost_categories`，把分类查询和管理 operation 统一。
+- [x] 6.3 低风险合并 `manage_planting_units`，把查询和管理 operation 统一。
+- [x] 6.4 低风险合并 `manage_cost_categories`，把分类查询和管理 operation 统一。
 - [ ] 6.5 在低风险合并稳定后，再为 `manage_cost`、`manage_crop_cycle`、`manage_work_orders`、`manage_labor_payment` 单独拆后续 OpenSpec change。

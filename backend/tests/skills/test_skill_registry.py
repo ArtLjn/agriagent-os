@@ -93,6 +93,52 @@ def test_manage_workers_legacy_aliases_resolve_to_operations():
     )
 
 
+def test_manage_planting_units_legacy_aliases_resolve_to_operations():
+    registry = load_skill_registry()
+
+    query_alias = registry.resolve_alias("get_planting_units")
+    manage_alias = registry.resolve_alias("manage_planting_units")
+
+    assert query_alias is not None
+    assert query_alias.capability == "manage_planting_units"
+    assert query_alias.operation == "query_units"
+    assert manage_alias is not None
+    assert manage_alias.capability == "manage_planting_units"
+    assert manage_alias.operation == "manage_units"
+    assert registry.capabilities["manage_planting_units"].capability == (
+        "manage_planting_units"
+    )
+    assert registry.get_operation("manage_planting_units", "query_units").risk == (
+        "read"
+    )
+    assert registry.get_operation("manage_planting_units", "manage_units").risk == (
+        "write_confirm"
+    )
+
+
+def test_manage_cost_categories_legacy_aliases_resolve_to_operations():
+    registry = load_skill_registry()
+
+    query_alias = registry.resolve_alias("get_cost_categories")
+    manage_alias = registry.resolve_alias("manage_cost_categories")
+
+    assert query_alias is not None
+    assert query_alias.capability == "manage_cost_categories"
+    assert query_alias.operation == "query_categories"
+    assert manage_alias is not None
+    assert manage_alias.capability == "manage_cost_categories"
+    assert manage_alias.operation == "manage_category"
+    assert registry.capabilities["manage_cost_categories"].capability == (
+        "manage_cost_categories"
+    )
+    assert registry.get_operation(
+        "manage_cost_categories", "query_categories"
+    ).risk == ("read")
+    assert registry.get_operation("manage_cost_categories", "manage_category").risk == (
+        "write_confirm"
+    )
+
+
 def test_validation_reports_structured_issues(tmp_path):
     _write_registry_files(
         tmp_path,

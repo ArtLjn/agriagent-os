@@ -88,6 +88,54 @@ def _tools(names: list[str]):
             "manage_settings",
             "update_settings",
         ),
+        (
+            "有哪些地块",
+            "get_planting_units",
+            "manage_planting_units",
+            "query_units",
+        ),
+        (
+            "查询种植单元",
+            "get_planting_units",
+            "manage_planting_units",
+            "query_units",
+        ),
+        (
+            "新增地块一号棚",
+            "manage_planting_units",
+            "manage_planting_units",
+            "manage_units",
+        ),
+        (
+            "把一号棚面积改成20亩",
+            "manage_planting_units",
+            "manage_planting_units",
+            "manage_units",
+        ),
+        (
+            "有哪些成本分类",
+            "get_cost_categories",
+            "manage_cost_categories",
+            "query_categories",
+        ),
+        (
+            "查询分类",
+            "get_cost_categories",
+            "manage_cost_categories",
+            "query_categories",
+        ),
+        (
+            "新增成本分类农药",
+            "manage_cost_categories",
+            "manage_cost_categories",
+            "manage_category",
+        ),
+        (
+            "删除成本分类农药",
+            "manage_cost_categories",
+            "manage_cost_categories",
+            "manage_category",
+        ),
     ],
 )
 def test_router_top1_capability_accuracy(
@@ -158,6 +206,16 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
             "工人列表",
             "get_workers",
             ["manage_workers"],
+        ),
+        (
+            "地块列表",
+            "get_planting_units",
+            ["manage_planting_units"],
+        ),
+        (
+            "成本分类列表",
+            "get_cost_categories",
+            ["manage_cost_categories"],
         ),
     ],
 )
@@ -246,4 +304,8 @@ def _governance_tool_pool() -> list[str]:
         "get_weather_forecast",
         "get_user_settings",
         "manage_user_settings",
+        "get_planting_units",
+        "manage_planting_units",
+        "get_cost_categories",
+        "manage_cost_categories",
     ]
