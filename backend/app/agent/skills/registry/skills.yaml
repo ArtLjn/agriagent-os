@@ -588,7 +588,7 @@ capabilities:
           - get_farm_status
   - name: manage_settings
     domain: settings
-    capability: user_settings_management
+    capability: manage_settings
     description: 查询或更新当前用户显示名、默认天气城市、经纬度和助手回复角色。
     examples:
       - 查询我的设置

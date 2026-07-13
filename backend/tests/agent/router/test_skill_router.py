@@ -692,6 +692,12 @@ def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
             "manage_settings",
             "query_settings",
         ),
+        (
+            "把默认天气城市改成苏州",
+            "manage_user_settings",
+            "manage_settings",
+            "update_settings",
+        ),
     ],
 )
 def test_registry_capability_routing_metadata_is_preserved(
@@ -708,3 +714,49 @@ def test_registry_capability_routing_metadata_is_preserved(
     assert decision.scores["operation"][operation] >= 0.85
     assert decision.frames[0].capability == capability
     assert decision.frames[0].operation == operation
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我的设置",
+        "查看我的设置",
+        "查询我的设置",
+        "我的默认天气城市是什么",
+        "默认天气城市设置是什么",
+        "当前助手回复角色是什么",
+        "我的默认经纬度是什么",
+        "当前默认经纬度是多少",
+    ],
+)
+def test_settings_read_query_does_not_expose_write_tool(message: str) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_user_settings"), _tool("manage_user_settings")],
+    )
+
+    assert decision.selected_tools == ["get_user_settings"]
+    assert decision.selected_operations == {"manage_settings": ["query_settings"]}
+    assert "manage_user_settings" not in decision.selected_tools
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "把默认天气城市改成苏州",
+        "设置默认天气城市为苏州",
+        "修改助手回复角色",
+        "设置默认经纬度为31.2,120.6",
+        "把默认经纬度改成31.2,120.6",
+    ],
+)
+def test_settings_update_uses_write_confirm_operation(message: str) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_user_settings"), _tool("manage_user_settings")],
+    )
+
+    assert decision.selected_tools == ["manage_user_settings"]
+    assert decision.selected_operations == {"manage_settings": ["update_settings"]}
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].requires_confirmation is True

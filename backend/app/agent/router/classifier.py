@@ -143,10 +143,35 @@ class RuleIntentClassifier:
     _user_settings_hints = (
         "用户设置",
         "我的设置",
+        "默认天气城市",
         "默认城市",
         "天气城市",
+        "默认经纬度",
+        "经纬度",
+        "经度",
+        "纬度",
+        "助手回复角色",
+        "助手角色",
+        "回复角色",
         "显示名",
         "昵称",
+    )
+    _user_settings_read_hints = (
+        "什么",
+        "是什么",
+        "当前",
+        "查看",
+        "查询",
+        "查一下",
+        "看看",
+        "多少",
+        "有哪些",
+    )
+    _user_settings_update_patterns = (
+        r"(?:把|将).{0,16}(?:改成|设为|换成|调整为|更新为)",
+        r"(?:设置|修改|调整|更新).{0,16}(?:为|成)",
+        r"(?:改成|设为|换成|调整为|更新为).{0,16}",
+        r"(?:修改|调整|更新)(?:用户设置|默认天气城市|默认城市|天气城市|默认经纬度|经纬度|经度|纬度|助手回复角色|助手角色|回复角色|显示名|昵称)",
     )
     _worker_query_hints = (
         "我的工人",
@@ -369,6 +394,10 @@ class RuleIntentClassifier:
         return frames
 
     def _classify_search_or_weather(self, message: str) -> list[IntentFrame]:
+        if self._looks_like_user_settings_query(message) or (
+            self._looks_like_update_user_settings(message)
+        ):
+            return []
         if self._looks_like_web_search(message):
             return [
                 IntentFrame(
@@ -420,6 +449,8 @@ class RuleIntentClassifier:
             frames.append(self._build_delete_crop_cycle_frame())
         if self._looks_like_create_cost_record(message):
             frames.append(self._build_create_cost_record_frame())
+        if self._looks_like_update_user_settings(message):
+            frames.append(self._build_update_user_settings_frame())
         if self._looks_like_incomplete_farm_labor_work(message):
             frames.append(self._build_clarify_farm_labor_frame(message))
         if self._looks_like_create_work_order(message):
@@ -482,6 +513,17 @@ class RuleIntentClassifier:
             entities=["cost"],
             candidate_tools=["create_cost_record"],
             confidence=0.78,
+            requires_confirmation=True,
+        )
+
+    def _build_update_user_settings_frame(self) -> IntentFrame:
+        return IntentFrame(
+            domain="settings",
+            intent="update_settings",
+            risk="write_confirm",
+            entities=["user_settings"],
+            candidate_tools=["manage_user_settings"],
+            confidence=0.8,
             requires_confirmation=True,
         )
 
@@ -687,7 +729,18 @@ class RuleIntentClassifier:
         )
 
     def _looks_like_user_settings_query(self, message: str) -> bool:
-        return self._has_any(message, self._user_settings_hints)
+        return self._has_any(
+            message,
+            self._user_settings_hints,
+        ) and not self._looks_like_update_user_settings(message)
+
+    def _looks_like_update_user_settings(self, message: str) -> bool:
+        if self._has_any(message, self._user_settings_read_hints):
+            return False
+        return self._has_any(message, self._user_settings_hints) and any(
+            re.search(pattern, message)
+            for pattern in self._user_settings_update_patterns
+        )
 
     def _looks_like_worker_query(self, message: str) -> bool:
         if self._looks_like_create_worker(message):

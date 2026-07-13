@@ -40,6 +40,54 @@ def _tools(names: list[str]):
             "manage_labor_payment",
             "query_payables",
         ),
+        (
+            "我的默认天气城市是什么",
+            "get_user_settings",
+            "manage_settings",
+            "query_settings",
+        ),
+        (
+            "默认天气城市设置是什么",
+            "get_user_settings",
+            "manage_settings",
+            "query_settings",
+        ),
+        (
+            "当前助手回复角色是什么",
+            "get_user_settings",
+            "manage_settings",
+            "query_settings",
+        ),
+        (
+            "当前默认经纬度是多少",
+            "get_user_settings",
+            "manage_settings",
+            "query_settings",
+        ),
+        (
+            "把默认天气城市改成苏州",
+            "manage_user_settings",
+            "manage_settings",
+            "update_settings",
+        ),
+        (
+            "设置默认天气城市为苏州",
+            "manage_user_settings",
+            "manage_settings",
+            "update_settings",
+        ),
+        (
+            "设置默认经纬度为31.2,120.6",
+            "manage_user_settings",
+            "manage_settings",
+            "update_settings",
+        ),
+        (
+            "把默认经纬度改成31.2,120.6",
+            "manage_user_settings",
+            "manage_settings",
+            "update_settings",
+        ),
     ],
 )
 def test_router_top1_capability_accuracy(
@@ -170,4 +218,6 @@ def _governance_tool_pool() -> list[str]:
         "settle_labor_payment",
         "get_farm_status",
         "get_weather_forecast",
+        "get_user_settings",
+        "manage_user_settings",
     ]

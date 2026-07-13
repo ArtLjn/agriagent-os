@@ -164,6 +164,28 @@ def test_registry_operation_risk_maps_to_runtime_risk():
     assert metadata.risk_level == SkillRiskLevel.HIGH
 
 
+def test_manage_settings_legacy_metadata_uses_shared_capability_operations():
+    class _GetUserSettingsSkill:
+        def name(self):
+            return "get_user_settings"
+
+    class _ManageUserSettingsSkill:
+        def name(self):
+            return "manage_user_settings"
+
+    query_metadata = get_skill_metadata(_GetUserSettingsSkill())
+    update_metadata = get_skill_metadata(_ManageUserSettingsSkill())
+
+    assert query_metadata.capability == "manage_settings"
+    assert query_metadata.operation == "query_settings"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert update_metadata.capability == "manage_settings"
+    assert update_metadata.operation == "update_settings"
+    assert update_metadata.operation_risk == "write_confirm"
+    assert update_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
 def test_default_external_network_skill_metadata():
     metadata = get_skill_metadata(_ExternalNetworkSkill())
 

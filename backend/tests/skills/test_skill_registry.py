@@ -53,6 +53,26 @@ def test_aliases_resolve_to_capability_operations():
         assert legacy_name in operation.legacy_aliases
 
 
+def test_manage_settings_legacy_aliases_resolve_to_operations():
+    registry = load_skill_registry()
+
+    query_alias = registry.resolve_alias("get_user_settings")
+    update_alias = registry.resolve_alias("manage_user_settings")
+
+    assert query_alias is not None
+    assert query_alias.capability == "manage_settings"
+    assert query_alias.operation == "query_settings"
+    assert update_alias is not None
+    assert update_alias.capability == "manage_settings"
+    assert update_alias.operation == "update_settings"
+    assert registry.capabilities["manage_settings"].capability == "manage_settings"
+    assert registry.get_operation("manage_settings", "query_settings").risk == "read"
+    assert (
+        registry.get_operation("manage_settings", "update_settings").risk
+        == "write_confirm"
+    )
+
+
 def test_validation_reports_structured_issues(tmp_path):
     _write_registry_files(
         tmp_path,
