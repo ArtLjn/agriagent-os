@@ -154,6 +154,11 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
             "get_crop_cycles",
             ["create_crop_cycle", "delete_crop_cycle"],
         ),
+        (
+            "工人列表",
+            "get_workers",
+            ["manage_workers"],
+        ),
     ],
 )
 def test_read_intent_does_not_expose_write_operations(
@@ -189,6 +194,27 @@ def test_write_tool_budget_selects_at_most_one_write_tool() -> None:
     assert len(decision.selected_tools) <= DisclosureBudget().max_write_tools
     assert decision.selected_tools == ["manage_workers"]
     assert decision.fallback != "fallback_all"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "新增工人张三",
+        "添加一个工人李四",
+        "把张三的电话改成13800000000",
+        "删除工人张三",
+    ],
+)
+def test_worker_management_write_intent_uses_manage_workers_operation(
+    message: str,
+) -> None:
+    decision = SkillRouter().route(message, _tools(_governance_tool_pool()))
+
+    assert decision.selected_tools[:1] == ["manage_workers"]
+    assert decision.selected_operations == {"manage_workers": ["manage_worker"]}
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].requires_confirmation is True
+    assert "get_workers" not in decision.selected_tools
 
 
 def _selected_candidates(selected_tools: list[str], tools: list) -> list:

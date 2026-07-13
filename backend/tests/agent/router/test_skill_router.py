@@ -760,3 +760,47 @@ def test_settings_update_uses_write_confirm_operation(message: str) -> None:
     assert decision.selected_operations == {"manage_settings": ["update_settings"]}
     assert decision.frames[0].risk == "write_confirm"
     assert decision.frames[0].requires_confirmation is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "我的工人",
+        "工人列表",
+        "有哪些工人",
+        "看看工人",
+        "查询工人",
+        "查一下工人",
+    ],
+)
+def test_worker_read_query_does_not_expose_write_tool(message: str) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_workers"), _tool("manage_workers")],
+    )
+
+    assert decision.selected_tools == ["get_workers"]
+    assert decision.selected_operations == {"manage_workers": ["query_workers"]}
+    assert "manage_workers" not in decision.selected_tools
+    assert decision.frames[0].risk == "read"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "新增工人张三",
+        "添加一个工人李四",
+        "把张三的电话改成13800000000",
+        "删除工人张三",
+    ],
+)
+def test_worker_management_uses_write_confirm_operation(message: str) -> None:
+    decision = SkillRouter().route(
+        message,
+        [_tool("get_workers"), _tool("manage_workers")],
+    )
+
+    assert decision.selected_tools == ["manage_workers"]
+    assert decision.selected_operations == {"manage_workers": ["manage_worker"]}
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].requires_confirmation is True

@@ -186,6 +186,28 @@ def test_manage_settings_legacy_metadata_uses_shared_capability_operations():
     assert update_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
 
 
+def test_manage_workers_legacy_metadata_uses_shared_capability_operations():
+    class _GetWorkersSkill:
+        def name(self):
+            return "get_workers"
+
+    class _ManageWorkersSkill:
+        def name(self):
+            return "manage_workers"
+
+    query_metadata = get_skill_metadata(_GetWorkersSkill())
+    manage_metadata = get_skill_metadata(_ManageWorkersSkill())
+
+    assert query_metadata.capability == "manage_workers"
+    assert query_metadata.operation == "query_workers"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert manage_metadata.capability == "manage_workers"
+    assert manage_metadata.operation == "manage_worker"
+    assert manage_metadata.operation_risk == "write_confirm"
+    assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
 def test_default_external_network_skill_metadata():
     metadata = get_skill_metadata(_ExternalNetworkSkill())
 

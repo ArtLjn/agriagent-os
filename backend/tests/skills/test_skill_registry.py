@@ -73,6 +73,26 @@ def test_manage_settings_legacy_aliases_resolve_to_operations():
     )
 
 
+def test_manage_workers_legacy_aliases_resolve_to_operations():
+    registry = load_skill_registry()
+
+    query_alias = registry.resolve_alias("get_workers")
+    manage_alias = registry.resolve_alias("manage_workers")
+
+    assert query_alias is not None
+    assert query_alias.capability == "manage_workers"
+    assert query_alias.operation == "query_workers"
+    assert manage_alias is not None
+    assert manage_alias.capability == "manage_workers"
+    assert manage_alias.operation == "manage_worker"
+    assert registry.capabilities["manage_workers"].capability == "manage_workers"
+    assert registry.get_operation("manage_workers", "query_workers").risk == "read"
+    assert (
+        registry.get_operation("manage_workers", "manage_worker").risk
+        == "write_confirm"
+    )
+
+
 def test_validation_reports_structured_issues(tmp_path):
     _write_registry_files(
         tmp_path,

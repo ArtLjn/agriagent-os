@@ -432,7 +432,7 @@ capabilities:
           - get_farm_status
   - name: manage_workers
     domain: labor
-    capability: worker_management
+    capability: manage_workers
     description: 管理工人档案，支持查询、创建、更新、停用和恢复。
     examples:
       - 我的工人有哪些

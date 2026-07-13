@@ -47,7 +47,22 @@ class RuleIntentClassifier:
         "禁用",
     )
     _write_entity_hints = ("工人", "作业", "账")
-    _worker_create_hints = ("新来", "招了", "新增", "创建")
+    _worker_create_hints = ("新来", "招了", "新增", "创建", "添加")
+    _worker_update_hints = ("改", "修改", "更新", "设置", "设为")
+    _worker_deactivate_hints = ("删除", "删掉", "删", "停用", "离职", "不用了")
+    _worker_restore_hints = ("恢复", "回来", "回来了", "返岗")
+    _worker_update_fields = (
+        "电话",
+        "手机号",
+        "手机",
+        "工资",
+        "日薪",
+        "单价",
+        "备注",
+        "姓名",
+        "名字",
+        "状态",
+    )
     _worker_pay_hints = ("工资", "日薪", "每天", "一天")
     _work_order_hints = ("作业", "采收", "授粉", "安排")
     _operation_hints = ("授粉", "装车", "整枝", "打杈", "压蔓", "压瓜", "留瓜", "垫瓜")
@@ -441,6 +456,8 @@ class RuleIntentClassifier:
         frames: list[IntentFrame] = []
         if self._looks_like_create_worker(message):
             frames.append(self._build_create_worker_frame(message))
+        elif self._looks_like_manage_worker(message):
+            frames.append(self._build_manage_worker_frame(message))
         if self._looks_like_create_crop_template(message):
             frames.append(self._build_create_crop_template_frame(message))
         if self._looks_like_create_crop_cycle(message):
@@ -464,6 +481,19 @@ class RuleIntentClassifier:
         return IntentFrame(
             domain="labor",
             intent="create_worker",
+            risk="write_confirm",
+            entities=["worker"],
+            candidate_tools=["manage_workers"],
+            confidence=0.78,
+            params_hint=worker_params or None,
+            requires_confirmation=True,
+        )
+
+    def _build_manage_worker_frame(self, message: str) -> IntentFrame:
+        worker_params = self._extract_worker_management_params(message)
+        return IntentFrame(
+            domain="labor",
+            intent="manage_worker",
             risk="write_confirm",
             entities=["worker"],
             candidate_tools=["manage_workers"],
@@ -620,6 +650,13 @@ class RuleIntentClassifier:
         has_pay_hint = self._has_any(message, self._worker_pay_hints)
         return has_create_action or has_pay_hint
 
+    def _looks_like_manage_worker(self, message: str) -> bool:
+        return (
+            self._looks_like_update_worker(message)
+            or self._looks_like_deactivate_worker(message)
+            or self._looks_like_restore_worker(message)
+        )
+
     def _looks_like_create_crop_template(self, message: str) -> bool:
         return "模板" in message and self._looks_like_create_action(message)
 
@@ -748,9 +785,29 @@ class RuleIntentClassifier:
         return self._has_any(message, self._worker_query_hints)
 
     def _looks_like_ambiguous_write(self, message: str) -> bool:
+        if self._looks_like_manage_worker(message):
+            return False
         return self._has_any(message, self._write_action_hints) and self._has_any(
             message, self._write_entity_hints
         )
+
+    def _looks_like_update_worker(self, message: str) -> bool:
+        has_update_action = self._has_any(message, self._worker_update_hints)
+        if not has_update_action:
+            return False
+        has_update_field = self._has_any(message, self._worker_update_fields)
+        return self._has_worker_target(message) and has_update_field
+
+    def _looks_like_deactivate_worker(self, message: str) -> bool:
+        has_deactivate_action = self._has_any(message, self._worker_deactivate_hints)
+        return has_deactivate_action and self._has_worker_target(message)
+
+    def _looks_like_restore_worker(self, message: str) -> bool:
+        has_restore_action = self._has_any(message, self._worker_restore_hints)
+        return has_restore_action and self._has_worker_target(message)
+
+    def _has_worker_target(self, message: str) -> bool:
+        return self._extract_worker_name(message) is not None
 
     @staticmethod
     def _has_any(message: str, hints: tuple[str, ...]) -> bool:
@@ -765,6 +822,27 @@ class RuleIntentClassifier:
         if price is not None:
             params["default_unit_price"] = price
         return params
+
+    def _extract_worker_management_params(self, message: str) -> dict:
+        params: dict = {"action": self._worker_management_action(message)}
+        name = self._extract_worker_name(message)
+        phone = self._extract_phone(message)
+        price = self._extract_unit_price(message)
+        if name:
+            params["name"] = name
+        if phone:
+            params["phone"] = phone
+        if price is not None:
+            params["default_unit_price"] = price
+            params.setdefault("default_pay_type", "daily")
+        return params
+
+    def _worker_management_action(self, message: str) -> str:
+        if self._looks_like_deactivate_worker(message):
+            return "deactivate"
+        if self._looks_like_restore_worker(message):
+            return "restore"
+        return "update"
 
     def _extract_work_order_params(self, message: str) -> dict:
         params: dict = {}
@@ -836,6 +914,7 @@ class RuleIntentClassifier:
         name_chars = r"[\u4e00-\u9fa5A-Za-z0-9]{1,8}"
         patterns = (
             rf"(?:工人|员工|师傅)(?P<name>{name_chars})(?:工资|日薪|每天)",
+            r"(?:把|将)?(?P<name>[\u4e00-\u9fa5]{2,4})的(?:电话|手机号|手机)",
             r"(?:今天|昨天|前天|这个月|本月)?(?P<name>[\u4e00-\u9fa5]{2,4})(?:去|到).{0,16}?(?:采收|授粉|装车|整枝|打杈|压蔓|压瓜|留瓜|垫瓜)",
             r"(?P<name>[\u4e00-\u9fa5]{2,4})(?:这个月|本月).{0,4}?干了\s*\d+\s*天",
             r"(?P<name>[\u4e00-\u9fa5]{2,4})(?:这个月|本月)?.{0,4}?干了\s*\d+\s*天",
@@ -870,6 +949,13 @@ class RuleIntentClassifier:
             or match.group("daily_price")
         )
         return int(price)
+
+    @staticmethod
+    def _extract_phone(message: str) -> str | None:
+        match = re.search(r"(?P<phone>1[3-9]\d{9})", message)
+        if not match:
+            return None
+        return match.group("phone")
 
     @staticmethod
     def _extract_labor_quantity(message: str) -> int | None:
