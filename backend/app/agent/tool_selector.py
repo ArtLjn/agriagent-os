@@ -84,7 +84,7 @@ def select_tools(
     has_labor_hint = any(hint in user_message for hint in ("人工", "工钱", "工资"))
 
     for tool_name, patterns in WRITE_PATTERNS.items():
-        if tool_name == "create_crop_cycle" and is_planting_advice:
+        if tool_name == "manage_crop_cycle" and is_planting_advice:
             continue
         for pat in patterns:
             if pat.search(user_message):
@@ -97,18 +97,8 @@ def select_tools(
                 candidates.add(tool_name)
                 break
 
-    if "update_crop_cycle" in candidates:
-        candidates.difference_update({"get_crop_cycle_info", "get_farm_status"})
-
-    if "delete_crop_cycle" in candidates:
-        candidates.difference_update(
-            {
-                "create_crop_cycle",
-                "update_crop_cycle",
-                "get_crop_cycle_info",
-                "get_farm_status",
-            }
-        )
+    if "manage_crop_cycle" in candidates:
+        candidates.discard("get_farm_status")
 
     if "manage_crop_templates" in candidates:
         candidates.difference_update({"create_crop_template", "get_crop_templates"})
@@ -129,9 +119,6 @@ def select_tools(
 
     if "get_cost_categories" in candidates:
         candidates.discard("manage_cost")
-
-    if "get_crop_cycles" in candidates:
-        candidates.difference_update({"get_crop_cycle_info", "get_farm_status"})
 
     if "manage_user_settings" in candidates:
         candidates.discard("get_user_settings")

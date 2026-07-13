@@ -25,6 +25,7 @@ WRITE_SKILLS = frozenset(
     {
         "create_cost_record",
         "create_crop_cycle",
+        "manage_crop_cycle",
         "create_crop_template",
         "log_farm_activity",
         "create_operation_work_order",
@@ -49,6 +50,13 @@ WRITE_SKILLS = frozenset(
 _CACHE_INVALIDATION_MAP: dict[str, list[str]] = {
     "create_cost_record": ["cost_analytics", "cost_summary", "get_farm_status"],
     "create_crop_cycle": ["crop_cycle", "get_farm_status"],
+    "manage_crop_cycle": [
+        "crop_cycle",
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ],
     "create_crop_template": [],
     "log_farm_activity": ["farm_logs", "get_farm_status"],
     "create_operation_work_order": [

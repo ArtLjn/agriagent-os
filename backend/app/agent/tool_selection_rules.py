@@ -24,11 +24,17 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r"(?:删除|删掉|移除).*(?:成本|收入|账务|费用).{0,6}分类"),
         re.compile(r"(?:分类).*(?:新增|添加|创建|新建|删除|删掉|移除)"),
     ],
-    "create_crop_cycle": [
+    "manage_crop_cycle": [
         re.compile(r"(?:创建|建|开)\s*.*茬口"),
         re.compile(r"(?:种植|种[了上下]?)\s*(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米)"),
         re.compile(r"(?:我想|我要|想要|准备|打算)\s*种\s*[\u4e00-\u9fa5]{1,12}$"),
         re.compile(r"(?:春茬|秋茬|夏茬|冬茬)"),
+        re.compile(r"(?:删除|删掉|移除).*(?:茬口|种植周期|批次)"),
+        re.compile(r"(?:茬口|种植周期|批次).*#?\d+.*(?:删除|删掉|移除)"),
+        re.compile(r"(?:修改|更改|调整|改|改成|改到).*(?:茬口|周期|开始|播种期|起始)"),
+        re.compile(
+            r"(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米|水稻).*(?:修改|更改|调整|改|改成|改到).*(?:\d{1,2}月|开始|播种期|起始)"
+        ),
     ],
     "create_crop_template": [
         re.compile(r"(?:创建|建|新建|添加).*(?:作物|模板)"),
@@ -39,10 +45,6 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(
             r"(?:作物模板|模板).*#?\d+.*(?:修改|更改|调整|更新|改|删除|删掉|移除)"
         ),
-    ],
-    "delete_crop_cycle": [
-        re.compile(r"(?:删除|删掉|移除).*(?:茬口|种植周期|批次)"),
-        re.compile(r"(?:茬口|种植周期|批次).*#?\d+.*(?:删除|删掉|移除)"),
     ],
     "log_farm_activity": [
         re.compile(r"(?:浇[了水]|施[了肥]|打[了药]|除[了草]|翻[了地]|播[了种])"),
@@ -59,12 +61,6 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
     "update_crop_stage": [
         re.compile(r"(?:进[了入]?).*(?:期|阶段)"),
         re.compile(r"(?:到[了]?|进入)\s*(?:苗期|开花期|结果期|采收期|伸蔓期|定植期)"),
-    ],
-    "update_crop_cycle": [
-        re.compile(r"(?:修改|更改|调整|改|改成|改到).*(?:茬口|周期|开始|播种期|起始)"),
-        re.compile(
-            r"(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米|水稻).*(?:修改|更改|调整|改|改成|改到).*(?:\d{1,2}月|开始|播种期|起始)"
-        ),
     ],
     "create_operation_work_order": [
         re.compile(
@@ -191,8 +187,16 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "有哪些分类",
     },
     "get_crop_templates": {"作物模板", "模板列表", "有哪些模板", "生长阶段模板"},
-    "get_crop_cycles": {"我的茬口", "有哪些茬口", "茬口列表", "种植批次"},
-    "get_crop_cycle_info": {"茬口", "当前阶段", "周期进度", "阶段"},
+    "manage_crop_cycle": {
+        "我的茬口",
+        "有哪些茬口",
+        "茬口列表",
+        "种植批次",
+        "茬口",
+        "当前阶段",
+        "周期进度",
+        "阶段",
+    },
     "get_recent_farm_logs": {"农事记录", "操作日志", "干了啥", "记录"},
     "get_planting_units": {"种植单元", "地块", "大棚", "棚区", "有哪些棚"},
     "get_labor_payables": {
@@ -267,8 +271,7 @@ DISABLED_SKILLS: set[str] = {
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_weather_forecast": [],
     "manage_cost": [],
-    "get_crop_cycles": [],
-    "get_crop_cycle_info": [],
+    "manage_crop_cycle": [],
     "get_recent_farm_logs": [],
     "get_labor_payables": [],
     "get_workers": [],
@@ -277,15 +280,12 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_planting_units": [],
     "get_crop_templates": [],
     "get_user_settings": [],
-    "create_crop_cycle": [],
-    "delete_crop_cycle": [],
     "create_crop_template": [],
     "manage_crop_templates": [],
     "create_operation_work_order": [],
     "log_farm_activity": [],
     "manage_farm_logs": [],
     "settle_labor_payment": [],
-    "update_crop_cycle": [],
     "update_crop_stage": [],
     "update_operation_work_order": [],
     "manage_workers": [],

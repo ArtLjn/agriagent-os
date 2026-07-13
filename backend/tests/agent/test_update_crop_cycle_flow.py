@@ -1,4 +1,4 @@
-"""update_crop_cycle pending action flow tests。"""
+"""manage_crop_cycle pending action flow tests。"""
 
 from datetime import date
 from types import SimpleNamespace
@@ -47,7 +47,7 @@ def _create_cycle(
 
 def _write_confirm_tool() -> SimpleNamespace:
     return SimpleNamespace(
-        name="update_crop_cycle",
+        name="manage_crop_cycle",
         args_schema=None,
         ainvoke=AsyncMock(return_value="不应直接执行"),
         skill_metadata=SkillMetadata(
@@ -85,8 +85,9 @@ async def test_update_crop_cycle_tool_call_stores_structured_pending_context(
                         content="",
                         tool_calls=[
                             {
-                                "name": "update_crop_cycle",
+                                "name": "manage_crop_cycle",
                                 "args": {
+                                    "operation": "update_cycle",
                                     "crop_name": "玉米",
                                     "start_date": "2026-09-01",
                                 },
@@ -100,8 +101,12 @@ async def test_update_crop_cycle_tool_call_stores_structured_pending_context(
 
     pending = get_pending(1)
     assert pending is not None
-    assert pending.skill_name == "update_crop_cycle"
-    assert pending.params == {"crop_name": "玉米", "start_date": "2026-09-01"}
+    assert pending.skill_name == "manage_crop_cycle"
+    assert pending.params == {
+        "operation": "update_cycle",
+        "crop_name": "玉米",
+        "start_date": "2026-09-01",
+    }
     assert pending.confirmation_context["target"]["name"] == "夏季玉米"
     assert pending.confirmation_context["target"]["id"] == 1
     assert pending.confirmation_context["changes"][0]["old"] == "2026-06-05"
@@ -149,8 +154,9 @@ async def test_update_crop_cycle_pending_context_uses_cycle_id_when_provided(
                         content="",
                         tool_calls=[
                             {
-                                "name": "update_crop_cycle",
+                                "name": "manage_crop_cycle",
                                 "args": {
+                                    "operation": "update_cycle",
                                     "cycle_id": cycle.id,
                                     "start_date": "2026-09-01",
                                 },

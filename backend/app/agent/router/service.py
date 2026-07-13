@@ -125,7 +125,7 @@ class SkillRouter:
             score = candidate.score
             if candidate.domain == frame.domain:
                 score += 0.2
-            if candidate.operation in frame.intent:
+            if candidate.operation and candidate.operation in frame.intent:
                 score += 0.2
             if candidate.name in frame.candidate_tools[:1]:
                 score += 0.1

@@ -186,12 +186,11 @@ async def test_llm_node_returns_router_decision_for_tool_node_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_read_query_binds_router_selected_legacy_tool_only() -> None:
-    """普通读请求只绑定 Router shortlist，且 tool name 仍为 legacy name。"""
+async def test_read_query_binds_router_selected_canonical_tool_only() -> None:
+    """普通读请求只绑定 Router shortlist，tool name 使用 canonical capability。"""
     fake_llm = _FakeLLM()
     tools = [
-        _FakeTool("get_crop_cycles"),
-        _FakeTool("get_crop_cycle_info"),
+        _FakeTool("manage_crop_cycle"),
         _FakeTool("get_farm_status"),
         _FakeTool("get_weather_forecast"),
         _FakeTool("create_operation_work_order"),
@@ -211,11 +210,11 @@ async def test_read_query_binds_router_selected_legacy_tool_only() -> None:
         )
 
     assert result["router_decision"].tool_choice == "auto"
-    assert result["router_decision"].selected_tools == ["get_crop_cycles"]
+    assert result["router_decision"].selected_tools == ["manage_crop_cycle"]
     assert result["router_decision"].selected_operations == {
         "manage_crop_cycle": ["query_cycles"]
     }
-    assert fake_llm.bound_tool_names == ["get_crop_cycles"]
+    assert fake_llm.bound_tool_names == ["manage_crop_cycle"]
 
 
 @pytest.mark.asyncio
@@ -255,9 +254,8 @@ async def test_llm_node_keeps_planting_planning_intent_in_read_tool_pool() -> No
     fake_llm = _FakeLLM()
     tools = [
         _FakeTool("get_farm_status"),
-        _FakeTool("get_crop_cycles"),
+        _FakeTool("manage_crop_cycle"),
         _FakeTool("get_crop_templates"),
-        _FakeTool("create_crop_cycle"),
         _FakeTool("create_crop_template"),
     ]
 
@@ -276,11 +274,15 @@ async def test_llm_node_keeps_planting_planning_intent_in_read_tool_pool() -> No
 
     assert fake_llm.bound_tool_names == [
         "get_farm_status",
-        "get_crop_cycles",
+        "manage_crop_cycle",
         "get_crop_templates",
     ]
     router_decision = result["router_decision"]
-    assert "create_crop_cycle" not in router_decision.selected_tools
+    assert router_decision.selected_tools == [
+        "get_farm_status",
+        "manage_crop_cycle",
+        "get_crop_templates",
+    ]
     assert router_decision.fallback == "model_choice_read_default"
 
 

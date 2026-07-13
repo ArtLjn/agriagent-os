@@ -356,7 +356,10 @@ class RuleIntentClassifier:
                     intent="query_crop_cycles",
                     risk="read",
                     entities=["crop_cycle"],
-                    candidate_tools=["get_crop_cycles"],
+                    candidate_tools=["manage_crop_cycle"],
+                    capability="manage_crop_cycle",
+                    operation="query_cycles",
+                    operation_hint="query_cycles",
                     confidence=0.88,
                 )
             ]
@@ -367,7 +370,10 @@ class RuleIntentClassifier:
                     intent="query_crop_cycle",
                     risk="read",
                     entities=["crop_cycle"],
-                    candidate_tools=["get_crop_cycle_info"],
+                    candidate_tools=["manage_crop_cycle"],
+                    capability="manage_crop_cycle",
+                    operation="query_cycle_info",
+                    operation_hint="query_cycle_info",
                     confidence=0.86,
                 )
             ]
@@ -389,7 +395,10 @@ class RuleIntentClassifier:
                     intent="query_active_crops",
                     risk="read",
                     entities=["farm", "crop_cycle"],
-                    candidate_tools=["get_crop_cycle_info", "get_farm_status"],
+                    candidate_tools=["manage_crop_cycle", "get_farm_status"],
+                    capability="manage_crop_cycle",
+                    operation="query_cycles",
+                    operation_hint="query_cycles",
                     confidence=0.85,
                 )
             ]
@@ -606,7 +615,10 @@ class RuleIntentClassifier:
             intent="create_crop_cycle",
             risk="write_confirm",
             entities=["crop_cycle"],
-            candidate_tools=["create_crop_cycle"],
+            candidate_tools=["manage_crop_cycle"],
+            capability="manage_crop_cycle",
+            operation="create_cycle",
+            operation_hint="create_cycle",
             confidence=0.76,
             requires_confirmation=True,
         )
@@ -617,7 +629,10 @@ class RuleIntentClassifier:
             intent="delete_cycle",
             risk="write_high",
             entities=["crop_cycle"],
-            candidate_tools=["delete_crop_cycle"],
+            candidate_tools=["manage_crop_cycle"],
+            capability="manage_crop_cycle",
+            operation="delete_cycle",
+            operation_hint="delete_cycle",
             confidence=0.78,
             requires_confirmation=True,
         )

@@ -172,12 +172,12 @@ def test_policy_requires_clarification_for_high_risk_operation() -> None:
                 domain="crop",
                 intent="delete_cycle",
                 risk="write_high",
-                candidate_tools=["delete_crop_cycle"],
+                candidate_tools=["manage_crop_cycle"],
             )
         ],
         candidates=[
             _candidate(
-                "delete_crop_cycle",
+                "manage_crop_cycle",
                 "write_high",
                 capability="manage_crop_cycle",
                 operation="delete_cycle",

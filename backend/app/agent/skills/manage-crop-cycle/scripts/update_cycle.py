@@ -1,4 +1,4 @@
-"""更新茬口 Skill — 修改茬口开始日期并同步重算阶段。"""
+"""更新茬口 operation。"""
 
 from __future__ import annotations
 
@@ -7,13 +7,8 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from skillify.models.schemas import ResultStatus, SkillResult
-from skillify.skills.base import Skill
 
 from app.agent.skills.context import require_farm_context
-from app.agent.skills.metadata import (
-    SkillPermissionLevel,
-    SkillRiskLevel,
-)
 from app.context.invalidation import invalidate_farm_context
 from app.core.database import SessionLocal
 from app.models.cycle import CropCycle
@@ -23,115 +18,39 @@ _ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _VALID_STATUSES = {"active", "planned", "finished"}
 
 
-class UpdateCropCycleSkill(Skill):
-    """更新种植茬口字段的 Skill。"""
+async def update_cycle(params: dict, context) -> SkillResult:
+    """执行茬口更新。"""
+    farm_id, context_error = require_farm_context(context, "修改茬口")
+    if context_error:
+        return context_error
 
-    def name(self) -> str:
-        return "update_crop_cycle"
+    changes, change_error = _parse_changes(params)
+    if change_error:
+        return change_error
 
-    def description(self) -> str:
-        return (
-            "修改、调整或更正已有茬口的开始日期、季节、名称、面积、状态、"
-            "当前阶段或备注。"
-            "当用户说修改玉米茬口9月1开始、把夏季玉米播种期改到9月1日、"
-            "调整茬口名称、面积、状态或备注时调用此工具。"
-            "可用 cycle_id、crop_name 或 cycle_name 定位茬口。"
+    db = SessionLocal()
+    try:
+        cycle = _resolve_cycle(db, params=params, farm_id=farm_id)
+        if isinstance(cycle, SkillResult):
+            return cycle
+
+        old_values = _snapshot_cycle(cycle)
+        _apply_changes(db, cycle, changes)
+
+        db.commit()
+        invalidate_farm_context(farm_id)
+        db.refresh(cycle)
+
+        reply = _format_success_reply(cycle, old_values, changes)
+        return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
+    except Exception as exc:
+        db.rollback()
+        return SkillResult(
+            status=ResultStatus.FAILED,
+            reply=f"修改茬口失败：{exc}",
         )
-
-    def parameters_schema(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "cycle_id": {
-                    "type": "integer",
-                    "description": "茬口 ID，可选。传入时按当前农场限定查找。",
-                },
-                "crop_name": {
-                    "type": "string",
-                    "description": "作物名称，如玉米、辣椒，用于自动匹配活跃茬口。",
-                },
-                "cycle_name": {
-                    "type": "string",
-                    "description": "茬口名称，如夏季玉米，用于自动匹配活跃茬口。",
-                },
-                "start_date": {
-                    "type": "string",
-                    "description": "新的开始日期 YYYY-MM-DD，上游应补全年份。",
-                },
-                "season": {"type": "string", "description": "季节，如夏季、秋季"},
-                "name": {"type": "string", "description": "新的茬口名称"},
-                "area": {"type": "number", "description": "面积，亩"},
-                "status": {
-                    "type": "string",
-                    "description": "状态 active/planned/finished",
-                },
-                "current_stage": {"type": "string", "description": "当前阶段名称"},
-                "stage": {"type": "string", "description": "当前阶段名称别名"},
-                "note": {"type": "string", "description": "批次备注"},
-                "batch_note": {"type": "string", "description": "批次备注"},
-            },
-        }
-
-    def metadata(self) -> dict:
-        return {
-            "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
-            "risk_level": SkillRiskLevel.MEDIUM,
-            "context_dependencies": ["farm", "active_cycles"],
-            "cache_invalidation": ["crop_cycle", "get_farm_status"],
-            "confirmation_schema": {
-                "target_fields": ["cycle_id", "cycle_name", "crop_name"],
-                "changed_fields": ["start_date"],
-                "inferred_fields": ["crop_name", "cycle_name", "current_context"],
-                "editable_fields": [
-                    "cycle_id",
-                    "cycle_name",
-                    "crop_name",
-                    "start_date",
-                    "season",
-                    "name",
-                    "area",
-                    "status",
-                    "current_stage",
-                    "note",
-                ],
-                "risk_notes": ["修改开始日期会同步重算该茬口所有阶段起止日期。"],
-            },
-            "evaluation_tags": ["write", "crop_cycle", "date_update"],
-        }
-
-    async def execute(self, params: dict, context) -> SkillResult:
-        """执行茬口更新。"""
-        farm_id, context_error = require_farm_context(context, "修改茬口")
-        if context_error:
-            return context_error
-
-        changes, change_error = _parse_changes(params)
-        if change_error:
-            return change_error
-
-        db = SessionLocal()
-        try:
-            cycle = _resolve_cycle(db, params=params, farm_id=farm_id)
-            if isinstance(cycle, SkillResult):
-                return cycle
-
-            old_values = _snapshot_cycle(cycle)
-            _apply_changes(db, cycle, changes)
-
-            db.commit()
-            invalidate_farm_context(farm_id)
-            db.refresh(cycle)
-
-            reply = _format_success_reply(cycle, old_values, changes)
-            return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
-        except Exception as exc:
-            db.rollback()
-            return SkillResult(
-                status=ResultStatus.FAILED,
-                reply=f"修改茬口失败：{exc}",
-            )
-        finally:
-            db.close()
+    finally:
+        db.close()
 
 
 def _parse_changes(params: dict) -> tuple[dict, SkillResult | None]:

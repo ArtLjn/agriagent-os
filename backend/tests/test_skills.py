@@ -16,9 +16,14 @@ _cost_summary_mod = importlib.import_module(
 _cost_analytics_mod = importlib.import_module(
     "app.agent.skills.manage-cost.scripts.analytics"
 )
-_crop_cycle_mod = importlib.import_module("app.agent.skills.crop-cycle.scripts.main")
+_crop_cycle_mod = importlib.import_module(
+    "app.agent.skills.manage-crop-cycle.scripts.main"
+)
+_crop_cycle_query_info_mod = importlib.import_module(
+    "app.agent.skills.manage-crop-cycle.scripts.query_cycle_info"
+)
 ManageCostSkill = _manage_cost_mod.ManageCostSkill
-CropCycleSkill = _crop_cycle_mod.CropCycleSkill
+ManageCropCycleSkill = _crop_cycle_mod.ManageCropCycleSkill
 
 
 class TestManageCostSkillMeta:
@@ -47,10 +52,11 @@ class TestManageCostSkillMeta:
 
 class TestCropCycleSkillMeta:
     def test_cycle_id_is_optional_for_safe_fallback(self):
-        skill = CropCycleSkill()
+        skill = ManageCropCycleSkill()
         schema = skill.parameters_schema()
         assert "cycle_id" in schema["properties"]
-        assert schema["required"] == []
+        assert schema["required"] == ["operation"]
+        assert "query_cycle_info" in schema["properties"]["operation"]["enum"]
 
 
 @pytest.fixture
@@ -340,32 +346,32 @@ class TestCostAnalyticsSkill:
 
 class TestCropCycleSkill:
     @pytest.mark.asyncio
-    @patch.object(_crop_cycle_mod, "SessionLocal")
+    @patch.object(_crop_cycle_query_info_mod, "SessionLocal")
     async def test_missing_context_farm_id_fails_without_db_access(self, mock_session):
-        skill = CropCycleSkill()
+        skill = ManageCropCycleSkill()
 
-        result = await skill.execute({}, SkillContext())
+        result = await skill.execute({"operation": "query_cycle_info"}, SkillContext())
 
         assert result.status.value == "failed"
         assert "缺少农场上下文" in result.reply
         mock_session.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch.object(_crop_cycle_mod, "SessionLocal")
+    @patch.object(_crop_cycle_query_info_mod, "SessionLocal")
     async def test_missing_context_farm_id_attr_fails_without_db_access(
         self, mock_session
     ):
-        skill = CropCycleSkill()
+        skill = ManageCropCycleSkill()
 
-        result = await skill.execute({}, MagicMock(spec=[]))
+        result = await skill.execute({"operation": "query_cycle_info"}, MagicMock(spec=[]))
 
         assert result.status.value == "failed"
         assert "缺少农场上下文" in result.reply
         mock_session.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch.object(_crop_cycle_mod, "SessionLocal")
-    @patch.object(_crop_cycle_mod, "farm_context_service")
+    @patch.object(_crop_cycle_query_info_mod, "SessionLocal")
+    @patch.object(_crop_cycle_query_info_mod, "farm_context_service")
     async def test_missing_cycle_id_returns_farm_status_fallback(
         self, mock_fcs, mock_session, ctx
     ):
@@ -375,8 +381,8 @@ class TestCropCycleSkill:
             return_value="【农场现状】\n茬口：夏季玉米(播种期)"
         )
 
-        skill = CropCycleSkill()
-        result = await skill.execute({}, ctx)
+        skill = ManageCropCycleSkill()
+        result = await skill.execute({"operation": "query_cycle_info"}, ctx)
 
         assert "未指定茬口 ID" in result.reply
         assert "夏季玉米" in result.reply
@@ -384,7 +390,7 @@ class TestCropCycleSkill:
         mock_db.close.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch.object(_crop_cycle_mod, "SessionLocal")
+    @patch.object(_crop_cycle_query_info_mod, "SessionLocal")
     async def test_cycle_id_query_filters_by_context_farm_id(self, mock_session, ctx):
         query = MagicMock()
         query.filter.return_value = query
@@ -393,8 +399,8 @@ class TestCropCycleSkill:
         mock_db.query.return_value = query
         mock_session.return_value = mock_db
 
-        skill = CropCycleSkill()
-        result = await skill.execute({"cycle_id": 9}, ctx)
+        skill = ManageCropCycleSkill()
+        result = await skill.execute({"operation": "query_cycle_info", "cycle_id": 9}, ctx)
 
         assert result.status.value == "success"
         assert "未找到 ID 为 9" in result.reply

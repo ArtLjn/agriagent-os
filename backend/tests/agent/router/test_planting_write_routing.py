@@ -17,17 +17,17 @@ def _tool(name: str, description: str = ""):
     return tool
 
 
-def test_catalog_enriches_create_crop_cycle_metadata() -> None:
-    catalog = SkillCatalog.from_tools([_tool("create_crop_cycle")])
+def test_catalog_enriches_manage_crop_cycle_metadata() -> None:
+    catalog = SkillCatalog.from_tools([_tool("manage_crop_cycle")])
 
-    candidate = catalog.get("create_crop_cycle")
+    candidate = catalog.get("manage_crop_cycle")
 
     assert candidate is not None
     assert candidate.domain == "crop"
     assert candidate.capability == "manage_crop_cycle"
-    assert candidate.operation == "create_cycle"
-    assert candidate.risk == "write_confirm"
-    assert "create_crop_cycle" in candidate.intents
+    assert candidate.operation is None
+    assert candidate.risk == "read"
+    assert "create_cycle" in candidate.intents
     assert "crop_templates" in candidate.context_dependencies
 
 
@@ -49,16 +49,14 @@ def test_create_crop_template_intent_routes_to_write_tool() -> None:
 def test_planting_planning_intent_keeps_read_tools(message: str) -> None:
     tools = [
         _tool("get_farm_status"),
-        _tool("get_crop_cycles"),
-        _tool("get_crop_cycle_info"),
+        _tool("manage_crop_cycle"),
         _tool("get_crop_templates"),
-        _tool("create_crop_cycle"),
         _tool("create_crop_template"),
     ]
 
     decision = SkillRouter().route(message, tools)
 
-    assert "create_crop_cycle" not in decision.selected_tools
+    assert decision.selected_tools != ["manage_crop_cycle"]
     assert "create_crop_template" not in decision.selected_tools
     assert decision.frames[0].risk == "read"
     assert decision.fallback == "model_choice_read_default"
@@ -67,27 +65,25 @@ def test_planting_planning_intent_keeps_read_tools(message: str) -> None:
 def test_explicit_create_crop_cycle_intent_routes_to_write_tool() -> None:
     tools = [
         _tool("get_farm_status"),
-        _tool("get_crop_cycles"),
-        _tool("get_crop_cycle_info"),
-        _tool("create_crop_cycle"),
+        _tool("manage_crop_cycle"),
         _tool("create_crop_template"),
     ]
 
     decision = SkillRouter().route("帮我建个黑布林茬口30亩", tools)
 
-    assert decision.selected_tools == ["create_crop_cycle"]
+    assert decision.selected_tools == ["manage_crop_cycle"]
     assert decision.frames[0].intent == "create_crop_cycle"
     assert decision.frames[0].risk == "write_confirm"
 
 
 @pytest.mark.parametrize("message", ["黑布林怎么种", "怎么种小麦", "种小麦要注意什么"])
 def test_planting_advice_keeps_read_tool(message: str) -> None:
-    tools = [_tool("get_farm_status"), _tool("create_crop_cycle")]
+    tools = [_tool("get_farm_status"), _tool("manage_crop_cycle")]
 
     decision = SkillRouter().route(message, tools)
 
     assert decision.selected_tools == ["get_farm_status"]
-    assert "create_crop_cycle" not in decision.selected_tools
+    assert "manage_crop_cycle" not in decision.selected_tools
     assert decision.frames[0].intent == "query_planting_advice"
 
 
@@ -95,15 +91,13 @@ def test_planting_advice_keeps_read_tool(message: str) -> None:
 def test_planting_read_queries_do_not_expose_write_tools(message: str) -> None:
     tools = [
         _tool("get_crop_templates"),
-        _tool("get_crop_cycles"),
+        _tool("manage_crop_cycle"),
         _tool("create_crop_template"),
-        _tool("create_crop_cycle"),
     ]
 
     decision = SkillRouter().route(message, tools)
 
     assert "create_crop_template" not in decision.selected_tools
-    assert "create_crop_cycle" not in decision.selected_tools
 
 
 def test_create_crop_template_with_read_entity_still_routes_to_write_tool() -> None:

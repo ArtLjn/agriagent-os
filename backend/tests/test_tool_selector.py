@@ -10,14 +10,11 @@ pytestmark = pytest.mark.no_db
 
 ALL_TOOL_NAMES = [
     "manage_cost",
-    "create_crop_cycle",
-    "delete_crop_cycle",
+    "manage_crop_cycle",
     "create_crop_template",
     "get_crop_templates",
-    "get_crop_cycles",
     "manage_crop_templates",
     "create_operation_work_order",
-    "get_crop_cycle_info",
     "get_recent_farm_logs",
     "manage_farm_logs",
     "get_farm_status",
@@ -32,7 +29,6 @@ ALL_TOOL_NAMES = [
     "manage_user_settings",
     "log_farm_activity",
     "settle_labor_payment",
-    "update_crop_cycle",
     "update_crop_stage",
     "update_operation_work_order",
     "manage_workers",
@@ -102,15 +98,15 @@ class TestWritePatternMatching:
 
     def test_create_crop_cycle_with_crop(self):
         result = select_tools("创建春茬种植西瓜", _make_tools())
-        assert "create_crop_cycle" in result
+        assert "manage_crop_cycle" in result
 
     def test_create_crop_cycle_season(self):
         result = select_tools("秋茬种番茄", _make_tools())
-        assert "create_crop_cycle" in result
+        assert "manage_crop_cycle" in result
 
     def test_create_crop_cycle_intent_with_new_crop_name(self):
         result = select_tools("我想种小麦", _make_tools())
-        assert result == ["create_crop_cycle"]
+        assert result == ["manage_crop_cycle"]
 
     def test_planting_advice_with_intent_phrase_does_not_write(self):
         result = select_tools("我想种小麦要注意什么", _make_tools())
@@ -138,11 +134,11 @@ class TestWritePatternMatching:
 
     def test_update_crop_cycle_colloquial_date_change(self):
         result = select_tools("玉米修改下9月开始", _make_tools())
-        assert result == ["update_crop_cycle"]
+        assert result == ["manage_crop_cycle"]
 
     def test_update_crop_cycle_named_cycle_date_change(self):
         result = select_tools("把玉米茬口改成9月1开始", _make_tools())
-        assert result == ["update_crop_cycle"]
+        assert result == ["manage_crop_cycle"]
 
     def test_ambiguous_triggers_returns_no_tools(self):
         result = select_tools("买化肥", _make_tools())
@@ -204,7 +200,7 @@ class TestWritePatternMatching:
 
     def test_delete_crop_cycle_uses_delete_skill(self):
         result = select_tools("删除茬口12", _make_tools())
-        assert result == ["delete_crop_cycle"]
+        assert result == ["manage_crop_cycle"]
 
     def test_manage_farm_log_uses_log_skill(self):
         result = select_tools("删除农事记录8", _make_tools())
@@ -302,7 +298,7 @@ class TestQueryKeywordMatching:
 
     def test_crop_cycle_list_query_uses_cycle_list_skill(self):
         result = select_tools("我的茬口", _make_tools())
-        assert result == ["get_crop_cycles"]
+        assert result == ["manage_crop_cycle"]
 
     def test_planting_unit_query_uses_unit_skill(self):
         result = select_tools("有哪些大棚", _make_tools())

@@ -16,14 +16,11 @@ class TestToolChainMap:
     def test_map_contains_all_known_tools(self):
         expected_keys = {
             "manage_cost",
-            "create_crop_cycle",
-            "delete_crop_cycle",
+            "manage_crop_cycle",
             "create_crop_template",
             "get_crop_templates",
             "manage_crop_templates",
             "create_operation_work_order",
-            "get_crop_cycle_info",
-            "get_crop_cycles",
             "get_recent_farm_logs",
             "manage_farm_logs",
             "get_farm_status",
@@ -38,7 +35,6 @@ class TestToolChainMap:
             "manage_user_settings",
             "log_farm_activity",
             "settle_labor_payment",
-            "update_crop_cycle",
             "update_crop_stage",
             "update_operation_work_order",
             "manage_workers",
@@ -52,8 +48,7 @@ class TestToolChainMap:
         """普通查询工具不应隐式关联 get_farm_status。"""
         query_tools_without_farm_status = [
             "manage_cost",
-            "get_crop_cycle_info",
-            "get_crop_cycles",
+            "manage_crop_cycle",
             "get_recent_farm_logs",
             "get_labor_payables",
             "get_workers",
@@ -72,15 +67,13 @@ class TestToolChainMap:
         """写操作工具不应关联额外工具。"""
         write_tools = [
             "manage_cost",
-            "create_crop_cycle",
-            "delete_crop_cycle",
+            "manage_crop_cycle",
             "create_crop_template",
             "manage_crop_templates",
             "create_operation_work_order",
             "log_farm_activity",
             "manage_farm_logs",
             "settle_labor_payment",
-            "update_crop_cycle",
             "update_crop_stage",
             "update_operation_work_order",
             "manage_workers",
@@ -102,8 +95,8 @@ class TestExpandByChain:
         assert result == {"manage_cost"}
 
     def test_crop_chain(self):
-        result = expand_by_chain({"get_crop_cycle_info"})
-        assert result == {"get_crop_cycle_info"}
+        result = expand_by_chain({"manage_crop_cycle"})
+        assert result == {"manage_crop_cycle"}
 
     def test_labor_payables_chain(self):
         result = expand_by_chain({"get_labor_payables"})
@@ -135,7 +128,7 @@ class TestExpandByChain:
 
     def test_original_tools_preserved(self):
         """扩展后的集合必须保留原始工具。"""
-        original = {"manage_cost", "get_crop_cycle_info"}
+        original = {"manage_cost", "manage_crop_cycle"}
         result = expand_by_chain(original)
         for tool in original:
             assert tool in result

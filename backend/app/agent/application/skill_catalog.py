@@ -27,7 +27,7 @@ _APP_SKILL_ORDER = [
     "manage_cost",
     "log_farm_activity",
     "manage_wages",
-    "create_crop_cycle",
+    "manage_crop_cycle",
     "get_weather_forecast",
     "manage_user_settings",
 ]
@@ -53,14 +53,14 @@ _DISPLAY_BY_SKILL: dict[str, SkillDisplay] = {
         examples=("买化肥花了200元", "本月成本怎么看", "还欠老王农资多少钱"),
         recommended=True,
     ),
-    "create_crop_cycle": SkillDisplay(
+    "manage_crop_cycle": SkillDisplay(
         title="批次管理",
         category="生产",
         icon="layout-grid",
         icon_color="purple",
-        summary="创建新的种植茬口或批次。",
-        details="根据作物、季节、面积和地块信息创建种植批次，方便后续关联农事、账本和工人投入。",
-        examples=("春茬种西瓜", "帮我建一个黄瓜批次", "6号棚开始种番茄"),
+        summary="管理种植茬口、阶段和批次。",
+        details="根据作物、季节、面积和地块信息创建种植批次，也能查询茬口列表和详情，调整开始日期、阶段、状态或删除批次。",
+        examples=("春茬种西瓜", "我的茬口有哪些", "把玉米茬口改到9月1开始"),
         recommended=True,
     ),
     "get_weather_forecast": SkillDisplay(

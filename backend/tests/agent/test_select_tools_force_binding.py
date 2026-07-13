@@ -21,9 +21,9 @@ class TestSelectToolsForceBinding:
 
     def test_query_selection_does_not_force_bind(self):
         """普通读查询不再通过规则强制绑定工具。"""
-        all_tools = [_fake_tool("get_crop_cycles"), _fake_tool("get_farm_status")]
+        all_tools = [_fake_tool("manage_crop_cycle"), _fake_tool("get_farm_status")]
         result = select_tools("我的茬口有哪些", all_tools)
-        assert "get_crop_cycles" in result.tools
+        assert "manage_crop_cycle" in result.tools
         assert not result.force_binding
 
     def test_no_force_binding_for_chitchat(self):

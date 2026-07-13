@@ -323,7 +323,10 @@ def _build_pending_confirmation_args(name: str, args: dict, farm_id: int) -> dic
     context_args = dict(args or {})
     if name == "create_operation_work_order":
         _normalize_operation_work_order_args(context_args)
-    if name == "update_crop_cycle":
+    if name == "update_crop_cycle" or (
+        name == "manage_crop_cycle"
+        and context_args.get("operation") in {"update_cycle", "update_stage"}
+    ):
         _fill_update_crop_cycle_context_args(context_args, farm_id)
     if name == "settle_labor_payment":
         _fill_settle_labor_context_args(context_args, farm_id)

@@ -162,7 +162,7 @@ def test_check_required_tool_missing_still_blocks_business_fact() -> None:
 
 def test_check_required_tool_missing_allows_planting_planning_advice() -> None:
     result = check_required_tool_missing(
-        selected_tools=["get_crop_cycles", "get_crop_templates"],
+        selected_tools=["manage_crop_cycle", "get_crop_templates"],
         tool_calls=[],
         final_text=(
             "十几亩可以先按 15 亩左右做试种规划。建议先确认地块排水、"
@@ -175,7 +175,7 @@ def test_check_required_tool_missing_allows_planting_planning_advice() -> None:
 
 def test_check_required_tool_missing_allows_currently_framed_advice() -> None:
     result = check_required_tool_missing(
-        selected_tools=["get_crop_cycles"],
+        selected_tools=["manage_crop_cycle"],
         tool_calls=[],
         final_text="目前建议先把地块排水和租期确认清楚，后面再决定要不要建茬口。",
     )
@@ -185,7 +185,7 @@ def test_check_required_tool_missing_allows_currently_framed_advice() -> None:
 
 def test_check_required_tool_missing_allows_no_need_advice() -> None:
     result = check_required_tool_missing(
-        selected_tools=["get_crop_cycles"],
+        selected_tools=["manage_crop_cycle"],
         tool_calls=[],
         final_text="没有必要马上建茬口，先把地块和租期聊清楚更稳。",
     )

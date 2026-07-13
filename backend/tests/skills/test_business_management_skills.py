@@ -35,8 +35,11 @@ _manage_units_mod = importlib.import_module(
 _get_templates_mod = importlib.import_module(
     "app.agent.skills.get-crop-templates.scripts.main"
 )
-_get_cycles_mod = importlib.import_module(
-    "app.agent.skills.get-crop-cycles.scripts.main"
+_manage_cycles_mod = importlib.import_module(
+    "app.agent.skills.manage-crop-cycle.scripts.main"
+)
+_manage_cycles_query_mod = importlib.import_module(
+    "app.agent.skills.manage-crop-cycle.scripts.query_cycles"
 )
 _manage_templates_mod = importlib.import_module(
     "app.agent.skills.manage-crop-templates.scripts.main"
@@ -44,8 +47,8 @@ _manage_templates_mod = importlib.import_module(
 _manage_logs_mod = importlib.import_module(
     "app.agent.skills.manage-farm-logs.scripts.main"
 )
-_delete_cycle_mod = importlib.import_module(
-    "app.agent.skills.delete-crop-cycle.scripts.main"
+_manage_cycles_delete_mod = importlib.import_module(
+    "app.agent.skills.manage-crop-cycle.scripts.delete_cycle"
 )
 _get_settings_mod = importlib.import_module(
     "app.agent.skills.get-user-settings.scripts.main"
@@ -60,10 +63,9 @@ ManageCostCategoriesSkill = _manage_categories_mod.ManageCostCategoriesSkill
 GetPlantingUnitsSkill = _get_units_mod.GetPlantingUnitsSkill
 ManagePlantingUnitsSkill = _manage_units_mod.ManagePlantingUnitsSkill
 GetCropTemplatesSkill = _get_templates_mod.GetCropTemplatesSkill
-GetCropCyclesSkill = _get_cycles_mod.GetCropCyclesSkill
+ManageCropCycleSkill = _manage_cycles_mod.ManageCropCycleSkill
 ManageCropTemplatesSkill = _manage_templates_mod.ManageCropTemplatesSkill
 ManageFarmLogsSkill = _manage_logs_mod.ManageFarmLogsSkill
-DeleteCropCycleSkill = _delete_cycle_mod.DeleteCropCycleSkill
 GetUserSettingsSkill = _get_settings_mod.GetUserSettingsSkill
 ManageUserSettingsSkill = _manage_settings_mod.ManageUserSettingsSkill
 
@@ -82,10 +84,10 @@ def patched_skill_sessions(monkeypatch, db_session):
         _get_units_mod,
         _manage_units_mod,
         _get_templates_mod,
-        _get_cycles_mod,
+        _manage_cycles_query_mod,
         _manage_templates_mod,
         _manage_logs_mod,
-        _delete_cycle_mod,
+        _manage_cycles_delete_mod,
         _get_settings_mod,
         _manage_settings_mod,
     ):
@@ -304,7 +306,7 @@ async def test_get_crop_cycles_lists_all_cycles(patched_skill_sessions, ctx):
         start_date=date(2026, 3, 1),
     )
 
-    listed = await GetCropCyclesSkill().execute({}, ctx)
+    listed = await ManageCropCycleSkill().execute({"operation": "query_cycles"}, ctx)
 
     assert listed.status.value == "success"
     assert "茬口列表" in listed.reply
@@ -364,7 +366,10 @@ async def test_delete_crop_cycle_removes_related_records(patched_skill_sessions,
     )
     patched_skill_sessions.commit()
 
-    result = await DeleteCropCycleSkill().execute({"cycle_id": cycle.id}, ctx)
+    result = await ManageCropCycleSkill().execute(
+        {"operation": "delete_cycle", "cycle_id": cycle.id},
+        ctx,
+    )
 
     assert result.status.value == "success"
     assert patched_skill_sessions.get(CropCycle, cycle.id) is None

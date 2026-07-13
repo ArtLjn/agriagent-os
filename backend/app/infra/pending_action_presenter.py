@@ -20,7 +20,10 @@ def build_confirmation_context(
     if skill_name == "create_operation_work_order":
         return _build_create_work_order_context(skill_name, params, original_input)
 
-    if skill_name == "update_crop_cycle":
+    if skill_name == "update_crop_cycle" or (
+        skill_name == "manage_crop_cycle"
+        and params.get("operation") in {"update_cycle", "update_stage"}
+    ):
         return {
             "skill_name": skill_name,
             "original_input": original_input,
@@ -152,6 +155,7 @@ def build_confirmation_context(
         "manage_cost_categories",
         "manage_planting_units",
         "manage_crop_templates",
+        "manage_crop_cycle",
         "manage_farm_logs",
         "delete_crop_cycle",
         "manage_user_settings",
@@ -207,7 +211,10 @@ def build_confirm_message(
         lines.append("确认吗？")
         return "\n".join(lines)
 
-    if skill_name == "update_crop_cycle":
+    if skill_name == "update_crop_cycle" or (
+        skill_name == "manage_crop_cycle"
+        and params.get("operation") in {"update_cycle", "update_stage"}
+    ):
         target = context["target"]["name"]
         change = context["changes"][0]
         lines = [
@@ -289,6 +296,7 @@ def build_confirm_message(
         "manage_cost_categories",
         "manage_planting_units",
         "manage_crop_templates",
+        "manage_crop_cycle",
         "manage_farm_logs",
         "delete_crop_cycle",
         "manage_user_settings",
@@ -423,7 +431,9 @@ def _build_generic_business_context(
     original_input: str,
 ) -> dict:
     risk_notes = []
-    if skill_name == "delete_crop_cycle":
+    if skill_name == "delete_crop_cycle" or (
+        skill_name == "manage_crop_cycle" and params.get("operation") == "delete_cycle"
+    ):
         risk_notes.append("删除茬口会级联删除阶段、农事日志、成本记录和种植单元。")
     elif skill_name == "manage_cost" and params.get("operation") == "delete_record":
         risk_notes.append("确认后会软删除该账务记录，并影响统计结果。")

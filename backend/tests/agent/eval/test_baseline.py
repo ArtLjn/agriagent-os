@@ -44,7 +44,7 @@ class TestBaselineChitchatNoFalsePositive:
         # 给所有可能的 query skill 作为候选
         all_query_skills = [
             "get_weather_forecast",
-            "get_crop_cycles",
+            "manage_crop_cycle",
             "get_workers",
             "get_labor_payables",
             "get_debt_summary",

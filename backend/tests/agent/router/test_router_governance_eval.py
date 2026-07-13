@@ -26,7 +26,7 @@ def _tools(names: list[str]):
     ("message", "expected_tool", "capability", "operation"),
     [
         ("今天买了100元化肥", "create_cost_record", "manage_cost", "create_record"),
-        ("我的茬口有哪些", "get_crop_cycles", "manage_crop_cycle", "query_cycles"),
+        ("我的茬口有哪些", "manage_crop_cycle", "manage_crop_cycle", "query_cycles"),
         ("我的工人有哪些", "get_workers", "manage_workers", "query_workers"),
         (
             "我的作业单有哪些",
@@ -172,9 +172,7 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
         [
             "get_weather_forecast",
             "get_farm_status",
-            "get_crop_cycles",
-            "get_crop_cycle_info",
-            "create_crop_cycle",
+            "manage_crop_cycle",
         ]
     )
 
@@ -183,10 +181,9 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
     assert decision.selected_tools == [
         "get_weather_forecast",
         "get_farm_status",
-        "get_crop_cycles",
+        "manage_crop_cycle",
     ]
     assert decision.fallback != "fallback_all"
-    assert "create_crop_cycle" not in decision.selected_tools
 
 
 @pytest.mark.parametrize(
@@ -199,8 +196,8 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
         ),
         (
             "我的茬口有哪些",
-            "get_crop_cycles",
-            ["create_crop_cycle", "delete_crop_cycle"],
+            "manage_crop_cycle",
+            [],
         ),
         (
             "工人列表",
@@ -233,12 +230,12 @@ def test_read_intent_does_not_expose_write_operations(
 
 
 def test_high_risk_delete_crop_cycle_requires_clarification() -> None:
-    decision = SkillRouter().route("删除这个茬口", _tools(["delete_crop_cycle"]))
+    decision = SkillRouter().route("删除这个茬口", _tools(["manage_crop_cycle"]))
 
     assert decision.selected_tools == []
     assert decision.fallback == "clarify_high_risk_operation"
     assert decision.fallback_reason == "high_risk_operation"
-    assert decision.rejected_candidates[0]["name"] == "delete_crop_cycle"
+    assert decision.rejected_candidates[0]["name"] == "manage_crop_cycle"
     assert decision.rejected_candidates[0]["reason"] == "high_risk_clarify"
     assert decision.rejected_candidates[0]["risk"] == "write_high"
 
@@ -290,10 +287,7 @@ def _governance_tool_pool() -> list[str]:
         "get_debt_summary",
         "get_cost_analytics",
         "create_cost_record",
-        "get_crop_cycles",
-        "get_crop_cycle_info",
-        "create_crop_cycle",
-        "delete_crop_cycle",
+        "manage_crop_cycle",
         "get_workers",
         "manage_workers",
         "get_operation_work_orders",

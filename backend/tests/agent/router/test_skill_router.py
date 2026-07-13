@@ -141,9 +141,7 @@ def test_catalog_handles_magicmock_tool_metadata() -> None:
 def test_crop_inventory_query_routes_to_crop_cycles(message: str) -> None:
     tools = [
         _tool("get_farm_status"),
-        _tool("get_crop_cycles"),
-        _tool("get_crop_cycle_info"),
-        _tool("create_crop_cycle"),
+        _tool("manage_crop_cycle"),
         _tool("manage_workers"),
         _tool("create_operation_work_order"),
     ]
@@ -151,8 +149,8 @@ def test_crop_inventory_query_routes_to_crop_cycles(message: str) -> None:
     decision = SkillRouter().route(message, tools)
 
     assert len(decision.selected_tools) <= 2
-    assert decision.selected_tools[0] == "get_crop_cycles"
-    assert set(decision.selected_tools) <= {"get_crop_cycles", "get_farm_status"}
+    assert decision.selected_tools[0] == "manage_crop_cycle"
+    assert set(decision.selected_tools) <= {"manage_crop_cycle", "get_farm_status"}
     assert decision.fallback != "fallback_all"
     assert "create_operation_work_order" not in decision.selected_tools
 
@@ -170,8 +168,7 @@ def test_crop_inventory_rule_does_not_capture_advice_or_overview(
     tools = [
         _tool("get_weather_forecast"),
         _tool("get_farm_status"),
-        _tool("get_crop_cycles"),
-        _tool("get_crop_cycle_info"),
+        _tool("manage_crop_cycle"),
     ]
 
     decision = SkillRouter().route(message, tools)
@@ -183,8 +180,7 @@ def test_farm_overview_read_exposes_shortlisted_read_pool_to_model() -> None:
     tools = [
         _tool("get_weather_forecast"),
         _tool("get_farm_status"),
-        _tool("get_crop_cycles"),
-        _tool("get_crop_cycle_info"),
+        _tool("manage_crop_cycle"),
     ]
 
     decision = SkillRouter().route("农场整体状态怎么样", tools)
@@ -192,7 +188,7 @@ def test_farm_overview_read_exposes_shortlisted_read_pool_to_model() -> None:
     assert decision.selected_tools == [
         "get_weather_forecast",
         "get_farm_status",
-        "get_crop_cycles",
+        "manage_crop_cycle",
     ]
     assert decision.frames[0].intent == "model_choice_read"
     assert decision.fallback != "fallback_all"
@@ -212,13 +208,12 @@ def test_greeting_binds_no_tools(message: str) -> None:
 def test_unknown_farm_read_uses_model_choice_read() -> None:
     tools = [
         _tool("get_farm_status"),
-        _tool("get_crop_cycles"),
-        _tool("create_crop_cycle"),
+        _tool("manage_crop_cycle"),
     ]
 
     decision = SkillRouter().route("农场最近怎么样", tools)
 
-    assert decision.selected_tools == ["get_farm_status", "get_crop_cycles"]
+    assert decision.selected_tools == ["get_farm_status", "manage_crop_cycle"]
     assert decision.fallback == "model_choice_read_default"
     assert decision.frames[0].intent == "model_choice_read"
 
@@ -243,7 +238,7 @@ def test_temperature_sensor_question_does_not_select_weather_tool() -> None:
 
 @pytest.mark.parametrize("message", ["西瓜怎么种", "怎么种小麦", "种小麦要注意什么"])
 def test_planting_advice_uses_read_frame(message: str) -> None:
-    tools = [_tool("get_farm_status"), _tool("create_crop_cycle")]
+    tools = [_tool("get_farm_status"), _tool("manage_crop_cycle")]
 
     decision = SkillRouter().route(message, tools)
 
@@ -672,7 +667,7 @@ def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
     ("message", "tool_name", "capability", "operation"),
     [
         ("这个月花了多少钱", "get_cost_summary", "manage_cost", "query_summary"),
-        ("我的茬口有哪些", "get_crop_cycles", "manage_crop_cycle", "query_cycles"),
+        ("我的茬口有哪些", "manage_crop_cycle", "manage_crop_cycle", "query_cycles"),
         ("我的工人有哪些", "get_workers", "manage_workers", "query_workers"),
         (
             "我的作业单有哪些",

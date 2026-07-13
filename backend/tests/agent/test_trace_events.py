@@ -99,7 +99,7 @@ class TestTraceEvents:
                 tool_calls=[
                     {
                         "id": "call-cycles",
-                        "name": "get_crop_cycles",
+                        "name": "manage_crop_cycle",
                         "args": {},
                     }
                 ],
@@ -109,4 +109,4 @@ class TestTraceEvents:
 
         tool_calls = _tool_messages_for_data_source(messages)
 
-        assert tool_calls == [{"name": "get_crop_cycles"}]
+        assert tool_calls == [{"name": "manage_crop_cycle"}]

@@ -18,14 +18,11 @@ pytestmark = pytest.mark.no_db
 
 EXPECTED_REGISTERED_SKILLS = {
     "manage_cost",
-    "create_crop_cycle",
-    "delete_crop_cycle",
+    "manage_crop_cycle",
     "create_crop_template",
     "get_crop_templates",
     "manage_crop_templates",
     "create_operation_work_order",
-    "get_crop_cycles",
-    "get_crop_cycle_info",
     "get_recent_farm_logs",
     "manage_farm_logs",
     "get_farm_status",
@@ -40,7 +37,6 @@ EXPECTED_REGISTERED_SKILLS = {
     "manage_user_settings",
     "log_farm_activity",
     "settle_labor_payment",
-    "update_crop_cycle",
     "update_crop_stage",
     "update_operation_work_order",
     "manage_workers",
@@ -50,15 +46,12 @@ EXPECTED_REGISTERED_SKILLS = {
 }
 
 EXPECTED_WRITE_SKILLS = {
-    "create_crop_cycle",
-    "delete_crop_cycle",
     "create_crop_template",
     "manage_crop_templates",
     "create_operation_work_order",
     "log_farm_activity",
     "manage_farm_logs",
     "settle_labor_payment",
-    "update_crop_cycle",
     "update_crop_stage",
     "update_operation_work_order",
     "manage_workers",
@@ -67,11 +60,16 @@ EXPECTED_WRITE_SKILLS = {
     "manage_planting_units",
     "manage_user_settings",
 }
-OPERATION_AWARE_WRITE_DOCS = {"manage_cost"}
+OPERATION_AWARE_WRITE_DOCS = {"manage_cost", "manage_crop_cycle"}
 RETIRED_COST_WRITE_ALIASES = {
     "create_cost_record",
     "delete_cost_record",
     "settle_debt",
+}
+RETIRED_CROP_CYCLE_WRITE_ALIASES = {
+    "create_crop_cycle",
+    "update_crop_cycle",
+    "delete_crop_cycle",
 }
 
 SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
@@ -147,7 +145,12 @@ def test_write_skills_use_write_confirm_permission() -> None:
 def test_write_skill_docs_are_registered_for_pending_confirmation() -> None:
     assert (
         _write_skill_docs()
-        == (WRITE_SKILLS - RETIRED_COST_WRITE_ALIASES) | OPERATION_AWARE_WRITE_DOCS
+        == (
+            WRITE_SKILLS
+            - RETIRED_COST_WRITE_ALIASES
+            - RETIRED_CROP_CYCLE_WRITE_ALIASES
+        )
+        | OPERATION_AWARE_WRITE_DOCS
     )
 
 
