@@ -15,9 +15,7 @@ class _Tool:
 
 TOOLS = [
     _Tool("get_farm_status"),
-    _Tool("get_crop_cycle_info"),
-    _Tool("get_crop_cycles"),
-    _Tool("create_crop_cycle"),
+    _Tool("manage_crop_cycle"),
     _Tool("manage_workers"),
     _Tool("create_operation_work_order"),
     _Tool("get_operation_work_orders"),
@@ -30,7 +28,6 @@ TOOLS = [
     _Tool("get_cost_categories"),
     _Tool("get_user_settings"),
     _Tool("settle_labor_payment"),
-    _Tool("delete_crop_cycle"),
 ]
 
 
@@ -38,7 +35,7 @@ def test_session5_crop_query_is_bounded() -> None:
     decision = SkillRouter().route("我家有哪些作物栽种", TOOLS)
 
     assert len(decision.selected_tools) <= 2
-    assert set(decision.selected_tools) <= {"get_farm_status", "get_crop_cycle_info"}
+    assert set(decision.selected_tools) <= {"get_farm_status", "manage_crop_cycle"}
     assert decision.schema_token_estimate <= 1800
 
 
@@ -94,7 +91,6 @@ def test_read_intent_does_not_expose_write_tools() -> None:
         for name in [
             "manage_workers",
             "create_operation_work_order",
-            "delete_crop_cycle",
         ]
     )
 
@@ -113,18 +109,21 @@ def test_worker_query_selects_worker_read_tool() -> None:
     assert decision.frames[0].intent == "query_workers"
 
 
-def test_high_risk_delete_not_exposed_for_unknown_text() -> None:
-    decision = SkillRouter().route("随便聊聊", TOOLS)
+def test_high_risk_delete_crop_cycle_requires_clarification() -> None:
+    decision = SkillRouter().route("删除这个茬口", TOOLS)
 
-    assert "delete_crop_cycle" not in decision.selected_tools
+    assert decision.selected_tools == []
+    assert decision.fallback == "clarify_high_risk_operation"
+    assert decision.rejected_candidates[0]["name"] == "manage_crop_cycle"
+    assert decision.rejected_candidates[0]["risk"] == "write_high"
 
 
 @pytest.mark.parametrize(
     ("message", "expected"),
     [
         ("老王还欠多少人工钱", ["get_labor_payables"]),
-        ("我的茬口", ["get_crop_cycles"]),
-        ("看一下3号茬口", ["get_crop_cycle_info"]),
+        ("我的茬口", ["manage_crop_cycle"]),
+        ("看一下3号茬口", ["manage_crop_cycle"]),
         ("有哪些作物模板", ["get_crop_templates"]),
         ("有哪些大棚", ["get_planting_units"]),
         ("有哪些成本分类", ["get_cost_categories"]),
