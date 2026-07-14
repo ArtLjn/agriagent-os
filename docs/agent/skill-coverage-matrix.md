@@ -16,8 +16,8 @@
 
 | 领域 | 功能 | Skill |
 | --- | --- | --- |
-| cost | 删除/撤销账务记录 | `delete_cost_record` |
-| cost_category | 分类列表、创建、删除 | `get_cost_categories`、`manage_cost_categories` |
+| cost | 删除/撤销账务记录 | `manage_cost` |
+| cost_category | 分类列表、创建、删除 | `manage_cost_categories` |
 | crop_template | 模板列表、更新、删除 | `get_crop_templates`、`manage_crop_templates` |
 | crop_cycle | 删除茬口 | `delete_crop_cycle` |
 | farm_log | 农事记录编辑、删除 | `manage_farm_logs` |

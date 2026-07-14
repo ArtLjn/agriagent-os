@@ -18,7 +18,6 @@ ALL_TOOL_NAMES = [
     "get_labor_payables",
     "get_workers",
     "get_operation_work_orders",
-    "get_cost_categories",
     "manage_cost_categories",
     "get_planting_units",
     "manage_planting_units",
@@ -288,7 +287,7 @@ class TestQueryKeywordMatching:
 
     def test_cost_category_query_uses_category_skill(self):
         result = select_tools("有哪些成本分类", _make_tools())
-        assert result == ["get_cost_categories"]
+        assert result == ["manage_cost_categories"]
 
     def test_crop_template_query_uses_template_skill(self):
         result = select_tools("有哪些作物模板", _make_tools())

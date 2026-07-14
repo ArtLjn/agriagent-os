@@ -327,7 +327,21 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
         return None
     operation = params.get("operation")
     if operation:
-        return str(operation)
+        operation_name = str(operation)
+        if skill_name == "manage_cost_categories" and operation_name in {
+            "create_category",
+            "delete_category",
+            "manage_category",
+        }:
+            return "manage_category"
+        return operation_name
+    if skill_name == "manage_cost_categories":
+        action = params.get("action")
+        if action in {"create", "delete"}:
+            return "manage_category"
+        if action == "query":
+            return "query_categories"
+        return None
     if skill_name != "manage_user_settings":
         return None
     return (

@@ -20,9 +20,6 @@ _manage_cost_mod = importlib.import_module("app.agent.skills.manage-cost.scripts
 _manage_cost_records_mod = importlib.import_module(
     "app.agent.skills.manage-cost.scripts.records"
 )
-_get_categories_mod = importlib.import_module(
-    "app.agent.skills.get-cost-categories.scripts.main"
-)
 _manage_categories_mod = importlib.import_module(
     "app.agent.skills.manage-cost-categories.scripts.main"
 )
@@ -52,7 +49,6 @@ _manage_settings_mod = importlib.import_module(
 )
 
 ManageCostSkill = _manage_cost_mod.ManageCostSkill
-GetCostCategoriesSkill = _get_categories_mod.GetCostCategoriesSkill
 ManageCostCategoriesSkill = _manage_categories_mod.ManageCostCategoriesSkill
 GetPlantingUnitsSkill = _get_units_mod.GetPlantingUnitsSkill
 ManagePlantingUnitsSkill = _manage_units_mod.ManagePlantingUnitsSkill
@@ -71,7 +67,6 @@ def ctx():
 def patched_skill_sessions(monkeypatch, db_session):
     for module in (
         _manage_cost_records_mod,
-        _get_categories_mod,
         _manage_categories_mod,
         _get_units_mod,
         _manage_units_mod,
@@ -195,20 +190,29 @@ async def test_delete_cost_record_soft_deletes_record(patched_skill_sessions, ct
 
 
 @pytest.mark.asyncio
-async def test_cost_category_skills_create_list_delete(patched_skill_sessions, ctx):
+async def test_cost_category_skill_queries_creates_and_deletes(
+    patched_skill_sessions, ctx
+):
     created = await ManageCostCategoriesSkill().execute(
-        {"action": "create", "name": "农机", "type": "cost", "icon": "tractor"},
+        {
+            "operation": "create_category",
+            "name": "农机",
+            "type": "cost",
+            "icon": "tractor",
+        },
         ctx,
     )
     assert created.status.value == "success"
     category = patched_skill_sessions.query(CostCategory).filter_by(name="农机").one()
 
-    listed = await GetCostCategoriesSkill().execute({}, ctx)
+    listed = await ManageCostCategoriesSkill().execute(
+        {"operation": "query_categories"}, ctx
+    )
     assert listed.status.value == "success"
     assert "农机" in listed.reply
 
     deleted = await ManageCostCategoriesSkill().execute(
-        {"action": "delete", "category_id": category.id},
+        {"operation": "delete_category", "category_id": category.id},
         ctx,
     )
     assert deleted.status.value == "success"

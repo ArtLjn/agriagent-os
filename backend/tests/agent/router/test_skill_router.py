@@ -886,14 +886,13 @@ def test_cost_category_read_query_does_not_expose_write_tool(
 ) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_cost_categories"), _tool("manage_cost_categories")],
+        [_tool("manage_cost_categories")],
     )
 
-    assert decision.selected_tools == ["get_cost_categories"]
+    assert decision.selected_tools == ["manage_cost_categories"]
     assert decision.selected_operations == {
         "manage_cost_categories": ["query_categories"]
     }
-    assert "manage_cost_categories" not in decision.selected_tools
     assert decision.frames[0].risk == "read"
 
 
@@ -911,7 +910,7 @@ def test_cost_category_management_uses_write_confirm_operation(
 ) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_cost_categories"), _tool("manage_cost_categories")],
+        [_tool("manage_cost_categories")],
     )
 
     assert decision.selected_tools == ["manage_cost_categories"]
@@ -931,7 +930,7 @@ def test_ambiguous_cost_category_management_asks_clarification(
 ) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_cost_categories"), _tool("manage_cost_categories")],
+        [_tool("manage_cost_categories")],
     )
 
     assert decision.selected_tools == []

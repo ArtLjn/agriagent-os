@@ -114,13 +114,13 @@ def _tools(names: list[str]):
         ),
         (
             "有哪些成本分类",
-            "get_cost_categories",
+            "manage_cost_categories",
             "manage_cost_categories",
             "query_categories",
         ),
         (
             "查询分类",
-            "get_cost_categories",
+            "manage_cost_categories",
             "manage_cost_categories",
             "query_categories",
         ),
@@ -211,8 +211,8 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
         ),
         (
             "成本分类列表",
-            "get_cost_categories",
-            ["manage_cost_categories"],
+            "manage_cost_categories",
+            [],
         ),
     ],
 )
@@ -299,6 +299,5 @@ def _governance_tool_pool() -> list[str]:
         "manage_user_settings",
         "get_planting_units",
         "manage_planting_units",
-        "get_cost_categories",
         "manage_cost_categories",
     ]

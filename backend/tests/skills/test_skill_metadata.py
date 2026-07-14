@@ -285,6 +285,30 @@ def test_manage_cost_categories_legacy_metadata_uses_shared_capability_operation
     assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
 
 
+def test_manage_cost_categories_call_metadata_resolves_operation_risk():
+    class _ManageCostCategoriesSkill:
+        def name(self):
+            return "manage_cost_categories"
+
+    query_metadata = get_skill_call_metadata(
+        _ManageCostCategoriesSkill(), {"operation": "query_categories"}
+    )
+    create_metadata = get_skill_call_metadata(
+        _ManageCostCategoriesSkill(), {"operation": "create_category"}
+    )
+    delete_metadata = get_skill_call_metadata(
+        _ManageCostCategoriesSkill(), {"operation": "delete_category"}
+    )
+
+    assert query_metadata.operation == "query_categories"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert create_metadata.operation == "manage_category"
+    assert create_metadata.operation_risk == "write_confirm"
+    assert delete_metadata.operation == "manage_category"
+    assert delete_metadata.operation_risk == "write_confirm"
+
+
 def test_manage_farm_logs_legacy_metadata_uses_shared_capability_operations():
     class _LogFarmActivitySkill:
         def name(self):

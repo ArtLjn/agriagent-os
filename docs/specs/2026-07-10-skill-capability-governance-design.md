@@ -47,7 +47,9 @@ User
 
 不先做大规模目录搬迁，也不直接删除旧 CRUD Skill。第一阶段先引入统一
 `skills.yaml` 和 alias 映射，让 Router 和 Prompt Builder 从 Registry 读取能力定义。
-旧目录作为 operation adapter 保留，等评测和 trace 证明新能力入口稳定后再逐步收敛目录。
+旧目录按能力稳定性逐步收敛；成本分类查询/管理已完成物理合并，只保留
+`manage_cost_categories` 目录，旧 `get_cost_categories` 通过 registry alias
+映射到 `manage_cost_categories.query_categories`。
 
 ## 新 Skill 分类方案
 
@@ -74,7 +76,7 @@ User
 | --- | --- |
 | `manage_cost` | `create_cost_record`、`delete_cost_record`、`get_cost_summary`、`get_debt_summary`、`settle_debt` |
 | `analyze_cost` | `get_cost_analytics` |
-| `manage_cost_categories` | `get_cost_categories`、`manage_cost_categories` |
+| `manage_cost_categories` | `get_cost_categories`（alias）、`manage_cost_categories` |
 | `manage_crop_cycle` | `create_crop_cycle`、`get_crop_cycles`、`get_crop_cycle_info`、`update_crop_cycle`、`update_crop_stage`（legacy alias）、`delete_crop_cycle` |
 | `manage_crop_template` | `create_crop_template`、`get_crop_templates`、`manage_crop_templates` |
 | `manage_planting_units` | `get_planting_units`、`manage_planting_units` |

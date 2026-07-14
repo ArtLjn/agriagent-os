@@ -326,7 +326,10 @@ class RuleIntentClassifier:
                     intent="query_cost_categories",
                     risk="read",
                     entities=["cost_category"],
-                    candidate_tools=["get_cost_categories"],
+                    candidate_tools=["manage_cost_categories"],
+                    capability="manage_cost_categories",
+                    operation="query_categories",
+                    operation_hint="query_categories",
                     confidence=0.86,
                 )
             ]
@@ -697,6 +700,9 @@ class RuleIntentClassifier:
             risk="write_confirm",
             entities=["cost_category"],
             candidate_tools=["manage_cost_categories"],
+            capability="manage_cost_categories",
+            operation="manage_category",
+            operation_hint="manage_category",
             confidence=0.8,
             params_hint={"action": self._cost_category_action(message)},
             requires_confirmation=True,

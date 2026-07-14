@@ -185,7 +185,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "比上月",
         "收支分析",
     },
-    "get_cost_categories": {
+    "manage_cost_categories": {
         "账务分类",
         "成本分类",
         "收入分类",
@@ -291,7 +291,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_workers": [],
     "get_operation_work_orders": [],
     "manage_work_orders": [],
-    "get_cost_categories": [],
     "get_planting_units": [],
     "manage_crop_templates": [],
     "create_operation_work_order": [],

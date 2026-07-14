@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from app.agent.skills import get_skill_manager
+from app.agent.skills import get_langchain_tools, get_skill_manager
 from app.agent.skills.metadata import (
     SkillPermissionLevel,
     get_skill_metadata,
@@ -25,7 +25,6 @@ EXPECTED_REGISTERED_SKILLS = {
     "get_farm_status",
     "get_labor_payables",
     "get_workers",
-    "get_cost_categories",
     "manage_cost_categories",
     "get_planting_units",
     "manage_planting_units",
@@ -106,6 +105,14 @@ def test_registered_skill_inventory_is_expected() -> None:
     skills = _registered_skills()
 
     assert set(skills) == EXPECTED_REGISTERED_SKILLS
+
+
+def test_cost_category_tool_surface_uses_single_capability() -> None:
+    tool_names = {tool.name for tool in get_langchain_tools()}
+
+    assert "manage_cost_categories" in tool_names
+    assert "get_cost_categories" not in tool_names
+    assert not (SKILLS_DIR / "get-cost-categories").exists()
 
 
 def test_enabled_registered_skills_have_selector_coverage() -> None:

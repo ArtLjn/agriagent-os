@@ -107,13 +107,10 @@ def select_tools(
         candidates.difference_update({"get_planting_units", "get_farm_status"})
 
     if "manage_cost_categories" in candidates:
-        candidates.difference_update({"get_cost_categories", "manage_cost"})
+        candidates.discard("manage_cost")
 
     if "manage_cost" in candidates:
         candidates.discard("manage_farm_logs")
-
-    if "get_cost_categories" in candidates:
-        candidates.discard("manage_cost")
 
     if "get_labor_payables" in candidates:
         if has_labor_hint:

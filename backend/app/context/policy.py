@@ -81,7 +81,7 @@ class ContextPolicy:
         }
     )
     LABOR_TOOLS = frozenset({"get_labor_payables", "settle_labor_payment"})
-    COST_CATEGORY_TOOLS = frozenset({"get_cost_categories", "manage_cost_categories"})
+    COST_CATEGORY_TOOLS = frozenset({"manage_cost_categories"})
 
     DEPENDENCY_SELECTORS = {
         "crop_cycle": (CycleSelector, "cycle"),

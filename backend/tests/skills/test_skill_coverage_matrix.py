@@ -67,11 +67,11 @@ def test_ordinary_high_priority_business_has_no_needs_skill_gap():
 @pytest.mark.parametrize(
     ("domain", "operation", "skill_name"),
     [
-        ("cost", "delete_record", "delete_cost_record"),
+        ("cost", "delete_record", "manage_cost"),
         (
             "cost_category",
             "list_create_delete",
-            "get_cost_categories|manage_cost_categories",
+            "manage_cost_categories",
         ),
         (
             "planting_unit",
