@@ -22,7 +22,6 @@ ALL_TOOL_NAMES = [
     "manage_cost_categories",
     "get_planting_units",
     "manage_planting_units",
-    "get_user_settings",
     "manage_user_settings",
     "settle_labor_payment",
     "update_operation_work_order",
@@ -305,7 +304,7 @@ class TestQueryKeywordMatching:
 
     def test_user_settings_query_uses_settings_skill(self):
         result = select_tools("我的默认城市是什么", _make_tools())
-        assert result == ["get_user_settings"]
+        assert result == ["manage_user_settings"]
 
     def test_create_worker_uses_manage_workers(self):
         result = select_tools("我招了一个工人李四，日薪150", _make_tools())

@@ -222,7 +222,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "最近采收",
     },
     "get_farm_status": {"农场", "茬口状态", "种植情况", "农事", "综合状态", "整体情况"},
-    "get_user_settings": {
+    "manage_user_settings": {
         "用户设置",
         "我的设置",
         "默认城市",
@@ -271,7 +271,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_operation_work_orders": [],
     "get_cost_categories": [],
     "get_planting_units": [],
-    "get_user_settings": [],
     "manage_crop_templates": [],
     "create_operation_work_order": [],
     "manage_farm_logs": [],

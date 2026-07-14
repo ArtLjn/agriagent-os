@@ -301,7 +301,10 @@ class RuleIntentClassifier:
                     intent="query_user_settings",
                     risk="read",
                     entities=["user_settings"],
-                    candidate_tools=["get_user_settings"],
+                    candidate_tools=["manage_user_settings"],
+                    capability="manage_settings",
+                    operation="query_settings",
+                    operation_hint="query_settings",
                     confidence=0.86,
                 )
             ]
@@ -677,6 +680,9 @@ class RuleIntentClassifier:
             risk="write_confirm",
             entities=["user_settings"],
             candidate_tools=["manage_user_settings"],
+            capability="manage_settings",
+            operation="update_settings",
+            operation_hint="update_settings",
             confidence=0.8,
             requires_confirmation=True,
         )

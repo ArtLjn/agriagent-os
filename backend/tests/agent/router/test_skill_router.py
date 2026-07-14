@@ -683,7 +683,7 @@ def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
         ),
         (
             "我的默认天气城市是什么",
-            "get_user_settings",
+            "manage_user_settings",
             "manage_settings",
             "query_settings",
         ),
@@ -727,12 +727,12 @@ def test_registry_capability_routing_metadata_is_preserved(
 def test_settings_read_query_does_not_expose_write_tool(message: str) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_user_settings"), _tool("manage_user_settings")],
+        [_tool("manage_user_settings")],
     )
 
-    assert decision.selected_tools == ["get_user_settings"]
+    assert decision.selected_tools == ["manage_user_settings"]
     assert decision.selected_operations == {"manage_settings": ["query_settings"]}
-    assert "manage_user_settings" not in decision.selected_tools
+    assert decision.frames[0].risk == "read"
 
 
 @pytest.mark.parametrize(
@@ -748,7 +748,7 @@ def test_settings_read_query_does_not_expose_write_tool(message: str) -> None:
 def test_settings_update_uses_write_confirm_operation(message: str) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_user_settings"), _tool("manage_user_settings")],
+        [_tool("manage_user_settings")],
     )
 
     assert decision.selected_tools == ["manage_user_settings"]

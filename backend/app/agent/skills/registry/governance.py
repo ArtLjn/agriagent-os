@@ -106,6 +106,11 @@ def _alias_skill_doc_issues(
     skill_doc_names: Iterable[str],
 ) -> list[GovernanceIssue]:
     known_docs = set(skill_doc_names)
+    documented_capabilities = {
+        alias.capability
+        for legacy_name, alias in registry.aliases.items()
+        if legacy_name in known_docs
+    }
     return [
         GovernanceIssue(
             code="alias_without_skill_doc",
@@ -113,7 +118,9 @@ def _alias_skill_doc_issues(
             message=f"Registry alias 找不到对应 skill.md：{legacy_name}",
         )
         for legacy_name, alias in sorted(registry.aliases.items())
-        if legacy_name not in known_docs and alias.capability not in known_docs
+        if legacy_name not in known_docs
+        and alias.capability not in known_docs
+        and alias.capability not in documented_capabilities
     ]
 
 

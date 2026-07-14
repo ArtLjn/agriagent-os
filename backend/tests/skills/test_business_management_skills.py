@@ -47,9 +47,6 @@ _manage_logs_mod = importlib.import_module(
 _manage_cycles_delete_mod = importlib.import_module(
     "app.agent.skills.manage-crop-cycle.scripts.delete_cycle"
 )
-_get_settings_mod = importlib.import_module(
-    "app.agent.skills.get-user-settings.scripts.main"
-)
 _manage_settings_mod = importlib.import_module(
     "app.agent.skills.manage-user-settings.scripts.main"
 )
@@ -62,7 +59,6 @@ ManagePlantingUnitsSkill = _manage_units_mod.ManagePlantingUnitsSkill
 ManageCropCycleSkill = _manage_cycles_mod.ManageCropCycleSkill
 ManageCropTemplatesSkill = _manage_templates_mod.ManageCropTemplatesSkill
 ManageFarmLogsSkill = _manage_logs_mod.ManageFarmLogsSkill
-GetUserSettingsSkill = _get_settings_mod.GetUserSettingsSkill
 ManageUserSettingsSkill = _manage_settings_mod.ManageUserSettingsSkill
 
 
@@ -83,7 +79,6 @@ def patched_skill_sessions(monkeypatch, db_session):
         _manage_templates_mod,
         _manage_logs_mod,
         _manage_cycles_delete_mod,
-        _get_settings_mod,
         _manage_settings_mod,
     ):
         monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
@@ -419,6 +414,7 @@ async def test_delete_crop_cycle_removes_related_records(patched_skill_sessions,
 async def test_user_settings_skills_read_and_update(patched_skill_sessions, ctx):
     result = await ManageUserSettingsSkill().execute(
         {
+            "operation": "update_settings",
             "display_name": "老李",
             "default_city": "杭州",
             "default_lat": 30.25,
@@ -435,8 +431,29 @@ async def test_user_settings_skills_read_and_update(patched_skill_sessions, ctx)
     assert setting.default_lat == 30.25
     assert setting.assistant_role == "creative"
 
-    read = await GetUserSettingsSkill().execute({}, ctx)
+    read = await ManageUserSettingsSkill().execute(
+        {"operation": "query_settings"},
+        ctx,
+    )
     assert read.status.value == "success"
     assert "老李" in read.reply
     assert "杭州" in read.reply
     assert "灵感创意型" in read.reply
+
+    inferred_read = await ManageUserSettingsSkill().execute({}, ctx)
+    assert inferred_read.status.value == "success"
+    assert "老李" in inferred_read.reply
+    assert "杭州" in inferred_read.reply
+    assert "灵感创意型" in inferred_read.reply
+
+
+@pytest.mark.asyncio
+async def test_user_settings_skill_infers_update_operation(
+    patched_skill_sessions, ctx
+):
+    read = await ManageUserSettingsSkill().execute(
+        {"display_name": "老周"},
+        ctx,
+    )
+    assert read.status.value == "success"
+    assert "老周" in read.reply

@@ -28,7 +28,6 @@ class TestToolChainMap:
             "manage_cost_categories",
             "get_planting_units",
             "manage_planting_units",
-            "get_user_settings",
             "manage_user_settings",
             "settle_labor_payment",
             "update_operation_work_order",
@@ -51,7 +50,7 @@ class TestToolChainMap:
             "get_cost_categories",
             "get_planting_units",
             "manage_crop_templates",
-            "get_user_settings",
+            "manage_user_settings",
         ]
         for tool in query_tools_without_farm_status:
             assert TOOL_CHAIN_MAP[tool] == [], f"{tool} 不应关联 get_farm_status"

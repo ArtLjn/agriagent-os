@@ -120,10 +120,6 @@ _READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
         "context_dependencies": ["farm", "crop_templates"],
         "evaluation_tags": ["read", "crop_template"],
     },
-    "get_user_settings": {
-        "context_dependencies": ["user"],
-        "evaluation_tags": ["read", "user_settings"],
-    },
     "get_operation_work_orders": {
         "context_dependencies": ["crop_cycles", "planting_units", "workers"],
         "evaluation_tags": ["read", "operation_work_order", "labor"],

@@ -30,7 +30,6 @@ EXPECTED_REGISTERED_SKILLS = {
     "manage_cost_categories",
     "get_planting_units",
     "manage_planting_units",
-    "get_user_settings",
     "manage_user_settings",
     "settle_labor_payment",
     "update_operation_work_order",

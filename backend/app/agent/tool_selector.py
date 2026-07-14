@@ -115,9 +115,6 @@ def select_tools(
     if "get_cost_categories" in candidates:
         candidates.discard("manage_cost")
 
-    if "manage_user_settings" in candidates:
-        candidates.discard("get_user_settings")
-
     if "get_labor_payables" in candidates:
         if has_labor_hint:
             candidates.discard("manage_cost")

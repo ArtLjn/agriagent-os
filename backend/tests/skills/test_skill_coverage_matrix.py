@@ -86,7 +86,7 @@ def test_ordinary_high_priority_business_has_no_needs_skill_gap():
         (
             "user_settings",
             "get_update_settings",
-            "get_user_settings|manage_user_settings",
+            "manage_user_settings",
         ),
     ],
 )

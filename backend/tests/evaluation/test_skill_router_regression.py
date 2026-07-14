@@ -26,7 +26,7 @@ TOOLS = [
     _Tool("manage_crop_templates"),
     _Tool("get_planting_units"),
     _Tool("get_cost_categories"),
-    _Tool("get_user_settings"),
+    _Tool("manage_user_settings"),
     _Tool("settle_labor_payment"),
 ]
 
@@ -127,7 +127,7 @@ def test_high_risk_delete_crop_cycle_requires_clarification() -> None:
         ("有哪些作物模板", ["manage_crop_templates"]),
         ("有哪些大棚", ["get_planting_units"]),
         ("有哪些成本分类", ["get_cost_categories"]),
-        ("我的默认城市是什么", ["get_user_settings"]),
+        ("我的默认城市是什么", ["manage_user_settings"]),
     ],
 )
 def test_specific_read_queries_do_not_fall_back_to_farm_status(
