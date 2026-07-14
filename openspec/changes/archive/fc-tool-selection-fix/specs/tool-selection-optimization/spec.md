@@ -28,7 +28,7 @@
 
 #### Scenario: prompt 包含所有 tool 映射
 - **WHEN** 检查 `base.j2` 内容
-- **THEN** 包含所有 10 个 tool 的名称和意图描述：get_weather_forecast、get_cost_summary、get_cost_analytics、create_cost_record、create_crop_cycle、get_crop_cycle_info、get_recent_farm_logs、log_farm_activity、update_crop_stage、settle_debt
+- **THEN** 包含所有 10 个 tool 的名称和意图描述：weather、get_cost_summary、get_cost_analytics、create_cost_record、create_crop_cycle、get_crop_cycle_info、get_recent_farm_logs、log_farm_activity、update_crop_stage、settle_debt
 
 #### Scenario: 新增 skill 后映射表可维护
 - **WHEN** 开发者新增一个 Python Skill

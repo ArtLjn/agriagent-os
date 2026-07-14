@@ -9,8 +9,8 @@ class TestToolChoiceRequired:
         from app.agent.runtime.llm_support import _resolve_tool_choice
 
         selection = ToolSelectionResult(
-            tools=["get_weather_forecast"],
-            force_binding=frozenset({"get_weather_forecast"}),
+            tools=["weather"],
+            force_binding=frozenset({"weather"}),
         )
         assert _resolve_tool_choice(selection) == "required"
 

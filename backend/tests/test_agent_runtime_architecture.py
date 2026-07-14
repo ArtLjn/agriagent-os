@@ -231,7 +231,7 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
     from app.context.models import ContextBlock, ContextBundle
 
     weather_tool = MagicMock()
-    weather_tool.name = "get_weather_forecast"
+    weather_tool.name = "weather"
     status_tool = MagicMock()
     status_tool.name = "get_farm_status"
 
@@ -306,7 +306,7 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
                 "session_id": "sess-1",
                 "system_prompt": "预构建系统提示",
                 "context_bundle": prepared_context,
-                "selected_tool_names": ["get_weather_forecast"],
+                "selected_tool_names": ["weather"],
             }
         )
 
@@ -328,7 +328,7 @@ async def test_llm_node_does_not_bind_tools_after_tool_results():
     from app.context.models import ContextBlock, ContextBundle
 
     weather_tool = MagicMock()
-    weather_tool.name = "get_weather_forecast"
+    weather_tool.name = "weather"
 
     prepared_context = ContextBundle(
         blocks=[
@@ -393,7 +393,7 @@ async def test_llm_node_does_not_bind_tools_after_tool_results():
                 "session_id": "sess-1",
                 "system_prompt": "预构建系统提示",
                 "context_bundle": prepared_context,
-                "selected_tool_names": ["get_weather_forecast"],
+                "selected_tool_names": ["weather"],
             }
         )
 

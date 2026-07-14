@@ -52,7 +52,7 @@ def test_weather_forecast_tool_enables_weather_and_retrieval_layer() -> None:
     result = ContextPolicy().resolve(
         ContextBuildRequest(
             intent="chat",
-            selected_tool_names=["get_weather_forecast"],
+            selected_tool_names=["weather"],
         )
     )
 

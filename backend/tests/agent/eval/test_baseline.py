@@ -43,7 +43,7 @@ class TestBaselineChitchatNoFalsePositive:
     def test_no_force_binding_for_chitchat(self, case, fake_tool_factory):
         # 给所有可能的 query skill 作为候选
         all_query_skills = [
-            "get_weather_forecast",
+            "weather",
             "manage_crop_cycle",
             "get_workers",
             "get_labor_payables",

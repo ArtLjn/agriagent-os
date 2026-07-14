@@ -64,7 +64,7 @@ class ContextPolicy:
     """根据意图和工具选择 Context 构建策略。"""
 
     COST_TOOLS = frozenset({"manage_cost"})
-    WEATHER_TOOLS = frozenset({"get_weather_forecast"})
+    WEATHER_TOOLS = frozenset({"weather"})
     CROP_CYCLE_TOOLS = frozenset(
         {
             "manage_crop_cycle",

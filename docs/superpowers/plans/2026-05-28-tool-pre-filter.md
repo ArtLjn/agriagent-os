@@ -46,7 +46,7 @@ from app.agent.tool_selector import select_tools
 
 def _all_tool_names():
     return [
-        "get_weather_forecast",
+        "weather",
         "get_cost_summary",
         "get_cost_analytics",
         "create_cost_record",
@@ -148,7 +148,7 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
 }
 
 QUERY_TRIGGERS: dict[str, set[str]] = {
-    "get_weather_forecast": {"天气", "预报", "降雨", "温度", "极端天气", "雨"},
+    "weather": {"天气", "预报", "降雨", "温度", "极端天气", "雨"},
     "get_cost_summary": {
         "余额",
         "收支",
@@ -252,10 +252,10 @@ class TestQueryKeywordMatching:
     @pytest.mark.parametrize(
         "user_msg,expected_tool",
         [
-            ("今天天气", "get_weather_forecast"),
+            ("今天天气", "weather"),
             ("我的余额", "get_cost_summary"),
             ("我的月额", "get_cost_summary"),
-            ("最近有雨吗", "get_weather_forecast"),
+            ("最近有雨吗", "weather"),
             ("利润怎么样", "get_cost_summary"),
             ("最近干了啥", "get_recent_farm_logs"),
             ("茬口状态怎么样", "get_crop_cycle_info"),
@@ -270,7 +270,7 @@ class TestQueryKeywordMatching:
 
     def test_multi_intent_matches_both(self):
         result = select_tools("看看天气和成本", _all_tool_names())
-        assert "get_weather_forecast" in result
+        assert "weather" in result
         assert "get_cost_summary" in result
 
 
@@ -332,7 +332,7 @@ cd /Users/ljn/Documents/demo/explore/backend && git add tests/test_tool_selector
         mock_summary.return_value = ""
 
         weather_tool = MagicMock()
-        weather_tool.name = "get_weather_forecast"
+        weather_tool.name = "weather"
         cost_tool = MagicMock()
         cost_tool.name = "get_cost_summary"
         mock_get_tools.return_value = [weather_tool, cost_tool]
@@ -349,7 +349,7 @@ cd /Users/ljn/Documents/demo/explore/backend && git add tests/test_tool_selector
 
         bound_tools = mock_llm.bind_tools.call_args[0][0]
         tool_names = [t.name for t in bound_tools]
-        assert "get_weather_forecast" in tool_names
+        assert "weather" in tool_names
         assert "get_cost_summary" not in tool_names
 ```
 
@@ -414,5 +414,5 @@ Expected: 全部 PASS
 
 - [ ] **Step 3: 验证 tool_selector 独立模块被正确 import**
 
-Run: `cd /Users/ljn/Documents/demo/explore/backend && source .venv/bin/activate && python -c "from app.agent.tool_selector import select_tools; print(select_tools('今天天气', ['get_weather_forecast', 'get_cost_summary']))"`
-Expected: `['get_weather_forecast']`
+Run: `cd /Users/ljn/Documents/demo/explore/backend && source .venv/bin/activate && python -c "from app.agent.tool_selector import select_tools; print(select_tools('今天天气', ['weather', 'get_cost_summary']))"`
+Expected: `['weather']`

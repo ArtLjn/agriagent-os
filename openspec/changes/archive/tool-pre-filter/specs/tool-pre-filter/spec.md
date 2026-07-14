@@ -32,11 +32,11 @@
 - **THEN** 无写操作 Tool 被匹配，进入 fallback
 
 ### Requirement: 查询操作 Tool 通过策划触发词表匹配
-`tool_selector.py` SHALL 维护一个查询 Tool 触发词字典 `{tool_name: set[str]}`。当用户消息包含某 Tool 的任一触发词时，该 Tool SHALL 加入候选列表。查询 Tool 包括：`get_weather_forecast`、`get_cost_summary`、`get_cost_analytics`、`get_crop_cycle_info`、`get_recent_farm_logs`。
+`tool_selector.py` SHALL 维护一个查询 Tool 触发词字典 `{tool_name: set[str]}`。当用户消息包含某 Tool 的任一触发词时，该 Tool SHALL 加入候选列表。查询 Tool 包括：`weather`、`get_cost_summary`、`get_cost_analytics`、`get_crop_cycle_info`、`get_recent_farm_logs`。
 
 #### Scenario: 天气查询
 - **WHEN** 用户消息为"今天天气"
-- **THEN** `get_weather_forecast` 在候选列表中（触发词"天气"匹配）
+- **THEN** `weather` 在候选列表中（触发词"天气"匹配）
 
 #### Scenario: 余额查询
 - **WHEN** 用户消息为"我的月额"
@@ -44,7 +44,7 @@
 
 #### Scenario: 多意图查询
 - **WHEN** 用户消息为"看看天气和成本"
-- **THEN** `get_weather_forecast` 和 `get_cost_summary` 都在候选列表中
+- **THEN** `weather` 和 `get_cost_summary` 都在候选列表中
 
 ### Requirement: 预筛函数合并两层结果并支持 fallback
 `select_tools(user_message: str, all_tools: list, top_k: int = 3) -> list` SHALL 执行 Layer 1（regex）和 Layer 2（keyword），合并去重后返回候选 Tool。当两层均无命中时，SHALL 返回全量 Tool 列表作为 fallback。
@@ -66,4 +66,4 @@
 
 #### Scenario: 记录预筛日志
 - **WHEN** `select_tools` 返回 2 个候选 Tool
-- **THEN** 日志输出 `tool_pre_filter | input="今天天气" | candidates=["get_weather_forecast"] | total=10`
+- **THEN** 日志输出 `tool_pre_filter | input="今天天气" | candidates=["weather"] | total=10`

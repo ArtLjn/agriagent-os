@@ -104,7 +104,7 @@ EXPECTED_REGISTERED_SKILLS = {
     "update_crop_cycle",
     "update_crop_stage",
     "update_operation_work_order",
-    "get_weather_forecast",
+    "weather",
     "web_search",
 }
 
@@ -238,7 +238,7 @@ ALL_TOOL_NAMES = [
     "update_crop_cycle",
     "update_crop_stage",
     "update_operation_work_order",
-    "get_weather_forecast",
+    "weather",
     "web_search",
 ]
 
@@ -407,7 +407,7 @@ expected_keys = {
     "update_crop_cycle",
     "update_crop_stage",
     "update_operation_work_order",
-    "get_weather_forecast",
+    "weather",
     "web_search",
 }
 ```
@@ -447,7 +447,7 @@ In `backend/app/agent/tool_selector.py`, replace `TOOL_CHAIN_MAP` with:
 
 ```python
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
-    "get_weather_forecast": ["get_farm_status"],
+    "weather": ["get_farm_status"],
     "get_cost_summary": ["get_farm_status"],
     "get_cost_analytics": ["get_farm_status"],
     "get_crop_cycle_info": ["get_farm_status"],
@@ -611,7 +611,7 @@ _SKILL_DOMAINS = {
     "update_operation_work_order": "planting_operation",
     "get_labor_payables": "labor",
     "settle_labor_payment": "labor",
-    "get_weather_forecast": "weather",
+    "weather": "weather",
     "web_search": "external_network",
 }
 
@@ -656,7 +656,7 @@ _CONTEXT_DEPENDENCIES = {
     "update_operation_work_order": ["active_cycles", "planting_units", "workers"],
     "get_labor_payables": ["workers", "unpaid_labor"],
     "settle_labor_payment": ["workers", "unpaid_labor"],
-    "get_weather_forecast": ["user_settings", "weather"],
+    "weather": ["user_settings", "weather"],
     "web_search": ["external_network"],
 }
 ```

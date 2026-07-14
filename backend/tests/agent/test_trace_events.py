@@ -26,17 +26,17 @@ class TestTraceEvents:
         from app.agent.runtime.llm_support import _resolve_tool_choice
 
         selection = ToolSelectionResult(
-            tools=["get_weather_forecast"],
-            force_binding=frozenset({"get_weather_forecast"}),
+            tools=["weather"],
+            force_binding=frozenset({"weather"}),
         )
         payload = {
             "forced_skills": sorted(selection.force_binding),
             "tool_choice": _resolve_tool_choice(selection),
             "selected_tools": selection.tools,
         }
-        assert payload["forced_skills"] == ["get_weather_forecast"]
+        assert payload["forced_skills"] == ["weather"]
         assert payload["tool_choice"] == "required"
-        assert "get_weather_forecast" in payload["selected_tools"]
+        assert "weather" in payload["selected_tools"]
 
     def test_force_binding_trace_records_actual_skills(self):
         """regression: 调用实际 trace 函数，传入真实 force_binding，断言 forced_skills 非空。
@@ -54,27 +54,27 @@ class TestTraceEvents:
         nodes_mod._record_tool_call_forced_trace(
             collector=collector,
             user_msg="今天天气如何",
-            selected_names=["get_weather_forecast"],
+            selected_names=["weather"],
             tool_choice="required",
-            force_binding=("get_weather_forecast",),
+            force_binding=("weather",),
         )
         assert collector.record.called, "trace 函数必须调用 collector.record"
         call_kwargs = collector.record.call_args.kwargs
         assert call_kwargs.get("node_name") == "tool_call_forced"
         output_data = call_kwargs.get("output_data", {})
-        assert output_data.get("forced_skills") == ["get_weather_forecast"], (
+        assert output_data.get("forced_skills") == ["weather"], (
             "forced_skills 必须包含真实 skill 名，不能为空列表"
         )
         assert output_data.get("tool_choice") == "required"
-        assert "get_weather_forecast" in output_data.get("selected_tools", [])
+        assert "weather" in output_data.get("selected_tools", [])
 
     def test_data_source_payload_from_tool(self):
         """当有 tool_messages 时，data_source 必须是 tool:<skill_name>。"""
         from app.agent.runtime.nodes import _build_data_source_payload
 
-        tool_calls = [{"name": "get_weather_forecast"}]
+        tool_calls = [{"name": "weather"}]
         payload = _build_data_source_payload(tool_calls=tool_calls)
-        assert payload["data_source"] == "tool:get_weather_forecast"
+        assert payload["data_source"] == "tool:weather"
         assert payload["has_tool_results"] is True
 
     def test_data_source_payload_without_tools(self):

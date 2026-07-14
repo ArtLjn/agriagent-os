@@ -4,7 +4,7 @@
 - [ ] 1.2 优化 `get_cost_analytics`（cost-analytics）的 description，使用意图场景描述格式
 - [ ] 1.3 优化 `create_crop_cycle`（create-crop-cycle）的 description，补充"创建"、"种植"、"春茬"、"秋茬"等触发词
 - [ ] 1.4 优化 `create_cost_record`（create-cost-record）的 description，使用意图场景描述格式
-- [ ] 1.5 优化 `get_weather_forecast`（weather）的 description，使用意图场景描述格式
+- [ ] 1.5 优化 `weather`（weather）的 description，使用意图场景描述格式
 - [ ] 1.6 优化 `get_crop_cycle_info`（crop-cycle）的 description，补充"茬口状态"、"当前阶段"等
 - [ ] 1.7 优化 `get_recent_farm_logs`（farm-logs）的 description，使用意图场景描述格式
 - [ ] 1.8 优化 `log_farm_activity`（log-farm-activity）的 description，使用意图场景描述格式

@@ -17,9 +17,9 @@ WeatherSkill = _weather_mod.WeatherSkill
 
 @pytest.fixture(autouse=True)
 def _clear_weather_skill_cache():
-    clear_cache("get_weather_forecast")
+    clear_cache("weather")
     yield
-    clear_cache("get_weather_forecast")
+    clear_cache("weather")
 
 
 def _make_weather_data(days=3) -> dict:

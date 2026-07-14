@@ -26,7 +26,7 @@ ALL_TOOL_NAMES = [
     "update_operation_work_order",
     "manage_workers",
     "manage_wages",
-    "get_weather_forecast",
+    "weather",
     "web_search",
 ]
 
@@ -211,7 +211,7 @@ class TestWritePatternMatching:
 class TestQueryKeywordMatching:
     def test_weather_query(self):
         result = select_tools("今天天气", _make_tools())
-        assert "get_weather_forecast" in result
+        assert "weather" in result
 
     def test_balance_query(self):
         result = select_tools("我的余额", _make_tools())
@@ -252,17 +252,17 @@ class TestQueryKeywordMatching:
 
     def test_multi_intent(self):
         result = select_tools("看看天气和成本", _make_tools())
-        assert "get_weather_forecast" in result
+        assert "weather" in result
         assert "manage_cost" in result
 
     def test_keyword_match_logs_tool_select_layer(self, caplog):
         with caplog.at_level("INFO", logger="app.agent.tool_selector"):
             result = select_tools("今天天气", _make_tools())
 
-        assert result == ["get_weather_forecast"]
+        assert result == ["weather"]
         assert "tool_select | layer=rule" in caplog.text
-        assert "candidates=['get_weather_forecast']" in caplog.text
-        assert "returned=['get_weather_forecast']" in caplog.text
+        assert "candidates=['weather']" in caplog.text
+        assert "returned=['weather']" in caplog.text
 
     def test_labor_payable_query_prefers_labor_skill(self):
         result = select_tools("老王还欠多少人工钱", _make_tools())

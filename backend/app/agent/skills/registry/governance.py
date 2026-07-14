@@ -172,22 +172,22 @@ def _web_search_guardrail(registry: SkillRegistry) -> list[GovernanceIssue]:
 
 
 def _weather_guardrail(registry: SkillRegistry) -> list[GovernanceIssue]:
-    alias = registry.resolve_alias("get_weather_forecast")
-    capability = registry.capabilities.get("get_weather_forecast")
-    operation = registry.get_operation("get_weather_forecast", "query_forecast")
+    alias = registry.resolve_alias("weather")
+    capability = registry.capabilities.get("weather")
+    operation = registry.get_operation("weather", "query_forecast")
     issues: list[GovernanceIssue] = []
     if alias is None:
         issues.append(
             _guardrail_issue(
                 "weather_missing_alias",
-                "aliases.get_weather_forecast",
+                "aliases.weather",
             )
         )
     if capability is None:
         issues.append(
             _guardrail_issue(
                 "weather_missing_capability",
-                "capabilities.get_weather_forecast",
+                "capabilities.weather",
             )
         )
         return issues
@@ -195,16 +195,16 @@ def _weather_guardrail(registry: SkillRegistry) -> list[GovernanceIssue]:
         issues.append(
             _guardrail_issue(
                 "weather_must_stay_active",
-                "capabilities.get_weather_forecast.status",
-                "get_weather_forecast 必须保持 active，作为可用 external_network 正例。",
+                "capabilities.weather.status",
+                "weather 必须保持 active，作为可用 external_network 正例。",
             )
         )
     if operation is None or operation.risk != "external_network":
         issues.append(
             _guardrail_issue(
                 "weather_invalid_risk",
-                "capabilities.get_weather_forecast.operations.query_forecast.risk",
-                "get_weather_forecast.query_forecast 必须声明 external_network 风险。",
+                "capabilities.weather.operations.query_forecast.risk",
+                "weather.query_forecast 必须声明 external_network 风险。",
             )
         )
     return issues

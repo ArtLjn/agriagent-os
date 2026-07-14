@@ -434,8 +434,8 @@ from app.agent.tool_selection_rules import QUERY_INTENT_FORCE_BINDING
 
 
 class TestForceBindingRules:
-    def test_weather_intent_binds_get_weather_forecast(self):
-        assert "get_weather_forecast" in QUERY_INTENT_FORCE_BINDING["天气"]
+    def test_weather_intent_binds_weather(self):
+        assert "weather" in QUERY_INTENT_FORCE_BINDING["天气"]
 
     def test_crop_cycle_intent_binds_get_crop_cycles(self):
         assert "get_crop_cycles" in QUERY_INTENT_FORCE_BINDING["我的茬口"]
@@ -474,10 +474,10 @@ Expected: ImportError on `QUERY_INTENT_FORCE_BINDING`.
 # Rule Gate 识别到这些意图时，对应 Skill 必须进 selected_tools 并设 tool_choice=required。
 # 不被 select_tools 的 difference_update 裁剪逻辑吃掉。
 QUERY_INTENT_FORCE_BINDING: dict[str, set[str]] = {
-    "天气": {"get_weather_forecast"},
-    "下雨": {"get_weather_forecast"},
-    "气温": {"get_weather_forecast"},
-    "预报": {"get_weather_forecast"},
+    "天气": {"weather"},
+    "下雨": {"weather"},
+    "气温": {"weather"},
+    "预报": {"weather"},
     "我的茬口": {"get_crop_cycles"},
     "当前种什么": {"get_crop_cycles"},
     "几号棚": {"get_crop_cycles"},
@@ -532,11 +532,11 @@ def _fake_tool(name: str) -> MagicMock:
 
 
 class TestSelectToolsForceBinding:
-    def test_weather_input_forces_get_weather_forecast(self):
-        all_tools = [_fake_tool("get_weather_forecast")]
+    def test_weather_input_forces_weather(self):
+        all_tools = [_fake_tool("weather")]
         result = select_tools("今天天气怎么样", all_tools)
-        assert "get_weather_forecast" in result.tools
-        assert "get_weather_forecast" in result.force_binding
+        assert "weather" in result.tools
+        assert "weather" in result.force_binding
 
     def test_force_binding_survives_difference_update(self):
         """强制绑定不被 select_tools 内部裁剪吃掉。"""
@@ -548,13 +548,13 @@ class TestSelectToolsForceBinding:
         assert "get_crop_cycles" in result.force_binding
 
     def test_no_force_binding_for_chitchat(self):
-        all_tools = [_fake_tool("get_weather_forecast")]
+        all_tools = [_fake_tool("weather")]
         result = select_tools("你好", all_tools)
-        assert "get_weather_forecast" not in result.force_binding
-        assert "get_weather_forecast" not in result.tools
+        assert "weather" not in result.force_binding
+        assert "weather" not in result.tools
 
     def test_force_binding_tools_are_subset_of_tools(self):
-        all_tools = [_fake_tool("get_weather_forecast")]
+        all_tools = [_fake_tool("weather")]
         result = select_tools("天气预报", all_tools)
         assert result.force_binding.issubset(set(result.tools))
 ```
@@ -696,8 +696,8 @@ class TestToolChoiceRequired:
         from app.agent.tool_selector import ToolSelectionResult
 
         selection = ToolSelectionResult(
-            tools=["get_weather_forecast"],
-            force_binding=frozenset({"get_weather_forecast"}),
+            tools=["weather"],
+            force_binding=frozenset({"weather"}),
         )
 
         with patch("app.agent.runtime.llm_support._call_llm") as mock_call:
@@ -819,11 +819,11 @@ class TestTraceEvents:
         from app.agent.tool_selector import ToolSelectionResult
 
         selection = ToolSelectionResult(
-            tools=["get_weather_forecast"],
-            force_binding=frozenset({"get_weather_forecast"}),
+            tools=["weather"],
+            force_binding=frozenset({"weather"}),
         )
         payload = _build_force_binding_trace_payload(selection)
-        assert payload["forced_skills"] == ["get_weather_forecast"]
+        assert payload["forced_skills"] == ["weather"]
         assert payload["tool_choice"] == "required"
 
 
@@ -957,10 +957,10 @@ class EvalCase:
 
 B_QUERY_CASES: list[EvalCase] = [
     # 5 意图 × 4 表达 = 20 条（D 类：同意图不同说法）
-    EvalCase("q-weather-1", "B_QUERY", "天气如何", "get_weather_forecast"),
-    EvalCase("q-weather-2", "B_QUERY", "今天下雨吗", "get_weather_forecast"),
-    EvalCase("q-weather-3", "B_QUERY", "明天出门要带伞吗", "get_weather_forecast"),
-    EvalCase("q-weather-4", "B_QUERY", "看下天气预报", "get_weather_forecast"),
+    EvalCase("q-weather-1", "B_QUERY", "天气如何", "weather"),
+    EvalCase("q-weather-2", "B_QUERY", "今天下雨吗", "weather"),
+    EvalCase("q-weather-3", "B_QUERY", "明天出门要带伞吗", "weather"),
+    EvalCase("q-weather-4", "B_QUERY", "看下天气预报", "weather"),
     EvalCase("q-cycle-1", "B_QUERY", "我的茬口", "get_crop_cycles"),
     EvalCase("q-cycle-2", "B_QUERY", "当前种了什么", "get_crop_cycles"),
     EvalCase("q-cycle-3", "B_QUERY", "几号棚在种", "get_crop_cycles"),
@@ -997,7 +997,7 @@ E2_MULTITURN_CASES: list[EvalCase] = [
         "e2-1",
         "E2_MULTITURN",
         "天气如何",
-        "get_weather_forecast",
+        "weather",
         previous_turns=["你好", "最近忙啥", "我在管理农场"],
         pollution_data={"weather_snapshot": "晴 30℃"},
         skill_mock_return={"weather": "雨 25℃", "forecast": "未来 3 小时有雨"},
@@ -1332,7 +1332,7 @@ git commit -m "test: verify context bundle skill binding rollout metrics"
 - Create: `backend/app/agent/runtime/session_intro.py`
 - Test: `backend/tests/agent/runtime/test_session_intro.py`
 
-按 spec §5.9.4 时序图实现：session 创建事件触发，主动调 `get_weather_forecast + get_farm_status`，结果只渲染到开场回复，不写入 ContextBundle。
+按 spec §5.9.4 时序图实现：session 创建事件触发，主动调 `weather + get_farm_status`，结果只渲染到开场回复，不写入 ContextBundle。
 
 具体任务分解留待业务确认后展开。
 

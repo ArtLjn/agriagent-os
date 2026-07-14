@@ -216,7 +216,7 @@ class TestPureNormalPath:
                 "7/10: 天气☀️, 最高35℃, 最低28℃, 降水0mm"
             ),
             tool_call_id="call-random",
-            name="get_weather_forecast",
+            name="weather",
         )
         state = {
             "messages": [normal_msg],

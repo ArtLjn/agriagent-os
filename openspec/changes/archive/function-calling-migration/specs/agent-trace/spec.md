@@ -4,8 +4,8 @@
 Agent trace 系统 SHALL 通过 `llm_call` 和 `skill_call` 节点记录完整的 FC 路由链路。`_llm_node` SHALL 记录 LLM 的 tool selection 决策（`tool_calls` 字段或直接回复）。`_parallel_tool_node` SHALL 记录每个 skill 的执行结果。SHALL 不再记录 `node_type="routing"` 的 `skillify_route` 条目。
 
 #### Scenario: FC 路由的 trace 记录完整
-- **WHEN** 用户发送 "今天天气咋样"，FC 路由命中 `get_weather_forecast`
-- **THEN** trace 中包含 `llm_call` 节点（`tool_calls=[get_weather_forecast]`）和 `skill_call` 节点（`node_name=get_weather_forecast`，含执行结果），不包含 `node_type="routing"` 的记录
+- **WHEN** 用户发送 "今天天气咋样"，FC 路由命中 `weather`
+- **THEN** trace 中包含 `llm_call` 节点（`tool_calls=[weather]`）和 `skill_call` 节点（`node_name=weather`，含执行结果），不包含 `node_type="routing"` 的记录
 
 #### Scenario: 无 tool 调用的 trace 记录
 - **WHEN** 用户发送 "你好"，LLM 直接回复

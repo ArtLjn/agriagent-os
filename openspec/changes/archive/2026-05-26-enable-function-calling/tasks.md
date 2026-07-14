@@ -15,7 +15,7 @@
 
 ## 4. 端到端验证
 
-- [ ] 4.1 编写测试：验证天气查询触发 `get_weather_forecast` tool call
+- [ ] 4.1 编写测试：验证天气查询触发 `weather` tool call
 - [ ] 4.2 编写测试：验证成本查询触发 `get_cost_summary` tool call
 - [ ] 4.3 编写测试：验证闲聊不触发 tool call，直接返回文本
 - [ ] 4.4 编写测试：验证 `enable_thinking` 配置正确传递给 API

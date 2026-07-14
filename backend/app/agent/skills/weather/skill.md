@@ -1,5 +1,5 @@
 ---
-name: get_weather_forecast
+name: weather
 type: read-only
 description: 获取未来 7 天天气预报和灾害预警，包括气温、降水、风速和极端天气提醒。
 triggers:
@@ -52,5 +52,5 @@ parameters:
 - 查询失败时返回中文说明，不暴露内部异常。
 
 ## 示例
-- 用户：“明天天气怎么样” -> `get_weather_forecast()`
-- 用户：“杭州未来 7 天会下雨吗” -> `get_weather_forecast(location="杭州")`
+- 用户：“明天天气怎么样” -> `weather()`
+- 用户：“杭州未来 7 天会下雨吗” -> `weather(location="杭州")`

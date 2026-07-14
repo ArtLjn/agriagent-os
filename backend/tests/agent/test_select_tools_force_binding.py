@@ -14,9 +14,9 @@ def _fake_tool(name: str) -> MagicMock:
 
 class TestSelectToolsForceBinding:
     def test_weather_input_selects_without_force_binding(self):
-        all_tools = [_fake_tool("get_weather_forecast")]
+        all_tools = [_fake_tool("weather")]
         result = select_tools("今天天气怎么样", all_tools)
-        assert "get_weather_forecast" in result.tools
+        assert "weather" in result.tools
         assert not result.force_binding
 
     def test_query_selection_does_not_force_bind(self):
@@ -27,12 +27,12 @@ class TestSelectToolsForceBinding:
         assert not result.force_binding
 
     def test_no_force_binding_for_chitchat(self):
-        all_tools = [_fake_tool("get_weather_forecast")]
+        all_tools = [_fake_tool("weather")]
         result = select_tools("你好", all_tools)
-        assert "get_weather_forecast" not in result.force_binding
-        assert "get_weather_forecast" not in result.tools
+        assert "weather" not in result.force_binding
+        assert "weather" not in result.tools
 
     def test_force_binding_field_stays_empty_for_query(self):
-        all_tools = [_fake_tool("get_weather_forecast")]
+        all_tools = [_fake_tool("weather")]
         result = select_tools("天气预报", all_tools)
         assert result.force_binding == frozenset()

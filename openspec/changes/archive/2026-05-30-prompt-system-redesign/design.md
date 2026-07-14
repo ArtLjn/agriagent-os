@@ -62,7 +62,7 @@ Spike 验证已确认：移除 12 条工具触发规则后 70 个测试全通过
 
 **选择**: 不在 prompt 中保留任何工具路由规则
 
-**理由**: Spike 验证通过。`tool_selector.py` 三层过滤 + `Tool.description` 自动注入 + `TOOL_CHAIN_MAP` 链式扩展已完全覆盖。保留行为约束（"禁止编造数据"）但移除路由规则（"用户提到天气 → 调用 get_weather_forecast"）。
+**理由**: Spike 验证通过。`tool_selector.py` 三层过滤 + `Tool.description` 自动注入 + `TOOL_CHAIN_MAP` 链式扩展已完全覆盖。保留行为约束（"禁止编造数据"）但移除路由规则（"用户提到天气 → 调用 weather"）。
 
 ## Risks / Trade-offs
 

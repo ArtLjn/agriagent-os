@@ -5,7 +5,7 @@
 ## What Changes
 
 - **Prompt 模板** `base.j2` 增加格式规则：要求 LLM 使用 emoji 前缀、Markdown 列表/加粗/标题、口语化短句
-- **天气预报** `get_weather_forecast` skill 的 `_format_reply` 改为 Markdown 表格 + emoji 天气图标
+- **天气预报** `weather` skill 的 `_format_reply` 改为 Markdown 表格 + emoji 天气图标
 - **记账确认** `build_confirm_message` 改为 emoji + 可读格式（💰 记账：化肥 50元）
 - **茬口创建结果** `create_crop_cycle` skill 的 `_format_reply` 改为 emoji + 表格展示阶段规划
 - **每日建议** 保持 LLM 自由输出，但 prompt 要求 emoji + 列表格式

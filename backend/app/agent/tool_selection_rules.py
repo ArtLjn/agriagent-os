@@ -147,7 +147,7 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
 }
 
 QUERY_TRIGGERS: dict[str, set[str]] = {
-    "get_weather_forecast": {"天气", "预报", "降雨", "温度", "极端天气"},
+    "weather": {"天气", "预报", "降雨", "温度", "极端天气"},
     "manage_cost": {
         "余额",
         "收支",
@@ -284,7 +284,7 @@ DISABLED_SKILLS: set[str] = {
     "web_search",
 }
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
-    "get_weather_forecast": [],
+    "weather": [],
     "manage_cost": [],
     "manage_crop_cycle": [],
     "get_labor_payables": [],

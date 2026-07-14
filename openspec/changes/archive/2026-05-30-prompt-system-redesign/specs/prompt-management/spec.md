@@ -13,7 +13,7 @@
 
 #### Scenario: tool calling 约束不含工具名
 - **WHEN** 渲染 `system_base` 模板
-- **THEN** 【安全护栏】段包含"禁止"和"必须调用工具"的明确措辞，但不包含 `get_weather_forecast`、`get_farm_status` 等具体工具函数名
+- **THEN** 【安全护栏】段包含"禁止"和"必须调用工具"的明确措辞，但不包含 `weather`、`get_farm_status` 等具体工具函数名
 
 ### Requirement: System prompt 包含 tool calling 硬约束
 组合后的 system prompt SHALL 包含明确的硬约束指令（归入 P1 Safety 层级），禁止 LLM 在 skill 覆盖领域编造数据。约束措辞 SHALL 使用"禁止"、"必须"等规范性语言。约束 SHALL NOT 包含具体工具名到触发场景的映射规则。
@@ -24,8 +24,8 @@
 
 #### Scenario: prompt 不包含工具路由规则
 - **WHEN** 渲染 `system_base` 组合
-- **THEN** 输出的 prompt 中不包含"用户提到天气 → 调用 get_weather_forecast"等触发规则文本
+- **THEN** 输出的 prompt 中不包含"用户提到天气 → 调用 weather"等触发规则文本
 
 #### Scenario: LLM 遵循约束调用 tool
 - **WHEN** 用户询问"明天天气"，且 LLM 已接收强化后的 system prompt
-- **THEN** LLM 通过 `Tool.description` + `tool_selector` 匹配并调用 `get_weather_forecast` tool
+- **THEN** LLM 通过 `Tool.description` + `tool_selector` 匹配并调用 `weather` tool

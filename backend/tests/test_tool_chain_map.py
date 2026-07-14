@@ -33,7 +33,7 @@ class TestToolChainMap:
             "update_operation_work_order",
             "manage_workers",
             "manage_wages",
-            "get_weather_forecast",
+            "weather",
             "web_search",
         }
         assert set(TOOL_CHAIN_MAP.keys()) == expected_keys
@@ -54,7 +54,7 @@ class TestToolChainMap:
         for tool in query_tools_without_farm_status:
             assert TOOL_CHAIN_MAP[tool] == [], f"{tool} 不应关联 get_farm_status"
 
-        assert TOOL_CHAIN_MAP["get_weather_forecast"] == []
+        assert TOOL_CHAIN_MAP["weather"] == []
 
     def test_write_tools_have_no_chain(self):
         """写操作工具不应关联额外工具。"""
@@ -109,11 +109,11 @@ class TestExpandByChain:
         assert result == set()
 
     def test_multiple_inputs(self):
-        result = expand_by_chain({"get_weather_forecast", "manage_cost"})
-        assert result == {"get_weather_forecast", "manage_cost"}
+        result = expand_by_chain({"weather", "manage_cost"})
+        assert result == {"weather", "manage_cost"}
 
     def test_max_tools_capped(self):
-        result = expand_by_chain({"get_weather_forecast"}, max_tools=1)
+        result = expand_by_chain({"weather"}, max_tools=1)
         assert len(result) <= 1
 
     def test_original_tools_preserved(self):
@@ -124,5 +124,5 @@ class TestExpandByChain:
             assert tool in result
 
     def test_max_tools_zero(self):
-        result = expand_by_chain({"get_weather_forecast"}, max_tools=0)
+        result = expand_by_chain({"weather"}, max_tools=0)
         assert result == set()

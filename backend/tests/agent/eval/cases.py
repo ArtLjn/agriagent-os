@@ -22,10 +22,10 @@ class EvalCase:
 
 B_QUERY_CASES: list[EvalCase] = [
     # Weather (4)
-    EvalCase("q-weather-1", "B_QUERY", "天气如何", "get_weather_forecast"),
-    EvalCase("q-weather-2", "B_QUERY", "今天下雨吗", "get_weather_forecast"),
-    EvalCase("q-weather-3", "B_QUERY", "明天出门要带伞吗", "get_weather_forecast"),
-    EvalCase("q-weather-4", "B_QUERY", "看下天气预报", "get_weather_forecast"),
+    EvalCase("q-weather-1", "B_QUERY", "天气如何", "weather"),
+    EvalCase("q-weather-2", "B_QUERY", "今天下雨吗", "weather"),
+    EvalCase("q-weather-3", "B_QUERY", "明天出门要带伞吗", "weather"),
+    EvalCase("q-weather-4", "B_QUERY", "看下天气预报", "weather"),
     # Crop cycles (4)
     EvalCase("q-cycle-1", "B_QUERY", "我的茬口", "manage_crop_cycle"),
     EvalCase("q-cycle-2", "B_QUERY", "当前种了什么", "manage_crop_cycle"),
@@ -89,7 +89,7 @@ E2_MULTITURN_CASES: list[EvalCase] = [
         "e2-1",
         "E2_MULTITURN",
         "天气如何",
-        "get_weather_forecast",
+        "weather",
         previous_turns=["你好", "最近忙啥"],
         pollution_data={"weather_snapshot": "晴 30℃"},
         skill_mock_return={"weather": "雨 25℃", "forecast": "未来 3 小时有雨"},

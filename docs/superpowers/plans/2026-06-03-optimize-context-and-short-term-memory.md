@@ -111,7 +111,7 @@ def test_policy_enables_weather_for_weather_tool():
     result = ContextPolicy().resolve(
         ContextBuildRequest(
             intent="query",
-            selected_tool_names=["get_weather_forecast"],
+            selected_tool_names=["weather"],
             farm_id=1,
             user_id="user-1",
             session_id="session-1",
@@ -189,7 +189,7 @@ class ContextPolicy:
     """根据意图和工具选择上下文 selector。"""
 
     LEDGER_TOOLS = {"get_cost_summary", "get_cost_analytics", "settle_debt"}
-    WEATHER_TOOLS = {"get_weather_forecast"}
+    WEATHER_TOOLS = {"weather"}
     FARM_TOOLS = {"get_farm_status", "get_crop_cycle_info"}
 
     def resolve(self, request: ContextBuildRequest) -> ContextPolicyResult:

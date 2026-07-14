@@ -98,8 +98,8 @@ aliases:
   - legacy_name: manage_user_settings
     capability: manage_settings
     operation: update_settings
-  - legacy_name: get_weather_forecast
-    capability: get_weather_forecast
+  - legacy_name: weather
+    capability: weather
     operation: query_forecast
   - legacy_name: web_search
     capability: web_search

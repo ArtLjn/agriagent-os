@@ -23,7 +23,7 @@ parameters:
 
 ## 不要使用
 - 用户只问精确账单或流水时，应使用 `manage_cost(operation="query_summary")`。
-- 用户只问天气时，应使用 `get_weather_forecast`。
+- 用户只问天气时，应使用 `weather`。
 - 用户要新增记录或创建茬口时，不要使用本 Skill 代替写入 Skill。
 
 ## 参数推断

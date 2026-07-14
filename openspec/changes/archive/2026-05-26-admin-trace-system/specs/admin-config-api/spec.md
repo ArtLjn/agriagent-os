@@ -8,7 +8,7 @@
 - **THEN** 返回所有已注册 skill 列表：
 ```json
 [
-  {"name": "get_weather_forecast", "description": "获取天气预报", "parameters_schema": {...}, "status": "active"},
+  {"name": "weather", "description": "获取天气预报", "parameters_schema": {...}, "status": "active"},
   {"name": "get_cost_summary", "description": "成本汇总", "parameters_schema": {...}, "status": "active"}
 ]
 ```

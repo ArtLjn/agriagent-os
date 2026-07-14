@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Weather forecast renders as Markdown table
-`get_weather_forecast` skill 的回复 SHALL 使用 Markdown 表格展示天气数据，包含 emoji 天气图标、日期、温度、降水量。只展示未来 3 天（非 7 天）。表格前加地点 emoji，表格后附天气预警。
+`weather` skill 的回复 SHALL 使用 Markdown 表格展示天气数据，包含 emoji 天气图标、日期、温度、降水量。只展示未来 3 天（非 7 天）。表格前加地点 emoji，表格后附天气预警。
 
 #### Scenario: Normal weather forecast
-- **WHEN** `get_weather_forecast` 成功返回 3 天天气数据
+- **WHEN** `weather` 成功返回 3 天天气数据
 - **THEN** 回复 SHALL 以 `📍 {地点}` 开头
 - **AND** 包含 Markdown 表格，列：日期、天气、最高温、最低温、降水
 - **AND** 日期格式为 `M/D`（如 `5/28`）

@@ -334,21 +334,21 @@ class TestFunctionCallingE2E:
     def test_weather_query_triggers_tool_call(
         self, mock_session, mock_summary, mock_get_llm, mock_get_tools
     ):
-        """天气查询应触发 get_weather_forecast tool call。"""
+        """天气查询应触发 weather tool call。"""
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(display_name="老李")
         mock_session.return_value = mock_db
         mock_summary.return_value = "当前无种植计划"
 
         mock_tool = MagicMock()
-        mock_tool.name = "get_weather_forecast"
+        mock_tool.name = "weather"
         mock_get_tools.return_value = [mock_tool]
 
         # 模拟 LLM 返回带 tool_call 的 AIMessage
         mock_llm = MagicMock()
         tool_call_msg = AIMessage(
             content="",
-            tool_calls=[{"name": "get_weather_forecast", "args": {"city": "苏州"}, "id": "tc1"}],
+            tool_calls=[{"name": "weather", "args": {"city": "苏州"}, "id": "tc1"}],
         )
         mock_llm.bind_tools.return_value = mock_llm
         mock_llm.invoke.side_effect = [tool_call_msg, AIMessage(content="明天苏州晴")]

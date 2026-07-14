@@ -418,7 +418,7 @@ async def test_get_skill_names_reads_trace_repository(monkeypatch):
             request_id="req-fresh-trace",
             farm_id=1,
             node_type="skill_call",
-            node_name="get_weather_forecast",
+            node_name="weather",
             status="success",
         ),
         TraceRecord(
@@ -440,7 +440,7 @@ async def test_get_skill_names_reads_trace_repository(monkeypatch):
 
     assert await stream_chat_use_case._get_skill_names(
         MagicMock(), 1, "req-fresh-trace"
-    ) == ["get_weather_forecast"]
+    ) == ["weather"]
 
 
 async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():

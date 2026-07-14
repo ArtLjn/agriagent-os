@@ -8,7 +8,7 @@
 
 #### Scenario: LLM 选择调用工具
 - **WHEN** LLM 返回包含 tool_calls 的响应
-- **THEN** 日志输出 `LLM 工具选择 | tool_calls=[get_weather_forecast] | model=qwen3.6-flash`
+- **THEN** 日志输出 `LLM 工具选择 | tool_calls=[weather] | model=qwen3.6-flash`
 
 #### Scenario: LLM 直接回复
 - **WHEN** LLM 返回纯文本回复
@@ -19,7 +19,7 @@
 
 #### Scenario: 服务启动时 Skill 发现
 - **WHEN** SkillManager 首次初始化
-- **THEN** 日志输出每个 Skill 的名称，如 `Skill 已加载 | name=get_weather_forecast | desc=获取天气预报...`
+- **THEN** 日志输出每个 Skill 的名称，如 `Skill 已加载 | name=weather | desc=获取天气预报...`
 
 ### Requirement: Skill 执行结构化日志
 `_parallel_tool_node` 中每个 Skill 调用 SHALL 记录：
@@ -29,11 +29,11 @@
 
 #### Scenario: Skill 正常执行
 - **WHEN** Skill `ainvoke` 成功返回
-- **THEN** 日志输出 `Skill 完成 | name=get_weather_forecast | duration_ms=230 | result=明天晴，最高温 28°C...`
+- **THEN** 日志输出 `Skill 完成 | name=weather | duration_ms=230 | result=明天晴，最高温 28°C...`
 
 #### Scenario: Skill 执行失败
 - **WHEN** Skill `ainvoke` 抛出异常
-- **THEN** 日志输出 `Skill 失败 | name=get_weather_forecast | error=API timeout`
+- **THEN** 日志输出 `Skill 失败 | name=weather | error=API timeout`
 
 ### Requirement: Prompt 渲染日志
 `render_prompt` SHALL 以 DEBUG 级别记录模板名称、是否命中注册表（`hit=true/false`）、渲染变量 key 列表。渲染失败回退时 SHALL 以 WARNING 级别记录。

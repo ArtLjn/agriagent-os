@@ -28,7 +28,7 @@ _APP_SKILL_ORDER = [
     "manage_farm_logs",
     "manage_wages",
     "manage_crop_cycle",
-    "get_weather_forecast",
+    "weather",
     "manage_user_settings",
 ]
 
@@ -63,7 +63,7 @@ _DISPLAY_BY_SKILL: dict[str, SkillDisplay] = {
         examples=("春茬种西瓜", "我的茬口有哪些", "把玉米茬口改到9月1开始"),
         recommended=True,
     ),
-    "get_weather_forecast": SkillDisplay(
+    "weather": SkillDisplay(
         title="天气提醒",
         category="推荐",
         icon="cloud-sun",

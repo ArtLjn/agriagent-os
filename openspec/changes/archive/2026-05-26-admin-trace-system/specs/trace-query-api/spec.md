@@ -32,7 +32,7 @@
       "nodes": [
         {"node_type": "prompt_render", "node_name": "system_prompt", "start_ms": 0, "duration_ms": 5, "status": "success"},
         {"node_type": "llm_call", "node_name": "qwen3.6-flash", "start_ms": 5, "duration_ms": 800, "token_usage": {...}},
-        {"node_type": "skill_call", "node_name": "get_weather_forecast", "start_ms": 805, "duration_ms": 400}
+        {"node_type": "skill_call", "node_name": "weather", "start_ms": 805, "duration_ms": 400}
       ]
     }
   ]

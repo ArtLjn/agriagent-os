@@ -108,7 +108,7 @@ def invalidate_farm_location_caches(
     context_result = invalidate_farm_context(farm_id)
     clear_context_cache()
     weather_cache.clear()
-    weather_skill_invalidated = clear_skill_cache("get_weather_forecast")
+    weather_skill_invalidated = clear_skill_cache("weather")
     return {
         **context_result,
         "weather_cache_cleared": True,

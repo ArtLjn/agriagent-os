@@ -45,7 +45,7 @@ async def test_parallel_tool_node_restores_trace_round_before_execution():
 async def test_read_tool_message_preserves_tool_name_for_direct_return():
     """读工具成功后应在 ToolMessage 上保留工具名，供直返策略判断。"""
     tool = SimpleNamespace(
-        name="get_weather_forecast",
+        name="weather",
         args_schema=None,
         ainvoke=AsyncMock(return_value="城市: 苏州\n未来天数: 3天"),
         skill_metadata=SkillMetadata(permission_level=SkillPermissionLevel.READ),
@@ -58,7 +58,7 @@ async def test_read_tool_message_preserves_tool_name_for_direct_return():
                 tool_calls=[
                     {
                         "id": "call-random",
-                        "name": "get_weather_forecast",
+                        "name": "weather",
                         "args": {"location": "苏州"},
                     }
                 ],
@@ -80,7 +80,7 @@ async def test_read_tool_message_preserves_tool_name_for_direct_return():
         result = await _parallel_tool_node(state)
 
     message = result["messages"][0]
-    assert message.name == "get_weather_forecast"
+    assert message.name == "weather"
     assert message.tool_call_id == "call-random"
 
 
@@ -729,7 +729,7 @@ async def test_registry_operation_risk_overrides_incomplete_read_metadata_for_wr
     tool.ainvoke.assert_not_awaited()
     output_data = collector.record.call_args.kwargs["output_data"]
     assert output_data["status"] == "pending"
-    assert output_data["legacy_tool_name"] == "create_cost_record"
+    assert "legacy_tool_name" not in output_data
     assert output_data["resolved_capability"] == "manage_cost"
     assert output_data["resolved_operation"] == "create_record"
     assert output_data["operation_risk"] == "write_confirm"
@@ -772,10 +772,12 @@ def test_manage_user_settings_query_operation_uses_read_permission():
     assert update_decision.requires_confirmation is True
     assert update_decision.operation == "update_settings"
     assert update_decision.operation_risk == "write_confirm"
-    assert inferred_query_decision.permission_level == SkillPermissionLevel.READ.value
-    assert inferred_query_decision.requires_confirmation is False
-    assert inferred_query_decision.operation == "query_settings"
-    assert inferred_query_decision.operation_risk == "read"
+    assert inferred_query_decision.permission_level == (
+        SkillPermissionLevel.WRITE_CONFIRM.value
+    )
+    assert inferred_query_decision.requires_confirmation is True
+    assert inferred_query_decision.operation == "update_settings"
+    assert inferred_query_decision.operation_risk == "write_confirm"
 
 
 @pytest.mark.asyncio
@@ -812,7 +814,11 @@ async def test_unknown_permission_on_legacy_write_skill_creates_pending_action()
     pending = get_pending(1)
     assert pending is not None
     assert pending.skill_name == "create_cost_record"
-    assert pending.params == {"amount": 100, "category": "化肥"}
+    assert pending.params == {
+        "amount": 100,
+        "category": "化肥",
+        "operation": "create_record",
+    }
     assert "[PENDING_ACTION]" in result["messages"][0].content
     tool.ainvoke.assert_not_awaited()
 
@@ -1030,7 +1036,7 @@ async def test_admin_permission_is_not_downgraded_by_registry_read_operation():
     output_data = collector.record.call_args.kwargs["output_data"]
     assert output_data["status"] == "rejected"
     assert output_data["permission_level"] == "admin"
-    assert output_data["legacy_tool_name"] == "get_farm_status"
+    assert "legacy_tool_name" not in output_data
     assert output_data["resolved_capability"] == "get_farm_status"
     assert output_data["resolved_operation"] == "query_status"
     assert output_data["operation_risk"] == "read"
@@ -1144,7 +1150,7 @@ async def test_validation_error_records_trace():
         (SkillPermissionLevel.READ, "metadata_read_tool", None),
         (
             SkillPermissionLevel.EXTERNAL_NETWORK,
-            "get_weather_forecast",
+            "weather",
             "外部天气暂不可用",
         ),
     ],
@@ -1211,9 +1217,9 @@ async def test_disabled_read_or_external_tool_rejects_without_execution(
     output_data = collector.record.call_args.kwargs["output_data"]
     for key, value in expected_output.items():
         assert output_data[key] == value
-    if tool_name == "get_weather_forecast":
-        assert output_data["legacy_tool_name"] == "get_weather_forecast"
-        assert output_data["resolved_capability"] == "get_weather_forecast"
+    if tool_name == "weather":
+        assert "legacy_tool_name" not in output_data
+        assert output_data["resolved_capability"] == "weather"
         assert output_data["resolved_operation"] == "query_forecast"
         assert output_data["operation_risk"] == "external_network"
 
@@ -1265,7 +1271,7 @@ async def test_registry_hidden_web_search_rejects_even_when_metadata_enabled():
     output_data = collector.record.call_args.kwargs["output_data"]
     assert output_data["status"] == "disabled"
     assert output_data["permission_level"] == "external_network"
-    assert output_data["legacy_tool_name"] == "web_search"
+    assert "legacy_tool_name" not in output_data
     assert output_data["resolved_capability"] == "web_search"
     assert output_data["resolved_operation"] == "search"
     assert output_data["operation_risk"] == "external_network"
@@ -1329,7 +1335,7 @@ async def test_disabled_write_confirm_tool_rejects_without_pending_action():
 @pytest.mark.asyncio
 async def test_external_network_permission_executes_and_records_permission_level():
     tool = SimpleNamespace(
-        name="get_weather_forecast",
+        name="weather",
         args_schema=None,
         ainvoke=AsyncMock(return_value="天气结果"),
         skill_metadata=SkillMetadata(
@@ -1344,7 +1350,7 @@ async def test_external_network_permission_executes_and_records_permission_level
                 tool_calls=[
                     {
                         "id": "tc1",
-                        "name": "get_weather_forecast",
+                        "name": "weather",
                         "args": {"location": "苏州"},
                     }
                 ],
@@ -1366,7 +1372,9 @@ async def test_external_network_permission_executes_and_records_permission_level
         result = await _parallel_tool_node(state)
 
     assert result["messages"][0].content == "天气结果"
-    tool.ainvoke.assert_awaited_once_with({"location": "苏州"})
+    tool.ainvoke.assert_awaited_once_with(
+        {"location": "苏州", "operation": "query_forecast"}
+    )
     output_data = collector.record.call_args.kwargs["output_data"]
     for key, value in {
         "status": "success",
@@ -1374,7 +1382,7 @@ async def test_external_network_permission_executes_and_records_permission_level
         "permission_level": "external_network",
     }.items():
         assert output_data[key] == value
-    assert output_data["legacy_tool_name"] == "get_weather_forecast"
-    assert output_data["resolved_capability"] == "get_weather_forecast"
+    assert "legacy_tool_name" not in output_data
+    assert output_data["resolved_capability"] == "weather"
     assert output_data["resolved_operation"] == "query_forecast"
     assert output_data["operation_risk"] == "external_network"

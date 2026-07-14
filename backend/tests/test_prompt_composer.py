@@ -68,7 +68,7 @@ class TestComposerCompose:
             current_date=date(2026, 5, 29),
         )
         assert "get_farm_status" in result
-        assert "get_weather_forecast" in result
+        assert "weather" in result
         assert "farm_context_summary" not in result
 
     def test_system_chat_excludes_tool_protocol(self, _composer):
@@ -91,7 +91,7 @@ class TestComposerCompose:
         assert "冷静专业型" in result
         assert "苏州" in result
         assert "get_farm_status" not in result
-        assert "get_weather_forecast" not in result
+        assert "weather" not in result
         assert "JSON 工具调用" not in result
         assert "只输出 JSON" not in result
 

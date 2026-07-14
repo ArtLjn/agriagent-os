@@ -324,7 +324,7 @@ class TestToolChainMap:
     """工具链关联映射测试。"""
 
     def test_weather_chain(self):
-        result = expand_by_chain({"get_weather_forecast"})
+        result = expand_by_chain({"weather"})
         assert "get_farm_status" in result
 
     def test_cost_chain(self):
@@ -344,13 +344,13 @@ class TestToolChainMap:
         assert result == set()
 
     def test_multiple_inputs(self):
-        result = expand_by_chain({"get_weather_forecast", "get_cost_summary"})
+        result = expand_by_chain({"weather", "get_cost_summary"})
         assert "get_farm_status" in result
-        assert "get_weather_forecast" in result
+        assert "weather" in result
         assert "get_cost_summary" in result
 
     def test_max_tools_capped(self):
-        result = expand_by_chain({"get_weather_forecast"}, max_tools=1)
+        result = expand_by_chain({"weather"}, max_tools=1)
         assert len(result) <= 1
 ```
 
@@ -365,7 +365,7 @@ Expected: FAIL — `ImportError: cannot import name 'TOOL_CHAIN_MAP'`
 
 ```python
 TOOL_CHAIN_MAP: dict[str, list[str]] = {
-    "get_weather_forecast": ["get_farm_status"],
+    "weather": ["get_farm_status"],
     "get_cost_summary": ["get_farm_status"],
     "get_cost_analytics": ["get_farm_status"],
     "get_crop_cycle_info": ["get_farm_status"],
@@ -645,7 +645,7 @@ Run: `cd backend && python -c "
 from app.agent.tool_selector import select_tools
 # 模拟工具列表
 tools = []
-for name in ['get_farm_status', 'get_weather_forecast', 'get_cost_summary', 'create_cost_record']:
+for name in ['get_farm_status', 'weather', 'get_cost_summary', 'create_cost_record']:
     from langchain_core.tools import BaseTool
     t = BaseTool(name=name, description='test')
     tools.append(t)
@@ -731,7 +731,7 @@ class TestContextEngineeringIntegration:
         """TOOL_CHAIN_MAP 正确扩展工具链。"""
         from app.agent.tool_selector import expand_by_chain
 
-        result = expand_by_chain({"get_weather_forecast"})
+        result = expand_by_chain({"weather"})
         assert "get_farm_status" in result
 ```
 

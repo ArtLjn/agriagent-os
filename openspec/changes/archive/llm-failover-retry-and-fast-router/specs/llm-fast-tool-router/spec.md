@@ -38,5 +38,5 @@ The first LLM call in `_llm_node` (tool selection) SHALL use `get_llm(role="tool
 
 #### Scenario: Different models for different phases
 - **WHEN** user sends "今天天气怎么样"
-- **THEN** first LLM call (selecting get_weather_forecast tool) uses tool-selection model
+- **THEN** first LLM call (selecting weather tool) uses tool-selection model
 - **AND** second LLM call (generating reply from weather data) uses generation model

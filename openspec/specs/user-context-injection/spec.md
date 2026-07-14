@@ -30,7 +30,7 @@
 
 #### Scenario: 天气查询使用注入的城市
 - **WHEN** 用户问"明天天气怎么样"，结构化用户上下文中 location 为"苏州"
-- **THEN** LLM 调用 `get_weather_forecast` 时传入 `location: "苏州"`
+- **THEN** LLM 调用 `weather` 时传入 `location: "苏州"`
 
 #### Scenario: location 为空时 LLM 追问
 - **WHEN** 用户问"明天天气怎么样"，结构化用户上下文中无 location

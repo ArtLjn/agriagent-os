@@ -192,7 +192,7 @@ async def test_read_query_binds_router_selected_canonical_tool_only() -> None:
     tools = [
         _FakeTool("manage_crop_cycle"),
         _FakeTool("get_farm_status"),
-        _FakeTool("get_weather_forecast"),
+        _FakeTool("weather"),
         _FakeTool("create_operation_work_order"),
     ]
 
@@ -225,7 +225,7 @@ async def test_model_choice_read_runtime_does_not_expand_to_all_read_tools() -> 
         _FakeTool("get_cost_summary"),
         _FakeTool("get_debt_summary"),
         _FakeTool("get_farm_status"),
-        _FakeTool("get_weather_forecast"),
+        _FakeTool("weather"),
         _FakeTool("create_cost_record"),
     ]
 
@@ -245,7 +245,7 @@ async def test_model_choice_read_runtime_does_not_expand_to_all_read_tools() -> 
     assert result["router_decision"].fallback == "model_choice_read_default"
     assert len(fake_llm.bound_tool_names) == 3
     assert "create_cost_record" not in fake_llm.bound_tool_names
-    assert "get_weather_forecast" not in fake_llm.bound_tool_names
+    assert "weather" not in fake_llm.bound_tool_names
 
 
 @pytest.mark.asyncio
@@ -318,12 +318,12 @@ async def test_final_answer_with_tool_result_binds_no_tools_by_default() -> None
 async def test_final_answer_with_tool_result_reuses_plan_and_context_trace() -> None:
     """已有工具结果的 final answer 轮不重复记录路由节点，并复用上下文。"""
     fake_llm = _FakeLLM()
-    tools = [_FakeTool("get_weather_forecast")]
+    tools = [_FakeTool("weather")]
     collector = MagicMock()
     prepared_context = ContextBundle(blocks=[], token_budget=0, token_estimate=0)
     plan_draft = {
         "route_type": "read_plan",
-        "selected_tools": ["get_weather_forecast"],
+        "selected_tools": ["weather"],
     }
 
     with ExitStack() as stack:
@@ -345,7 +345,7 @@ async def test_final_answer_with_tool_result_reuses_plan_and_context_trace() -> 
                 "user_id": "user-1",
                 "session_id": "session-1",
                 "router_decision": RouterDecision(
-                    selected_tools=["get_weather_forecast"],
+                    selected_tools=["weather"],
                 ),
                 "plan_draft": plan_draft,
                 "context_bundle": prepared_context,

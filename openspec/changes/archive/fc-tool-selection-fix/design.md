@@ -16,7 +16,7 @@ FC 迁移移除了 skillify 预路由后，所有对话请求依赖 LLM 的 Func
 |-----------|----------------------|
 | `get_cost_summary` | 缺少"余额"、"花了多少"、"账"等口语词 |
 | `create_crop_cycle` | 缺少"创建"、"种植"、"春茬"、"秋茬" |
-| `get_weather_forecast` | 基本可用，但可增强 |
+| `weather` | 基本可用，但可增强 |
 | `create_cost_record` | 触发词较多，相对完善 |
 | 其余 6 个 | 均需审查补充 |
 
@@ -65,7 +65,7 @@ FC 迁移移除了 skillify 预路由后，所有对话请求依赖 LLM 的 Func
 **格式：**
 ```
 【可用工具】
-- get_weather_forecast: 天气、预报、降雨、温度
+- weather: 天气、预报、降雨、温度
 - get_cost_summary: 余额、收支、成本、利润、花了多少
 - get_cost_analytics: 趋势、对比、比去年、比上月
 - create_cost_record: 记账、花了、买了、卖了、赊账

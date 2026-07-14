@@ -67,7 +67,7 @@ User
 | labor | `manage_labor_payment` | 未付人工查询、工资记录、人工结算 |
 | log | `manage_farm_logs` | 农事日志记录、查询、编辑、删除 |
 | settings | `manage_settings` | 用户显示名、天气城市、经纬度、助手角色设置 |
-| external | `get_weather_forecast` | 天气预报和灾害预警 |
+| external | `weather` | 天气预报和灾害预警 |
 | external | `web_search` | 外部实时政策、价格、新闻和市场信息 |
 
 ## Skill 合并清单
@@ -86,7 +86,7 @@ User
 | `manage_farm_logs` | `log_farm_activity`、`get_recent_farm_logs`、`manage_farm_logs` |
 | `manage_settings` | `get_user_settings`、`manage_user_settings` |
 
-`get_weather_forecast` 和 `web_search` 暂不合并，因为它们是外部网络能力，权限、缓存、失败策略和稳定性边界独立。
+`weather` 和 `web_search` 暂不合并，因为它们是外部网络能力，权限、缓存、失败策略和稳定性边界独立。
 
 ## 新目录结构
 
@@ -124,7 +124,7 @@ backend/app/agent/skills/
     settings/
       manage_settings/
     external/
-      get_weather_forecast/
+      weather/
       web_search/
 
   legacy/

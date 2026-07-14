@@ -390,7 +390,7 @@ class RuleIntentClassifier:
                     intent="query_daily_operation_advice",
                     risk="read",
                     entities=["weather", "farm", "crop_cycle"],
-                    candidate_tools=["get_weather_forecast", "get_farm_status"],
+                    candidate_tools=["weather", "get_farm_status"],
                     confidence=0.84,
                 )
             ]
@@ -528,7 +528,7 @@ class RuleIntentClassifier:
                     intent="query_weather_crop_impact",
                     risk="read",
                     entities=["weather", "farm", "crop_cycle"],
-                    candidate_tools=["get_weather_forecast", "get_farm_status"],
+                    candidate_tools=["weather", "get_farm_status"],
                     confidence=0.84,
                 )
             ]
@@ -539,7 +539,7 @@ class RuleIntentClassifier:
                     intent="query_weather",
                     risk="read",
                     entities=["weather"],
-                    candidate_tools=["get_weather_forecast"],
+                    candidate_tools=["weather"],
                     confidence=0.82,
                 )
             ]

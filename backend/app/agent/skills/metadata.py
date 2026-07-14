@@ -66,7 +66,7 @@ _DEFAULT_WRITE_CONFIRMATION = ConfirmationSchema(
     editable_fields=["params"],
 )
 
-_EXTERNAL_NETWORK_SKILLS = frozenset({"web_search", "get_weather_forecast"})
+_EXTERNAL_NETWORK_SKILLS = frozenset({"web_search", "weather"})
 _WEB_SEARCH_DISABLED_REASON = "SearXNG 引擎不稳定（CAPTCHA/限流），暂禁用"
 
 _WRITE_CONFIRM_SKILLS = WRITE_SKILLS
@@ -208,7 +208,7 @@ _WRITE_SKILL_METADATA: dict[str, dict[str, Any]] = {
 }
 
 _EXTERNAL_NETWORK_SKILL_METADATA: dict[str, dict[str, Any]] = {
-    "get_weather_forecast": {
+    "weather": {
         "context_dependencies": ["farm", "weather_location"],
         "evaluation_tags": ["read", "weather", "external_network"],
         "enabled": True,

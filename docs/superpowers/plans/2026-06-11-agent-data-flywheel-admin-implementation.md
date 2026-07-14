@@ -459,7 +459,7 @@ def _seed_turn(db, tmp_path):
                     "manage_workers",
                     "create_operation_work_order",
                 ],
-                "rejected_tools": ["get_weather_forecast"],
+                "rejected_tools": ["weather"],
                 "fallback": False,
             },
         ),

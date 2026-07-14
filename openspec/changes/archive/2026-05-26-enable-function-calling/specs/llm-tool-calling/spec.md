@@ -20,7 +20,7 @@
 
 #### Scenario: 用户询问天气触发 tool call
 - **WHEN** 用户发送"明天天气怎么样"
-- **THEN** LLM 返回 `tool_calls` 包含 `get_weather_forecast`，`_should_continue` 返回 `"tools"`，`_parallel_tool_node` 执行 weather skill 并返回真实天气数据
+- **THEN** LLM 返回 `tool_calls` 包含 `weather`，`_should_continue` 返回 `"tools"`，`_parallel_tool_node` 执行 weather skill 并返回真实天气数据
 
 #### Scenario: 用户闲聊不触发 tool call
 - **WHEN** 用户发送"你好"

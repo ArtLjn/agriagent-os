@@ -28,7 +28,7 @@
 from skillify.skills.base import Skill
 
 class WeatherSkill(Skill):
-    def name(self) -> str: return "get_weather_forecast"
+    def name(self) -> str: return "weather"
     def description(self) -> str: return "获取未来7天天气预报。触发词: 天气、预报"
     def parameters_schema(self) -> dict: return {"type":"object","properties":{"location":{"type":"string"}}}
     def execute(self, params, context): ...

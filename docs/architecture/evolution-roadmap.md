@@ -469,7 +469,7 @@ WRITE_PATTERNS = {
 
 # Layer 2: 查询操作 Keyword（~95% 召回）
 QUERY_TRIGGERS = {
-    "get_weather_forecast": {"天气", "预报", "降雨", "温度", "雨"},
+    "weather": {"天气", "预报", "降雨", "温度", "雨"},
     "get_cost_summary": {"余额", "收支", "成本", "利润", "月额"},
     # ...
 }

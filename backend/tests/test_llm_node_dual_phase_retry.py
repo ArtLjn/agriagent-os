@@ -168,7 +168,7 @@ async def test_no_tool_chat_retries_json_tool_leak_as_natural_reply(
     llm.ainvoke = AsyncMock(
         side_effect=[
             AIMessage(
-                content='{"name": "get_weather_forecast", "parameters": {"location": "苏州"}}',
+                content='{"name": "weather", "parameters": {"location": "苏州"}}',
                 tool_calls=[],
             ),
             AIMessage(

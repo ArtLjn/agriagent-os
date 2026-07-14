@@ -98,7 +98,7 @@ async def test_query_request_enters_llm_with_read_tools():
 
     fake_llm = _FakeLLM()
     tools = [
-        _make_tool("get_weather_forecast"),
+        _make_tool("weather"),
         _make_tool("get_farm_status"),
         _make_tool("create_operation_work_order"),
     ]
@@ -115,7 +115,7 @@ async def test_query_request_enters_llm_with_read_tools():
 
     assert isinstance(result["messages"][0], AIMessage)
     assert fake_llm.bound_tool_names == [
-        "get_weather_forecast",
+        "weather",
         "get_farm_status",
     ]
 
@@ -191,7 +191,7 @@ def test_weather_tool_message_should_go_through_final_llm():
         ToolMessage(
             content="城市: 苏州\n未来天数: 3天\n7/10: 天气☀️, 最高35℃",
             tool_call_id="call-random",
-            name="get_weather_forecast",
+            name="weather",
         )
     ]
 

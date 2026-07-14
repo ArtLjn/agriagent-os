@@ -415,7 +415,7 @@ class _SkillsYayaRepository extends _YayaCopyRepository {
         enabled: true,
       ),
       YayaSkill(
-        key: 'get_weather_forecast',
+        key: 'weather',
         title: '天气提醒',
         description: '查看天气和风险',
         summary: '查看7天天气和农事风险。',

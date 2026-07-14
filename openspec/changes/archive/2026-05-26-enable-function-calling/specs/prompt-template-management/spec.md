@@ -9,7 +9,7 @@
 
 #### Scenario: LLM 遵循约束调用 tool
 - **WHEN** 用户询问"明天天气"，且 LLM 已接收强化后的 system prompt
-- **THEN** LLM 优先调用 `get_weather_forecast` tool 而非直接用自身知识回答
+- **THEN** LLM 优先调用 `weather` tool 而非直接用自身知识回答
 
 ## MODIFIED Requirements
 

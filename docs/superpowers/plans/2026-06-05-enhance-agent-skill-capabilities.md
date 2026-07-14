@@ -224,7 +224,7 @@ def get_skill_metadata(skill: Any) -> SkillMetadata:
 
     permission = (
         SkillPermissionLevel.EXTERNAL_NETWORK
-        if skill_name in {"web_search", "get_weather_forecast"}
+        if skill_name in {"web_search", "weather"}
         else SkillPermissionLevel.READ
     )
     return SkillMetadata(

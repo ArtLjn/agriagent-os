@@ -27,7 +27,7 @@
 
 **Goals:**
 - 实现双 Provider 天气架构：和风天气（中国主）+ Open-Meteo（国际 + 兜底）
-- LLM 侧只看到一个 `get_weather_forecast` tool，provider 切换透明
+- LLM 侧只看到一个 `weather` tool，provider 切换透明
 - 统一 API key 管理，所有第三方密钥收归 `SecretsConfig`
 - 支持按 location 自动路由 provider（中国城市 → 和风天气优先，海外 → Open-Meteo）
 - 主 provider 失败自动兜底到次 provider

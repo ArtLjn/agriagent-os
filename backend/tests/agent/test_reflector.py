@@ -213,7 +213,7 @@ def test_check_required_tool_missing_blocks_template_availability_claim() -> Non
 )
 def test_check_required_tool_missing_allows_capability_intro(final_text: str) -> None:
     result = check_required_tool_missing(
-        selected_tools=["get_farm_status", "get_weather_forecast"],
+        selected_tools=["get_farm_status", "weather"],
         tool_calls=[],
         final_text=final_text,
     )

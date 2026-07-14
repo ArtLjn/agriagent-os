@@ -120,7 +120,7 @@ def _seed_turn(
             "router.decision",
             {
                 "selected_tools": router_tools,
-                "rejected_tools": ["get_weather_forecast"],
+                "rejected_tools": ["weather"],
                 "fallback": False,
             },
         ),

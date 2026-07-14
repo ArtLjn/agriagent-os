@@ -202,7 +202,7 @@ def builtin_skill_regression_cases() -> list[AgentReplayCase]:
             "description": "天气查询",
             "user_input": "明天适合打药吗？",
             "category": "weather",
-            "expected_skills": [{"name": "get_weather_forecast"}],
+            "expected_skills": [{"name": "weather"}],
             "metadata": {
                 "business_domain": "weather",
                 "permission_level": "external_network",

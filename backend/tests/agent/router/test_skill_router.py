@@ -125,11 +125,11 @@ def test_catalog_estimates_schema_tokens_from_pydantic_fields() -> None:
 def test_catalog_handles_magicmock_tool_metadata() -> None:
     """MagicMock 工具的非标准 metadata 不应让 catalog 构建崩溃。"""
     tool = MagicMock()
-    tool.name = "get_weather_forecast"
+    tool.name = "weather"
 
     catalog = SkillCatalog.from_tools([tool])
 
-    candidate = catalog.get("get_weather_forecast")
+    candidate = catalog.get("weather")
     assert candidate is not None
     assert candidate.schema_token_estimate >= 80
 
@@ -158,15 +158,15 @@ def test_crop_inventory_query_routes_to_crop_cycles(message: str) -> None:
 @pytest.mark.parametrize(
     ("message", "expected_tools"),
     [
-        ("今日天气对作物有什么影响", ["get_weather_forecast", "get_farm_status"]),
-        ("今天适合给作物打药吗", ["get_weather_forecast", "get_farm_status"]),
+        ("今日天气对作物有什么影响", ["weather", "get_farm_status"]),
+        ("今天适合给作物打药吗", ["weather", "get_farm_status"]),
     ],
 )
 def test_crop_inventory_rule_does_not_capture_advice_or_overview(
     message: str, expected_tools: list[str]
 ) -> None:
     tools = [
-        _tool("get_weather_forecast"),
+        _tool("weather"),
         _tool("get_farm_status"),
         _tool("manage_crop_cycle"),
     ]
@@ -178,7 +178,7 @@ def test_crop_inventory_rule_does_not_capture_advice_or_overview(
 
 def test_farm_overview_read_exposes_shortlisted_read_pool_to_model() -> None:
     tools = [
-        _tool("get_weather_forecast"),
+        _tool("weather"),
         _tool("get_farm_status"),
         _tool("manage_crop_cycle"),
     ]
@@ -186,7 +186,7 @@ def test_farm_overview_read_exposes_shortlisted_read_pool_to_model() -> None:
     decision = SkillRouter().route("农场整体状态怎么样", tools)
 
     assert decision.selected_tools == [
-        "get_weather_forecast",
+        "weather",
         "get_farm_status",
         "manage_crop_cycle",
     ]
@@ -220,16 +220,16 @@ def test_unknown_farm_read_uses_model_choice_read() -> None:
 
 @pytest.mark.parametrize("message", ["明天苏州什么天气", "今天天气", "明天会下雨吗"])
 def test_weather_query_selects_weather_tool(message: str) -> None:
-    tools = [_tool("get_weather_forecast"), _tool("get_farm_status")]
+    tools = [_tool("weather"), _tool("get_farm_status")]
 
     decision = SkillRouter().route(message, tools)
 
-    assert decision.selected_tools == ["get_weather_forecast"]
+    assert decision.selected_tools == ["weather"]
     assert decision.frames[0].intent == "query_weather"
 
 
 def test_temperature_sensor_question_does_not_select_weather_tool() -> None:
-    tools = [_tool("get_weather_forecast"), _tool("get_farm_status")]
+    tools = [_tool("weather"), _tool("get_farm_status")]
 
     decision = SkillRouter().route("温度传感器怎么安装", tools)
 
@@ -252,11 +252,11 @@ def test_planting_advice_uses_read_frame(message: str) -> None:
     ["今天适合做什么", "今天适合做啥", "今天适合打药吗"],
 )
 def test_daily_operation_advice_binds_weather_and_farm_status(message: str) -> None:
-    tools = [_tool("get_weather_forecast"), _tool("get_farm_status")]
+    tools = [_tool("weather"), _tool("get_farm_status")]
 
     decision = SkillRouter().route(message, tools)
 
-    assert decision.selected_tools == ["get_weather_forecast", "get_farm_status"]
+    assert decision.selected_tools == ["weather", "get_farm_status"]
     assert decision.frames[0].intent == "query_daily_operation_advice"
     assert decision.frames[0].risk == "read"
 
@@ -301,7 +301,7 @@ def test_capability_question_exposes_shortlisted_read_pool_to_model(
         _tool("get_cost_summary"),
         _tool("get_debt_summary"),
         _tool("get_farm_status"),
-        _tool("get_weather_forecast"),
+        _tool("weather"),
         _tool("create_cost_record"),
     ]
 

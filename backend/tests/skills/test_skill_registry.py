@@ -236,7 +236,7 @@ capabilities:
       search:
         risk: read
         legacy_aliases: [web_search]
-  - name: get_weather_forecast
+  - name: weather
     domain: external
     capability: weather_forecast_query
     description: 查询天气。
@@ -251,7 +251,7 @@ capabilities:
     operations:
       query_forecast:
         risk: read
-        legacy_aliases: [get_weather_forecast]
+        legacy_aliases: [weather]
   - name: manage_cost
     domain: finance
     capability: cost_management
@@ -276,8 +276,8 @@ aliases:
   - legacy_name: web_search
     capability: web_search
     operation: search
-  - legacy_name: get_weather_forecast
-    capability: get_weather_forecast
+  - legacy_name: weather
+    capability: weather
     operation: query_forecast
   - legacy_name: create_cost_record
     capability: manage_cost
@@ -285,7 +285,7 @@ aliases:
 """,
     )
     skills_dir = tmp_path / "skills"
-    for tool_name in ("web_search", "get_weather_forecast", "create_cost_record"):
+    for tool_name in ("web_search", "weather", "create_cost_record"):
         skill_dir = skills_dir / tool_name
         skill_dir.mkdir(parents=True)
         (skill_dir / "skill.md").write_text(

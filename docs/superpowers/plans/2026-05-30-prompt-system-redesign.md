@@ -296,7 +296,7 @@ class TestComposerCompose:
             current_date=date(2026, 5, 29),
         )
         assert "get_farm_status" not in result
-        assert "get_weather_forecast" not in result
+        assert "weather" not in result
         assert "最高优先级" not in result
 
     def test_cost_parse_compose(self, _composer):

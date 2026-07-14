@@ -8,7 +8,7 @@
 
 #### Scenario: 用户询问天气触发 tool call
 - **WHEN** 用户发送"明天天气怎么样"
-- **THEN** LLM 返回 `tool_calls` 包含 `get_weather_forecast`，`_should_continue` 返回 `"tools"`，`_parallel_tool_node` 执行 weather skill 并返回真实天气数据，`_llm_node` 日志记录 `tool_calls=[get_weather_forecast]`
+- **THEN** LLM 返回 `tool_calls` 包含 `weather`，`_should_continue` 返回 `"tools"`，`_parallel_tool_node` 执行 weather skill 并返回真实天气数据，`_llm_node` 日志记录 `tool_calls=[weather]`
 
 #### Scenario: 用户闲聊不触发 tool call
 - **WHEN** 用户发送"你好"
@@ -16,7 +16,7 @@
 
 #### Scenario: 多 skill 并行调用
 - **WHEN** 用户发送"看看天气和最近的成本"
-- **THEN** LLM 返回多个 `tool_calls`（weather + cost_summary），`_parallel_tool_node` 并行执行两个 skill，`_llm_node` 日志记录 `tool_calls=[get_weather_forecast, get_cost_summary]`，trace 系统记录 `parallel_batch` 聚合日志
+- **THEN** LLM 返回多个 `tool_calls`（weather + cost_summary），`_parallel_tool_node` 并行执行两个 skill，`_llm_node` 日志记录 `tool_calls=[weather, get_cost_summary]`，trace 系统记录 `parallel_batch` 聚合日志
 
 #### Scenario: 并行配置关闭时 bind_tools 不传 parallel_tool_calls
 - **WHEN** `AIConfig.parallel_tool_calls` 为 `False`

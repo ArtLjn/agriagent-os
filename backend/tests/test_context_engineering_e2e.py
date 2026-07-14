@@ -156,8 +156,8 @@ class TestToolChainExpansion:
         """普通天气查询不应隐式扩展到 get_farm_status。"""
         from app.agent.tool_selector import expand_by_chain
 
-        result = expand_by_chain({"get_weather_forecast"})
-        assert result == {"get_weather_forecast"}
+        result = expand_by_chain({"weather"})
+        assert result == {"weather"}
 
     def test_cost_summary_does_not_expand_to_farm_status(self):
         """账务查询不应隐式扩展到 get_farm_status。"""
@@ -197,7 +197,7 @@ class TestToolChainExpansion:
         """扩展后保留所有原始工具。"""
         from app.agent.tool_selector import expand_by_chain
 
-        original = {"get_weather_forecast", "manage_cost"}
+        original = {"weather", "manage_cost"}
         result = expand_by_chain(original)
         for tool in original:
             assert tool in result
@@ -211,7 +211,7 @@ class TestCrossCuttingIntegration:
         from app.agent.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
 
         query_tools = [
-            "get_weather_forecast",
+            "weather",
             "manage_cost",
             "get_crop_cycle_info",
             "manage_farm_logs",
@@ -238,7 +238,7 @@ class TestCrossCuttingIntegration:
         assert "天气" in text
         assert "farm_context_summary" not in text
         # 查询工具需要上下文时由 ContextBundle 注入，不通过额外 Skill 调用解决。
-        for tool in ["get_weather_forecast", "manage_cost", "get_crop_cycle_info"]:
+        for tool in ["weather", "manage_cost", "get_crop_cycle_info"]:
             expanded = expand_by_chain({tool})
             assert expanded == {tool}
 

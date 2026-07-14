@@ -440,7 +440,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agents.tools import get_crop_cycle_info, get_recent_farm_logs, get_cycle_cost_summary, get_weather_forecast
+from app.agents.tools import get_crop_cycle_info, get_recent_farm_logs, get_cycle_cost_summary, weather
 
 
 class TestGetWeatherForecast:
@@ -461,7 +461,7 @@ class TestGetWeatherForecast:
         }
         mock_warnings.return_value = []
 
-        result = get_weather_forecast("徐州")
+        result = weather("徐州")
 
         assert "徐州" in result
         assert "2026-05-23" in result
@@ -577,7 +577,7 @@ from app.core.config import settings
 
 
 @tool
-def get_weather_forecast(location: str = "当前地块") -> str:
+def weather(location: str = "当前地块") -> str:
     """获取未来 7 天天气预报和灾害预警。
 
     Args:
@@ -708,7 +708,7 @@ def get_cycle_cost_summary(db: Session, cycle_id: int) -> str:
 
 
 __all__ = [
-    "get_weather_forecast",
+    "weather",
     "get_crop_cycle_info",
     "get_recent_farm_logs",
     "get_cycle_cost_summary",
@@ -825,13 +825,13 @@ from app.agents.tools import (
     get_crop_cycle_info,
     get_cycle_cost_summary,
     get_recent_farm_logs,
-    get_weather_forecast,
+    weather,
 )
 from app.core.llm import get_llm
 
 
 TOOLS = [
-    get_weather_forecast,
+    weather,
     get_crop_cycle_info,
     get_recent_farm_logs,
     get_cycle_cost_summary,
@@ -1808,7 +1808,7 @@ git commit -m "feat: register agent router in main app"
 
 **1. Spec coverage:**
 - ✅ LangGraph 多 Agent 编排（Task 5, 6）
-- ✅ 天气作为 Agent Tool（Task 4: `get_weather_forecast`）
+- ✅ 天气作为 Agent Tool（Task 4: `weather`）
 - ✅ 种植周期作为 Agent Tool（Task 4: `get_crop_cycle_info`）
 - ✅ 农事记录作为 Agent Tool（Task 4: `get_recent_farm_logs`）
 - ✅ 成本作为 Agent Tool（Task 4: `get_cycle_cost_summary`）
@@ -1823,7 +1823,7 @@ git commit -m "feat: register agent router in main app"
 
 **3. Type consistency:**
 - `AgentState` 使用 `Annotated[list[BaseMessage], "add_messages"]` 与 LangGraph 预构建 Agent 兼容。
-- 所有 Tool 函数签名一致：`get_weather_forecast(location: str)` 和 `get_crop_cycle_info(db: Session, cycle_id: int)` 等。
+- 所有 Tool 函数签名一致：`weather(location: str)` 和 `get_crop_cycle_info(db: Session, cycle_id: int)` 等。
 - `invoke_advisor` 和 `generate_cycle_report` 均返回 `str`。
 - `chat_with_agent`、`get_daily_advice`、`generate_report` 均返回对应的 Pydantic Response schema。
 

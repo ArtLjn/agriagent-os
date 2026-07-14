@@ -604,7 +604,7 @@ capabilities:
           - manage_user_settings
         cache_invalidation:
           - get_farm_status
-  - name: get_weather_forecast
+  - name: weather
     domain: external
     capability: weather_forecast_query
     description: 获取未来天气预报和灾害预警。
@@ -637,7 +637,7 @@ capabilities:
         risk: external_network
         description: 查询天气预报和灾害预警。
         legacy_aliases:
-          - get_weather_forecast
+          - weather
   - name: web_search
     domain: external
     capability: web_search

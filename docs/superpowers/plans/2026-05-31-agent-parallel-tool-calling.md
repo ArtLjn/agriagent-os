@@ -128,7 +128,7 @@ class TestBindToolsParallel:
         mock_session.return_value = mock_db
 
         mock_tool = MagicMock()
-        mock_tool.name = "get_weather_forecast"
+        mock_tool.name = "weather"
         mock_get_tools.return_value = [mock_tool]
 
         mock_llm = MagicMock()
@@ -160,7 +160,7 @@ class TestBindToolsParallel:
         mock_session.return_value = mock_db
 
         mock_tool = MagicMock()
-        mock_tool.name = "get_weather_forecast"
+        mock_tool.name = "weather"
         mock_get_tools.return_value = [mock_tool]
 
         mock_llm = MagicMock()
@@ -333,7 +333,7 @@ class TestParallelBatchTrace:
         mock_get_collector.return_value = mock_collector
 
         weather_tool = MagicMock()
-        weather_tool.name = "get_weather_forecast"
+        weather_tool.name = "weather"
         weather_tool.ainvoke = AsyncMock(return_value="晴天 25度")
 
         cost_tool = MagicMock()
@@ -349,7 +349,7 @@ class TestParallelBatchTrace:
                 AIMessage(
                     content="",
                     tool_calls=[
-                        {"name": "get_weather_forecast", "args": {"city": "徐州"}, "id": "tc1"},
+                        {"name": "weather", "args": {"city": "徐州"}, "id": "tc1"},
                         {"name": "get_cost_summary", "args": {}, "id": "tc2"},
                     ],
                 )
@@ -381,7 +381,7 @@ class TestParallelBatchTrace:
         mock_get_collector.return_value = mock_collector
 
         weather_tool = MagicMock()
-        weather_tool.name = "get_weather_forecast"
+        weather_tool.name = "weather"
         weather_tool.ainvoke = AsyncMock(return_value="晴天 25度")
         mock_get_tools.return_value = [weather_tool]
 
@@ -392,7 +392,7 @@ class TestParallelBatchTrace:
                 AIMessage(
                     content="",
                     tool_calls=[
-                        {"name": "get_weather_forecast", "args": {"city": "徐州"}, "id": "tc1"},
+                        {"name": "weather", "args": {"city": "徐州"}, "id": "tc1"},
                     ],
                 )
             ],

@@ -17,7 +17,7 @@ CATALOG_REGISTRY: dict[str, dict] = {
         "context_dependencies": ["farm", "crop_cycles", "recent_operations"],
         "candidate_group": "planting_read",
     },
-    "get_weather_forecast": {
+    "weather": {
         "domain": "weather",
         "intents": ["query_weather"],
         "risk": "read",

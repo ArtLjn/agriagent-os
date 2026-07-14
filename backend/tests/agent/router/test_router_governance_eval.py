@@ -170,7 +170,7 @@ def test_router_top3_recall_for_uncategorized_business_read_stays_read_only() ->
 def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> None:
     tools = _tools(
         [
-            "get_weather_forecast",
+            "weather",
             "get_farm_status",
             "manage_crop_cycle",
         ]
@@ -179,7 +179,7 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
     decision = SkillRouter().route("农场整体状态怎么样", tools)
 
     assert decision.selected_tools == [
-        "get_weather_forecast",
+        "weather",
         "get_farm_status",
         "manage_crop_cycle",
     ]
@@ -295,7 +295,7 @@ def _governance_tool_pool() -> list[str]:
         "get_labor_payables",
         "settle_labor_payment",
         "get_farm_status",
-        "get_weather_forecast",
+        "weather",
         "manage_user_settings",
         "get_planting_units",
         "manage_planting_units",

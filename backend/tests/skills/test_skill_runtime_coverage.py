@@ -32,7 +32,7 @@ EXPECTED_REGISTERED_SKILLS = {
     "settle_labor_payment",
     "manage_workers",
     "manage_wages",
-    "get_weather_forecast",
+    "weather",
     "web_search",
 }
 

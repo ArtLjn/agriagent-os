@@ -5,7 +5,7 @@ When `_llm_node` receives ToolMessages containing both pending (PENDING_MARKER) 
 
 #### Scenario: Weather query + crop creation in one message
 - **WHEN** user sends "今天天气怎么样，我想种玉米"
-- **AND** LLM calls both `get_weather_forecast` and `create_crop_cycle`
+- **AND** LLM calls both `weather` and `create_crop_cycle`
 - **AND** `_parallel_tool_node` returns one normal ToolMessage (weather) and one PENDING_MARKER ToolMessage (crop cycle)
 - **THEN** `_llm_node` SHALL compose a response containing both the weather summary and "要帮你创建茬口：玉米，确认吗？"
 - **AND** the response SHALL NOT call the LLM
@@ -19,7 +19,7 @@ When `_llm_node` receives ToolMessages containing both pending (PENDING_MARKER) 
 
 #### Scenario: Pure query intent still works as before
 - **WHEN** user sends "今天天气怎么样"
-- **AND** LLM calls only `get_weather_forecast`
+- **AND** LLM calls only `weather`
 - **AND** `_parallel_tool_node` returns only normal ToolMessage
 - **THEN** `_llm_node` SHALL call the LLM to generate a natural language response from the tool result
 

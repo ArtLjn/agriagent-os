@@ -49,12 +49,12 @@
 - **THEN** 返回 `SkillResult(status=FAILED)`，reply 包含友好错误信息"天气数据暂时不可用，请稍后再试"
 
 ### Requirement: WeatherSkill 对外接口不变
-`get_weather_forecast` tool 的 `parameters_schema` 和调用方式 SHALL 保持不变。LLM 无感知 provider 切换。
+`weather` tool 的 `parameters_schema` 和调用方式 SHALL 保持不变。LLM 无感知 provider 切换。
 
 #### Scenario: LLM 调用天气 tool
-- **WHEN** LLM 调用 `get_weather_forecast(location="苏州")`
+- **WHEN** LLM 调用 `weather(location="苏州")`
 - **THEN** Skill 内部自动路由到和风天气，返回格式化天气预报文本
 
 #### Scenario: location 参数实际生效
-- **WHEN** LLM 调用 `get_weather_forecast(location="南京")`
+- **WHEN** LLM 调用 `weather(location="南京")`
 - **THEN** 查询南京的天气（不再使用硬编码坐标）

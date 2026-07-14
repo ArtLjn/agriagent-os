@@ -453,7 +453,7 @@ from app.services.weather_service import check_weather_warnings, fetch_weather
 
 class WeatherSkill(Skill):
     def name(self) -> str:
-        return "get_weather_forecast"
+        return "weather"
 
     def description(self) -> str:
         return "获取未来7天天气预报和灾害预警。触发词: 天气、预报、降雨"
@@ -514,7 +514,7 @@ print([s.name for s in sm.list_skills()])
 "
 ```
 
-Expected: `['get_weather_forecast']`
+Expected: `['weather']`
 
 - [ ] **Step 3: Commit**
 
@@ -757,7 +757,7 @@ print(f'{len(names)} skills: {names}')
 "
 ```
 
-Expected: `4 skills: ['get_weather_forecast', 'get_crop_cycle_info', 'get_recent_farm_logs', 'get_cycle_cost_summary']`
+Expected: `4 skills: ['weather', 'get_crop_cycle_info', 'get_recent_farm_logs', 'get_cycle_cost_summary']`
 
 - [ ] **Step 3: Commit**
 

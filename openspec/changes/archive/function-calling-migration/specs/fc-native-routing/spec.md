@@ -5,7 +5,7 @@
 
 #### Scenario: 只读 skill 请求走 FC 路由
 - **WHEN** 用户发送 "今天天气咋样"
-- **THEN** 请求不经过 `_try_skillify_route()`，直接进入 LangGraph；`_llm_node` 返回 `tool_calls=[get_weather_forecast]`；`_parallel_tool_node` 执行 skill；LLM 第二轮将天气数据组织为自然语言返回
+- **THEN** 请求不经过 `_try_skillify_route()`，直接进入 LangGraph；`_llm_node` 返回 `tool_calls=[weather]`；`_parallel_tool_node` 执行 skill；LLM 第二轮将天气数据组织为自然语言返回
 
 #### Scenario: 闲聊请求不触发 tool
 - **WHEN** 用户发送 "你好"
@@ -13,7 +13,7 @@
 
 #### Scenario: 多 skill 并行调用
 - **WHEN** 用户发送 "看看天气和最近的成本"
-- **THEN** `_llm_node` 返回 `tool_calls=[get_weather_forecast, get_cost_summary]`；`_parallel_tool_node` 并行执行两个 skill；LLM 第二轮将两个结果综合为自然语言返回
+- **THEN** `_llm_node` 返回 `tool_calls=[weather, get_cost_summary]`；`_parallel_tool_node` 并行执行两个 skill；LLM 第二轮将两个结果综合为自然语言返回
 
 ### Requirement: 移除 skillify 预路由函数
 `agent_service.py` SHALL 删除 `_try_skillify_route()` 函数。`chat_with_agent()` 和 `stream_chat_with_agent()` 中所有调用 `_try_skillify_route()` 的分支代码 SHALL 被移除。

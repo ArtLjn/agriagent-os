@@ -211,7 +211,7 @@ def _format_weather_reply(location: str, data: dict) -> str:
 
 class WeatherSkill(Skill):
     def name(self) -> str:
-        return "get_weather_forecast"
+        return "weather"
 
     def description(self) -> str:
         return (

@@ -4,7 +4,7 @@
 
 **Goal:** 将天气系统从单一 Open-Meteo 数据源重构为双 Provider 架构（和风天气 + Open-Meteo），支持按城市名自动路由、主 provider 失败自动兜底、中国官方气象预警爬取。
 
-**Architecture:** 新增 `SecretsConfig` 统一密钥管理；引入 `WeatherProvider` ABC 抽象层，`QWeatherProvider` 和 `OpenMeteoProvider` 两个实现，`WeatherStrategy` 负责按 location 自动路由和兜底；`AlertScraper` 独立爬取中国天气网官方预警。LLM 侧仍只看到一个 `get_weather_forecast` tool。
+**Architecture:** 新增 `SecretsConfig` 统一密钥管理；引入 `WeatherProvider` ABC 抽象层，`QWeatherProvider` 和 `OpenMeteoProvider` 两个实现，`WeatherStrategy` 负责按 location 自动路由和兜底；`AlertScraper` 独立爬取中国天气网官方预警。LLM 侧仍只看到一个 `weather` tool。
 
 **Tech Stack:** Python 3.11, FastAPI, pydantic-settings, httpx, pytest, skillify SDK
 
@@ -2279,7 +2279,7 @@ def _get_user_coords(farm_id: int) -> tuple[float, float]:
 
 class WeatherSkill(Skill):
     def name(self) -> str:
-        return "get_weather_forecast"
+        return "weather"
 
     def description(self) -> str:
         return (
@@ -2482,8 +2482,8 @@ class TestWeatherSkill:
         assert "天气查询失败" in result.reply
 
     def test_name(self, skill: WeatherSkill) -> None:
-        """Skill 名称为 get_weather_forecast。"""
-        assert skill.name() == "get_weather_forecast"
+        """Skill 名称为 weather。"""
+        assert skill.name() == "weather"
 
     def test_parameters_schema_has_location(self, skill: WeatherSkill) -> None:
         """参数 schema 包含 location 字段。"""

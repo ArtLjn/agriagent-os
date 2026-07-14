@@ -38,7 +38,7 @@ class TestFunctionCallingE2E:
         mock_get_tools,
         mock_executor_tools,
     ):
-        """天气查询应触发 get_weather_forecast tool call。"""
+        """天气查询应触发 weather tool call。"""
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.first.return_value = MagicMock(
             display_name="老李"
@@ -46,7 +46,7 @@ class TestFunctionCallingE2E:
         mock_session.return_value = mock_db
 
         mock_tool = MagicMock()
-        mock_tool.name = "get_weather_forecast"
+        mock_tool.name = "weather"
         mock_get_tools.return_value = [mock_tool]
         mock_executor_tools.return_value = [mock_tool]
 
@@ -54,7 +54,7 @@ class TestFunctionCallingE2E:
         tool_call_msg = AIMessage(
             content="",
             tool_calls=[
-                {"name": "get_weather_forecast", "args": {"city": "苏州"}, "id": "tc1"}
+                {"name": "weather", "args": {"city": "苏州"}, "id": "tc1"}
             ],
         )
         mock_llm.bind_tools.return_value = mock_llm
@@ -131,7 +131,7 @@ class TestFunctionCallingE2E:
         mock_session.return_value = mock_db
 
         weather_tool = MagicMock()
-        weather_tool.name = "get_weather_forecast"
+        weather_tool.name = "weather"
         cost_tool = MagicMock()
         cost_tool.name = "manage_cost"
         mock_get_tools.return_value = [weather_tool, cost_tool]
@@ -148,7 +148,7 @@ class TestFunctionCallingE2E:
         mock_llm.bind_tools.assert_called_once()
         bound_tools = mock_llm.bind_tools.call_args[0][0]
         bound_names = [t.name for t in bound_tools]
-        assert "get_weather_forecast" in bound_names
+        assert "weather" in bound_names
         assert "create_cost_record" not in bound_names
         assert "get_cost_summary" not in bound_names
 
