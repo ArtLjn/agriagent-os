@@ -8,8 +8,12 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
-from app.agent.runtime.tool_executor import _parallel_tool_node
-from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
+from app.agent.runtime.tool_executor import _parallel_tool_node, _permission_decision
+from app.agent.skills.metadata import (
+    SkillMetadata,
+    SkillPermissionLevel,
+    get_skill_metadata,
+)
 from app.infra.pending_actions import get_pending, remove_pending
 from app.models.planting import LaborEntry, OperationWorkOrder, Worker
 
@@ -640,6 +644,49 @@ async def test_registry_operation_risk_overrides_incomplete_read_metadata_for_wr
     assert output_data["resolved_capability"] == "manage_cost"
     assert output_data["resolved_operation"] == "create_record"
     assert output_data["operation_risk"] == "write_confirm"
+
+
+def test_manage_user_settings_query_operation_uses_read_permission():
+    class _ManageUserSettingsSkill:
+        def name(self):
+            return "manage_user_settings"
+
+    metadata = get_skill_metadata(_ManageUserSettingsSkill())
+    tool = SimpleNamespace(skill_metadata=metadata)
+    state = {"messages": []}
+
+    query_decision = _permission_decision(
+        tool,
+        "manage_user_settings",
+        state,
+        {"operation": "query_settings"},
+    )
+    update_decision = _permission_decision(
+        tool,
+        "manage_user_settings",
+        state,
+        {"operation": "update_settings", "display_name": "x"},
+    )
+    inferred_query_decision = _permission_decision(
+        tool,
+        "manage_user_settings",
+        state,
+        {},
+    )
+
+    assert query_decision.permission_level == SkillPermissionLevel.READ.value
+    assert query_decision.requires_confirmation is False
+    assert query_decision.operation == "query_settings"
+    assert query_decision.operation_risk == "read"
+    assert query_decision.capability == "manage_settings"
+    assert update_decision.permission_level == SkillPermissionLevel.WRITE_CONFIRM.value
+    assert update_decision.requires_confirmation is True
+    assert update_decision.operation == "update_settings"
+    assert update_decision.operation_risk == "write_confirm"
+    assert inferred_query_decision.permission_level == SkillPermissionLevel.READ.value
+    assert inferred_query_decision.requires_confirmation is False
+    assert inferred_query_decision.operation == "query_settings"
+    assert inferred_query_decision.operation_risk == "read"
 
 
 @pytest.mark.asyncio

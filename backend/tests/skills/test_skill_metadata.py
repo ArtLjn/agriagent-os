@@ -292,6 +292,32 @@ def test_manage_farm_logs_canonical_operation_overrides_self_alias():
     assert manage_metadata["operation_risk"] == "write_confirm"
 
 
+def test_manage_user_settings_physical_skill_operation_overrides_update_alias():
+    query_metadata = resolve_skill_capability_metadata(
+        "manage_user_settings", "query_settings"
+    )
+    update_metadata = resolve_skill_capability_metadata(
+        "manage_user_settings", "update_settings"
+    )
+    legacy_query_metadata = resolve_skill_capability_metadata("get_user_settings")
+    legacy_update_metadata = resolve_skill_capability_metadata("manage_user_settings")
+
+    assert query_metadata is not None
+    assert query_metadata["capability"] == "manage_settings"
+    assert query_metadata["operation"] == "query_settings"
+    assert query_metadata["operation_risk"] == "read"
+    assert query_metadata["permission_level"] == SkillPermissionLevel.READ
+    assert update_metadata is not None
+    assert update_metadata["operation"] == "update_settings"
+    assert update_metadata["operation_risk"] == "write_confirm"
+    assert legacy_query_metadata is not None
+    assert legacy_query_metadata["operation"] == "query_settings"
+    assert legacy_query_metadata["operation_risk"] == "read"
+    assert legacy_update_metadata is not None
+    assert legacy_update_metadata["operation"] == "update_settings"
+    assert legacy_update_metadata["operation_risk"] == "write_confirm"
+
+
 def test_default_external_network_skill_metadata():
     metadata = get_skill_metadata(_ExternalNetworkSkill())
 

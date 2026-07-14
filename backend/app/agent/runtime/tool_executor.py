@@ -109,6 +109,7 @@ def _permission_decision(
     if _must_honor_metadata_permission_before_operation(
         permission_value,
         skill_name,
+        capability_metadata,
     ):
         return _metadata_permission_decision(
             permission_value,
@@ -135,11 +136,13 @@ def _metadata_permission_value(metadata):
 def _must_honor_metadata_permission_before_operation(
     permission_value,
     skill_name: str,
+    capability_metadata: dict,
 ) -> bool:
-    if permission_value in {
-        SkillPermissionLevel.ADMIN.value,
-        SkillPermissionLevel.WRITE_CONFIRM.value,
-    }:
+    if permission_value == SkillPermissionLevel.ADMIN.value:
+        return True
+    if permission_value == SkillPermissionLevel.WRITE_CONFIRM.value:
+        return capability_metadata.get("operation_risk") != SkillPermissionLevel.READ.value
+    if permission_value in {SkillPermissionLevel.EXTERNAL_NETWORK.value}:
         return True
     return isinstance(permission_value, str) and (
         permission_value not in _KNOWN_PERMISSION_LEVELS
@@ -245,21 +248,46 @@ def _capability_metadata_from_runtime(
     args: dict | None = None,
 ) -> dict:
     """读取 Tool metadata；缺失时用 Registry alias 做兼容解析。"""
-    operation_name = None
-    if isinstance(args, dict):
-        operation_name = args.get("operation")
+    operation_name = _operation_name_from_args(skill_name, args)
     resolved = resolve_skill_capability_metadata(skill_name, operation_name) or {}
+    operation = resolved.get("operation") or getattr(metadata, "operation", None)
+    operation_risk = resolved.get("operation_risk") or getattr(
+        metadata,
+        "operation_risk",
+        None,
+    )
     return {
         "legacy_alias": getattr(metadata, "legacy_alias", None)
         or resolved.get("legacy_alias"),
         "capability": getattr(metadata, "capability", None)
         or resolved.get("capability"),
-        "operation": getattr(metadata, "operation", None) or resolved.get("operation"),
-        "operation_risk": getattr(metadata, "operation_risk", None)
-        or resolved.get("operation_risk"),
+        "operation": operation,
+        "operation_risk": operation_risk,
         "registry_enabled": resolved.get("enabled"),
         "registry_disabled_reason": resolved.get("disabled_reason"),
     }
+
+
+def _operation_name_from_args(skill_name: str, args: dict | None) -> str | None:
+    if not isinstance(args, dict):
+        return None
+    operation = args.get("operation")
+    if operation:
+        return str(operation)
+    if skill_name == "manage_user_settings":
+        write_fields = (
+            "display_name",
+            "default_city",
+            "default_lat",
+            "default_lon",
+            "assistant_role",
+        )
+        return (
+            "update_settings"
+            if any(args.get(key) is not None for key in write_fields)
+            else "query_settings"
+        )
+    return None
 
 
 def _permission_value_for_disabled(
