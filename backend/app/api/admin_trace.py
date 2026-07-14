@@ -23,6 +23,11 @@ from app.infra.repository_runtime import (
 )
 from app.infra.trace_repository import TracePage
 from app.models.trace import TraceRecord
+from app.api.admin_trace_requests import (
+    TraceRequestPageResponse,
+    list_trace_requests_from_mongo,
+    trace_request_page_from_records,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +105,42 @@ async def list_traces(
     )
 
     return _trace_page_response(TracePage(items=items, total=total))
+
+
+@router.get("/traces/requests", response_model=TraceRequestPageResponse)
+async def list_trace_requests(
+    request_id: str | None = Query(None),
+    session_id: str | None = Query(None),
+    farm_id: int | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> TraceRequestPageResponse:
+    """按 request 聚合 trace 列表，分页单位是一次请求而不是单个节点。"""
+    if _trace_storage_is_mongo() or not _trace_table_exists(db):
+        return await list_trace_requests_from_mongo(
+            request_id=request_id,
+            session_id=session_id,
+            farm_id=farm_id,
+            limit=limit,
+            offset=offset,
+        )
+
+    query = db.query(TraceRecord)
+    if request_id:
+        query = query.filter(TraceRecord.request_id == request_id)
+    if session_id:
+        query = query.filter(TraceRecord.session_id == session_id)
+    if farm_id is not None:
+        query = query.filter(TraceRecord.farm_id == farm_id)
+    records = (
+        query.order_by(
+            TraceRecord.start_time.desc(),
+            TraceRecord.created_at.desc(),
+            TraceRecord.id.desc(),
+        ).all()
+    )
+    return trace_request_page_from_records(records, limit=limit, offset=offset)
 
 
 @router.get("/traces/{request_id}/timeline", response_model=TimelineResponse)

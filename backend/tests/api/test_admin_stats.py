@@ -1,6 +1,6 @@
 """Tests for Admin Token Stats API。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,6 +11,7 @@ from app.infra.mongo import set_mongo_client
 from app.modules.auth.dependencies import get_current_user
 from app.main import app
 from app.models.farm import Farm
+from app.models.token_stats import TokenDailyStats
 from app.models.trace import TraceRecord
 from app.models.user import User
 
@@ -187,6 +188,60 @@ class TestTokenDaily:
 
 
 class TestTokenHourly:
+    def test_falls_back_to_daily_stats_when_hourly_trace_empty(
+        self, client, db_session, admin_user
+    ) -> None:
+        farm = db_session.query(Farm).filter(Farm.id == 1).first()
+        farm.user_id = "hourly-fallback-user"
+        db_session.add(
+            User(
+                id="hourly-fallback-user",
+                phone="18800000005",
+                password_hash="h",
+                nickname="小时回填用户",
+                role="user",
+                status="active",
+            )
+        )
+        db_session.commit()
+        db_session.add(
+            TokenDailyStats(
+                user_id="hourly-fallback-user",
+                farm_id=1,
+                date=date(2026, 7, 10),
+                model="qwen3.6-flash",
+                call_type="chat",
+                prompt_tokens=100_000,
+                completion_tokens=15_000,
+                total_tokens=115_000,
+                request_count=42,
+            )
+        )
+        db_session.commit()
+
+        def _override_get_db():
+            yield db_session
+
+        def _override_current_user():
+            return admin_user
+
+        app.dependency_overrides[get_db] = _override_get_db
+        app.dependency_overrides[get_current_user] = _override_current_user
+        try:
+            resp = client.get(
+                "/admin/stats/tokens/hourly?start_date=2026-07-10&end_date=2026-07-10"
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["total_tokens"] == 115_000
+            assert data["total_requests"] == 42
+            assert data["hours"] == ["00"]
+            assert data["items"][0]["date"] == "2026-07-10"
+            assert data["items"][0]["hour"] == "00"
+            assert data["items"][0]["model"] == "qwen3.6-flash"
+        finally:
+            app.dependency_overrides.clear()
+
     def test_returns_hourly_usage_grouped_by_user_model_and_hour(
         self, client, db_session, admin_user
     ) -> None:

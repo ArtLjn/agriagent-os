@@ -14,10 +14,10 @@ import {
 import { SearchOutlined, ClearOutlined, CopyOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import {
-  listTraces,
+  listTraceRequests,
   getTimeline,
   deleteTracesBefore,
-  type TraceRecord,
+  type TraceRequestSummary,
   type TraceTimeline,
   type TraceNodeDetail,
 } from '../../api/admin';
@@ -40,7 +40,7 @@ interface TraceItem {
   farm_id: number;
   node_count: number;
   total_duration_ms: number;
-  created_at: string;
+  created_at: string | null;
   timeline: TraceTimeline | null;
   timelineLoading: boolean;
 }
@@ -51,29 +51,21 @@ interface TraceSessionGroup {
   request_count: number;
   node_count: number;
   total_duration_ms: number;
-  created_at: string;
+  created_at: string | null;
   items: TraceItem[];
 }
 
-const aggregateTraces = (records: TraceRecord[]): TraceItem[] => {
-  const groups = new Map<string, TraceRecord[]>();
-  records.forEach((item) => {
-    const arr = groups.get(item.request_id) || [];
-    arr.push(item);
-    groups.set(item.request_id, arr);
-  });
-
-  return Array.from(groups.entries()).map(([request_id, records]) => ({
-    request_id,
-    session_id: records[0].session_id,
-    farm_id: records[0].farm_id,
-    node_count: records.length,
-    total_duration_ms: records.reduce((s, r) => s + (r.duration_ms || 0), 0),
-    created_at: records[0].created_at,
+const toTraceItems = (records: TraceRequestSummary[]): TraceItem[] =>
+  records.map((record) => ({
+    request_id: record.request_id,
+    session_id: record.session_id,
+    farm_id: record.farm_id,
+    node_count: record.node_count,
+    total_duration_ms: record.total_duration_ms,
+    created_at: record.created_at,
     timeline: null,
     timelineLoading: true,
   }));
-};
 
 const aggregateSessionGroups = (items: TraceItem[]): TraceSessionGroup[] => {
   const groups = new Map<string, TraceItem[]>();
@@ -97,6 +89,13 @@ const aggregateSessionGroups = (items: TraceItem[]): TraceSessionGroup[] => {
     items: groupItems,
   }));
 };
+
+function formatTraceTime(value: string | null | undefined): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || date.getTime() <= 0) return '-';
+  return date.toLocaleString('zh-CN');
+}
 
 export default function TraceMonitor() {
   const location = useLocation();
@@ -155,8 +154,8 @@ export default function TraceMonitor() {
         if (filters.session_id.trim()) params.session_id = filters.session_id.trim();
         if (filters.farm_id.trim()) params.farm_id = Number(filters.farm_id.trim());
 
-        const res = await listTraces(params);
-        const aggregated = aggregateTraces(res.items);
+        const res = await listTraceRequests(params);
+        const aggregated = toTraceItems(res.items);
         setItems(aggregated);
         setTotal(res.total);
         setPage(p);
@@ -366,7 +365,7 @@ export default function TraceMonitor() {
                 <span style={{ color: TEXT }}>{group.total_duration_ms}ms</span>
               </span>
               <span style={{ marginLeft: 'auto' }}>
-                {new Date(group.created_at).toLocaleString('zh-CN')}
+                {formatTraceTime(group.created_at)}
               </span>
             </div>
 
@@ -433,7 +432,9 @@ export default function TraceMonitor() {
                         复制耗时
                       </Button>
                     )}
-                    <span>{new Date(item.created_at).toLocaleString('zh-CN')}</span>
+                    <span style={{ minWidth: 150, textAlign: 'right' }}>
+                      {formatTraceTime(item.created_at)}
+                    </span>
                     <span style={{ color: ACCENT }}>
                       {expandedCards.has(item.request_id) ? '收起 ▲' : '展开 ▼'}
                     </span>

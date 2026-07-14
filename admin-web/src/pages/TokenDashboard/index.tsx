@@ -123,20 +123,20 @@ export default function TokenDashboard() {
     void Promise.resolve().then(() => {
       setLoading(true);
       setLoadFailed(false);
-      return Promise.all([
+      return Promise.allSettled([
         getTokenSummary(params),
         getDailyTokenStats(todayStr, { user_id: selectedUserId }),
         getHourlyTokenStats(hourlyParams),
       ])
-        .then(([sum, daily, hourly]) => {
+        .then(([summaryResult, dailyResult, hourlyResult]) => {
           if (cancelled) return;
-          setSummary(sum);
-          setDailyItems(daily.items);
-          setHourlyItems(hourly.items);
-          setLastLoadedAt(new Date());
-        })
-        .catch(() => {
-          if (!cancelled) setLoadFailed(true);
+          const results = [summaryResult, dailyResult, hourlyResult];
+          const hasSuccess = results.some((result) => result.status === 'fulfilled');
+          setLoadFailed(results.some((result) => result.status === 'rejected'));
+          setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null);
+          setDailyItems(dailyResult.status === 'fulfilled' ? dailyResult.value.items : []);
+          setHourlyItems(hourlyResult.status === 'fulfilled' ? hourlyResult.value.items : []);
+          if (hasSuccess) setLastLoadedAt(new Date());
         })
         .finally(() => {
           if (!cancelled) setLoading(false);

@@ -3,11 +3,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TraceMonitor from './index';
-import { getTimeline, listTraces } from '../../api/admin';
+import { getTimeline, listTraceRequests, listTraces } from '../../api/admin';
 
 vi.mock('../../api/admin', () => ({
   deleteTracesBefore: vi.fn(),
   getTimeline: vi.fn(),
+  listTraceRequests: vi.fn(),
   listTraces: vi.fn(),
 }));
 
@@ -16,26 +17,21 @@ vi.mock('../../components/GanttTimeline', () => ({
 }));
 
 const mockedListTraces = vi.mocked(listTraces);
+const mockedListTraceRequests = vi.mocked(listTraceRequests);
 const mockedGetTimeline = vi.mocked(getTimeline);
 
 describe('TraceMonitor query 初始化', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedListTraces.mockResolvedValue({
+    mockedListTraceRequests.mockResolvedValue({
       total: 1,
       items: [
         {
-          id: 1,
           request_id: 'req-1',
           session_id: 'sess-1',
           farm_id: 1,
-          round_index: 0,
-          node_type: 'router',
-          node_name: 'skill_router',
-          duration_ms: 12,
-          status: 'success',
-          token_usage: null,
-          error_message: null,
+          node_count: 1,
+          total_duration_ms: 12,
           created_at: '2026-06-11T10:00:00+08:00',
         },
       ],
@@ -54,7 +50,7 @@ describe('TraceMonitor query 初始化', () => {
     );
 
     await waitFor(() => {
-      expect(mockedListTraces).toHaveBeenCalledWith({
+      expect(mockedListTraceRequests).toHaveBeenCalledWith({
         limit: 20,
         offset: 0,
         request_id: 'req-1',
@@ -66,5 +62,33 @@ describe('TraceMonitor query 初始化', () => {
     });
     expect(screen.getByDisplayValue('req-1')).toBeInTheDocument();
     expect(screen.getByDisplayValue('sess-1')).toBeInTheDocument();
+  });
+
+  it('空创建时间显示占位符而不是 1970', async () => {
+    mockedListTraceRequests.mockResolvedValueOnce({
+      total: 1,
+      items: [
+        {
+          request_id: 'req-empty-time',
+          session_id: 'sess-empty-time',
+          farm_id: 1,
+          node_count: 1,
+          total_duration_ms: 12,
+          created_at: null,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/req-empty-time/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/1970/)).not.toBeInTheDocument();
+    expect(mockedListTraces).not.toHaveBeenCalled();
   });
 });

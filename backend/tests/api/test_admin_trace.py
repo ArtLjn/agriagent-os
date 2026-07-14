@@ -142,6 +142,67 @@ class TestGetTraces:
         mock_db.trace_query.count.assert_not_called()
 
 
+class TestGetTraceRequests:
+    def test_list_trace_requests_groups_nodes_by_request(self, db_session) -> None:
+        from app.core.config import settings
+        from pytest import MonkeyPatch
+
+        admin_user = ensure_admin_user(db_session)
+
+        first_node = MagicMock()
+        first_node.request_id = "req-new"
+        first_node.session_id = "sess-1"
+        first_node.farm_id = 2
+        first_node.duration_ms = 10
+        first_node.start_time = datetime(2026, 7, 10, 16, 0, 1)
+        first_node.created_at = None
+        first_node.end_time = None
+
+        second_node = MagicMock()
+        second_node.request_id = "req-new"
+        second_node.session_id = "sess-1"
+        second_node.farm_id = 2
+        second_node.duration_ms = 20
+        second_node.start_time = datetime(2026, 7, 10, 16, 0, 2)
+        second_node.created_at = None
+        second_node.end_time = None
+
+        old_node = MagicMock()
+        old_node.request_id = "req-old"
+        old_node.session_id = "sess-1"
+        old_node.farm_id = 2
+        old_node.duration_ms = 5
+        old_node.start_time = datetime(2026, 7, 10, 15, 0, 0)
+        old_node.created_at = None
+        old_node.end_time = None
+
+        mock_db = _mock_db(admin_user)
+        mock_db.trace_query.all.return_value = [first_node, second_node, old_node]
+        monkeypatch = MonkeyPatch()
+        monkeypatch.setattr(settings.storage, "trace", "mysql")
+
+        try:
+            with auth_override_scope(app), _db_override(mock_db):
+                resp = TestClient(app).get(
+                    "/admin/traces/requests?session_id=sess-1&limit=20",
+                    headers=admin_headers(),
+                )
+        finally:
+            monkeypatch.undo()
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+        assert data["items"][0] == {
+            "request_id": "req-new",
+            "session_id": "sess-1",
+            "farm_id": 2,
+            "node_count": 2,
+            "total_duration_ms": 30,
+            "created_at": "2026-07-10T16:00:02",
+        }
+
+
 class TestGetTimeline:
     def test_timeline_orders_rounds_by_first_node_time(self, db_session) -> None:
         from app.core.config import settings

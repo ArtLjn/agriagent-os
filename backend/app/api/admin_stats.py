@@ -149,7 +149,7 @@ def token_hourly(
     start_dt = datetime.combine(start, time.min)
     end_dt = datetime.combine(end + timedelta(days=1), time.min)
     if not _trace_table_exists(db):
-        return _token_hourly_from_mongo(
+        mongo_response = _token_hourly_from_mongo(
             db=db,
             user_id=user_id,
             farm_id=farm_id,
@@ -158,6 +158,11 @@ def token_hourly(
             end=end,
             start_dt=start_dt,
             end_dt=end_dt,
+        )
+        if mongo_response["items"]:
+            return mongo_response
+        return _token_hourly_from_daily_stats(
+            db, user_id=user_id, farm_id=farm_id, model=model, start=start, end=end
         )
 
     query = (
@@ -231,6 +236,11 @@ def token_hourly(
     )
     hours = sorted({item["hour"] for item in items})
 
+    if not items:
+        return _token_hourly_from_daily_stats(
+            db, user_id=user_id, farm_id=farm_id, model=model, start=start, end=end
+        )
+
     return {
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
@@ -238,6 +248,66 @@ def token_hourly(
         "hours": hours,
         "total_tokens": sum(item["total_tokens"] for item in items),
         "total_requests": sum(item["request_count"] for item in items),
+    }
+
+
+def _token_hourly_from_daily_stats(
+    db: Session,
+    *,
+    user_id: str | None,
+    farm_id: int | None,
+    model: str | None,
+    start: date,
+    end: date,
+) -> dict:
+    query = db.query(
+        TokenDailyStats.date,
+        TokenDailyStats.user_id,
+        TokenDailyStats.farm_id,
+        TokenDailyStats.model,
+        func.sum(TokenDailyStats.prompt_tokens),
+        func.sum(TokenDailyStats.completion_tokens),
+        func.sum(TokenDailyStats.total_tokens),
+        func.sum(TokenDailyStats.request_count),
+    ).filter(TokenDailyStats.date >= start, TokenDailyStats.date <= end)
+    if user_id is not None:
+        query = query.filter(TokenDailyStats.user_id == user_id)
+    if farm_id is not None:
+        query = query.filter(TokenDailyStats.farm_id == farm_id)
+    if model is not None:
+        query = query.filter(TokenDailyStats.model == model)
+    rows = (
+        query.group_by(
+            TokenDailyStats.date,
+            TokenDailyStats.user_id,
+            TokenDailyStats.farm_id,
+            TokenDailyStats.model,
+        )
+        .all()
+    )
+    items = [_daily_stats_hourly_item(row) for row in rows]
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "items": items,
+        "hours": ["00"] if items else [],
+        "total_tokens": sum(item["total_tokens"] for item in items),
+        "total_requests": sum(item["request_count"] for item in items),
+    }
+
+
+def _daily_stats_hourly_item(row) -> dict:
+    row_date, row_user_id, row_farm_id, row_model, prompt, completion, total, count = row
+    return {
+        "date": _date_value(row_date).isoformat(),
+        "hour": "00",
+        "user_id": row_user_id,
+        "farm_id": row_farm_id,
+        "model": row_model,
+        "prompt_tokens": prompt or 0,
+        "completion_tokens": completion or 0,
+        "total_tokens": total or 0,
+        "request_count": count or 0,
     }
 
 

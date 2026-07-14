@@ -18,6 +18,15 @@ export interface TraceRecord {
   created_at: string;
 }
 
+export interface TraceRequestSummary {
+  request_id: string;
+  session_id: string | null;
+  farm_id: number;
+  node_count: number;
+  total_duration_ms: number;
+  created_at: string | null;
+}
+
 export interface TraceNode {
   node_type: string;
   node_name: string;
@@ -97,12 +106,22 @@ export interface ListTracesResponse {
   total: number;
 }
 
+export interface ListTraceRequestsResponse {
+  items: TraceRequestSummary[];
+  total: number;
+}
+
 export interface DeleteTracesResponse {
   deleted: number;
 }
 
 export async function listTraces(params?: ListTracesParams): Promise<ListTracesResponse> {
   const res = await apiClient.get<ListTracesResponse>('/admin/traces', { params });
+  return res.data;
+}
+
+export async function listTraceRequests(params?: ListTracesParams): Promise<ListTraceRequestsResponse> {
+  const res = await apiClient.get<ListTraceRequestsResponse>('/admin/traces/requests', { params });
   return res.data;
 }
 

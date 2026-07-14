@@ -44,6 +44,7 @@ import { createCycle, listCycles, type CropCycleListItem, type CycleParseRespons
 import { createTemplate, type CropTemplateParseResponse } from '../../api/crops';
 import { createRecord, type CostParseResponse } from '../../api/costs';
 import { listAppSkills, type AppSkillItem, type AppSkillListResponse } from '../../api/agent';
+import { searchLocations } from '../../api/locations';
 import {
   operationsApi,
   type CostCategory,
@@ -64,6 +65,12 @@ import {
   formatMoney,
   normalizeOperationOptions,
 } from './workbenchModel';
+import {
+  buildCurrentLocationOption,
+  buildLocationSelectOptions,
+  buildSettingsLocationFields,
+  type LocationSelectOption,
+} from './locationSelectModel';
 import { buildCostCreatePayload, buildCostFormValues } from '../Costs/costSmartFill';
 import {
   SMART_FILL_FALLBACK_SCENARIOS,
@@ -1048,6 +1055,8 @@ function SystemPanel() {
   const [appSkills, setAppSkills] = useState<AppSkillListResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [skillsLoading, setSkillsLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationOptions, setLocationOptions] = useState<LocationSelectOption[]>([]);
   const [settingsForm] = Form.useForm<SettingsForm>();
   const [versionCode, setVersionCode] = useState(0);
 
@@ -1067,12 +1076,48 @@ function SystemPanel() {
         default_city: settingsRes.data.default_city ?? undefined,
         assistant_role: settingsRes.data.assistant_role ?? 'warm',
       });
+      const currentLocation = buildCurrentLocationOption(settingsRes.data);
+      setLocationOptions(currentLocation ? buildLocationSelectOptions([currentLocation]) : []);
     } catch {
       message.error('加载用户与应用调试数据失败');
     } finally {
       setLoading(false);
     }
   }, [settingsForm, versionCode]);
+
+  const handleLocationSearch = useCallback(async (keyword: string) => {
+    const query = keyword.trim();
+    if (!query) {
+      const currentLocation = settings ? buildCurrentLocationOption(settings) : null;
+      setLocationOptions(currentLocation ? buildLocationSelectOptions([currentLocation]) : []);
+      return;
+    }
+    setLocationLoading(true);
+    try {
+      const locations = await searchLocations(query, 50);
+      setLocationOptions(buildLocationSelectOptions(locations));
+    } catch {
+      message.error('搜索城市失败');
+    } finally {
+      setLocationLoading(false);
+    }
+  }, [settings]);
+
+  const handleLocationSelect = useCallback((value: string) => {
+    const selected = locationOptions.find((option) => option.value === value)?.location;
+    if (!selected) {
+      return;
+    }
+    settingsForm.setFieldsValue(buildSettingsLocationFields(selected));
+  }, [locationOptions, settingsForm]);
+
+  const clearLocation = useCallback(() => {
+    settingsForm.setFieldsValue({
+      default_city: undefined,
+      default_lat: null,
+      default_lon: null,
+    });
+  }, [settingsForm]);
 
   const refreshAppSkills = useCallback(async () => {
     setSkillsLoading(true);
@@ -1156,7 +1201,20 @@ function SystemPanel() {
           <Card title={<span><SettingOutlined /> 当前用户设置</span>} style={cardStyle}>
             <Form form={settingsForm} layout="vertical">
               <Form.Item name="display_name" label="显示名" rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item name="default_city" label="默认城市"><Input /></Form.Item>
+              <Form.Item name="default_city" label="默认城市">
+                <Select
+                  allowClear
+                  showSearch
+                  filterOption={false}
+                  loading={locationLoading}
+                  options={locationOptions}
+                  placeholder="搜索城市或区县"
+                  onSearch={handleLocationSearch}
+                  onSelect={handleLocationSelect}
+                  onClear={clearLocation}
+                  notFoundContent={locationLoading ? '搜索中' : '输入城市名搜索'}
+                />
+              </Form.Item>
               <Form.Item
                 name="assistant_role"
                 label="回答风格"

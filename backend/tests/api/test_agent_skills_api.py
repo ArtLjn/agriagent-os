@@ -62,7 +62,7 @@ def test_agent_skills_only_returns_app_level_capabilities(db_session) -> None:
         "manage_farm_logs",
         "manage_wages",
         "manage_crop_cycle",
-        "get_weather_forecast",
+        "weather",
         "manage_user_settings",
     }
     assert "create_crop_cycle" not in keys
