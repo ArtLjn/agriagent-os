@@ -11,8 +11,6 @@ pytestmark = pytest.mark.no_db
 ALL_TOOL_NAMES = [
     "manage_cost",
     "manage_crop_cycle",
-    "create_crop_template",
-    "get_crop_templates",
     "manage_crop_templates",
     "create_operation_work_order",
     "get_recent_farm_logs",
@@ -294,7 +292,7 @@ class TestQueryKeywordMatching:
 
     def test_crop_template_query_uses_template_skill(self):
         result = select_tools("有哪些作物模板", _make_tools())
-        assert result == ["get_crop_templates"]
+        assert result == ["manage_crop_templates"]
 
     def test_crop_cycle_list_query_uses_cycle_list_skill(self):
         result = select_tools("我的茬口", _make_tools())

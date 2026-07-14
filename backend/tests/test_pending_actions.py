@@ -50,6 +50,7 @@ def test_write_skill_registry_covers_runtime_write_skills():
     expected = {
         "create_cost_record",
         "create_crop_cycle",
+        "manage_crop_cycle",
         "create_crop_template",
         "create_operation_work_order",
         "log_farm_activity",

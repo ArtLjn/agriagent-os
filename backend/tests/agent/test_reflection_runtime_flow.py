@@ -305,7 +305,7 @@ async def test_planning_reply_with_read_tools_is_not_rewritten() -> None:
     fake_llm = _FakeLLM(planning_reply)
     tools = [
         _FakeTool("manage_crop_cycle"),
-        _FakeTool("get_crop_templates"),
+        _FakeTool("manage_crop_templates"),
     ]
 
     with ExitStack() as stack:
@@ -319,7 +319,7 @@ async def test_planning_reply_with_read_tools_is_not_rewritten() -> None:
                 "user_id": "user-1",
                 "session_id": "session-planting-planning",
                 "router_decision": RouterDecision(
-                    selected_tools=["manage_crop_cycle", "get_crop_templates"],
+                    selected_tools=["manage_crop_cycle", "manage_crop_templates"],
                 ),
             }
         )
@@ -327,7 +327,7 @@ async def test_planning_reply_with_read_tools_is_not_rewritten() -> None:
     assert result["messages"][0].content == planning_reply
     assert fake_llm.bound_tool_names == [
         "manage_crop_cycle",
-        "get_crop_templates",
+        "manage_crop_templates",
     ]
 
 

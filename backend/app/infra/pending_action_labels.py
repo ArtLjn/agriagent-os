@@ -92,7 +92,14 @@ _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
     "delete_cost_record": ["record_id"],
     "manage_cost_categories": ["action", "category_id", "name", "type"],
     "manage_planting_units": ["action", "unit_id", "cycle_id", "name", "area_mu"],
-    "manage_crop_templates": ["action", "template_id", "name", "variety"],
+    "manage_crop_templates": [
+        "operation",
+        "action",
+        "template_id",
+        "crop_name",
+        "name",
+        "variety",
+    ],
     "manage_farm_logs": ["action", "log_id", "cycle_id", "operation_type"],
     "delete_crop_cycle": ["cycle_id"],
     "manage_user_settings": [

@@ -41,16 +41,6 @@ CATALOG_REGISTRY: dict[str, dict] = {
         "context_dependencies": ["crop_templates", "planting_units", "crop_cycles"],
         "candidate_group": "planting_write",
     },
-    "create_crop_template": {
-        "domain": "planting",
-        "intents": ["create_crop_template"],
-        "risk": "write_confirm",
-        "entities": ["crop_template"],
-        "trigger_examples": ["帮我创建黑布林种植模板"],
-        "anti_examples": ["有哪些作物模板", "模板列表"],
-        "context_dependencies": ["crop_templates"],
-        "candidate_group": "planting_write",
-    },
     "get_cost_summary": {
         "domain": "finance",
         "intents": ["query_cost_summary"],

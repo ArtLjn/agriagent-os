@@ -36,11 +36,9 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
             r"(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米|水稻).*(?:修改|更改|调整|改|改成|改到).*(?:\d{1,2}月|开始|播种期|起始)"
         ),
     ],
-    "create_crop_template": [
+    "manage_crop_templates": [
         re.compile(r"(?:创建|建|新建|添加).*(?:作物|模板)"),
         re.compile(r"(?:没有|缺少|找不到).*(?:模板|作物)"),
-    ],
-    "manage_crop_templates": [
         re.compile(r"(?:修改|更改|调整|更新|改|删除|删掉|移除).*(?:作物模板|模板)"),
         re.compile(
             r"(?:作物模板|模板).*#?\d+.*(?:修改|更改|调整|更新|改|删除|删掉|移除)"
@@ -186,7 +184,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "费用分类",
         "有哪些分类",
     },
-    "get_crop_templates": {"作物模板", "模板列表", "有哪些模板", "生长阶段模板"},
+    "manage_crop_templates": {"作物模板", "模板列表", "有哪些模板", "生长阶段模板"},
     "manage_crop_cycle": {
         "我的茬口",
         "有哪些茬口",
@@ -278,9 +276,7 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_operation_work_orders": [],
     "get_cost_categories": [],
     "get_planting_units": [],
-    "get_crop_templates": [],
     "get_user_settings": [],
-    "create_crop_template": [],
     "manage_crop_templates": [],
     "create_operation_work_order": [],
     "log_farm_activity": [],

@@ -19,8 +19,6 @@ pytestmark = pytest.mark.no_db
 EXPECTED_REGISTERED_SKILLS = {
     "manage_cost",
     "manage_crop_cycle",
-    "create_crop_template",
-    "get_crop_templates",
     "manage_crop_templates",
     "create_operation_work_order",
     "get_recent_farm_logs",
@@ -46,8 +44,6 @@ EXPECTED_REGISTERED_SKILLS = {
 }
 
 EXPECTED_WRITE_SKILLS = {
-    "create_crop_template",
-    "manage_crop_templates",
     "create_operation_work_order",
     "log_farm_activity",
     "manage_farm_logs",
@@ -60,7 +56,11 @@ EXPECTED_WRITE_SKILLS = {
     "manage_planting_units",
     "manage_user_settings",
 }
-OPERATION_AWARE_WRITE_DOCS = {"manage_cost", "manage_crop_cycle"}
+OPERATION_AWARE_WRITE_DOCS = {
+    "manage_cost",
+    "manage_crop_cycle",
+    "manage_crop_templates",
+}
 RETIRED_COST_WRITE_ALIASES = {
     "create_cost_record",
     "delete_cost_record",
@@ -70,6 +70,9 @@ RETIRED_CROP_CYCLE_WRITE_ALIASES = {
     "create_crop_cycle",
     "update_crop_cycle",
     "delete_crop_cycle",
+}
+RETIRED_CROP_TEMPLATE_WRITE_ALIASES = {
+    "create_crop_template",
 }
 
 SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
@@ -149,6 +152,7 @@ def test_write_skill_docs_are_registered_for_pending_confirmation() -> None:
             WRITE_SKILLS
             - RETIRED_COST_WRITE_ALIASES
             - RETIRED_CROP_CYCLE_WRITE_ALIASES
+            - RETIRED_CROP_TEMPLATE_WRITE_ALIASES
         )
         | OPERATION_AWARE_WRITE_DOCS
     )

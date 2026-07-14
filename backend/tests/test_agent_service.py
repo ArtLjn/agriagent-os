@@ -241,8 +241,8 @@ class TestStreamChatWithAgent:
         reply = "".join(chunks)
         pending = get_pending(1)
         assert pending is not None
-        assert pending.skill_name == "create_crop_template"
-        assert pending.params == {"crop_name": "小麦"}
+        assert pending.skill_name == "manage_crop_templates"
+        assert pending.params == {"operation": "create_template", "crop_name": "小麦"}
         assert pending.follow_up_skill_name == "create_crop_cycle"
         assert pending.follow_up_params == {"crop_name": "小麦"}
         assert "系统还没有小麦作物模板" in reply

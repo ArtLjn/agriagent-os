@@ -32,9 +32,6 @@ _get_units_mod = importlib.import_module(
 _manage_units_mod = importlib.import_module(
     "app.agent.skills.manage-planting-units.scripts.main"
 )
-_get_templates_mod = importlib.import_module(
-    "app.agent.skills.get-crop-templates.scripts.main"
-)
 _manage_cycles_mod = importlib.import_module(
     "app.agent.skills.manage-crop-cycle.scripts.main"
 )
@@ -62,7 +59,6 @@ GetCostCategoriesSkill = _get_categories_mod.GetCostCategoriesSkill
 ManageCostCategoriesSkill = _manage_categories_mod.ManageCostCategoriesSkill
 GetPlantingUnitsSkill = _get_units_mod.GetPlantingUnitsSkill
 ManagePlantingUnitsSkill = _manage_units_mod.ManagePlantingUnitsSkill
-GetCropTemplatesSkill = _get_templates_mod.GetCropTemplatesSkill
 ManageCropCycleSkill = _manage_cycles_mod.ManageCropCycleSkill
 ManageCropTemplatesSkill = _manage_templates_mod.ManageCropTemplatesSkill
 ManageFarmLogsSkill = _manage_logs_mod.ManageFarmLogsSkill
@@ -83,7 +79,6 @@ def patched_skill_sessions(monkeypatch, db_session):
         _manage_categories_mod,
         _get_units_mod,
         _manage_units_mod,
-        _get_templates_mod,
         _manage_cycles_query_mod,
         _manage_templates_mod,
         _manage_logs_mod,
@@ -269,19 +264,30 @@ async def test_planting_unit_skills_create_list_update_delete(
 async def test_crop_template_skills_list_update_delete(patched_skill_sessions, ctx):
     template = _create_template(patched_skill_sessions)
 
-    listed = await GetCropTemplatesSkill().execute({}, ctx)
+    listed = await ManageCropTemplatesSkill().execute(
+        {"operation": "query_templates"}, ctx
+    )
     assert listed.status.value == "success"
     assert "西瓜" in listed.reply
 
     updated = await ManageCropTemplatesSkill().execute(
-        {"action": "update", "template_id": template.id, "name": "麒麟西瓜"},
+        {
+            "operation": "manage_template",
+            "action": "update",
+            "template_id": template.id,
+            "name": "麒麟西瓜",
+        },
         ctx,
     )
     assert updated.status.value == "success"
     assert patched_skill_sessions.get(CropTemplate, template.id).name == "麒麟西瓜"
 
     deleted = await ManageCropTemplatesSkill().execute(
-        {"action": "delete", "template_id": template.id},
+        {
+            "operation": "manage_template",
+            "action": "delete",
+            "template_id": template.id,
+        },
         ctx,
     )
     assert deleted.status.value == "success"

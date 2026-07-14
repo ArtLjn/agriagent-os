@@ -255,8 +255,7 @@ async def test_llm_node_keeps_planting_planning_intent_in_read_tool_pool() -> No
     tools = [
         _FakeTool("get_farm_status"),
         _FakeTool("manage_crop_cycle"),
-        _FakeTool("get_crop_templates"),
-        _FakeTool("create_crop_template"),
+        _FakeTool("manage_crop_templates"),
     ]
 
     with ExitStack() as stack:
@@ -275,13 +274,11 @@ async def test_llm_node_keeps_planting_planning_intent_in_read_tool_pool() -> No
     assert fake_llm.bound_tool_names == [
         "get_farm_status",
         "manage_crop_cycle",
-        "get_crop_templates",
     ]
     router_decision = result["router_decision"]
     assert router_decision.selected_tools == [
         "get_farm_status",
         "manage_crop_cycle",
-        "get_crop_templates",
     ]
     assert router_decision.fallback == "model_choice_read_default"
 

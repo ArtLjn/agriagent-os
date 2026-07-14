@@ -228,8 +228,8 @@ async def _confirm_pending(
         if crop_name:
             store_pending(
                 farm_id,
-                "create_crop_template",
-                {"crop_name": crop_name},
+                "manage_crop_templates",
+                {"operation": "create_template", "crop_name": crop_name},
                 original_input=f"系统还没有{crop_name}作物模板",
                 follow_up_skill_name="create_crop_cycle",
                 follow_up_params=dict(pending.params),
@@ -237,8 +237,8 @@ async def _confirm_pending(
                 session_id=session_id,
             )
             confirm = build_confirm_message(
-                "create_crop_template",
-                {"crop_name": crop_name},
+                "manage_crop_templates",
+                {"operation": "create_template", "crop_name": crop_name},
                 original_input=f"系统还没有{crop_name}作物模板",
             )
             reply = (

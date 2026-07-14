@@ -102,7 +102,12 @@ async def test_handle_pending_legacy_replay_records_resolved_alias_trace():
 
     assert decision.status == "confirmed"
     tool.ainvoke.assert_awaited_once_with(
-        {"amount": 100, "category": "化肥", "record_type": "cost"}
+        {
+            "amount": 100,
+            "category": "化肥",
+            "record_type": "cost",
+            "operation": "create_record",
+        }
     )
     output_data = collector.record.call_args.kwargs["output_data"]
     assert output_data["legacy_tool_name"] == "create_cost_record"
@@ -231,7 +236,8 @@ async def test_handle_pending_missing_template_creates_template_pending():
     pending = get_pending(1)
     assert decision.status == "confirmed"
     assert pending is not None
-    assert pending.skill_name == "create_crop_template"
+    assert pending.skill_name == "manage_crop_templates"
+    assert pending.params["operation"] == "create_template"
     assert pending.follow_up_skill_name == "create_crop_cycle"
     assert "确认创建作物模板" in decision.reply
 

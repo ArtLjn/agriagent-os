@@ -55,4 +55,5 @@
 - [x] 6.4 低风险合并 `manage_cost_categories`，把分类查询和管理 operation 统一。
 - [x] 6.5 成本域进入物理合并阶段：将 `create_cost_record`、`delete_cost_record`、`get_cost_summary`、`get_cost_analytics`、`get_debt_summary`、`settle_debt` 合并到 canonical `manage_cost`，旧名保留 alias 兼容但不再作为独立 Skill 目录暴露。
 - [x] 6.6 已完成 crop-cycle 域物理合并：将 `create_crop_cycle`、`update_crop_cycle`、`delete_crop_cycle`、`get_crop_cycles` 和 `get_crop_cycle_info` 收敛到 canonical `manage_crop_cycle`，旧名保留 alias 兼容但不再作为独立 Skill 目录暴露。
-- [ ] 6.7 在 crop-cycle 域稳定后，再为 `manage_work_orders`、`manage_labor_payment` 单独拆后续 OpenSpec change。
+- [x] 6.7 已完成 crop-template 域物理合并：将 `create_crop_template`、`get_crop_templates` 收敛到 canonical `manage_crop_templates`，旧名保留 alias/pending 兼容但不再作为独立 Skill 目录暴露。
+- [ ] 6.8 在 crop-cycle 与 crop-template 域稳定后，再为 `manage_work_orders`、`manage_labor_payment` 单独拆后续 OpenSpec change。

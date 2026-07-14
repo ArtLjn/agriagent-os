@@ -437,7 +437,11 @@ def _build_generic_business_context(
         risk_notes.append("删除茬口会级联删除阶段、农事日志、成本记录和种植单元。")
     elif skill_name == "manage_cost" and params.get("operation") == "delete_record":
         risk_notes.append("确认后会软删除该账务记录，并影响统计结果。")
-    elif skill_name == "manage_crop_templates" and params.get("action") == "delete":
+    elif (
+        skill_name == "manage_crop_templates"
+        and params.get("operation") in (None, "manage_template")
+        and params.get("action") == "delete"
+    ):
         risk_notes.append("删除模板会级联删除相关茬口、农事日志和成本记录。")
     elif skill_name == "delete_cost_record":
         risk_notes.append("确认后会软删除该账务记录，并影响统计结果。")
@@ -482,6 +486,9 @@ def _build_generic_business_confirm_message(
     emoji = _SKILL_EMOJI.get(skill_name, "❓")
     action = _SKILL_DISPLAY.get(skill_name, skill_name)
     action_value = params.get("action")
+    if skill_name == "manage_crop_templates":
+        action = "作物模板"
+        action_value = _crop_template_action_value(params)
     action_label = {
         "create": "创建",
         "update": "更新",
@@ -501,6 +508,14 @@ def _build_generic_business_confirm_message(
         lines.append(f"理解：您说的是「{original_input}」")
     lines.append("确认吗？")
     return "\n".join(lines)
+
+
+def _crop_template_action_value(params: dict) -> str | None:
+    if params.get("operation") == "create_template":
+        return "create"
+    if params.get("operation") == "manage_template":
+        return params.get("action")
+    return params.get("action")
 
 
 def _split_names(value) -> list[str]:

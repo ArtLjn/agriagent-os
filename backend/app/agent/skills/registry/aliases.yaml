@@ -42,13 +42,13 @@ aliases:
     capability: manage_crop_cycle
     operation: delete_cycle
   - legacy_name: create_crop_template
-    capability: manage_crop_template
+    capability: manage_crop_templates
     operation: create_template
   - legacy_name: get_crop_templates
-    capability: manage_crop_template
+    capability: manage_crop_templates
     operation: query_templates
   - legacy_name: manage_crop_templates
-    capability: manage_crop_template
+    capability: manage_crop_templates
     operation: manage_template
   - legacy_name: get_planting_units
     capability: manage_planting_units

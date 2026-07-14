@@ -162,7 +162,7 @@ def test_check_required_tool_missing_still_blocks_business_fact() -> None:
 
 def test_check_required_tool_missing_allows_planting_planning_advice() -> None:
     result = check_required_tool_missing(
-        selected_tools=["manage_crop_cycle", "get_crop_templates"],
+        selected_tools=["manage_crop_cycle", "manage_crop_templates"],
         tool_calls=[],
         final_text=(
             "十几亩可以先按 15 亩左右做试种规划。建议先确认地块排水、"
@@ -195,7 +195,7 @@ def test_check_required_tool_missing_allows_no_need_advice() -> None:
 
 def test_check_required_tool_missing_blocks_template_availability_claim() -> None:
     result = check_required_tool_missing(
-        selected_tools=["get_crop_templates"],
+        selected_tools=["manage_crop_templates"],
         tool_calls=[],
         final_text="目前没有黑布林模板，可以新建一个。",
     )

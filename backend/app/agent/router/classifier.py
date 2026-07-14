@@ -334,7 +334,7 @@ class RuleIntentClassifier:
                     intent="query_crop_templates",
                     risk="read",
                     entities=["crop_template"],
-                    candidate_tools=["get_crop_templates"],
+                    candidate_tools=["manage_crop_templates"],
                     confidence=0.86,
                 )
             ]
@@ -604,7 +604,7 @@ class RuleIntentClassifier:
             intent="create_crop_template",
             risk="write_confirm",
             entities=["crop_template"],
-            candidate_tools=["create_crop_template"],
+            candidate_tools=["manage_crop_templates"],
             confidence=0.78,
             requires_confirmation=True,
         )

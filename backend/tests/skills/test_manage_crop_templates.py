@@ -1,4 +1,4 @@
-"""创建作物模板 Skill 测试。"""
+"""作物模板能力 Skill 测试。"""
 
 import importlib
 from types import SimpleNamespace
@@ -7,8 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-_mod = importlib.import_module("app.agent.skills.create-crop-template.scripts.main")
-CreateCropTemplateSkill = _mod.CreateCropTemplateSkill
+from app.agent.skills.registry import load_skill_registry
+
+_mod = importlib.import_module("app.agent.skills.manage-crop-templates.scripts.main")
+ManageCropTemplatesSkill = _mod.ManageCropTemplatesSkill
 
 pytestmark = pytest.mark.no_db
 
@@ -33,7 +35,7 @@ def _stage(
 
 
 def _template(template_id: int, stages: list[SimpleNamespace]) -> SimpleNamespace:
-    return SimpleNamespace(id=template_id, stages=stages)
+    return SimpleNamespace(id=template_id, name="西瓜", variety="8424", stages=stages)
 
 
 def _llm_client_with_stages() -> MagicMock:
@@ -50,12 +52,59 @@ def _llm_client_with_stages() -> MagicMock:
     return client
 
 
+def test_legacy_crop_template_aliases_resolve_to_canonical_operations() -> None:
+    registry = load_skill_registry()
+
+    create_alias = registry.resolve_alias("create_crop_template")
+    query_alias = registry.resolve_alias("get_crop_templates")
+
+    assert create_alias is not None
+    assert create_alias.capability == "manage_crop_templates"
+    assert create_alias.operation == "create_template"
+    assert query_alias is not None
+    assert query_alias.capability == "manage_crop_templates"
+    assert query_alias.operation == "query_templates"
+
+
+@pytest.mark.asyncio
+@patch.object(_mod, "SessionLocal")
+@patch.object(_mod.crop_service, "get_crop_templates")
+async def test_query_templates_operation_lists_templates(
+    mock_get_templates,
+    mock_session,
+    ctx,
+) -> None:
+    """查询 operation 复用模板列表能力。"""
+    db = MagicMock()
+    mock_session.return_value = db
+    mock_get_templates.return_value = [
+        _template(
+            42,
+            [
+                _stage("播种期", order_index=0),
+                _stage("苗期", order_index=1),
+            ],
+        )
+    ]
+
+    result = await ManageCropTemplatesSkill().execute(
+        {"operation": "query_templates"},
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "#42 西瓜（8424）" in result.reply
+    assert "播种期、苗期" in result.reply
+    mock_get_templates.assert_called_once_with(db, 7, limit=100)
+    db.close.assert_called_once()
+
+
 @pytest.mark.asyncio
 @patch.object(_mod, "SessionLocal")
 @patch.object(_mod.crop_service, "create_crop_template")
 @patch.object(_mod.crop_service, "find_system_template_match")
 @patch.object(_mod.crop_service, "find_exact_duplicate")
-async def test_exact_duplicate_returns_existing_id_after_stage_generation(
+async def test_create_template_exact_duplicate_returns_existing_id(
     mock_find_duplicate,
     mock_find_system_match,
     mock_create,
@@ -77,8 +126,8 @@ async def test_exact_duplicate_returns_existing_id_after_stage_generation(
     ctx.llm_model = "test-model"
     ctx.llm_client = _llm_client_with_stages()
 
-    result = await CreateCropTemplateSkill().execute(
-        {"crop_name": "西瓜", "variety": "8424"},
+    result = await ManageCropTemplatesSkill().execute(
+        {"operation": "create_template", "crop_name": "西瓜", "variety": "8424"},
         ctx,
     )
 
@@ -100,7 +149,7 @@ async def test_exact_duplicate_returns_existing_id_after_stage_generation(
 @patch.object(_mod.crop_service, "create_crop_template")
 @patch.object(_mod.crop_service, "find_system_template_match")
 @patch.object(_mod.crop_service, "find_exact_duplicate")
-async def test_system_template_match_returns_need_clarify_without_llm_or_write(
+async def test_create_template_system_match_returns_need_clarify(
     mock_find_duplicate,
     mock_find_system_match,
     mock_create,
@@ -121,7 +170,10 @@ async def test_system_template_match_returns_need_clarify_without_llm_or_write(
     ctx.llm_model = "test-model"
     ctx.llm_client = _llm_client_with_stages()
 
-    result = await CreateCropTemplateSkill().execute({"crop_name": "玉米"}, ctx)
+    result = await ManageCropTemplatesSkill().execute(
+        {"operation": "create_template", "crop_name": "玉米"},
+        ctx,
+    )
 
     assert result.status.value == "need_clarify"
     assert "系统库已有 玉米 的成熟模版" in result.reply
@@ -139,7 +191,7 @@ async def test_system_template_match_returns_need_clarify_without_llm_or_write(
 @patch.object(_mod.crop_service, "create_crop_template")
 @patch.object(_mod.crop_service, "find_system_template_match")
 @patch.object(_mod.crop_service, "find_exact_duplicate")
-async def test_no_match_uses_llm_and_creates_template(
+async def test_create_template_uses_llm_and_creates_template(
     mock_find_duplicate,
     mock_find_system_match,
     mock_create,
@@ -156,7 +208,10 @@ async def test_no_match_uses_llm_and_creates_template(
     ctx.llm_model = "test-model"
     ctx.llm_client = _llm_client_with_stages()
 
-    result = await CreateCropTemplateSkill().execute({"crop_name": "藜麦"}, ctx)
+    result = await ManageCropTemplatesSkill().execute(
+        {"operation": "create_template", "crop_name": "藜麦"},
+        ctx,
+    )
 
     assert result.status.value == "success"
     assert "藜麦模板已创建" in result.reply
@@ -180,8 +235,8 @@ async def test_missing_context_rejects_before_opening_db(
     mock_session,
 ) -> None:
     """缺少 farm_id 时拒绝执行，不打开 DB。"""
-    result = await CreateCropTemplateSkill().execute(
-        {"crop_name": "西瓜"},
+    result = await ManageCropTemplatesSkill().execute(
+        {"operation": "create_template", "crop_name": "西瓜"},
         SkillContext(),
     )
 

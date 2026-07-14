@@ -100,9 +100,6 @@ def select_tools(
     if "manage_crop_cycle" in candidates:
         candidates.discard("get_farm_status")
 
-    if "manage_crop_templates" in candidates:
-        candidates.difference_update({"create_crop_template", "get_crop_templates"})
-
     if "manage_farm_logs" in candidates:
         candidates.difference_update(
             {"get_recent_farm_logs", "log_farm_activity", "get_farm_status"}

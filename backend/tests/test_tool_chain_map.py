@@ -17,8 +17,6 @@ class TestToolChainMap:
         expected_keys = {
             "manage_cost",
             "manage_crop_cycle",
-            "create_crop_template",
-            "get_crop_templates",
             "manage_crop_templates",
             "create_operation_work_order",
             "get_recent_farm_logs",
@@ -55,7 +53,7 @@ class TestToolChainMap:
             "get_operation_work_orders",
             "get_cost_categories",
             "get_planting_units",
-            "get_crop_templates",
+            "manage_crop_templates",
             "get_user_settings",
         ]
         for tool in query_tools_without_farm_status:
@@ -68,7 +66,6 @@ class TestToolChainMap:
         write_tools = [
             "manage_cost",
             "manage_crop_cycle",
-            "create_crop_template",
             "manage_crop_templates",
             "create_operation_work_order",
             "log_farm_activity",

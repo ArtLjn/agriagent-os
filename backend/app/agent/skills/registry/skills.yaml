@@ -211,7 +211,7 @@ capabilities:
           - cost_analytics
           - cost_summary
           - get_farm_status
-  - name: manage_crop_template
+  - name: manage_crop_templates
     domain: crop
     capability: crop_template_management
     description: 管理作物模板，支持查询、创建、更新和级联删除。
