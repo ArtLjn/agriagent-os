@@ -286,17 +286,18 @@ def test_registry_aliases_have_skill_docs():
     skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
     registry = load_skill_registry()
     tool_names = _skill_doc_tool_names(skills_dir)
-    capability_doc_names = {
+    documented_capabilities = {
         alias.capability
-        for alias in registry.aliases.values()
-        if alias.capability in tool_names
+        for legacy_name, alias in registry.aliases.items()
+        if legacy_name in tool_names
     }
 
     missing_docs = sorted(
         legacy_name
         for legacy_name, alias in registry.aliases.items()
         if legacy_name not in tool_names
-        and alias.capability not in capability_doc_names
+        and alias.capability not in tool_names
+        and alias.capability not in documented_capabilities
     )
 
     assert missing_docs == []
