@@ -9,10 +9,19 @@ from app.infra.pending_action_labels import (
     _SKILL_EMOJI,
     _SKILL_PARAM_FORMAT,
 )
-from app.agent.skills.work_order_aliases import (
-    CREATE_WORK_ORDER,
-    operation_for_work_order_call,
-)
+
+_CREATE_WORK_ORDER = "create_work_order"
+_WORK_ORDER_ALIAS_TO_OPERATION = {
+    "create_operation_work_order": _CREATE_WORK_ORDER,
+    "get_operation_work_orders": "query_work_orders",
+    "update_operation_work_order": "update_work_order",
+}
+
+
+def _work_order_operation(skill_name: str, params: dict) -> str | None:
+    return str(params.get("operation") or "") or _WORK_ORDER_ALIAS_TO_OPERATION.get(
+        skill_name
+    )
 
 
 def build_confirmation_context(
@@ -21,7 +30,7 @@ def build_confirmation_context(
     original_input: str = "",
 ) -> dict:
     """构建结构化确认上下文。"""
-    if operation_for_work_order_call(skill_name, params) == CREATE_WORK_ORDER:
+    if _work_order_operation(skill_name, params) == _CREATE_WORK_ORDER:
         return _build_create_work_order_context(skill_name, params, original_input)
 
     if skill_name == "update_crop_cycle" or (
@@ -186,7 +195,7 @@ def build_confirm_message(
     skill_name: str, params: dict, original_input: str = ""
 ) -> str:
     context = build_confirmation_context(skill_name, params, original_input)
-    if operation_for_work_order_call(skill_name, params) == CREATE_WORK_ORDER:
+    if _work_order_operation(skill_name, params) == _CREATE_WORK_ORDER:
         target = context["target"]
         labor = context["labor"]
         lines = [
@@ -356,7 +365,7 @@ def _format_plan_step(tool_name: str, params: dict) -> str:
             return f"创建工人：{name}"
         return f"管理工人：{name}"
 
-    if operation_for_work_order_call(tool_name, params) == CREATE_WORK_ORDER:
+    if _work_order_operation(tool_name, params) == _CREATE_WORK_ORDER:
         operation_type = params.get("operation_type") or "农事"
         units = _split_names(params.get("unit_names"))
         scope = f"（{'、'.join(units)}）" if units else ""

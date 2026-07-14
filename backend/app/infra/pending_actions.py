@@ -10,7 +10,6 @@ from datetime import datetime
 
 from langchain_core.messages import ToolMessage
 
-from app.agent.skills.registry import load_skill_registry
 from app.core.database import SessionLocal
 from app.infra.pending_action_presenter import (
     build_confirm_message,
@@ -486,6 +485,8 @@ def is_write_skill_call(skill_name: str, params: dict | None = None) -> bool:
 
 def _registry_operation_risk(skill_name: str, params: dict | None = None) -> str | None:
     try:
+        from app.agent.skills.registry import load_skill_registry
+
         registry = load_skill_registry()
     except (OSError, ValueError):
         return None

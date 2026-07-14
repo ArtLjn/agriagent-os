@@ -13,6 +13,12 @@ from app.infra.pending_actions import (
 )
 
 
+def test_pending_actions_module_imports_without_agent_skill_cycle():
+    import app.infra.pending_actions as pending_actions
+
+    assert pending_actions.WRITE_SKILLS
+
+
 def test_confirm_message_hides_internal_param_keys():
     message = build_confirm_message(
         "create_crop_template",
