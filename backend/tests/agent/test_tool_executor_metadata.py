@@ -500,6 +500,95 @@ async def test_operation_work_order_pending_uses_worker_default_wage(
 
 
 @pytest.mark.asyncio
+async def test_legacy_create_work_order_alias_stores_manage_operation_pending():
+    tool = SimpleNamespace(
+        name="manage_work_orders",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            context_dependencies=["workers"],
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="今天李树去6号棚收水稻"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "create_operation_work_order",
+                        "args": {
+                            "operation_type": "采收",
+                            "workers": "李树",
+                            "unit_names": "6号棚",
+                            "no_wage": True,
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-work-order-alias",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id="sess-work-order-alias")
+    assert pending is not None
+    assert pending.skill_name == "create_operation_work_order"
+    assert pending.params["operation"] == "create_work_order"
+    assert pending.params["operation_type"] == "采收"
+    assert "[PENDING_ACTION]" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_manage_work_orders_query_operation_executes_without_pending():
+    tool = SimpleNamespace(
+        name="manage_work_orders",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="匹配的农事作业单：\n- #1 采收"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            context_dependencies=["operation_work_orders"],
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="最近玉米授粉作业有哪些"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_work_orders",
+                        "args": {"operation": "query_work_orders"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-work-order-query",
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1, session_id="sess-work-order-query") is None
+    tool.ainvoke.assert_awaited_once_with({"operation": "query_work_orders"})
+    assert result["messages"][0].content.startswith("匹配的农事作业单")
+
+
+@pytest.mark.asyncio
 async def test_settle_labor_payment_all_workers_drops_polluted_content_param():
     """全员结算不能把上下文中的单人工人名作为待执行参数。"""
     tool = SimpleNamespace(

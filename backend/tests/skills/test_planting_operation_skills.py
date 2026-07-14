@@ -25,11 +25,8 @@ from app.schemas.planting import (
 )
 from app.services import planting_read_service, planting_service
 
-_get_orders_mod = importlib.import_module(
-    "app.agent.skills.get-operation-work-orders.scripts.main"
-)
-_update_order_mod = importlib.import_module(
-    "app.agent.skills.update-operation-work-order.scripts.main"
+_work_orders_mod = importlib.import_module(
+    "app.agent.skills.manage-work-orders.scripts.main"
 )
 _get_payables_mod = importlib.import_module(
     "app.agent.skills.get-labor-payables.scripts.main"
@@ -37,15 +34,10 @@ _get_payables_mod = importlib.import_module(
 _settle_payment_mod = importlib.import_module(
     "app.agent.skills.settle-labor-payment.scripts.main"
 )
-_create_order_mod = importlib.import_module(
-    "app.agent.skills.create-operation-work-order.scripts.main"
-)
 
-GetOperationWorkOrdersSkill = _get_orders_mod.GetOperationWorkOrdersSkill
-UpdateOperationWorkOrderSkill = _update_order_mod.UpdateOperationWorkOrderSkill
+ManageWorkOrdersSkill = _work_orders_mod.ManageWorkOrdersSkill
 GetLaborPayablesSkill = _get_payables_mod.GetLaborPayablesSkill
 SettleLaborPaymentSkill = _settle_payment_mod.SettleLaborPaymentSkill
-CreateOperationWorkOrderSkill = _create_order_mod.CreateOperationWorkOrderSkill
 
 
 @pytest.fixture
@@ -64,11 +56,9 @@ def clean_pending():
 def skill_sessions(monkeypatch, db_session):
     """让新增 Skill 使用当前测试会话。"""
     for module in (
-        _get_orders_mod,
-        _update_order_mod,
+        _work_orders_mod,
         _get_payables_mod,
         _settle_payment_mod,
-        _create_order_mod,
     ):
         monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
     return db_session
@@ -292,8 +282,9 @@ async def test_create_work_order_skill_uses_labor_quantity(skill_sessions, ctx):
     _create_unit(skill_sessions, cycle, name="6号棚")
     worker = _create_worker(skill_sessions, "李海")
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "压瓜",
             "operation_date": "2026-06-15",
             "unit_names": "6号棚",
@@ -346,8 +337,13 @@ def test_list_and_settle_labor_payables(db_session):
 async def test_get_operation_work_orders_skill(skill_sessions, ctx):
     _create_work_order(skill_sessions)
 
-    result = await GetOperationWorkOrdersSkill().execute(
-        {"operation_type": "授粉", "worker": "老王", "payment_status": "partial"},
+    result = await ManageWorkOrdersSkill().execute(
+        {
+            "operation": "query_work_orders",
+            "operation_type": "授粉",
+            "worker": "老王",
+            "payment_status": "partial",
+        },
         ctx,
     )
 
@@ -374,8 +370,9 @@ async def test_get_labor_payables_skill(skill_sessions, ctx):
 async def test_update_operation_work_order_skill(skill_sessions, ctx):
     work_order = _create_work_order(skill_sessions)
 
-    result = await UpdateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "update_work_order",
             "work_order_id": work_order.id,
             "operation_date": "2026-06-05",
             "operation_type": "压蔓",

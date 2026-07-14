@@ -24,7 +24,7 @@ from app.infra.pending_actions import (
     build_confirm_message,
     build_confirmation_context,
     build_plan_confirm_message,
-    is_write_skill,
+    is_write_skill_call,
     store_pending,
     store_pending_plan,
 )
@@ -146,7 +146,7 @@ def _must_honor_metadata_permission_before_operation(
         return True
     return isinstance(permission_value, str) and (
         permission_value not in _KNOWN_PERMISSION_LEVELS
-        and not is_write_skill(skill_name)
+        and not is_write_skill_call(skill_name, None)
     )
 
 
@@ -190,7 +190,7 @@ def _metadata_permission_decision(
     if permission_value in _KNOWN_PERMISSION_LEVELS:
         return _known_permission_decision(permission_value, state, capability_metadata)
     if isinstance(permission_value, str):
-        if is_write_skill(skill_name):
+        if is_write_skill_call(skill_name, None):
             return _write_confirm_decision(capability_metadata)
         return _PermissionDecision(
             permission_level=permission_value,
@@ -225,7 +225,7 @@ def _legacy_permission_decision(
     skill_name: str,
     capability_metadata: dict,
 ) -> _PermissionDecision:
-    if is_write_skill(skill_name):
+    if is_write_skill_call(skill_name, None):
         return _write_confirm_decision(capability_metadata)
 
     return _PermissionDecision(
@@ -270,10 +270,13 @@ def _capability_metadata_from_runtime(
 
 def _operation_name_from_args(skill_name: str, args: dict | None) -> str | None:
     if not isinstance(args, dict):
-        return None
+        args = {}
     operation = args.get("operation")
     if operation:
         return str(operation)
+    resolved = resolve_skill_capability_metadata(skill_name)
+    if resolved is not None and resolved.get("operation"):
+        return str(resolved["operation"])
     if skill_name == "manage_user_settings":
         write_fields = (
             "display_name",
@@ -303,7 +306,7 @@ def _permission_value_for_disabled(
         return SkillPermissionLevel.WRITE_CONFIRM.value
     if operation_risk == SkillPermissionLevel.READ.value:
         return SkillPermissionLevel.READ.value
-    if is_write_skill(skill_name):
+    if is_write_skill_call(skill_name, None):
         return SkillPermissionLevel.WRITE_CONFIRM.value
     if isinstance(permission_value, str):
         return permission_value
@@ -349,7 +352,7 @@ def _permission_trace_output(permission_decision: _PermissionDecision) -> dict:
 def _build_pending_confirmation_args(name: str, args: dict, farm_id: int) -> dict:
     """构建确认展示用参数，避免修改实际待执行参数。"""
     context_args = dict(args or {})
-    if name == "create_operation_work_order":
+    if _operation_name_from_args(name, context_args) == "create_work_order":
         _normalize_operation_work_order_args(context_args)
     if name == "update_crop_cycle" or (
         name == "manage_crop_cycle"
@@ -369,7 +372,7 @@ def _build_pending_execution_args(
 ) -> dict:
     """构建待执行参数，只补齐确定性的目标标识。"""
     execution_args = dict(args or {})
-    if name == "create_operation_work_order":
+    if _operation_name_from_args(name, execution_args) == "create_work_order":
         _normalize_operation_work_order_args(execution_args)
         _fill_operation_default_wage(execution_args, farm_id)
     if name == "settle_labor_payment":
@@ -1333,9 +1336,30 @@ async def _invoke_read_tool_message(
 
 
 def _tool_message_kwargs(name: str, args: dict) -> dict:
-    if name in {"manage_cost", "manage_farm_logs"} and args.get("operation"):
+    if name in {"manage_cost", "manage_farm_logs", "manage_work_orders"} and args.get(
+        "operation"
+    ):
         return {"operation": str(args["operation"])}
     return {}
+
+
+def _runtime_tool_for_call(name: str, args: dict, tool_map: dict):
+    """按 registry alias 解析实际 runtime tool。"""
+    resolved = resolve_skill_capability_metadata(name, args.get("operation")) or {}
+    canonical_name = resolved.get("capability") or name
+    return tool_map.get(name) or tool_map.get(canonical_name)
+
+
+def _execution_args_for_call(name: str, args: dict) -> dict:
+    """为 legacy alias 调用补齐 registry operation。"""
+    execution_args = dict(args or {})
+    resolved = resolve_skill_capability_metadata(
+        name,
+        execution_args.get("operation"),
+    )
+    if resolved is not None and resolved.get("operation"):
+        execution_args.setdefault("operation", resolved["operation"])
+    return execution_args
 
 
 async def _call_one(
@@ -1349,12 +1373,12 @@ async def _call_one(
 ) -> ToolMessage:
     """执行单个 tool_call，保持原有权限、pending 和 trace 顺序。"""
     name = tc["name"]
-    args = tc["args"]
+    args = _execution_args_for_call(name, tc["args"])
     tool_call_id = tc["id"]
     logger.info("Skill 调用 %s(%s)", name, args)
     start = _time.perf_counter()
 
-    tool = tool_map.get(name)
+    tool = _runtime_tool_for_call(name, args, tool_map)
     permission_decision = _permission_decision(tool, name, state, args)
 
     message = _disabled_tool_message(

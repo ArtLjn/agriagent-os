@@ -222,6 +222,13 @@ _EXTERNAL_NETWORK_SKILL_METADATA: dict[str, dict[str, Any]] = {
 }
 
 _RUNTIME_ENABLEMENT_OVERRIDES: dict[str, dict[str, Any]] = {}
+_USER_SETTINGS_WRITE_FIELDS = (
+    "display_name",
+    "default_city",
+    "default_lat",
+    "default_lon",
+    "assistant_role",
+)
 _REGISTRY_RISK_TO_METADATA: dict[str, tuple[SkillPermissionLevel, SkillRiskLevel]] = {
     "read": (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
     "write_confirm": (SkillPermissionLevel.WRITE_CONFIRM, SkillRiskLevel.MEDIUM),
@@ -299,6 +306,37 @@ def _metadata_from_legacy_read(skill_name: str) -> SkillMetadata:
     )
 
 
+def get_skill_call_metadata(skill: Any, params: Mapping[str, Any]) -> SkillMetadata:
+    skill_name = _get_skill_name(skill)
+    metadata = get_skill_metadata(skill)
+    operation_name = _operation_name_from_params(skill_name, params)
+    registry_metadata = (
+        resolve_skill_capability_metadata(skill_name, operation_name)
+        if operation_name is not None
+        else None
+    )
+    if registry_metadata is None:
+        return metadata
+    payload = metadata.model_dump(mode="python")
+    payload.update(registry_metadata)
+    return SkillMetadata.model_validate(_apply_runtime_enablement(skill_name, payload))
+
+
+def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | None):
+    if not isinstance(params, Mapping):
+        return None
+    operation = params.get("operation")
+    if operation:
+        return str(operation)
+    if skill_name != "manage_user_settings":
+        return None
+    return (
+        "update_settings"
+        if any(params.get(key) is not None for key in _USER_SETTINGS_WRITE_FIELDS)
+        else "query_settings"
+    )
+
+
 def set_skill_enabled_state(
     skill_name: str, *, enabled: bool, disabled_reason: str | None = None
 ) -> SkillMetadata:
@@ -337,7 +375,7 @@ def _apply_runtime_enablement(
 
 
 def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
-    registry_metadata = _get_registry_default_metadata(skill_name)
+    registry_metadata = resolve_skill_capability_metadata(skill_name)
     if skill_name in _WRITE_CONFIRM_SKILLS:
         metadata = {
             "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
@@ -374,10 +412,6 @@ def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
         return metadata
 
     return registry_metadata
-
-
-def _get_registry_default_metadata(skill_name: str) -> dict[str, Any] | None:
-    return resolve_skill_capability_metadata(skill_name)
 
 
 def resolve_skill_capability_metadata(
@@ -446,7 +480,6 @@ def resolve_skill_capability_metadata(
 
 
 def metadata_to_dict(skill: Any) -> dict[str, Any]:
-    """返回可序列化 metadata。"""
     return get_skill_metadata(skill).model_dump(mode="json")
 
 
@@ -465,16 +498,3 @@ def _get_skill_name(skill: Any) -> str:
     if callable(name_attr):
         return str(name_attr())
     return str(name_attr or "")
-
-
-__all__ = [
-    "ConfirmationSchema",
-    "SkillMetadata",
-    "SkillPermissionLevel",
-    "SkillRiskLevel",
-    "clear_skill_enabled_state",
-    "get_skill_metadata",
-    "metadata_to_dict",
-    "resolve_skill_capability_metadata",
-    "set_skill_enabled_state",
-]

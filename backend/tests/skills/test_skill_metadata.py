@@ -10,6 +10,7 @@ from app.agent.skills.metadata import (
     SkillMetadata,
     SkillPermissionLevel,
     SkillRiskLevel,
+    get_skill_call_metadata,
     get_skill_metadata,
     metadata_to_dict,
     resolve_skill_capability_metadata,
@@ -33,6 +34,11 @@ class _ReadSkill:
 class _WriteSkill:
     def name(self):
         return "create_cost_record"
+
+
+class _ManageWorkOrdersSkill:
+    def name(self):
+        return "manage_work_orders"
 
 
 class _WriteSkillWithMetadata:
@@ -134,6 +140,32 @@ def test_default_write_skill_metadata():
     assert metadata.enabled is True
     assert metadata.disabled_reason is None
     assert metadata.metadata_incomplete is False
+
+
+def test_manage_work_orders_permission_depends_on_operation():
+    skill = _ManageWorkOrdersSkill()
+
+    assert (
+        get_skill_call_metadata(
+            skill,
+            {"operation": "create_work_order"},
+        ).permission_level
+        == SkillPermissionLevel.WRITE_CONFIRM
+    )
+    assert (
+        get_skill_call_metadata(
+            skill,
+            {"operation": "query_work_orders"},
+        ).permission_level
+        == SkillPermissionLevel.READ
+    )
+    assert (
+        get_skill_call_metadata(
+            skill,
+            {"operation": "update_work_order"},
+        ).permission_level
+        == SkillPermissionLevel.WRITE_CONFIRM
+    )
 
 
 def test_known_write_skill_metadata_uses_governed_cache_invalidation():

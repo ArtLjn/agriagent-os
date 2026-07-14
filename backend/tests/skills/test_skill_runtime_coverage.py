@@ -20,19 +20,17 @@ EXPECTED_REGISTERED_SKILLS = {
     "manage_cost",
     "manage_crop_cycle",
     "manage_crop_templates",
-    "create_operation_work_order",
+    "manage_work_orders",
     "manage_farm_logs",
     "get_farm_status",
     "get_labor_payables",
     "get_workers",
-    "get_operation_work_orders",
     "get_cost_categories",
     "manage_cost_categories",
     "get_planting_units",
     "manage_planting_units",
     "manage_user_settings",
     "settle_labor_payment",
-    "update_operation_work_order",
     "manage_workers",
     "manage_wages",
     "get_weather_forecast",
@@ -40,9 +38,8 @@ EXPECTED_REGISTERED_SKILLS = {
 }
 
 EXPECTED_WRITE_SKILLS = {
-    "create_operation_work_order",
+    "manage_work_orders",
     "settle_labor_payment",
-    "update_operation_work_order",
     "manage_workers",
     "manage_wages",
     "manage_cost_categories",
@@ -70,6 +67,10 @@ RETIRED_CROP_TEMPLATE_WRITE_ALIASES = {
 }
 RETIRED_FARM_LOG_WRITE_ALIASES = {
     "log_farm_activity",
+}
+RETIRED_WORK_ORDER_WRITE_ALIASES = {
+    "create_operation_work_order",
+    "update_operation_work_order",
 }
 
 SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
@@ -151,6 +152,7 @@ def test_write_skill_docs_are_registered_for_pending_confirmation() -> None:
             - RETIRED_CROP_CYCLE_WRITE_ALIASES
             - RETIRED_CROP_TEMPLATE_WRITE_ALIASES
             - RETIRED_FARM_LOG_WRITE_ALIASES
+            - RETIRED_WORK_ORDER_WRITE_ALIASES
         )
         | OPERATION_AWARE_WRITE_DOCS
     )

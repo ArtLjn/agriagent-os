@@ -81,6 +81,29 @@ CATALOG_REGISTRY: dict[str, dict] = {
         "context_dependencies": ["workers", "planting_units", "active_cycles"],
         "candidate_group": "operation_write",
     },
+    "manage_work_orders": {
+        "domain": "operation",
+        "intents": [
+            "create_work_order",
+            "query_work_orders",
+            "update_work_order",
+        ],
+        "risk": "write_confirm",
+        "entities": ["operation_work_order", "worker", "planting_unit", "labor"],
+        "trigger_examples": [
+            "今天李树去6号棚收水稻",
+            "最近玉米授粉作业有哪些",
+            "修改昨天的作业单备注",
+        ],
+        "anti_examples": ["我的工人有哪些"],
+        "context_dependencies": [
+            "operation_work_orders",
+            "workers",
+            "planting_units",
+            "active_cycles",
+        ],
+        "candidate_group": "operation_work_orders",
+    },
     "manage_workers": {
         "domain": "labor",
         "intents": ["create_worker", "update_worker", "deactivate_worker"],

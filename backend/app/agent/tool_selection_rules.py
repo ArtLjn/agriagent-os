@@ -68,6 +68,18 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
             r"(?:东大棚|西大棚|地块|棚).*(?:工人|每人|人工).*(?:\d+\s*(?:元|块|人))"
         ),
     ],
+    "manage_work_orders": [
+        re.compile(
+            r"(?:安排|派|叫|让).{1,20}(?:去|到).{0,20}(?:授粉|压蔓|留瓜|垫瓜|采收|装车|打杈|绑蔓|整枝)"
+        ),
+        re.compile(
+            r"(?:授粉|压蔓|留瓜|垫瓜|采收|装车|打杈|绑蔓|整枝).*(?:工人|每人|人工|作业|干活)"
+        ),
+        re.compile(r"(?:创建|新建|记录).*(?:作业单|农事作业|用工)"),
+        re.compile(
+            r"(?:东大棚|西大棚|地块|棚).*(?:工人|每人|人工).*(?:\d+\s*(?:元|块|人))"
+        ),
+    ],
     "settle_labor_payment": [
         re.compile(r"(?:补付|支付|结算|付清|结清).*(?:人工|工钱|工资)"),
         re.compile(r"(?:人工|工钱|工资).*(?:补付|支付|结算|付清|结清)"),
@@ -221,6 +233,15 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "最近授粉",
         "最近采收",
     },
+    "manage_work_orders": {
+        "作业单",
+        "农事作业",
+        "授粉作业",
+        "作业有哪些",
+        "用工记录",
+        "最近授粉",
+        "最近采收",
+    },
     "get_farm_status": {"农场", "茬口状态", "种植情况", "农事", "综合状态", "整体情况"},
     "manage_user_settings": {
         "用户设置",
@@ -269,6 +290,7 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_labor_payables": [],
     "get_workers": [],
     "get_operation_work_orders": [],
+    "manage_work_orders": [],
     "get_cost_categories": [],
     "get_planting_units": [],
     "manage_crop_templates": [],

@@ -18,6 +18,7 @@ class TestToolChainMap:
             "manage_cost",
             "manage_crop_cycle",
             "manage_crop_templates",
+            "manage_work_orders",
             "create_operation_work_order",
             "manage_farm_logs",
             "get_farm_status",

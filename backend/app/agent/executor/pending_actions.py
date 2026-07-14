@@ -113,7 +113,9 @@ def _get_metadata_cache_groups(
             tool.name: tool
             for tool in get_langchain_tools(farm_id=farm_id, farm_uid=farm_uid)
         }
-        tool = tool_map.get(skill_name)
+        alias_metadata = pending_alias_metadata(skill_name, {})
+        resolved_tool_name = alias_metadata.get("resolved_capability") or skill_name
+        tool = tool_map.get(resolved_tool_name) or tool_map.get(skill_name)
         metadata = getattr(tool, "skill_metadata", None) if tool else None
         cache_groups = getattr(metadata, "cache_invalidation", None)
         if cache_groups:
@@ -398,7 +400,8 @@ def _cancel_pending_plan(
 def _normalize_pending_plan_step_params(tool_name: str, params: dict) -> dict:
     """把历史 pending plan 参数转换为对应 skill schema 可接受的形态。"""
     normalized = dict(params or {})
-    if tool_name == "create_operation_work_order":
+    alias_metadata = pending_alias_metadata(tool_name, normalized)
+    if alias_metadata.get("resolved_operation") == "create_work_order":
         for key in ("workers", "unit_names"):
             if isinstance(normalized.get(key), list):
                 normalized[key] = ",".join(str(item) for item in normalized[key])

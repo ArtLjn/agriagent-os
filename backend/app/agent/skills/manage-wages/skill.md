@@ -71,7 +71,7 @@ parameters:
 
 - 用户只是查询未付工资时，使用 `get_labor_payables`。
 - 用户只是结算/补付工资时，使用 `settle_labor_payment`。
-- 用户是在创建农事作业单并带多个工人时，使用 `create_operation_work_order`。
+- 用户是在创建农事作业单并带多个工人时，使用 `manage_work_orders(operation=create_work_order)`。
 - 用户只是修改工人档案默认日薪时，使用 `manage_workers`。
 
 ## 参数推断

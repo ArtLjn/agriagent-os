@@ -10,6 +10,7 @@ from datetime import datetime
 
 from langchain_core.messages import ToolMessage
 
+from app.agent.skills.registry import load_skill_registry
 from app.core.database import SessionLocal
 from app.infra.pending_action_presenter import (
     build_confirm_message,
@@ -27,6 +28,7 @@ WRITE_SKILLS = frozenset(
         "create_crop_cycle",
         "manage_crop_cycle",
         "create_crop_template",
+        "manage_work_orders",
         "create_operation_work_order",
         "settle_debt",
         "settle_labor_payment",
@@ -57,6 +59,12 @@ _CACHE_INVALIDATION_MAP: dict[str, list[str]] = {
     ],
     "create_crop_template": [],
     "log_farm_activity": ["farm_logs", "get_farm_status"],
+    "manage_work_orders": [
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ],
     "create_operation_work_order": [
         "farm_logs",
         "cost_analytics",
@@ -466,6 +474,39 @@ def is_write_skill(skill_name: str) -> bool:
     return skill_name in WRITE_SKILLS
 
 
+def is_write_skill_call(skill_name: str, params: dict | None = None) -> bool:
+    """按 registry operation 风险判断当前调用是否需要写确认。"""
+    operation_risk = _registry_operation_risk(skill_name, params)
+    if operation_risk == "read":
+        return False
+    if operation_risk in {"write_confirm", "write_high"}:
+        return True
+    return is_write_skill(skill_name)
+
+
+def _registry_operation_risk(skill_name: str, params: dict | None = None) -> str | None:
+    try:
+        registry = load_skill_registry()
+    except (OSError, ValueError):
+        return None
+
+    alias = registry.resolve_alias(skill_name)
+    capability_name = alias.capability if alias is not None else skill_name
+    operation_name = _operation_name_from_call(alias, params)
+    if operation_name is None:
+        return None
+    operation = registry.get_operation(capability_name, operation_name)
+    return operation.risk if operation is not None else None
+
+
+def _operation_name_from_call(alias, params: dict | None = None) -> str | None:
+    if isinstance(params, dict) and params.get("operation"):
+        return str(params["operation"])
+    if alias is not None:
+        return alias.operation
+    return None
+
+
 PENDING_MARKER = "[PENDING_ACTION]"
 
 
@@ -524,6 +565,7 @@ __all__ = [
     "get_pending_plan",
     "remove_pending",
     "is_write_skill",
+    "is_write_skill_call",
     "detect_user_intent",
     "build_confirm_message",
     "build_confirmation_context",

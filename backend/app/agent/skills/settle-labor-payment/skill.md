@@ -45,7 +45,7 @@ parameters:
 ## 不要使用
 
 - 用户只是查询欠款时使用 `get_labor_payables`。
-- 用户要改作业单里的工人、单价或应付金额时使用 `update_operation_work_order`。
+- 用户要改作业单里的工人、单价或应付金额时使用 `manage_work_orders(operation=update_work_order)`。
 - 用户要记普通成本或债务还款时不要使用本 Skill。
 
 ## 参数推断

@@ -52,6 +52,7 @@ def test_write_skill_registry_covers_runtime_write_skills():
         "create_crop_cycle",
         "manage_crop_cycle",
         "create_crop_template",
+        "manage_work_orders",
         "create_operation_work_order",
         "settle_debt",
         "settle_labor_payment",
@@ -83,6 +84,12 @@ def test_write_skill_registry_covers_runtime_write_skills():
         "get_farm_status",
     ]
     assert get_cache_groups_for_skill("update_operation_work_order") == [
+        "farm_logs",
+        "cost_analytics",
+        "cost_summary",
+        "get_farm_status",
+    ]
+    assert get_cache_groups_for_skill("manage_work_orders") == [
         "farm_logs",
         "cost_analytics",
         "cost_summary",

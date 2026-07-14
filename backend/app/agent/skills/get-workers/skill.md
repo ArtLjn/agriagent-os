@@ -28,7 +28,7 @@ parameters:
 
 - 用户要新增、修改、停用或恢复工人时，使用 `manage_workers`。
 - 用户要查询未付工资时，使用 `get_labor_payables`。
-- 用户要查询作业单中的用工记录时，使用 `get_operation_work_orders`。
+- 用户要查询作业单中的用工记录时，使用 `manage_work_orders(operation=query_work_orders)`。
 
 ## 参数推断
 

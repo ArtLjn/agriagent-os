@@ -45,8 +45,8 @@ parameters:
 ## 不要使用
 
 - 用户要实际付款或补付人工时使用 `settle_labor_payment`。
-- 用户要查询所有作业单详情时使用 `get_operation_work_orders`。
-- 用户要修改作业单工人或金额时使用 `update_operation_work_order`。
+- 用户要查询所有作业单详情时使用 `manage_work_orders(operation=query_work_orders)`。
+- 用户要修改作业单工人或金额时使用 `manage_work_orders(operation=update_work_order)`。
 
 ## 参数推断
 

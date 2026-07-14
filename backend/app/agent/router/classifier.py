@@ -438,7 +438,10 @@ class RuleIntentClassifier:
                     intent="query_work_orders",
                     risk="read",
                     entities=["operation_work_order"],
-                    candidate_tools=["get_operation_work_orders"],
+                    candidate_tools=[
+                        "get_operation_work_orders",
+                        "manage_work_orders",
+                    ],
                     confidence=0.82,
                 )
             )
@@ -751,7 +754,10 @@ class RuleIntentClassifier:
             intent="create_work_order",
             risk="write_confirm",
             entities=["operation_work_order"],
-            candidate_tools=["create_operation_work_order"],
+            candidate_tools=[
+                "create_operation_work_order",
+                "manage_work_orders",
+            ],
             confidence=0.76,
             params_hint=work_order_params or None,
             planning_evidence=work_order_evidence,

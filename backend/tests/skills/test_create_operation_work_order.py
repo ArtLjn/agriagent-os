@@ -8,10 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-_mod = importlib.import_module(
-    "app.agent.skills.create-operation-work-order.scripts.main"
-)
-CreateOperationWorkOrderSkill = _mod.CreateOperationWorkOrderSkill
+_mod = importlib.import_module("app.agent.skills.manage-work-orders.scripts.main")
+ManageWorkOrdersSkill = _mod.ManageWorkOrdersSkill
 
 
 @pytest.fixture
@@ -20,11 +18,11 @@ def ctx():
 
 
 def test_skill_meta():
-    skill = CreateOperationWorkOrderSkill()
+    skill = ManageWorkOrdersSkill()
 
-    assert skill.name() == "create_operation_work_order"
+    assert skill.name() == "manage_work_orders"
     assert "授粉" in skill.description()
-    assert "operation_type" in skill.parameters_schema()["required"]
+    assert "operation" in skill.parameters_schema()["required"]
 
 
 @pytest.mark.asyncio
@@ -56,8 +54,9 @@ async def test_create_pollination_work_order_with_labor(
     mock_create.return_value = MagicMock()
     mock_to_response.return_value = response
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "人工授粉",
             "operation_date": "2026-06-04",
             "unit_names": "东大棚 1-3 号",
@@ -108,8 +107,9 @@ async def test_create_work_order_normalizes_common_llm_aliases(
     mock_create.return_value = MagicMock()
     mock_to_response.return_value = response
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "采收",
             "work_date": "2026-06-08",
             "crop_cycle_name": "水稻",
@@ -164,8 +164,9 @@ async def test_create_work_order_uses_worker_default_wage_when_unit_price_missin
     mock_create.return_value = MagicMock()
     mock_to_response.return_value = response
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "采收",
             "worker_name": "李丽",
         },
@@ -208,8 +209,9 @@ async def test_create_work_order_no_wage_false_string_uses_default_wage(
         total_unpaid_amount=Decimal("100"),
     )
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "采收",
             "worker_name": "李丽",
             "no_wage": "false",
@@ -238,8 +240,9 @@ async def test_create_work_order_asks_wage_when_missing_everywhere(mock_session,
     db.query.return_value.filter.return_value.all.return_value = []
     db.query.return_value.filter.return_value.first.return_value = worker
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "采收",
             "worker_name": "李丽",
         },
@@ -269,8 +272,9 @@ async def test_create_work_order_asks_wage_when_unit_price_is_not_finite(
     db.query.return_value.filter.return_value.all.return_value = []
     db.query.return_value.filter.return_value.first.return_value = worker
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "采收",
             "worker_name": "李丽",
             "unit_price": "NaN",
@@ -312,8 +316,9 @@ async def test_create_work_order_allows_explicit_no_wage(
         total_unpaid_amount=Decimal("0"),
     )
 
-    result = await CreateOperationWorkOrderSkill().execute(
+    result = await ManageWorkOrdersSkill().execute(
         {
+            "operation": "create_work_order",
             "operation_type": "采收",
             "worker_name": "李丽",
             "no_wage": True,
@@ -328,7 +333,69 @@ async def test_create_work_order_allows_explicit_no_wage(
 
 @pytest.mark.asyncio
 async def test_missing_operation_type(ctx):
-    result = await CreateOperationWorkOrderSkill().execute({}, ctx)
+    result = await ManageWorkOrdersSkill().execute(
+        {"operation": "create_work_order"}, ctx
+    )
 
     assert result.status.value == "failed"
     assert "作业类型" in result.reply
+
+
+@pytest.mark.asyncio
+@patch.object(_mod, "SessionLocal")
+@patch.object(_mod.planting_read_service, "list_operation_work_orders")
+async def test_query_work_orders_operation_dispatches_to_read_service(
+    mock_list, mock_session, ctx
+):
+    db = MagicMock()
+    mock_session.return_value = db
+    mock_list.return_value = []
+
+    result = await ManageWorkOrdersSkill().execute(
+        {
+            "operation": "query_work_orders",
+            "operation_type": "授粉",
+            "limit": 5,
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "未找到" in result.reply
+    assert mock_list.call_args.kwargs["operation_type"] == "授粉"
+    assert mock_list.call_args.kwargs["limit"] == 5
+
+
+@pytest.mark.asyncio
+@patch.object(_mod, "SessionLocal")
+@patch.object(_mod.planting_service, "get_work_order")
+@patch.object(_mod.planting_service, "update_work_order")
+@patch.object(_mod.planting_read_service, "to_work_order_response")
+async def test_update_work_order_operation_dispatches_to_write_service(
+    mock_to_response, mock_update, mock_get, mock_session, ctx
+):
+    db = MagicMock()
+    mock_session.return_value = db
+    mock_get.return_value = MagicMock(cycle_id=8)
+    mock_update.return_value = MagicMock()
+    mock_to_response.return_value = MagicMock(
+        id=12,
+        operation_type="采收",
+        operation_date=date(2026, 6, 9),
+        unit_names=[],
+        labor_entries=[],
+    )
+
+    result = await ManageWorkOrdersSkill().execute(
+        {
+            "operation": "update_work_order",
+            "work_order_id": 12,
+            "note": "改到明天",
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "已更新农事作业单 #12" in result.reply
+    update_payload = mock_update.call_args.args[2]
+    assert update_payload.note == "改到明天"
