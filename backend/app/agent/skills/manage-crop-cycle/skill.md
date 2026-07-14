@@ -12,6 +12,8 @@ triggers:
   - 秋茬
   - 生长阶段
   - 播种期
+  - 膨大期
+  - 采收期
 parameters:
   type: object
   properties:
@@ -55,6 +57,9 @@ parameters:
     current_stage:
       type: string
       description: 当前阶段名称。
+    stage_name:
+      type: string
+      description: 目标阶段名称，兼容旧 update_crop_stage 参数。
     stage:
       type: string
       description: 当前阶段名称别名。
@@ -96,8 +101,8 @@ parameters:
 - “我的茬口有哪些” -> `operation=query_cycles`。
 - “看一下 3 号茬口阶段” -> `operation=query_cycle_info`, `cycle_id=3`。
 - “把夏季玉米播种期改到 9 月 1 日” -> `operation=update_cycle`, `cycle_name=夏季玉米`, `start_date=2026-09-01`。
-- “西瓜进入膨大期了” -> `operation=update_cycle`, `crop_name=西瓜`, `current_stage=膨大期`。
 - “西瓜进入膨大期了” -> `operation=update_stage`, `crop_name=西瓜`, `current_stage=膨大期`。
+- “3 号茬口到采收期了” -> `operation=update_stage`, `cycle_id=3`, `current_stage=采收期`。
 - “删除茬口 12” -> `operation=delete_cycle`, `cycle_id=12`。
 
 ## 缺参策略
@@ -125,4 +130,6 @@ parameters:
 - 用户：“有哪些活跃茬口” -> `manage_crop_cycle(operation="query_cycles", status="active")`
 - 用户：“看一下 3 号茬口” -> `manage_crop_cycle(operation="query_cycle_info", cycle_id=3)`
 - 用户：“玉米茬口改到 9 月 1 开始” -> `manage_crop_cycle(operation="update_cycle", crop_name="玉米", start_date="2026-09-01")`
+- 用户：“西瓜进入膨大期了” -> `manage_crop_cycle(operation="update_stage", crop_name="西瓜", current_stage="膨大期")`
+- 用户：“3 号茬口到采收期了” -> `manage_crop_cycle(operation="update_stage", cycle_id=3, current_stage="采收期")`
 - 用户：“删除茬口 12” -> `manage_crop_cycle(operation="delete_cycle", cycle_id=12)`

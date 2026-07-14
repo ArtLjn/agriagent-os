@@ -27,7 +27,6 @@ ALL_TOOL_NAMES = [
     "manage_user_settings",
     "log_farm_activity",
     "settle_labor_payment",
-    "update_crop_stage",
     "update_operation_work_order",
     "manage_workers",
     "manage_wages",
@@ -122,13 +121,13 @@ class TestWritePatternMatching:
         result = select_tools("打药了", _make_tools())
         assert "log_farm_activity" in result
 
-    def test_update_crop_stage_seedling(self):
+    def test_update_crop_stage_seedling_uses_manage_crop_cycle(self):
         result = select_tools("西瓜进苗期了", _make_tools())
-        assert "update_crop_stage" in result
+        assert result == ["manage_crop_cycle"]
 
-    def test_update_crop_stage_flowering(self):
+    def test_update_crop_stage_flowering_uses_manage_crop_cycle(self):
         result = select_tools("到开花期了", _make_tools())
-        assert "update_crop_stage" in result
+        assert result == ["manage_crop_cycle"]
 
     def test_update_crop_cycle_colloquial_date_change(self):
         result = select_tools("玉米修改下9月开始", _make_tools())

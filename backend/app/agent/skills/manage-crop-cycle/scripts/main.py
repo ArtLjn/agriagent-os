@@ -10,6 +10,7 @@ from .delete_cycle import delete_cycle
 from .query_cycle_info import query_cycle_info
 from .query_cycles import query_cycles
 from .update_cycle import update_cycle
+from .update_stage import update_stage
 
 
 class ManageCropCycleSkill(Skill):
@@ -73,6 +74,10 @@ class ManageCropCycleSkill(Skill):
                     "type": "string",
                     "description": "当前阶段名称。",
                 },
+                "stage_name": {
+                    "type": "string",
+                    "description": "目标阶段名称，兼容旧 update_crop_stage 参数。",
+                },
                 "stage": {"type": "string", "description": "当前阶段名称别名。"},
                 "note": {"type": "string", "description": "批次备注。"},
                 "batch_note": {"type": "string", "description": "批次备注。"},
@@ -134,7 +139,7 @@ class ManageCropCycleSkill(Skill):
             "query_cycles": query_cycles,
             "query_cycle_info": query_cycle_info,
             "update_cycle": update_cycle,
-            "update_stage": update_cycle,
+            "update_stage": update_stage,
             "delete_cycle": delete_cycle,
         }
         handler = handlers.get(operation)

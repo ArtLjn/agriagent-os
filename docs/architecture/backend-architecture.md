@@ -166,7 +166,7 @@ flowchart TB
     Manager["SkillManager\n扫描 app/agent/skills"]
     Adapter["skills_to_langchain_tools\n转 StructuredTool"]
     Read["只读 Skill\nweather、farm-status、cost-summary、cost-analytics、crop-cycle、farm-logs、web_search"]
-    Write["写操作 Skill\ncreate-cost-record、create-crop-cycle、create-crop-template、log-farm-activity、update-crop-stage、settle-debt"]
+    Write["写操作 Skill\nmanage-cost、manage-crop-cycle、manage-crop-templates、log-farm-activity、settle-debt"]
     Pending["pending_actions\n确认、取消、修改、链式后续动作"]
     Cache["skill_cache\n只读缓存"]
     Services["services\n业务读写"]
@@ -178,7 +178,7 @@ flowchart TB
     Write --> Pending --> Services
 ```
 
-写操作不会直接静默落库，通常注册为 pending action，由用户确认后再执行。`create_crop_cycle` 缺模板时会链式注册 `create_crop_template`，模板创建后再回到原始创建茬口动作。
+写操作不会直接静默落库，通常注册为 pending action，由用户确认后再执行。作物周期创建、日期调整和阶段推进统一由 `manage_crop_cycle` 承接；`update_crop_stage` 只作为 registry legacy alias 兼容旧名。
 
 ## 7. LLM 与天气外部依赖
 

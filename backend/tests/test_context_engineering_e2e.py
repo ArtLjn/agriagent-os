@@ -172,9 +172,8 @@ class TestToolChainExpansion:
 
         write_tools = [
             "manage_cost",
-            "create_crop_cycle",
+            "manage_crop_cycle",
             "log_farm_activity",
-            "update_crop_stage",
         ]
         for tool in write_tools:
             result = expand_by_chain({tool})

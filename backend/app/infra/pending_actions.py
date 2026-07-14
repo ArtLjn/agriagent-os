@@ -32,7 +32,6 @@ WRITE_SKILLS = frozenset(
         "settle_debt",
         "settle_labor_payment",
         "update_crop_cycle",
-        "update_crop_stage",
         "update_operation_work_order",
         "manage_workers",
         "manage_wages",

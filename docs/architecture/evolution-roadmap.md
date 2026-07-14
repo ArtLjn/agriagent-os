@@ -176,8 +176,8 @@ status: active
 │   skills/ (10+ Skill)                                           │
 │   ├── 只读: cost-summary, cost-analytics, crop-cycle,            │
 │   │         farm-logs, weather                                   │
-│   └── 写操作: create-cost-record, create-crop-cycle,             │
-│              update-crop-stage, log-farm-activity, settle-debt    │
+│   └── 写操作: manage-cost, manage-crop-cycle,                    │
+│              manage-crop-templates, log-farm-activity, settle-debt│
 │                                                                  │
 │   prompt_registry.py + prompt_renderer.py (单一数据源: .j2文件)   │
 │   llm.py + guardrails.py (LLM调用 + 安全护栏)                    │

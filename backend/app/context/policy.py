@@ -66,7 +66,12 @@ class ContextPolicy:
     COST_TOOLS = frozenset({"manage_cost"})
     WEATHER_TOOLS = frozenset({"get_weather_forecast"})
     CROP_CYCLE_TOOLS = frozenset(
-        {"update_crop_cycle", "create_crop_cycle", "update_crop_stage"}
+        {
+            "manage_crop_cycle",
+            "create_crop_cycle",
+            "update_crop_cycle",
+            "update_crop_stage",
+        }
     )
     WORK_ORDER_TOOLS = frozenset(
         {

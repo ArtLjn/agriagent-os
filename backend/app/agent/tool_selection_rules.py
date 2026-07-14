@@ -35,6 +35,8 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(
             r"(?:西瓜|番茄|辣椒|豆角|黄瓜|玉米|水稻).*(?:修改|更改|调整|改|改成|改到).*(?:\d{1,2}月|开始|播种期|起始)"
         ),
+        re.compile(r"(?:进[了入]?).*(?:期|阶段)"),
+        re.compile(r"(?:到[了]?|进入)\s*(?:苗期|开花期|结果期|采收期|伸蔓期|定植期|膨大期)"),
     ],
     "manage_crop_templates": [
         re.compile(r"(?:创建|建|新建|添加).*(?:作物|模板)"),
@@ -55,10 +57,6 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(
             r"(?:农事记录|农事日志|操作日志|操作记录).*#?\d+.*(?:修改|更改|调整|更新|更正|删除|删掉|移除)"
         ),
-    ],
-    "update_crop_stage": [
-        re.compile(r"(?:进[了入]?).*(?:期|阶段)"),
-        re.compile(r"(?:到[了]?|进入)\s*(?:苗期|开花期|结果期|采收期|伸蔓期|定植期)"),
     ],
     "create_operation_work_order": [
         re.compile(
@@ -282,7 +280,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "log_farm_activity": [],
     "manage_farm_logs": [],
     "settle_labor_payment": [],
-    "update_crop_stage": [],
     "update_operation_work_order": [],
     "manage_workers": [],
     "manage_wages": [],

@@ -330,6 +330,6 @@ def test_llm_tool_surface_hides_retired_crop_cycle_crud_tools():
     ],
 )
 def test_tool_selector_routes_crop_cycle_intents_to_canonical_skill(message, expected):
-    tools = _make_tools(["manage_crop_cycle", "get_farm_status", "update_crop_stage"])
+    tools = _make_tools(["manage_crop_cycle", "get_farm_status"])
 
     assert select_tools(message, tools) == expected

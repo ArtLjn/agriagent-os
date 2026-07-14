@@ -57,7 +57,6 @@ def test_write_skill_registry_covers_runtime_write_skills():
         "settle_debt",
         "settle_labor_payment",
         "update_crop_cycle",
-        "update_crop_stage",
         "update_operation_work_order",
         "manage_workers",
         "manage_wages",
@@ -77,6 +76,10 @@ def test_write_skill_registry_covers_runtime_write_skills():
         "get_farm_status",
     ]
     assert get_cache_groups_for_skill("update_crop_cycle") == [
+        "crop_cycle",
+        "get_farm_status",
+    ]
+    assert get_cache_groups_for_skill("update_crop_stage") == [
         "crop_cycle",
         "get_farm_status",
     ]
