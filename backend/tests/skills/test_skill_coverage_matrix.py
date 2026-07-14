@@ -81,7 +81,7 @@ def test_ordinary_high_priority_business_has_no_needs_skill_gap():
         (
             "farm_log",
             "create_query_update_delete",
-            "log_farm_activity|get_recent_farm_logs|manage_farm_logs",
+            "manage_farm_logs",
         ),
         (
             "user_settings",

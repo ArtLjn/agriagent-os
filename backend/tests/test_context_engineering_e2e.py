@@ -173,7 +173,7 @@ class TestToolChainExpansion:
         write_tools = [
             "manage_cost",
             "manage_crop_cycle",
-            "log_farm_activity",
+            "manage_farm_logs",
         ]
         for tool in write_tools:
             result = expand_by_chain({tool})
@@ -214,7 +214,7 @@ class TestCrossCuttingIntegration:
             "get_weather_forecast",
             "manage_cost",
             "get_crop_cycle_info",
-            "get_recent_farm_logs",
+            "manage_farm_logs",
         ]
         for tool in query_tools:
             assert TOOL_CHAIN_MAP.get(tool, []) == [], (

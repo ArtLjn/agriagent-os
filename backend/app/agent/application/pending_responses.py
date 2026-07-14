@@ -104,6 +104,7 @@ def _build_pending_display_params(skill_name: str, params: dict) -> dict[str, st
             "variety",
         ],
         "log_farm_activity": ["operation_type"],
+        "manage_farm_logs": ["operation", "action", "log_id", "cycle_id", "operation_type"],
         "settle_debt": ["counterparty", "amount"],
         "update_crop_stage": ["stage_name"],
     }

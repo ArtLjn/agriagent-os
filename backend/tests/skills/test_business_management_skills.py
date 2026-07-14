@@ -324,9 +324,36 @@ async def test_get_crop_cycles_lists_all_cycles(patched_skill_sessions, ctx):
 @pytest.mark.asyncio
 async def test_manage_farm_logs_updates_and_deletes_log(patched_skill_sessions, ctx):
     cycle = _create_cycle(patched_skill_sessions)
+    cycle_id = cycle.id
+    created = await ManageFarmLogsSkill().execute(
+        {
+            "operation": "create_log",
+            "cycle_id": cycle_id,
+            "operation_type": "除草",
+            "operation_date": "2026-03-02",
+            "note": "棚头",
+        },
+        ctx,
+    )
+    assert created.status.value == "success"
+    assert (
+        patched_skill_sessions.query(FarmLog)
+        .filter_by(cycle_id=cycle_id, operation_type="除草")
+        .one()
+        .note
+        == "棚头"
+    )
+
+    listed = await ManageFarmLogsSkill().execute(
+        {"operation": "query_logs", "cycle_id": cycle_id, "days": 180},
+        ctx,
+    )
+    assert listed.status.value == "success"
+    assert "除草" in listed.reply
+
     log = FarmLog(
         farm_id=1,
-        cycle_id=cycle.id,
+        cycle_id=cycle_id,
         operation_type="浇水",
         operation_date=date(2026, 3, 3),
         note="上午",
@@ -335,14 +362,19 @@ async def test_manage_farm_logs_updates_and_deletes_log(patched_skill_sessions, 
     patched_skill_sessions.commit()
 
     updated = await ManageFarmLogsSkill().execute(
-        {"action": "update", "log_id": log.id, "operation_type": "施肥"},
+        {
+            "operation": "manage_log",
+            "action": "update",
+            "log_id": log.id,
+            "operation_type": "施肥",
+        },
         ctx,
     )
     assert updated.status.value == "success"
     assert patched_skill_sessions.get(FarmLog, log.id).operation_type == "施肥"
 
     deleted = await ManageFarmLogsSkill().execute(
-        {"action": "delete", "log_id": log.id},
+        {"operation": "manage_log", "action": "delete", "log_id": log.id},
         ctx,
     )
     assert deleted.status.value == "success"

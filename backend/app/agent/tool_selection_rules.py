@@ -46,11 +46,9 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
             r"(?:作物模板|模板).*#?\d+.*(?:修改|更改|调整|更新|改|删除|删掉|移除)"
         ),
     ],
-    "log_farm_activity": [
+    "manage_farm_logs": [
         re.compile(r"(?:浇[了水]|施[了肥]|打[了药]|除[了草]|翻[了地]|播[了种])"),
         re.compile(r"(?:记录|记下)\s*(?:农事|操作|浇水|施肥)"),
-    ],
-    "manage_farm_logs": [
         re.compile(
             r"(?:修改|更改|调整|更新|更正|删除|删掉|移除).*(?:农事记录|农事日志|操作日志|操作记录)"
         ),
@@ -193,7 +191,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "周期进度",
         "阶段",
     },
-    "get_recent_farm_logs": {"农事记录", "操作日志", "干了啥", "记录"},
+    "manage_farm_logs": {"农事记录", "农事日志", "操作日志", "干了啥", "记录"},
     "get_planting_units": {"种植单元", "地块", "大棚", "棚区", "有哪些棚"},
     "get_labor_payables": {
         "人工钱",
@@ -268,7 +266,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_weather_forecast": [],
     "manage_cost": [],
     "manage_crop_cycle": [],
-    "get_recent_farm_logs": [],
     "get_labor_payables": [],
     "get_workers": [],
     "get_operation_work_orders": [],
@@ -277,7 +274,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_user_settings": [],
     "manage_crop_templates": [],
     "create_operation_work_order": [],
-    "log_farm_activity": [],
     "manage_farm_logs": [],
     "settle_labor_payment": [],
     "update_operation_work_order": [],

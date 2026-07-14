@@ -100,7 +100,7 @@ _SKILL_PARAM_FORMAT: dict[str, list[str]] = {
         "name",
         "variety",
     ],
-    "manage_farm_logs": ["action", "log_id", "cycle_id", "operation_type"],
+    "manage_farm_logs": ["operation", "action", "log_id", "cycle_id", "operation_type"],
     "delete_crop_cycle": ["cycle_id"],
     "manage_user_settings": [
         "display_name",

@@ -13,7 +13,6 @@ ALL_TOOL_NAMES = [
     "manage_crop_cycle",
     "manage_crop_templates",
     "create_operation_work_order",
-    "get_recent_farm_logs",
     "manage_farm_logs",
     "get_farm_status",
     "get_labor_payables",
@@ -25,7 +24,6 @@ ALL_TOOL_NAMES = [
     "manage_planting_units",
     "get_user_settings",
     "manage_user_settings",
-    "log_farm_activity",
     "settle_labor_payment",
     "update_operation_work_order",
     "manage_workers",
@@ -109,17 +107,17 @@ class TestWritePatternMatching:
         result = select_tools("我想种小麦要注意什么", _make_tools())
         assert result == ["get_farm_status"]
 
-    def test_log_farm_activity_watering(self):
+    def test_create_farm_log_watering(self):
         result = select_tools("今天浇了水", _make_tools())
-        assert "log_farm_activity" in result
+        assert result == ["manage_farm_logs"]
 
-    def test_log_farm_activity_fertilizing(self):
+    def test_create_farm_log_fertilizing(self):
         result = select_tools("刚施了肥", _make_tools())
-        assert "log_farm_activity" in result
+        assert result == ["manage_farm_logs"]
 
-    def test_log_farm_activity_spraying(self):
+    def test_create_farm_log_spraying(self):
         result = select_tools("打药了", _make_tools())
-        assert "log_farm_activity" in result
+        assert result == ["manage_farm_logs"]
 
     def test_update_crop_stage_seedling_uses_manage_crop_cycle(self):
         result = select_tools("西瓜进苗期了", _make_tools())
@@ -276,6 +274,10 @@ class TestQueryKeywordMatching:
     def test_operation_work_order_query(self):
         result = select_tools("最近玉米授粉作业有哪些", _make_tools())
         assert result == ["get_operation_work_orders"]
+
+    def test_farm_log_query_uses_canonical_skill(self):
+        result = select_tools("最近7天农事日志", _make_tools())
+        assert result == ["manage_farm_logs"]
 
     def test_workers_query_defaults_to_worker_skill(self):
         result = select_tools("我的工人", _make_tools())

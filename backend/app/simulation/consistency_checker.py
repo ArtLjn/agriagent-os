@@ -50,7 +50,7 @@ _OP_TYPE_TO_SKILL_NAME: dict[str, str] = {
     "create_template": "create_crop_template",
     "create_cycle": "create_crop_cycle",
     "update_stage": "update_cycle_stage",
-    "log_activity": "log_farm_activity",
+    "log_activity": "manage_farm_logs",
     "settle_debt": "settle_debt",
 }
 

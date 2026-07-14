@@ -394,7 +394,9 @@ def resolve_skill_capability_metadata(
     except (OSError, ValueError):
         return None
     alias = registry.resolve_alias(skill_name)
-    if alias is not None:
+    if alias is not None and not (
+        operation_name is not None and alias.capability == skill_name
+    ):
         capability_name = alias.capability
         resolved_operation = alias.operation
         legacy_alias = alias.legacy_name

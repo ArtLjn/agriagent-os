@@ -25,7 +25,7 @@ class SkillDisplay:
 _APP_SKILL_ORDER = [
     "get_farm_status",
     "manage_cost",
-    "log_farm_activity",
+    "manage_farm_logs",
     "manage_wages",
     "manage_crop_cycle",
     "get_weather_forecast",
@@ -73,14 +73,14 @@ _DISPLAY_BY_SKILL: dict[str, SkillDisplay] = {
         examples=("明天适合打药吗", "最近有雨吗", "未来一周天气怎么样"),
         recommended=True,
     ),
-    "log_farm_activity": SkillDisplay(
+    "manage_farm_logs": SkillDisplay(
         title="农事记录",
         category="记录",
         icon="file-pen",
         icon_color="purple",
-        summary="记录浇水、施肥、打药等操作。",
-        details="把日常农活记录到对应茬口里，后续复盘生产过程、生成报告和分析投入时都能引用。",
-        examples=("今天6号棚浇水了", "下午给西瓜施肥", "记录一次打药"),
+        summary="记录、查询和管理农事日志。",
+        details="把浇水、施肥、打药等日常农活记录到对应茬口里，也能查询最近日志并在确认后修改或删除记录。",
+        examples=("今天6号棚浇水了", "最近7天农事日志", "删除8号农事日志"),
         recommended=True,
     ),
     "manage_wages": SkillDisplay(

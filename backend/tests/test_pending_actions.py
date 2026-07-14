@@ -53,7 +53,6 @@ def test_write_skill_registry_covers_runtime_write_skills():
         "manage_crop_cycle",
         "create_crop_template",
         "create_operation_work_order",
-        "log_farm_activity",
         "settle_debt",
         "settle_labor_payment",
         "update_crop_cycle",

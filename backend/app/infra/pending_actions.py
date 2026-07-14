@@ -27,7 +27,6 @@ WRITE_SKILLS = frozenset(
         "create_crop_cycle",
         "manage_crop_cycle",
         "create_crop_template",
-        "log_farm_activity",
         "create_operation_work_order",
         "settle_debt",
         "settle_labor_payment",

@@ -101,9 +101,7 @@ def select_tools(
         candidates.discard("get_farm_status")
 
     if "manage_farm_logs" in candidates:
-        candidates.difference_update(
-            {"get_recent_farm_logs", "log_farm_activity", "get_farm_status"}
-        )
+        candidates.discard("get_farm_status")
 
     if "manage_planting_units" in candidates:
         candidates.difference_update({"get_planting_units", "get_farm_status"})
@@ -112,7 +110,7 @@ def select_tools(
         candidates.difference_update({"get_cost_categories", "manage_cost"})
 
     if "manage_cost" in candidates:
-        candidates.discard("get_recent_farm_logs")
+        candidates.discard("manage_farm_logs")
 
     if "get_cost_categories" in candidates:
         candidates.discard("manage_cost")
@@ -129,7 +127,7 @@ def select_tools(
         and "create_operation_work_order" not in candidates
     ):
         candidates.difference_update(
-            {"create_operation_work_order", "get_recent_farm_logs", "get_farm_status"}
+            {"create_operation_work_order", "manage_farm_logs", "get_farm_status"}
         )
     elif (
         "get_operation_work_orders" in candidates
@@ -156,16 +154,14 @@ def select_tools(
             {
                 "manage_cost",
                 "get_labor_payables",
-                "get_recent_farm_logs",
+                "manage_farm_logs",
                 "manage_workers",
                 "settle_labor_payment",
             }
         )
 
     if "update_operation_work_order" in candidates:
-        candidates.difference_update(
-            {"create_operation_work_order", "get_recent_farm_logs", "log_farm_activity"}
-        )
+        candidates.difference_update({"create_operation_work_order", "manage_farm_logs"})
 
     candidates.intersection_update(enabled_tool_names)
 

@@ -59,7 +59,7 @@ def test_agent_skills_only_returns_app_level_capabilities(db_session) -> None:
     assert keys == {
         "get_farm_status",
         "manage_cost",
-        "log_farm_activity",
+        "manage_farm_logs",
         "manage_wages",
         "manage_crop_cycle",
         "get_weather_forecast",

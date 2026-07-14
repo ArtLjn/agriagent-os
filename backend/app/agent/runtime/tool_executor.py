@@ -1305,7 +1305,7 @@ async def _invoke_read_tool_message(
 
 
 def _tool_message_kwargs(name: str, args: dict) -> dict:
-    if name == "manage_cost" and args.get("operation"):
+    if name in {"manage_cost", "manage_farm_logs"} and args.get("operation"):
         return {"operation": str(args["operation"])}
     return {}
 

@@ -10,7 +10,7 @@ PRELOAD_MAP: dict[str, list[str]] = {
     "manage_cost": ["cost_summary", "cost_analytics"],
     "get_farm_status": ["farm_status"],
     "get_crop_cycle_info": ["crop_cycle"],
-    "get_recent_farm_logs": ["farm_logs"],
+    "manage_farm_logs": ["farm_logs"],
 }
 
 DEPENDENCY_PRELOAD_MAP: dict[str, str] = {

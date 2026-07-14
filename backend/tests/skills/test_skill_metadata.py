@@ -12,6 +12,7 @@ from app.agent.skills.metadata import (
     SkillRiskLevel,
     get_skill_metadata,
     metadata_to_dict,
+    resolve_skill_capability_metadata,
 )
 
 
@@ -250,6 +251,45 @@ def test_manage_cost_categories_legacy_metadata_uses_shared_capability_operation
     assert manage_metadata.operation == "manage_category"
     assert manage_metadata.operation_risk == "write_confirm"
     assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
+def test_manage_farm_logs_legacy_metadata_uses_shared_capability_operations():
+    class _LogFarmActivitySkill:
+        def name(self):
+            return "log_farm_activity"
+
+    class _GetRecentFarmLogsSkill:
+        def name(self):
+            return "get_recent_farm_logs"
+
+    query_metadata = get_skill_metadata(_GetRecentFarmLogsSkill())
+    create_metadata = get_skill_metadata(_LogFarmActivitySkill())
+
+    assert query_metadata.capability == "manage_farm_logs"
+    assert query_metadata.operation == "query_logs"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert create_metadata.capability == "manage_farm_logs"
+    assert create_metadata.operation == "create_log"
+    assert create_metadata.operation_risk == "write_confirm"
+    assert create_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
+def test_manage_farm_logs_canonical_operation_overrides_self_alias():
+    query_metadata = resolve_skill_capability_metadata(
+        "manage_farm_logs", "query_logs"
+    )
+    manage_metadata = resolve_skill_capability_metadata(
+        "manage_farm_logs", "manage_log"
+    )
+
+    assert query_metadata is not None
+    assert query_metadata["capability"] == "manage_farm_logs"
+    assert query_metadata["operation"] == "query_logs"
+    assert query_metadata["operation_risk"] == "read"
+    assert manage_metadata is not None
+    assert manage_metadata["operation"] == "manage_log"
+    assert manage_metadata["operation_risk"] == "write_confirm"
 
 
 def test_default_external_network_skill_metadata():

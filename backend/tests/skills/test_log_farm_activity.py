@@ -1,4 +1,4 @@
-"""记农事 Skill (log_farm_activity) 单元测试。"""
+"""农事日志聚合 Skill 单元测试。"""
 
 import importlib
 from datetime import date
@@ -8,8 +8,8 @@ import pytest
 
 from skillify.core.context import SkillContext
 
-_mod = importlib.import_module("app.agent.skills.log-farm-activity.scripts.main")
-LogFarmActivitySkill = _mod.LogFarmActivitySkill
+_mod = importlib.import_module("app.agent.skills.manage-farm-logs.scripts.main")
+ManageFarmLogsSkill = _mod.ManageFarmLogsSkill
 
 
 @pytest.fixture
@@ -46,29 +46,37 @@ def _make_farm_log(
 # ── 元信息测试 ──────────────────────────────────────────────────
 
 
-class TestLogFarmActivityMeta:
+class TestManageFarmLogsMeta:
     """Skill 元信息测试。"""
 
     def test_name(self):
-        skill = LogFarmActivitySkill()
-        assert skill.name() == "log_farm_activity"
+        skill = ManageFarmLogsSkill()
+        assert skill.name() == "manage_farm_logs"
 
     def test_description_contains_trigger_words(self):
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         desc = skill.description()
         assert "浇水" in desc
         assert "施肥" in desc
         assert "打药" in desc
         assert "农事" in desc
+        assert "查询" in desc
+        assert "删除" in desc
 
     def test_parameters_schema_required_fields(self):
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         schema = skill.parameters_schema()
+        assert "operation" in schema["properties"]
+        assert schema["properties"]["operation"]["enum"] == [
+            "create_log",
+            "query_logs",
+            "manage_log",
+        ]
         assert "operation_type" in schema["properties"]
         assert "operation_date" in schema["properties"]
         assert "note" in schema["properties"]
         assert "cycle_id" in schema["properties"]
-        assert set(schema["required"]) == {"operation_type"}
+        assert set(schema["required"]) == {"operation"}
 
 
 # ── 正常场景 ──────────────────────────────────────────────────
@@ -92,9 +100,10 @@ class TestLogFarmActivityNormal:
         )
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
             {
+                "operation": "create_log",
                 "operation_type": "浇水",
                 "operation_date": "2026-05-26",
                 "cycle_id": 5,
@@ -125,9 +134,9 @@ class TestLogFarmActivityNormal:
         )
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
-            {"operation_type": "施肥"},
+            {"operation": "create_log", "operation_type": "施肥"},
             ctx,
         )
 
@@ -149,9 +158,9 @@ class TestLogFarmActivityNormal:
         farm_log = _make_farm_log(operation_date=date.today())
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
-            {"operation_type": "浇水", "cycle_id": 1},
+            {"operation": "create_log", "operation_type": "浇水", "cycle_id": 1},
             ctx,
         )
 
@@ -171,9 +180,14 @@ class TestLogFarmActivityNormal:
         farm_log = _make_farm_log(operation_date=date(2026, 6, 1))
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
-            {"operation_type": "打药", "operation_date": "2026-06-01", "cycle_id": 1},
+            {
+                "operation": "create_log",
+                "operation_type": "打药",
+                "operation_date": "2026-06-01",
+                "cycle_id": 1,
+            },
             ctx,
         )
 
@@ -193,9 +207,10 @@ class TestLogFarmActivityNormal:
         farm_log = _make_farm_log(note="追施复合肥 10kg")
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
             {
+                "operation": "create_log",
                 "operation_type": "施肥",
                 "cycle_id": 1,
                 "note": "追施复合肥 10kg",
@@ -219,9 +234,9 @@ class TestLogFarmActivityNormal:
         farm_log = _make_farm_log()
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         await skill.execute(
-            {"operation_type": "浇水", "cycle_id": 1},
+            {"operation": "create_log", "operation_type": "浇水", "cycle_id": 1},
             ctx,
         )
 
@@ -246,9 +261,9 @@ class TestLogFarmActivityNoCycle:
         # 查询返回 None（无活跃茬口）
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
-            {"operation_type": "浇水"},
+            {"operation": "create_log", "operation_type": "浇水"},
             ctx,
         )
 
@@ -266,8 +281,8 @@ class TestLogFarmActivityError:
     @pytest.mark.asyncio
     async def test_missing_operation_type(self, ctx):
         """缺少 operation_type 时返回错误。"""
-        skill = LogFarmActivitySkill()
-        result = await skill.execute({}, ctx)
+        skill = ManageFarmLogsSkill()
+        result = await skill.execute({"operation": "create_log"}, ctx)
 
         assert result.status.value == "failed"
         assert "操作类型" in result.reply
@@ -277,8 +292,10 @@ class TestLogFarmActivityError:
     @patch.object(_mod, "log_service")
     async def test_empty_operation_type(self, mock_log_svc, mock_session, ctx):
         """operation_type 为空字符串时返回错误。"""
-        skill = LogFarmActivitySkill()
-        result = await skill.execute({"operation_type": ""}, ctx)
+        skill = ManageFarmLogsSkill()
+        result = await skill.execute(
+            {"operation": "create_log", "operation_type": ""}, ctx
+        )
 
         assert result.status.value == "failed"
         assert "操作类型" in result.reply
@@ -296,9 +313,14 @@ class TestLogFarmActivityError:
         farm_log = _make_farm_log(operation_date=date.today())
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         await skill.execute(
-            {"operation_type": "浇水", "cycle_id": 1, "operation_date": "不是日期"},
+            {
+                "operation": "create_log",
+                "operation_type": "浇水",
+                "cycle_id": 1,
+                "operation_date": "不是日期",
+            },
             ctx,
         )
 
@@ -316,9 +338,9 @@ class TestLogFarmActivityError:
 
         mock_log_svc.create_log.side_effect = Exception("DB error")
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
-            {"operation_type": "浇水", "cycle_id": 1},
+            {"operation": "create_log", "operation_type": "浇水", "cycle_id": 1},
             ctx,
         )
 
@@ -335,9 +357,9 @@ class TestLogFarmActivityError:
         """context 无 farm_id 时必须失败，不能默认写到 1 号农场。"""
         empty_ctx = SkillContext()
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         result = await skill.execute(
-            {"operation_type": "浇水", "cycle_id": 1},
+            {"operation": "create_log", "operation_type": "浇水", "cycle_id": 1},
             empty_ctx,
         )
 
@@ -357,9 +379,9 @@ class TestLogFarmActivityError:
         farm_log = _make_farm_log()
         mock_log_svc.create_log.return_value = farm_log
 
-        skill = LogFarmActivitySkill()
+        skill = ManageFarmLogsSkill()
         await skill.execute(
-            {"operation_type": "浇水", "cycle_id": 1},
+            {"operation": "create_log", "operation_type": "浇水", "cycle_id": 1},
             ctx,
         )
 
