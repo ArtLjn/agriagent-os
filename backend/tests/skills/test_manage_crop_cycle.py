@@ -29,6 +29,9 @@ _query_info_mod = importlib.import_module(
 _update_mod = importlib.import_module(
     "app.agent.skills.manage-crop-cycle.scripts.update_cycle"
 )
+_update_stage_mod = importlib.import_module(
+    "app.agent.skills.manage-crop-cycle.scripts.update_stage"
+)
 _delete_mod = importlib.import_module(
     "app.agent.skills.manage-crop-cycle.scripts.delete_cycle"
 )
@@ -43,7 +46,13 @@ def ctx():
 
 @pytest.fixture
 def skill_session(monkeypatch, db_session):
-    for module in (_query_cycles_mod, _query_info_mod, _update_mod, _delete_mod):
+    for module in (
+        _query_cycles_mod,
+        _query_info_mod,
+        _update_mod,
+        _update_stage_mod,
+        _delete_mod,
+    ):
         monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
     return db_session
 
@@ -250,7 +259,10 @@ async def test_update_stage_operation_uses_update_handler(skill_session, ctx):
     )
 
     assert result.status.value == "success"
-    stages = {stage.name: stage.is_current for stage in skill_session.get(CropCycle, cycle.id).stages}
+    stages = {
+        stage.name: stage.is_current
+        for stage in skill_session.get(CropCycle, cycle.id).stages
+    }
     assert stages["播种期"] is False
     assert stages["生长期"] is True
 
