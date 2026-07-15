@@ -45,7 +45,6 @@ POLLUTION_MATCHES=$(find . \
     -o -path "./farm-index/app/node_modules" \
     -o -path "./archive/FarmManagerMobile/node_modules" \
     -o -path "./backend/.venv" \
-    -o -path "./backend/skillify-sdk/.venv" \
     -o -path "./mobile-app/.dart_tool" \
     -o -path "./mobile-app/android/.gradle" \) -prune \
   -o \( -type d -name "__pycache__" \

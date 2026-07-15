@@ -43,7 +43,6 @@ COPYFILE_DISABLE=1 tar czf /tmp/farm-backend-sync.tar.gz \
     backend/alembic \
     backend/alembic.ini \
     backend/requirements.txt \
-    backend/skillify-sdk \
     backend/config.yaml \
     backend/config.yaml.example \
     backend/providers.json \
@@ -127,7 +126,6 @@ rm -rf app alembic skillify-sdk prompts
 mv backend/app .
 mv backend/alembic .
 mv backend/alembic.ini .
-mv backend/skillify-sdk .
 mv backend/prompts .
 mv backend/requirements.txt .
 mv backend/config.yaml .
@@ -176,13 +174,8 @@ hash -r
 # --- 安装依赖 ---
 rlog "安装依赖..."
 pip install -q --upgrade pip || rdie "pip 升级失败"
-rlog "  安装 skillify-sdk..."
-pip install -q -e ./skillify-sdk 2>&1 || pip install -q ./skillify-sdk 2>&1 || { rollback; rdie "skillify-sdk 安装失败，已回滚"; }
-rlog "  安装其他依赖..."
-grep -v "^skillify" requirements.txt > /tmp/requirements-no-skillify.txt
-if ! pip install -q -r /tmp/requirements-no-skillify.txt 2>&1; then
-    rlog "依赖安装有警告，尝试继续..."
-fi
+rlog "  安装 requirements.txt..."
+pip install -q -r requirements.txt 2>&1 || { rollback; rdie "依赖安装失败，已回滚"; }
 
 # --- 数据库备份 ---
 rlog "检查数据库..."

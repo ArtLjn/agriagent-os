@@ -96,7 +96,7 @@ check_python_imports_recursive_excluding() {
   fi
 
   MATCHES=$(find "$DIR" \
-    \( -name "__pycache__" -o -name ".venv" -o -name "skillify-sdk" -o -name "build" -o -name "vendor" -o -name "_vendor" \) -prune \
+    \( -name "__pycache__" -o -name ".venv" -o -name "build" -o -name "vendor" -o -name "_vendor" \) -prune \
     -o -name "*.py" -type f -print 2>/dev/null \
     | while IFS= read -r file; do
         rg -n --with-filename "$PATTERN" "$file" 2>/dev/null | grep -v "# harness-exempt:" || true
@@ -264,7 +264,7 @@ echo "🔍 检查文件大小..."
 
 # Python 文件
 for f in $(find backend/app \
-  \( -name "__pycache__" -o -name ".venv" -o -name "skillify-sdk" -o -name "build" -o -name "vendor" -o -name "_vendor" \) -prune \
+  \( -name "__pycache__" -o -name ".venv" -o -name "build" -o -name "vendor" -o -name "_vendor" \) -prune \
   -o -name "*.py" -type f -print 2>/dev/null); do
   lines=$(wc -l < "$f")
   if [ "$lines" -gt 500 ]; then
@@ -321,7 +321,6 @@ if [ -n "$TODO_TARGETS" ]; then
   TODO_MATCHES=$(rg -n "TODO|FIXME|NotImplemented|pass  # TODO" $TODO_TARGETS \
     --glob '!**/__pycache__/**' \
     --glob '!**/.venv/**' \
-    --glob '!**/skillify-sdk/**' \
     --glob '!**/build/**' \
     --glob '!**/vendor/**' \
     --glob '!**/_vendor/**' \
