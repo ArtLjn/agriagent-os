@@ -1,17 +1,68 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Button, Select, Space, Table, Tag, message } from 'antd';
-import { CheckCircleOutlined, ImportOutlined, ReadOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Form, Modal, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
+import {
+  CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  ImportOutlined,
+  PlusOutlined,
+  ReadOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
 import type { TableRowSelection } from 'antd/es/table/interface';
 
 import {
+  createSystemTemplate,
+  deleteSystemTemplate,
   importSystemCropTemplate,
   listSystemCropTemplates,
+  updateSystemTemplate,
   type CropTemplate,
+  type GrowthStage,
 } from '../../api/crops';
 import { PageShell, Toolbar } from '../../components/PageShell';
+import TemplateForm from '../../components/TemplateForm';
 
 const ALL_CATEGORIES = 'all';
+
+type StageFormValue = {
+  name?: string;
+  duration_days?: number;
+  key_tasks?: string;
+};
+
+function buildSavePayload(values: {
+  name: string;
+  variety?: string | null;
+  category?: string | null;
+  stages?: StageFormValue[];
+}) {
+  return {
+    name: values.name,
+    variety: values.variety ?? null,
+    category: values.category ?? null,
+    stages: (values.stages ?? []).map((stage, index) => ({
+      name: stage.name ?? '',
+      duration_days: stage.duration_days ?? 0,
+      order_index: index,
+      key_tasks: stage.key_tasks,
+    })),
+  };
+}
+
+function mapTemplateToFormValues(template: CropTemplate) {
+  return {
+    name: template.name,
+    variety: template.variety,
+    category: template.category,
+    stages: (template.stages ?? []).map((stage: GrowthStage) => ({
+      name: stage.name,
+      duration_days: stage.duration_days,
+      key_tasks: stage.key_tasks,
+    })),
+  };
+}
 
 export default function SystemLibrary() {
   const navigate = useNavigate();
@@ -22,6 +73,10 @@ export default function SystemLibrary() {
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form] = Form.useForm();
 
   const mergeCategoryOptions = useCallback((templates: CropTemplate[]) => {
     const values = templates
@@ -93,6 +148,56 @@ export default function SystemLibrary() {
     }
   };
 
+  const openCreate = () => {
+    setEditingId(null);
+    form.resetFields();
+    setModalOpen(true);
+  };
+
+  const openEdit = (record: CropTemplate) => {
+    setEditingId(record.id);
+    form.setFieldsValue(mapTemplateToFormValues(record));
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingId(null);
+    form.resetFields();
+  };
+
+  const handleSave = async () => {
+    const values = await form.validateFields();
+    const payload = buildSavePayload(values);
+    setSaving(true);
+    try {
+      if (editingId === null) {
+        await createSystemTemplate(payload);
+        message.success('创建成功');
+      } else {
+        await updateSystemTemplate(editingId, payload);
+        message.success('更新成功');
+      }
+      closeModal();
+      loadTemplates(category);
+    } catch {
+      message.error(editingId === null ? '创建失败' : '更新失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteSystemTemplate(id);
+      message.success('删除成功');
+      loadTemplates(category);
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      message.error(typeof detail === 'string' && detail ? detail : '删除失败');
+    }
+  };
+
   const rowSelection: TableRowSelection<CropTemplate> = {
     selectedRowKeys,
     onChange: setSelectedRowKeys,
@@ -130,6 +235,34 @@ export default function SystemLibrary() {
         </Space>
       ),
     },
+    {
+      title: '操作',
+      key: 'action',
+      width: 180,
+      fixed: 'right' as const,
+      render: (_: unknown, record: CropTemplate) => (
+        <Space>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEdit(record)}
+          >
+            编辑
+          </Button>
+          <Popconfirm
+            title="确认删除"
+            description={`删除系统模版 "${record.name}"？已被农场导入的模版无法删除。`}
+            onConfirm={() => handleDelete(record.id)}
+            okText="删除"
+            cancelText="取消"
+          >
+            <Button size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -153,6 +286,12 @@ export default function SystemLibrary() {
             />
             <Button
               type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+            >
+              新建模版
+            </Button>
+            <Button
               icon={<ImportOutlined />}
               loading={importing}
               disabled={selectedRowKeys.length === 0}
@@ -193,7 +332,7 @@ export default function SystemLibrary() {
         loading={loading}
         rowSelection={rowSelection}
         size="small"
-        scroll={{ x: 760 }}
+        scroll={{ x: 960 }}
         pagination={{
           pageSize: 20,
           showSizeChanger: true,
@@ -201,6 +340,21 @@ export default function SystemLibrary() {
           showTotal: (count) => `共 ${count} 条`,
         }}
       />
+
+      <Modal
+        title={editingId !== null ? '编辑系统模版' : '新建系统模版'}
+        open={modalOpen}
+        onOk={handleSave}
+        confirmLoading={saving}
+        onCancel={closeModal}
+        width={560}
+        okText="确定"
+        cancelText="取消"
+      >
+        <Form form={form} layout="vertical">
+          <TemplateForm showCategory />
+        </Form>
+      </Modal>
     </PageShell>
   );
 }

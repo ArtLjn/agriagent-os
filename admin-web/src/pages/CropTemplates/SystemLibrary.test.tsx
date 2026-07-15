@@ -4,19 +4,28 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  createSystemTemplate,
+  deleteSystemTemplate,
   importSystemCropTemplate,
   listSystemCropTemplates,
+  updateSystemTemplate,
   type CropTemplate,
 } from '../../api/crops';
 import SystemLibrary from './SystemLibrary';
 
 vi.mock('../../api/crops', () => ({
+  createSystemTemplate: vi.fn(),
+  deleteSystemTemplate: vi.fn(),
   importSystemCropTemplate: vi.fn(),
   listSystemCropTemplates: vi.fn(),
+  updateSystemTemplate: vi.fn(),
 }));
 
 const mockedListSystemCropTemplates = vi.mocked(listSystemCropTemplates);
 const mockedImportSystemCropTemplate = vi.mocked(importSystemCropTemplate);
+const mockedCreateSystemTemplate = vi.mocked(createSystemTemplate);
+const mockedUpdateSystemTemplate = vi.mocked(updateSystemTemplate);
+const mockedDeleteSystemTemplate = vi.mocked(deleteSystemTemplate);
 
 const templates: CropTemplate[] = [
   {
@@ -45,6 +54,9 @@ describe('SystemLibrary', () => {
     vi.clearAllMocks();
     mockedListSystemCropTemplates.mockResolvedValue(templates);
     mockedImportSystemCropTemplate.mockResolvedValue({ id: 201, already_exists: false });
+    mockedCreateSystemTemplate.mockResolvedValue({ id: 999, name: 'new', stages: [] });
+    mockedUpdateSystemTemplate.mockResolvedValue({ id: 101, name: 'updated', stages: [] });
+    mockedDeleteSystemTemplate.mockResolvedValue(undefined);
   });
 
   it('展示系统模板列表和阶段摘要', async () => {
@@ -126,5 +138,103 @@ describe('SystemLibrary', () => {
 
     expect(await screen.findByText('已存在相同模板，已为你跳过重复导入')).toBeInTheDocument();
     expect(screen.getByText('水稻')).toBeInTheDocument();
+  });
+
+  it('点击「新建模版」打开 Modal 并提交后调用 createSystemTemplate', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <SystemLibrary />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('水稻');
+    await user.click(screen.getByRole('button', { name: /新建模版/ }));
+
+    expect(await screen.findByText('新建系统模版')).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('如：西瓜'), '草莓');
+    await user.type(screen.getByPlaceholderText('如：粮食 / 蔬菜 / 水果'), '水果');
+    await user.click(screen.getByRole('button', { name: /添加阶段/ }));
+    await user.type(screen.getByPlaceholderText('阶段名'), '育苗期');
+    await user.type(screen.getByPlaceholderText('天数'), '20');
+
+    const okButton = await waitFor(() => {
+      const btn = document.querySelector('.ant-modal-footer .ant-btn-primary') as HTMLButtonElement | null;
+      expect(btn).not.toBeNull();
+      return btn as HTMLButtonElement;
+    });
+    await user.click(okButton);
+
+    await waitFor(() => {
+      expect(mockedCreateSystemTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: '草莓',
+          category: '水果',
+          stages: expect.arrayContaining([
+            expect.objectContaining({ name: '育苗期', duration_days: 20 }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('点击行内「编辑」打开 Modal 并提交后调用 updateSystemTemplate', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <SystemLibrary />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('水稻');
+    const riceRow = screen.getByRole('row', { name: /水稻/ });
+    await user.click(within(riceRow).getByRole('button', { name: /编辑/ }));
+
+    expect(await screen.findByText('编辑系统模版')).toBeInTheDocument();
+    const nameInput = screen.getByPlaceholderText('如：西瓜') as HTMLInputElement;
+    await user.clear(nameInput);
+    await user.type(nameInput, '改名水稻');
+
+    const okButton = await waitFor(() => {
+      const btn = document.querySelector('.ant-modal-footer .ant-btn-primary') as HTMLButtonElement | null;
+      expect(btn).not.toBeNull();
+      return btn as HTMLButtonElement;
+    });
+    await user.click(okButton);
+
+    await waitFor(() => {
+      expect(mockedUpdateSystemTemplate).toHaveBeenCalledWith(
+        101,
+        expect.objectContaining({ name: '改名水稻' }),
+      );
+    });
+  });
+
+  it('点击行内「删除」并确认后调用 deleteSystemTemplate', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <SystemLibrary />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('水稻');
+    const riceRow = screen.getByRole('row', { name: /水稻/ });
+    await user.click(within(riceRow).getByRole('button', { name: /删除/ }));
+
+    const popup = await waitFor(() => {
+      const el = document.querySelector('.ant-popconfirm') as HTMLElement | null;
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    await user.click(within(popup).getByRole('button', { name: /删\s*除/ }));
+
+    await waitFor(() => {
+      expect(mockedDeleteSystemTemplate).toHaveBeenCalledWith(101);
+    });
   });
 });
