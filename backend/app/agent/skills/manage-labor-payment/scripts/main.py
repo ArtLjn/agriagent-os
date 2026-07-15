@@ -9,6 +9,7 @@ from skillify.skills.base import Skill
 from app.agent.skills.context import require_farm_context
 from app.agent.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.core.database import SessionLocal
+from app.models.planting import Worker
 from app.schemas.planting import WageSaveRequest, WageUpdateRequest
 from app.services import labor_service, planting_read_service, planting_service
 
@@ -227,6 +228,8 @@ def _resolve_operation(params: dict) -> str | None:
 
     has_settle_signal = any(params.get(key) not in (None, "") for key in _SETTLE_FIELDS)
     has_wage_signal = any(params.get(key) not in (None, "") for key in _WAGE_FIELDS)
+    if has_settle_signal and _only_worker_id_wage_signal(params):
+        return _SETTLE_OPERATION
     if has_settle_signal and has_wage_signal:
         return None
     if has_settle_signal:
@@ -274,7 +277,7 @@ def _settle_payment(db, farm_id: int, params: dict) -> SkillResult:
         db,
         farm_id=farm_id,
         amount=_to_decimal(params.get("amount")),
-        worker_name=_clean(params.get("worker") or params.get("worker_name")),
+        worker_name=_settlement_worker_name(db, farm_id, params),
         cycle_id=params.get("cycle_id"),
         work_order_id=params.get("work_order_id"),
         start_date=_parse_date(params.get("start_date")),
@@ -291,6 +294,30 @@ def _settle_payment(db, farm_id: int, params: dict) -> SkillResult:
             f"剩余{item['remaining_unpaid']}元"
         )
     return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
+
+
+def _only_worker_id_wage_signal(params: dict) -> bool:
+    wage_keys = {
+        key for key in _WAGE_FIELDS if params.get(key) not in (None, "")
+    }
+    return wage_keys == {"worker_id"}
+
+
+def _settlement_worker_name(db, farm_id: int, params: dict) -> str | None:
+    worker_name = _clean(params.get("worker") or params.get("worker_name"))
+    if worker_name:
+        return worker_name
+    worker_id = params.get("worker_id")
+    if worker_id in (None, ""):
+        return None
+    worker = (
+        db.query(Worker)
+        .filter(Worker.id == int(worker_id), Worker.farm_id == farm_id)
+        .first()
+    )
+    if worker is None:
+        raise ValueError("工人不存在，请提供有效 worker_id。")
+    return worker.name
 
 
 def _manage_wage(db, farm_id: int, params: dict) -> SkillResult:

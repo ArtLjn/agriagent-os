@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
 from app.agent.runtime.tool_executor import _parallel_tool_node, _permission_decision
+from app.agent.skills import get_langchain_tools
 from app.agent.skills.metadata import (
     SkillMetadata,
     SkillPermissionLevel,
@@ -19,7 +20,10 @@ from app.models.planting import LaborEntry, OperationWorkOrder, Worker
 
 
 @pytest.fixture(autouse=True)
-def clean_pending_action():
+def clean_pending_action(request):
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
     remove_pending(1)
     yield
     remove_pending(1)
@@ -778,6 +782,67 @@ def test_manage_user_settings_query_operation_uses_read_permission():
     assert inferred_query_decision.requires_confirmation is True
     assert inferred_query_decision.operation == "update_settings"
     assert inferred_query_decision.operation_risk == "write_confirm"
+
+
+@pytest.mark.no_db
+@pytest.mark.parametrize(
+    ("args", "operation", "operation_risk", "permission_level", "requires_confirm"),
+    [
+        ({}, "query_payables", "read", SkillPermissionLevel.READ.value, False),
+        (
+            {"worker": "老王"},
+            "query_payables",
+            "read",
+            SkillPermissionLevel.READ.value,
+            False,
+        ),
+        (
+            {"amount": 300, "worker_name": "老王"},
+            "settle_payment",
+            "write_confirm",
+            SkillPermissionLevel.WRITE_CONFIRM.value,
+            True,
+        ),
+        (
+            {"worker_id": 1, "amount": 300},
+            "settle_payment",
+            "write_confirm",
+            SkillPermissionLevel.WRITE_CONFIRM.value,
+            True,
+        ),
+        (
+            {"work_date": "2026-06-04", "quantity": 15, "unit_price": 180},
+            "manage_wage",
+            "write_confirm",
+            SkillPermissionLevel.WRITE_CONFIRM.value,
+            True,
+        ),
+        (
+            {"operation": "query_payables", "worker": "老王"},
+            "query_payables",
+            "read",
+            SkillPermissionLevel.READ.value,
+            False,
+        ),
+    ],
+)
+def test_manage_labor_payment_permission_decision_infers_operation_from_args(
+    args,
+    operation,
+    operation_risk,
+    permission_level,
+    requires_confirm,
+):
+    tool = next(
+        item for item in get_langchain_tools() if item.name == "manage_labor_payment"
+    )
+
+    decision = _permission_decision(tool, "manage_labor_payment", {}, args)
+
+    assert decision.operation == operation
+    assert decision.operation_risk == operation_risk
+    assert decision.permission_level == permission_level
+    assert decision.requires_confirmation is requires_confirm
 
 
 @pytest.mark.asyncio

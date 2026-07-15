@@ -64,14 +64,23 @@ _AMBIGUOUS_DEBT_RE = re.compile(
 )
 _ALL_LABOR_PAYMENT_RE = re.compile(
     r"(?:所有|全部|全体|全部的|所有的).{0,8}(?:员工|工人|人工|工资)"
-    r"|(?:员工|工人|人工|工资).{0,8}(?:全部|全都|全额|全结|结清|结了)"
+    r"|(?:员工|工人|人工|工资).{0,8}(?:全部|全都|全额|全结|全清)"
+)
+_SINGLE_LABOR_PAYMENT_RE = re.compile(
+    r"(?:补付|支付|结算|付清|结清|结了|结工资)"
+    r"|(?:工资|工钱|人工).{0,6}(?:结了|结清|付清)"
+)
+_LABOR_PAYMENT_QUERY_RE = re.compile(
+    r"(?:还欠|欠多少|多少|查询|查一下|看看|未付|应付|人工欠款)"
 )
 _SETTLE_LABOR_PAYMENT_ALLOWED_ARGS = {
     "operation",
     "scope",
     "worker",
+    "worker_id",
     "worker_name",
     "amount",
+    "payment_date",
     "cycle_id",
     "work_order_id",
     "start_date",
@@ -79,6 +88,22 @@ _SETTLE_LABOR_PAYMENT_ALLOWED_ARGS = {
 }
 _LABOR_PAYMENT_SKILL = "manage_labor_payment"
 _LABOR_SETTLE_OPERATION = "settle_payment"
+_LABOR_QUERY_OPERATION = "query_payables"
+_LABOR_WAGE_OPERATION = "manage_wage"
+_LABOR_PAYMENT_SETTLE_FIELDS = ("amount", "scope", "payment_date")
+_LABOR_PAYMENT_WAGE_FIELDS = (
+    "action",
+    "labor_entry_id",
+    "operation_type",
+    "worker_id",
+    "pay_type",
+    "quantity",
+    "unit_price",
+    "paid_amount",
+    "note",
+    "work_date",
+    "client_request_id",
+)
 
 
 def _permission_decision(
@@ -280,6 +305,8 @@ def _operation_name_from_args(skill_name: str, args: dict | None) -> str | None:
     resolved = resolve_skill_capability_metadata(skill_name)
     if resolved is not None and resolved.get("operation"):
         return str(resolved["operation"])
+    if skill_name == _LABOR_PAYMENT_SKILL:
+        return _labor_payment_operation_from_args(args)
     if skill_name == "manage_user_settings":
         write_fields = (
             "display_name",
@@ -294,6 +321,33 @@ def _operation_name_from_args(skill_name: str, args: dict | None) -> str | None:
             else "query_settings"
         )
     return None
+
+
+def _labor_payment_operation_from_args(args: dict) -> str | None:
+    has_settle_fields = any(
+        args.get(key) not in (None, "") for key in _LABOR_PAYMENT_SETTLE_FIELDS
+    )
+    has_wage_fields = any(
+        args.get(key) not in (None, "") for key in _LABOR_PAYMENT_WAGE_FIELDS
+    )
+    if has_settle_fields and _only_labor_payment_worker_id_wage_field(args):
+        return _LABOR_SETTLE_OPERATION
+    if has_settle_fields and has_wage_fields:
+        return None
+    if has_settle_fields:
+        return _LABOR_SETTLE_OPERATION
+    if has_wage_fields:
+        return _LABOR_WAGE_OPERATION
+    return _LABOR_QUERY_OPERATION
+
+
+def _only_labor_payment_worker_id_wage_field(args: dict) -> bool:
+    wage_keys = {
+        key
+        for key in _LABOR_PAYMENT_WAGE_FIELDS
+        if args.get(key) not in (None, "")
+    }
+    return wage_keys == {"worker_id"}
 
 
 def _permission_value_for_disabled(
@@ -378,9 +432,7 @@ def _build_pending_execution_args(
     if _operation_name_from_args(name, execution_args) == "create_work_order":
         _normalize_operation_work_order_args(execution_args)
         _fill_operation_default_wage(execution_args, farm_id)
-    if _is_labor_payment_settle_call(name, execution_args) or (
-        name == _LABOR_PAYMENT_SKILL and _is_all_labor_payment_request(original_input)
-    ):
+    if _should_force_labor_payment_settle(name, execution_args, original_input):
         execution_args["operation"] = _LABOR_SETTLE_OPERATION
         _normalize_settle_labor_payment_args(execution_args, original_input)
     if name == "manage_workers":
@@ -479,6 +531,26 @@ def _is_labor_payment_settle_call(name: str, args: dict) -> bool:
         args.get(key) not in (None, "")
         for key in ("amount", "scope", "payment_date")
     )
+
+
+def _should_force_labor_payment_settle(
+    name: str, args: dict, original_input: str
+) -> bool:
+    if _is_labor_payment_settle_call(name, args):
+        return True
+    if name != _LABOR_PAYMENT_SKILL:
+        return False
+    if _is_all_labor_payment_request(original_input):
+        return True
+    return _is_single_labor_payment_request(original_input)
+
+
+def _is_single_labor_payment_request(original_input: str) -> bool:
+    normalized = _normalize_text(original_input)
+    if _LABOR_PAYMENT_QUERY_RE.search(normalized):
+        return False
+    has_labor_target = any(hint in normalized for hint in ("工资", "工钱", "人工"))
+    return has_labor_target and bool(_SINGLE_LABOR_PAYMENT_RE.search(normalized))
 
 
 def _is_all_labor_payment_request(original_input: str) -> bool:
@@ -643,10 +715,18 @@ def _fill_settle_labor_context_args(args: dict, farm_id: int) -> None:
     try:
         from app.services import planting_read_service
 
+        worker_name = _clean_text(args.get("worker") or args.get("worker_name"))
+        if worker_name is None and args.get("worker_id") not in (None, ""):
+            worker = (
+                db.query(Worker)
+                .filter(Worker.id == int(args["worker_id"]), Worker.farm_id == farm_id)
+                .first()
+            )
+            worker_name = worker.name if worker else None
         entries = planting_read_service.list_labor_payables(
             db,
             farm_id=farm_id,
-            worker_name=_clean_text(args.get("worker") or args.get("worker_name")),
+            worker_name=worker_name,
             cycle_id=args.get("cycle_id"),
             work_order_id=args.get("work_order_id"),
         )

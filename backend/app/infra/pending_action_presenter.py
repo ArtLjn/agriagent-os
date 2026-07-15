@@ -35,7 +35,10 @@ def _labor_payment_operation(skill_name: str, params: dict) -> str | None:
     if skill_name == "manage_wages":
         return _LABOR_WAGE_OPERATION
     if skill_name == "manage_labor_payment":
-        if any(params.get(key) not in (None, "") for key in ("amount", "scope")):
+        if any(
+            params.get(key) not in (None, "")
+            for key in ("amount", "scope", "payment_date")
+        ):
             return _LABOR_SETTLE_OPERATION
         if any(
             params.get(key) not in (None, "")
@@ -104,6 +107,7 @@ def build_confirmation_context(
                 "type": "labor_payment",
                 "scope": scope,
                 "worker": worker,
+                "worker_id": params.get("worker_id"),
                 "work_order_id": params.get("work_order_id"),
                 "cycle_id": params.get("cycle_id"),
             },
@@ -118,12 +122,15 @@ def build_confirmation_context(
             "inferred_fields": {
                 "scope": scope,
                 "worker": worker,
+                "worker_id": params.get("worker_id"),
                 "affected_entries": params.get("affected_entries"),
             },
             "risk_notes": ["确认后会增加人工已付金额。"],
             "editable_fields": [
                 "worker",
+                "worker_id",
                 "amount",
+                "payment_date",
                 "cycle_id",
                 "work_order_id",
                 "start_date",
@@ -320,6 +327,8 @@ def build_confirm_message(
             target_text = "全部未付人工"
         elif target.get("worker"):
             target_text = str(target["worker"])
+        elif target.get("worker_id"):
+            target_text = f"工人#{target['worker_id']}"
         elif target.get("work_order_id"):
             target_text = f"作业单#{target['work_order_id']}"
         elif target.get("cycle_id"):

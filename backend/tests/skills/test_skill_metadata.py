@@ -327,6 +327,9 @@ def test_manage_labor_payment_call_metadata_infers_operation_risk():
     settle_metadata = get_skill_call_metadata(
         _ManageLaborPaymentSkill(), {"amount": 300, "worker_name": "老王"}
     )
+    worker_id_settle_metadata = get_skill_call_metadata(
+        _ManageLaborPaymentSkill(), {"worker_id": 1, "amount": 300}
+    )
     wage_metadata = get_skill_call_metadata(
         _ManageLaborPaymentSkill(),
         {"work_date": "2026-06-04", "quantity": 15, "unit_price": 180},
@@ -344,9 +347,35 @@ def test_manage_labor_payment_call_metadata_infers_operation_risk():
     assert settle_metadata.operation == "settle_payment"
     assert settle_metadata.operation_risk == "write_confirm"
     assert settle_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+    assert worker_id_settle_metadata.operation == "settle_payment"
+    assert worker_id_settle_metadata.operation_risk == "write_confirm"
+    assert (
+        worker_id_settle_metadata.permission_level
+        == SkillPermissionLevel.WRITE_CONFIRM
+    )
     assert wage_metadata.operation == "manage_wage"
     assert wage_metadata.operation_risk == "write_confirm"
     assert wage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
+def test_manage_labor_payment_pending_args_infer_single_settlement_only():
+    from app.agent.runtime.tool_executor import _build_pending_execution_args
+
+    settle_args = _build_pending_execution_args(
+        "manage_labor_payment",
+        {"worker": "老王"},
+        farm_id=1,
+        original_input="把老王工资结了",
+    )
+    query_args = _build_pending_execution_args(
+        "manage_labor_payment",
+        {"worker": "老王"},
+        farm_id=1,
+        original_input="老王还欠多少人工钱",
+    )
+
+    assert settle_args == {"worker": "老王", "operation": "settle_payment"}
+    assert query_args == {"worker": "老王"}
 
 
 def test_manage_planting_units_legacy_metadata_uses_shared_capability_operations():

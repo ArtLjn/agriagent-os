@@ -436,6 +436,104 @@ async def test_manage_labor_payment_settle_accepts_worker_name_alias(
 
 
 @pytest.mark.asyncio
+async def test_manage_labor_payment_worker_id_amount_settles_specific_worker(
+    skill_sessions, ctx
+):
+    work_order = _create_work_order(skill_sessions)
+    wang_entry = next(
+        entry for entry in work_order.labor_entries if entry.worker.name == "老王"
+    )
+
+    result = await ManageLaborPaymentSkill().execute(
+        {"worker_id": wang_entry.worker_id, "amount": 100},
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "已结算人工100.00元" in result.reply
+    skill_sessions.expire_all()
+    entries = (
+        skill_sessions.query(LaborEntry)
+        .filter(LaborEntry.work_order_id == work_order.id)
+        .order_by(LaborEntry.worker_id)
+        .all()
+    )
+    assert {entry.worker.name: entry.unpaid_amount for entry in entries} == {
+        "老王": Decimal("0.00"),
+        "老李": Decimal("180.00"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_single_worker_pending_confirm_infers_settlement_from_user_input(
+    skill_sessions, ctx
+):
+    work_order = _create_work_order(skill_sessions)
+    work_order_id = work_order.id
+
+    async def _ainvoke(params):
+        result = await ManageLaborPaymentSkill().execute(params, ctx)
+        return result.reply
+
+    tool = SimpleNamespace(
+        name="manage_labor_payment",
+        args_schema=None,
+        ainvoke=AsyncMock(side_effect=_ainvoke),
+    )
+    _attach_skill_metadata(tool, ManageLaborPaymentSkill())
+    state = {
+        "messages": [
+            HumanMessage(content="把老王工资结了"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_labor_payment",
+                        "args": {"worker": "老王"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-settle-one-labor",
+    }
+
+    with (
+        patch("app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]),
+        patch(
+            "app.agent.executor.pending_actions.get_langchain_tools",
+            return_value=[tool],
+        ),
+    ):
+        pending_result = await _parallel_tool_node(state)
+        pending = get_pending(1, session_id="sess-settle-one-labor")
+        assert pending is not None
+        assert pending.params == {"worker": "老王", "operation": "settle_payment"}
+        assert "确认结算人工" in pending_result["messages"][0].content
+
+        decision = await handle_pending_action(
+            farm_id=1,
+            message="确认",
+            session_id="sess-settle-one-labor",
+        )
+
+    skill_sessions.expire_all()
+    entries = (
+        skill_sessions.query(LaborEntry)
+        .filter(LaborEntry.work_order_id == work_order_id)
+        .order_by(LaborEntry.worker_id)
+        .all()
+    )
+    assert decision.status == "confirmed"
+    assert "已结算人工100.00元" in decision.reply
+    assert {entry.worker.name: entry.unpaid_amount for entry in entries} == {
+        "老王": Decimal("0.00"),
+        "老李": Decimal("180.00"),
+    }
+
+
+@pytest.mark.asyncio
 async def test_all_workers_pending_confirm_settles_every_unpaid_labor(
     skill_sessions, ctx
 ):

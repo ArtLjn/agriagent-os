@@ -407,6 +407,8 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
         has_wage_fields = any(
             params.get(key) not in (None, "") for key in _LABOR_PAYMENT_WAGE_FIELDS
         )
+        if has_settle_fields and _only_labor_payment_worker_id_wage_field(params):
+            return "settle_payment"
         if has_settle_fields and has_wage_fields:
             return None
         if has_settle_fields:
@@ -421,6 +423,15 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
         if any(params.get(key) is not None for key in _USER_SETTINGS_WRITE_FIELDS)
         else "query_settings"
     )
+
+
+def _only_labor_payment_worker_id_wage_field(params: Mapping[str, Any]) -> bool:
+    wage_keys = {
+        key
+        for key in _LABOR_PAYMENT_WAGE_FIELDS
+        if params.get(key) not in (None, "")
+    }
+    return wage_keys == {"worker_id"}
 
 
 def set_skill_enabled_state(
