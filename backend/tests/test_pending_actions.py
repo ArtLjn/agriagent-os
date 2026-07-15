@@ -61,11 +61,10 @@ def test_write_skill_registry_covers_runtime_write_skills():
         "manage_work_orders",
         "create_operation_work_order",
         "settle_debt",
-        "settle_labor_payment",
+        "manage_labor_payment",
         "update_crop_cycle",
         "update_operation_work_order",
         "manage_workers",
-        "manage_wages",
         "delete_cost_record",
         "manage_cost_categories",
         "manage_planting_units",
@@ -76,7 +75,7 @@ def test_write_skill_registry_covers_runtime_write_skills():
     }
 
     assert WRITE_SKILLS == expected
-    assert get_cache_groups_for_skill("settle_labor_payment") == [
+    assert get_cache_groups_for_skill("manage_labor_payment") == [
         "cost_analytics",
         "cost_summary",
         "get_farm_status",

@@ -85,7 +85,7 @@ parameters:
 
 ## 不要使用
 
-用户只是在记录普通农事日志时使用 `log_farm_activity`。用户要管理工人档案时使用 `manage_workers`。用户要结清人工工资时使用 `settle_labor_payment`。
+用户只是在记录普通农事日志时使用 `log_farm_activity`。用户要管理工人档案时使用 `manage_workers`。用户要结清人工工资时使用 `manage_labor_payment(operation=settle_payment)`。
 
 ## 参数推断
 

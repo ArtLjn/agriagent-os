@@ -46,7 +46,7 @@ class TestBaselineChitchatNoFalsePositive:
             "weather",
             "manage_crop_cycle",
             "manage_workers",
-            "get_labor_payables",
+            "manage_labor_payment",
             "get_debt_summary",
         ]
         tools = [fake_tool_factory(name) for name in all_query_skills]

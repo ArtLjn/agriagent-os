@@ -96,6 +96,38 @@ def test_manage_workers_legacy_aliases_resolve_to_operations():
     )
 
 
+def test_manage_labor_payment_legacy_aliases_resolve_to_operations():
+    registry = load_skill_registry()
+
+    query_alias = registry.resolve_alias("get_labor_payables")
+    settle_alias = registry.resolve_alias("settle_labor_payment")
+    wage_alias = registry.resolve_alias("manage_wages")
+
+    assert query_alias is not None
+    assert query_alias.capability == "manage_labor_payment"
+    assert query_alias.operation == "query_payables"
+    assert settle_alias is not None
+    assert settle_alias.capability == "manage_labor_payment"
+    assert settle_alias.operation == "settle_payment"
+    assert wage_alias is not None
+    assert wage_alias.capability == "manage_labor_payment"
+    assert wage_alias.operation == "manage_wage"
+    assert registry.capabilities["manage_labor_payment"].capability == (
+        "labor_payment_management"
+    )
+    assert registry.get_operation("manage_labor_payment", "query_payables").risk == (
+        "read"
+    )
+    assert (
+        registry.get_operation("manage_labor_payment", "settle_payment").risk
+        == "write_confirm"
+    )
+    assert (
+        registry.get_operation("manage_labor_payment", "manage_wage").risk
+        == "write_confirm"
+    )
+
+
 def test_manage_planting_units_legacy_aliases_resolve_to_operations():
     registry = load_skill_registry()
 

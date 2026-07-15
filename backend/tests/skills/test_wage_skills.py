@@ -12,11 +12,11 @@ from app.models.crop import CropTemplate, GrowthStage
 from app.models.cycle import CropCycle, CycleStage
 from app.models.planting import LaborEntry
 
-_manage_wages_mod = importlib.import_module(
-    "app.agent.skills.manage-wages.scripts.main"
+_manage_labor_payment_mod = importlib.import_module(
+    "app.agent.skills.manage-labor-payment.scripts.main"
 )
 
-ManageWagesSkill = _manage_wages_mod.ManageWagesSkill
+ManageLaborPaymentSkill = _manage_labor_payment_mod.ManageLaborPaymentSkill
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def ctx():
 
 @pytest.fixture
 def wage_skill_session(monkeypatch, db_session):
-    monkeypatch.setattr(_manage_wages_mod, "SessionLocal", lambda: db_session)
+    monkeypatch.setattr(_manage_labor_payment_mod, "SessionLocal", lambda: db_session)
     return db_session
 
 
@@ -71,11 +71,12 @@ def _create_cycle(db) -> CropCycle:
 
 
 @pytest.mark.asyncio
-async def test_manage_wages_saves_wage_and_cost(wage_skill_session, ctx):
+async def test_manage_labor_payment_saves_wage_and_cost(wage_skill_session, ctx):
     cycle = _create_cycle(wage_skill_session)
 
-    result = await ManageWagesSkill().execute(
+    result = await ManageLaborPaymentSkill().execute(
         {
+            "operation": "manage_wage",
             "action": "save",
             "cycle_id": cycle.id,
             "operation_type": "采收",
@@ -99,11 +100,14 @@ async def test_manage_wages_saves_wage_and_cost(wage_skill_session, ctx):
 
 
 @pytest.mark.asyncio
-async def test_manage_wages_requires_date_for_new_wage(wage_skill_session, ctx):
+async def test_manage_labor_payment_requires_date_for_new_wage(
+    wage_skill_session, ctx
+):
     cycle = _create_cycle(wage_skill_session)
 
-    result = await ManageWagesSkill().execute(
+    result = await ManageLaborPaymentSkill().execute(
         {
+            "operation": "manage_wage",
             "action": "save",
             "cycle_id": cycle.id,
             "operation_type": "采收",
@@ -118,10 +122,11 @@ async def test_manage_wages_requires_date_for_new_wage(wage_skill_session, ctx):
 
 
 @pytest.mark.asyncio
-async def test_manage_wages_updates_existing_wage(wage_skill_session, ctx):
+async def test_manage_labor_payment_updates_existing_wage(wage_skill_session, ctx):
     cycle = _create_cycle(wage_skill_session)
-    saved = await ManageWagesSkill().execute(
+    saved = await ManageLaborPaymentSkill().execute(
         {
+            "operation": "manage_wage",
             "action": "save",
             "cycle_id": cycle.id,
             "operation_type": "采收",
@@ -136,8 +141,9 @@ async def test_manage_wages_updates_existing_wage(wage_skill_session, ctx):
     assert saved.status.value == "success"
     entry = wage_skill_session.query(LaborEntry).one()
 
-    result = await ManageWagesSkill().execute(
+    result = await ManageLaborPaymentSkill().execute(
         {
+            "operation": "manage_wage",
             "action": "update",
             "labor_entry_id": entry.id,
             "unit_price": 200,
@@ -156,11 +162,33 @@ async def test_manage_wages_updates_existing_wage(wage_skill_session, ctx):
 
 
 @pytest.mark.asyncio
-async def test_manage_wages_update_requires_labor_entry_id(wage_skill_session, ctx):
-    result = await ManageWagesSkill().execute(
-        {"action": "update", "unit_price": 200},
+async def test_manage_labor_payment_update_requires_labor_entry_id(
+    wage_skill_session, ctx
+):
+    result = await ManageLaborPaymentSkill().execute(
+        {"operation": "manage_wage", "action": "update", "unit_price": 200},
         ctx,
     )
 
     assert result.status.value == "need_clarify"
     assert "工资记录 ID" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_legacy_wage_fields_infer_manage_wage(wage_skill_session, ctx):
+    cycle = _create_cycle(wage_skill_session)
+
+    result = await ManageLaborPaymentSkill().execute(
+        {
+            "cycle_id": cycle.id,
+            "operation_type": "压瓜",
+            "worker_name": "李海",
+            "quantity": 15,
+            "unit_price": 180,
+            "work_date": "2026-06-04",
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "已保存工资" in result.reply

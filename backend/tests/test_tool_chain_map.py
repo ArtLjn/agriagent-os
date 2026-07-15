@@ -22,15 +22,13 @@ class TestToolChainMap:
             "create_operation_work_order",
             "manage_farm_logs",
             "get_farm_status",
-            "get_labor_payables",
+            "manage_labor_payment",
             "get_operation_work_orders",
             "manage_cost_categories",
             "manage_planting_units",
             "manage_user_settings",
-            "settle_labor_payment",
             "update_operation_work_order",
             "manage_workers",
-            "manage_wages",
             "weather",
             "web_search",
         }
@@ -42,7 +40,7 @@ class TestToolChainMap:
             "manage_cost",
             "manage_crop_cycle",
             "manage_farm_logs",
-            "get_labor_payables",
+            "manage_labor_payment",
             "get_operation_work_orders",
             "manage_crop_templates",
             "manage_workers",
@@ -61,10 +59,9 @@ class TestToolChainMap:
             "manage_crop_templates",
             "create_operation_work_order",
             "manage_farm_logs",
-            "settle_labor_payment",
+            "manage_labor_payment",
             "update_operation_work_order",
             "manage_workers",
-            "manage_wages",
             "manage_cost_categories",
             "manage_planting_units",
             "manage_user_settings",
@@ -85,9 +82,9 @@ class TestExpandByChain:
         result = expand_by_chain({"manage_crop_cycle"})
         assert result == {"manage_crop_cycle"}
 
-    def test_labor_payables_chain(self):
-        result = expand_by_chain({"get_labor_payables"})
-        assert result == {"get_labor_payables"}
+    def test_labor_payment_chain(self):
+        result = expand_by_chain({"manage_labor_payment"})
+        assert result == {"manage_labor_payment"}
 
     def test_operation_work_orders_chain(self):
         result = expand_by_chain({"get_operation_work_orders"})

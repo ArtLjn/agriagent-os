@@ -36,7 +36,7 @@ def _tools(names: list[str]):
         ),
         (
             "还欠多少人工钱",
-            "get_labor_payables",
+            "manage_labor_payment",
             "manage_labor_payment",
             "query_payables",
         ),
@@ -290,8 +290,7 @@ def _governance_tool_pool() -> list[str]:
         "manage_workers",
         "get_operation_work_orders",
         "create_operation_work_order",
-        "get_labor_payables",
-        "settle_labor_payment",
+        "manage_labor_payment",
         "get_farm_status",
         "weather",
         "manage_user_settings",

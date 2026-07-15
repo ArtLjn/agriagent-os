@@ -112,7 +112,7 @@ def select_tools(
     if "manage_cost" in candidates:
         candidates.discard("manage_farm_logs")
 
-    if "get_labor_payables" in candidates:
+    if "manage_labor_payment" in candidates:
         if has_labor_hint:
             candidates.discard("manage_cost")
 
@@ -132,27 +132,22 @@ def select_tools(
         elif has_query_intent and not has_write_intent:
             candidates.remove("create_operation_work_order")
 
-    if "settle_labor_payment" in candidates:
-        candidates.difference_update({"manage_cost", "get_labor_payables"})
+    if "manage_labor_payment" in candidates:
+        candidates.discard("manage_cost")
 
     if "create_operation_work_order" in candidates:
         candidates.discard("manage_workers")
-        candidates.discard("manage_wages")
+        candidates.discard("manage_labor_payment")
         candidates.discard("manage_planting_units")
 
-    if "manage_workers" in candidates:
-        candidates.discard("get_labor_payables")
+    if "manage_labor_payment" in candidates and "工资记录" in user_message:
+        candidates.discard("manage_workers")
 
-    if "manage_wages" in candidates:
-        candidates.difference_update(
-            {
-                "manage_cost",
-                "get_labor_payables",
-                "manage_farm_logs",
-                "manage_workers",
-                "settle_labor_payment",
-            }
-        )
+    if "manage_workers" in candidates:
+        candidates.discard("manage_labor_payment")
+
+    if "manage_labor_payment" in candidates:
+        candidates.difference_update({"manage_cost", "manage_farm_logs"})
 
     if "update_operation_work_order" in candidates:
         candidates.difference_update({"create_operation_work_order", "manage_farm_logs"})

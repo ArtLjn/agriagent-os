@@ -63,7 +63,7 @@ parameters:
 ## 不要使用
 
 - 用户记录一次具体农事作业和用工时，优先使用 `manage_work_orders(operation=create_work_order)`。
-- 用户查询未付工资或结算工资时，使用 `get_labor_payables` 或 `settle_labor_payment`。
+- 用户查询未付工资或结算工资时，使用 `manage_labor_payment`。
 - 用户只是在普通对话中提到人名，但没有工人档案意图时，不要创建工人。
 
 ## 参数推断

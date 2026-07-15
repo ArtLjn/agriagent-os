@@ -80,7 +80,7 @@ class ContextPolicy:
             "update_operation_work_order",
         }
     )
-    LABOR_TOOLS = frozenset({"get_labor_payables", "settle_labor_payment"})
+    LABOR_TOOLS = frozenset({"manage_labor_payment"})
     COST_CATEGORY_TOOLS = frozenset({"manage_cost_categories"})
     PLANTING_UNIT_TOOLS = frozenset({"manage_planting_units"})
 
