@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, InputNumber, Row, Select, Space, Statistic, Tag, Typography, message } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Col, InputNumber, Row, Select, message } from 'antd';
 import {
   CloudOutlined,
   DashboardOutlined,
+  EnvironmentOutlined,
   FieldTimeOutlined,
   ReloadOutlined,
   ThunderboltOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
 import { getForecast, searchLocations, type LocationOption } from '../../api/weather';
-import { MetricCard, PageShell, StateBlock, Toolbar } from '../../components/PageShell';
-import { cardStyle, palette } from '../../styles/theme';
+import { PageShell, StateBlock, Toolbar } from '../../components/PageShell';
+import { palette } from '../../styles/theme';
 import { buildWeatherSummary, buildWeatherView, type WeatherViewDay } from './weatherModel';
 
 export default function Weather() {
@@ -86,6 +87,14 @@ export default function Weather() {
   const rainyDays = weather.filter((day) => day.riskText === '有雨' || day.riskText === '强降水').length;
   const warningDays = weather.filter((day) => day.riskLevel === 'warning').length;
 
+  const heroTemp = useMemo(() => {
+    const today = weather[0];
+    if (!today) return null;
+    return today.temperatureRange;
+  }, [weather]);
+
+  const heroLabel = useMemo(() => weather[0]?.label ?? null, [weather]);
+
   return (
     <PageShell
       title="天气预报"
@@ -94,7 +103,7 @@ export default function Weather() {
       <Toolbar
         left={(
           <>
-            <span style={{ color: palette.textMuted, fontSize: 13 }}>预报天数</span>
+            <span className="weather-toolbar__label">预报天数</span>
             <InputNumber min={1} max={16} value={days} onChange={(v) => setDays(v ?? 7)} />
             <Select
               allowClear
@@ -104,6 +113,7 @@ export default function Weather() {
               placeholder="搜索地点"
               value={selectedLocation?.display_name}
               style={{ width: 240 }}
+              suffixIcon={<EnvironmentOutlined style={{ color: palette.textMuted }} />}
               onSearch={handleSearchLocation}
               onChange={handleSelectLocation}
               options={locationOptions.map((item) => ({
@@ -123,50 +133,73 @@ export default function Weather() {
         )}
       />
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+      <Row gutter={[16, 16]} className="weather-hero-row" align="top">
         <Col xs={24} lg={12}>
-          <Card style={{ ...cardStyle, height: '100%' }}>
-            <Space direction="vertical" size={10} style={{ width: '100%' }}>
-              <Space>
-                <CloudOutlined style={{ color: palette.accent, fontSize: 20 }} />
-                <Typography.Text style={{ color: palette.textMuted }}>农事天气摘要</Typography.Text>
-              </Space>
-              <Typography.Title level={4} style={{ color: palette.text, margin: 0, lineHeight: 1.45 }}>
-                {summary}
-              </Typography.Title>
-              <OfficialWarnings warnings={warnings} />
-            </Space>
-          </Card>
+          <section className="weather-hero">
+            <header className="weather-hero__head">
+              <span className="weather-hero__eyebrow">
+                <CloudOutlined style={{ color: palette.accent, fontSize: 16 }} />
+                农事天气摘要
+              </span>
+              {heroTemp && (
+                <div className="weather-hero__temp">
+                  <span className="weather-hero__temp-value">{heroTemp}</span>
+                  {heroLabel && <span className="weather-hero__temp-label">{heroLabel}</span>}
+                </div>
+              )}
+            </header>
+            <p className="weather-hero__summary">{summary}</p>
+          </section>
         </Col>
-        <Col xs={24} sm={8} lg={4}>
-          <MetricCard accent={warningDays > 0 ? palette.danger : palette.success}>
-            <Statistic title="风险天数" value={warningDays} prefix={<WarningOutlined />} suffix="天" />
-          </MetricCard>
-        </Col>
-        <Col xs={24} sm={8} lg={4}>
-          <MetricCard accent={palette.warning}>
-            <Statistic title="高温关注" value={hotDays} prefix={<ThunderboltOutlined />} suffix="天" />
-          </MetricCard>
-        </Col>
-        <Col xs={24} sm={8} lg={4}>
-          <MetricCard accent={palette.accent}>
-            <Statistic title="降水窗口" value={rainyDays} prefix={<DashboardOutlined />} suffix="天" />
-          </MetricCard>
+        <Col xs={24} lg={12}>
+          <Row gutter={[12, 12]} className="weather-metric-row">
+            <Col xs={24} sm={8}>
+              <WeatherMetric
+                icon={<WarningOutlined />}
+                accent={warningDays > 0 ? palette.danger : palette.success}
+                label="风险天数"
+                value={warningDays}
+                hint={warningDays > 0 ? '需调整作业' : '总体平稳'}
+              />
+            </Col>
+            <Col xs={24} sm={8}>
+              <WeatherMetric
+                icon={<ThunderboltOutlined />}
+                accent={palette.warning}
+                label="高温关注"
+                value={hotDays}
+                hint={hotDays > 0 ? '注意防暑' : '无需特别防护'}
+              />
+            </Col>
+            <Col xs={24} sm={8}>
+              <WeatherMetric
+                icon={<DashboardOutlined />}
+                accent={palette.accent}
+                label="降水窗口"
+                value={rainyDays}
+                hint={rainyDays > 0 ? '关注排水' : '灌溉正常'}
+              />
+            </Col>
+          </Row>
         </Col>
       </Row>
+
+      <div className="weather-warnings-section">
+        <OfficialWarnings warnings={warnings} />
+      </div>
 
       {warningDays > 0 && (
         <Alert
           type="warning"
           showIcon
-          style={{ marginBottom: 16 }}
+          className="weather-alert"
           message="存在影响作业安排的天气风险"
           description="建议优先检查排水、棚膜、支架和灌溉计划，把采收、施肥、喷药安排到风险较低的时段。"
         />
       )}
 
       <StateBlock loading={loading} empty={weather.length === 0} emptyText="暂无天气数据">
-        <Row gutter={[16, 16]}>
+        <Row gutter={[16, 16]} className="weather-day-grid">
           {weather.map((day) => (
             <Col xs={24} sm={12} lg={8} xl={6} key={day.date}>
               <WeatherCard day={day} />
@@ -178,110 +211,120 @@ export default function Weather() {
   );
 }
 
+interface WeatherMetricProps {
+  icon: React.ReactNode;
+  accent: string;
+  label: string;
+  value: number;
+  hint: string;
+}
+
+function WeatherMetric({ icon, accent, label, value, hint }: WeatherMetricProps) {
+  return (
+    <div
+      className="weather-metric"
+      style={{ '--weather-metric-accent': accent } as React.CSSProperties}
+    >
+      <div className="weather-metric__icon" style={{ color: accent, background: `${accent}1f` }}>
+        {icon}
+      </div>
+      <div className="weather-metric__body">
+        <div className="weather-metric__label">{label}</div>
+        <div className="weather-metric__value">
+          {value}
+          <span className="weather-metric__unit">天</span>
+        </div>
+        <div className="weather-metric__hint">{hint}</div>
+      </div>
+    </div>
+  );
+}
+
 function OfficialWarnings({ warnings }: { warnings: string[] }) {
   if (warnings.length === 0) {
     return (
-      <Tag color="green" style={{ width: 'fit-content' }}>
-        无官方预警
-      </Tag>
+      <div className="weather-warnings weather-warnings--empty">
+        <span className="weather-warnings__title">官方天气预警</span>
+        <span className="weather-warnings__pill">
+          <span className="weather-warnings__dot" />
+          无官方预警
+        </span>
+      </div>
     );
   }
 
-  const visibleWarnings = warnings.slice(0, 3);
-  const remaining = warnings.length - visibleWarnings.length;
-
   return (
-    <div
-      aria-label="官方天气预警"
-      style={{
-        display: 'grid',
-        gap: 8,
-        maxWidth: '100%',
-        overflow: 'hidden',
-      }}
-    >
-      {visibleWarnings.map((item) => (
-        <div
-          key={item}
-          title={item}
-          style={{
-            color: palette.warning,
-            background: 'rgba(210, 153, 34, 0.12)',
-            border: `1px solid rgba(210, 153, 34, 0.36)`,
-            borderRadius: 6,
-            fontSize: 12,
-            lineHeight: 1.55,
-            maxWidth: '100%',
-            minWidth: 0,
-            padding: '6px 10px',
-            wordBreak: 'break-word',
-            overflowWrap: 'anywhere',
-            display: '-webkit-box',
-            WebkitBoxOrient: 'vertical',
-            WebkitLineClamp: 2,
-            overflow: 'hidden',
-          }}
-        >
-          {item}
-        </div>
-      ))}
-      {remaining > 0 && (
-        <Typography.Text style={{ color: palette.textMuted, fontSize: 12 }}>
-          另有 {remaining} 条官方预警
-        </Typography.Text>
-      )}
+    <div className="weather-warnings" aria-label="官方天气预警">
+      <header className="weather-warnings__head">
+        <span className="weather-warnings__title">官方天气预警</span>
+        <span className="weather-warnings__count">{warnings.length} 条 · 横向滑动查看</span>
+      </header>
+      <div className="weather-warnings__track">
+        {warnings.map((item) => (
+          <div key={item} className="weather-warnings__item" title={item}>
+            {item}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 function WeatherCard({ day }: { day: WeatherViewDay }) {
-  const riskColor = day.riskLevel === 'warning' ? palette.danger : day.riskLevel === 'notice' ? palette.warning : palette.success;
+  const riskColor = day.riskLevel === 'warning'
+    ? palette.danger
+    : day.riskLevel === 'notice'
+      ? palette.warning
+      : palette.success;
 
   return (
-    <Card
-      size="small"
-      style={{ ...cardStyle, height: '100%', borderTop: `2px solid ${riskColor}` }}
-      title={(
-        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-          <span>{day.shortDate}</span>
-          <Tag color={day.riskLevel === 'warning' ? 'red' : day.riskLevel === 'notice' ? 'gold' : 'green'}>
-            {day.riskText}
-          </Tag>
-        </Space>
-      )}
+    <article
+      className="weather-card"
+      style={{ '--weather-card-accent': riskColor } as React.CSSProperties}
     >
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        <Space>
-          <CloudOutlined style={{ color: palette.accent, fontSize: 18 }} />
-          <Typography.Text strong>{day.label}</Typography.Text>
-        </Space>
-
-        <Row gutter={10}>
-          <Col span={8}>
-            <SmallMetric label="温度" value={day.temperatureRange} />
-          </Col>
-          <Col span={8}>
-            <SmallMetric label="降水" value={day.precipitationText} />
-          </Col>
-          <Col span={8}>
-            <SmallMetric label="风速" value={day.windText} />
-          </Col>
-        </Row>
-
-        <div style={{ color: palette.textMuted, fontSize: 13, lineHeight: 1.6, minHeight: 42 }}>
-          <FieldTimeOutlined style={{ marginRight: 6 }} />
-          {day.advice}
+      <header className="weather-card__head">
+        <div className="weather-card__date">
+          <span className="weather-card__short">{day.shortDate}</span>{' '}
+          <span className="weather-card__label">
+            <CloudOutlined style={{ color: palette.accent, fontSize: 14 }} />
+            {day.label}
+          </span>
         </div>
-      </Space>
-    </Card>
+        <span
+          className="weather-card__risk"
+          style={{ color: riskColor, background: `${riskColor}1f`, borderColor: `${riskColor}55` }}
+        >
+          {day.riskText}
+        </span>
+      </header>
+
+      <div className="weather-card__temp">{day.temperatureRange}</div>
+
+      <Row gutter={8} className="weather-card__metrics">
+        <Col span={12}>
+          <SmallMetric icon={<DashboardOutlined />} label="降水" value={day.precipitationText} />
+        </Col>
+        <Col span={12}>
+          <SmallMetric icon={<ThunderboltOutlined />} label="风速" value={day.windText} />
+        </Col>
+      </Row>
+
+      <div className="weather-card__advice">
+        <FieldTimeOutlined style={{ marginRight: 6, color: palette.accent }} />
+        {day.advice}
+      </div>
+    </article>
   );
 }
 
-function SmallMetric({ label, value }: { label: string; value: string }) {
+function SmallMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div>
-      <div style={{ color: palette.textSubtle, fontSize: 12, marginBottom: 4 }}>{label}</div>
-      <div style={{ color: palette.text, fontSize: 13, fontWeight: 650, whiteSpace: 'nowrap' }}>{value}</div>
+    <div className="weather-small-metric">
+      <div className="weather-small-metric__label">
+        {icon}
+        {label}
+      </div>
+      <div className="weather-small-metric__value">{value}</div>
     </div>
   );
 }
