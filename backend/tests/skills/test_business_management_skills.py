@@ -235,6 +235,17 @@ async def test_planting_unit_skills_create_list_update_delete(
     unit = patched_skill_sessions.query(PlantingUnit).filter_by(name="东大棚").one()
     unit_id = unit.id
 
+    legacy_listed = await ManagePlantingUnitsSkill().execute({}, ctx)
+    assert legacy_listed.status.value == "success"
+    assert "东大棚" in legacy_listed.reply
+    assert "创建种植单元需要" not in legacy_listed.reply
+
+    legacy_cycle_listed = await ManagePlantingUnitsSkill().execute(
+        {"cycle_id": cycle_id}, ctx
+    )
+    assert legacy_cycle_listed.status.value == "success"
+    assert "东大棚" in legacy_cycle_listed.reply
+
     listed = await ManagePlantingUnitsSkill().execute(
         {"operation": "query_units", "cycle_id": cycle_id}, ctx
     )

@@ -229,6 +229,13 @@ _USER_SETTINGS_WRITE_FIELDS = (
     "default_lon",
     "assistant_role",
 )
+_PLANTING_UNIT_WRITE_FIELDS = (
+    "name",
+    "area_mu",
+    "planted_date",
+    "status",
+    "note",
+)
 _REGISTRY_RISK_TO_METADATA: dict[str, tuple[SkillPermissionLevel, SkillRiskLevel]] = {
     "read": (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
     "write_confirm": (SkillPermissionLevel.WRITE_CONFIRM, SkillRiskLevel.MEDIUM),
@@ -348,7 +355,14 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
             return "manage_units"
         if action == "query":
             return "query_units"
-        return None
+        return (
+            "manage_units"
+            if any(
+                params.get(key) not in (None, "")
+                for key in _PLANTING_UNIT_WRITE_FIELDS
+            )
+            else "query_units"
+        )
     if skill_name != "manage_user_settings":
         return None
     return (

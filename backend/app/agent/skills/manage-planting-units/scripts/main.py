@@ -112,8 +112,18 @@ def _operation(params: dict) -> str:
     action = _clean(params.get("action"))
     if action == "query":
         return "query_units"
-    return "manage_units"
+    if action:
+        return "manage_units"
+    if _has_write_fields(params):
+        return "manage_units"
+    return "query_units"
 
+
+def _has_write_fields(params: dict) -> bool:
+    return any(
+        params.get(key) not in (None, "")
+        for key in ("name", "area_mu", "planted_date", "status", "note")
+    )
 
 def _query_units(db, farm_id: int, params: dict) -> SkillResult:
     cycle_id = params.get("cycle_id")

@@ -271,6 +271,10 @@ def test_manage_planting_units_call_metadata_infers_operation_risk():
     query_metadata = get_skill_call_metadata(
         _ManagePlantingUnitsSkill(), {"operation": "query_units"}
     )
+    legacy_empty_query_metadata = get_skill_call_metadata(_ManagePlantingUnitsSkill(), {})
+    legacy_cycle_query_metadata = get_skill_call_metadata(
+        _ManagePlantingUnitsSkill(), {"cycle_id": 1}
+    )
     create_metadata = get_skill_call_metadata(
         _ManagePlantingUnitsSkill(), {"operation": "manage_units", "action": "create"}
     )
@@ -281,6 +285,12 @@ def test_manage_planting_units_call_metadata_infers_operation_risk():
     assert query_metadata.operation == "query_units"
     assert query_metadata.operation_risk == "read"
     assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert legacy_empty_query_metadata.operation == "query_units"
+    assert legacy_empty_query_metadata.operation_risk == "read"
+    assert legacy_empty_query_metadata.permission_level == SkillPermissionLevel.READ
+    assert legacy_cycle_query_metadata.operation == "query_units"
+    assert legacy_cycle_query_metadata.operation_risk == "read"
+    assert legacy_cycle_query_metadata.permission_level == SkillPermissionLevel.READ
     assert create_metadata.operation == "manage_units"
     assert create_metadata.operation_risk == "write_confirm"
     assert create_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
