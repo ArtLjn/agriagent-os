@@ -68,6 +68,79 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CropTemplateResponse'
+    post:
+      tags:
+        - crops
+      summary: 创建系统作物模板
+      description: >
+        创建 farm_id 为空的系统模板；同名同品种已存在时返回 409。
+        仅在 admin-web 维护系统模板库时使用，农场副本创建请走 POST /crops/templates。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CropTemplateCreate'
+      responses:
+        '201':
+          description: 创建成功。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CropTemplateResponse'
+        '409':
+          description: 同名同品种的系统模板已存在。
+  /crops/templates/system/{template_id}:
+    put:
+      tags:
+        - crops
+      summary: 更新系统作物模板
+      description: >
+        全量替换系统模板的阶段（stages）；系统模板不存在时返回 404。
+        不影响已导入到农场的副本。
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 系统模板 ID。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CropTemplateCreate'
+      responses:
+        '200':
+          description: 更新成功。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CropTemplateResponse'
+        '404':
+          description: 系统模板不存在。
+    delete:
+      tags:
+        - crops
+      summary: 删除系统作物模板
+      description: >
+        删除系统模板；已被农场导入（按 name+variety 匹配）时返回 409，
+        提示已有 N 个农场导入。删除系统模板不影响已导入到农场的副本。
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 系统模板 ID。
+      responses:
+        '200':
+          description: 删除成功。
+        '404':
+          description: 系统模板不存在。
+        '409':
+          description: 已被农场导入，禁止删除；detail 含具体农场数量。
   /crops/templates/system/{template_id}/import:
     post:
       tags:
