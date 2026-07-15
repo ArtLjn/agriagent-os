@@ -16,7 +16,7 @@ def test_validator_requires_runtime_strategy(tmp_path):
     doc.write_text(
         """---
 name: demo_skill
-type: read-only
+type: read
 description: 查询示例数据。
 triggers:
   - 示例
@@ -57,7 +57,7 @@ def test_validator_accepts_tool_name_alias_for_snake_case_runtime(tmp_path):
         """---
 name: demo-skill
 tool_name: demo_skill
-type: read-only
+type: read
 description: 查询示例数据。
 triggers:
   - 示例
@@ -107,7 +107,7 @@ def test_validator_accepts_quoted_tool_name_alias(tmp_path):
         """---
 name: demo-skill
 tool_name: "demo_skill"
-type: read-only
+type: read
 description: 查询示例数据。
 triggers:
   - 示例
@@ -156,7 +156,7 @@ def test_validator_requires_runtime_strategy_as_heading(tmp_path):
     doc.write_text(
         """---
 name: demo_skill
-type: read-only
+type: read
 description: 查询示例数据。
 triggers:
   - 示例
@@ -202,7 +202,7 @@ def test_validator_rejects_non_snake_case_tool_name_alias(tmp_path):
         """---
 name: demo-skill
 tool_name: demo-skill
-type: read-only
+type: read
 description: 查询示例数据。
 triggers:
   - 示例
@@ -244,6 +244,29 @@ parameters:
     result = validate_skill_doc(doc)
 
     assert "tool_name 必须是严格 snake_case" in result.errors
+
+
+def test_validator_rejects_legacy_read_only_type(tmp_path):
+    doc = tmp_path / "skill.md"
+    doc.write_text("---\nname: demo_skill\ntype: read-only\n---\n", encoding="utf-8")
+
+    result = validate_skill_doc(doc)
+
+    assert "frontmatter type 只允许 read 或 write" in result.errors
+
+
+def test_farm_status_doc_uses_directory_capability_and_runtime_tool_name():
+    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
+    skill_doc = skills_dir / "farm-status" / "skill.md"
+    metadata = _skill_doc_metadata(skill_doc)
+    registry = load_skill_registry()
+
+    assert metadata["name"] == skill_doc.parent.name
+    assert metadata["tool_name"] == "get_farm_status"
+    assert "get_farm_status" in _skill_doc_tool_names(skills_dir)
+    alias = registry.resolve_alias(metadata["tool_name"])
+    assert alias is not None
+    assert alias.target == "get_farm_status.query_status"
 
 
 def test_all_existing_skill_docs_are_valid():
@@ -357,7 +380,7 @@ def test_validator_rejects_empty_properties_when_parameter_inference_has_params(
     doc.write_text(
         """---
 name: demo_skill
-type: read-only
+type: read
 description: 查询示例数据。
 triggers:
   - 示例
@@ -410,7 +433,7 @@ def test_validator_rejects_invalid_tool_name_even_when_name_is_snake_case(tmp_pa
         """---
 name: demo_skill
 tool_name: demo-skill
-type: read-only
+type: read
 description: 查询示例数据。
 triggers:
   - 示例

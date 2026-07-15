@@ -72,153 +72,39 @@ _WEB_SEARCH_DISABLED_REASON = "SearXNG 引擎不稳定（CAPTCHA/限流），暂
 _WRITE_CONFIRM_SKILLS = WRITE_SKILLS
 
 _READ_SKILL_METADATA: dict[str, dict[str, Any]] = {
-    "get_cost_analytics": {
-        "context_dependencies": ["farm", "cost_records"],
-        "evaluation_tags": ["read", "cost", "analytics"],
-    },
-    "get_cost_summary": {
-        "context_dependencies": ["farm", "cost_records"],
-        "evaluation_tags": ["read", "cost", "summary"],
-    },
-    "get_debt_summary": {
-        "context_dependencies": ["farm", "cost_records"],
-        "evaluation_tags": ["read", "debt", "summary"],
-    },
-    "get_crop_cycle_info": {
-        "context_dependencies": ["farm", "active_cycles"],
-        "evaluation_tags": ["read", "crop_cycle"],
-    },
-    "get_crop_cycles": {
-        "context_dependencies": ["farm", "crop_cycles"],
-        "evaluation_tags": ["read", "crop_cycle", "list"],
-    },
-    "get_recent_farm_logs": {
-        "context_dependencies": ["farm", "farm_logs"],
-        "evaluation_tags": ["read", "farm_logs"],
-    },
     "get_farm_status": {
         "context_dependencies": ["farm"],
         "evaluation_tags": ["read", "farm_status"],
     },
-    "get_labor_payables": {
-        "context_dependencies": ["workers", "unpaid_labor", "crop_cycles"],
-        "evaluation_tags": ["read", "labor", "payable"],
-    },
-    "get_workers": {
-        "context_dependencies": ["workers", "unpaid_labor"],
-        "evaluation_tags": ["read", "worker", "labor"],
-    },
-    "get_cost_categories": {
-        "context_dependencies": ["cost_categories"],
-        "evaluation_tags": ["read", "cost_category"],
-    },
-    "get_planting_units": {
-        "context_dependencies": ["farm", "crop_cycles", "planting_units"],
-        "evaluation_tags": ["read", "planting_unit"],
-    },
-    "get_crop_templates": {
-        "context_dependencies": ["farm", "crop_templates"],
-        "evaluation_tags": ["read", "crop_template"],
-    },
-    "get_operation_work_orders": {
-        "context_dependencies": ["crop_cycles", "planting_units", "workers"],
-        "evaluation_tags": ["read", "operation_work_order", "labor"],
-    },
-}
-
-_WRITE_SKILL_METADATA: dict[str, dict[str, Any]] = {
-    "create_cost_record": {
-        "context_dependencies": ["farm", "cost_categories"],
-        "evaluation_tags": ["write", "cost", "record"],
-    },
-    "create_crop_cycle": {
-        "context_dependencies": ["farm", "crop_templates"],
-        "evaluation_tags": ["write", "crop_cycle"],
-    },
-    "create_crop_template": {
-        "context_dependencies": ["farm"],
-        "evaluation_tags": ["write", "crop_template"],
-    },
-    "create_operation_work_order": {
-        "context_dependencies": ["farm", "crop_cycles", "planting_units", "workers"],
-        "evaluation_tags": ["write", "operation_work_order", "labor"],
-    },
-    "log_farm_activity": {
-        "context_dependencies": ["farm", "active_cycles"],
-        "evaluation_tags": ["write", "farm_logs"],
-    },
-    "manage_workers": {
-        "context_dependencies": ["workers", "unpaid_labor"],
-        "evaluation_tags": ["write", "worker", "labor"],
-    },
-    "manage_wages": {
-        "context_dependencies": ["workers", "crop_cycles", "unpaid_labor"],
-        "evaluation_tags": ["write", "labor", "wage"],
-    },
-    "delete_cost_record": {
-        "context_dependencies": ["cost_records"],
-        "evaluation_tags": ["write", "cost", "delete"],
-    },
-    "manage_cost_categories": {
-        "context_dependencies": ["cost_categories"],
-        "evaluation_tags": ["write", "cost_category"],
-    },
-    "manage_planting_units": {
-        "context_dependencies": ["crop_cycles", "planting_units"],
-        "evaluation_tags": ["write", "planting_unit"],
-    },
-    "manage_crop_templates": {
-        "context_dependencies": ["crop_templates", "crop_cycles"],
-        "risk_level": SkillRiskLevel.HIGH,
-        "evaluation_tags": ["write", "crop_template"],
-    },
-    "manage_farm_logs": {
-        "context_dependencies": ["farm_logs", "crop_cycles"],
-        "evaluation_tags": ["write", "farm_logs"],
-    },
-    "delete_crop_cycle": {
-        "context_dependencies": ["crop_cycles", "farm_logs", "cost_records"],
-        "risk_level": SkillRiskLevel.HIGH,
-        "evaluation_tags": ["write", "crop_cycle", "delete"],
-    },
-    "manage_user_settings": {
-        "context_dependencies": ["user"],
-        "evaluation_tags": ["write", "user_settings"],
-    },
-    "settle_debt": {
-        "context_dependencies": ["farm", "cost_records"],
-        "evaluation_tags": ["write", "debt", "settlement"],
-    },
-    "settle_labor_payment": {
-        "context_dependencies": ["workers", "unpaid_labor", "operation_work_orders"],
-        "evaluation_tags": ["write", "labor", "settlement"],
-    },
-    "update_crop_cycle": {
-        "context_dependencies": ["farm", "active_cycles"],
-        "evaluation_tags": ["write", "crop_cycle", "date_update"],
-    },
-    "update_crop_stage": {
-        "context_dependencies": ["farm", "active_cycles"],
-        "evaluation_tags": ["write", "crop_stage"],
-    },
-    "update_operation_work_order": {
-        "context_dependencies": ["operation_work_orders", "planting_units", "workers"],
-        "evaluation_tags": ["write", "operation_work_order", "labor"],
-    },
-}
-
-_EXTERNAL_NETWORK_SKILL_METADATA: dict[str, dict[str, Any]] = {
     "weather": {
+        "permission_level": SkillPermissionLevel.EXTERNAL_NETWORK,
         "context_dependencies": ["farm", "weather_location"],
         "evaluation_tags": ["read", "weather", "external_network"],
         "enabled": True,
     },
     "web_search": {
+        "permission_level": SkillPermissionLevel.EXTERNAL_NETWORK,
         "context_dependencies": ["external_search"],
         "evaluation_tags": ["read", "search", "external_network"],
         "enabled": False,
         "disabled_reason": _WEB_SEARCH_DISABLED_REASON,
     },
+}
+
+_WRITE_SKILL_METADATA: dict[str, dict[str, Any]] = {
+    "manage_cost": {},
+    "manage_crop_cycle": {},
+    "manage_crop_templates": {},
+    "manage_farm_logs": {},
+    "manage_labor_payment": {},
+    "manage_work_orders": {},
+    "manage_workers": {
+        "context_dependencies": ["workers", "unpaid_labor"],
+        "evaluation_tags": ["write", "worker", "labor"],
+    },
+    "manage_planting_units": {},
+    "manage_cost_categories": {},
+    "manage_user_settings": {},
 }
 
 _RUNTIME_ENABLEMENT_OVERRIDES: dict[str, dict[str, Any]] = {}
@@ -473,7 +359,7 @@ def _apply_runtime_enablement(
 
 def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
     registry_metadata = resolve_skill_capability_metadata(skill_name)
-    if skill_name in _WRITE_CONFIRM_SKILLS:
+    if skill_name in _WRITE_SKILL_METADATA or skill_name in _WRITE_CONFIRM_SKILLS:
         metadata = {
             "permission_level": SkillPermissionLevel.WRITE_CONFIRM,
             "risk_level": SkillRiskLevel.MEDIUM,
@@ -484,6 +370,10 @@ def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
         metadata.update(_WRITE_SKILL_METADATA.get(skill_name, {}))
         if registry_metadata is not None:
             metadata.update(registry_metadata)
+        if skill_name in _WRITE_SKILL_METADATA and metadata.get("operation") is None:
+            metadata["permission_level"] = SkillPermissionLevel.WRITE_CONFIRM
+            if metadata.get("risk_level") == SkillRiskLevel.LOW:
+                metadata["risk_level"] = SkillRiskLevel.MEDIUM
         return metadata
 
     if skill_name in _READ_SKILL_METADATA:
@@ -492,17 +382,6 @@ def _get_known_default_metadata(skill_name: str) -> dict[str, Any] | None:
             "risk_level": SkillRiskLevel.LOW,
             "metadata_incomplete": False,
             **_READ_SKILL_METADATA[skill_name],
-        }
-        if registry_metadata is not None:
-            metadata.update(registry_metadata)
-        return metadata
-
-    if skill_name in _EXTERNAL_NETWORK_SKILL_METADATA:
-        metadata = {
-            "permission_level": SkillPermissionLevel.EXTERNAL_NETWORK,
-            "risk_level": SkillRiskLevel.LOW,
-            "metadata_incomplete": False,
-            **_EXTERNAL_NETWORK_SKILL_METADATA[skill_name],
         }
         if registry_metadata is not None:
             metadata.update(registry_metadata)

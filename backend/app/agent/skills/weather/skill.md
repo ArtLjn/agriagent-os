@@ -1,6 +1,6 @@
 ---
 name: weather
-type: read-only
+type: read
 description: 获取未来 7 天天气预报和灾害预警，包括气温、降水、风速和极端天气提醒。
 triggers:
   - 天气

@@ -1,6 +1,7 @@
 ---
-name: get_farm_status
-type: read-only
+name: farm-status
+tool_name: get_farm_status
+type: read
 description: 获取当前农场综合状态摘要，包括活跃茬口、近期农事、欠账、月度花费和天气。
 triggers:
   - 农场
@@ -37,6 +38,7 @@ parameters:
 
 ## Runtime 策略
 - permission: read
+- runtime tool name: `get_farm_status`
 - direct_call: true
 - direct_return: false
 - cache: none

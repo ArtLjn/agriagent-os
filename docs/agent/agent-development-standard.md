@@ -79,6 +79,7 @@ Router 的职责是保护系统，不是替模型思考。
 必须包含：
 
 - 稳定工具名，使用 snake_case。
+- `skill.md` frontmatter 的能力名和类型标记。
 - 明确 `read` / `write_confirm` / `write_high` 风险级别。
 - 参数 JSON Schema，必填字段不能靠模型猜默认值。
 - 正向示例和反向示例。
@@ -86,6 +87,15 @@ Router 的职责是保护系统，不是替模型思考。
 - 失败策略。
 - 只读缓存策略或明确不缓存。
 - 测试覆盖正常、缺参、权限/农场隔离、服务异常。
+
+`skill.md` frontmatter 规范：
+
+- `type` 只允许 `read` 或 `write`，禁止继续使用历史值 `read-only`。
+- `type: read` 表示不改变系统状态；它可以依赖上下文、权限或外部只读数据，但不应进入 pending 确认。
+- `type: write` 表示 capability 具有写风险，会创建、更新、删除、结算、同步成本或修改设置，默认进入 pending 确认或由 operation-aware metadata 决策。
+- 聚合 Skill 只要包含任何写 operation，frontmatter 必须使用 `type: write`；如果同一聚合 Skill 也包含查询 operation，必须通过 runtime metadata 或 Registry operation risk 推断，确保具体 read operation 降级为 read/no pending。
+- `skill.md type` 是治理和文档层标记；真正执行时以 runtime metadata、Registry operation risk 和 pending action 白名单共同决定。
+- 如果目录使用 kebab-case 能力名，frontmatter `name` 应与目录一致；runtime LangChain tool 仍需保持 snake_case 兼容名时，必须显式声明 `tool_name`。
 
 写操作 Skill 额外要求：
 

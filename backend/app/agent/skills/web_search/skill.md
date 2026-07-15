@@ -1,6 +1,6 @@
 ---
 name: web_search
-type: read-only
+type: read
 description: 搜索实时网络信息，适合农业政策、新闻、价格、上市时间、热点等需要外部最新资料的问题。
 triggers:
   - 最新

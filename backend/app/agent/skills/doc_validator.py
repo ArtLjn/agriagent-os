@@ -23,6 +23,7 @@ REQUIRED_FRONTMATTER_KEYS = [
     "parameters",
 ]
 
+ALLOWED_SKILL_DOC_TYPES = {"read", "write"}
 SNAKE_CASE_PATTERN = r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*"
 
 
@@ -42,6 +43,11 @@ def validate_skill_doc(path: Path) -> SkillDocValidationResult:
         for key in REQUIRED_FRONTMATTER_KEYS:
             if not re.search(rf"^{re.escape(key)}:", frontmatter, re.MULTILINE):
                 errors.append(f"frontmatter 缺少字段：{key}")
+        type_match = re.search(r"^type:\s*(\S+)\s*$", frontmatter, re.MULTILINE)
+        if type_match is not None:
+            skill_type = type_match.group(1).strip("\"'")
+            if skill_type not in ALLOWED_SKILL_DOC_TYPES:
+                errors.append("frontmatter type 只允许 read 或 write")
         tool_name_match = re.search(
             r"^tool_name:\s*(\S+)\s*$", frontmatter, re.MULTILINE
         )
