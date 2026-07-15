@@ -6,6 +6,7 @@ from starlette.responses import Response
 from app.api import (
     admin,
     admin_config,
+    admin_dashboard,
     admin_stats,
     admin_trace,
     admin_users,
@@ -60,6 +61,7 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(data_flywheel_repair_packs_router)
     app.include_router(admin_trace.router)
     app.include_router(admin_stats.router)
+    app.include_router(admin_dashboard.router)
     app.include_router(admin_config.router)
     app.include_router(admin_users.router)
     app.include_router(user_settings.router)
