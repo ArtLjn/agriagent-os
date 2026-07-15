@@ -104,7 +104,7 @@ def select_tools(
         candidates.discard("get_farm_status")
 
     if "manage_planting_units" in candidates:
-        candidates.difference_update({"get_planting_units", "get_farm_status"})
+        candidates.discard("get_farm_status")
 
     if "manage_cost_categories" in candidates:
         candidates.discard("manage_cost")
@@ -138,7 +138,7 @@ def select_tools(
     if "create_operation_work_order" in candidates:
         candidates.discard("manage_workers")
         candidates.discard("manage_wages")
-        candidates.discard("get_planting_units")
+        candidates.discard("manage_planting_units")
 
     if "manage_workers" in candidates:
         candidates.difference_update({"get_workers", "get_labor_payables"})

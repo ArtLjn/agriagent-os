@@ -90,13 +90,13 @@ def _tools(names: list[str]):
         ),
         (
             "有哪些地块",
-            "get_planting_units",
+            "manage_planting_units",
             "manage_planting_units",
             "query_units",
         ),
         (
             "查询种植单元",
-            "get_planting_units",
+            "manage_planting_units",
             "manage_planting_units",
             "query_units",
         ),
@@ -206,8 +206,8 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
         ),
         (
             "地块列表",
-            "get_planting_units",
-            ["manage_planting_units"],
+            "manage_planting_units",
+            [],
         ),
         (
             "成本分类列表",
@@ -297,7 +297,6 @@ def _governance_tool_pool() -> list[str]:
         "get_farm_status",
         "weather",
         "manage_user_settings",
-        "get_planting_units",
         "manage_planting_units",
         "manage_cost_categories",
     ]

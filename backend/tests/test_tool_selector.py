@@ -19,7 +19,6 @@ ALL_TOOL_NAMES = [
     "get_workers",
     "get_operation_work_orders",
     "manage_cost_categories",
-    "get_planting_units",
     "manage_planting_units",
     "manage_user_settings",
     "settle_labor_payment",
@@ -299,7 +298,7 @@ class TestQueryKeywordMatching:
 
     def test_planting_unit_query_uses_unit_skill(self):
         result = select_tools("有哪些大棚", _make_tools())
-        assert result == ["get_planting_units"]
+        assert result == ["manage_planting_units"]
 
     def test_user_settings_query_uses_settings_skill(self):
         result = select_tools("我的默认城市是什么", _make_tools())

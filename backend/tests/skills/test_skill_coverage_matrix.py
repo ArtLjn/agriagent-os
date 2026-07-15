@@ -76,7 +76,7 @@ def test_ordinary_high_priority_business_has_no_needs_skill_gap():
         (
             "planting_unit",
             "crud",
-            "get_planting_units|manage_planting_units",
+            "manage_planting_units",
         ),
         (
             "farm_log",

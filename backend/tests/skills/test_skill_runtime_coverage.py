@@ -26,7 +26,6 @@ EXPECTED_REGISTERED_SKILLS = {
     "get_labor_payables",
     "get_workers",
     "manage_cost_categories",
-    "get_planting_units",
     "manage_planting_units",
     "manage_user_settings",
     "settle_labor_payment",
@@ -113,6 +112,14 @@ def test_cost_category_tool_surface_uses_single_capability() -> None:
     assert "manage_cost_categories" in tool_names
     assert "get_cost_categories" not in tool_names
     assert not (SKILLS_DIR / "get-cost-categories").exists()
+
+
+def test_planting_unit_tool_surface_uses_single_capability() -> None:
+    tool_names = {tool.name for tool in get_langchain_tools()}
+
+    assert "manage_planting_units" in tool_names
+    assert "get_planting_units" not in tool_names
+    assert not (SKILLS_DIR / "get-planting-units").exists()
 
 
 def test_enabled_registered_skills_have_selector_coverage() -> None:

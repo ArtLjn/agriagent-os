@@ -82,6 +82,7 @@ class ContextPolicy:
     )
     LABOR_TOOLS = frozenset({"get_labor_payables", "settle_labor_payment"})
     COST_CATEGORY_TOOLS = frozenset({"manage_cost_categories"})
+    PLANTING_UNIT_TOOLS = frozenset({"manage_planting_units"})
 
     DEPENDENCY_SELECTORS = {
         "crop_cycle": (CycleSelector, "cycle"),
@@ -198,6 +199,8 @@ class ContextPolicy:
             add(["workers", "unpaid_labor", "ledger"])
         if selected_tool_names & self.COST_CATEGORY_TOOLS:
             add(["ledger", "cost_categories"])
+        if selected_tool_names & self.PLANTING_UNIT_TOOLS:
+            add(["farm", "crop_cycles", "planting_units"])
         if selected_tool_names & self.WEATHER_TOOLS:
             add(["weather"])
         return dependencies

@@ -351,7 +351,10 @@ class RuleIntentClassifier:
                     intent="query_planting_units",
                     risk="read",
                     entities=["planting_unit"],
-                    candidate_tools=["get_planting_units"],
+                    candidate_tools=["manage_planting_units"],
+                    capability="manage_planting_units",
+                    operation="query_units",
+                    operation_hint="query_units",
                     confidence=0.86,
                 )
             ]
@@ -715,6 +718,9 @@ class RuleIntentClassifier:
             risk="write_confirm",
             entities=["planting_unit"],
             candidate_tools=["manage_planting_units"],
+            capability="manage_planting_units",
+            operation="manage_units",
+            operation_hint="manage_units",
             confidence=0.8,
             params_hint={"action": self._planting_unit_action(message)},
             requires_confirmation=True,
