@@ -173,9 +173,15 @@ hash -r
 
 # --- 安装依赖 ---
 rlog "安装依赖..."
-pip install -q --upgrade pip || rdie "pip 升级失败"
+python -m pip install -q --upgrade pip || rdie "pip 升级失败"
+# 旧部署曾用 editable skillify-sdk；切到 pip 包时必须先移除失效的 pth 指针。
+SKILLIFY_INFO="$(python -m pip show skillify 2>/dev/null || true)"
+if [[ "${SKILLIFY_INFO}" == *"Editable project location:"* ]]; then
+    rlog "  清理旧的 skillify editable 安装..."
+    python -m pip uninstall -y -q skillify || rdie "skillify 清理失败"
+fi
 rlog "  安装 requirements.txt..."
-pip install -q -r requirements.txt 2>&1 || { rollback; rdie "依赖安装失败，已回滚"; }
+python -m pip install -q -r requirements.txt 2>&1 || { rollback; rdie "依赖安装失败，已回滚"; }
 
 # --- 数据库备份 ---
 rlog "检查数据库..."
@@ -257,7 +263,7 @@ journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
 echo ""
 echo "  尝试 import 测试..."
 source .venv/bin/activate
-python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app; print('Import OK')" 2>&1
+python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app; print('Import OK')" 2>&1 || true
 
 # --- 自动回滚（启动失败时）---
 echo ""
