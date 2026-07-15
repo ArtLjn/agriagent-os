@@ -142,7 +142,9 @@ def builtin_skill_regression_cases() -> list[AgentReplayCase]:
             "description": "查询未结人工",
             "user_input": "还有哪些人工没结清？",
             "category": "labor",
-            "expected_skills": [{"name": "get_labor_payables"}],
+            "expected_skills": [
+                {"name": "manage_labor_payment", "arguments": {"operation": "query_payables"}}
+            ],
             "metadata": {
                 "business_domain": "labor",
                 "permission_level": "read",
@@ -156,11 +158,14 @@ def builtin_skill_regression_cases() -> list[AgentReplayCase]:
             "user_input": "给张三结清人工300元",
             "category": "labor",
             "expected_skills": [
-                {"name": "settle_labor_payment", "arguments": {"worker": "张三"}}
+                {
+                    "name": "manage_labor_payment",
+                    "arguments": {"operation": "settle_payment", "worker": "张三"},
+                }
             ],
             "expected_pending_action": {
-                "skill_name": "settle_labor_payment",
-                "params": {"worker": "张三", "amount": 300},
+                "skill_name": "manage_labor_payment",
+                "params": {"operation": "settle_payment", "worker": "张三", "amount": 300},
             },
             "confirmation_flow": [
                 {"user_input": "确认", "expected_status": "confirmed"}

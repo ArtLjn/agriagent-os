@@ -128,7 +128,7 @@ def test_builder_trace_records_skill_dependency_context_status(db_session) -> No
         db=db_session,
         request=ContextBuildRequest(
             intent="agent",
-            selected_tool_names=["settle_labor_payment"],
+            selected_tool_names=["manage_labor_payment"],
             farm_id=1,
             user_id="test-user-001",
         ),

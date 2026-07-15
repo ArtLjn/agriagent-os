@@ -16,12 +16,45 @@ _WORK_ORDER_ALIAS_TO_OPERATION = {
     "get_operation_work_orders": "query_work_orders",
     "update_operation_work_order": "update_work_order",
 }
+_LABOR_SETTLE_OPERATION = "settle_payment"
+_LABOR_WAGE_OPERATION = "manage_wage"
 
 
 def _work_order_operation(skill_name: str, params: dict) -> str | None:
     return str(params.get("operation") or "") or _WORK_ORDER_ALIAS_TO_OPERATION.get(
         skill_name
     )
+
+
+def _labor_payment_operation(skill_name: str, params: dict) -> str | None:
+    operation = str(params.get("operation") or "")
+    if operation:
+        return operation
+    if skill_name == "settle_labor_payment":
+        return _LABOR_SETTLE_OPERATION
+    if skill_name == "manage_wages":
+        return _LABOR_WAGE_OPERATION
+    if skill_name == "manage_labor_payment":
+        if any(params.get(key) not in (None, "") for key in ("amount", "scope")):
+            return _LABOR_SETTLE_OPERATION
+        if any(
+            params.get(key) not in (None, "")
+            for key in (
+                "action",
+                "labor_entry_id",
+                "operation_type",
+                "worker_id",
+                "pay_type",
+                "quantity",
+                "unit_price",
+                "paid_amount",
+                "note",
+                "work_date",
+                "client_request_id",
+            )
+        ):
+            return _LABOR_WAGE_OPERATION
+    return None
 
 
 def build_confirmation_context(
@@ -61,7 +94,7 @@ def build_confirmation_context(
             "editable_fields": ["start_date", "season", "batch_note"],
         }
 
-    if skill_name == "settle_labor_payment":
+    if _labor_payment_operation(skill_name, params) == _LABOR_SETTLE_OPERATION:
         worker = params.get("worker") or params.get("worker_name")
         scope = params.get("scope")
         return {
@@ -127,7 +160,7 @@ def build_confirmation_context(
             ],
         }
 
-    if skill_name == "manage_wages":
+    if _labor_payment_operation(skill_name, params) == _LABOR_WAGE_OPERATION:
         action = params.get("action") or "save"
         return {
             "skill_name": skill_name,
@@ -259,7 +292,7 @@ def build_confirm_message(
         lines.append("确认吗？")
         return "\n".join(lines)
 
-    if skill_name == "manage_wages":
+    if _labor_payment_operation(skill_name, params) == _LABOR_WAGE_OPERATION:
         target = context["target"]
         action_label = "更新工资" if target.get("action") == "update" else "保存工资"
         worker = target.get("worker") or "工人"
@@ -281,7 +314,7 @@ def build_confirm_message(
         lines.append("确认吗？")
         return "\n".join(lines)
 
-    if skill_name == "settle_labor_payment":
+    if _labor_payment_operation(skill_name, params) == _LABOR_SETTLE_OPERATION:
         target = context["target"]
         if target.get("scope") == "all_unpaid_labor":
             target_text = "全部未付人工"

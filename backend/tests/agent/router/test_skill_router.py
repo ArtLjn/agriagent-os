@@ -454,7 +454,7 @@ def test_session4_extracts_wage_after_greenhouse_number() -> None:
 def test_implicit_labor_operation_routes_to_work_order_not_no_tool() -> None:
     tools = [
         _tool("create_operation_work_order"),
-        _tool("get_labor_payables"),
+        _tool("manage_labor_payment"),
         _tool("manage_workers"),
     ]
 
@@ -462,7 +462,7 @@ def test_implicit_labor_operation_routes_to_work_order_not_no_tool() -> None:
 
     assert decision.fallback != "no_tools"
     assert "create_operation_work_order" in decision.selected_tools
-    assert "get_labor_payables" not in decision.selected_tools
+    assert "manage_labor_payment" not in decision.selected_tools
     work_order_frame = next(
         frame for frame in decision.frames if frame.intent == "create_work_order"
     )
@@ -485,7 +485,7 @@ def test_implicit_labor_operation_routes_to_work_order_not_no_tool() -> None:
 def test_implicit_labor_without_operation_asks_clarification() -> None:
     tools = [
         _tool("create_operation_work_order"),
-        _tool("get_labor_payables"),
+        _tool("manage_labor_payment"),
         _tool("manage_workers"),
     ]
 
@@ -505,14 +505,14 @@ def test_implicit_labor_without_operation_asks_clarification() -> None:
 def test_farm_labor_statement_extracts_worker_unit_operation_and_daily_wage() -> None:
     tools = [
         _tool("create_operation_work_order"),
-        _tool("get_labor_payables"),
+        _tool("manage_labor_payment"),
         _tool("manage_workers"),
     ]
 
     decision = SkillRouter().route("今天李海去6号棚压蔓工资100一天", tools)
 
     assert decision.selected_tools == ["create_operation_work_order"]
-    assert "get_labor_payables" not in decision.selected_tools
+    assert "manage_labor_payment" not in decision.selected_tools
     work_order_frame = next(
         frame for frame in decision.frames if frame.intent == "create_work_order"
     )
@@ -567,14 +567,14 @@ def test_new_worker_and_work_order_keeps_two_step_dependency() -> None:
 @pytest.mark.parametrize(
     ("message", "tools"),
     [
-        ("你好", [_tool("create_operation_work_order"), _tool("get_labor_payables")]),
+        ("你好", [_tool("create_operation_work_order"), _tool("manage_labor_payment")]),
         (
             "李海最近挺忙的",
-            [_tool("create_operation_work_order"), _tool("get_labor_payables")],
+            [_tool("create_operation_work_order"), _tool("manage_labor_payment")],
         ),
         (
             "老王还欠多少人工钱",
-            [_tool("create_operation_work_order"), _tool("get_labor_payables")],
+            [_tool("create_operation_work_order"), _tool("manage_labor_payment")],
         ),
     ],
 )
@@ -586,7 +586,7 @@ def test_farm_labor_semantic_gate_keeps_greeting_chitchat_and_query_negative_cas
 
     assert "create_operation_work_order" not in decision.selected_tools
     if "人工钱" in message:
-        assert decision.selected_tools == ["get_labor_payables"]
+        assert decision.selected_tools == ["manage_labor_payment"]
 
 
 def test_multi_intent_worker_name_with_digit_and_field_name_are_extracted() -> None:
@@ -677,7 +677,7 @@ def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
         ),
         (
             "还欠多少人工钱",
-            "get_labor_payables",
+            "manage_labor_payment",
             "manage_labor_payment",
             "query_payables",
         ),

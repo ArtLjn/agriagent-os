@@ -41,7 +41,7 @@ def test_worker_crud_is_covered_by_dedicated_skills():
     assert worker_entry.skill_name == "manage_workers"
 
 
-def test_wage_save_update_is_covered_by_manage_wages():
+def test_wage_save_update_is_covered_by_manage_labor_payment():
     entries = list_skill_coverage_entries()
     wage_entry = next(
         entry
@@ -50,7 +50,7 @@ def test_wage_save_update_is_covered_by_manage_wages():
     )
 
     assert wage_entry.status == CoverageStatus.COVERED_BY_SKILL
-    assert wage_entry.skill_name == "manage_wages"
+    assert wage_entry.skill_name == "manage_labor_payment"
 
 
 def test_ordinary_high_priority_business_has_no_needs_skill_gap():

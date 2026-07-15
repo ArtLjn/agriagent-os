@@ -67,6 +67,7 @@ _ALL_LABOR_PAYMENT_RE = re.compile(
     r"|(?:员工|工人|人工|工资).{0,8}(?:全部|全都|全额|全结|结清|结了)"
 )
 _SETTLE_LABOR_PAYMENT_ALLOWED_ARGS = {
+    "operation",
     "scope",
     "worker",
     "worker_name",
@@ -76,6 +77,8 @@ _SETTLE_LABOR_PAYMENT_ALLOWED_ARGS = {
     "start_date",
     "end_date",
 }
+_LABOR_PAYMENT_SKILL = "manage_labor_payment"
+_LABOR_SETTLE_OPERATION = "settle_payment"
 
 
 def _permission_decision(
@@ -359,7 +362,7 @@ def _build_pending_confirmation_args(name: str, args: dict, farm_id: int) -> dic
         and context_args.get("operation") in {"update_cycle", "update_stage"}
     ):
         _fill_update_crop_cycle_context_args(context_args, farm_id)
-    if name == "settle_labor_payment":
+    if _is_labor_payment_settle_call(name, context_args):
         _fill_settle_labor_context_args(context_args, farm_id)
     return context_args
 
@@ -375,7 +378,10 @@ def _build_pending_execution_args(
     if _operation_name_from_args(name, execution_args) == "create_work_order":
         _normalize_operation_work_order_args(execution_args)
         _fill_operation_default_wage(execution_args, farm_id)
-    if name == "settle_labor_payment":
+    if _is_labor_payment_settle_call(name, execution_args) or (
+        name == _LABOR_PAYMENT_SKILL and _is_all_labor_payment_request(original_input)
+    ):
+        execution_args["operation"] = _LABOR_SETTLE_OPERATION
         _normalize_settle_labor_payment_args(execution_args, original_input)
     if name == "manage_workers":
         _fill_manage_workers_target_args(execution_args, farm_id, original_input)
@@ -459,7 +465,20 @@ def _normalize_settle_labor_payment_args(args: dict, original_input: str) -> Non
     if _is_all_labor_payment_request(original_input):
         args.pop("worker", None)
         args.pop("worker_name", None)
+        args["operation"] = _LABOR_SETTLE_OPERATION
         args["scope"] = "all_unpaid_labor"
+
+
+def _is_labor_payment_settle_call(name: str, args: dict) -> bool:
+    operation = str(args.get("operation") or "")
+    if name == "settle_labor_payment":
+        return True
+    if name != _LABOR_PAYMENT_SKILL:
+        return False
+    return operation == _LABOR_SETTLE_OPERATION or any(
+        args.get(key) not in (None, "")
+        for key in ("amount", "scope", "payment_date")
+    )
 
 
 def _is_all_labor_payment_request(original_input: str) -> bool:
@@ -475,19 +494,23 @@ def _collapse_all_labor_payment_tool_calls(
     settle_calls = [
         tool_call
         for tool_call in tool_calls
-        if tool_call.get("name") == "settle_labor_payment"
+        if tool_call.get("name") in {"settle_labor_payment", _LABOR_PAYMENT_SKILL}
     ]
     if len(settle_calls) <= 1:
         return tool_calls
 
     collapsed = dict(settle_calls[0])
-    collapsed["args"] = {"scope": "all_unpaid_labor"}
+    collapsed["name"] = _LABOR_PAYMENT_SKILL
+    collapsed["args"] = {
+        "operation": _LABOR_SETTLE_OPERATION,
+        "scope": "all_unpaid_labor",
+    }
     return [
         collapsed,
         *[
             tool_call
             for tool_call in tool_calls
-            if tool_call.get("name") != "settle_labor_payment"
+            if tool_call.get("name") not in {"settle_labor_payment", _LABOR_PAYMENT_SKILL}
         ],
     ]
 
@@ -638,7 +661,7 @@ def _fill_settle_labor_context_args(args: dict, farm_id: int) -> None:
         ]
     except Exception as exc:
         logger.warning(
-            "构建 settle_labor_payment pending context 失败 | farm_id=%s | error=%s",
+            "构建 manage_labor_payment pending context 失败 | farm_id=%s | error=%s",
             farm_id,
             exc,
         )

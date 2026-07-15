@@ -37,10 +37,10 @@ B_QUERY_CASES: list[EvalCase] = [
     EvalCase("q-workers-3", "B_QUERY", "工人列表", "manage_workers"),
     EvalCase("q-workers-4", "B_QUERY", "现在谁在干", "manage_workers"),
     # Labor payables (4)
-    EvalCase("q-payables-1", "B_QUERY", "未付人工", "get_labor_payables"),
-    EvalCase("q-payables-2", "B_QUERY", "还欠多少人工钱", "get_labor_payables"),
-    EvalCase("q-payables-3", "B_QUERY", "应付工资", "get_labor_payables"),
-    EvalCase("q-payables-4", "B_QUERY", "人工欠款", "get_labor_payables"),
+    EvalCase("q-payables-1", "B_QUERY", "未付人工", "manage_labor_payment"),
+    EvalCase("q-payables-2", "B_QUERY", "还欠多少人工钱", "manage_labor_payment"),
+    EvalCase("q-payables-3", "B_QUERY", "应付工资", "manage_labor_payment"),
+    EvalCase("q-payables-4", "B_QUERY", "人工欠款", "manage_labor_payment"),
     # Debt summary (4)
     EvalCase("q-debt-1", "B_QUERY", "欠款", "get_debt_summary"),
     EvalCase("q-debt-2", "B_QUERY", "还欠别人多少", "get_debt_summary"),
@@ -56,8 +56,8 @@ B_WRITE_CASES: list[EvalCase] = [
     EvalCase("w-log-2", "B_WRITE", "记一下昨天施肥", "manage_farm_logs"),
     EvalCase("w-cycle-1", "B_WRITE", "新建茬口种西瓜", "manage_crop_cycle"),
     EvalCase("w-worker-1", "B_WRITE", "新来工人李丽日薪100", "manage_workers"),
-    EvalCase("w-wage-1", "B_WRITE", "给李海记15天压瓜工资每天180", "manage_wages"),
-    EvalCase("w-settle-1", "B_WRITE", "把李海这笔工资结了", "settle_labor_payment"),
+    EvalCase("w-wage-1", "B_WRITE", "给李海记15天压瓜工资每天180", "manage_labor_payment"),
+    EvalCase("w-settle-1", "B_WRITE", "把李海这笔工资结了", "manage_labor_payment"),
     EvalCase(
         "w-order-1", "B_WRITE", "李海今天去6号棚压蔓", "create_operation_work_order"
     ),
@@ -107,7 +107,7 @@ E2_MULTITURN_CASES: list[EvalCase] = [
         "e2-3",
         "E2_MULTITURN",
         "未付人工",
-        "get_labor_payables",
+        "manage_labor_payment",
         previous_turns=["记一笔", "好的"],
         pollution_data={"labor_payables_snapshot": "未付 500 元"},
         skill_mock_return={"payables": [{"worker": "李海", "amount": 800}]},

@@ -23,22 +23,19 @@ EXPECTED_REGISTERED_SKILLS = {
     "manage_work_orders",
     "manage_farm_logs",
     "get_farm_status",
-    "get_labor_payables",
+    "manage_labor_payment",
     "manage_cost_categories",
     "manage_planting_units",
     "manage_user_settings",
-    "settle_labor_payment",
     "manage_workers",
-    "manage_wages",
     "weather",
     "web_search",
 }
 
 EXPECTED_WRITE_SKILLS = {
     "manage_work_orders",
-    "settle_labor_payment",
+    "manage_labor_payment",
     "manage_workers",
-    "manage_wages",
     "manage_cost_categories",
     "manage_planting_units",
     "manage_user_settings",
@@ -68,6 +65,10 @@ RETIRED_FARM_LOG_WRITE_ALIASES = {
 RETIRED_WORK_ORDER_WRITE_ALIASES = {
     "create_operation_work_order",
     "update_operation_work_order",
+}
+RETIRED_LABOR_PAYMENT_ALIASES = {
+    "settle_labor_payment",
+    "manage_wages",
 }
 
 SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
@@ -129,6 +130,18 @@ def test_worker_tool_surface_uses_single_capability() -> None:
     assert not (SKILLS_DIR / "get-workers").exists()
 
 
+def test_labor_payment_tool_surface_uses_single_capability() -> None:
+    tool_names = {tool.name for tool in get_langchain_tools()}
+
+    assert "manage_labor_payment" in tool_names
+    assert "get_labor_payables" not in tool_names
+    assert "settle_labor_payment" not in tool_names
+    assert "manage_wages" not in tool_names
+    assert not (SKILLS_DIR / "get-labor-payables").exists()
+    assert not (SKILLS_DIR / "settle-labor-payment").exists()
+    assert not (SKILLS_DIR / "manage-wages").exists()
+
+
 def test_enabled_registered_skills_have_selector_coverage() -> None:
     skills = _registered_skills()
     selector_names = set(WRITE_PATTERNS) | set(QUERY_TRIGGERS)
@@ -174,6 +187,7 @@ def test_write_skill_docs_are_registered_for_pending_confirmation() -> None:
             - RETIRED_CROP_TEMPLATE_WRITE_ALIASES
             - RETIRED_FARM_LOG_WRITE_ALIASES
             - RETIRED_WORK_ORDER_WRITE_ALIASES
+            - RETIRED_LABOR_PAYMENT_ALIASES
         )
         | OPERATION_AWARE_WRITE_DOCS
     )

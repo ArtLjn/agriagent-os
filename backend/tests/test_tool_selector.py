@@ -15,15 +15,13 @@ ALL_TOOL_NAMES = [
     "create_operation_work_order",
     "manage_farm_logs",
     "get_farm_status",
-    "get_labor_payables",
+    "manage_labor_payment",
     "get_operation_work_orders",
     "manage_cost_categories",
     "manage_planting_units",
     "manage_user_settings",
-    "settle_labor_payment",
     "update_operation_work_order",
     "manage_workers",
-    "manage_wages",
     "weather",
     "web_search",
 ]
@@ -151,11 +149,11 @@ class TestWritePatternMatching:
 
     def test_settle_labor_payment_partial_payment(self):
         result = select_tools("给老王补付300人工", _make_tools())
-        assert result == ["settle_labor_payment"]
+        assert result == ["manage_labor_payment"]
 
     def test_settle_labor_payment_full_settle_with_worker_name(self):
         result = select_tools("哈哈哈工资结清了", _make_tools())
-        assert result == ["settle_labor_payment"]
+        assert result == ["manage_labor_payment"]
 
     def test_update_operation_work_order_correction(self):
         result = select_tools("刚才那条授粉记录不是付老王，是付老李200", _make_tools())
@@ -163,11 +161,11 @@ class TestWritePatternMatching:
 
     def test_save_wage_uses_manage_wages(self):
         result = select_tools("给老王记一笔采收工资，每天180", _make_tools())
-        assert result == ["manage_wages"]
+        assert result == ["manage_labor_payment"]
 
     def test_update_wage_uses_manage_wages(self):
         result = select_tools("把工资记录12的日薪改成200", _make_tools())
-        assert result == ["manage_wages"]
+        assert result == ["manage_labor_payment"]
 
     def test_update_worker_default_wage_uses_manage_workers(self):
         result = select_tools("猪八戒工资更新150一天", _make_tools())
@@ -238,7 +236,7 @@ class TestQueryKeywordMatching:
     def test_payable_debt_summary_query(self):
         result = select_tools("我欠别人多少钱", _make_tools())
         assert result[0] == "manage_cost"
-        assert "get_labor_payables" not in result
+        assert "manage_labor_payment" not in result
 
     def test_total_payable_query_uses_debt_summary(self):
         result = select_tools("我还欠多少钱", _make_tools())
@@ -264,7 +262,7 @@ class TestQueryKeywordMatching:
 
     def test_labor_payable_query_prefers_labor_skill(self):
         result = select_tools("老王还欠多少人工钱", _make_tools())
-        assert result[0] == "get_labor_payables"
+        assert result[0] == "manage_labor_payment"
         assert "manage_cost" not in result
 
     def test_operation_work_order_query(self):

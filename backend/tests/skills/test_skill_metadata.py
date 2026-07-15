@@ -281,6 +281,74 @@ def test_manage_workers_call_metadata_infers_operation_risk():
     assert write_field_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
 
 
+def test_manage_labor_payment_legacy_aliases_resolve_to_operations():
+    class _GetLaborPayablesSkill:
+        def name(self):
+            return "get_labor_payables"
+
+    class _SettleLaborPaymentSkill:
+        def name(self):
+            return "settle_labor_payment"
+
+    class _ManageWagesSkill:
+        def name(self):
+            return "manage_wages"
+
+    query_metadata = get_skill_metadata(_GetLaborPayablesSkill())
+    settle_metadata = get_skill_metadata(_SettleLaborPaymentSkill())
+    wage_metadata = get_skill_metadata(_ManageWagesSkill())
+
+    assert query_metadata.capability == "manage_labor_payment"
+    assert query_metadata.operation == "query_payables"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert settle_metadata.capability == "manage_labor_payment"
+    assert settle_metadata.operation == "settle_payment"
+    assert settle_metadata.operation_risk == "write_confirm"
+    assert settle_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+    assert wage_metadata.capability == "manage_labor_payment"
+    assert wage_metadata.operation == "manage_wage"
+    assert wage_metadata.operation_risk == "write_confirm"
+    assert wage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
+def test_manage_labor_payment_call_metadata_infers_operation_risk():
+    class _ManageLaborPaymentSkill:
+        def name(self):
+            return "manage_labor_payment"
+
+    empty_query_metadata = get_skill_call_metadata(_ManageLaborPaymentSkill(), {})
+    explicit_query_metadata = get_skill_call_metadata(
+        _ManageLaborPaymentSkill(), {"operation": "query_payables"}
+    )
+    worker_query_metadata = get_skill_call_metadata(
+        _ManageLaborPaymentSkill(), {"worker": "老王"}
+    )
+    settle_metadata = get_skill_call_metadata(
+        _ManageLaborPaymentSkill(), {"amount": 300, "worker_name": "老王"}
+    )
+    wage_metadata = get_skill_call_metadata(
+        _ManageLaborPaymentSkill(),
+        {"work_date": "2026-06-04", "quantity": 15, "unit_price": 180},
+    )
+
+    for metadata in (
+        empty_query_metadata,
+        explicit_query_metadata,
+        worker_query_metadata,
+    ):
+        assert metadata.operation == "query_payables"
+        assert metadata.operation_risk == "read"
+        assert metadata.permission_level == SkillPermissionLevel.READ
+
+    assert settle_metadata.operation == "settle_payment"
+    assert settle_metadata.operation_risk == "write_confirm"
+    assert settle_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+    assert wage_metadata.operation == "manage_wage"
+    assert wage_metadata.operation_risk == "write_confirm"
+    assert wage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
 def test_manage_planting_units_legacy_metadata_uses_shared_capability_operations():
     class _GetPlantingUnitsSkill:
         def name(self):

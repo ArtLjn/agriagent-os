@@ -77,7 +77,7 @@ WAGE_FIELD_KEYS = (
 )
 NO_WAGE_FIELD_KEYS = ("no_wage", "wage_policy")
 NO_WAGE_VALUES = ("none", "no_wage", "free", "不计工资", "无工资")
-WORK_ORDER_TOOLS = ("create_operation_work_order", "manage_wages")
+WORK_ORDER_TOOLS = ("create_operation_work_order", "manage_labor_payment")
 
 
 def detect_issue_candidates(

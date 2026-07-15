@@ -28,16 +28,12 @@ from app.services import planting_read_service, planting_service
 _work_orders_mod = importlib.import_module(
     "app.agent.skills.manage-work-orders.scripts.main"
 )
-_get_payables_mod = importlib.import_module(
-    "app.agent.skills.get-labor-payables.scripts.main"
-)
-_settle_payment_mod = importlib.import_module(
-    "app.agent.skills.settle-labor-payment.scripts.main"
+_labor_payment_mod = importlib.import_module(
+    "app.agent.skills.manage-labor-payment.scripts.main"
 )
 
 ManageWorkOrdersSkill = _work_orders_mod.ManageWorkOrdersSkill
-GetLaborPayablesSkill = _get_payables_mod.GetLaborPayablesSkill
-SettleLaborPaymentSkill = _settle_payment_mod.SettleLaborPaymentSkill
+ManageLaborPaymentSkill = _labor_payment_mod.ManageLaborPaymentSkill
 
 
 @pytest.fixture
@@ -57,8 +53,7 @@ def skill_sessions(monkeypatch, db_session):
     """让新增 Skill 使用当前测试会话。"""
     for module in (
         _work_orders_mod,
-        _get_payables_mod,
-        _settle_payment_mod,
+        _labor_payment_mod,
     ):
         monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
     return db_session
@@ -355,10 +350,23 @@ async def test_get_operation_work_orders_skill(skill_sessions, ctx):
 
 
 @pytest.mark.asyncio
-async def test_get_labor_payables_skill(skill_sessions, ctx):
+async def test_manage_labor_payment_defaults_to_query_payables(skill_sessions, ctx):
     _create_work_order(skill_sessions)
 
-    result = await GetLaborPayablesSkill().execute({"worker": "老王"}, ctx)
+    result = await ManageLaborPaymentSkill().execute({}, ctx)
+
+    assert result.status.value == "success"
+    assert "未付人工汇总" in result.reply
+    assert "老王" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_manage_labor_payment_queries_payables(skill_sessions, ctx):
+    _create_work_order(skill_sessions)
+
+    result = await ManageLaborPaymentSkill().execute(
+        {"operation": "query_payables", "worker": "老王"}, ctx
+    )
 
     assert result.status.value == "success"
     assert "老王" in result.reply
@@ -393,11 +401,11 @@ async def test_update_operation_work_order_skill(skill_sessions, ctx):
 
 
 @pytest.mark.asyncio
-async def test_settle_labor_payment_skill(skill_sessions, ctx):
+async def test_manage_labor_payment_settles_payment(skill_sessions, ctx):
     _create_work_order(skill_sessions)
 
-    result = await SettleLaborPaymentSkill().execute(
-        {"worker": "老王", "amount": 60},
+    result = await ManageLaborPaymentSkill().execute(
+        {"operation": "settle_payment", "worker": "老王", "amount": 60},
         ctx,
     )
 
@@ -407,12 +415,12 @@ async def test_settle_labor_payment_skill(skill_sessions, ctx):
 
 
 @pytest.mark.asyncio
-async def test_settle_labor_payment_skill_accepts_worker_name_alias(
+async def test_manage_labor_payment_settle_accepts_worker_name_alias(
     skill_sessions, ctx
 ):
     _create_work_order(skill_sessions)
 
-    result = await SettleLaborPaymentSkill().execute(
+    result = await ManageLaborPaymentSkill().execute(
         {"worker_name": "老王", "amount": 60},
         ctx,
     )
@@ -436,15 +444,15 @@ async def test_all_workers_pending_confirm_settles_every_unpaid_labor(
     work_order_id = work_order.id
 
     async def _ainvoke(params):
-        result = await SettleLaborPaymentSkill().execute(params, ctx)
+        result = await ManageLaborPaymentSkill().execute(params, ctx)
         return result.reply
 
     tool = SimpleNamespace(
-        name="settle_labor_payment",
+        name="manage_labor_payment",
         args_schema=None,
         ainvoke=AsyncMock(side_effect=_ainvoke),
     )
-    _attach_skill_metadata(tool, SettleLaborPaymentSkill())
+    _attach_skill_metadata(tool, ManageLaborPaymentSkill())
     state = {
         "messages": [
             HumanMessage(content="把所有员工工资结了"),
@@ -453,12 +461,12 @@ async def test_all_workers_pending_confirm_settles_every_unpaid_labor(
                 tool_calls=[
                     {
                         "id": "tc1",
-                        "name": "settle_labor_payment",
+                        "name": "manage_labor_payment",
                         "args": {"worker": "老王"},
                     },
                     {
                         "id": "tc2",
-                        "name": "settle_labor_payment",
+                        "name": "manage_labor_payment",
                         "args": {"worker": "老李"},
                     },
                 ],

@@ -201,7 +201,7 @@ _COVERAGE_ENTRIES: tuple[SkillCoverageEntry, ...] = (
         operation="wage_save_update",
         source="POST/PATCH /planting/labor/wages",
         status=CoverageStatus.COVERED_BY_SKILL,
-        skill_name="manage_wages",
+        skill_name="manage_labor_payment",
         permission_level="write_confirm",
         risk_level="medium",
         rationale="单独记工资和修改工资由确认型工资 Skill 覆盖。",
@@ -215,7 +215,7 @@ _COVERAGE_ENTRIES: tuple[SkillCoverageEntry, ...] = (
         status=CoverageStatus.COVERED_BY_SKILL,
         skill_name=(
             "create_operation_work_order|get_operation_work_orders|"
-            "update_operation_work_order|get_labor_payables|settle_labor_payment"
+            "update_operation_work_order|manage_labor_payment"
         ),
         permission_level="read|write_confirm",
         risk_level="low|medium",

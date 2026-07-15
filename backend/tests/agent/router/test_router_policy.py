@@ -192,7 +192,7 @@ def test_policy_requires_clarification_for_high_risk_operation() -> None:
     assert decision.rejected_candidates[0]["reason"] == "high_risk_clarify"
 
 
-def test_policy_records_selected_operations_for_legacy_tools() -> None:
+def test_policy_records_selected_operations_for_labor_payment() -> None:
     decision = RouterPolicy().apply(
         message="查询未付人工",
         frames=[
@@ -200,12 +200,14 @@ def test_policy_records_selected_operations_for_legacy_tools() -> None:
                 domain="labor",
                 intent="query_labor_payables",
                 risk="read",
-                candidate_tools=["get_labor_payables"],
+                capability="manage_labor_payment",
+                operation="query_payables",
+                candidate_tools=["manage_labor_payment"],
             )
         ],
         candidates=[
             _candidate(
-                "get_labor_payables",
+                "manage_labor_payment",
                 "read",
                 capability="manage_labor_payment",
                 operation="query_payables",
@@ -213,7 +215,7 @@ def test_policy_records_selected_operations_for_legacy_tools() -> None:
         ],
     )
 
-    assert decision.selected_tools == ["get_labor_payables"]
+    assert decision.selected_tools == ["manage_labor_payment"]
     assert decision.selected_operations == {"manage_labor_payment": ["query_payables"]}
 
 

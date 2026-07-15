@@ -152,6 +152,8 @@ class RuleIntentClassifier:
         "还欠多少人工",
         "人工欠款",
     )
+    _labor_settle_hints = ("补付", "支付", "结算", "付清", "结清", "结了")
+    _wage_record_hints = ("记", "记录", "新增", "添加", "修改", "更改", "调整", "更新")
     _cost_category_hints = (
         "账务分类",
         "成本分类",
@@ -314,8 +316,11 @@ class RuleIntentClassifier:
                     domain="labor",
                     intent="query_labor_payables",
                     risk="read",
+                    capability="manage_labor_payment",
+                    operation="query_payables",
+                    operation_hint="query_payables",
                     entities=["labor_payable"],
-                    candidate_tools=["get_labor_payables"],
+                    candidate_tools=["manage_labor_payment"],
                     confidence=0.86,
                 )
             ]
@@ -573,6 +578,10 @@ class RuleIntentClassifier:
             frames.append(self._build_delete_cost_record_frame())
         if self._looks_like_settle_debt(message):
             frames.append(self._build_settle_debt_frame())
+        if self._looks_like_settle_labor_payment(message):
+            frames.append(self._build_settle_labor_payment_frame(message))
+        if self._looks_like_manage_wage(message):
+            frames.append(self._build_manage_wage_frame(message))
         if self._looks_like_update_user_settings(message):
             frames.append(self._build_update_user_settings_frame())
         if self._looks_like_manage_cost_category(message):
@@ -682,6 +691,57 @@ class RuleIntentClassifier:
             entities=["debt"],
             candidate_tools=["settle_debt"],
             confidence=0.78,
+            requires_confirmation=True,
+        )
+
+    def _build_settle_labor_payment_frame(self, message: str) -> IntentFrame:
+        params = {"operation": "settle_payment"}
+        worker = self._extract_worker_name(message)
+        amount = self._extract_money_amount(message)
+        if worker:
+            params["worker"] = worker
+        if amount is not None:
+            params["amount"] = amount
+        return IntentFrame(
+            domain="labor",
+            intent="settle_labor_payment",
+            risk="write_confirm",
+            capability="manage_labor_payment",
+            operation="settle_payment",
+            operation_hint="settle_payment",
+            entities=["labor_payable"],
+            candidate_tools=["manage_labor_payment"],
+            confidence=0.82,
+            params_hint=params,
+            requires_confirmation=True,
+        )
+
+    def _build_manage_wage_frame(self, message: str) -> IntentFrame:
+        params: dict = {"operation": "manage_wage", "action": "save"}
+        worker = self._extract_worker_name(message)
+        operation_type = self._extract_operation_type(message)
+        quantity = self._extract_labor_quantity(message)
+        unit_price = self._extract_unit_price(message)
+        if worker:
+            params["worker_name"] = worker
+        if operation_type:
+            params["operation_type"] = operation_type
+        if quantity is not None:
+            params["quantity"] = quantity
+            params["pay_type"] = "daily"
+        if unit_price is not None:
+            params["unit_price"] = unit_price
+        return IntentFrame(
+            domain="labor",
+            intent="manage_wage",
+            risk="write_confirm",
+            capability="manage_labor_payment",
+            operation="manage_wage",
+            operation_hint="manage_wage",
+            entities=["labor_payable", "wage"],
+            candidate_tools=["manage_labor_payment"],
+            confidence=0.8,
+            params_hint=params,
             requires_confirmation=True,
         )
 
@@ -885,6 +945,8 @@ class RuleIntentClassifier:
         )
 
     def _looks_like_create_work_order(self, message: str) -> bool:
+        if self._looks_like_manage_wage(message):
+            return False
         if self._has_any(message, self._read_blockers):
             return False
         return (
@@ -925,7 +987,31 @@ class RuleIntentClassifier:
             return False
         if self._looks_like_farm_labor_work(message):
             return False
+        if self._looks_like_settle_labor_payment(message):
+            return False
+        if self._looks_like_manage_wage(message):
+            return False
         return self._has_any(message, self._labor_payable_hints)
+
+    def _looks_like_settle_labor_payment(self, message: str) -> bool:
+        has_labor = self._has_any(message, ("人工", "工钱", "工资"))
+        return has_labor and self._has_any(message, self._labor_settle_hints)
+
+    def _looks_like_manage_wage(self, message: str) -> bool:
+        if not self._has_any(message, ("工资", "工钱", "人工费")):
+            return False
+        if self._looks_like_settle_labor_payment(message):
+            return False
+        has_record_action = self._has_any(message, self._wage_record_hints)
+        has_wage_detail = (
+            self._extract_operation_type(message) is not None
+            and self._extract_worker_name(message) is not None
+            and self._extract_unit_price(message) is not None
+        )
+        has_work_order_target = self._extract_unit_name(message) is not None or self._has_any(
+            message, ("去", "到", "安排", "让", "叫", "派")
+        )
+        return has_record_action or (has_wage_detail and not has_work_order_target)
 
     def _looks_like_farm_labor_work(self, message: str) -> bool:
         has_operation = self._extract_operation_type(message) is not None
@@ -1209,6 +1295,13 @@ class RuleIntentClassifier:
             or match.group("daily_price")
         )
         return int(price)
+
+    @staticmethod
+    def _extract_money_amount(message: str) -> int | None:
+        match = re.search(r"(?P<amount>\d+)\s*(?:元|块|百|千)?", message)
+        if not match:
+            return None
+        return int(match.group("amount"))
 
     @staticmethod
     def _extract_phone(message: str) -> str | None:

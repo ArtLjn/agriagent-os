@@ -80,10 +80,23 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
             r"(?:东大棚|西大棚|地块|棚).*(?:工人|每人|人工).*(?:\d+\s*(?:元|块|人))"
         ),
     ],
-    "settle_labor_payment": [
+    "manage_labor_payment": [
         re.compile(r"(?:补付|支付|结算|付清|结清).*(?:人工|工钱|工资)"),
         re.compile(r"(?:人工|工钱|工资).*(?:补付|支付|结算|付清|结清)"),
         re.compile(r"(?:给|付给).{1,12}(?:\d+\s*(?:元|块|百|千)).*(?:人工|工钱|工资)"),
+        re.compile(r"(?:记|记录|新增|添加).*(?:工资记录|工资|工钱|人工费)"),
+        re.compile(
+            r"(?:修改|更改|调整|更新|改).*(?:工资记录|工资单|工钱记录|人工费记录).*(?:\d+\s*(?:元|块|百|千))"
+        ),
+        re.compile(
+            r"(?:工资记录|工资单|工钱记录|人工费记录).*(?:修改|更改|调整|更新|改成|改到)"
+        ),
+        re.compile(
+            r"(?:工资记录|工资单|工钱记录|人工费记录).*(?:日薪|单价|金额|已付).*(?:改成|改到|调整为|更新为)?\s*\d+"
+        ),
+        re.compile(
+            r"(?:采收|装车|整枝|打杈|授粉|除草|施肥|浇水|压瓜).*(?:工资|工钱).*(?:\d+\s*(?:元|块|百|千))"
+        ),
     ],
     "update_operation_work_order": [
         re.compile(
@@ -97,18 +110,6 @@ WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
         ),
         re.compile(
             r"(?:种植单元|地块|大棚|棚区|棚).*#?\d+.*(?:修改|更改|调整|更新|删除|删掉|移除)"
-        ),
-    ],
-    "manage_wages": [
-        re.compile(r"(?:记|记录|新增|添加).*(?:工资记录|工资|工钱|人工费)"),
-        re.compile(
-            r"(?:修改|更改|调整|更新|改).*(?:工资记录|工资单|工钱记录|人工费记录).*(?:\d+\s*(?:元|块|百|千))"
-        ),
-        re.compile(
-            r"(?:工资记录|工资单|工钱记录|人工费记录).*(?:修改|更改|调整|更新|改成|改到)"
-        ),
-        re.compile(
-            r"(?:采收|装车|整枝|打杈|授粉|除草|施肥|浇水).*(?:工资|工钱).*(?:\d+\s*(?:元|块|百|千))"
         ),
     ],
     "manage_workers": [
@@ -205,7 +206,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
     },
     "manage_farm_logs": {"农事记录", "农事日志", "操作日志", "干了啥", "记录"},
     "manage_planting_units": {"种植单元", "地块", "大棚", "棚区", "有哪些棚"},
-    "get_labor_payables": {
+    "manage_labor_payment": {
         "人工钱",
         "工钱",
         "工资",
@@ -287,16 +288,14 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "weather": [],
     "manage_cost": [],
     "manage_crop_cycle": [],
-    "get_labor_payables": [],
+    "manage_labor_payment": [],
     "manage_workers": [],
     "get_operation_work_orders": [],
     "manage_work_orders": [],
     "manage_crop_templates": [],
     "create_operation_work_order": [],
     "manage_farm_logs": [],
-    "settle_labor_payment": [],
     "update_operation_work_order": [],
-    "manage_wages": [],
     "manage_cost_categories": [],
     "manage_planting_units": [],
     "manage_user_settings": [],

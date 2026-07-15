@@ -244,6 +244,24 @@ _WORKER_WRITE_FIELDS = (
     "note",
     "status",
 )
+_LABOR_PAYMENT_SETTLE_FIELDS = (
+    "amount",
+    "scope",
+    "payment_date",
+)
+_LABOR_PAYMENT_WAGE_FIELDS = (
+    "action",
+    "labor_entry_id",
+    "operation_type",
+    "worker_id",
+    "pay_type",
+    "quantity",
+    "unit_price",
+    "paid_amount",
+    "note",
+    "work_date",
+    "client_request_id",
+)
 _REGISTRY_RISK_TO_METADATA: dict[str, tuple[SkillPermissionLevel, SkillRiskLevel]] = {
     "read": (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
     "write_confirm": (SkillPermissionLevel.WRITE_CONFIRM, SkillRiskLevel.MEDIUM),
@@ -382,6 +400,20 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
             if any(params.get(key) not in (None, "") for key in _WORKER_WRITE_FIELDS)
             else "query_workers"
         )
+    if skill_name == "manage_labor_payment":
+        has_settle_fields = any(
+            params.get(key) not in (None, "") for key in _LABOR_PAYMENT_SETTLE_FIELDS
+        )
+        has_wage_fields = any(
+            params.get(key) not in (None, "") for key in _LABOR_PAYMENT_WAGE_FIELDS
+        )
+        if has_settle_fields and has_wage_fields:
+            return None
+        if has_settle_fields:
+            return "settle_payment"
+        if has_wage_fields:
+            return "manage_wage"
+        return "query_payables"
     if skill_name != "manage_user_settings":
         return None
     return (

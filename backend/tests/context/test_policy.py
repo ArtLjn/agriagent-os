@@ -120,11 +120,11 @@ def test_router_context_dependencies_drive_selectors() -> None:
     assert result.dependency_map["planting_units"] == ["planting_units"]
 
 
-def test_policy_enables_labor_context_for_settle_labor_payment() -> None:
+def test_policy_enables_labor_context_for_manage_labor_payment() -> None:
     result = ContextPolicy().resolve(
         ContextBuildRequest(
             intent="agent",
-            selected_tool_names=["settle_labor_payment"],
+            selected_tool_names=["manage_labor_payment"],
             farm_id=1,
         )
     )
