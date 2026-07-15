@@ -103,6 +103,53 @@ def import_system_template(
     return {"id": result.template_id, "already_exists": result.already_exists}
 
 
+@router.post(
+    "/templates/system",
+    response_model=CropTemplateResponse,
+    status_code=201,
+)
+def create_system_template_endpoint(
+    template: CropTemplateCreate,
+    db: Session = Depends(get_db),
+):
+    """创建系统作物模板（farm_id 为空）。"""
+    duplicate = crop_service.find_system_template_match(
+        db, name=template.name, variety=template.variety
+    )
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="同名同品种的系统模板已存在")
+    return crop_service.create_system_crop_template(db, template)
+
+
+@router.put("/templates/system/{template_id}", response_model=CropTemplateResponse)
+def update_system_template_endpoint(
+    template_id: int,
+    template: CropTemplateCreate,
+    db: Session = Depends(get_db),
+):
+    """更新系统作物模板（含 stages 全量替换）。"""
+    try:
+        return crop_service.update_system_crop_template(db, template_id, template)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/templates/system/{template_id}")
+def delete_system_template_endpoint(
+    template_id: int,
+    db: Session = Depends(get_db),
+):
+    """删除系统作物模板；已被农场导入时返回 409。"""
+    try:
+        crop_service.delete_system_crop_template(db, template_id)
+    except ValueError as e:
+        msg = str(e)
+        if "已被" in msg and "导入" in msg:
+            raise HTTPException(status_code=409, detail=msg)
+        raise HTTPException(status_code=404, detail=msg)
+    return {"message": "删除成功"}
+
+
 @router.get("/templates/{template_id}", response_model=CropTemplateResponse)
 def get_template(
     template_id: int,

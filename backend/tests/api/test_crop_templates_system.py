@@ -158,3 +158,65 @@ def test_system_templates_are_write_protected_at_api(client, db_session):
     list_response = client.get("/crops/templates/system")
     assert list_response.status_code == 200
     assert list_response.json()[0]["name"] == "西瓜"
+
+
+def test_create_system_template_endpoint_creates_with_null_farm_id(client):
+    response = client.post("/crops/templates/system", json=_payload())
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "西瓜"
+    assert body["variety"] == "8424"
+    assert [s["name"] for s in body["stages"]] == ["育苗期", "定植期"]
+
+    list_response = client.get("/crops/templates/system")
+    assert any(item["id"] == body["id"] for item in list_response.json())
+
+
+def test_update_system_template_endpoint_replaces_stages(client, db_session):
+    system_template = _create_system_template(db_session)
+
+    response = client.put(
+        f"/crops/templates/system/{system_template.id}",
+        json={
+            "name": "改名西瓜",
+            "variety": "8424",
+            "stages": [
+                _stage("新育苗期", 20, 0, "新任务"),
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "改名西瓜"
+    assert [s["name"] for s in body["stages"]] == ["新育苗期"]
+
+
+def test_update_system_template_not_found_returns_404(client):
+    response = client.put(
+        "/crops/templates/system/99999",
+        json=_payload(),
+    )
+    assert response.status_code == 404
+
+
+def test_delete_system_template_endpoint_removes_template(client, db_session):
+    system_template = _create_system_template(db_session)
+
+    response = client.delete(f"/crops/templates/system/{system_template.id}")
+
+    assert response.status_code == 200
+    list_response = client.get("/crops/templates/system")
+    assert all(item["id"] != system_template.id for item in list_response.json())
+
+
+def test_delete_system_template_returns_409_when_imported_by_farm(client, db_session):
+    system_template = _create_system_template(db_session)
+    db_session.add(CropTemplate(farm_id=1, name="西瓜", variety="8424", category="水果"))
+    db_session.commit()
+
+    response = client.delete(f"/crops/templates/system/{system_template.id}")
+
+    assert response.status_code == 409
+    assert "已被 1 个农场导入" in response.json()["detail"]
