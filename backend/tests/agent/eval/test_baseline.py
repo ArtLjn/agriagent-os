@@ -45,7 +45,7 @@ class TestBaselineChitchatNoFalsePositive:
         all_query_skills = [
             "weather",
             "manage_crop_cycle",
-            "get_workers",
+            "manage_workers",
             "get_labor_payables",
             "get_debt_summary",
         ]

@@ -236,6 +236,14 @@ _PLANTING_UNIT_WRITE_FIELDS = (
     "status",
     "note",
 )
+_WORKER_WRITE_FIELDS = (
+    "name",
+    "phone",
+    "default_pay_type",
+    "default_unit_price",
+    "note",
+    "status",
+)
 _REGISTRY_RISK_TO_METADATA: dict[str, tuple[SkillPermissionLevel, SkillRiskLevel]] = {
     "read": (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
     "write_confirm": (SkillPermissionLevel.WRITE_CONFIRM, SkillRiskLevel.MEDIUM),
@@ -362,6 +370,17 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
                 for key in _PLANTING_UNIT_WRITE_FIELDS
             )
             else "query_units"
+        )
+    if skill_name == "manage_workers":
+        action = params.get("action")
+        if action in {"create", "update", "deactivate", "restore"}:
+            return "manage_worker"
+        if action == "query":
+            return "query_workers"
+        return (
+            "manage_worker"
+            if any(params.get(key) not in (None, "") for key in _WORKER_WRITE_FIELDS)
+            else "query_workers"
         )
     if skill_name != "manage_user_settings":
         return None

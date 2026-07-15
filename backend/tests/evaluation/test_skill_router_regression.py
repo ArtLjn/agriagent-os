@@ -19,7 +19,6 @@ TOOLS = [
     _Tool("manage_workers"),
     _Tool("create_operation_work_order"),
     _Tool("get_operation_work_orders"),
-    _Tool("get_workers"),
     _Tool("get_cost_summary"),
     _Tool("get_debt_summary"),
     _Tool("get_labor_payables"),
@@ -86,13 +85,10 @@ def test_multi_step_case_reports_pending_creation_inputs() -> None:
 def test_read_intent_does_not_expose_write_tools() -> None:
     decision = SkillRouter().route("我的工人有哪些", TOOLS)
 
-    assert all(
-        name not in decision.selected_tools
-        for name in [
-            "manage_workers",
-            "create_operation_work_order",
-        ]
-    )
+    assert decision.selected_tools == ["manage_workers"]
+    assert decision.selected_operations == {"manage_workers": ["query_workers"]}
+    assert decision.frames[0].risk == "read"
+    assert "create_operation_work_order" not in decision.selected_tools
 
 
 def test_balance_query_selects_cost_summary_tool() -> None:
@@ -105,8 +101,10 @@ def test_balance_query_selects_cost_summary_tool() -> None:
 def test_worker_query_selects_worker_read_tool() -> None:
     decision = SkillRouter().route("我的工人", TOOLS)
 
-    assert decision.selected_tools == ["get_workers"]
+    assert decision.selected_tools == ["manage_workers"]
+    assert decision.selected_operations == {"manage_workers": ["query_workers"]}
     assert decision.frames[0].intent == "query_workers"
+    assert decision.frames[0].risk == "read"
 
 
 def test_high_risk_delete_crop_cycle_requires_clarification() -> None:

@@ -32,10 +32,10 @@ B_QUERY_CASES: list[EvalCase] = [
     EvalCase("q-cycle-3", "B_QUERY", "几号棚在种", "manage_crop_cycle"),
     EvalCase("q-cycle-4", "B_QUERY", "种植批次列表", "manage_crop_cycle"),
     # Workers (4)
-    EvalCase("q-workers-1", "B_QUERY", "我的工人", "get_workers"),
-    EvalCase("q-workers-2", "B_QUERY", "有哪些工人", "get_workers"),
-    EvalCase("q-workers-3", "B_QUERY", "工人列表", "get_workers"),
-    EvalCase("q-workers-4", "B_QUERY", "现在谁在干", "get_workers"),
+    EvalCase("q-workers-1", "B_QUERY", "我的工人", "manage_workers"),
+    EvalCase("q-workers-2", "B_QUERY", "有哪些工人", "manage_workers"),
+    EvalCase("q-workers-3", "B_QUERY", "工人列表", "manage_workers"),
+    EvalCase("q-workers-4", "B_QUERY", "现在谁在干", "manage_workers"),
     # Labor payables (4)
     EvalCase("q-payables-1", "B_QUERY", "未付人工", "get_labor_payables"),
     EvalCase("q-payables-2", "B_QUERY", "还欠多少人工钱", "get_labor_payables"),
@@ -116,7 +116,7 @@ E2_MULTITURN_CASES: list[EvalCase] = [
         "e2-4",
         "E2_MULTITURN",
         "我的工人",
-        "get_workers",
+        "manage_workers",
         previous_turns=["你好", "今天天气不错"],
         pollution_data={"worker_list_snapshot": "李海、王五"},
         skill_mock_return={
