@@ -21,7 +21,7 @@
 | crop_template | 模板列表、更新、删除 | `get_crop_templates`、`manage_crop_templates` |
 | crop_cycle | 删除茬口 | `delete_crop_cycle` |
 | farm_log | 农事记录编辑、删除 | `manage_farm_logs` |
-| planting_unit | 种植单元 CRUD | `get_planting_units`、`manage_planting_units` |
+| planting_unit | 种植单元查询、创建、更新、删除 | `manage_planting_units`（`get_planting_units` 为 legacy alias） |
 | user_settings | 当前用户设置查询、更新 | `get_user_settings`、`manage_user_settings` |
 
 ## 已补齐能力

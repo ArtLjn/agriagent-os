@@ -263,6 +263,42 @@ def test_manage_planting_units_legacy_metadata_uses_shared_capability_operations
     assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
 
 
+def test_manage_planting_units_call_metadata_infers_operation_risk():
+    class _ManagePlantingUnitsSkill:
+        def name(self):
+            return "manage_planting_units"
+
+    query_metadata = get_skill_call_metadata(
+        _ManagePlantingUnitsSkill(), {"operation": "query_units"}
+    )
+    legacy_empty_query_metadata = get_skill_call_metadata(_ManagePlantingUnitsSkill(), {})
+    legacy_cycle_query_metadata = get_skill_call_metadata(
+        _ManagePlantingUnitsSkill(), {"cycle_id": 1}
+    )
+    create_metadata = get_skill_call_metadata(
+        _ManagePlantingUnitsSkill(), {"operation": "manage_units", "action": "create"}
+    )
+    legacy_update_metadata = get_skill_call_metadata(
+        _ManagePlantingUnitsSkill(), {"action": "update"}
+    )
+
+    assert query_metadata.operation == "query_units"
+    assert query_metadata.operation_risk == "read"
+    assert query_metadata.permission_level == SkillPermissionLevel.READ
+    assert legacy_empty_query_metadata.operation == "query_units"
+    assert legacy_empty_query_metadata.operation_risk == "read"
+    assert legacy_empty_query_metadata.permission_level == SkillPermissionLevel.READ
+    assert legacy_cycle_query_metadata.operation == "query_units"
+    assert legacy_cycle_query_metadata.operation_risk == "read"
+    assert legacy_cycle_query_metadata.permission_level == SkillPermissionLevel.READ
+    assert create_metadata.operation == "manage_units"
+    assert create_metadata.operation_risk == "write_confirm"
+    assert create_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+    assert legacy_update_metadata.operation == "manage_units"
+    assert legacy_update_metadata.operation_risk == "write_confirm"
+    assert legacy_update_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
 def test_manage_cost_categories_legacy_metadata_uses_shared_capability_operations():
     class _GetCostCategoriesSkill:
         def name(self):

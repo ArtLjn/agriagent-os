@@ -23,9 +23,6 @@ _manage_cost_records_mod = importlib.import_module(
 _manage_categories_mod = importlib.import_module(
     "app.agent.skills.manage-cost-categories.scripts.main"
 )
-_get_units_mod = importlib.import_module(
-    "app.agent.skills.get-planting-units.scripts.main"
-)
 _manage_units_mod = importlib.import_module(
     "app.agent.skills.manage-planting-units.scripts.main"
 )
@@ -50,7 +47,6 @@ _manage_settings_mod = importlib.import_module(
 
 ManageCostSkill = _manage_cost_mod.ManageCostSkill
 ManageCostCategoriesSkill = _manage_categories_mod.ManageCostCategoriesSkill
-GetPlantingUnitsSkill = _get_units_mod.GetPlantingUnitsSkill
 ManagePlantingUnitsSkill = _manage_units_mod.ManagePlantingUnitsSkill
 ManageCropCycleSkill = _manage_cycles_mod.ManageCropCycleSkill
 ManageCropTemplatesSkill = _manage_templates_mod.ManageCropTemplatesSkill
@@ -68,7 +64,6 @@ def patched_skill_sessions(monkeypatch, db_session):
     for module in (
         _manage_cost_records_mod,
         _manage_categories_mod,
-        _get_units_mod,
         _manage_units_mod,
         _manage_cycles_query_mod,
         _manage_templates_mod,
@@ -240,7 +235,20 @@ async def test_planting_unit_skills_create_list_update_delete(
     unit = patched_skill_sessions.query(PlantingUnit).filter_by(name="东大棚").one()
     unit_id = unit.id
 
-    listed = await GetPlantingUnitsSkill().execute({"cycle_id": cycle_id}, ctx)
+    legacy_listed = await ManagePlantingUnitsSkill().execute({}, ctx)
+    assert legacy_listed.status.value == "success"
+    assert "东大棚" in legacy_listed.reply
+    assert "创建种植单元需要" not in legacy_listed.reply
+
+    legacy_cycle_listed = await ManagePlantingUnitsSkill().execute(
+        {"cycle_id": cycle_id}, ctx
+    )
+    assert legacy_cycle_listed.status.value == "success"
+    assert "东大棚" in legacy_cycle_listed.reply
+
+    listed = await ManagePlantingUnitsSkill().execute(
+        {"operation": "query_units", "cycle_id": cycle_id}, ctx
+    )
     assert listed.status.value == "success"
     assert "东大棚" in listed.reply
 

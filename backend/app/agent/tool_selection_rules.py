@@ -204,7 +204,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "阶段",
     },
     "manage_farm_logs": {"农事记录", "农事日志", "操作日志", "干了啥", "记录"},
-    "get_planting_units": {"种植单元", "地块", "大棚", "棚区", "有哪些棚"},
+    "manage_planting_units": {"种植单元", "地块", "大棚", "棚区", "有哪些棚"},
     "get_labor_payables": {
         "人工钱",
         "工钱",
@@ -291,7 +291,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "get_workers": [],
     "get_operation_work_orders": [],
     "manage_work_orders": [],
-    "get_planting_units": [],
     "manage_crop_templates": [],
     "create_operation_work_order": [],
     "manage_farm_logs": [],

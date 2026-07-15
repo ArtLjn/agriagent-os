@@ -816,12 +816,11 @@ def test_planting_unit_read_query_does_not_expose_write_tool(
 ) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_planting_units"), _tool("manage_planting_units")],
+        [_tool("manage_planting_units")],
     )
 
-    assert decision.selected_tools == ["get_planting_units"]
+    assert decision.selected_tools == ["manage_planting_units"]
     assert decision.selected_operations == {"manage_planting_units": ["query_units"]}
-    assert "manage_planting_units" not in decision.selected_tools
     assert decision.frames[0].risk == "read"
 
 
@@ -839,7 +838,7 @@ def test_planting_unit_management_uses_write_confirm_operation(
 ) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_planting_units"), _tool("manage_planting_units")],
+        [_tool("manage_planting_units")],
     )
 
     assert decision.selected_tools == ["manage_planting_units"]
@@ -863,7 +862,7 @@ def test_ambiguous_planting_unit_management_asks_clarification(
 ) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_planting_units"), _tool("manage_planting_units")],
+        [_tool("manage_planting_units")],
     )
 
     assert decision.selected_tools == []

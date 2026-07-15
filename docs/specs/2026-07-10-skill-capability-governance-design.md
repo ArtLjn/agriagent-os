@@ -79,7 +79,7 @@ User
 | `manage_cost_categories` | `get_cost_categories`（alias）、`manage_cost_categories` |
 | `manage_crop_cycle` | `create_crop_cycle`、`get_crop_cycles`、`get_crop_cycle_info`、`update_crop_cycle`、`update_crop_stage`（legacy alias）、`delete_crop_cycle` |
 | `manage_crop_template` | `create_crop_template`、`get_crop_templates`、`manage_crop_templates` |
-| `manage_planting_units` | `get_planting_units`、`manage_planting_units` |
+| `manage_planting_units` | `get_planting_units`（legacy alias）、`manage_planting_units`（已物理合并为单一目录） |
 | `manage_work_orders` | `create_operation_work_order`、`get_operation_work_orders`、`update_operation_work_order` |
 | `manage_workers` | `get_workers`、`manage_workers` |
 | `manage_labor_payment` | `get_labor_payables`、`settle_labor_payment`、`manage_wages` |
@@ -588,7 +588,7 @@ Router trace 增加 capability、operation、legacy_alias、retrieval_score。
 
 - `manage_workers`
 - `manage_settings`
-- `manage_planting_units`
+- `manage_planting_units`（已合并：`query_units` 为 read，`manage_units` 为 write_confirm）
 - `manage_cost_categories`
 
 ### Phase 4：高风险能力合并

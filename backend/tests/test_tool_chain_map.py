@@ -26,7 +26,6 @@ class TestToolChainMap:
             "get_workers",
             "get_operation_work_orders",
             "manage_cost_categories",
-            "get_planting_units",
             "manage_planting_units",
             "manage_user_settings",
             "settle_labor_payment",
@@ -47,7 +46,6 @@ class TestToolChainMap:
             "get_labor_payables",
             "get_workers",
             "get_operation_work_orders",
-            "get_planting_units",
             "manage_crop_templates",
             "manage_user_settings",
         ]
