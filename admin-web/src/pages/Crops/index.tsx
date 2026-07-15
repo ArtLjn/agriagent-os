@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Button, Modal, Form, Input, InputNumber, Space, message, Divider, Popconfirm, Tag, Card, Alert } from 'antd';
-import { PlusOutlined, MinusCircleOutlined, BugOutlined, EditOutlined, DeleteOutlined, ReadOutlined, RobotOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Space, message, Popconfirm, Tag, Card, Alert } from 'antd';
+import { PlusOutlined, BugOutlined, EditOutlined, DeleteOutlined, ReadOutlined, RobotOutlined } from '@ant-design/icons';
 import { listTemplates, createTemplate, updateTemplate, deleteTemplate, parseTemplate, type CropTemplate, type CropTemplateParseResponse } from '../../api/crops';
 import ApiDebugger from '../../components/ApiDebugger';
 import { PageShell, Toolbar } from '../../components/PageShell';
+import TemplateForm from '../../components/TemplateForm';
 import { cardStyle } from '../../styles/theme';
 import { buildTemplateFormValues } from '../Operations/smartCreateModel';
 
@@ -243,31 +244,7 @@ export default function Crops() {
           </Card>
         )}
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入模板名称' }]}><Input placeholder="如：西瓜" /></Form.Item>
-          <Form.Item name="variety" label="品种"><Input placeholder="如：8424" /></Form.Item>
-
-          <Divider>生长阶段</Divider>
-          <Form.List name="stages">
-            {(fields, { add, remove }) => (
-              <>
-                {fields.map(({ key, name, ...restField }) => (
-                  <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                    <Form.Item {...restField} name={[name, 'name']} rules={[{ required: true, message: '阶段名' }]}>
-                      <Input placeholder="阶段名" style={{ width: 120 }} />
-                    </Form.Item>
-                    <Form.Item {...restField} name={[name, 'duration_days']} rules={[{ required: true, message: '天数' }]}>
-                      <InputNumber placeholder="天数" min={1} style={{ width: 90 }} />
-                    </Form.Item>
-                    <Form.Item {...restField} name={[name, 'key_tasks']}>
-                      <Input placeholder="关键任务（选填）" style={{ width: 160 }} />
-                    </Form.Item>
-                    <MinusCircleOutlined onClick={() => remove(name)} />
-                  </Space>
-                ))}
-                <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>添加阶段</Button>
-              </>
-            )}
-          </Form.List>
+          <TemplateForm />
         </Form>
       </Modal>
 
