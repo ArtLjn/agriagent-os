@@ -12,7 +12,7 @@ status: active
 ```text
 api/
   → modules/*/router 或 agent/application
-  → modules/*/service、agent/runtime、agent/planner、agent/executor、prompt、context、memory、skills
+  → modules/*/service、agent/runtime、agent/executor、prompt、context、memory、skills
   → shared、core、models、infra
 ```
 
@@ -27,7 +27,6 @@ api/
 | API `api/` | Pydantic schema、依赖注入、application use case、模块 router/service | 直接承载 Memory、Prompt、Context 选择或存储逻辑 |
 | Agent Application `agent/application/` | Auth/Farm 依赖结果、Context Builder、Prompt Composer、Agent Runtime、Memory Service、Evaluation capture、Observability | HTTP request 细节、数据库表直接操作 |
 | Agent Runtime `agent/runtime/` | Runtime state、nodes、graph factory、tool executor 协议、Agent ports | Prompt 版本治理、Context selector 实现、Memory 存储或检索实现 |
-| Agent Planner `agent/planner/` | 工具候选、意图分类、Context 摘要输入 | HTTP 路由、Prompt 模板渲染、Memory 存储 |
 | Agent Executor `agent/executor/` | Skill registry、权限策略、参数校验、写操作确认 | API 路由、Prompt 模板、Memory 存储 |
 | Prompt `prompt/` | 结构化 PromptInput、ContextBundle 摘要、版本配置、快照 | 在模板渲染阶段直接查询数据库或读取 Memory 存储 |
 | Context `context/` | 业务 selector、Memory Service 接口、token budget、cache adapter | Prompt 版本治理、LLM Runtime 节点执行 |

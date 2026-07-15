@@ -416,7 +416,6 @@ def test_current_architecture_has_no_empty_placeholder_directories():
         "modules/farm",
         "agent/application",
         "agent/runtime",
-        "agent/planner",
         "agent/executor",
         "agent/guardrails",
         "prompt",

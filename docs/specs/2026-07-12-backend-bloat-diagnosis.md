@@ -324,15 +324,19 @@ class ContextSelector(Protocol):
 - `from app.context.policy import ContextSelector` 与 `from app.context.builder import ContextSelector` 走两个 namespace，mypy 视角下是"两个类型"
 - 调用方 import 路径混乱，重构易破坏
 
-##### 🔴 #2 `document_repository` 16 个实现类，config 实际只用 mongo
+##### 🔴 #2 `document_repository` 16 个实现类，生产配置实际只用 mongo
 
 ```yaml
-# config.yaml 实际配置
+# backend/config.yaml 当前运行配置
 storage:
   trace: "mongo"
   case_drafts: "mongo"
   # ... 全部 mongo
 ```
+
+注意：`app/core/settings/models.py` 中 storage 默认值仍是 `mysql`，测试与无配置启动路径可能
+依赖默认值。删除 MySQL / Dual / MongoRead 实现前，必须同时确认生产配置、测试默认、回滚策略
+和 MongoDB 迁移 OpenSpec 状态，不能只凭 `config.yaml` 一处判断。
 
 ```python
 # document_repository_selector.py 维护 4 种 backend × 4 个对象 = 16 个类
@@ -347,17 +351,18 @@ storage:
 - "为迁移设计"已变成"迁移完没收尾" → 新人不知道生产用 mysql 还是 mongo
 - 每加一个 data_flywheel 对象要写 4 套实现 → 新功能成本 ×4
 
-##### 🔴 #3 `planner/` 和 `planning/` 双目录近死代码
+##### 🔴 #3 `planner/` 死代码与 `planning/` 命名混淆
 
 ```
 agent/planner/    # 63 行，0 外部引用
-agent/planning/   # adapter.py 160 行，唯一引用方是 planning/__init__.py 自身
+agent/planning/   # PlanDraft / DomainValidator 仍被 runtime/nodes.py 使用
 ```
 
 **不稳定因素**：
 - 两个目录名字几乎一样，IDE 跳转经常跳错
-- `planning/adapter.py` 把 `RouterDecision` "适配" 成 `PlanDraft`，但 `PlanDraft` 没找到外部消费者
-- "Plan 草稿"概念代码里有、运行时没人用 → 改一处以为影响流程，实际无影响；反过来也成立
+- `planner/` 是旧规划入口，当前未找到外部消费者，可作为删除候选
+- `planning/` 不是死目录，`runtime/nodes.py` 正在使用 `PlanDraft`、`DomainValidator` 与 `attach_validation`
+- 真正问题是命名太近、职责边界不清：一个可删，一个应迁移/收敛到 runtime planning 能力，不能打包删除
 
 ##### 🟠 #4 `MemoryServicePort` Protocol 只有 1 个实现
 
@@ -421,14 +426,14 @@ except ImportError:
 | **行为不稳定** | 多 backend / dual-write 路径潜伏 bug | `document_repository_*` 16 类、`online_document_*` 3 Protocol |
 | **演进不稳定** | 加新对象要改 N 处 | data_flywheel 新增一类要写 4 套 backend |
 | **测试不稳定** | 测了不用、用了没测 | 12 个未使用 Repository 仍占测试覆盖 |
-| **死代码不稳定** | 谁都不敢删但又改不动 | `planner/`、`planning/adapter.py`、`MemoryServicePort` |
+| **死代码不稳定** | 谁都不敢删但又改不动 | `planner/`、`MemoryServicePort`；`planning/` 需迁移/收敛但不可直接删除 |
 | **命名不稳定** | IDE 跳转跳错 | `selector.py` vs `selectors/`、两个 `ContextSelector` |
 
 #### 9.3 最危险的两类
 
-> **#2 document_repository 与 #3 planner/planning** 是最高优先级。
+> **#2 document_repository 与 #3 planner/planning 命名混淆** 是最高优先级。
 > 一个制造潜伏 bug（dual-write 路径不常走），
-> 一个制造认知迷雾（两个相似目录、两个相同 Protocol）。
+> 一个制造认知迷雾（一个旧目录可删、一个运行时仍在用）。
 > 根治掉这两类，"沉重感"会断崖式下降。
 
 #### 9.4 量化
@@ -441,7 +446,7 @@ except ImportError:
 | 多后端 Repository 类总数 | **16 个**（4 对象 × 4 backend） |
 | 多后端中实际未使用的实现 | **~12 个**（生产 config 全 mongo） |
 | 兼容层 / 双写层文件 | **7 个**（compat / dual / fallback / adapter / selector 类） |
-| 疑似死代码目录 | **2 个**（`agent/planner/`、`agent/planning/` 待评估） |
+| 疑似死代码目录 | **1 个**（`agent/planner/`）；`agent/planning/` 为待迁移/收敛目录 |
 
 ## 量化诊断
 
@@ -491,11 +496,12 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 ## 整改计划追踪
 
 > 2026-07-14 新增。每个整改项需更新"状态"列；完成的项注明 commit hash 与验证方式。
-> 整改原则：**先减后拆、先合后分**——本阶段不新增任何抽象、skill 或子模块。
+> 整改原则：**先减后拆、先合后分**——本阶段禁止新增业务能力或抽象；
+> 允许为迁移既有代码创建 `application/`、`skills/`、`platforms/` 等目标目录。
 
 ### 整改原则
 
-1. **冻结新增**：整改完成前禁止新增 skill / 禁止新增子模块 / 禁止新增 Protocol
+1. **冻结新增**：整改完成前禁止新增业务 skill / 禁止新增业务子模块 / 禁止新增 Protocol
 2. **先减后拆**：先删除死代码与过度设计，再考虑拆分巨石文件
 3. **小步提交**：每个 P0/P1 项独立 commit / PR，可独立回滚
 4. **CI 验证**：每项整改必须通过 `bash scripts/harness-check.sh` 全套检查
@@ -516,7 +522,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
 | P0-1 | 删除 `agent/planner/` 整个目录 | `backend/app/agent/planner/`（3 文件 63 行） | 9-#3、4 | ⏳ | `grep -rn "from app.agent.planner" backend/` 返回空；CI 全绿 |
-| P0-2 | 评估并收拢 `agent/planning/` | `backend/app/agent/planning/`（含 adapter.py 160 行） | 9-#3 | ⏳ | 核对 `PlanDraft` 外部消费者；若无则整目录删除 |
+| P0-2 | 评估并迁移/收拢 `agent/planning/` | `backend/app/agent/planning/`（含 adapter.py 160 行） | 9-#3 | ⏳ | 确认 `runtime/nodes.py` 使用路径；保留语义并迁到 runtime planning 或保留清晰命名 |
 | P0-3 | 合并 `ContextSelector` Protocol 双定义 | `context/policy.py`、`context/builder.py` | 9-#1 | ⏳ | 统一 import 路径；CI 全绿 |
 | P0-4 | 合并 runtime 顶部碎片 | `agent/runtime/{errors,quota,graph_factory}.py` | 7、附录 A | ⏳ | 合并为单文件；3 处 import 更新 |
 | P0-5 | 合并 `observability/` 整包 | `observability/{__init__,lifecycle,metrics}.py` | 8.3 | ⏳ | 平铺为 `observability.py` 单文件 |
@@ -539,7 +545,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
-| P2-1 | **`document_repository_*` 砍掉 12 个未用 backend 类** | `modules/data_flywheel/document_repository_*.py` | 9-#2 | ⚠️ | 业务确认生产 config；保留 `Mongo*`，删 `MySQL*`/`Dual*`/`MongoRead*` |
+| P2-1 | **`document_repository_*` 砍掉 12 个未用 backend 类** | `modules/data_flywheel/document_repository_*.py` | 9-#2 | ⚠️ | 确认生产 config、settings 默认、测试路径、回滚策略和 Mongo 迁移状态；保留 `Mongo*`，再删 `MySQL*`/`Dual*`/`MongoRead*` |
 | P2-2 | `infra/online_document_common.py` 3 Protocol 同步处理 | `backend/app/infra/online_document_common.py` | 9-#5 | ⚠️ | 与 P2-1 同步决策 |
 | P2-3 | `services/` 21 个 `*_service.py` 评估合并 | `backend/app/services/` | 3 | ⚠️ | 业务方确认实体边界 |
 | P2-4 | `tests/` 根目录 78 个 test_*.py 下沉 | `backend/tests/` | 5 | ⏳ | 按源码镜像目录重构 |

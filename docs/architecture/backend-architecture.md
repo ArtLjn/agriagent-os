@@ -49,7 +49,6 @@ flowchart TB
 | `app/services/` | 迁移期业务服务：作物、周期、日志、成本、债务、天气、会话、报告、配额。 |
 | `app/agent/application/` | Agent 应用用例：聊天、SSE、每日建议、报告、历史、上下文失效。 |
 | `app/agent/runtime/` | LangGraph 图工厂、节点、消息压缩、工具执行、最终 prompt 预算、流式事件。 |
-| `app/agent/planner/` | 意图与工具候选规划，调用旧 `tool_selector.py` 兼容能力。 |
 | `app/agent/executor/` | Tool call 执行计划和并行执行适配。 |
 | `app/agent/skills/` | Skillify Skill 实现，目前仍位于 Agent 域下。 |
 | `app/context/` | ContextBundle、selector、token budget、压缩、缓存、预加载和失效。 |

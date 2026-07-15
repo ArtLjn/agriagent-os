@@ -67,7 +67,6 @@ Agent 平台由 `agent/`、`prompt/`、`context/`、`memory/`、`evaluation/`、
 
 - `agent/application/` 承接聊天、流式聊天、每日建议和报告生成 use case，API 只调用 use case。
 - `agent/runtime/` 只负责图执行、节点协议、状态流转和 runtime 错误，不保存 Prompt、Context 或 Memory 的平台实现。
-- `agent/planner/` 负责意图识别、任务规划和工具候选选择。
 - `agent/executor/` 负责 Skill 调用、并行执行、权限分级、参数校验和写操作确认。
 - `agent/reflector/` 负责触发式反思控制、写操作风险检查、工具结果一致性检查和 reflection trace payload；Runtime/Executor 只调用反思服务，不内联策略规则。
 - `agent/response/` 负责结构化回复、流式事件和输出格式约束。
