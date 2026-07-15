@@ -6,8 +6,8 @@ from langchain_core.messages import ToolMessage
 
 logger = logging.getLogger(__name__)
 
-DIRECT_RETURN_TOOLS: set[str] = {"get_workers"}
 DIRECT_RETURN_MANAGE_COST_OPERATIONS: set[str] = {"query_debt"}
+DIRECT_RETURN_MANAGE_WORKERS_OPERATIONS: set[str] = {"query_workers"}
 
 
 def can_return_direct_tool_messages(messages: list[ToolMessage]) -> bool:
@@ -20,7 +20,13 @@ def can_return_direct_tool_messages(messages: list[ToolMessage]) -> bool:
             if operation not in DIRECT_RETURN_MANAGE_COST_OPERATIONS:
                 return False
             continue
-        if tool_name not in DIRECT_RETURN_TOOLS:
+        if tool_name == "manage_workers":
+            if operation not in DIRECT_RETURN_MANAGE_WORKERS_OPERATIONS:
+                return False
+            continue
+        if tool_name == "get_workers":
+            continue
+        if tool_name:
             return False
     return True
 

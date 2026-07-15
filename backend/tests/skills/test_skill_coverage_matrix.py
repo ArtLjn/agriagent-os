@@ -38,7 +38,7 @@ def test_worker_crud_is_covered_by_dedicated_skills():
 
     assert worker_entry.status == CoverageStatus.COVERED_BY_SKILL
     assert worker_entry.priority == CoveragePriority.HIGH
-    assert worker_entry.skill_name == "get_workers|manage_workers"
+    assert worker_entry.skill_name == "manage_workers"
 
 
 def test_wage_save_update_is_covered_by_manage_wages():

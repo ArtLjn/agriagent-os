@@ -14,6 +14,16 @@ from app.services import planting_service
 
 _ACTIVE_STATUS = "active"
 _INACTIVE_STATUS = "inactive"
+_QUERY_ACTIONS = {"query", "list", "read", "query_workers"}
+_WRITE_ACTIONS = {"create", "update", "deactivate", "restore"}
+_WRITE_FIELDS = (
+    "name",
+    "phone",
+    "default_pay_type",
+    "default_unit_price",
+    "note",
+    "status",
+)
 
 
 class ManageWorkersSkill(Skill):
@@ -24,7 +34,7 @@ class ManageWorkersSkill(Skill):
 
     def description(self) -> str:
         return (
-            "创建、更新、停用或恢复工人档案。创建或更新时可记录姓名、电话、"
+            "查询、创建、更新、停用或恢复工人档案。创建或更新时可记录姓名、电话、"
             "默认计薪方式、默认单价和备注；删除语义统一为停用/离职，保留历史用工。"
         )
 
@@ -34,7 +44,15 @@ class ManageWorkersSkill(Skill):
             "properties": {
                 "action": {
                     "type": "string",
-                    "description": "操作：create/update/deactivate/restore",
+                    "description": "操作：query/create/update/deactivate/restore",
+                },
+                "operation": {
+                    "type": "string",
+                    "description": "能力操作：query_workers 或 manage_worker",
+                },
+                "active_only": {
+                    "type": "boolean",
+                    "description": "查询时是否只返回活跃工人，默认 true",
                 },
                 "worker_id": {"type": "integer", "description": "工人 ID"},
                 "name": {"type": "string", "description": "工人姓名"},
@@ -53,7 +71,7 @@ class ManageWorkersSkill(Skill):
                     "description": "状态：active 或 inactive",
                 },
             },
-            "required": ["action"],
+            "required": [],
         }
 
     def metadata(self) -> dict:
@@ -84,7 +102,7 @@ class ManageWorkersSkill(Skill):
                 ],
                 "risk_notes": ["停用工人会隐藏当前列表，但保留历史用工和账务记录。"],
             },
-            "evaluation_tags": ["write", "worker", "labor"],
+            "evaluation_tags": ["read", "write", "worker", "labor"],
         }
 
     async def execute(self, params: dict, context) -> SkillResult:
@@ -92,9 +110,11 @@ class ManageWorkersSkill(Skill):
         if context_error:
             return context_error
 
-        action = _clean(params.get("action")) or "create"
+        action = _resolve_action(params)
         db = SessionLocal()
         try:
+            if action == "query":
+                return _query_workers(db, farm_id, params)
             if action == "create":
                 return _create_worker(db, farm_id, params)
             if action == "update":
@@ -105,12 +125,50 @@ class ManageWorkersSkill(Skill):
                 return _restore_worker(db, farm_id, params)
             return SkillResult(
                 status=ResultStatus.FAILED,
-                reply="管理工人失败：action 必须是 create、update、deactivate 或 restore。",
+                reply=(
+                    "管理工人失败：action 必须是 query、create、update、"
+                    "deactivate 或 restore。"
+                ),
             )
         except Exception as exc:
             return SkillResult(status=ResultStatus.FAILED, reply=f"管理工人失败：{exc}")
         finally:
             db.close()
+
+
+def _resolve_action(params: dict) -> str:
+    operation = _clean(params.get("operation"))
+    action = _clean(params.get("action"))
+    if operation == "query_workers" or action in _QUERY_ACTIONS:
+        return "query"
+    if action in _WRITE_ACTIONS:
+        return action
+    if action:
+        return action
+    if operation == "manage_worker":
+        return "create"
+    if _has_write_fields(params):
+        return "create"
+    return "query"
+
+
+def _has_write_fields(params: dict) -> bool:
+    return any(params.get(key) not in (None, "") for key in _WRITE_FIELDS)
+
+
+def _query_workers(db, farm_id: int, params: dict) -> SkillResult:
+    active_only = _to_bool(params.get("active_only"), default=True)
+    workers = planting_service.list_workers(
+        db,
+        farm_id,
+        active_only=active_only,
+    )
+    if not workers:
+        return SkillResult(status=ResultStatus.SUCCESS, reply="当前没有活跃工人。")
+    lines = ["当前工人："]
+    for worker in workers:
+        lines.append(_format_worker(worker))
+    return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
 
 
 def _create_worker(db, farm_id: int, params: dict) -> SkillResult:
@@ -225,3 +283,16 @@ def _to_decimal(value) -> Decimal | None:
         return Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
+
+
+def _to_bool(value, *, default: bool) -> bool:
+    if value in (None, ""):
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"false", "0", "no", "n", "否", "不", "停用", "离职", "历史"}:
+        return False
+    if text in {"true", "1", "yes", "y", "是", "活跃", "在职"}:
+        return True
+    return bool(value)

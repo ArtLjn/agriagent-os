@@ -16,7 +16,6 @@ ALL_TOOL_NAMES = [
     "manage_farm_logs",
     "get_farm_status",
     "get_labor_payables",
-    "get_workers",
     "get_operation_work_orders",
     "manage_cost_categories",
     "manage_planting_units",
@@ -278,11 +277,11 @@ class TestQueryKeywordMatching:
 
     def test_workers_query_defaults_to_worker_skill(self):
         result = select_tools("我的工人", _make_tools())
-        assert result == ["get_workers"]
+        assert result == ["manage_workers"]
 
     def test_inactive_workers_query_uses_worker_skill(self):
         result = select_tools("看看离职工人", _make_tools())
-        assert result == ["get_workers"]
+        assert result == ["manage_workers"]
 
     def test_cost_category_query_uses_category_skill(self):
         result = select_tools("有哪些成本分类", _make_tools())

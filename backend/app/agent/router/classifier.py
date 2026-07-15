@@ -501,8 +501,11 @@ class RuleIntentClassifier:
                     domain="labor",
                     intent="query_workers",
                     risk="read",
+                    capability="manage_workers",
+                    operation="query_workers",
+                    operation_hint="query_workers",
                     entities=["worker"],
-                    candidate_tools=["get_workers"],
+                    candidate_tools=["manage_workers"],
                     confidence=0.84,
                 )
             )

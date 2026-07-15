@@ -24,7 +24,6 @@ EXPECTED_REGISTERED_SKILLS = {
     "manage_farm_logs",
     "get_farm_status",
     "get_labor_payables",
-    "get_workers",
     "manage_cost_categories",
     "manage_planting_units",
     "manage_user_settings",
@@ -120,6 +119,14 @@ def test_planting_unit_tool_surface_uses_single_capability() -> None:
     assert "manage_planting_units" in tool_names
     assert "get_planting_units" not in tool_names
     assert not (SKILLS_DIR / "get-planting-units").exists()
+
+
+def test_worker_tool_surface_uses_single_capability() -> None:
+    tool_names = {tool.name for tool in get_langchain_tools()}
+
+    assert "manage_workers" in tool_names
+    assert "get_workers" not in tool_names
+    assert not (SKILLS_DIR / "get-workers").exists()
 
 
 def test_enabled_registered_skills_have_selector_coverage() -> None:

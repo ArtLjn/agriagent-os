@@ -8,12 +8,10 @@ from skillify.core.context import SkillContext
 
 from app.models.planting import Worker
 
-_get_workers_mod = importlib.import_module("app.agent.skills.get-workers.scripts.main")
 _manage_workers_mod = importlib.import_module(
     "app.agent.skills.manage-workers.scripts.main"
 )
 
-GetWorkersSkill = _get_workers_mod.GetWorkersSkill
 ManageWorkersSkill = _manage_workers_mod.ManageWorkersSkill
 
 
@@ -24,8 +22,7 @@ def ctx():
 
 @pytest.fixture
 def worker_skill_sessions(monkeypatch, db_session):
-    for module in (_get_workers_mod, _manage_workers_mod):
-        monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
+    monkeypatch.setattr(_manage_workers_mod, "SessionLocal", lambda: db_session)
     return db_session
 
 
@@ -44,22 +41,45 @@ def _add_worker(db, name: str, status: str = "active") -> Worker:
 
 
 @pytest.mark.asyncio
-async def test_get_workers_defaults_to_active_only(worker_skill_sessions, ctx):
+async def test_manage_workers_empty_params_queries_active_workers(
+    worker_skill_sessions, ctx
+):
     _add_worker(worker_skill_sessions, "李四")
     _add_worker(worker_skill_sessions, "王五", status="inactive")
 
-    result = await GetWorkersSkill().execute({}, ctx)
+    result = await ManageWorkersSkill().execute({}, ctx)
 
     assert result.status.value == "success"
     assert "李四" in result.reply
     assert "王五" not in result.reply
+    assert "创建工人需要姓名" not in result.reply
 
 
 @pytest.mark.asyncio
-async def test_get_workers_can_include_inactive(worker_skill_sessions, ctx):
+async def test_manage_workers_query_action_queries_workers(worker_skill_sessions, ctx):
+    _add_worker(worker_skill_sessions, "李四")
+
+    result = await ManageWorkersSkill().execute({"action": "query"}, ctx)
+
+    assert result.status.value == "success"
+    assert "李四" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_manage_workers_query_operation_queries_workers(worker_skill_sessions, ctx):
+    _add_worker(worker_skill_sessions, "李四")
+
+    result = await ManageWorkersSkill().execute({"operation": "query_workers"}, ctx)
+
+    assert result.status.value == "success"
+    assert "李四" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_manage_workers_query_can_include_inactive(worker_skill_sessions, ctx):
     _add_worker(worker_skill_sessions, "王五", status="inactive")
 
-    result = await GetWorkersSkill().execute({"active_only": False}, ctx)
+    result = await ManageWorkersSkill().execute({"active_only": False}, ctx)
 
     assert result.status.value == "success"
     assert "王五" in result.reply

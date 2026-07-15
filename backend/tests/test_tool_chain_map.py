@@ -23,7 +23,6 @@ class TestToolChainMap:
             "manage_farm_logs",
             "get_farm_status",
             "get_labor_payables",
-            "get_workers",
             "get_operation_work_orders",
             "manage_cost_categories",
             "manage_planting_units",
@@ -44,9 +43,9 @@ class TestToolChainMap:
             "manage_crop_cycle",
             "manage_farm_logs",
             "get_labor_payables",
-            "get_workers",
             "get_operation_work_orders",
             "manage_crop_templates",
+            "manage_workers",
             "manage_user_settings",
         ]
         for tool in query_tools_without_farm_status:
@@ -95,8 +94,8 @@ class TestExpandByChain:
         assert result == {"get_operation_work_orders"}
 
     def test_workers_chain(self):
-        result = expand_by_chain({"get_workers"})
-        assert result == {"get_workers"}
+        result = expand_by_chain({"manage_workers"})
+        assert result == {"manage_workers"}
 
     def test_write_skill_no_chain(self):
         result = expand_by_chain({"manage_cost"})

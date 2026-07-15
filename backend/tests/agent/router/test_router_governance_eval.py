@@ -27,7 +27,7 @@ def _tools(names: list[str]):
     [
         ("今天买了100元化肥", "create_cost_record", "manage_cost", "create_record"),
         ("我的茬口有哪些", "manage_crop_cycle", "manage_crop_cycle", "query_cycles"),
-        ("我的工人有哪些", "get_workers", "manage_workers", "query_workers"),
+        ("我的工人有哪些", "manage_workers", "manage_workers", "query_workers"),
         (
             "我的作业单有哪些",
             "get_operation_work_orders",
@@ -201,8 +201,8 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
         ),
         (
             "工人列表",
-            "get_workers",
-            ["manage_workers"],
+            "manage_workers",
+            [],
         ),
         (
             "地块列表",
@@ -269,7 +269,6 @@ def test_worker_management_write_intent_uses_manage_workers_operation(
     assert decision.selected_operations == {"manage_workers": ["manage_worker"]}
     assert decision.frames[0].risk == "write_confirm"
     assert decision.frames[0].requires_confirmation is True
-    assert "get_workers" not in decision.selected_tools
 
 
 def _selected_candidates(selected_tools: list[str], tools: list) -> list:
@@ -288,7 +287,6 @@ def _governance_tool_pool() -> list[str]:
         "get_cost_analytics",
         "create_cost_record",
         "manage_crop_cycle",
-        "get_workers",
         "manage_workers",
         "get_operation_work_orders",
         "create_operation_work_order",

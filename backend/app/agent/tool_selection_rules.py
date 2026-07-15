@@ -214,7 +214,7 @@ QUERY_TRIGGERS: dict[str, set[str]] = {
         "还欠多少人工",
         "人工欠款",
     },
-    "get_workers": {
+    "manage_workers": {
         "我的工人",
         "当前工人",
         "活跃工人",
@@ -288,7 +288,7 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "manage_cost": [],
     "manage_crop_cycle": [],
     "get_labor_payables": [],
-    "get_workers": [],
+    "manage_workers": [],
     "get_operation_work_orders": [],
     "manage_work_orders": [],
     "manage_crop_templates": [],
@@ -296,7 +296,6 @@ TOOL_CHAIN_MAP: dict[str, list[str]] = {
     "manage_farm_logs": [],
     "settle_labor_payment": [],
     "update_operation_work_order": [],
-    "manage_workers": [],
     "manage_wages": [],
     "manage_cost_categories": [],
     "manage_planting_units": [],

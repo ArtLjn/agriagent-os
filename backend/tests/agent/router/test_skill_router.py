@@ -668,7 +668,7 @@ def test_work_order_read_queries_do_not_expose_write_tool(message: str) -> None:
     [
         ("这个月花了多少钱", "get_cost_summary", "manage_cost", "query_summary"),
         ("我的茬口有哪些", "manage_crop_cycle", "manage_crop_cycle", "query_cycles"),
-        ("我的工人有哪些", "get_workers", "manage_workers", "query_workers"),
+        ("我的工人有哪些", "manage_workers", "manage_workers", "query_workers"),
         (
             "我的作业单有哪些",
             "get_operation_work_orders",
@@ -768,15 +768,14 @@ def test_settings_update_uses_write_confirm_operation(message: str) -> None:
         "查一下工人",
     ],
 )
-def test_worker_read_query_does_not_expose_write_tool(message: str) -> None:
+def test_worker_read_query_uses_read_operation(message: str) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_workers"), _tool("manage_workers")],
+        [_tool("manage_workers")],
     )
 
-    assert decision.selected_tools == ["get_workers"]
+    assert decision.selected_tools == ["manage_workers"]
     assert decision.selected_operations == {"manage_workers": ["query_workers"]}
-    assert "manage_workers" not in decision.selected_tools
     assert decision.frames[0].risk == "read"
 
 
@@ -792,7 +791,7 @@ def test_worker_read_query_does_not_expose_write_tool(message: str) -> None:
 def test_worker_management_uses_write_confirm_operation(message: str) -> None:
     decision = SkillRouter().route(
         message,
-        [_tool("get_workers"), _tool("manage_workers")],
+        [_tool("manage_workers")],
     )
 
     assert decision.selected_tools == ["manage_workers"]

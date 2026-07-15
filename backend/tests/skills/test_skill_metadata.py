@@ -241,6 +241,46 @@ def test_manage_workers_legacy_metadata_uses_shared_capability_operations():
     assert manage_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
 
 
+def test_manage_workers_call_metadata_infers_operation_risk():
+    class _ManageWorkersSkill:
+        def name(self):
+            return "manage_workers"
+
+    empty_query_metadata = get_skill_call_metadata(_ManageWorkersSkill(), {})
+    action_query_metadata = get_skill_call_metadata(
+        _ManageWorkersSkill(), {"action": "query"}
+    )
+    operation_query_metadata = get_skill_call_metadata(
+        _ManageWorkersSkill(), {"operation": "query_workers"}
+    )
+    active_only_query_metadata = get_skill_call_metadata(
+        _ManageWorkersSkill(), {"active_only": False}
+    )
+    create_metadata = get_skill_call_metadata(
+        _ManageWorkersSkill(), {"action": "create", "name": "李四"}
+    )
+    write_field_metadata = get_skill_call_metadata(
+        _ManageWorkersSkill(), {"name": "李四", "default_unit_price": 150}
+    )
+
+    for metadata in (
+        empty_query_metadata,
+        action_query_metadata,
+        operation_query_metadata,
+        active_only_query_metadata,
+    ):
+        assert metadata.operation == "query_workers"
+        assert metadata.operation_risk == "read"
+        assert metadata.permission_level == SkillPermissionLevel.READ
+
+    assert create_metadata.operation == "manage_worker"
+    assert create_metadata.operation_risk == "write_confirm"
+    assert create_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+    assert write_field_metadata.operation == "manage_worker"
+    assert write_field_metadata.operation_risk == "write_confirm"
+    assert write_field_metadata.permission_level == SkillPermissionLevel.WRITE_CONFIRM
+
+
 def test_manage_planting_units_legacy_metadata_uses_shared_capability_operations():
     class _GetPlantingUnitsSkill:
         def name(self):
