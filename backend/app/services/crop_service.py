@@ -94,7 +94,10 @@ def create_crop_template(
 ) -> CropTemplate:
     """创建作物模板及其生长阶段。"""
     db_template = CropTemplate(
-        name=template.name, variety=template.variety, farm_id=farm_id
+        name=template.name,
+        variety=template.variety,
+        category=template.category,
+        farm_id=farm_id,
     )
     db.add(db_template)
     db.flush()
@@ -233,6 +236,114 @@ def _system_template_query(db: Session, template_id: int):
     )
 
 
+def create_system_crop_template(
+    db: Session, template: CropTemplateCreate
+) -> CropTemplate:
+    """创建系统作物模板（farm_id 为空）。"""
+    db_template = CropTemplate(
+        farm_id=None,
+        name=template.name,
+        variety=template.variety,
+        category=template.category,
+    )
+    db.add(db_template)
+    db.flush()
+
+    for stage in template.stages:
+        db.add(
+            GrowthStage(
+                crop_template_id=db_template.id,
+                name=stage.name,
+                duration_days=stage.duration_days,
+                order_index=stage.order_index,
+                key_tasks=stage.key_tasks,
+            )
+        )
+
+    try:
+        db.commit()
+        db.refresh(db_template)
+    except Exception:
+        db.rollback()
+        raise
+    return db_template
+
+
+def update_system_crop_template(
+    db: Session, template_id: int, update: CropTemplateCreate
+) -> CropTemplate:
+    """更新系统作物模板（含 stages 全量替换）。"""
+    template = get_system_template(db, template_id)
+    if template is None:
+        raise ValueError(f"系统模板 {template_id} 不存在")
+
+    template.name = update.name
+    template.variety = update.variety
+    template.category = update.category
+
+    for stage in template.stages:
+        db.delete(stage)
+
+    for stage in update.stages:
+        db.add(
+            GrowthStage(
+                crop_template_id=template.id,
+                name=stage.name,
+                duration_days=stage.duration_days,
+                order_index=stage.order_index,
+                key_tasks=stage.key_tasks,
+            )
+        )
+
+    try:
+        db.commit()
+        db.refresh(template)
+    except Exception:
+        db.rollback()
+        raise
+    return template
+
+
+def count_farm_template_imports(
+    db: Session, name: str, variety: str | None
+) -> int:
+    """统计农场副本中同名同品种的模板数量，用于删除前置检查。"""
+    query = db.query(CropTemplate).filter(
+        CropTemplate.farm_id.is_not(None),
+        CropTemplate.name == name,
+    )
+    if variety is None:
+        query = query.filter(CropTemplate.variety.is_(None))
+    else:
+        query = query.filter(CropTemplate.variety == variety)
+    return query.count()
+
+
+def delete_system_crop_template(db: Session, template_id: int) -> None:
+    """删除系统作物模板；已被农场导入时拒绝。"""
+    template = get_system_template(db, template_id)
+    if template is None:
+        raise ValueError(f"系统模板 {template_id} 不存在")
+
+    farm_count = count_farm_template_imports(
+        db, name=template.name, variety=template.variety
+    )
+    if farm_count > 0:
+        raise ValueError(
+            f"系统模板 {template_id} 已被 {farm_count} 个农场导入，禁止删除"
+        )
+
+    for stage in template.stages:
+        db.delete(stage)
+    db.delete(template)
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
 def _get_any_crop_template(db: Session, template_id: int) -> CropTemplate | None:
     return db.query(CropTemplate).filter(CropTemplate.id == template_id).first()
 
@@ -327,5 +438,9 @@ __all__ = [
     "get_system_template",
     "import_system_template",
     "find_system_template_match",
+    "create_system_crop_template",
+    "update_system_crop_template",
+    "count_farm_template_imports",
+    "delete_system_crop_template",
     "ImportSystemTemplateResult",
 ]

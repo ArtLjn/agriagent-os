@@ -34,6 +34,7 @@ class CropTemplateBase(BaseModel):
 class CropTemplateCreate(CropTemplateBase):
     """创建作物模板请求 Schema，包含生长阶段列表。"""
 
+    category: str | None = None
     stages: list[GrowthStageCreate]
 
 
