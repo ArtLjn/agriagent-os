@@ -61,6 +61,25 @@ export async function importSystemCropTemplate(id: number): Promise<CropTemplate
   return res.data;
 }
 
+export async function createSystemTemplate(
+  data: { name: string; variety?: string | null; category?: string | null; stages: GrowthStage[] },
+): Promise<CropTemplate> {
+  const res = await apiClient.post<CropTemplate>('/crops/templates/system', data);
+  return res.data;
+}
+
+export async function updateSystemTemplate(
+  id: number,
+  data: { name: string; variety?: string | null; category?: string | null; stages: GrowthStage[] },
+): Promise<CropTemplate> {
+  const res = await apiClient.put<CropTemplate>(`/crops/templates/system/${id}`, data);
+  return res.data;
+}
+
+export async function deleteSystemTemplate(id: number): Promise<void> {
+  await apiClient.delete(`/crops/templates/system/${id}`);
+}
+
 export async function parseTemplate(description: string): Promise<CropTemplateParseResponse> {
   const res = await apiClient.post<CropTemplateParseResponse>('/crops/templates/parse', { description });
   return res.data;
