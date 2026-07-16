@@ -56,6 +56,6 @@
 **回滚**：关闭 feature flag `ai.enable_session_summary` 即可；已写入的 `conversations.summary` 字段可保留，不影响现有流程。
 
 **关联文档**：
-- [farm-manager-design-spec/01_正式设计/03_Context工程 § 6](../../../farm-manager-design-spec/01_正式设计/03_Context工程.md)
-- [farm-manager-design-spec/01_正式设计/04_Memory工程 § 7.2 / § 12](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md)
+- [docs/farm-manager-design-spec/01_正式设计/03_Context工程 § 6](../../../docs/farm-manager-design-spec/01_正式设计/03_Context工程.md)
+- [docs/farm-manager-design-spec/01_正式设计/04_Memory工程 § 7.2 / § 12](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md)
 - [docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md](../../../docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md)

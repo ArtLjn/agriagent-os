@@ -27,7 +27,7 @@
 
 ### D1：5 类记忆，不做类型合并
 
-**选择**：固定 5 类 `preference / habit / alias / event / fact`，与 [04_Memory工程 § 4](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md) 一致。
+**选择**：固定 5 类 `preference / habit / alias / event / fact`，与 [04_Memory工程 § 4](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md) 一致。
 
 **理由**：
 - 类型决定流转规则（fact 永久，preference 可覆盖）

@@ -70,7 +70,7 @@
 
 ## 9. Verification and Documentation
 
-- [x] 9.1 更新 `farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 的当前状态为实现中或已落地
+- [x] 9.1 更新 `docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 的当前状态为实现中或已落地
 - [x] 9.2 增加面向标注员的简短使用说明：每日质检如何处理一条问题链
 - [x] 9.3 运行后端相关 pytest：DataFlywheel API、judge/prelabel、case draft、repair pack service
 - [x] 9.4 运行前端 DataFlywheel 测试

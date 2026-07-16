@@ -36,8 +36,8 @@
   - `backend/app/agent/runtime/tool_executor.py`
   - 相关 router/reflection/pending/evaluation 测试
 - 影响文档：
-  - `farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md`
-  - `farm-manager-design-spec/01_正式设计/12_Skill路由选择架构.md`
+  - `docs/farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md`
+  - `docs/farm-manager-design-spec/01_正式设计/12_Skill路由选择架构.md`
 - 不新增外部依赖。
 - 不改变 HTTP API。
 - 不改变写操作必须用户确认后执行的安全边界。

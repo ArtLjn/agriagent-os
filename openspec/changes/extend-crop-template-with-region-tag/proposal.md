@@ -48,14 +48,14 @@
 - `backend/app/seeds/crop_templates_xuzhou.py`（新）徐州地域 seed
 
 **文档同步**：
-- [farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md](../../../farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md) 表清单补 `crop_templates.region_tag`
-- [farm-manager-design-spec/01_正式设计/08_业务模块化.md](../../../farm-manager-design-spec/01_正式设计/08_业务模块化.md) `CropPort.list_templates` 签名加 region
-- [farm-manager-design-spec/02_产品需求/01_核心能力清单.md](../../../farm-manager-design-spec/02_产品需求/01_核心能力清单.md) 作物管理能力补地域化描述
-- [farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md](../../../farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md) 补 `GET /crops/templates/system?region=`
+- [docs/farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md](../../../docs/farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md) 表清单补 `crop_templates.region_tag`
+- [docs/farm-manager-design-spec/01_正式设计/08_业务模块化.md](../../../docs/farm-manager-design-spec/01_正式设计/08_业务模块化.md) `CropPort.list_templates` 签名加 region
+- [docs/farm-manager-design-spec/02_产品需求/01_核心能力清单.md](../../../docs/farm-manager-design-spec/02_产品需求/01_核心能力清单.md) 作物管理能力补地域化描述
+- [docs/farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md](../../../docs/farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md) 补 `GET /crops/templates/system?region=`
 
 **前置依赖**：
 - 必须先合并 [`crop-template-system-library`](../crop-template-system-library/proposal.md)（本提案基于其字段与 API 设计）
 
 **关联**：
 - [docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md](../../../docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md) § 3
-- [farm-manager-design-spec/01_正式设计/04_Memory工程.md](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md) § 7（用户喜好与作物模板独立）
+- [docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md) § 7（用户喜好与作物模板独立）

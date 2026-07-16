@@ -64,9 +64,9 @@
 
 ## 10. 文档同步
 
-- [ ] 10.1 `farm-manager-design-spec/01_正式设计/04_Memory工程.md` § 14 当前状态：long_term 从 🚧 改为 ✅
-- [ ] 10.2 `farm-manager-design-spec/Readme.md` 变更记录加长期记忆落地行
-- [ ] 10.3 `farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md` 表清单加 `memory_records`
+- [ ] 10.1 `docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md` § 14 当前状态：long_term 从 🚧 改为 ✅
+- [ ] 10.2 `docs/farm-manager-design-spec/README.md` 变更记录加长期记忆落地行
+- [ ] 10.3 `docs/farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md` 表清单加 `memory_records`
 
 ## 11. 上线与验证
 

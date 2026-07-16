@@ -43,11 +43,11 @@
 
 ## 8. 文档同步
 
-- [ ] 8.1 [farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md](../../../farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md) 表清单修正：`crops` → `crop_templates`；补 `region_tag` 字段说明
-- [ ] 8.2 [farm-manager-design-spec/01_正式设计/08_业务模块化.md](../../../farm-manager-design-spec/01_正式设计/08_业务模块化.md) `CropPort.list_templates` 签名加 region 参数
-- [ ] 8.3 [farm-manager-design-spec/02_产品需求/01_核心能力清单.md](../../../farm-manager-design-spec/02_产品需求/01_核心能力清单.md) 作物管理能力补"地域化模板"
-- [ ] 8.4 [farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md](../../../farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md) 补 `GET /crops/templates/system?region=` 与 `POST /crops/templates/system/{id}/import` 端点
-- [ ] 8.5 [farm-manager-design-spec/Readme.md](../../../farm-manager-design-spec/Readme.md) 加变更记录 v0.8
+- [ ] 8.1 [docs/farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md](../../../docs/farm-manager-design-spec/04_相关规范/03_数据库与迁移规范.md) 表清单修正：`crops` → `crop_templates`；补 `region_tag` 字段说明
+- [ ] 8.2 [docs/farm-manager-design-spec/01_正式设计/08_业务模块化.md](../../../docs/farm-manager-design-spec/01_正式设计/08_业务模块化.md) `CropPort.list_templates` 签名加 region 参数
+- [ ] 8.3 [docs/farm-manager-design-spec/02_产品需求/01_核心能力清单.md](../../../docs/farm-manager-design-spec/02_产品需求/01_核心能力清单.md) 作物管理能力补"地域化模板"
+- [ ] 8.4 [docs/farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md](../../../docs/farm-manager-design-spec/03_接口协议/01_HTTP_API协议.md) 补 `GET /crops/templates/system?region=` 与 `POST /crops/templates/system/{id}/import` 端点
+- [ ] 8.5 [docs/farm-manager-design-spec/README.md](../../../docs/farm-manager-design-spec/README.md) 加变更记录 v0.8
 
 ## 9. 集成测试与仿真
 

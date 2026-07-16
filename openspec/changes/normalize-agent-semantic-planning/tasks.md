@@ -36,7 +36,7 @@
 
 ## 6. Documentation And Validation
 
-- [x] 6.1 Update Agent design docs if implementation differs from `farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md`.
+- [x] 6.1 Update Agent design docs if implementation differs from `docs/farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md`.
 - [x] 6.2 Run focused backend tests for router, reflection, pending plan, data flywheel repair pack, and skill regression evaluation.
 - [x] 6.3 Run OpenSpec validation for `normalize-agent-semantic-planning`.
 - [x] 6.4 Summarize residual risks and any intentionally unsupported multi-agent scenarios.

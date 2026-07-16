@@ -2,7 +2,7 @@
 
 ### 现状
 
-当前会话压缩是 5 道关卡串行的"截断 / 丢弃"，没有 LLM 语义摘要（详见 [farm-manager-design-spec/01_正式设计/03_Context工程 § 6.1](../../../farm-manager-design-spec/01_正式设计/03_Context工程.md#61-实际实现5-道关卡串行过滤)）：
+当前会话压缩是 5 道关卡串行的"截断 / 丢弃"，没有 LLM 语义摘要（详见 [docs/farm-manager-design-spec/01_正式设计/03_Context工程 § 6.1](../../../docs/farm-manager-design-spec/01_正式设计/03_Context工程.md#61-实际实现5-道关卡串行过滤)）：
 
 1. `ContextBuilder` 预算默认 1200 token，policy 模式仅 512-900
 2. `compressors/text.py` 只有 `text[:max_chars-1] + "…"` 截断
@@ -16,7 +16,7 @@
 
 - 生产环境 2C4G 单机，systemd 单 uvicorn 进程
 - 生产 LLM：qwen3.6-35b-a3b（DashScope，OpenAI 兼容），无便宜模型分支
-- 单户月成本预算 ≤ ¥30（spec [02_非功能性需求](../../../farm-manager-design-spec/02_产品需求/02_非功能性需求.md)）
+- 单户月成本预算 ≤ ¥30（spec [02_非功能性需求](../../../docs/farm-manager-design-spec/02_产品需求/02_非功能性需求.md)）
 - 现有 LLM 抽象 + 熔断器（`backend/app/agent/runtime/llm_support.py`）必须复用
 - 零 schema 迁移（`conversations.summary` 字段已存在）
 
@@ -32,7 +32,7 @@
 
 **Non-Goals**：
 
-- 不上 Redis / 向量库（spec 已声明，详见 [04_Memory工程 § 13](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md)）
+- 不上 Redis / 向量库（spec 已声明，详见 [04_Memory工程 § 13](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md)）
 - 不上 MemGPT / Letta 自治 memory 模型
 - 不引入新 LLM provider（如 Haiku），复用现有 qwen
 - 不改 LangGraph 拓扑（保持现有 Response 节点不变，仅在末尾挂异步任务）

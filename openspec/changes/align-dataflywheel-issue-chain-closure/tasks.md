@@ -38,7 +38,7 @@
 
 ## 6. 验证与文档
 
-- [x] 6.1 更新 `farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 当前状态，标明本 change 收口页面边界和旧入口状态
+- [x] 6.1 更新 `docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 当前状态，标明本 change 收口页面边界和旧入口状态
 - [x] 6.2 运行后端 DataFlywheel 相关测试
 - [x] 6.3 运行前端 DataFlywheel 相关测试
 - [x] 6.4 运行 `openspec validate align-dataflywheel-issue-chain-closure --type change --strict`

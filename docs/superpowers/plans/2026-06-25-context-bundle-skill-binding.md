@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12 + FastAPI + LangChain Tools + pytest + pytest-mock。代码层级：`app/context/`（ContextBundle）+ `app/agent/tool_selector.py`（Rule Gate）+ `app/agent/runtime/`（LLM 调用）。
 
-**Spec 来源:** `farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md` §5.9
+**Spec 来源:** `docs/farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md` §5.9
 
 ---
 
@@ -1255,7 +1255,7 @@ git commit -m "test(eval): add pollution differential and multiturn eval"
 
 **Files:**
 - Verify: 全套 eval 集
-- Update: `farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md`（已更新 §5.9）
+- Update: `docs/farm-manager-design-spec/01_正式设计/13_Agent范式规范化设计.md`（已更新 §5.9）
 - Update: 如有 `docs/architecture/overview.md` 涉及 ContextBundle，同步说明
 
 - [ ] **Step 10.1: 跑全套 eval，记录改造后指标**

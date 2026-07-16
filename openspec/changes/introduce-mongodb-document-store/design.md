@@ -5,7 +5,7 @@
 - `trace_records`: `input_data`、`output_data`、`token_usage` 等 JSON 字段持续追加，且被 admin trace、discovery rule、issue chain evidence 等路径读取。
 - `agent_case_drafts`、`agent_repair_packs`、`agent_review_issue_chains`、`agent_data_flywheel_prelabels`: 字段本质是评测、预标注、修复包和问题链文档，schema 随数据飞轮迭代高频变化。
 
-本设计落实 `farm-manager-design-spec/01_正式设计/14_MongoDB迁移方案.md` 第 1 期。生产切换必须保持 MySQL 可回滚，所有新增代码遵守现有模块边界：基础设施在 `app/infra` 或 `app/core`，Data Flywheel 在 `app/modules/data_flywheel`，Trace 写入继续从 `TraceDAO`/TraceCollector 入口收敛。
+本设计落实 `docs/farm-manager-design-spec/01_正式设计/14_MongoDB迁移方案.md` 第 1 期。生产切换必须保持 MySQL 可回滚，所有新增代码遵守现有模块边界：基础设施在 `app/infra` 或 `app/core`，Data Flywheel 在 `app/modules/data_flywheel`，Trace 写入继续从 `TraceDAO`/TraceCollector 入口收敛。
 
 ## Goals / Non-Goals
 

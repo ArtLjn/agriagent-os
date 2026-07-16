@@ -35,7 +35,7 @@
 - **P1 `crop-template-system-library`**：新用户冷启动 + 现有查重逻辑分散且错误（API 层不查重，Skill 层 ilike 模糊匹配）。也是 P2 `extend-crop-template-with-region-tag` 的前置。
 - **P2 `extend-crop-template-with-region-tag`**：在 P1 之上加 `region_tag` 字段，让徐州西瓜和海南西瓜拿到不同阶段天数。作为 delta 提案，紧随 P1 之后做。
 - **P2 `add-long-term-memory-observations`**：承接从 P0 摘出的长期记忆能力，解决跨 session 偏好/习惯/事实不沉淀；依赖 running summary 先稳定上下文链路。
-- **P2 `add-dataflywheel-discovery-layer`**：不影响终端用户，但是数据飞轮从「能跑」到「能转」的关键升级。**工作量小（4.5 人日），适合作为 P0/P1 之间的"穿插任务"**。详细设计见 [design-spec 01.06 § 9](../farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md)。
+- **P2 `add-dataflywheel-discovery-layer`**：不影响终端用户，但是数据飞轮从「能跑」到「能转」的关键升级。**工作量小（4.5 人日），适合作为 P0/P1 之间的"穿插任务"**。详细设计见 [design-spec 01.06 § 9](../docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md)。
 - **P3 `add-ai-assisted-password-recovery`**：用户群小、密码恢复事件少。工作量低，可随时穿插。
 
 ## 依赖关系

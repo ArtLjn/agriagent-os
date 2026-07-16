@@ -63,9 +63,9 @@
 
 ## 10. 文档同步
 
-- [x] 10.1 更新 `farm-manager-design-spec/01_正式设计/03_Context工程.md` § 11 当前状态：summary 接通状态从 🚧 改为 ✅
-- [x] 10.2 更新 `farm-manager-design-spec/01_正式设计/04_Memory工程.md` § 14 当前状态：`set_session_summary` 接通状态从 🚧 改为 ✅
-- [x] 10.3 更新 `farm-manager-design-spec/README.md` 变更记录，加 v1.0 行（Phase A 落地）
+- [x] 10.1 更新 `docs/farm-manager-design-spec/01_正式设计/03_Context工程.md` § 11 当前状态：summary 接通状态从 🚧 改为 ✅
+- [x] 10.2 更新 `docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md` § 14 当前状态：`set_session_summary` 接通状态从 🚧 改为 ✅
+- [x] 10.3 更新 `docs/farm-manager-design-spec/README.md` 变更记录，加 v1.0 行（Phase A 落地）
 - [x] 10.4 在 `docs/architecture/evolution-roadmap.md` 标记 Phase 4 中 "Memory 会话摘要自动生成" 子项进度
 
 ## 11. 上线与验证

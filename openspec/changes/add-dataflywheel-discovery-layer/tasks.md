@@ -64,5 +64,5 @@
 - [ ] 7.3 基于标注员反馈微调 `rules.yaml` 权重
 - [ ] 7.4 灰度部署：先放给 2 个标注员试用 1 周
 - [x] 7.5 监控 Judge 月成本是否接近 $200 阈值
-- [ ] 7.6 更新 `farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` § 9 状态：设计中 → 已落地
+- [ ] 7.6 更新 `docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` § 9 状态：设计中 → 已落地
 - [x] 7.7 更新 `.claude/rules/` 与 `docs/architecture/boundaries.md`：新增 `app/evaluation/discovery/` 的依赖方向说明

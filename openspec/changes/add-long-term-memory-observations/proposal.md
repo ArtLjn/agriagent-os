@@ -53,5 +53,5 @@
 **回滚**：关闭 feature flag `ai.enable_long_term_memory`；`memory_records` 表可保留不参与查询。
 
 **关联文档**：
-- [farm-manager-design-spec/01_正式设计/04_Memory工程 § 4 / § 14](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md)
+- [docs/farm-manager-design-spec/01_正式设计/04_Memory工程 § 4 / § 14](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md)
 - [docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md](../../../docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md)

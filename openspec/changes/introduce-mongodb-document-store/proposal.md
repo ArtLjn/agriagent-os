@@ -34,4 +34,4 @@ Farm Manager 的 Trace 与 Data Flywheel 表已经出现高密度 JSON 字段、
 - **脚本**: 新增 MySQL 到 MongoDB 回填、校验、补偿重放、可选反向同步脚本。
 - **测试**: 新增 mapper、Repository、DualWrite、迁移脚本和服务依赖注入测试；现有 API 行为测试必须保持通过。
 - **运维**: 需要 MongoDB 连接密钥、白名单/TLS、备份策略、切换 runbook 和回滚阈值。
-- **文档**: 同步 `farm-manager-design-spec/01_正式设计/14_MongoDB迁移方案.md`、`10_数据库结构设计.md`、相关运维和迁移规范。
+- **文档**: 同步 `docs/farm-manager-design-spec/01_正式设计/14_MongoDB迁移方案.md`、`10_数据库结构设计.md`、相关运维和迁移规范。

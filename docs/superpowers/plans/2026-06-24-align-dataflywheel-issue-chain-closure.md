@@ -42,7 +42,7 @@
   - 覆盖每日质检 chain 出口和高级搜索边界。
 - 修改：`admin-web/src/pages/DataFlywheel/layout.test.tsx`
   - 覆盖默认入口和高级搜索结构不回退。
-- 修改：`farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md`
+- 修改：`docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md`
   - 更新当前状态和旧入口边界说明。
 
 ## Task 1: 固定标签集合对齐
@@ -1087,14 +1087,14 @@ git commit -m "fix: 标记 sample 级飞轮资产为兼容路径"
 ## Task 7: 文档和最终验证
 
 **Files:**
-- Modify: `farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md`
+- Modify: `docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md`
 - Test: backend DataFlywheel pytest
 - Test: admin-web Vitest
 - Test: OpenSpec strict validation
 
 - [ ] **Step 1: 更新设计文档当前状态**
 
-在 `farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 的 `## 14. 当前状态` 中，确保以下条目存在或被更新：
+在 `docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md` 的 `## 14. 当前状态` 中，确保以下条目存在或被更新：
 
 ```markdown
 - ✅ DataFlywheel 页面边界收口：每日质检是最终人工审核入口，高级搜索只用于查证、抽检和候选链补充
@@ -1194,7 +1194,7 @@ Expected:
 - [ ] **Step 8: 最终提交**
 
 ```bash
-git add farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md
+git add docs/farm-manager-design-spec/01_正式设计/06_数据飞轮与评测.md
 git commit -m "docs: 更新数据飞轮收口状态"
 ```
 

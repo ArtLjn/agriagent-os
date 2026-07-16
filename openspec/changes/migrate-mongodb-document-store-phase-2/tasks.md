@@ -72,7 +72,7 @@
 
 ## 8. 文档与上线 Runbook
 
-- [ ] 8.1 更新 `farm-manager-design-spec/01_正式设计/14_MongoDB迁移方案.md`，同步第 2 期范围、状态和 `rule_hits` 评估结论
+- [ ] 8.1 更新 `docs/farm-manager-design-spec/01_正式设计/14_MongoDB迁移方案.md`，同步第 2 期范围、状态和 `rule_hits` 评估结论
 - [x] 8.2 更新 `docs/database/mongodb-migration-runbook.md`，加入三张第 2 期表的索引、回填、校验、灰度和回滚命令
 - [x] 8.3 更新 `docs/database/mongodb-document-storage.md`，记录第 2 期集合、默认模式、索引策略和暂缓项
 - [x] 8.4 记录生产灰度顺序：`guardrails_logs -> agent_records -> conversation_messages`

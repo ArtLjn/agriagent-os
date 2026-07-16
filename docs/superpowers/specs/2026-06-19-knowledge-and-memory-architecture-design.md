@@ -4,7 +4,7 @@
 > 维护：BlockShip
 > 类型：架构梳理（非实施）
 > 状态：等待用户审查
-> 关联：[farm-manager-design-spec/01_正式设计/04_Memory工程](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md)、[crop-template-system-library 提案](../../../openspec/changes/crop-template-system-library/proposal.md)、[add-running-summary-compaction 提案](../../../openspec/changes/add-running-summary-compaction/proposal.md)
+> 关联：[docs/farm-manager-design-spec/01_正式设计/04_Memory工程](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md)、[crop-template-system-library 提案](../../../openspec/changes/crop-template-system-library/proposal.md)、[add-running-summary-compaction 提案](../../../openspec/changes/add-running-summary-compaction/proposal.md)
 
 ---
 
@@ -117,7 +117,7 @@ class CropTemplate(Base):
 
 ### 4.1 改动定位
 
-落地 [farm-manager-design-spec/01_正式设计/04_Memory工程 § 7 长时记忆](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md)。memory.long_term 目录骨架已存在，**只接通**即可。
+落地 [docs/farm-manager-design-spec/01_正式设计/04_Memory工程 § 7 长时记忆](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md)。memory.long_term 目录骨架已存在，**只接通**即可。
 
 ### 4.2 数据流
 
@@ -147,7 +147,7 @@ LLM 抽取（复用 qwen + 现有熔断器）
 
 ### 4.3 memory_records 表（新建）
 
-当前 [memory/long_term/store.py](../../../backend/app/memory/long_term/store.py) 是空实现，无表。本次落地新建 `memory_records` 表，按 [04_Memory工程 § 4 5 类](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md) 设计：
+当前 [memory/long_term/store.py](../../../backend/app/memory/long_term/store.py) 是空实现，无表。本次落地新建 `memory_records` 表，按 [04_Memory工程 § 4 5 类](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md) 设计：
 
 ```python
 class MemoryRecord(Base):
@@ -227,7 +227,7 @@ LIMIT 5
 
 ### 5.4 当前要保留的"接口位"
 
-[farm-manager-design-spec/01_正式设计/04_Memory工程 § 8 检索（Retrieval，预留）](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md) 已有 `RetrievalPort` 协议占位：
+[docs/farm-manager-design-spec/01_正式设计/04_Memory工程 § 8 检索（Retrieval，预留）](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md) 已有 `RetrievalPort` 协议占位：
 
 ```python
 class RetrievalPort(Protocol):
@@ -267,12 +267,12 @@ class RetrievalPort(Protocol):
 
 | 文档 | 章节 | 改动 |
 | --- | --- | --- |
-| [01_正式设计/04_Memory工程.md](../../../farm-manager-design-spec/01_正式设计/04_Memory工程.md) | § 7 长时记忆 | 从"设计意图"补"落地实施"：candidate→confirmed 流转规则、importance 阈值、与 summary 共触发 |
+| [01_正式设计/04_Memory工程.md](../../../docs/farm-manager-design-spec/01_正式设计/04_Memory工程.md) | § 7 长时记忆 | 从"设计意图"补"落地实施"：candidate→confirmed 流转规则、importance 阈值、与 summary 共触发 |
 | 同上 | § 8 检索（Retrieval） | 补"触发条件表 + 实施边界" |
 | 同上 | § 14 当前状态 | 更新 long_term 状态 |
 | 同上 | § 16 相关文档 | 加本 spec 引用 |
-| [01_正式设计/02_Skill引擎与契约.md](../../../farm-manager-design-spec/01_正式设计/02_Skill引擎与契约.md) | Skill 清单 | `create_crop_template` 行加注"按 region 优先推荐" |
-| [Readme.md](../../../farm-manager-design-spec/Readme.md) | 变更记录 | 加 v0.5 行 |
+| [01_正式设计/02_Skill引擎与契约.md](../../../docs/farm-manager-design-spec/01_正式设计/02_Skill引擎与契约.md) | Skill 清单 | `create_crop_template` 行加注"按 region 优先推荐" |
+| [Readme.md](../../../docs/farm-manager-design-spec/README.md) | 变更记录 | 加 v0.5 行 |
 
 ## 8. 后续触发点（不在本次范围）
 

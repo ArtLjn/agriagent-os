@@ -77,4 +77,4 @@
 
 ### 8.x 文档落点说明
 
-当前 worktree 中 `farm-manager-design-spec/` 为空目录，未包含正式设计文档源文件；本次可交付文档落在 `docs/database/mongodb-migration-runbook.md` 与 `docs/database/mongodb-document-storage.md`。
+当前 worktree 中 `docs/farm-manager-design-spec/` 为空目录，未包含正式设计文档源文件；本次可交付文档落在 `docs/database/mongodb-migration-runbook.md` 与 `docs/database/mongodb-document-storage.md`。
