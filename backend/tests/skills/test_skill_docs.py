@@ -10,6 +10,8 @@ from app.skills.doc_validator import validate_skill_doc
 
 pytestmark = pytest.mark.no_db
 
+SKILLS_DIR = Path(__file__).parents[2] / "app" / "skills"
+
 
 def test_validator_requires_runtime_strategy(tmp_path):
     doc = tmp_path / "skill.md"
@@ -256,22 +258,20 @@ def test_validator_rejects_legacy_read_only_type(tmp_path):
 
 
 def test_farm_status_doc_uses_directory_capability_and_runtime_tool_name():
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
-    skill_doc = skills_dir / "farm-status" / "skill.md"
+    skill_doc = SKILLS_DIR / "farm-status" / "skill.md"
     metadata = _skill_doc_metadata(skill_doc)
     registry = load_skill_registry()
 
     assert metadata["name"] == skill_doc.parent.name
     assert metadata["tool_name"] == "get_farm_status"
-    assert "get_farm_status" in _skill_doc_tool_names(skills_dir)
+    assert "get_farm_status" in _skill_doc_tool_names(SKILLS_DIR)
     alias = registry.resolve_alias(metadata["tool_name"])
     assert alias is not None
     assert alias.target == "get_farm_status.query_status"
 
 
 def test_all_existing_skill_docs_are_valid():
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
-    skill_docs = sorted(skills_dir.glob("*/skill.md"))
+    skill_docs = sorted(SKILLS_DIR.glob("*/skill.md"))
 
     assert skill_docs
 
@@ -279,18 +279,17 @@ def test_all_existing_skill_docs_are_valid():
     for skill_doc in skill_docs:
         result = validate_skill_doc(skill_doc)
         if result.errors:
-            relative_path = skill_doc.relative_to(skills_dir)
+            relative_path = skill_doc.relative_to(SKILLS_DIR)
             failures.append(f"{relative_path}: {', '.join(result.errors)}")
 
     assert failures == []
 
 
 def test_all_existing_skill_docs_resolve_registry_aliases():
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
     registry = load_skill_registry()
     failures = []
 
-    for skill_doc in sorted(skills_dir.glob("*/skill.md")):
+    for skill_doc in sorted(SKILLS_DIR.glob("*/skill.md")):
         front_matter = skill_doc.read_text(encoding="utf-8").split("---", 2)[1]
         metadata = yaml.safe_load(front_matter) or {}
         tool_name = str(metadata.get("tool_name") or metadata["name"])
@@ -306,9 +305,8 @@ def test_all_existing_skill_docs_resolve_registry_aliases():
 
 
 def test_registry_aliases_have_skill_docs():
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
     registry = load_skill_registry()
-    tool_names = _skill_doc_tool_names(skills_dir)
+    tool_names = _skill_doc_tool_names(SKILLS_DIR)
     documented_capabilities = {
         alias.capability
         for legacy_name, alias in registry.aliases.items()
@@ -327,11 +325,10 @@ def test_registry_aliases_have_skill_docs():
 
 
 def test_skill_docs_do_not_conflict_with_registry_domain_or_capability():
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
     registry = load_skill_registry()
     failures = []
 
-    for skill_doc in sorted(skills_dir.glob("*/skill.md")):
+    for skill_doc in sorted(SKILLS_DIR.glob("*/skill.md")):
         metadata = _skill_doc_metadata(skill_doc)
         tool_name = str(metadata.get("tool_name") or metadata["name"])
         alias = registry.resolve_alias(tool_name)
@@ -352,11 +349,10 @@ def test_skill_docs_do_not_conflict_with_registry_domain_or_capability():
 
 
 def test_hidden_or_disabled_skill_docs_disclose_disabled_state():
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
     registry = load_skill_registry()
     failures = []
 
-    for skill_doc in sorted(skills_dir.glob("*/skill.md")):
+    for skill_doc in sorted(SKILLS_DIR.glob("*/skill.md")):
         metadata = _skill_doc_metadata(skill_doc)
         tool_name = str(metadata.get("tool_name") or metadata["name"])
         alias = registry.resolve_alias(tool_name)

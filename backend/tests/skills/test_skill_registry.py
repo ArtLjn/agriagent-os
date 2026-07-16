@@ -337,7 +337,7 @@ aliases:
 
 
 def _skill_doc_tool_names() -> set[str]:
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
+    skills_dir = Path(__file__).parents[2] / "app" / "skills"
     tool_names = set()
     for skill_doc in sorted(skills_dir.glob("*/skill.md")):
         front_matter = skill_doc.read_text(encoding="utf-8").split("---", 2)[1]

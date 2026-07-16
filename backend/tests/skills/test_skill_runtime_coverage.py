@@ -71,7 +71,7 @@ RETIRED_LABOR_PAYMENT_ALIASES = {
     "manage_wages",
 }
 
-SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
+SKILLS_DIR = Path(__file__).parents[2] / "app" / "skills"
 
 
 def _registered_skills() -> dict[str, object]:
