@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-14
+last_updated: 2026-07-16
 status: draft
 ---
 
@@ -270,9 +270,9 @@ agent/
 | --- | --- | --- |
 | `agent/application/*` | `app/application/` | 决策 D |
 | `agent/skills/*` | `app/skills/` | 决策 C |
-| `agent/advisor.py` | `app/application/advice/` | 新增 |
-| `agent/report.py` | `app/application/report.py` | 新增 |
-| `agent/skill_coverage.py` | `app/platforms/evaluation/` | 决策 A |
+| `agent/advisor.py` | 阶段性迁至 `app/agent/application/advisor.py`；最终随决策 D 进入 `app/application/advice/` | 新增 |
+| `agent/report.py` | 阶段性迁至 `app/agent/application/report.py`；最终随决策 D 进入 `app/application/report.py` | 新增 |
+| `agent/skill_coverage.py` | 阶段性迁至 `app/evaluation/skill_coverage.py`；最终随决策 A 进入 `app/platforms/evaluation/` | 决策 A |
 | `agent/intent_router.py` | `agent/router/intent.py` | 新增 |
 | `agent/tool_selector.py` | `agent/router/tool_selector.py` | 新增 |
 | `agent/tool_selection_rules.py` | `agent/router/rules.py` | 新增 |
@@ -287,7 +287,7 @@ agent/
 | --- | --- | --- |
 | B1 | 删 `agent/planner/`（0 外部引用，当前工作树已无版本目录） | 低 |
 | B2 | 已迁移/收拢 `agent/planning/` 到 `agent/runtime/planning/`，保留 PlanDraft / DomainValidator 语义 | 中 |
-| B3 | 业务根文件归位（advisor / report / skill_coverage / intent_router / tool_selector / tool_selection_rules / llm / assistant_roles）；本轮已先迁移 intent_router / tool_selector / tool_selection_rules / llm / assistant_roles，并保留旧路径兼容入口 | 中 |
+| B3 | 业务根文件归位（advisor / report / skill_coverage / intent_router / tool_selector / tool_selection_rules / llm / assistant_roles）；已完成 routing/core 子集与 `advisor` / `report` / `skill_coverage` 阶段性归位，并保留旧路径兼容入口；`graph` / `state` / `ports` 属 runtime 根文件，留给 P1-6/P1-runtime 后续处理 | 中 |
 | B4 | `application/` 与 `skills/` 的迁移见决策 C、D | 见对应章节 |
 
 ---
@@ -493,7 +493,7 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | P1-2 | 评估 `core/compat.py` 是否仍必要 | diagnosis 9-#8 |
 | P1-3 | **决策 D**：`agent/application/` → `app/application/` | 决策 D |
 | P1-4 | **决策 C**：`agent/skills/` → `app/skills/` | 决策 C |
-| P1-5 | **决策 B**：业务根文件归位（advisor、report、intent_router 等） | 决策 B |
+| P1-5 | **决策 B**：业务根文件归位（advisor、report、skill_coverage、intent_router 等；graph/state/ports 绑定 runtime 后续任务） | 决策 B |
 | P1-6 | **决策 E**：移除 LangGraph，改纯 Python ReAct 循环 | 决策 E |
 | P1-7 | 合并 `stream_chat_*` 切片群 | diagnosis 7 |
 | P1-8 | `review_issue_chain_*` / `repair_pack_*` 切片收回 | diagnosis 2.2 |
@@ -594,7 +594,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | --- | --- | --- | --- |
 | B1 | 删 `agent/planner/` | ✅ | 本工作树待提交 |
 | B2 | 评估并迁移/收拢 `agent/planning/` | ✅ | 本工作树待提交 |
-| B3 | 业务根文件归位 | ⏳ | 本轮完成 routing/core 子集：`intent_router`、`tool_selector`、`tool_selection_rules`、`llm`、`assistant_roles`；`advisor`、`report`、`skill_coverage` 等仍待后续切片 |
+| B3 | 业务根文件归位 | ✅ 业务根文件完成；runtime 根文件待 P1-6/P1-runtime | 已完成 routing/core 子集：`intent_router`、`tool_selector`、`tool_selection_rules`、`llm`、`assistant_roles`；本轮完成 `advisor`、`report`、`skill_coverage` 阶段性归位并保留旧路径兼容入口 |
 
 ### 决策 C：skills/ 拆出
 
