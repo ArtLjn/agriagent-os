@@ -532,7 +532,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
-| P1-1 | 删除 `MemoryServicePort` Protocol | `backend/app/memory/ports.py` | 9-#4 | ⏳ | 改用具体类型；测试通过 |
+| P1-1 | 删除 `MemoryServicePort` Protocol | `backend/app/memory/ports.py` | 9-#4 | ✅ 本工作树待提交 | `backend/app/memory/ports.py` 已删除；`rg -n "MemoryServicePort\|MemoryContextProviderPort\|app\\.memory\\.ports\|from app\\.memory\\.ports\|import app\\.memory\\.ports" backend/app backend/tests` 无输出；新增 `tests/memory/test_memory_service_contract.py` 锁住 `InMemoryMemoryService` 运行时方法；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/memory/test_memory_service_contract.py -q` 通过（2 passed）；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/memory/test_memory_service_contract.py tests/memory/test_memory_service.py tests/test_agent_service.py -q` 因本地 MySQL `localhost:3306` 不可用失败（1 failed, 28 passed），失败用例为 `tests/test_agent_service.py::TestStreamChatWithAgent::test_stream_cycle_confirm_missing_template_creates_template_pending`；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过（复杂度检查保留既有警告） |
 | P1-2 | 删除 `_ComparableStage(Protocol)` | `backend/app/services/crop_service.py` | 9-#6 | ⏳ | 改用 `TypeVar` 或 `Any` |
 | P1-3 | 评估 `core/compat.py` 是否仍必要 | `backend/app/core/compat.py` 及 9 处引用 | 9-#8 | ⏳ | 确认 `python_requires`；若 ≥ 3.11 则删除 |
 | P1-4 | 合并 `stream_chat_*` 切片群 | `agent/application/stream_chat_*.py`（5 文件 910 行） | 7 | ⏳ | 合并为 2 文件（主流程 + 类型） |
