@@ -10,6 +10,7 @@ from app.agent.advisor import invoke_advisor
 from app.agent.application.chat_use_case_helpers import (
     flush_trace_queue as _flush_trace_queue,
     observe_chat_completion as _observe_chat_completion,
+    record_agent_response,
 )
 from app.agent.application.session_flywheel import SessionFlywheelRecorder
 from app.agent.application.pending_responses import (
@@ -17,7 +18,6 @@ from app.agent.application.pending_responses import (
     build_pending_plan_response,
 )
 from app.agent.application.query_capability_menu import resolve_query_menu_or_message
-from app.agent.application.response_trace import record_agent_response
 from app.agent.application.session_summary import schedule_session_summary
 from app.agent.application.stream_chat_use_case import (
     resolve_stream_user_and_farm,

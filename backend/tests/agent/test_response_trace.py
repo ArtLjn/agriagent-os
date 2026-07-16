@@ -1,10 +1,10 @@
 from unittest.mock import patch
 
-from app.agent.application.response_trace import record_agent_response
+from app.agent.application.chat_use_case_helpers import record_agent_response
 
 
 def test_record_agent_response_records_agent_response_node() -> None:
-    with patch("app.agent.application.response_trace.get_collector") as mock_get:
+    with patch("app.agent.application.chat_use_case_helpers.get_collector") as mock_get:
         collector = mock_get.return_value
 
         record_agent_response(
