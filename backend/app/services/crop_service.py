@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable, Protocol
+from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
@@ -14,12 +14,6 @@ from app.models.crop import CropTemplate, GrowthStage
 from app.models.cycle import CropCycle
 from app.models.log import FarmLog
 from app.schemas.crop import CropTemplateCreate
-
-
-class _ComparableStage(Protocol):
-    name: str
-    duration_days: int
-    key_tasks: str | None
 
 
 @dataclass(frozen=True)
@@ -36,18 +30,19 @@ def _normalize_key_tasks(key_tasks: str | None) -> str | None:
     return re.sub(r"\s+", " ", key_tasks.strip())
 
 
+def _stage_compare_value(stage: Any) -> tuple[str, int, str | None]:
+    return (
+        getattr(stage, "name"),
+        getattr(stage, "duration_days"),
+        _normalize_key_tasks(getattr(stage, "key_tasks", None)),
+    )
+
+
 def _normalize_stages_for_compare(
-    stages: Iterable[_ComparableStage],
+    stages: Iterable[Any],
 ) -> tuple[tuple[str, int, str | None], ...]:
     """规范化阶段内容，顺序无关但保留重复阶段数量。"""
-    stage_counts = Counter(
-        (
-            stage.name,
-            stage.duration_days,
-            _normalize_key_tasks(stage.key_tasks),
-        )
-        for stage in stages
-    )
+    stage_counts = Counter(_stage_compare_value(stage) for stage in stages)
     return tuple(sorted(stage_counts.elements()))
 
 
@@ -56,7 +51,7 @@ def find_exact_duplicate(
     farm_id: int,
     name: str,
     variety: str | None,
-    stages: Iterable[_ComparableStage],
+    stages: Iterable[Any],
 ) -> CropTemplate | None:
     """按 name、variety 和规范化 stages 查找完全重复的用户模板。"""
     query = db.query(CropTemplate).filter(
