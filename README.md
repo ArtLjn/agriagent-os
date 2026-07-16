@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/farm-manager-design-spec/banner.png" alt="Farm Manager Design Spec" width="100%">
+  <img src="docs/farm-manager-design-spec/banner.png" alt="AgriAgent OS Design Spec" width="100%">
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/Farm_Management-2E7D32?style=flat-square" alt="Farm Management">
 </p>
 
-# Farm Manager 设计规范（Design Spec）
+# AgriAgent OS 设计规范（Design Spec）
 
 > 版本：v1.2（草稿，全部 34 篇骨架已成 + Context/Memory 压缩机制修订 + Discovery Layer 设计补充 + 知识与记忆架构梳理 + 完整脱敏 + 作物地域化 delta 提案同步 + 数据库结构设计补全 + Agent 范式规范化设计）  
 > 编写日期：2026-06-20  
@@ -31,7 +31,7 @@
 
 ## 这是什么
 
-本目录是 **Farm Manager 项目的统一设计规范**，目标是把分散在 `docs/architecture/`、`docs/design/`、`.claude/rules/`、`backend/app/**` 的架构决策、模块边界、接口契约、编码规范**收敛成一份单一事实来源**，避免后续迭代中团队/Agent 走偏。
+本目录是 **AgriAgent OS 项目的统一设计规范**，目标是把分散在 `docs/architecture/`、`docs/design/`、`.claude/rules/`、`backend/app/**` 的架构决策、模块边界、接口契约、编码规范**收敛成一份单一事实来源**，避免后续迭代中团队/Agent 走偏。
 
 参考体例：主流 Agent 设计文档的预设计 / 正式设计 / 接口协议 / 相关规范 / 系统测试 / 项目管理六分法。
 

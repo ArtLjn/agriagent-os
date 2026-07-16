@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./banner.png" alt="Farm Manager Design Spec" width="100%">
+  <img src="./banner.png" alt="AgriAgent OS Design Spec" width="100%">
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/Farm_Management-2E7D32?style=flat-square" alt="Farm Management">
 </p>
 
-# Farm Manager Design Spec
+# AgriAgent OS Design Spec
 
 > Version: v0.9 (draft, 33 chapters scaffolded + Context/Memory compression revised + Discovery Layer design added + Knowledge & Memory architecture梳理 + fully redacted + region-tag delta proposal synced + database schema design backfilled)
 > Last updated: 2026-06-20
@@ -31,7 +31,7 @@
 
 ## What is this
 
-This repo is the **single source of truth** for the Farm Manager project's design spec. It consolidates the architectural decisions, module boundaries, interface contracts, and coding rules scattered across `docs/architecture/`, `docs/design/`, `.claude/rules/`, and `backend/app/**` into one place — so future iterations stay aligned across the team and across AI agents.
+This repo is the **single source of truth** for the AgriAgent OS project's design spec. It consolidates the architectural decisions, module boundaries, interface contracts, and coding rules scattered across `docs/architecture/`, `docs/design/`, `.claude/rules/`, and `backend/app/**` into one place — so future iterations stay aligned across the team and across AI agents.
 
 Reference layout: the six-bucket pattern (pre-design / formal design / interface protocols / related rules / system testing / project management) used by mainstream agent design docs.
 
