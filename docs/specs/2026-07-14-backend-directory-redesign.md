@@ -600,7 +600,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| C0 | 建立 `app.agent.skills` 旧路径兼容别名 | ⏳ | — |
+| C0 | 建立 `app.agent.skills` 旧路径兼容别名 | ✅ 本 worktree/PR 已处理 | test: 锁定 skills 旧路径兼容 |
 | C1 | `git mv app/agent/skills app/skills` | ⏳ | — |
 | C2 | 全局搜替换 import | ⏳ | — |
 | C3 | 核对 registry 加载机制 | ⏳ | — |
