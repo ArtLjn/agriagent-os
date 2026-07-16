@@ -480,7 +480,7 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | --- | --- | --- | --- | --- |
 | P0-1 | 删 `agent/planner/`（死代码） | 决策 B | ✅ | `rg "app\.agent\.planner|agent\.planner" backend/app backend/tests` 返回空；本工作树待提交 |
 | P0-2 | 评估并迁移/收拢 `agent/planning/` | 决策 B | ✅ | 已迁到 `agent/runtime/planning/`；`PYTHONDONTWRITEBYTECODE=1 python -m pytest tests/agent/planning/test_plan_draft_models.py::test_runtime_planning_exports_plan_draft_contract -q` 通过；本工作树待提交 |
-| P0-3 | 合并 `ContextSelector` 双定义 | diagnosis 9-#1 | ✅ 本工作树待提交 | `ContextSelector` 仅保留 `app.context.policy.ContextSelector`；builder 只在 `TYPE_CHECKING` 下引用；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/context/test_context_selector_protocol.py -q` 通过；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/context/test_context_selector_protocol.py tests/agent/test_chat_use_case.py -q` 因本地 MySQL `localhost:3306` 不可用失败（11 failed, 10 passed）；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过 |
+| P0-3 | 合并 `ContextSelector` 双定义 | diagnosis 9-#1 | ✅ e481ee56 | `ContextSelector` 仅保留 `app.context.policy.ContextSelector`；builder 只在 `TYPE_CHECKING` 下引用；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/context/test_context_selector_protocol.py -q` 通过；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/context/test_context_selector_protocol.py tests/agent/test_chat_use_case.py -q` 因本地 MySQL `localhost:3306` 不可用失败（11 failed, 10 passed）；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过 |
 | P0-4 | 合并 runtime 顶部 3 碎片 | diagnosis 7 | ⏳ | 待执行 |
 | P0-5 | 合并 `observability/` 3 文件 | diagnosis 8.3 | ⏳ | 待执行 |
 | P0-6 | 合并 `agent/application/` 3 碎片 | diagnosis 7 | ⏳ | 待执行 |
