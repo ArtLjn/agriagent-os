@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session
 
-from app.agent.assistant_roles import assistant_role_label, normalize_assistant_role
+from app.core.settings.roles import assistant_role_label, normalize_assistant_role
 from app.context.models import ContextBlock
 from app.models.farm import Farm
 from app.models.user_setting import UserSetting

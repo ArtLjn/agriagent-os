@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
-from app.agent.intent_router import IntentType, classify_intent, get_greeting_reply
-from app.agent.llm import get_llm
+from app.agent.router.intent import IntentType, classify_intent, get_greeting_reply
+from app.core.llm import get_llm
 from app.agent.application.chat_use_case_helpers import record_agent_response
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.infra.trace_context import clear_trace, init_trace, set_round_index

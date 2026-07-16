@@ -6,7 +6,7 @@ import logging
 from datetime import date
 
 from app.prompt.cache import get_farm_ctx_cache
-from app.agent.tool_selector import ToolSelectionResult
+from app.agent.router.tool_selector import ToolSelectionResult
 from app.context.models import ContextBundle
 from app.core.database import SessionLocal
 

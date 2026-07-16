@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
-from app.agent.llm import get_llm
+from app.core.llm import get_llm
 from app.prompt.composer import get_composer
 from app.core.date_context import get_request_date
 from app.core.json_repair import safe_parse_json

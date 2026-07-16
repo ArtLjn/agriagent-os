@@ -14,7 +14,7 @@ from app.agent.skills.registry import (
     SkillRegistry,
     load_skill_registry,
 )
-from app.agent.tool_selection_rules import DISABLED_SKILLS
+from app.agent.router.rules import DISABLED_SKILLS
 
 
 _ROUTER_READ_RISKS = frozenset({"read", "external_network"})

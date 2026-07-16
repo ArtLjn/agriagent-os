@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.advisor import invoke_advisor, stream_advisor
 from app.agent.executor.pending_actions import handle_pending_action
-from app.agent.llm import get_llm
+from app.core.llm import get_llm
 from app.prompt.composer import get_composer
 from app.infra.pending_actions import (
     get_pending,

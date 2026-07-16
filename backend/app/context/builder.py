@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
-from app.agent.assistant_roles import (
+from app.core.settings.roles import (
     DEFAULT_ASSISTANT_ROLE,
     assistant_role_prompt,
     normalize_assistant_role,

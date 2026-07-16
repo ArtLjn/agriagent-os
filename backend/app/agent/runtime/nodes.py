@@ -9,7 +9,7 @@ from dataclasses import replace
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END
 
-from app.agent.llm import get_llm
+from app.core.llm import get_llm
 from app.prompt.cache import get_prompt_cache  # harness-exempt: 迁移期 prompt fallback
 from app.prompt.composer import get_composer  # harness-exempt: 迁移期 prompt fallback
 from app.agent.runtime.llm_support import (
@@ -52,9 +52,9 @@ from app.agent.runtime.planning import (
 from app.agent.router import RouterDecision, SkillRouter
 from app.agent.skills import get_langchain_tools
 from app.agent.state import AgentState
-from app.agent.tool_selector import expand_by_chain as _expand_by_chain
-from app.agent.tool_selector import select_tools as _select_tools
-from app.agent.tool_selector import ToolSelectionResult
+from app.agent.router.tool_selector import expand_by_chain as _expand_by_chain
+from app.agent.router.tool_selector import select_tools as _select_tools
+from app.agent.router.tool_selector import ToolSelectionResult
 from app.core.config import settings
 from app.core.date_context import get_request_date
 from app.context.models import ContextBundle
