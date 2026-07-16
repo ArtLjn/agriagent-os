@@ -610,7 +610,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| D0 | 建立 `app.agent.application` 旧路径兼容别名 | ⏳ | — |
+| D0 | 建立 `app.agent.application` 旧路径兼容别名 | ✅ 本 worktree/PR 已处理 | test: 锁定 application 旧路径兼容 |
 | D1 | `git mv app/agent/application app/application` | ⏳ | — |
 | D2 | 全局搜替换 import | ⏳ | — |
 | D3 | 内部重组（合并 stream_chat、context 碎片） | ⏳ | — |
