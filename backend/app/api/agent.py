@@ -10,7 +10,7 @@ from app.modules.auth.dependencies import get_current_user
 from app.modules.farm.dependencies import get_current_farm
 from app.models.user import User
 from app.infra.limiter import limiter
-from app.agent.llm import LlmNotConfiguredError
+from app.core.llm import LlmNotConfiguredError
 from app.models.farm import Farm
 from app.agent.application.chat_use_case import chat, new_request_id
 from app.agent.application.advice_use_case import (

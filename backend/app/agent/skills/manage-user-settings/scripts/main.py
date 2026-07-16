@@ -4,7 +4,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.agent.application.chat_use_case_helpers import invalidate_user_farm_context
-from app.agent.assistant_roles import (
+from app.core.settings.roles import (
     DEFAULT_ASSISTANT_ROLE,
     assistant_role_label,
     normalize_assistant_role,

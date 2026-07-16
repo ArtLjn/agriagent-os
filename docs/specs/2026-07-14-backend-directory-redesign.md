@@ -277,7 +277,7 @@ agent/
 | `agent/tool_selector.py` | `agent/router/tool_selector.py` | 新增 |
 | `agent/tool_selection_rules.py` | `agent/router/rules.py` | 新增 |
 | `agent/llm.py` | `core/llm.py` | 新增 |
-| `agent/assistant_roles.py` | `core/config/roles.py` | 新增 |
+| `agent/assistant_roles.py` | `core/settings/roles.py` | 新增，本轮按既有 `core/settings/` 包落位 |
 | `agent/planner/` | 删除 | P0-1 |
 | `agent/planning/` | 已迁移/收敛到 `agent/runtime/planning/`，保留现有 PlanDraft 语义 | P0-2 |
 
@@ -287,7 +287,7 @@ agent/
 | --- | --- | --- |
 | B1 | 删 `agent/planner/`（0 外部引用，当前工作树已无版本目录） | 低 |
 | B2 | 已迁移/收拢 `agent/planning/` 到 `agent/runtime/planning/`，保留 PlanDraft / DomainValidator 语义 | 中 |
-| B3 | 业务根文件归位（advisor / report / skill_coverage / intent_router / tool_selector / tool_selection_rules / llm / assistant_roles） | 中 |
+| B3 | 业务根文件归位（advisor / report / skill_coverage / intent_router / tool_selector / tool_selection_rules / llm / assistant_roles）；本轮已先迁移 intent_router / tool_selector / tool_selection_rules / llm / assistant_roles，并保留旧路径兼容入口 | 中 |
 | B4 | `application/` 与 `skills/` 的迁移见决策 C、D | 见对应章节 |
 
 ---
@@ -594,7 +594,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | --- | --- | --- | --- |
 | B1 | 删 `agent/planner/` | ✅ | 本工作树待提交 |
 | B2 | 评估并迁移/收拢 `agent/planning/` | ✅ | 本工作树待提交 |
-| B3 | 业务根文件归位 | ⏳ | — |
+| B3 | 业务根文件归位 | ⏳ | 本轮完成 routing/core 子集：`intent_router`、`tool_selector`、`tool_selection_rules`、`llm`、`assistant_roles`；`advisor`、`report`、`skill_coverage` 等仍待后续切片 |
 
 ### 决策 C：skills/ 拆出
 

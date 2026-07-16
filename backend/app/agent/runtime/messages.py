@@ -125,7 +125,7 @@ def _detect_missed_tool_call(
         return False, []
 
     # 如果用户消息明显匹配某个工具的关键词，且 LLM 没有调用
-    from app.agent.tool_selector import WRITE_PATTERNS, QUERY_TRIGGERS
+    from app.agent.router.rules import QUERY_TRIGGERS, WRITE_PATTERNS
     from app.infra.pending_actions import is_write_skill
 
     matched_tools = []

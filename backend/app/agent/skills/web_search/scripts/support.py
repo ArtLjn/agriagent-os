@@ -9,7 +9,7 @@ from html import unescape
 import httpx
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agent.llm import LlmNotConfiguredError, get_llm
+from app.core.llm import LlmNotConfiguredError, get_llm
 
 logger = logging.getLogger(__name__)
 

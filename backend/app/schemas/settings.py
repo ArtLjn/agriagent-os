@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from app.agent.assistant_roles import AssistantRole, DEFAULT_ASSISTANT_ROLE  # harness-exempt: 迁移期 schemas 复用助手角色枚举，后续随 settings schema 下沉解除
+from app.core.settings.roles import AssistantRole, DEFAULT_ASSISTANT_ROLE  # harness-exempt: 迁移期 schemas 复用助手角色枚举，后续随 settings schema 下沉解除
 
 __all__ = ["UserSettingsResponse", "UserSettingsUpdate"]
 
