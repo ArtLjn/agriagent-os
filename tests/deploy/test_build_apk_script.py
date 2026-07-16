@@ -67,7 +67,8 @@ def test_unknown_argument_fails_with_usage_hint() -> None:
 
 def test_custom_gradle_home_is_used_in_dry_run() -> None:
     result = run_script("--gradle-home", "output/gradle-cache", "--dry-run")
+    expected_gradle_home = PROJECT_ROOT / "output" / "gradle-cache"
 
     assert result.returncode == 0
-    assert "Gradle缓存: /Users/ljn/Documents/demo/explore/output/gradle-cache" in result.stdout
-    assert "GRADLE_USER_HOME=/Users/ljn/Documents/demo/explore/output/gradle-cache" in result.stdout
+    assert f"Gradle缓存: {expected_gradle_home}" in result.stdout
+    assert f"GRADLE_USER_HOME={expected_gradle_home}" in result.stdout
