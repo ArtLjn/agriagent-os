@@ -149,7 +149,9 @@ async def _get_runtime_context_bundle(
             if user_id:
                 loader = memory_context_loader
                 if loader is None:
-                    from app.agent.application.context_memory import load_memory_context
+                    from app.agent.application.chat_use_case_helpers import (
+                        load_memory_context,
+                    )
 
                     loader = load_memory_context
                 memory_context = asyncio.run(

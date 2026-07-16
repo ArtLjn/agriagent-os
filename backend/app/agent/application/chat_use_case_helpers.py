@@ -7,17 +7,21 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.context.invalidation import invalidate_farm_context
 from app.core.database import SessionLocal
 from app.infra.repository_runtime import (
     get_agent_record_repository,
     resolve_maybe_awaitable,
 )
+from app.infra.trace_collector import get_collector
+from app.memory.models import MemoryContext
 from app.memory.service import get_memory_service
 from app.models.agent_record import AgentRecord
 from app.models.conversation import Conversation
 from app.models.farm import Farm
 from app.models.trace import TraceRecord
 from app.models.user import User
+from app.modules.farm.service import get_farm_by_user_id
 from app.schemas.agent import ChatRequest, PendingActionResponse, PendingPlanResponse
 
 logger = logging.getLogger(__name__)
@@ -66,6 +70,46 @@ async def observe_chat_completion(
         )
     except Exception:
         logger.exception("[%s] Memory observation 提交失败", request_id)
+
+
+def invalidate_user_farm_context(
+    db: Session, user_id: str
+) -> dict[str, int | bool] | None:
+    """清理当前用户关联农场的上下文缓存。"""
+    farm = get_farm_by_user_id(db, user_id)
+    if farm is None:
+        return None
+    return invalidate_farm_context(farm.id)
+
+
+async def load_memory_context(
+    *,
+    user_id: str,
+    farm_id: int,
+    session_id: str | None,
+) -> MemoryContext:
+    """通过 application 层获取 Runtime 所需的 MemoryContext。"""
+    return await get_memory_service().build_context(
+        user_id=user_id,
+        farm_id=farm_id,
+        session_id=session_id,
+    )
+
+
+def record_agent_response(
+    *,
+    node_name: str,
+    user_input: str,
+    reply: str,
+    reason: str,
+) -> None:
+    """记录不一定经过工具节点的最终回复。"""
+    get_collector().record(
+        node_type="agent_response",
+        node_name=node_name,
+        input_data={"message": user_input},
+        output_data={"reply": reply, "reason": reason},
+    )
 
 
 async def flush_trace_queue() -> None:
