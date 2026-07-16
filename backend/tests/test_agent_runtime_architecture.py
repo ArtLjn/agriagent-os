@@ -11,11 +11,11 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 def test_agent_graph_is_compatibility_facade():
     """graph.py 保持薄兼容入口，真实实现位于 runtime。"""
     import app.agent.graph as graph
-    import app.agent.runtime.graph_factory as graph_factory
     import app.agent.runtime.nodes as nodes
+    import app.agent.runtime.support as support
     import app.agent.runtime.tool_executor as tool_executor
 
-    assert graph.compile_advisor_graph is graph_factory.compile_advisor_graph
+    assert graph.compile_advisor_graph is support.compile_advisor_graph
     assert graph._llm_node is nodes._llm_node
     assert graph._parallel_tool_node is tool_executor._parallel_tool_node
 

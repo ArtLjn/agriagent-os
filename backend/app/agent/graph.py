@@ -4,7 +4,6 @@
 方便分阶段迁移测试和外部调用。
 """
 
-from app.agent.runtime.graph_factory import compile_advisor_graph
 from app.agent.runtime.nodes import (
     _build_circuit_key,
     _detect_missed_tool_call,
@@ -22,6 +21,7 @@ from app.agent.runtime.nodes import (
     _warm_tool_caches,
     sliding_window_compact,
 )
+from app.agent.runtime.support import compile_advisor_graph
 from app.agent.state import AgentState
 
 __all__ = [

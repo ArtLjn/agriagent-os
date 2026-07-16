@@ -41,8 +41,8 @@ from app.agent.runtime.messages import (
     extract_token_usage,
     sliding_window_compact,
 )
-from app.agent.runtime.quota import QUOTA_REJECT_MESSAGES, check_quota
 from app.agent.runtime.reflection import apply_post_tool_reflection
+from app.agent.runtime.support import QUOTA_REJECT_MESSAGES, check_quota
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.runtime.planning import (
     DomainValidator,
