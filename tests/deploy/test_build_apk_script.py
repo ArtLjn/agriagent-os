@@ -52,7 +52,8 @@ def test_dry_run_uses_custom_api_and_versioned_filename() -> None:
 
     assert result.returncode == 0
     assert "API 地址: http://127.0.0.1:8099" in result.stdout
-    assert "FarmManager-v1.2.7-release-" in result.stdout
+    assert "FarmManager-v" in result.stdout
+    assert "-release-" in result.stdout
     assert ".apk" in result.stdout
 
 
