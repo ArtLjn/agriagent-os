@@ -1,6 +1,6 @@
 """Agent 平台 trace 事件名。"""
 
-from app.observability.lifecycle import AgentLifecycleEvent, lifecycle_event_names
+from app.observability import AgentLifecycleEvent, lifecycle_event_names
 
 CONTEXT_BUILD = AgentLifecycleEvent.CONTEXT_BUILD.value
 PROMPT_RENDER = AgentLifecycleEvent.PROMPT_RENDER.value
