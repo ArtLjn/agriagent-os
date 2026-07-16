@@ -25,7 +25,7 @@ from app.memory.models import (
 from app.memory.schemas import MemoryObservationEvent, MemorySearchQuery
 from app.memory.short_term import InMemoryShortTermMemory
 from app.models.conversation import Conversation
-from app.observability.metrics import increment_counter
+from app.observability import increment_counter
 
 TraceRecorder = Callable[..., None]
 logger = logging.getLogger(__name__)

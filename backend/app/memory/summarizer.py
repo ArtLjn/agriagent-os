@@ -19,7 +19,7 @@ from app.agent.runtime.llm_support import (
 )
 from app.core.config import settings
 from app.infra.trace_collector import get_collector
-from app.observability.metrics import increment_counter
+from app.observability import increment_counter
 from app.prompt.registry import MEMORY_RUNNING_SUMMARY_PROMPT, get_registry
 
 logger = logging.getLogger(__name__)

@@ -1,10 +1,30 @@
-"""轻量级运行时指标注册表。"""
+"""Agent 平台可观测性入口。"""
 
 from collections import Counter
 from threading import Lock
 
+from app.core.compat import StrEnum
+
+
+class AgentLifecycleEvent(StrEnum):
+    """Agent 平台 trace 生命周期事件。"""
+
+    CONTEXT_BUILD = "context_build"
+    PROMPT_RENDER = "prompt_render"
+    LLM_CALL = "llm_call"
+    TOOL_CALL = "tool_call"
+    MEMORY_OBSERVE = "memory_observe"
+    RESPONSE_FORMAT = "response_format"
+    EVALUATION_CAPTURE = "evaluation_capture"
+
+
 _lock = Lock()
 _counters: Counter[tuple[str, tuple[tuple[str, str], ...]]] = Counter()
+
+
+def lifecycle_event_names() -> set[str]:
+    """返回所有平台生命周期事件名。"""
+    return {event.value for event in AgentLifecycleEvent}
 
 
 def increment_counter(name: str, labels: dict[str, str] | None = None) -> None:
@@ -43,8 +63,10 @@ def session_summary_failed_total() -> int:
 
 
 __all__ = [
+    "AgentLifecycleEvent",
     "get_counter",
     "increment_counter",
+    "lifecycle_event_names",
     "reset_metrics",
     "session_summary_failed_total",
     "session_summary_generated_total",

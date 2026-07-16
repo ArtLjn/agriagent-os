@@ -84,7 +84,7 @@ async def test_maybe_summarize_消息数低于阈值时跳过并记录_trace(
     db_session, monkeypatch, caplog
 ):
     from app.memory import service as service_module
-    from app.observability.metrics import reset_metrics, session_summary_skipped_total
+    from app.observability import reset_metrics, session_summary_skipped_total
 
     reset_metrics()
     conversation = _新建会话(db_session)
@@ -357,7 +357,7 @@ async def test_maybe_summarize_异常时记录结构化日志且不抛出(
     caplog,
 ):
     from app.memory import service as service_module
-    from app.observability.metrics import reset_metrics, session_summary_failed_total
+    from app.observability import reset_metrics, session_summary_failed_total
 
     reset_metrics()
     conversation = _新建会话(db_session)

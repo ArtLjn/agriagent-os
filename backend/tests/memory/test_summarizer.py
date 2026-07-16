@@ -68,7 +68,7 @@ def test_render_summary_prompt_uses_registry_template(monkeypatch):
 @pytest.mark.asyncio
 async def test_generate_summary_returns_content_and_records_success(monkeypatch):
     from app.memory import summarizer
-    from app.observability.metrics import (
+    from app.observability import (
         reset_metrics,
         session_summary_generated_total,
     )
@@ -130,7 +130,7 @@ async def test_generate_summary_returns_content_and_records_success(monkeypatch)
 @pytest.mark.asyncio
 async def test_generate_summary_returns_none_when_llm_fails(monkeypatch):
     from app.memory import summarizer
-    from app.observability.metrics import reset_metrics, session_summary_failed_total
+    from app.observability import reset_metrics, session_summary_failed_total
 
     reset_metrics()
     llm = MagicMock()
