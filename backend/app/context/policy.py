@@ -211,4 +211,5 @@ __all__ = [
     "ContextLayer",
     "ContextPolicy",
     "ContextPolicyResult",
+    "ContextSelector",
 ]

@@ -1,7 +1,7 @@
 """Context Builder。"""
 
 import time
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
@@ -34,14 +34,8 @@ from app.models.user import User
 from app.models.user_setting import UserSetting
 
 if TYPE_CHECKING:
-    from app.context.policy import ContextBuildRequest, ContextPolicy
+    from app.context.policy import ContextBuildRequest, ContextPolicy, ContextSelector
     from app.memory.models import MemoryContext
-
-
-class ContextSelector(Protocol):
-    """Context selector 协议。"""
-
-    def select(self, **kwargs) -> list[ContextBlock]: ...
 
 
 class ContextBuilder:
@@ -49,7 +43,7 @@ class ContextBuilder:
 
     def __init__(
         self,
-        selectors: list[ContextSelector] | None = None,
+        selectors: list["ContextSelector"] | None = None,
         max_tokens: int = 1200,
         policy: "ContextPolicy | None" = None,
         trace_collector: Any | None = None,
@@ -291,4 +285,4 @@ class ContextBuilder:
             return
 
 
-__all__ = ["ContextBuilder", "ContextSelector"]
+__all__ = ["ContextBuilder"]
