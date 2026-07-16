@@ -8,32 +8,32 @@ from unittest.mock import MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-from app.agent.skills import get_skill_manager
-from app.agent.skills.registry import load_skill_registry
+from app.skills import get_skill_manager
+from app.skills.registry import load_skill_registry
 from app.agent.tool_selector import select_tools
 from app.models.cost import CostRecord
 from app.models.crop import CropTemplate, GrowthStage
 from app.models.cycle import CropCycle, CycleStage
 from app.models.log import FarmLog
 
-_manage_mod = importlib.import_module("app.agent.skills.manage-crop-cycle.scripts.main")
+_manage_mod = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
 _create_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.create_cycle"
+    "app.skills.manage-crop-cycle.scripts.create_cycle"
 )
 _query_cycles_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.query_cycles"
+    "app.skills.manage-crop-cycle.scripts.query_cycles"
 )
 _query_info_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.query_cycle_info"
+    "app.skills.manage-crop-cycle.scripts.query_cycle_info"
 )
 _update_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.update_cycle"
+    "app.skills.manage-crop-cycle.scripts.update_cycle"
 )
 _update_stage_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.update_stage"
+    "app.skills.manage-crop-cycle.scripts.update_stage"
 )
 _delete_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.delete_cycle"
+    "app.skills.manage-crop-cycle.scripts.delete_cycle"
 )
 
 ManageCropCycleSkill = _manage_mod.ManageCropCycleSkill

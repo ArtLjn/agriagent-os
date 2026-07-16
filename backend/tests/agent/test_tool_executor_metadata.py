@@ -9,8 +9,8 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
 from app.agent.runtime.tool_executor import _parallel_tool_node, _permission_decision
-from app.agent.skills import get_langchain_tools
-from app.agent.skills.metadata import (
+from app.skills import get_langchain_tools
+from app.skills.metadata import (
     SkillMetadata,
     SkillPermissionLevel,
     get_skill_metadata,

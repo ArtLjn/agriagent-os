@@ -14,7 +14,7 @@ from app.agent.reflector import (
     ReflectionTrigger,
     ReflectorService,
 )
-from app.agent.skills import get_langchain_tools
+from app.skills import get_langchain_tools
 from app.infra.pending_actions import (
     PendingAction,
     PendingPlan,

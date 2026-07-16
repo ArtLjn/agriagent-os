@@ -15,7 +15,7 @@ status: active
 
 - 后续删除兼容入口前，先按 `docs/architecture/compatibility-entries.md` 逐项确认调用方迁移完成。
 - 后续业务模块迁移按真实职责推进：`crop`、`cycle`、`ledger`、`weather`、`conversation`、`feedback`、`admin` 只有在 router/service/dependencies/ports 至少一类职责落地时才创建目录。
-- 后续平台级 `skills/` 迁移需整体迁出 `agent/skills/` 的注册、权限、schema 和执行适配，禁止先建空目录。
+- 平台级 `skills/` 迁移已整体迁出 `agent/skills/` 的注册、权限、schema 和执行适配；当前旧路径仅作为兼容入口保留，禁止在 `agent/skills/` 下新增真实 Skill。
 
 ## 已完成
 

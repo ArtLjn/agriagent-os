@@ -5,8 +5,8 @@ import re
 
 import pytest
 
-from app.agent.skills import get_langchain_tools, get_skill_manager
-from app.agent.skills.metadata import (
+from app.skills import get_langchain_tools, get_skill_manager
+from app.skills.metadata import (
     SkillPermissionLevel,
     get_skill_metadata,
 )

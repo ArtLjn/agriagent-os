@@ -483,7 +483,7 @@ def is_write_skill_call(skill_name: str, params: dict | None = None) -> bool:
 
 def _registry_operation_risk(skill_name: str, params: dict | None = None) -> str | None:
     try:
-        from app.agent.skills.registry import load_skill_registry
+        from app.skills.registry import load_skill_registry
 
         registry = load_skill_registry()
     except (OSError, ValueError):

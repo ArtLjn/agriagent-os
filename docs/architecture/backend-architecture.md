@@ -50,7 +50,7 @@ flowchart TB
 | `app/agent/application/` | Agent 应用用例：聊天、SSE、每日建议、报告、历史、上下文失效。 |
 | `app/agent/runtime/` | LangGraph 图工厂、节点、消息压缩、工具执行、最终 prompt 预算、流式事件。 |
 | `app/agent/executor/` | Tool call 执行计划和并行执行适配。 |
-| `app/agent/skills/` | Skillify Skill 实现，目前仍位于 Agent 域下。 |
+| `app/skills/` | Skillify Skill 实现、注册、权限、schema 和执行适配；`app/agent/skills` 仅保留旧路径兼容入口。 |
 | `app/context/` | ContextBundle、selector、token budget、压缩、缓存、预加载和失效。 |
 | `app/memory/` | 短时记忆、长时记忆接口、检索空实现、observation event。 |
 | `app/prompt/` 与 `backend/prompts/` | Prompt registry/composer/renderer/replay 代码与 Jinja2 模板文件。 |
@@ -162,7 +162,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    Manager["SkillManager\n扫描 app/agent/skills"]
+    Manager["SkillManager\n扫描 app/skills"]
     Adapter["skills_to_langchain_tools\n转 StructuredTool"]
     Read["只读 Skill\nweather、farm-status、cost-summary、cost-analytics、crop-cycle、farm-logs、web_search"]
     Write["写操作 Skill\nmanage-cost、manage-crop-cycle、manage-crop-templates、log-farm-activity、settle-debt"]
@@ -236,5 +236,5 @@ erDiagram
 - `api/agent.py` 已经瘦身，但仍通过 `services.agent_service` 进入旧 `advisor.py` 兼容入口。
 - `agent/runtime/llm_support.py` 当前会构建 runtime context bundle，后续可继续向 application 注入端口的方向收敛。
 - `services/` 仍承担大量业务模块职责，后续可逐步迁移到 `modules/farm`、`modules/ledger`、`modules/weather`、`modules/conversation` 等真实模块。
-- `app/agent/skills/` 当前是平台能力和业务写入的交汇点，新增 Skill 要明确只读/写操作权限、缓存策略和 pending action 行为。
+- `app/skills/` 当前是平台能力和业务写入的交汇点，新增 Skill 要明确只读/写操作权限、缓存策略和 pending action 行为。
 - 架构图应保持分图维护；不要把 API、Agent、Skill、DB、外部服务全部塞进一张图。

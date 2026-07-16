@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.agent.skills.registry import load_skill_registry
-from app.agent.skills.doc_validator import validate_skill_doc
+from app.skills.registry import load_skill_registry
+from app.skills.doc_validator import validate_skill_doc
 
 pytestmark = pytest.mark.no_db
 

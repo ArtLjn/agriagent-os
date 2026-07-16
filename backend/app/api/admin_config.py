@@ -10,8 +10,8 @@ from app.agent.application.admin_config_use_case import (
     list_prompt_templates,
     reload_prompt_templates,
 )
-from app.agent.skills import clear_skill_cache, get_skill_manager
-from app.agent.skills.metadata import (
+from app.skills import clear_skill_cache, get_skill_manager
+from app.skills.metadata import (
     SkillPermissionLevel,
     metadata_to_dict,
     set_skill_enabled_state,
@@ -151,7 +151,7 @@ def get_config() -> dict:
 @router.post("/cache/clear")
 def clear_all_cache() -> dict:
     """清空所有 Skill 缓存。"""
-    from app.agent.skills import clear_skill_cache
+    from app.skills import clear_skill_cache
 
     clear_skill_cache()
     cache_count = clear_cache()

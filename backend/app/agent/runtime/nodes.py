@@ -50,7 +50,7 @@ from app.agent.runtime.planning import (
     plan_draft_from_router_decision,
 )
 from app.agent.router import RouterDecision, SkillRouter
-from app.agent.skills import get_langchain_tools
+from app.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.router.tool_selector import expand_by_chain as _expand_by_chain
 from app.agent.router.tool_selector import select_tools as _select_tools

@@ -539,7 +539,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P1-5 | `review_issue_chain_*` 切片收回 | `review_issue_chain_{helpers,case,repair}.py` | 2.2 | ⏳ | 收回 `review_issue_chain_service.py` |
 | P1-6 | `repair_pack_*` 切片收回 | `repair_pack_{chain,readme}.py` | 2 | ⏳ | 收回 `repair_pack_service.py` |
 | P1-7 | `context/selectors/` 3 文件合并 | `backend/app/context/selectors/` | 9-#7、附录 A | ⏳ | 改为单文件 `context/selectors.py` |
-| P1-8 | `manage-crop-cycle/scripts/` 切片合并 | `agent/skills/manage-crop-cycle/scripts/` | 7 | ⏳ | 合进 `main.py` |
+| P1-8 | `manage-crop-cycle/scripts/` 切片合并 | `skills/manage-crop-cycle/scripts/` | 7 | ⏳ | 合进 `main.py` |
 
 ### P2 — 需业务确认（高风险高收益）
 

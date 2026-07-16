@@ -1,6 +1,6 @@
 """Skill Router 迁移期 fallback 注册表。
 
-长期事实源是 ``app.agent.skills.registry`` 下的 YAML Registry。这里的静态
+长期事实源是 ``app.skills.registry`` 下的 YAML Registry。这里的静态
 配置仅用于未写入 Registry 的旧工具兜底，新增业务能力不要继续扩展本文件。
 """
 

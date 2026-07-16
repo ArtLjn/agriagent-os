@@ -9,18 +9,18 @@ from skillify.core.context import SkillContext
 pytestmark = pytest.mark.no_db
 
 # 目录名含连字符，无法直接 import，使用 importlib 动态加载
-_manage_cost_mod = importlib.import_module("app.agent.skills.manage-cost.scripts.main")
+_manage_cost_mod = importlib.import_module("app.skills.manage-cost.scripts.main")
 _cost_summary_mod = importlib.import_module(
-    "app.agent.skills.manage-cost.scripts.summary"
+    "app.skills.manage-cost.scripts.summary"
 )
 _cost_analytics_mod = importlib.import_module(
-    "app.agent.skills.manage-cost.scripts.analytics"
+    "app.skills.manage-cost.scripts.analytics"
 )
 _crop_cycle_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.main"
+    "app.skills.manage-crop-cycle.scripts.main"
 )
 _crop_cycle_query_info_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.query_cycle_info"
+    "app.skills.manage-crop-cycle.scripts.query_cycle_info"
 )
 ManageCostSkill = _manage_cost_mod.ManageCostSkill
 ManageCropCycleSkill = _crop_cycle_mod.ManageCropCycleSkill

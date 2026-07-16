@@ -11,8 +11,8 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from app.agent.reflector import ReflectorService
 from app.agent.reflector.models import ReflectionDecision, ReflectionTrigger
 from app.agent.router import SkillRouter
-from app.agent.skills import get_langchain_tools
-from app.agent.skills.metadata import (
+from app.skills import get_langchain_tools
+from app.skills.metadata import (
     SkillPermissionLevel,
     resolve_skill_capability_metadata,
 )

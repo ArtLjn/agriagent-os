@@ -63,7 +63,7 @@ Data Flywheel 失败样本导出为 vibecoding repair pack 的闭环流程见 [d
 
 ## Agent 平台边界
 
-Agent 平台由 `agent/`、`prompt/`、`context/`、`memory/`、`evaluation/`、`observability/` 共同组成；Skill 实现当前仍在 `agent/skills/`，后续若拆为平台级 `skills/`，必须同步迁移注册、权限、schema 和执行适配，而不是先建空目录。
+Agent 平台由 `agent/`、`skills/`、`prompt/`、`context/`、`memory/`、`evaluation/`、`observability/` 共同组成；Skill 实现、注册、权限、schema 和执行适配已整体迁移到平台级 `skills/`，旧 `agent/skills` 仅保留兼容入口。
 
 - `agent/application/` 承接聊天、流式聊天、每日建议和报告生成 use case，API 只调用 use case。
 - `agent/runtime/` 只负责图执行、节点协议、状态流转和 runtime 错误，不保存 Prompt、Context 或 Memory 的平台实现。

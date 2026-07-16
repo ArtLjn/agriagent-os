@@ -1,6 +1,6 @@
 """Pending action legacy alias 解析。"""
 
-from app.agent.skills.metadata import resolve_skill_capability_metadata
+from app.skills.metadata import resolve_skill_capability_metadata
 from app.infra.trace_collector import get_collector
 
 

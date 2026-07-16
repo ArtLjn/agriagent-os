@@ -32,7 +32,7 @@ class TestSkillRegistration:
 
     def test_get_farm_status_skill_registered(self):
         """get_farm_status Skill 被 skillify 自动发现。"""
-        from app.agent.skills import get_skill_manager
+        from app.skills import get_skill_manager
 
         manager = get_skill_manager()
         names = [s.name for s in manager.list_skills()]
@@ -42,7 +42,7 @@ class TestSkillRegistration:
         """get_farm_status Skill 无必填参数。"""
         import importlib
 
-        _mod = importlib.import_module("app.agent.skills.farm-status.scripts.main")
+        _mod = importlib.import_module("app.skills.farm-status.scripts.main")
         skill = _mod.FarmStatusSkill()
         schema = skill.parameters_schema()
         assert schema.get("required") == []

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from app.agent.skills.registry import load_skill_registry
+from app.skills.registry import load_skill_registry
 from app.core.compat import StrEnum
 from pydantic import BaseModel, Field
 
