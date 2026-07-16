@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from app.agent.planning.models import (
+from app.agent.runtime.planning.models import (
     InferredField,
     PlanDraft,
     PlanIssue,

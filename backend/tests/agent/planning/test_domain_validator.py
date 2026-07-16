@@ -2,13 +2,13 @@
 
 import pytest
 
-from app.agent.planning.models import (
+from app.agent.runtime.planning.models import (
     InferredField,
     PlanDraft,
     PlanStep,
     RouteType,
 )
-from app.agent.planning.validator import DomainValidator, WorkerDefaultWage
+from app.agent.runtime.planning.validator import DomainValidator, WorkerDefaultWage
 
 pytestmark = pytest.mark.no_db
 

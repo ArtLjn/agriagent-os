@@ -1,8 +1,10 @@
 """PlanDraft 数据契约测试。"""
 
+from importlib import import_module
+
 import pytest
 
-from app.agent.planning.models import (
+from app.agent.runtime.planning.models import (
     PlanDraft,
     PlanIssue,
     PlanStep,
@@ -10,6 +12,14 @@ from app.agent.planning.models import (
 )
 
 pytestmark = pytest.mark.no_db
+
+
+def test_runtime_planning_exports_plan_draft_contract() -> None:
+    runtime_planning = import_module("app.agent.runtime.planning")
+
+    assert runtime_planning.PlanDraft is PlanDraft
+    assert runtime_planning.PlanStep is PlanStep
+    assert runtime_planning.PlanValidationResult is PlanValidationResult
 
 
 def test_plan_draft_serializes_supported_route_types() -> None:
