@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 from typing import Any
 
-from app.agent.planning.models import PlanDraft, PlanIssue, PlanStep, PlanValidationResult
+from app.agent.runtime.planning.models import PlanDraft, PlanIssue, PlanStep, PlanValidationResult
 from app.agent.router.models import IntentFrame, RouterDecision
 
 

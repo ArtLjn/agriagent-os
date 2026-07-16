@@ -355,13 +355,13 @@ storage:
 
 ```
 agent/planner/    # 63 行，0 外部引用
-agent/planning/   # PlanDraft / DomainValidator 仍被 runtime/nodes.py 使用
+agent/runtime/planning/   # PlanDraft / DomainValidator 已收拢到 runtime planning 边界
 ```
 
 **不稳定因素**：
 - 两个目录名字几乎一样，IDE 跳转经常跳错
 - `planner/` 是旧规划入口，当前未找到外部消费者，可作为删除候选
-- `planning/` 不是死目录，`runtime/nodes.py` 正在使用 `PlanDraft`、`DomainValidator` 与 `attach_validation`
+- `planning/` 不是死目录，`PlanDraft`、`DomainValidator` 与 `attach_validation` 已迁移到 `runtime/planning/`
 - 真正问题是命名太近、职责边界不清：一个可删，一个应迁移/收敛到 runtime planning 能力，不能打包删除
 
 ##### 🟠 #4 `MemoryServicePort` Protocol 只有 1 个实现
@@ -446,7 +446,7 @@ except ImportError:
 | 多后端 Repository 类总数 | **16 个**（4 对象 × 4 backend） |
 | 多后端中实际未使用的实现 | **~12 个**（生产 config 全 mongo） |
 | 兼容层 / 双写层文件 | **7 个**（compat / dual / fallback / adapter / selector 类） |
-| 疑似死代码目录 | **1 个**（`agent/planner/`）；`agent/planning/` 为待迁移/收敛目录 |
+| 疑似死代码目录 | **1 个**（`agent/planner/`）；`agent/planning/` 已收敛到 runtime planning 边界 |
 
 ## 量化诊断
 
@@ -521,8 +521,8 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
-| P0-1 | 删除 `agent/planner/` 整个目录 | `backend/app/agent/planner/`（3 文件 63 行） | 9-#3、4 | ⏳ | `grep -rn "from app.agent.planner" backend/` 返回空；CI 全绿 |
-| P0-2 | 评估并迁移/收拢 `agent/planning/` | `backend/app/agent/planning/`（含 adapter.py 160 行） | 9-#3 | ⏳ | 确认 `runtime/nodes.py` 使用路径；保留语义并迁到 runtime planning 或保留清晰命名 |
+| P0-1 | 删除 `agent/planner/` 整个目录 | `backend/app/agent/planner/`（当前工作树已无版本文件） | 9-#3、4 | ✅ | `rg "app\.agent\.planner|agent\.planner" backend/app backend/tests` 返回空；本工作树待提交 |
+| P0-2 | 评估并迁移/收拢 `agent/planning/` | `backend/app/agent/runtime/planning/`（保留 PlanDraft 语义） | 9-#3 | ✅ | `runtime/nodes.py` 与测试 import 已改为 `app.agent.runtime.planning`；`PYTHONDONTWRITEBYTECODE=1 python -m pytest tests/agent/planning/test_plan_draft_models.py::test_runtime_planning_exports_plan_draft_contract -q` 通过；本工作树待提交 |
 | P0-3 | 合并 `ContextSelector` Protocol 双定义 | `context/policy.py`、`context/builder.py` | 9-#1 | ⏳ | 统一 import 路径；CI 全绿 |
 | P0-4 | 合并 runtime 顶部碎片 | `agent/runtime/{errors,quota,graph_factory}.py` | 7、附录 A | ⏳ | 合并为单文件；3 处 import 更新 |
 | P0-5 | 合并 `observability/` 整包 | `observability/{__init__,lifecycle,metrics}.py` | 8.3 | ⏳ | 平铺为 `observability.py` 单文件 |

@@ -279,14 +279,14 @@ agent/
 | `agent/llm.py` | `core/llm.py` | 新增 |
 | `agent/assistant_roles.py` | `core/config/roles.py` | 新增 |
 | `agent/planner/` | 删除 | P0-1 |
-| `agent/planning/` | 迁移/收敛到 runtime planning 能力，保留现有 PlanDraft 语义 | P0-2 |
+| `agent/planning/` | 已迁移/收敛到 `agent/runtime/planning/`，保留现有 PlanDraft 语义 | P0-2 |
 
 #### 迁移步骤
 
 | 步 | 动作 | 风险 |
 | --- | --- | --- |
-| B1 | 删 `agent/planner/`（0 外部引用） | 低 |
-| B2 | 评估并迁移/收拢 `agent/planning/`，不得直接删除运行时仍使用的 PlanDraft / DomainValidator | 中 |
+| B1 | 删 `agent/planner/`（0 外部引用，当前工作树已无版本目录） | 低 |
+| B2 | 已迁移/收拢 `agent/planning/` 到 `agent/runtime/planning/`，保留 PlanDraft / DomainValidator 语义 | 中 |
 | B3 | 业务根文件归位（advisor / report / skill_coverage / intent_router / tool_selector / tool_selection_rules / llm / assistant_roles） | 中 |
 | B4 | `application/` 与 `skills/` 的迁移见决策 C、D | 见对应章节 |
 
@@ -476,14 +476,14 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 
 ### 6.1 阶段 P0：删除与零风险合并（第 1 周）
 
-| 编号 | 动作 | 来源 |
-| --- | --- | --- |
-| P0-1 | 删 `agent/planner/`（死代码） | 决策 B |
-| P0-2 | 评估并迁移/收拢 `agent/planning/` | 决策 B |
-| P0-3 | 合并 `ContextSelector` 双定义 | diagnosis 9-#1 |
-| P0-4 | 合并 runtime 顶部 3 碎片 | diagnosis 7 |
-| P0-5 | 合并 `observability/` 3 文件 | diagnosis 8.3 |
-| P0-6 | 合并 `agent/application/` 3 碎片 | diagnosis 7 |
+| 编号 | 动作 | 来源 | 状态 | 验证方式 |
+| --- | --- | --- | --- | --- |
+| P0-1 | 删 `agent/planner/`（死代码） | 决策 B | ✅ | `rg "app\.agent\.planner|agent\.planner" backend/app backend/tests` 返回空；本工作树待提交 |
+| P0-2 | 评估并迁移/收拢 `agent/planning/` | 决策 B | ✅ | 已迁到 `agent/runtime/planning/`；`PYTHONDONTWRITEBYTECODE=1 python -m pytest tests/agent/planning/test_plan_draft_models.py::test_runtime_planning_exports_plan_draft_contract -q` 通过；本工作树待提交 |
+| P0-3 | 合并 `ContextSelector` 双定义 | diagnosis 9-#1 | ⏳ | 待执行 |
+| P0-4 | 合并 runtime 顶部 3 碎片 | diagnosis 7 | ⏳ | 待执行 |
+| P0-5 | 合并 `observability/` 3 文件 | diagnosis 8.3 | ⏳ | 待执行 |
+| P0-6 | 合并 `agent/application/` 3 碎片 | diagnosis 7 | ⏳ | 待执行 |
 
 ### 6.2 阶段 P1：核心结构迁移（第 2-3 周）
 
@@ -592,8 +592,8 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| B1 | 删 `agent/planner/` | ⏳ | — |
-| B2 | 评估并迁移/收拢 `agent/planning/` | ⏳ | — |
+| B1 | 删 `agent/planner/` | ✅ | 本工作树待提交 |
+| B2 | 评估并迁移/收拢 `agent/planning/` | ✅ | 本工作树待提交 |
 | B3 | 业务根文件归位 | ⏳ | — |
 
 ### 决策 C：skills/ 拆出

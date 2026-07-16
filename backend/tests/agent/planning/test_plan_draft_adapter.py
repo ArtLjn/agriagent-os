@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.agent.planning import plan_draft_from_router_decision
+from app.agent.runtime.planning import plan_draft_from_router_decision
 from app.agent.router.models import IntentFrame, RouterDecision
 
 pytestmark = pytest.mark.no_db
