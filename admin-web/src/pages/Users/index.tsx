@@ -8,7 +8,7 @@ import {
   Space,
   Modal,
   Descriptions,
-  message,
+  App,
   Statistic,
   Progress,
   Row,
@@ -72,6 +72,7 @@ const statusFilters = [
 ];
 
 export default function Users() {
+  const { modal: modalApi, message } = App.useApp();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -117,7 +118,7 @@ export default function Users() {
     } finally {
       setLoading(false);
     }
-  }, [page, size, statusFilter, phoneKeyword]);
+  }, [page, size, statusFilter, phoneKeyword, message]);
 
   useEffect(() => {
     void Promise.resolve().then(fetchUsers);
@@ -145,7 +146,7 @@ export default function Users() {
   const handleToggleStatus = (record: UserListItem) => {
     const newStatus = record.status === "active" ? "disabled" : "active";
     const action = newStatus === "disabled" ? "禁用" : "启用";
-    Modal.confirm({
+    modalApi.confirm({
       title: `确认${action}`,
       content: `确定要${action}用户 ${record.nickname}（${record.phone}）吗？`,
       icon: <ExclamationCircleOutlined />,

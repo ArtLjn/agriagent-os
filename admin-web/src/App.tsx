@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider, theme } from 'antd';
+import { App as AntdApp, ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import AdminLayout from './layouts/AdminLayout';
 import Crops from './pages/Crops';
@@ -73,32 +73,34 @@ export default function App() {
         },
       }}
     >
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login onLogin={() => window.location.href = '/'} />} />
-          <Route path="/" element={<AuthGuard><Navigate to="/dashboard" replace /></AuthGuard>} />
-          <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
-          <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
-          <Route path="/operations" element={<AuthGuard><Operations /></AuthGuard>} />
-          <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
-          <Route path="/crops/system" element={<AuthGuard><SystemLibrary /></AuthGuard>} />
-          <Route path="/cycles" element={<AuthGuard><Cycles /></AuthGuard>} />
-          <Route path="/cycles/:id" element={<AuthGuard><CycleDetail /></AuthGuard>} />
-          <Route path="/logs" element={<AuthGuard><Logs /></AuthGuard>} />
-          <Route path="/costs" element={<AuthGuard><Costs /></AuthGuard>} />
-          <Route path="/agent" element={<AuthGuard><Agent /></AuthGuard>} />
-          <Route path="/weather" element={<AuthGuard><Weather /></AuthGuard>} />
-          <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
-          <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
-          <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />
-          <Route path="/dev/data-flywheel" element={<AuthGuard><DataFlywheel /></AuthGuard>} />
-          <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
-          <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
-          <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />
-          <Route path="/dev/simulation" element={<AuthGuard><Simulation /></AuthGuard>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <AntdApp>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login onLogin={() => window.location.href = '/'} />} />
+            <Route path="/" element={<AuthGuard><Navigate to="/dashboard" replace /></AuthGuard>} />
+            <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
+            <Route path="/users" element={<AuthGuard><Users /></AuthGuard>} />
+            <Route path="/operations" element={<AuthGuard><Operations /></AuthGuard>} />
+            <Route path="/crops" element={<AuthGuard><Crops /></AuthGuard>} />
+            <Route path="/crops/system" element={<AuthGuard><SystemLibrary /></AuthGuard>} />
+            <Route path="/cycles" element={<AuthGuard><Cycles /></AuthGuard>} />
+            <Route path="/cycles/:id" element={<AuthGuard><CycleDetail /></AuthGuard>} />
+            <Route path="/logs" element={<AuthGuard><Logs /></AuthGuard>} />
+            <Route path="/costs" element={<AuthGuard><Costs /></AuthGuard>} />
+            <Route path="/agent" element={<AuthGuard><Agent /></AuthGuard>} />
+            <Route path="/weather" element={<AuthGuard><Weather /></AuthGuard>} />
+            <Route path="/dev/traces" element={<AuthGuard><TraceMonitor /></AuthGuard>} />
+            <Route path="/dev/tokens" element={<AuthGuard><TokenDashboard /></AuthGuard>} />
+            <Route path="/dev/playground" element={<AuthGuard><Playground /></AuthGuard>} />
+            <Route path="/dev/data-flywheel" element={<AuthGuard><DataFlywheel /></AuthGuard>} />
+            <Route path="/dev/skills" element={<AuthGuard><SkillRegistry /></AuthGuard>} />
+            <Route path="/dev/prompts" element={<AuthGuard><PromptInspector /></AuthGuard>} />
+            <Route path="/dev/config" element={<AuthGuard><ConfigKeys /></AuthGuard>} />
+            <Route path="/dev/simulation" element={<AuthGuard><Simulation /></AuthGuard>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AntdApp>
     </ConfigProvider>
   );
 }
