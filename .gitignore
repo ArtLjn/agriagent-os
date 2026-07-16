@@ -47,6 +47,10 @@ archive/**/android/android/
 .claude/
 .superpowers/
 
+# Agent-local
+.agents/
+.codex/
+
 # Database
 *.db
 *.db-shm
