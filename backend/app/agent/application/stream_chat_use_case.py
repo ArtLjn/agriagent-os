@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.agent.advisor import stream_advisor
+from app.agent.application.advisor import stream_advisor
 from app.agent.application.chat_use_case_helpers import (
     flush_trace_queue as _flush_trace_queue,
     merge_skill_names as _merge_skill_names,

@@ -6,7 +6,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.agent.advisor import invoke_advisor
+from app.agent.application.advisor import invoke_advisor
 from app.agent.application.chat_use_case_helpers import (
     flush_trace_queue as _flush_trace_queue,
     observe_chat_completion as _observe_chat_completion,

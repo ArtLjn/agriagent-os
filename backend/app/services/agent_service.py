@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 
-from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.application.advisor import invoke_advisor, stream_advisor
 from app.agent.executor.pending_actions import handle_pending_action
 from app.core.llm import get_llm
 from app.prompt.composer import get_composer
