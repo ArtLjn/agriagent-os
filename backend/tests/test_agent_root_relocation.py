@@ -26,6 +26,13 @@ def test_router_modules_export_new_and_legacy_paths() -> None:
     assert legacy_selector.ToolSelectionResult is selector.ToolSelectionResult
     assert legacy_selector.select_tools is selector.select_tools
     assert legacy_selector.expand_by_chain is selector.expand_by_chain
+    assert legacy_selector.DISABLED_SKILLS is rules.DISABLED_SKILLS
+    assert legacy_selector.PLANTING_ADVICE_HINTS is rules.PLANTING_ADVICE_HINTS
+    assert legacy_selector.QUERY_INTENT_HINTS is rules.QUERY_INTENT_HINTS
+    assert legacy_selector.QUERY_TRIGGERS is rules.QUERY_TRIGGERS
+    assert legacy_selector.TOOL_CHAIN_MAP is rules.TOOL_CHAIN_MAP
+    assert legacy_selector.WRITE_INTENT_HINTS is rules.WRITE_INTENT_HINTS
+    assert legacy_selector.WRITE_PATTERNS is rules.WRITE_PATTERNS
 
 
 def test_core_modules_export_new_and_legacy_paths() -> None:
