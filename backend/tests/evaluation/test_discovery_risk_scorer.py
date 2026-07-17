@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from app.evaluation.discovery.risk_scorer import apply_risk_score, calculate_risk
+from app.platforms.evaluation.discovery.risk_scorer import apply_risk_score, calculate_risk
 
 
 def test_rule_signal_dominates_judge_signal() -> None:

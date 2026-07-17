@@ -1,7 +1,7 @@
 """Skill 调用质量指标。"""
 
-from app.evaluation.metrics.models import SkillQualityMetrics
-from app.evaluation.replay.models import ReplayResult
+from app.platforms.evaluation.metrics.models import SkillQualityMetrics
+from app.platforms.evaluation.replay.models import ReplayResult
 
 
 def compute_skill_quality(results: list[ReplayResult]) -> SkillQualityMetrics:

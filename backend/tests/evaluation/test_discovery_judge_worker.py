@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.evaluation.discovery.judge_worker import (
+from app.platforms.evaluation.discovery.judge_worker import (
     JUDGE_MONTHLY_COST_LIMIT_USD,
     build_default_judge_client,
     build_judge_prompt,

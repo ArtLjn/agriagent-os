@@ -20,7 +20,7 @@ def test_new_business_modules_are_importable():
     """新业务落点应可直接导入。"""
     import app.application.advisor as advisor
     import app.application.report as report
-    import app.evaluation.skill_coverage as skill_coverage
+    import app.platforms.evaluation.skill_coverage as skill_coverage
 
     assert advisor.invoke_advisor is not None
     assert report.generate_cycle_report is not None
@@ -48,7 +48,7 @@ def test_legacy_report_public_api_reexports_new_objects():
 def test_legacy_skill_coverage_public_api_reexports_new_objects():
     """旧 skill_coverage 入口公开对象应转发到新模块对象。"""
     import app.agent.skill_coverage as legacy_coverage
-    import app.evaluation.skill_coverage as new_coverage
+    import app.platforms.evaluation.skill_coverage as new_coverage
 
     public_names = [
         "CoverageStatus",

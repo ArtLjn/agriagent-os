@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass
 
-from app.evaluation.cases.schemas import AgentReplayCase
-from app.evaluation.replay.models import ReplayResult, ReplayRunConfig
-from app.evaluation.replay.runner import AgentReplayExecutor, ReplayRunner
+from app.platforms.evaluation.cases.schemas import AgentReplayCase
+from app.platforms.evaluation.replay.models import ReplayResult, ReplayRunConfig
+from app.platforms.evaluation.replay.runner import AgentReplayExecutor, ReplayRunner
 
 
 @dataclass

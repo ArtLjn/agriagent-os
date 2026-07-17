@@ -2,9 +2,9 @@
 
 import pytest
 
-from app.evaluation.cases.schemas import ExpectedSkillCall
-from app.evaluation.replay.models import ActualSkillCall, ReplayResult
-from app.evaluation.reports.builder import EvaluationReportBuilder
+from app.platforms.evaluation.cases.schemas import ExpectedSkillCall
+from app.platforms.evaluation.replay.models import ActualSkillCall, ReplayResult
+from app.platforms.evaluation.reports.builder import EvaluationReportBuilder
 
 pytestmark = pytest.mark.no_db
 

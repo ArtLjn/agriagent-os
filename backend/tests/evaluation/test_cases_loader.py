@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from app.evaluation.cases.loader import (
+from app.platforms.evaluation.cases.loader import (
     builtin_skill_regression_cases,
     load_replay_cases,
     load_simulation_cases,

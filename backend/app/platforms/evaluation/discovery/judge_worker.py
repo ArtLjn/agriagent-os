@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.evaluation.discovery.risk_scorer import apply_risk_score
+from app.platforms.evaluation.discovery.risk_scorer import apply_risk_score
 from app.models.agent_turn import AgentTurn
 from app.models.data_flywheel import AgentDataFlywheelLabel
 from app.platforms.shared.judge_service import OpenAIDataFlywheelJudgeClient

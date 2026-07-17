@@ -33,12 +33,12 @@ api/
 | Memory `memory/` | Memory models、schemas、retrieval、consolidation、infra adapter | API 路由、Agent Runtime 内部状态机细节 |
 | Skills `skills/` | Skill schema、权限、执行适配、业务模块端口 | API request 对象、Prompt/Context 存储实现 |
 | Platform Shared `platforms/shared/` | `core/`, `models/`, `infra/`，迁移期可临时依赖未整体迁移的子系统实现并写明解除步骤 | API 路由、HTTP request 对象、跨平台业务编排 |
-| Evaluation `evaluation/` | replay cases、Prompt 版本、Context 摘要、Skill 调用结果、trace、DataFlywheel discovery 风险信号 | 生产 API 路由编排、业务写入副作用 |
+| Evaluation `platforms/evaluation/` | replay cases、Prompt 版本、Context 摘要、Skill 调用结果、trace、DataFlywheel discovery 风险信号 | 生产 API 路由编排、业务写入副作用 |
 | Observability `observability/` | trace、token、latency、tool call、memory observe、evaluation capture 事件 | 业务决策、Prompt 组合、Context 选择 |
 
 ### DataFlywheel Discovery 边界
 
-`app/evaluation/discovery/` 负责 DataFlywheel 标注候选发现层：
+`app/platforms/evaluation/discovery/` 负责 DataFlywheel 标注候选发现层；`app.evaluation` 仅作为旧 import 兼容入口保留：
 
 - Rule Engine：读取 `rules.yaml`，基于 turn 的白名单上下文计算 `rule_hits`、`rule_score`、`risk_severity`。
 - Risk Scorer：融合规则信号和 Judge 信号，写出 `risk_score` 与 `risk_dominant_signal`。
@@ -48,13 +48,14 @@ Discovery 只能依赖 `models/`、`platforms/shared` 中稳定的 judge client 
 
 ### Platforms Shared 前置层
 
-`app/platforms/shared/` 是 evaluation 与 data_flywheel 整体迁移前的共享层，当前承载：
+`app/platforms/shared/` 是 Evaluation 与 DataFlywheel 平台共享层，当前承载：
 
 - `judge_service.py`：DataFlywheel judge 协议、OpenAI-compatible client、judge 输入构造和输出归一化。
 - `repository_selector.py`：DataFlywheel 文档 Repository selector，供 `infra/repository_runtime.py` 创建仓库，避免 infra 直接依赖 `modules/data_flywheel` 聚合出口。
 
-迁移期旧入口必须保留 re-export，确保 `app.modules.data_flywheel.judge_service` 和
-`app.modules.data_flywheel.document_repository_selector` 的旧 import API 可用。A4/A5
+迁移期旧入口必须保留 re-export 或 alias，确保 `app.evaluation`、
+`app.modules.data_flywheel.judge_service` 和
+`app.modules.data_flywheel.document_repository_selector` 的旧 import API 可用。A5
 完成后，shared selector 对 `modules/data_flywheel.document_repository_*` 的临时依赖必须改向
 `platforms/data_flywheel`。
 

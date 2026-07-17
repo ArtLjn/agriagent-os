@@ -4,11 +4,11 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
-from app.evaluation.metrics.context_quality import compute_context_quality
-from app.evaluation.metrics.models import EvaluationMetrics
-from app.evaluation.metrics.skill_quality import compute_skill_quality
-from app.evaluation.replay.models import ReplayResult
-from app.evaluation.reports.models import EvaluationCaseResult, EvaluationReport
+from app.platforms.evaluation.metrics.context_quality import compute_context_quality
+from app.platforms.evaluation.metrics.models import EvaluationMetrics
+from app.platforms.evaluation.metrics.skill_quality import compute_skill_quality
+from app.platforms.evaluation.replay.models import ReplayResult
+from app.platforms.evaluation.reports.models import EvaluationCaseResult, EvaluationReport
 
 
 class EvaluationReportBuilder:

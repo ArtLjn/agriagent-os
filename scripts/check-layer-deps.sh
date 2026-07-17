@@ -18,7 +18,7 @@ is_size_baseline_file() {
     backend/app/modules/data_flywheel/router.py|\
     backend/app/modules/data_flywheel/review_issue_chain_repository.py|\
     backend/app/modules/data_flywheel/review_issue_chain_service.py|\
-    backend/app/evaluation/discovery/rule_engine.py|\
+    backend/app/platforms/evaluation/discovery/rule_engine.py|\
     backend/app/modules/data_flywheel/repair_pack_repository.py|\
     backend/app/modules/data_flywheel/service.py|\
     backend/app/modules/data_flywheel/repair_pack_service.py)

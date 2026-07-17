@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_db
 from app.core.config import settings
 from app.modules.auth.dependencies import require_admin
-from app.evaluation.diagnostics import SkillDiagnosticService
+from app.platforms.evaluation.diagnostics import SkillDiagnosticService
 from app.infra.mongo import get_mongo_database
 from app.infra.mongo_mappers import trace_record_from_mongo_doc
 from app.infra.repository_runtime import (

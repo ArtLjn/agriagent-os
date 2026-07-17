@@ -24,7 +24,7 @@ def test_shared_and_legacy_judge_exports_same_objects() -> None:
     review_chain_service = importlib.import_module(
         "app.modules.data_flywheel.review_issue_chain_service"
     )
-    judge_worker = importlib.import_module("app.evaluation.discovery.judge_worker")
+    judge_worker = importlib.import_module("app.platforms.evaluation.discovery.judge_worker")
 
     assert legacy.OpenAIDataFlywheelJudgeClient is shared.OpenAIDataFlywheelJudgeClient
     assert legacy.DataFlywheelJudgeClient is shared.DataFlywheelJudgeClient

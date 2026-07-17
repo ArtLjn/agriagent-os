@@ -2,8 +2,8 @@
 
 from collections import Counter
 
-from app.evaluation.metrics.models import ContextQualityMetrics
-from app.evaluation.replay.models import ReplayResult
+from app.platforms.evaluation.metrics.models import ContextQualityMetrics
+from app.platforms.evaluation.replay.models import ReplayResult
 
 
 def compute_context_quality(results: list[ReplayResult]) -> ContextQualityMetrics:

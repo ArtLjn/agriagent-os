@@ -1,12 +1,12 @@
 """评测指标。"""
 
-from app.evaluation.metrics.context_quality import compute_context_quality
-from app.evaluation.metrics.models import (
+from app.platforms.evaluation.metrics.context_quality import compute_context_quality
+from app.platforms.evaluation.metrics.models import (
     ContextQualityMetrics,
     EvaluationMetrics,
     SkillQualityMetrics,
 )
-from app.evaluation.metrics.skill_quality import compute_skill_quality
+from app.platforms.evaluation.metrics.skill_quality import compute_skill_quality
 
 __all__ = [
     "ContextQualityMetrics",

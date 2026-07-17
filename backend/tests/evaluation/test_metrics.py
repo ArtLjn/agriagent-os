@@ -1,9 +1,9 @@
 """测试评测指标。"""
 
-from app.evaluation.cases.schemas import ExpectedSkillCall, ExpectedWriteOperation
-from app.evaluation.metrics.context_quality import compute_context_quality
-from app.evaluation.metrics.skill_quality import compute_skill_quality
-from app.evaluation.replay.models import ActualSkillCall, ReplayResult
+from app.platforms.evaluation.cases.schemas import ExpectedSkillCall, ExpectedWriteOperation
+from app.platforms.evaluation.metrics.context_quality import compute_context_quality
+from app.platforms.evaluation.metrics.skill_quality import compute_skill_quality
+from app.platforms.evaluation.replay.models import ActualSkillCall, ReplayResult
 
 
 def test_compute_context_quality_metrics() -> None:

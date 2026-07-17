@@ -1,6 +1,6 @@
 """测试平台 trace 事件名。"""
 
-from app.evaluation.trace_events import (
+from app.platforms.evaluation.trace_events import (
     CONTEXT_BUILD,
     EVALUATION_CAPTURE,
     LLM_CALL,

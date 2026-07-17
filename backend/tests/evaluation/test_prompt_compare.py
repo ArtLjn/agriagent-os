@@ -1,7 +1,7 @@
 """测试 Prompt 版本对比。"""
 
-from app.evaluation.replay.models import ActualSkillCall, ReplayResult
-from app.evaluation.runners.prompt_compare import build_prompt_comparison
+from app.platforms.evaluation.replay.models import ActualSkillCall, ReplayResult
+from app.platforms.evaluation.runners.prompt_compare import build_prompt_comparison
 
 
 def test_build_prompt_comparison_outputs_required_deltas() -> None:
