@@ -560,7 +560,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
-| P3-1 | 巨石文件拆分（在合并完成后） | `tool_executor.py` (1517)、`classifier.py` (1233)、`nodes.py` (1049) | 1 | ⏳ | 按 lifecycle / 规则族 / 节点类型分别拆；2026-07-17 第一阶段先拆 `agent/router/policy.py` 的候选选择状态与预算辅助逻辑，以解除 501 行硬错误，不代表 P3-1 全部完成 |
+| P3-1 | 巨石文件拆分（在合并完成后） | `tool_executor.py` (1517)、`classifier.py` (1233)、`nodes.py` (1049) | 1 | ⏳ | 按 lifecycle / 规则族 / 节点类型分别拆；2026-07-17 第一阶段先拆 `agent/router/policy.py` 的候选选择状态与预算辅助逻辑，以解除 501 行硬错误；同日继续拆 `agent/router/classifier.py`，将 hint 常量迁入 `classifier_hints.py`、无状态 `IntentFrame` 构造迁入 `classifier_frames.py`，`classifier.py` 从 1341 行降至 736 行，不代表 P3-1 全部完成 |
 | P3-2 | 引入"新增 Protocol/ABC 必须列出 ≥2 实现"规则 | `.claude/rules/python-style.md` + CI sensor | 9 | ⏳ | sensor 脚本扫描单实现 Protocol |
 | P3-3 | 引入"新增 backend 实现必须证明使用"规则 | `.claude/rules/` + CI sensor | 9-#2 | ⏳ | 与 P3-2 类似 |
 

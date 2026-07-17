@@ -2,6 +2,8 @@
 
 import re
 
+from app.agent.router import classifier_frames as frame_builders
+from app.agent.router import classifier_hints as hints
 from app.agent.router.models import IntentFrame
 
 
@@ -12,261 +14,53 @@ class RuleIntentClassifier:
     capability/operation enrichment 由 service 与 policy 接管。
     """
 
-    _query_hints = (
-        "哪些",
-        "有哪些",
-        "看看",
-        "查询",
-        "查一下",
-        "最近",
-        "怎么样",
-        "列表",
-    )
-    _farm_hints = ("作物", "栽种", "农场", "茬口", "种植")
-    _crop_hints = ("作物", "栽种", "茬口", "种植")
-    _daily_advice_time_hints = ("今天", "明天", "这几天", "最近")
-    _daily_advice_action_hints = (
-        "适合",
-        "该做",
-        "做什么",
-        "做啥",
-        "安排什么",
-        "干什么",
-        "干啥",
-    )
-    _weather_sensitive_operation_hints = (
-        "打药",
-        "施药",
-        "喷药",
-        "浇水",
-        "施肥",
-        "采收",
-        "播种",
-        "移栽",
-    )
-    _write_action_hints = (
-        "处理",
-        "弄一下",
-        "搞一下",
-        "删",
-        "删除",
-        "改",
-        "修改",
-        "停用",
-        "禁用",
-    )
-    _write_entity_hints = (
-        "工人",
-        "作业",
-        "账",
-        "分类",
-        "种植单元",
-        "地块",
-        "大棚",
-        "棚区",
-        "号棚",
-    )
-    _worker_create_hints = ("新来", "招了", "新增", "创建", "添加")
-    _worker_update_hints = ("改", "修改", "更新", "设置", "设为")
-    _worker_deactivate_hints = ("删除", "删掉", "删", "停用", "离职", "不用了")
-    _worker_restore_hints = ("恢复", "回来", "回来了", "返岗")
-    _worker_update_fields = (
-        "电话",
-        "手机号",
-        "手机",
-        "工资",
-        "日薪",
-        "单价",
-        "备注",
-        "姓名",
-        "名字",
-        "状态",
-    )
-    _worker_pay_hints = ("工资", "日薪", "每天", "一天")
-    _work_order_hints = ("作业", "采收", "授粉", "安排")
-    _operation_hints = ("授粉", "装车", "整枝", "打杈", "压蔓", "压瓜", "留瓜", "垫瓜")
-    _work_order_read_hints = ("作业单", "作业", "采收", "授粉")
-    _read_blockers = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
-    _planting_advice_hints = ("怎么种", "如何种", "咋种", "要注意什么")
-    _web_search_hints = ("搜索", "网上查", "新闻")
-    _weather_hints = (
-        "天气",
-        "预报",
-        "降雨",
-        "下雨",
-        "气温",
-        "风力",
-        "湿度",
-        "极端天气",
-    )
-    _finance_overview_hints = ("money", "finance", "financial")
-    _cost_summary_hints = (
-        "余额",
-        "收支",
-        "成本",
-        "利润",
-        "账单",
-        "流水",
-        "花了多少",
-        "赚了多少",
-        "收入多少",
-        "支出多少",
-    )
-    _cost_record_write_hints = (
-        "买",
-        "采购",
-        "购入",
-        "花了",
-        "支出",
-        "记一笔",
-        "记录",
-    )
-    _cost_record_entities = (
-        "化肥",
-        "肥料",
-        "种子",
-        "农药",
-        "农资",
-        "成本",
-        "费用",
-        "支出",
-    )
-    _debt_summary_hints = (
-        "还欠",
-        "欠款",
-        "欠多少钱",
-        "欠别人多少钱",
-        "赊账统计",
-        "赊账还欠",
-        "总欠款",
-    )
-    _cost_analytics_hints = ("趋势", "同比", "环比", "比上个月", "比去年", "分析")
-    _delete_cost_hints = ("删除账务", "删除账单", "删除流水", "撤销账单", "撤销账务")
-    _settle_debt_hints = ("还钱", "还账", "还款", "清账", "结清", "全还")
-    _labor_payable_hints = (
-        "人工钱",
-        "工钱",
-        "工资",
-        "未付人工",
-        "欠人工",
-        "还欠多少人工",
-        "人工欠款",
-    )
-    _labor_settle_hints = ("补付", "支付", "结算", "付清", "结清", "结了")
-    _wage_record_hints = ("记", "记录", "新增", "添加", "修改", "更改", "调整", "更新")
-    _cost_category_hints = (
-        "账务分类",
-        "成本分类",
-        "收入分类",
-        "费用分类",
-        "有哪些分类",
-        "查询分类",
-    )
-    _cost_category_entity_hints = (
-        "账务分类",
-        "成本分类",
-        "收入分类",
-        "费用分类",
-        "支出分类",
-        "分类",
-    )
-    _cost_category_scope_hints = (
-        "账务分类",
-        "成本分类",
-        "收入分类",
-        "费用分类",
-        "支出分类",
-        "自定义分类",
-    )
-    _cost_category_delete_hints = ("删除", "删掉", "删")
-    _crop_template_hints = (
-        "作物模板",
-        "模板列表",
-        "有哪些模板",
-        "生长阶段模板",
-    )
-    _crop_cycle_list_hints = (
-        "我的茬口",
-        "有哪些茬口",
-        "茬口列表",
-        "种植批次",
-        "我的作物",
-        "有哪些作物栽种",
-        "种了哪些作物",
-        "种植哪些作物",
-        "地里都种着什么",
-    )
-    _planting_unit_hints = ("种植单元", "地块", "大棚", "棚区", "有哪些棚")
-    _planting_unit_entity_hints = (
-        "种植单元",
-        "地块",
-        "大棚",
-        "棚区",
-        "号棚",
-        "区域",
-    )
-    _ambiguous_planting_unit_targets = (
-        "这个地块",
-        "这个大棚",
-        "这个棚区",
-        "这个种植单元",
-        "该地块",
-        "该大棚",
-        "该棚区",
-        "该种植单元",
-    )
-    _planting_unit_update_hints = (
-        "改",
-        "修改",
-        "更新",
-        "调整",
-        "改成",
-        "设为",
-        "面积",
-    )
-    _planting_unit_delete_hints = ("删除", "删掉", "删")
-    _user_settings_hints = (
-        "用户设置",
-        "我的设置",
-        "默认天气城市",
-        "默认城市",
-        "天气城市",
-        "默认经纬度",
-        "经纬度",
-        "经度",
-        "纬度",
-        "助手回复角色",
-        "助手角色",
-        "回复角色",
-        "显示名",
-        "昵称",
-    )
-    _user_settings_read_hints = (
-        "什么",
-        "是什么",
-        "当前",
-        "查看",
-        "查询",
-        "查一下",
-        "看看",
-        "多少",
-        "有哪些",
-    )
-    _user_settings_update_patterns = (
-        r"(?:把|将).{0,16}(?:改成|设为|换成|调整为|更新为)",
-        r"(?:设置|修改|调整|更新).{0,16}(?:为|成)",
-        r"(?:改成|设为|换成|调整为|更新为).{0,16}",
-        r"(?:修改|调整|更新)(?:用户设置|默认天气城市|默认城市|天气城市|默认经纬度|经纬度|经度|纬度|助手回复角色|助手角色|回复角色|显示名|昵称)",
-    )
-    _worker_query_hints = (
-        "我的工人",
-        "工人列表",
-        "有哪些工人",
-        "看看工人",
-        "查询工人",
-        "查一下工人",
-        "工人有哪些",
-    )
+    _query_hints = hints.QUERY_HINTS
+    _farm_hints = hints.FARM_HINTS
+    _crop_hints = hints.CROP_HINTS
+    _daily_advice_time_hints = hints.DAILY_ADVICE_TIME_HINTS
+    _daily_advice_action_hints = hints.DAILY_ADVICE_ACTION_HINTS
+    _weather_sensitive_operation_hints = hints.WEATHER_SENSITIVE_OPERATION_HINTS
+    _write_action_hints = hints.WRITE_ACTION_HINTS
+    _write_entity_hints = hints.WRITE_ENTITY_HINTS
+    _worker_create_hints = hints.WORKER_CREATE_HINTS
+    _worker_update_hints = hints.WORKER_UPDATE_HINTS
+    _worker_deactivate_hints = hints.WORKER_DEACTIVATE_HINTS
+    _worker_restore_hints = hints.WORKER_RESTORE_HINTS
+    _worker_update_fields = hints.WORKER_UPDATE_FIELDS
+    _worker_pay_hints = hints.WORKER_PAY_HINTS
+    _work_order_hints = hints.WORK_ORDER_HINTS
+    _operation_hints = hints.OPERATION_HINTS
+    _work_order_read_hints = hints.WORK_ORDER_READ_HINTS
+    _read_blockers = hints.READ_BLOCKERS
+    _planting_advice_hints = hints.PLANTING_ADVICE_HINTS
+    _web_search_hints = hints.WEB_SEARCH_HINTS
+    _weather_hints = hints.WEATHER_HINTS
+    _finance_overview_hints = hints.FINANCE_OVERVIEW_HINTS
+    _cost_summary_hints = hints.COST_SUMMARY_HINTS
+    _cost_record_write_hints = hints.COST_RECORD_WRITE_HINTS
+    _cost_record_entities = hints.COST_RECORD_ENTITIES
+    _debt_summary_hints = hints.DEBT_SUMMARY_HINTS
+    _cost_analytics_hints = hints.COST_ANALYTICS_HINTS
+    _delete_cost_hints = hints.DELETE_COST_HINTS
+    _settle_debt_hints = hints.SETTLE_DEBT_HINTS
+    _labor_payable_hints = hints.LABOR_PAYABLE_HINTS
+    _labor_settle_hints = hints.LABOR_SETTLE_HINTS
+    _wage_record_hints = hints.WAGE_RECORD_HINTS
+    _cost_category_hints = hints.COST_CATEGORY_HINTS
+    _cost_category_entity_hints = hints.COST_CATEGORY_ENTITY_HINTS
+    _cost_category_scope_hints = hints.COST_CATEGORY_SCOPE_HINTS
+    _cost_category_delete_hints = hints.COST_CATEGORY_DELETE_HINTS
+    _crop_template_hints = hints.CROP_TEMPLATE_HINTS
+    _crop_cycle_list_hints = hints.CROP_CYCLE_LIST_HINTS
+    _planting_unit_hints = hints.PLANTING_UNIT_HINTS
+    _planting_unit_entity_hints = hints.PLANTING_UNIT_ENTITY_HINTS
+    _ambiguous_planting_unit_targets = hints.AMBIGUOUS_PLANTING_UNIT_TARGETS
+    _planting_unit_update_hints = hints.PLANTING_UNIT_UPDATE_HINTS
+    _planting_unit_delete_hints = hints.PLANTING_UNIT_DELETE_HINTS
+    _user_settings_hints = hints.USER_SETTINGS_HINTS
+    _user_settings_read_hints = hints.USER_SETTINGS_READ_HINTS
+    _user_settings_update_patterns = hints.USER_SETTINGS_UPDATE_PATTERNS
+    _worker_query_hints = hints.WORKER_QUERY_HINTS
 
     def classify(self, message: str) -> list[IntentFrame]:
         """按固定规则抽取意图帧。"""
@@ -284,237 +78,48 @@ class RuleIntentClassifier:
     def _classify_precheck(self, message: str) -> list[IntentFrame] | None:
         if not self._looks_like_ambiguous_write(message):
             return None
-        return [
-            IntentFrame(
-                domain="general",
-                intent="ambiguous_write",
-                risk="write_confirm",
-                candidate_tools=[],
-                confidence=0.7,
-                requires_confirmation=True,
-            )
-        ]
+        return [frame_builders.build_ambiguous_write_frame()]
 
     def _classify_primary_read(self, message: str) -> list[IntentFrame]:
         if self._looks_like_user_settings_query(message):
-            return [
-                IntentFrame(
-                    domain="settings",
-                    intent="query_user_settings",
-                    risk="read",
-                    entities=["user_settings"],
-                    candidate_tools=["manage_user_settings"],
-                    capability="manage_settings",
-                    operation="query_settings",
-                    operation_hint="query_settings",
-                    confidence=0.86,
-                )
-            ]
+            return [frame_builders.build_query_user_settings_frame()]
         if self._looks_like_labor_payable_query(message):
-            return [
-                IntentFrame(
-                    domain="labor",
-                    intent="query_labor_payables",
-                    risk="read",
-                    capability="manage_labor_payment",
-                    operation="query_payables",
-                    operation_hint="query_payables",
-                    entities=["labor_payable"],
-                    candidate_tools=["manage_labor_payment"],
-                    confidence=0.86,
-                )
-            ]
+            return [frame_builders.build_query_labor_payables_frame()]
         if self._looks_like_cost_category_query(message):
-            return [
-                IntentFrame(
-                    domain="finance",
-                    intent="query_cost_categories",
-                    risk="read",
-                    entities=["cost_category"],
-                    candidate_tools=["manage_cost_categories"],
-                    capability="manage_cost_categories",
-                    operation="query_categories",
-                    operation_hint="query_categories",
-                    confidence=0.86,
-                )
-            ]
+            return [frame_builders.build_query_cost_categories_frame()]
         if self._looks_like_crop_template_query(message):
-            return [
-                IntentFrame(
-                    domain="planting",
-                    intent="query_crop_templates",
-                    risk="read",
-                    entities=["crop_template"],
-                    candidate_tools=["manage_crop_templates"],
-                    confidence=0.86,
-                )
-            ]
+            return [frame_builders.build_query_crop_templates_frame()]
         if self._looks_like_planting_unit_query(message):
-            return [
-                IntentFrame(
-                    domain="planting",
-                    intent="query_planting_units",
-                    risk="read",
-                    entities=["planting_unit"],
-                    candidate_tools=["manage_planting_units"],
-                    capability="manage_planting_units",
-                    operation="query_units",
-                    operation_hint="query_units",
-                    confidence=0.86,
-                )
-            ]
+            return [frame_builders.build_query_planting_units_frame()]
         if self._looks_like_crop_cycle_list_query(message):
-            return [
-                IntentFrame(
-                    domain="planting",
-                    intent="query_crop_cycles",
-                    risk="read",
-                    entities=["crop_cycle"],
-                    candidate_tools=["manage_crop_cycle"],
-                    capability="manage_crop_cycle",
-                    operation="query_cycles",
-                    operation_hint="query_cycles",
-                    confidence=0.88,
-                )
-            ]
+            return [frame_builders.build_query_crop_cycles_frame()]
         if self._looks_like_crop_cycle_detail_query(message):
-            return [
-                IntentFrame(
-                    domain="planting",
-                    intent="query_crop_cycle",
-                    risk="read",
-                    entities=["crop_cycle"],
-                    candidate_tools=["manage_crop_cycle"],
-                    capability="manage_crop_cycle",
-                    operation="query_cycle_info",
-                    operation_hint="query_cycle_info",
-                    confidence=0.86,
-                )
-            ]
+            return [frame_builders.build_query_crop_cycle_frame()]
         if self._looks_like_daily_operation_advice(message):
-            return [
-                IntentFrame(
-                    domain="operation",
-                    intent="query_daily_operation_advice",
-                    risk="read",
-                    entities=["weather", "farm", "crop_cycle"],
-                    candidate_tools=["weather", "get_farm_status"],
-                    confidence=0.84,
-                )
-            ]
+            return [frame_builders.build_query_daily_operation_advice_frame()]
         if self._looks_like_active_crop_query(message):
-            return [
-                IntentFrame(
-                    domain="planting",
-                    intent="query_active_crops",
-                    risk="read",
-                    entities=["farm", "crop_cycle"],
-                    candidate_tools=["manage_crop_cycle", "get_farm_status"],
-                    capability="manage_crop_cycle",
-                    operation="query_cycles",
-                    operation_hint="query_cycles",
-                    confidence=0.85,
-                )
-            ]
+            return [frame_builders.build_query_active_crops_frame()]
         if self._looks_like_planting_advice(message):
-            return [
-                IntentFrame(
-                    domain="planting",
-                    intent="query_planting_advice",
-                    risk="read",
-                    entities=["farm", "crop_cycle"],
-                    candidate_tools=["get_farm_status"],
-                    confidence=0.72,
-                )
-            ]
+            return [frame_builders.build_query_planting_advice_frame()]
         if self._looks_like_farm_read(message):
-            return [
-                IntentFrame(
-                    domain="farm",
-                    intent="unknown_farm_read",
-                    risk="read",
-                    entities=["farm"],
-                    candidate_tools=[],
-                    confidence=0.6,
-                )
-            ]
+            return [frame_builders.build_unknown_farm_read_frame()]
         return []
 
     def _classify_additional_reads(self, message: str) -> list[IntentFrame]:
-        frames: list[IntentFrame] = []
+        intent_frames: list[IntentFrame] = []
         if self._looks_like_query_work_orders(message):
-            frames.append(
-                IntentFrame(
-                    domain="operation",
-                    intent="query_work_orders",
-                    risk="read",
-                    entities=["operation_work_order"],
-                    candidate_tools=[
-                        "get_operation_work_orders",
-                        "manage_work_orders",
-                    ],
-                    confidence=0.82,
-                )
-            )
+            intent_frames.append(frame_builders.build_query_work_orders_frame())
         if self._looks_like_finance_overview_query(message):
-            frames.append(
-                IntentFrame(
-                    domain="finance",
-                    intent="query_finance_overview",
-                    risk="read",
-                    entities=["cost", "income", "debt"],
-                    candidate_tools=["get_cost_summary", "get_debt_summary"],
-                    confidence=0.78,
-                )
-            )
+            intent_frames.append(frame_builders.build_query_finance_overview_frame())
         if self._looks_like_cost_summary_query(message):
-            frames.append(
-                IntentFrame(
-                    domain="finance",
-                    intent="query_cost_summary",
-                    risk="read",
-                    entities=["cost", "income", "balance"],
-                    candidate_tools=["get_cost_summary"],
-                    confidence=0.84,
-                )
-            )
+            intent_frames.append(frame_builders.build_query_cost_summary_frame())
         if self._looks_like_cost_analytics_query(message):
-            frames.append(
-                IntentFrame(
-                    domain="finance",
-                    intent="analyze_cost",
-                    risk="read",
-                    entities=["cost", "income", "trend"],
-                    candidate_tools=["get_cost_analytics"],
-                    confidence=0.84,
-                )
-            )
+            intent_frames.append(frame_builders.build_analyze_cost_frame())
         if self._looks_like_debt_summary_query(message):
-            frames.append(
-                IntentFrame(
-                    domain="finance",
-                    intent="query_debt_summary",
-                    risk="read",
-                    entities=["debt"],
-                    candidate_tools=["get_debt_summary"],
-                    confidence=0.84,
-                )
-            )
+            intent_frames.append(frame_builders.build_query_debt_summary_frame())
         if self._looks_like_worker_query(message):
-            frames.append(
-                IntentFrame(
-                    domain="labor",
-                    intent="query_workers",
-                    risk="read",
-                    capability="manage_workers",
-                    operation="query_workers",
-                    operation_hint="query_workers",
-                    entities=["worker"],
-                    candidate_tools=["manage_workers"],
-                    confidence=0.84,
-                )
-            )
-        return frames
+            intent_frames.append(frame_builders.build_query_workers_frame())
+        return intent_frames
 
     def _classify_search_or_weather(self, message: str) -> list[IntentFrame]:
         if self._looks_like_user_settings_query(message) or (
@@ -522,38 +127,11 @@ class RuleIntentClassifier:
         ):
             return []
         if self._looks_like_web_search(message):
-            return [
-                IntentFrame(
-                    domain="external_search",
-                    intent="query_web_search",
-                    risk="read",
-                    entities=["web"],
-                    candidate_tools=["web_search"],
-                    confidence=0.8,
-                )
-            ]
+            return [frame_builders.build_query_web_search_frame()]
         if self._looks_like_weather_crop_impact_query(message):
-            return [
-                IntentFrame(
-                    domain="operation",
-                    intent="query_weather_crop_impact",
-                    risk="read",
-                    entities=["weather", "farm", "crop_cycle"],
-                    candidate_tools=["weather", "get_farm_status"],
-                    confidence=0.84,
-                )
-            ]
+            return [frame_builders.build_query_weather_crop_impact_frame()]
         if self._looks_like_weather_query(message):
-            return [
-                IntentFrame(
-                    domain="weather",
-                    intent="query_weather",
-                    risk="read",
-                    entities=["weather"],
-                    candidate_tools=["weather"],
-                    confidence=0.82,
-                )
-            ]
+            return [frame_builders.build_query_weather_frame()]
         return []
 
     def _classify_write_candidates(
@@ -561,140 +139,51 @@ class RuleIntentClassifier:
         message: str,
         existing_frames: list[IntentFrame],
     ) -> list[IntentFrame]:
-        frames: list[IntentFrame] = []
+        intent_frames: list[IntentFrame] = []
         if self._looks_like_create_worker(message):
-            frames.append(self._build_create_worker_frame(message))
+            params = self._extract_worker_params(message) or None
+            intent_frames.append(frame_builders.build_create_worker_frame(params))
         elif self._looks_like_manage_worker(message):
-            frames.append(self._build_manage_worker_frame(message))
+            params = self._extract_worker_management_params(message) or None
+            intent_frames.append(frame_builders.build_manage_worker_frame(params))
         if self._looks_like_create_crop_template(message):
-            frames.append(self._build_create_crop_template_frame(message))
+            intent_frames.append(frame_builders.build_create_crop_template_frame())
         if self._looks_like_create_crop_cycle(message):
-            frames.append(self._build_create_crop_cycle_frame(message))
+            intent_frames.append(frame_builders.build_create_crop_cycle_frame())
         if self._looks_like_delete_crop_cycle(message):
-            frames.append(self._build_delete_crop_cycle_frame())
+            intent_frames.append(frame_builders.build_delete_crop_cycle_frame())
         if self._looks_like_create_cost_record(message):
-            frames.append(self._build_create_cost_record_frame())
+            intent_frames.append(frame_builders.build_create_cost_record_frame())
         if self._looks_like_delete_cost_record(message):
-            frames.append(self._build_delete_cost_record_frame())
+            intent_frames.append(frame_builders.build_delete_cost_record_frame())
         if self._looks_like_settle_debt(message):
-            frames.append(self._build_settle_debt_frame())
+            intent_frames.append(frame_builders.build_settle_debt_frame())
         if self._looks_like_settle_labor_payment(message):
-            frames.append(self._build_settle_labor_payment_frame(message))
+            params = self._extract_labor_payment_params(message)
+            intent_frames.append(frame_builders.build_settle_labor_payment_frame(params))
         if self._looks_like_manage_wage(message):
-            frames.append(self._build_manage_wage_frame(message))
+            params = self._extract_wage_params(message)
+            intent_frames.append(frame_builders.build_manage_wage_frame(params))
         if self._looks_like_update_user_settings(message):
-            frames.append(self._build_update_user_settings_frame())
+            intent_frames.append(frame_builders.build_update_user_settings_frame())
         if self._looks_like_manage_cost_category(message):
-            frames.append(self._build_manage_cost_category_frame(message))
+            action = self._cost_category_action(message)
+            intent_frames.append(frame_builders.build_manage_cost_category_frame(action))
         if self._looks_like_manage_planting_unit(message):
-            frames.append(self._build_manage_planting_unit_frame(message))
-        if self._looks_like_incomplete_farm_labor_work(message):
-            frames.append(self._build_clarify_farm_labor_frame(message))
-        if self._looks_like_create_work_order(message):
-            frames.append(
-                self._build_create_work_order_frame(message, existing_frames + frames)
+            action = self._planting_unit_action(message)
+            intent_frames.append(
+                frame_builders.build_manage_planting_unit_frame(action)
             )
-        return frames
+        if self._looks_like_incomplete_farm_labor_work(message):
+            evidence = self._extract_incomplete_farm_labor_evidence(message)
+            intent_frames.append(frame_builders.build_clarify_farm_labor_frame(evidence))
+        if self._looks_like_create_work_order(message):
+            intent_frames.append(
+                self._create_work_order_frame(message, existing_frames + intent_frames)
+            )
+        return intent_frames
 
-    def _build_create_worker_frame(self, message: str) -> IntentFrame:
-        worker_params = self._extract_worker_params(message)
-        return IntentFrame(
-            domain="labor",
-            intent="create_worker",
-            risk="write_confirm",
-            entities=["worker"],
-            candidate_tools=["manage_workers"],
-            confidence=0.78,
-            params_hint=worker_params or None,
-            requires_confirmation=True,
-        )
-
-    def _build_manage_worker_frame(self, message: str) -> IntentFrame:
-        worker_params = self._extract_worker_management_params(message)
-        return IntentFrame(
-            domain="labor",
-            intent="manage_worker",
-            risk="write_confirm",
-            entities=["worker"],
-            candidate_tools=["manage_workers"],
-            confidence=0.78,
-            params_hint=worker_params or None,
-            requires_confirmation=True,
-        )
-
-    def _build_create_crop_template_frame(self, message: str) -> IntentFrame:
-        return IntentFrame(
-            domain="planting",
-            intent="create_crop_template",
-            risk="write_confirm",
-            entities=["crop_template"],
-            candidate_tools=["manage_crop_templates"],
-            confidence=0.78,
-            requires_confirmation=True,
-        )
-
-    def _build_create_crop_cycle_frame(self, message: str) -> IntentFrame:
-        return IntentFrame(
-            domain="planting",
-            intent="create_crop_cycle",
-            risk="write_confirm",
-            entities=["crop_cycle"],
-            candidate_tools=["manage_crop_cycle"],
-            capability="manage_crop_cycle",
-            operation="create_cycle",
-            operation_hint="create_cycle",
-            confidence=0.76,
-            requires_confirmation=True,
-        )
-
-    def _build_delete_crop_cycle_frame(self) -> IntentFrame:
-        return IntentFrame(
-            domain="crop",
-            intent="delete_cycle",
-            risk="write_high",
-            entities=["crop_cycle"],
-            candidate_tools=["manage_crop_cycle"],
-            capability="manage_crop_cycle",
-            operation="delete_cycle",
-            operation_hint="delete_cycle",
-            confidence=0.78,
-            requires_confirmation=True,
-        )
-
-    def _build_create_cost_record_frame(self) -> IntentFrame:
-        return IntentFrame(
-            domain="finance",
-            intent="create_cost_record",
-            risk="write_confirm",
-            entities=["cost"],
-            candidate_tools=["create_cost_record"],
-            confidence=0.78,
-            requires_confirmation=True,
-        )
-
-    def _build_delete_cost_record_frame(self) -> IntentFrame:
-        return IntentFrame(
-            domain="finance",
-            intent="delete_record",
-            risk="write_high",
-            entities=["cost"],
-            candidate_tools=["delete_cost_record"],
-            confidence=0.78,
-            requires_confirmation=True,
-        )
-
-    def _build_settle_debt_frame(self) -> IntentFrame:
-        return IntentFrame(
-            domain="finance",
-            intent="settle_debt",
-            risk="write_confirm",
-            entities=["debt"],
-            candidate_tools=["settle_debt"],
-            confidence=0.78,
-            requires_confirmation=True,
-        )
-
-    def _build_settle_labor_payment_frame(self, message: str) -> IntentFrame:
+    def _extract_labor_payment_params(self, message: str) -> dict:
         params = {"operation": "settle_payment"}
         worker = self._extract_worker_name(message)
         amount = self._extract_money_amount(message)
@@ -702,21 +191,9 @@ class RuleIntentClassifier:
             params["worker"] = worker
         if amount is not None:
             params["amount"] = amount
-        return IntentFrame(
-            domain="labor",
-            intent="settle_labor_payment",
-            risk="write_confirm",
-            capability="manage_labor_payment",
-            operation="settle_payment",
-            operation_hint="settle_payment",
-            entities=["labor_payable"],
-            candidate_tools=["manage_labor_payment"],
-            confidence=0.82,
-            params_hint=params,
-            requires_confirmation=True,
-        )
+        return params
 
-    def _build_manage_wage_frame(self, message: str) -> IntentFrame:
+    def _extract_wage_params(self, message: str) -> dict:
         params: dict = {"operation": "manage_wage", "action": "save"}
         worker = self._extract_worker_name(message)
         operation_type = self._extract_operation_type(message)
@@ -731,114 +208,32 @@ class RuleIntentClassifier:
             params["pay_type"] = "daily"
         if unit_price is not None:
             params["unit_price"] = unit_price
-        return IntentFrame(
-            domain="labor",
-            intent="manage_wage",
-            risk="write_confirm",
-            capability="manage_labor_payment",
-            operation="manage_wage",
-            operation_hint="manage_wage",
-            entities=["labor_payable", "wage"],
-            candidate_tools=["manage_labor_payment"],
-            confidence=0.8,
-            params_hint=params,
-            requires_confirmation=True,
-        )
+        return params
 
-    def _build_update_user_settings_frame(self) -> IntentFrame:
-        return IntentFrame(
-            domain="settings",
-            intent="update_settings",
-            risk="write_confirm",
-            entities=["user_settings"],
-            candidate_tools=["manage_user_settings"],
-            capability="manage_settings",
-            operation="update_settings",
-            operation_hint="update_settings",
-            confidence=0.8,
-            requires_confirmation=True,
-        )
-
-    def _build_manage_cost_category_frame(self, message: str) -> IntentFrame:
-        return IntentFrame(
-            domain="finance",
-            intent="manage_cost_category",
-            risk="write_confirm",
-            entities=["cost_category"],
-            candidate_tools=["manage_cost_categories"],
-            capability="manage_cost_categories",
-            operation="manage_category",
-            operation_hint="manage_category",
-            confidence=0.8,
-            params_hint={"action": self._cost_category_action(message)},
-            requires_confirmation=True,
-        )
-
-    def _build_manage_planting_unit_frame(self, message: str) -> IntentFrame:
-        return IntentFrame(
-            domain="farm",
-            intent="manage_planting_units",
-            risk="write_confirm",
-            entities=["planting_unit"],
-            candidate_tools=["manage_planting_units"],
-            capability="manage_planting_units",
-            operation="manage_units",
-            operation_hint="manage_units",
-            confidence=0.8,
-            params_hint={"action": self._planting_unit_action(message)},
-            requires_confirmation=True,
-        )
-
-    def _build_clarify_farm_labor_frame(self, message: str) -> IntentFrame:
-        name = self._extract_worker_name(message)
-        quantity = self._extract_labor_quantity(message)
-        evidence = self._build_farm_labor_evidence(
-            worker=name,
+    def _extract_incomplete_farm_labor_evidence(self, message: str) -> dict:
+        return self._build_farm_labor_evidence(
+            worker=self._extract_worker_name(message),
             operation_type=None,
-            quantity=quantity,
+            quantity=self._extract_labor_quantity(message),
             unit_price=None,
         )
-        return IntentFrame(
-            domain="operation",
-            intent="clarify_farm_labor_work",
-            risk="write_confirm",
-            entities=["worker", "operation_work_order"],
-            candidate_tools=[],
-            confidence=0.7,
-            params_hint=None,
-            planning_evidence=evidence,
-            missing_fields=["operation_type"],
-            requires_confirmation=True,
-        )
 
-    def _build_create_work_order_frame(
+    def _create_work_order_frame(
         self,
         message: str,
-        frames: list[IntentFrame],
+        current_frames: list[IntentFrame],
     ) -> IntentFrame:
         work_order_params = self._extract_work_order_params(message)
-        work_order_evidence = self._extract_work_order_evidence(message)
-        work_order_missing = self._missing_work_order_fields(work_order_params)
         depends_on = (
             ["create_worker"]
-            if any(frame.intent == "create_worker" for frame in frames)
+            if any(frame.intent == "create_worker" for frame in current_frames)
             else []
         )
-        return IntentFrame(
-            domain="operation",
-            intent="create_work_order",
-            risk="write_confirm",
-            entities=["operation_work_order"],
-            candidate_tools=[
-                "create_operation_work_order",
-                "manage_work_orders",
-            ],
-            confidence=0.76,
+        return frame_builders.build_create_work_order_frame(
             params_hint=work_order_params or None,
-            planning_evidence=work_order_evidence,
-            missing_fields=work_order_missing,
+            planning_evidence=self._extract_work_order_evidence(message),
+            missing_fields=self._missing_work_order_fields(work_order_params),
             depends_on=depends_on,
-            requires_confirmation=True,
         )
 
     def _looks_like_active_crop_query(self, message: str) -> bool:
