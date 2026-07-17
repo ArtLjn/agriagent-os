@@ -17,7 +17,7 @@ from app.modules.data_flywheel.service import (
     _sample_id,
     _sample_row,
 )
-from app.modules.data_flywheel.judge_service import (
+from app.platforms.shared.judge_service import (
     DataFlywheelJudgeClient,
     LABEL_DEFINITIONS,
     LABEL_SELECTION_RULES,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import threading
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -133,6 +134,18 @@ def _seed_user_and_conversation(db_session):
     db_session.add(conversation)
     db_session.flush()
     return conversation
+
+
+def test_repository_runtime_uses_platform_shared_selector() -> None:
+    import app.infra.repository_runtime as repository_runtime
+    from app.platforms.shared.repository_selector import (
+        build_data_flywheel_repository as shared_builder,
+    )
+
+    source = inspect.getsource(repository_runtime)
+
+    assert repository_runtime.build_data_flywheel_repository is shared_builder
+    assert "app.modules.data_flywheel" not in source
 
 
 def test_run_maybe_awaitable_uses_registered_main_loop_from_worker_thread():

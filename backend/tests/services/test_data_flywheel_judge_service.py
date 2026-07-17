@@ -1,5 +1,6 @@
 """数据飞轮 LLM judge service primitives 测试。"""
 
+import importlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -14,6 +15,30 @@ from app.modules.data_flywheel.judge_service import (
 )
 
 pytestmark = pytest.mark.no_db
+
+
+def test_shared_and_legacy_judge_exports_same_objects() -> None:
+    shared = importlib.import_module("app.platforms.shared.judge_service")
+    legacy = importlib.import_module("app.modules.data_flywheel.judge_service")
+    data_flywheel_service = importlib.import_module("app.modules.data_flywheel.service")
+    review_chain_service = importlib.import_module(
+        "app.modules.data_flywheel.review_issue_chain_service"
+    )
+    judge_worker = importlib.import_module("app.evaluation.discovery.judge_worker")
+
+    assert legacy.OpenAIDataFlywheelJudgeClient is shared.OpenAIDataFlywheelJudgeClient
+    assert legacy.DataFlywheelJudgeClient is shared.DataFlywheelJudgeClient
+    assert legacy.build_judge_input is shared.build_judge_input
+    assert legacy.normalize_judge_output is shared.normalize_judge_output
+    assert (
+        data_flywheel_service.DataFlywheelJudgeClient
+        is shared.DataFlywheelJudgeClient
+    )
+    assert review_chain_service.LABEL_DEFINITIONS is shared.LABEL_DEFINITIONS
+    assert (
+        judge_worker.OpenAIDataFlywheelJudgeClient
+        is shared.OpenAIDataFlywheelJudgeClient
+    )
 
 
 def _sample_detail() -> dict[str, Any]:
@@ -185,6 +210,7 @@ def test_normalize_judge_output_filters_labels_and_clamps_confidence() -> None:
         "confidence": 1.0,
         "reason": "回复直接声称已安排，但缺少确认证据。",
         "recommended_fix": "补充 pending confirmation。",
+        "missing_evidence": [],
     }
 
 
@@ -215,6 +241,7 @@ def test_normalize_judge_output_defaults_non_dict_raw(raw: Any) -> None:
         "confidence": 0.0,
         "reason": "LLM judge 未返回判断理由。",
         "recommended_fix": "",
+        "missing_evidence": [],
     }
 
 

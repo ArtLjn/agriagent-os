@@ -25,7 +25,7 @@ from app.models.data_flywheel import (
 )
 from app.modules.data_flywheel.case_builder import build_case_json
 from app.modules.data_flywheel.issue_detector import detect_issue_candidates
-from app.modules.data_flywheel.judge_service import (
+from app.platforms.shared.judge_service import (
     DataFlywheelJudgeClient,
     build_judge_input,
     normalize_judge_output,
