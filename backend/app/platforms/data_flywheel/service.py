@@ -23,8 +23,8 @@ from app.models.data_flywheel import (
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,
 )
-from app.modules.data_flywheel.case_builder import build_case_json
-from app.modules.data_flywheel.issue_detector import detect_issue_candidates
+from app.platforms.data_flywheel.case_builder import build_case_json
+from app.platforms.data_flywheel.issue_detector import detect_issue_candidates
 from app.platforms.shared.judge_service import (
     DataFlywheelJudgeClient,
     build_judge_input,

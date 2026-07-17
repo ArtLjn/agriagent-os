@@ -11,7 +11,7 @@ from app.modules.auth.dependencies import get_current_user, require_admin
 from app.modules.farm.dependencies import get_current_farm
 from app.models.farm import Farm
 from app.models.user import User
-from app.modules.data_flywheel.service import (
+from app.platforms.data_flywheel.service import (
     SAMPLE_TYPE_SESSION_TURN,
     accept_sample_prelabel,
     add_sample_label,

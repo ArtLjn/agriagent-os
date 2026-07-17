@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.farm import Farm
 from app.models.user import User
-from app.modules.data_flywheel.service import (
+from app.platforms.data_flywheel.service import (
     SAMPLE_TYPE_SESSION_TURN,
     build_case_draft,
     create_sample_prelabel,
@@ -27,8 +27,8 @@ from app.platforms.shared.judge_service import (
     DataFlywheelJudgeClient,
     OpenAIDataFlywheelJudgeClient,
 )
-from app.modules.data_flywheel.session_review_service import get_session_review
-from app.modules.data_flywheel.session_sync_service import sync_session_events
+from app.platforms.data_flywheel.session_review_service import get_session_review
+from app.platforms.data_flywheel.session_sync_service import sync_session_events
 
 router = APIRouter(
     prefix="/admin/data-flywheel",

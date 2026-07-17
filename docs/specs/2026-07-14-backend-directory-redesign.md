@@ -191,15 +191,16 @@ api  →  application/ 或 modules/*/router
 
 - evaluation 真实代码已迁入 `app.platforms.evaluation`，生产调用方改用新路径；
   `app.evaluation` 仅保留兼容入口
-- data_flywheel 仅通过 `bootstrap/routes.py` 注册 4 个 router（HTTP 入口）
+- data_flywheel 真实代码已迁入 `app.platforms.data_flywheel`，仅通过
+  `bootstrap/routes.py` 注册 4 个 router（HTTP 入口）
 - A1/A2 前置后，evaluation 与 data_flywheel 已共同依赖
   `app.platforms.shared.judge_service`，不再由 evaluation 反向 import
   `app.modules.data_flywheel.judge_service`
-- A3 评估后，`rule_engine.py` 当前没有被 `modules/data_flywheel` 直接依赖，
+- A3 评估后，`rule_engine.py` 当前没有被 `platforms/data_flywheel` 直接依赖，
   暂不迁入 shared；A4 后 `services/agent_turn_service.py` 的运行时导入已指向
   `app.platforms.evaluation.discovery`
 - `infra/repository_runtime.py` 已改用 `app.platforms.shared.repository_selector`，
-  不再直接 import `app.modules.data_flywheel.*`
+  不再直接 import DataFlywheel 真实实现。
 
 #### 目标
 
@@ -233,13 +234,14 @@ app/platforms/
 #### 2026-07-17 前置层落地状态
 
 - `app.platforms.shared.judge_service` 已承载 DataFlywheel judge 真实实现；
-  `app.modules.data_flywheel.judge_service` 仅保留兼容 re-export，旧 import API 不变。
+  `app.modules.data_flywheel.judge_service` 通过旧路径兼容 alias 映射到同一模块对象，
+  旧 import API 不变。
 - `app.platforms.shared.repository_selector` 已承载
   `build_data_flywheel_repository`；`infra/repository_runtime.py` 通过 shared selector
-  创建 data_flywheel 文档仓库，消除 infra → modules/data_flywheel 的反向依赖。
-- shared selector 当前仍临时引用
-  `app.modules.data_flywheel.document_repository_*` 实现类，这是 A1-A3 迁移期依赖；
-  A5 整体迁移 data_flywheel 后解除。
+  创建 data_flywheel 文档仓库，消除 infra → DataFlywheel 真实目录的反向依赖。
+- `app.platforms.data_flywheel` 已承载 DataFlywheel 真实代码；shared selector 已改向
+  `app.platforms.data_flywheel.document_repository_*` 实现类，A1-A3 的迁移期旧路径依赖已解除。
+- `app.modules.data_flywheel` 仅保留兼容入口，用于旧动态 import 与 monkeypatch target。
 - `rule_engine.py` 暂不迁移：当前没有 data_flywheel 直接依赖，只有 evaluation
   discovery 自身测试与 `services/agent_turn_service.py` 的运行时评估入口使用。
 
@@ -247,9 +249,9 @@ app/platforms/
 
 | 步 | 动作 | 风险 |
 | --- | --- | --- |
-| A4 | `git mv app/evaluation app/platforms/evaluation` + 全局搜替换 import；保留 `app.evaluation` 兼容 alias | 低 |
-| A5 | `git mv app/modules/data_flywheel app/platforms/data_flywheel` + 全局搜替换 import | 低 |
-| A6 | 更新 [boundaries.md](../architecture/boundaries.md) 中相关章节 | 低 |
+| A4 | `git mv app/evaluation app/platforms/evaluation` + 全局搜替换 import；保留 `app.evaluation` 兼容 alias | ✅ PR #17 |
+| A5 | `git mv app/modules/data_flywheel app/platforms/data_flywheel` + 全局搜替换 import；保留 `app.modules.data_flywheel` 兼容 alias | ✅ 本轮 |
+| A6 | 更新 [boundaries.md](../architecture/boundaries.md) 中相关章节 | ✅ 本轮 |
 
 ---
 
@@ -609,9 +611,9 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | A1 | 抽 `judge_service` 到 `platforms/shared/` | ✅ | PR #16 |
 | A2 | 抽 `repository_selector`；修 infra 反向调用 | ✅ | PR #16 |
 | A3 | 评估 `rule_engine` 是否共享 | ✅ 暂不迁移 | PR #16 |
-| A4 | `evaluation/` 迁入 `platforms/` | ✅ | 本轮 PR |
-| A5 | `data_flywheel/` 迁入 `platforms/` | ⏳ | — |
-| A6 | 更新 boundaries.md | ⏳ | — |
+| A4 | `evaluation/` 迁入 `platforms/` | ✅ | PR #17 |
+| A5 | `data_flywheel/` 迁入 `platforms/` | ✅ | 本轮 PR |
+| A6 | 更新 boundaries.md | ✅ | 本轮 PR |
 
 ### 决策 B：agent/ 瘦身
 

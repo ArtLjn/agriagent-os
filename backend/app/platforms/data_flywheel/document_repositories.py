@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from app.modules.data_flywheel.document_repository_common import (
+from app.platforms.data_flywheel.document_repository_common import (
     CaseDraftRepository,
     PrelabelRepository,
     RepairPackRepository,
     RepositoryPage,
     ReviewIssueChainRepository,
 )
-from app.modules.data_flywheel.document_repository_dual import (
+from app.platforms.data_flywheel.document_repository_dual import (
     DualWriteCaseDraftRepository,
     DualWritePrelabelRepository,
     DualWriteRepairPackRepository,
@@ -19,13 +19,13 @@ from app.modules.data_flywheel.document_repository_dual import (
     MongoReadRepairPackRepository,
     MongoReadReviewIssueChainRepository,
 )
-from app.modules.data_flywheel.document_repository_mongo import (
+from app.platforms.data_flywheel.document_repository_mongo import (
     MongoCaseDraftRepository,
     MongoPrelabelRepository,
     MongoRepairPackRepository,
     MongoReviewIssueChainRepository,
 )
-from app.modules.data_flywheel.document_repository_mysql import (
+from app.platforms.data_flywheel.document_repository_mysql import (
     MySQLCaseDraftRepository,
     MySQLPrelabelRepository,
     MySQLRepairPackRepository,

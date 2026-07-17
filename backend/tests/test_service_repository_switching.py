@@ -140,7 +140,7 @@ async def test_trace_dao_flush_awaits_async_repository(monkeypatch, db_session) 
 
 
 def test_prelabel_review_uses_repository(monkeypatch, db_session) -> None:
-    from app.modules.data_flywheel import service
+    from app.platforms.data_flywheel import service
 
     row = AgentDataFlywheelPrelabel(
         id=9,
@@ -178,7 +178,7 @@ def test_prelabel_review_uses_repository(monkeypatch, db_session) -> None:
 
 
 def test_repair_pack_dedup_uses_repository(monkeypatch, db_session, tmp_path) -> None:
-    from app.modules.data_flywheel import repair_pack_repository as module
+    from app.platforms.data_flywheel import repair_pack_repository as module
 
     row = AgentRepairPack(
         id=7,

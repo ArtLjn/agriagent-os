@@ -69,6 +69,10 @@
 | `logs/` | 0 | 0 | 0% | 🟡 74 MB 本地日志（gitignored，非仓库污染） |
 
 **核心结论**：`agent/` + `modules/data_flywheel` + `services/` 三个热点占 65.4% 代码量。
+
+> 2026-07-17 状态补充：上方统计与后续“发现”章节保留 2026-07-12 快照的当时路径，
+> 不回写历史行数。DataFlywheel 真实代码已在 A5 迁入 `platforms/data_flywheel/`，
+> 旧 `app.modules.data_flywheel` 仅作为 import 兼容入口。
 `agent/` 已有独立整改 spec；其余两个为本报告新发现的重灾区。
 
 ## 关键发现
@@ -545,7 +549,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
-| P2-1 | **`document_repository_*` 砍掉 12 个未用 backend 类** | `modules/data_flywheel/document_repository_*.py` | 9-#2 | ⚠️ | 确认生产 config、settings 默认、测试路径、回滚策略和 Mongo 迁移状态；保留 `Mongo*`，再删 `MySQL*`/`Dual*`/`MongoRead*` |
+| P2-1 | **`document_repository_*` 砍掉 12 个未用 backend 类** | `platforms/data_flywheel/document_repository_*.py`（2026-07-17 A5 已从 `modules/data_flywheel/` 迁入） | 9-#2 | ⚠️ | 确认生产 config、settings 默认、测试路径、回滚策略和 Mongo 迁移状态；保留 `Mongo*`，再删 `MySQL*`/`Dual*`/`MongoRead*` |
 | P2-2 | `infra/online_document_common.py` 3 Protocol 同步处理 | `backend/app/infra/online_document_common.py` | 9-#5 | ⚠️ | 与 P2-1 同步决策 |
 | P2-3 | `services/` 21 个 `*_service.py` 评估合并 | `backend/app/services/` | 3 | ⚠️ | 业务方确认实体边界 |
 | P2-4 | `tests/` 根目录 78 个 test_*.py 下沉 | `backend/tests/` | 5 | ⏳ | 按源码镜像目录重构 |

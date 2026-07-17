@@ -5,7 +5,7 @@ import hashlib
 from typing import Any
 from collections import defaultdict
 
-from app.modules.data_flywheel.repair_pack_readme import build_repair_pack_readme
+from app.platforms.data_flywheel.repair_pack_readme import build_repair_pack_readme
 
 REDACTED_SECRET = "[REDACTED_SECRET]"
 

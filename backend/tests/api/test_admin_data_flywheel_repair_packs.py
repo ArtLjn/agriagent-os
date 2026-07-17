@@ -12,7 +12,7 @@ from app.models.data_flywheel import AgentDataFlywheelLabel, AgentRepairPack
 from app.models.farm import Farm
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
 from app.services.conversation_service import get_or_create_conversation, save_message
-from app.modules.data_flywheel.service import add_sample_label
+from app.platforms.data_flywheel.service import add_sample_label
 from tests.api.auth_helpers import (
     ADMIN_USER_ID,
     admin_headers,

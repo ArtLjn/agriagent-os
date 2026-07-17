@@ -264,7 +264,7 @@ def test_chain_repair_pack_exports_traceable_case_and_debug_evidence(
     db_session, tmp_path, monkeypatch
 ) -> None:
     context, trigger, result = _seed_reviewed_chain(db_session, tmp_path)
-    import app.modules.data_flywheel.review_issue_chains_router as chain_api
+    import app.platforms.data_flywheel.review_issue_chains_router as chain_api
 
     monkeypatch.setattr(chain_api, "REPAIR_PACK_BASE_DIR", tmp_path / "repair-packs")
 
@@ -313,7 +313,7 @@ def test_chain_repair_pack_rejects_needs_evidence_or_missing_expected(
     _, trigger, _ = _seed_reviewed_chain(db_session, tmp_path)
     from app.models.data_flywheel import AgentReviewIssueChain
 
-    import app.modules.data_flywheel.review_issue_chains_router as chain_api
+    import app.platforms.data_flywheel.review_issue_chains_router as chain_api
 
     monkeypatch.setattr(chain_api, "REPAIR_PACK_BASE_DIR", tmp_path / "repair-packs")
     saved = (
@@ -352,7 +352,7 @@ def test_chain_repair_pack_cleans_export_dir_when_db_commit_fails(
     db_session, tmp_path, monkeypatch
 ) -> None:
     _, trigger, _ = _seed_reviewed_chain(db_session, tmp_path)
-    import app.modules.data_flywheel.review_issue_chain_repair as chain_repair
+    import app.platforms.data_flywheel.review_issue_chain_repair as chain_repair
 
     export_base_dir = tmp_path / "repair-packs"
     original_commit = db_session.commit

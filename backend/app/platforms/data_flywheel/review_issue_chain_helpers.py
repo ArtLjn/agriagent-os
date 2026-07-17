@@ -11,7 +11,7 @@ from app.infra.repository_runtime import (
 )
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import ConversationMessage
-from app.modules.data_flywheel.service import (
+from app.platforms.data_flywheel.service import (
     _events_for_turn,
     _label_to_dict,
     _messages_for_turn,

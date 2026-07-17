@@ -4,10 +4,10 @@ import json
 
 from fastapi.testclient import TestClient
 
-import app.modules.data_flywheel.router as admin_data_flywheel_api
-import app.modules.data_flywheel.review_issue_chains_router as review_chain_api
-import app.modules.data_flywheel.review_issue_chain_service as review_chain_service
-import app.modules.data_flywheel.review_issue_chain_repository as review_chain_repo
+import app.platforms.data_flywheel.router as admin_data_flywheel_api
+import app.platforms.data_flywheel.review_issue_chains_router as review_chain_api
+import app.platforms.data_flywheel.review_issue_chain_service as review_chain_service
+import app.platforms.data_flywheel.review_issue_chain_repository as review_chain_repo
 from app.platforms.evaluation.discovery.judge_worker import run_judge_batch
 from app.infra.agent_events import AgentEventWriter
 from app.main import app

@@ -12,7 +12,7 @@ from app.infra.repository_runtime import (
 )
 from app.models.agent_turn import AgentTurn
 from app.models.data_flywheel import AgentDataFlywheelLabel, AgentReviewIssueChain
-from app.modules.data_flywheel.service import (
+from app.platforms.data_flywheel.service import (
     ALLOWED_LABELS,
     LABEL_STATUS_OPEN,
     LABEL_STATUS_RESOLVED,

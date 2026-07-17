@@ -14,18 +14,18 @@ from app.infra.repository_runtime import (
     run_maybe_awaitable,
 )
 from app.models.data_flywheel import AgentRepairPack
-from app.modules.data_flywheel.repair_pack_chain import (
+from app.platforms.data_flywheel.repair_pack_chain import (
     build_chain_repair_pack_payload,
     derive_chain_repair_candidate,
     validate_chain_repair_export_ready,
 )
-from app.modules.data_flywheel.repair_pack_repository import (
+from app.platforms.data_flywheel.repair_pack_repository import (
     REPAIR_PACK_STATUS_EXPORTED,
     _open_label_ids_for_samples,
     _pack_to_dict,
     _write_repair_pack_files,
 )
-from app.modules.data_flywheel.review_issue_chain_service import (
+from app.platforms.data_flywheel.review_issue_chain_service import (
     get_review_issue_chain_detail,
 )
 

@@ -32,7 +32,7 @@ api/
 | Context `context/` | 业务 selector、Memory Service 接口、token budget、cache adapter | Prompt 版本治理、LLM Runtime 节点执行 |
 | Memory `memory/` | Memory models、schemas、retrieval、consolidation、infra adapter | API 路由、Agent Runtime 内部状态机细节 |
 | Skills `skills/` | Skill schema、权限、执行适配、业务模块端口 | API request 对象、Prompt/Context 存储实现 |
-| Platform Shared `platforms/shared/` | `core/`, `models/`, `infra/`，迁移期可临时依赖未整体迁移的子系统实现并写明解除步骤 | API 路由、HTTP request 对象、跨平台业务编排 |
+| Platform Shared `platforms/shared/` | `core/`, `models/`, `infra/`，以及已迁入 `platforms/data_flywheel` 的 repository 实现 | API 路由、HTTP request 对象、跨平台业务编排 |
 | Evaluation `platforms/evaluation/` | replay cases、Prompt 版本、Context 摘要、Skill 调用结果、trace、DataFlywheel discovery 风险信号 | 生产 API 路由编排、业务写入副作用 |
 | Observability `observability/` | trace、token、latency、tool call、memory observe、evaluation capture 事件 | 业务决策、Prompt 组合、Context 选择 |
 
@@ -51,13 +51,13 @@ Discovery 只能依赖 `models/`、`platforms/shared` 中稳定的 judge client 
 `app/platforms/shared/` 是 Evaluation 与 DataFlywheel 平台共享层，当前承载：
 
 - `judge_service.py`：DataFlywheel judge 协议、OpenAI-compatible client、judge 输入构造和输出归一化。
-- `repository_selector.py`：DataFlywheel 文档 Repository selector，供 `infra/repository_runtime.py` 创建仓库，避免 infra 直接依赖 `modules/data_flywheel` 聚合出口。
+- `repository_selector.py`：DataFlywheel 文档 Repository selector，供 `infra/repository_runtime.py` 创建仓库，避免 infra 直接依赖 `platforms/data_flywheel` 聚合出口。
 
 迁移期旧入口必须保留 re-export 或 alias，确保 `app.evaluation`、
 `app.modules.data_flywheel.judge_service` 和
-`app.modules.data_flywheel.document_repository_selector` 的旧 import API 可用。A5
-完成后，shared selector 对 `modules/data_flywheel.document_repository_*` 的临时依赖必须改向
-`platforms/data_flywheel`。
+`app.modules.data_flywheel.document_repository_selector` 的旧 import API 可用。
+`app.modules.data_flywheel` 仅作为兼容入口，真实 DataFlywheel 代码位于
+`app.platforms.data_flywheel`。
 
 ## 禁止规则
 

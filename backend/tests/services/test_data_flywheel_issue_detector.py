@@ -1,6 +1,6 @@
 """数据飞轮问题候选规则检测测试。"""
 
-from app.modules.data_flywheel.issue_detector import detect_issue_candidates
+from app.platforms.data_flywheel.issue_detector import detect_issue_candidates
 
 
 def _candidate_types(candidates: list[dict[str, str]]) -> list[str]:
