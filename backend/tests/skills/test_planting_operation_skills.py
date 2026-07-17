@@ -12,7 +12,7 @@ from skillify.core.context import SkillContext
 
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.runtime.tool_executor import _parallel_tool_node
-from app.agent.skills import _attach_skill_metadata
+from app.skills import _attach_skill_metadata
 from app.infra.pending_actions import get_pending, remove_pending
 from app.models.cost import CostRecord
 from app.models.crop import CropTemplate, GrowthStage
@@ -26,10 +26,10 @@ from app.schemas.planting import (
 from app.services import planting_read_service, planting_service
 
 _work_orders_mod = importlib.import_module(
-    "app.agent.skills.manage-work-orders.scripts.main"
+    "app.skills.manage-work-orders.scripts.main"
 )
 _labor_payment_mod = importlib.import_module(
-    "app.agent.skills.manage-labor-payment.scripts.main"
+    "app.skills.manage-labor-payment.scripts.main"
 )
 
 ManageWorkOrdersSkill = _work_orders_mod.ManageWorkOrdersSkill
@@ -41,8 +41,26 @@ def ctx():
     return SkillContext(farm_id=1)
 
 
+class _SessionProxy:
+    """复用 pytest 会话，并忽略被测代码里的 close。"""
+
+    def __init__(self, db):
+        self._db = db
+
+    def __getattr__(self, name):
+        return getattr(self._db, name)
+
+    def close(self) -> None:
+        pass
+
+
 @pytest.fixture(autouse=True)
-def clean_pending():
+def clean_pending(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.infra.pending_actions.SessionLocal",
+        lambda: _SessionProxy(db_session),
+        raising=False,
+    )
     remove_pending(1)
     yield
     remove_pending(1)
@@ -51,11 +69,17 @@ def clean_pending():
 @pytest.fixture
 def skill_sessions(monkeypatch, db_session):
     """让新增 Skill 使用当前测试会话。"""
+    for target in (
+        "app.infra.pending_actions.SessionLocal",
+        "app.agent.executor.pending_actions.SessionLocal",
+        "app.agent.runtime.tool_executor.SessionLocal",
+    ):
+        monkeypatch.setattr(target, lambda: _SessionProxy(db_session), raising=False)
     for module in (
         _work_orders_mod,
         _labor_payment_mod,
     ):
-        monkeypatch.setattr(module, "SessionLocal", lambda: db_session)
+        monkeypatch.setattr(module, "SessionLocal", lambda: _SessionProxy(db_session))
     return db_session
 
 
@@ -584,7 +608,10 @@ async def test_all_workers_pending_confirm_settles_every_unpaid_labor(
         pending_result = await _parallel_tool_node(state)
         pending = get_pending(1, session_id="sess-settle-all-labor")
         assert pending is not None
-        assert pending.params == {"scope": "all_unpaid_labor"}
+        assert pending.params == {
+            "operation": "settle_payment",
+            "scope": "all_unpaid_labor",
+        }
         assert len(pending_result["messages"]) == 1
 
         decision = await handle_pending_action(

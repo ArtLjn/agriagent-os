@@ -11,7 +11,7 @@ from skillify.models.schemas import ResultStatus
 pytestmark = pytest.mark.no_db
 
 # kebab-case 目录名需要通过 importlib 导入
-_mod = importlib.import_module("app.agent.skills.farm-status.scripts.main")
+_mod = importlib.import_module("app.skills.farm-status.scripts.main")
 FarmStatusSkill = _mod.FarmStatusSkill
 
 SKILL_NAME = "get_farm_status"

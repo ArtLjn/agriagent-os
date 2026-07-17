@@ -7,14 +7,19 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.runtime.tool_executor import _parallel_tool_node
-from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
+from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_actions import get_pending, get_pending_plan, remove_pending
 
 pytestmark = pytest.mark.no_db
 
 
 @pytest.fixture(autouse=True)
-def clean_pending_state():
+def clean_pending_state(monkeypatch):
+    monkeypatch.setattr(
+        "app.infra.pending_actions._cancel_pending_plan_in_db",
+        lambda *_, **__: None,
+        raising=False,
+    )
     remove_pending(1)
     yield
     remove_pending(1)

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-07
+last_updated: 2026-07-17
 status: active
 ---
 
@@ -7,7 +7,7 @@ status: active
 
 本文是 farm-manager Agent 平台开发的硬性规范。目标不是让代码“看起来工程化”，而是让每次 Agent 改动都可解释、可回放、可验证、可回滚。
 
-凡修改 `backend/app/agent/`、`backend/app/prompt/`、`backend/app/context/`、`backend/app/memory/`、`backend/app/evaluation/`、`backend/app/infra/trace*`、`backend/app/agent/skills/` 或相关测试，均必须遵守本文。
+凡修改 `backend/app/agent/`、`backend/app/application/`、`backend/app/skills/`、`backend/app/prompt/`、`backend/app/context/`、`backend/app/memory/`、`backend/app/evaluation/`、`backend/app/infra/trace*` 或相关测试，均必须遵守本文。
 
 ## 1. 核心原则
 
@@ -36,10 +36,10 @@ status: active
 
 | 模块 | 允许职责 | 禁止职责 |
 | --- | --- | --- |
-| `agent/application/` | Chat/SSE/use case 编排、会话保存、Context/Memory/Runtime 组装 | HTTP 细节、模型节点实现、直接写底层表 |
+| `application/` | Chat/SSE/use case 编排、会话保存、Context/Memory/Runtime 组装 | HTTP 细节、模型节点实现、直接写底层表 |
 | `agent/runtime/` | LangGraph 节点、消息压缩、模型调用、工具执行循环、流事件 | Prompt 治理、Context selector、Memory store、业务查询 |
 | `agent/router/` | 粗粒度风险门禁、写入澄清、候选工具预算、只读工具池暴露 | 长期维护业务词库、硬编码每个业务意图到工具 |
-| `agent/skills/` | 单一业务能力的参数 schema、权限、执行适配 | 跨流程编排、Prompt 拼接、会话状态管理 |
+| `skills/` | 单一业务能力的参数 schema、权限、执行适配 | 跨流程编排、Prompt 拼接、会话状态管理 |
 | `prompt/` | Prompt 版本、片段、组合、渲染、回放 | 查询数据库、选择业务上下文 |
 | `context/` | ContextBundle、selector、预算、压缩、缓存 | Runtime 执行、工具调用、副作用写入 |
 | `memory/` | 短时/长期记忆接口、observation、检索端口 | API 路由、Runtime 状态机 |

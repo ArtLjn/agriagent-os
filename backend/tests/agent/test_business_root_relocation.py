@@ -106,35 +106,6 @@ async def test_legacy_report_patch_target_drives_new_execution():
     mock_llm.ainvoke.assert_awaited_once()
 
 
-def test_legacy_application_module_names_alias_real_domain_modules():
-    """旧 application 根模块名应直接指向新子域真实模块。"""
-    module_pairs = [
-        ("app.application.chat_use_case", "app.application.chat.use_case"),
-        ("app.application.chat_use_case_helpers", "app.application.chat.helpers"),
-        ("app.application.stream_chat_use_case", "app.application.chat.stream_chat"),
-        (
-            "app.application.stream_chat_finalization",
-            "app.application.chat.stream_finalization",
-        ),
-        (
-            "app.application.stream_chat_persistence",
-            "app.application.chat.stream_persistence",
-        ),
-        ("app.application.stream_chat_tail", "app.application.chat.stream_tail"),
-        ("app.application.stream_chat_types", "app.application.chat.stream_types"),
-        ("app.application.history_use_case", "app.application.session.history"),
-        ("app.application.session_flywheel", "app.application.session.flywheel"),
-        ("app.application.session_summary", "app.application.session.summary"),
-        ("app.application.advice_use_case", "app.application.advice.use_case"),
-        ("app.application.advisor", "app.application.advice.advisor"),
-    ]
-
-    for legacy_name, new_name in module_pairs:
-        legacy_module = importlib.import_module(legacy_name)
-        new_module = importlib.import_module(new_name)
-        assert legacy_module is new_module
-
-
 def test_legacy_agent_advisor_aliases_real_advice_module():
     """旧 agent advisor 入口不应双跳加载旧 application advisor。"""
     legacy_agent = importlib.import_module("app.agent.advisor")
@@ -145,7 +116,7 @@ def test_legacy_agent_advisor_aliases_real_advice_module():
 
 @pytest.mark.asyncio
 async def test_legacy_chat_patch_target_drives_new_chat_execution():
-    """patch 旧非流式聊天 target 应影响新子包聊天入口。"""
+    """patch 新非流式聊天 target 应影响新子包聊天入口。"""
     from app.agent.executor.models import PendingActionDecision
     from app.application.chat.use_case import chat
 
@@ -154,28 +125,28 @@ async def test_legacy_chat_patch_target_drives_new_chat_execution():
 
     with (
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
         patch(
-            "app.application.chat_use_case.build_pending_action_response",
+            "app.application.chat.use_case.build_pending_action_response",
             return_value=None,
         ),
         patch(
-            "app.application.chat_use_case.build_pending_plan_response",
+            "app.application.chat.use_case.build_pending_plan_response",
             return_value=None,
         ),
     ):
         mock_pending.return_value = PendingActionDecision.unhandled()
-        mock_advisor.return_value = "旧 target patch 后的回复"
+        mock_advisor.return_value = "新 target patch 后的回复"
 
         result = await chat(
             db,
@@ -184,13 +155,13 @@ async def test_legacy_chat_patch_target_drives_new_chat_execution():
             request_id="req-compat-chat",
         )
 
-    assert result.reply == "旧 target patch 后的回复"
+    assert result.reply == "新 target patch 后的回复"
     mock_advisor.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_legacy_stream_patch_target_drives_new_stream_execution():
-    """patch 旧流式聊天 target 应影响新子包流式入口。"""
+    """patch 新流式聊天 target 应影响新子包流式入口。"""
     from app.agent.executor.models import PendingActionDecision
     from app.application.chat.stream_chat import stream_chat_events
 
@@ -204,36 +175,36 @@ async def test_legacy_stream_patch_target_drives_new_stream_execution():
 
     with (
         patch(
-            "app.application.stream_chat_use_case.handle_pending_action",
+            "app.application.chat.stream_chat.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.stream_chat_use_case.resolve_query_menu_or_message",
+            "app.application.chat.stream_chat.resolve_query_menu_or_message",
             new_callable=AsyncMock,
             return_value=("请给建议", None),
         ),
         patch(
-            "app.application.stream_chat_use_case.stream_advisor",
+            "app.application.chat.stream_chat.stream_advisor",
             side_effect=_patched_stream_advisor,
         ) as mock_stream_advisor,
         patch(
-            "app.application.stream_chat_use_case._flush_trace_queue",
+            "app.application.chat.stream_chat._flush_trace_queue",
             new_callable=AsyncMock,
         ),
         patch(
-            "app.application.stream_chat_use_case._get_skill_names",
+            "app.application.chat.stream_chat._get_skill_names",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.application.stream_chat_use_case._schedule_stream_background_finalization",
+            "app.application.chat.stream_chat._schedule_stream_background_finalization",
         ),
         patch(
-            "app.application.stream_chat_use_case.build_pending_action_response",
+            "app.application.chat.stream_chat.build_pending_action_response",
             return_value=None,
         ),
         patch(
-            "app.application.stream_chat_use_case.build_pending_plan_response",
+            "app.application.chat.stream_chat.build_pending_plan_response",
             return_value=None,
         ),
     ):

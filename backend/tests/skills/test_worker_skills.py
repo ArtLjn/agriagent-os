@@ -9,7 +9,7 @@ from skillify.core.context import SkillContext
 from app.models.planting import Worker
 
 _manage_workers_mod = importlib.import_module(
-    "app.agent.skills.manage-workers.scripts.main"
+    "app.skills.manage-workers.scripts.main"
 )
 
 ManageWorkersSkill = _manage_workers_mod.ManageWorkersSkill

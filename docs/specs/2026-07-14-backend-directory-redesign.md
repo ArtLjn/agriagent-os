@@ -354,11 +354,11 @@ app/skills/                       # 🆕 顶层包，与 agent/ 平级
 
 | 步 | 动作 | 风险 |
 | --- | --- | --- |
-| C0 | 建立旧路径兼容别名或 re-export，覆盖动态 import 与 monkeypatch 路径 | 中 |
+| C0 | 已完成的迁移期兼容别名或 re-export，曾覆盖动态 import 与 monkeypatch 路径 | 中 |
 | C1 | `git mv app/agent/skills app/skills` | 中 |
-| C2 | 分批搜替换 `from app.agent.skills` / `import app.agent.skills` / 动态 import 字符串 → `app.skills` | 中 |
+| C2 | 分批搜替换旧 agent skills import 与动态 import 字符串 → `app.skills` | 中 |
 | C3 | 核对 `agent/executor/` 是否仍能通过 registry 加载（不直接 import） | 中 |
-| C4 | 测试全部切到新路径后，移除旧 `app.agent.skills` 兼容层 | 低 |
+| C4 | 测试全部切到新路径后，移除旧 agent skills 兼容层 | 低 |
 
 ---
 
@@ -423,18 +423,18 @@ app/application/                  # 🆕 业务编排层
 
 | 步 | 动作 | 风险 |
 | --- | --- | --- |
-| D0 | 建立旧路径兼容别名或 re-export，覆盖 API、测试和动态 patch 路径 | 中 |
+| D0 | 已完成的迁移期兼容别名或 re-export，曾覆盖 API、测试和动态 patch 路径 | 中 |
 | D1 | `git mv app/agent/application app/application` | 中 |
-| D2 | 分批搜替换 `from app.agent.application` / `import app.agent.application` / 动态 import 字符串 → `app.application` | 中 |
+| D2 | 分批搜替换旧 agent application import 与动态 import 字符串 → `app.application` | 中 |
 | D3 | 内部重组：合并 3 个 context 碎片、按业务子目录归位；`stream_chat_*` 先归入 `chat/`，进一步合并待后续拆职责后处理 | 中 |
-| D4 | 测试全部切到新路径后，移除旧 `app.agent.application` 兼容层 | 低 |
+| D4 | 测试全部切到新路径后，移除旧 agent application 兼容层 | 低 |
 
 D1-D2 已在 2026-07-17 PR #18 迁移中完成：真实业务 use case 目录已迁至
-`app/application/`，生产代码和非兼容测试优先引用 `app.application.*`；
-`app.agent.application.*` 仅作为旧路径兼容入口保留。D3 第一阶段已完成
-`chat/`、`session/`、`advice/` 子包归位，并为
-`app.application.chat_use_case` 等旧根模块名保留同模块对象兼容入口；D4 删除兼容层
-仍保持待办。`stream_chat_*` 进一步合并会超过 500 行预算，后续需先拆分职责再收敛。
+`app/application/`，生产代码和测试引用真实新路径。D3 第一阶段已完成
+`chat/`、`session/`、`advice/` 子包归位。本轮完成 C4/D4，旧 agent
+application、旧 agent skills 与旧 application 根 use case 兼容入口均已删除；
+旧路径不再作为 import 或 monkeypatch 契约。`stream_chat_*` 进一步合并会超过
+500 行预算，后续需先拆分职责再收敛。
 
 ---
 
@@ -643,21 +643,21 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| C0 | 建立 `app.agent.skills` 旧路径兼容别名 | ✅ 本 worktree/PR 已处理 | test: 锁定 skills 旧路径兼容 |
+| C0 | 建立旧 agent skills 路径兼容别名 | ✅ 历史 PR 已处理 | 迁移期护栏，已在 C4 退出 |
 | C1 | `git mv app/agent/skills app/skills` | ✅ 本 PR 已处理 | refactor: 迁移 skills 到顶层包 |
-| C2 | 全局搜替换 import | ✅ 本 PR 已处理 | 生产代码与关键测试改为 `app.skills`；旧测试和旧 patch target 继续通过兼容层 |
+| C2 | 全局搜替换 import | ✅ 本 PR 已处理 | 生产代码与关键测试改为 `app.skills` |
 | C3 | 核对 registry 加载机制 | ✅ 本 PR 已处理 | `SkillManager` 扫描 `app.skills`；registry YAML 跟随迁移到 `app/skills/registry`；`agent/executor` 仍仅依赖 registry/metadata/tool manager，不直接 import 具体业务 skill |
-| C4 | 移除旧路径兼容层 | ⏳ | — |
+| C4 | 移除旧路径兼容层 | ✅ 本轮完成 | 删除旧 agent skills 兼容入口，测试改为新路径护栏 |
 
 ### 决策 D：新建 application/
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| D0 | 建立 `app.agent.application` 旧路径兼容别名 | ✅ 已处理 | test: 锁定 application 旧路径兼容 |
+| D0 | 建立旧 agent application 路径兼容别名 | ✅ 历史 PR 已处理 | 迁移期护栏，已在 D4 退出 |
 | D1 | `git mv app/agent/application app/application` | ✅ 本轮已处理 | refactor: 迁移 application 到顶层包 |
-| D2 | 全局搜替换 import | ✅ 本轮已处理 | 生产代码与普通行为测试改为 `app.application`；旧路径兼容测试继续保留 `app.agent.application` 并断言新旧模块同对象 |
+| D2 | 全局搜替换 import | ✅ 本轮已处理 | 生产代码与普通行为测试改为 `app.application` 真实子包路径 |
 | D3 | 内部重组（chat/session/advice 子包归位；stream 进一步合并待后续） | ✅ 子包归位完成 | 本轮 PR |
-| D4 | 移除旧路径兼容层 | ⏳ | — |
+| D4 | 移除旧路径兼容层 | ✅ 本轮完成 | 删除旧 agent application 与旧 application 根 use case 兼容入口，旧兼容测试退场 |
 
 ### 决策 E：移除 LangGraph
 

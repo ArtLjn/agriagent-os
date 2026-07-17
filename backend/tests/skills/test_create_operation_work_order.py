@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-_mod = importlib.import_module("app.agent.skills.manage-work-orders.scripts.main")
+_mod = importlib.import_module("app.skills.manage-work-orders.scripts.main")
 ManageWorkOrdersSkill = _mod.ManageWorkOrdersSkill
 
 

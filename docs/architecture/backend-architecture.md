@@ -47,10 +47,10 @@ flowchart TB
 | `app/api/` | HTTP 入口、参数校验、FastAPI Depends；Agent 路由已主要调用 application use case，智能填写通过 `api/smart_fill.py` 暴露统一场景入口。 |
 | `app/modules/auth`、`app/modules/farm` | 已迁移的模块化认证和农场依赖能力。 |
 | `app/services/` | 迁移期业务服务：作物、周期、日志、成本、债务、天气、会话、报告、配额。 |
-| `app/application/` | 业务 use case：聊天、SSE、每日建议、报告、历史、上下文失效；`app/agent/application` 仅保留旧路径兼容入口。 |
+| `app/application/` | 业务 use case：聊天、SSE、每日建议、报告、历史、上下文失效；旧 agent application 与旧根 use case 兼容入口已删除。 |
 | `app/agent/runtime/` | LangGraph 图工厂、节点、消息压缩、工具执行、最终 prompt 预算、流式事件。 |
 | `app/agent/executor/` | Tool call 执行计划和并行执行适配。 |
-| `app/skills/` | Skillify Skill 实现、注册、权限、schema 和执行适配；`app/agent/skills` 仅保留旧路径兼容入口。 |
+| `app/skills/` | Skillify Skill 实现、注册、权限、schema 和执行适配；旧 agent skills 兼容入口已删除。 |
 | `app/context/` | ContextBundle、selector、token budget、压缩、缓存、预加载和失效。 |
 | `app/memory/` | 短时记忆、长时记忆接口、检索空实现、observation event。 |
 | `app/prompt/` 与 `backend/prompts/` | Prompt registry/composer/renderer/replay 代码与 Jinja2 模板文件。 |
