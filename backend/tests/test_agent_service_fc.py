@@ -74,7 +74,7 @@ class TestChatWithAgentRouting:
     """验证 chat_with_agent 所有请求走 invoke_advisor，无预路由。"""
 
     @pytest.mark.asyncio
-    @patch("app.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_routes_through_invoke_advisor(
         self,
@@ -88,7 +88,7 @@ class TestChatWithAgentRouting:
         mock_invoke.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_no_skillify_pre_route(
         self,
@@ -101,9 +101,9 @@ class TestChatWithAgentRouting:
         mock_invoke.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
     @patch("app.services.conversation_service.save_message")
-    @patch("app.application.chat_use_case.get_or_create_conversation")
+    @patch("app.application.chat.use_case.get_or_create_conversation")
     @patch("app.services.agent_service.get_pending", return_value=None)
     async def test_routes_with_session_id(
         self,
@@ -127,9 +127,9 @@ class TestPendingActionPreserved:
     """验证 pending action confirm/cancel 流程保留完整。"""
 
     @pytest.mark.asyncio
-    @patch("app.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
     @patch(
-        "app.application.chat_use_case.handle_pending_action",
+        "app.application.chat.use_case.handle_pending_action",
         new_callable=AsyncMock,
     )
     async def test_confirm_executes_pending_action(
@@ -149,9 +149,9 @@ class TestPendingActionPreserved:
         mock_invoke.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @patch("app.application.chat_use_case.invoke_advisor", new_callable=AsyncMock)
+    @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
     @patch(
-        "app.application.chat_use_case.handle_pending_action",
+        "app.application.chat.use_case.handle_pending_action",
         new_callable=AsyncMock,
     )
     async def test_cancel_removes_pending(

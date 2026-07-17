@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.application import chat_use_case_helpers as helpers
+from app.application.chat import helpers
 
 pytestmark = pytest.mark.no_db
 

@@ -95,9 +95,9 @@ backend/app/
 │   └── ports.py                  # agent 对外端口
 │
 ├── application/                  # 🆕 业务 use case（编排 agent 完成业务流程）
-│   ├── chat/                     # chat_use_case + stream_chat + helpers
-│   ├── session/                  # history + session_flywheel + session_summary
-│   ├── advice/                   # advisor + advice_use_case
+│   ├── chat/                     # use_case + stream_chat + helpers
+│   ├── session/                  # history + flywheel + summary
+│   ├── advice/                   # advisor + use_case
 │   ├── smart_fill.py
 │   ├── report.py
 │   ├── skill_catalog.py
@@ -250,8 +250,8 @@ app/platforms/
 | 步 | 动作 | 风险 |
 | --- | --- | --- |
 | A4 | `git mv app/evaluation app/platforms/evaluation` + 全局搜替换 import；保留 `app.evaluation` 兼容 alias | ✅ PR #17 |
-| A5 | `git mv app/modules/data_flywheel app/platforms/data_flywheel` + 全局搜替换 import；保留 `app.modules.data_flywheel` 兼容 alias | ✅ 本轮 |
-| A6 | 更新 [boundaries.md](../architecture/boundaries.md) 中相关章节 | ✅ 本轮 |
+| A5 | `git mv app/modules/data_flywheel app/platforms/data_flywheel` + 全局搜替换 import；保留 `app.modules.data_flywheel` 兼容 alias | ✅ PR #18 |
+| A6 | 更新 [boundaries.md](../architecture/boundaries.md) 中相关章节 | ✅ PR #18 |
 
 ---
 
@@ -292,7 +292,7 @@ agent/
 | --- | --- | --- |
 | `agent/application/*` | `app/application/` | 决策 D |
 | `agent/skills/*` | `app/skills/` | 决策 C |
-| `agent/advisor.py` | 已随 D1-D2 迁至 `app/application/advisor.py`；后续 D3 可再归入 `app/application/advice/` | 新增 |
+| `agent/advisor.py` | 已随 D3 归入 `app/application/advice/advisor.py`；`app.agent.advisor` 保留同模块对象兼容入口 | 新增 |
 | `agent/report.py` | 已随 D1-D2 迁至 `app/application/report.py` | 新增 |
 | `agent/skill_coverage.py` | 已随 A4 迁至 `app/platforms/evaluation/skill_coverage.py`；`agent/skill_coverage.py` 仅保留兼容入口 | 决策 A |
 | `agent/intent_router.py` | `agent/router/intent.py` | 新增 |
@@ -379,10 +379,14 @@ app/skills/                       # 🆕 顶层包，与 agent/ 平级
 
 ```text
 app/application/                  # 🆕 业务编排层
-├── chat/                         # chat_use_case + stream_chat + helpers
-│   ├── chat_use_case.py
-│   ├── stream_chat.py            # 合并 5 个 stream_chat_* 切片
-│   └── helpers.py                # 合并 chat_use_case_helpers + 3 个碎片
+├── chat/                         # 非流式聊天、流式聊天与聊天辅助
+│   ├── use_case.py
+│   ├── stream_chat.py
+│   ├── stream_finalization.py
+│   ├── stream_persistence.py
+│   ├── stream_tail.py
+│   ├── stream_types.py
+│   └── helpers.py
 ├── session/                      # 历史与会话管理
 │   ├── history.py
 │   ├── flywheel.py
@@ -407,8 +411,8 @@ app/application/                  # 🆕 业务编排层
 
 | 当前 | 目标 |
 | --- | --- |
-| `stream_chat_use_case.py` (460) + `stream_chat_finalization.py` (248) + `stream_chat_persistence.py` (79) + `stream_chat_tail.py` (64) + `stream_chat_types.py` (59) | `chat/stream_chat.py` + `chat/types.py` |
-| `chat_use_case.py` + `chat_use_case_helpers.py` | `chat/chat_use_case.py` + `chat/helpers.py` |
+| `stream_chat_use_case.py` (460) + `stream_chat_finalization.py` (248) + `stream_chat_persistence.py` (79) + `stream_chat_tail.py` (64) + `stream_chat_types.py` (59) | 已归位到 `chat/stream_chat.py`、`chat/stream_finalization.py`、`chat/stream_persistence.py`、`chat/stream_tail.py`、`chat/stream_types.py`；进一步合并需先拆职责，避免单文件超过 500 行 |
+| `chat_use_case.py` + `chat_use_case_helpers.py` | `chat/use_case.py` + `chat/helpers.py` |
 | `context_invalidation.py` (19) + `context_memory.py` (21) + `response_trace.py` (19) | 并入 `chat/helpers.py` |
 | `history_use_case.py` + `session_flywheel.py` + `session_summary.py` | `session/` 目录 |
 
@@ -419,13 +423,15 @@ app/application/                  # 🆕 业务编排层
 | D0 | 建立旧路径兼容别名或 re-export，覆盖 API、测试和动态 patch 路径 | 中 |
 | D1 | `git mv app/agent/application app/application` | 中 |
 | D2 | 分批搜替换 `from app.agent.application` / `import app.agent.application` / 动态 import 字符串 → `app.application` | 中 |
-| D3 | 内部重组：合并 `stream_chat_*` 5 文件、合并 3 个 context 碎片、按业务子目录归位 | 中 |
+| D3 | 内部重组：合并 3 个 context 碎片、按业务子目录归位；`stream_chat_*` 先归入 `chat/`，进一步合并待后续拆职责后处理 | 中 |
 | D4 | 测试全部切到新路径后，移除旧 `app.agent.application` 兼容层 | 低 |
 
-D1-D2 已在 2026-07-17 本轮迁移中完成：真实业务 use case 目录已迁至
+D1-D2 已在 2026-07-17 PR #18 迁移中完成：真实业务 use case 目录已迁至
 `app/application/`，生产代码和非兼容测试优先引用 `app.application.*`；
-`app.agent.application.*` 仅作为旧路径兼容入口保留。D3 内部重组与 D4 删除兼容层
-仍保持待办。
+`app.agent.application.*` 仅作为旧路径兼容入口保留。D3 第一阶段已完成
+`chat/`、`session/`、`advice/` 子包归位，并为
+`app.application.chat_use_case` 等旧根模块名保留同模块对象兼容入口；D4 删除兼容层
+仍保持待办。`stream_chat_*` 进一步合并会超过 500 行预算，后续需先拆分职责再收敛。
 
 ---
 
@@ -612,8 +618,8 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | A2 | 抽 `repository_selector`；修 infra 反向调用 | ✅ | PR #16 |
 | A3 | 评估 `rule_engine` 是否共享 | ✅ 暂不迁移 | PR #16 |
 | A4 | `evaluation/` 迁入 `platforms/` | ✅ | PR #17 |
-| A5 | `data_flywheel/` 迁入 `platforms/` | ✅ | 本轮 PR |
-| A6 | 更新 boundaries.md | ✅ | 本轮 PR |
+| A5 | `data_flywheel/` 迁入 `platforms/` | ✅ | PR #18 |
+| A6 | 更新 boundaries.md | ✅ | PR #18 |
 
 ### 决策 B：agent/ 瘦身
 
@@ -640,7 +646,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | D0 | 建立 `app.agent.application` 旧路径兼容别名 | ✅ 已处理 | test: 锁定 application 旧路径兼容 |
 | D1 | `git mv app/agent/application app/application` | ✅ 本轮已处理 | refactor: 迁移 application 到顶层包 |
 | D2 | 全局搜替换 import | ✅ 本轮已处理 | 生产代码与普通行为测试改为 `app.application`；旧路径兼容测试继续保留 `app.agent.application` 并断言新旧模块同对象 |
-| D3 | 内部重组（合并 stream_chat、context 碎片） | ⏳ | — |
+| D3 | 内部重组（chat/session/advice 子包归位；stream 进一步合并待后续） | ✅ 子包归位完成 | 本轮 PR |
 | D4 | 移除旧路径兼容层 | ⏳ | — |
 
 ### 决策 E：移除 LangGraph

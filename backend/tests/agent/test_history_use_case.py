@@ -6,8 +6,8 @@ from sqlalchemy.orm import sessionmaker
 import pytest
 from datetime import datetime
 
-import app.application.history_use_case as history_use_case
-from app.application.history_use_case import (
+import app.application.session.history as history_use_case
+from app.application.session.history import (
     list_conversation_items,
     list_message_items,
 )

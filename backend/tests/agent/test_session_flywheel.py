@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.application.session_flywheel import (
+from app.application.session.flywheel import (
     SessionFlywheelRecorder,
     _mysql_message_fk_id,
     build_message_meta,

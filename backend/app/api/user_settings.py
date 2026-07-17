@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.application.chat_use_case_helpers import invalidate_user_farm_context
+from app.application.chat.helpers import invalidate_user_farm_context
 from app.core.settings.roles import DEFAULT_ASSISTANT_ROLE, normalize_assistant_role
 from app.core.dependencies import get_db
 from app.modules.auth.dependencies import get_current_user

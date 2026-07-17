@@ -149,7 +149,7 @@ async def _get_runtime_context_bundle(
             if user_id:
                 loader = memory_context_loader
                 if loader is None:
-                    from app.application.chat_use_case_helpers import (
+                    from app.application.chat.helpers import (
                         load_memory_context,
                     )
 

@@ -43,7 +43,7 @@ backend/app/
 │   ├── auth/
 │   ├── data_flywheel/  # 仅旧 import 兼容入口
 │   └── farm/
-├── application/     # 聊天、流式聊天、每日建议、报告、历史等业务 use case
+├── application/     # chat/session/advice 子包及报告、能力菜单等业务 use case
 ├── platforms/       # 平台级能力与共享层
 │   ├── evaluation/  # 回放、评测、指标、报告、基线
 │   ├── data_flywheel/ # 样本、标注、问题链、repair pack 闭环
@@ -72,9 +72,9 @@ Data Flywheel 失败样本导出为 vibecoding repair pack 的闭环流程见 [d
 
 ## Agent 平台边界
 
-Agent 平台由 `application/`、`agent/`、`skills/`、`prompt/`、`context/`、`memory/`、`platforms/evaluation/`、`observability/` 共同组成；Skill 实现、注册、权限、schema 和执行适配已整体迁移到平台级 `skills/`，业务 use case 已迁移到顶层 `application/`；旧 `agent/skills`、`agent/application` 与 `app.evaluation` 仅保留兼容入口。
+Agent 平台由 `application/`、`agent/`、`skills/`、`prompt/`、`context/`、`memory/`、`platforms/evaluation/`、`observability/` 共同组成；Skill 实现、注册、权限、schema 和执行适配已整体迁移到平台级 `skills/`，业务 use case 已迁移到顶层 `application/`，其中聊天、会话和建议分别归入 `application/chat/`、`application/session/`、`application/advice/`；旧 `agent/skills`、`agent/application`、`app.application.*` 根 use case 名与 `app.evaluation` 仅保留兼容入口。
 
-- `application/` 承接聊天、流式聊天、每日建议和报告生成 use case，API 只调用 use case。
+- `application/` 承接聊天、流式聊天、每日建议、会话历史和报告生成 use case，API 只调用 use case。
 - `agent/runtime/` 只负责图执行、节点协议、状态流转和 runtime 错误，不保存 Prompt、Context 或 Memory 的平台实现。
 - `agent/executor/` 负责 Skill 调用、并行执行、权限分级、参数校验和写操作确认。
 - `agent/reflector/` 负责触发式反思控制、写操作风险检查、工具结果一致性检查和 reflection trace payload；Runtime/Executor 只调用反思服务，不内联策略规则。
