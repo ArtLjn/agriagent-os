@@ -57,7 +57,10 @@ Discovery 只能依赖 `models/`、`platforms/shared` 中稳定的 judge client 
 `app.modules.data_flywheel.judge_service` 和
 `app.modules.data_flywheel.document_repository_selector` 的旧 import API 可用。
 `app.modules.data_flywheel` 仅作为兼容入口，真实 DataFlywheel 代码位于
-`app.platforms.data_flywheel`。
+`app.platforms.data_flywheel`。其中问题链与 repair pack 子域真实代码分别位于
+`app.platforms.data_flywheel.review_issue_chain` 与
+`app.platforms.data_flywheel.repair_pack`；data_flywheel root 下同名旧文件仅做
+`sys.modules` alias，供旧动态 import 与 monkeypatch target 过渡使用。
 
 ## 禁止规则
 

@@ -12,7 +12,7 @@ from app.modules.auth.dependencies import get_current_user, require_admin
 from app.modules.farm.dependencies import get_current_farm
 from app.models.farm import Farm
 from app.models.user import User
-from app.platforms.data_flywheel.review_issue_chain_service import (
+from app.platforms.data_flywheel.review_issue_chain.service import (
     create_review_issue_chain_candidate,
     get_review_issue_chain_detail,
     list_daily_review_inbox,
@@ -20,10 +20,10 @@ from app.platforms.data_flywheel.review_issue_chain_service import (
     save_review_issue_chain_review,
 )
 from app.platforms.data_flywheel.router import build_data_flywheel_judge_client
-from app.platforms.data_flywheel.review_issue_chain_case import (
+from app.platforms.data_flywheel.review_issue_chain.case import (
     build_case_draft_from_review_issue_chain,
 )
-from app.platforms.data_flywheel.review_issue_chain_repair import (
+from app.platforms.data_flywheel.review_issue_chain.repair import (
     create_repair_pack_from_review_issue_chain,
 )
 

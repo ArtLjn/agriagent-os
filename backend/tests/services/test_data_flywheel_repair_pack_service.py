@@ -4,13 +4,13 @@ from typing import Any
 
 import pytest
 
-from app.platforms.data_flywheel.repair_pack_service import (
+from app.platforms.data_flywheel.repair_pack.service import (
     build_repair_pack_payload,
     derive_repair_candidate,
     group_samples_by_fix_target,
     sanitize_debug_evidence,
 )
-from app.platforms.data_flywheel.repair_pack_chain import (
+from app.platforms.data_flywheel.repair_pack.chain import (
     build_chain_repair_pack_payload,
     derive_chain_repair_candidate,
 )

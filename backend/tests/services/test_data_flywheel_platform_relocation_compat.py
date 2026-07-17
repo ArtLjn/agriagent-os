@@ -24,6 +24,12 @@ _ALIASED_MODULES = [
     "document_repositories",
     "document_repository_selector",
     "repair_pack_repository",
+    "repair_pack_chain",
+    "repair_pack_readme",
+    "repair_pack_service",
+    "review_issue_chain_case",
+    "review_issue_chain_helpers",
+    "review_issue_chain_repair",
     "review_issue_chain_service",
     "judge_service",
 ]
