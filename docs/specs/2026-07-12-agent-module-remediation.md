@@ -60,7 +60,7 @@
 | `app/services/**` | 业务服务保持稳定 |
 | `app/api/**` | API 契约不变 |
 | `app/models/**` | 数据模型不变 |
-| `app/agent/skills/<skill-name>/scripts/main.py` 内部实现 | skill-capability-governance Phase 6 范围 |
+| `app/skills/<skill-name>/scripts/main.py` 内部实现 | skill-capability-governance Phase 6 范围 |
 | `app/context/**`、`app/memory/**` | 不在本整改触及层 |
 
 ## 详细整改项
@@ -151,8 +151,8 @@ finance:
 按 smart fill 的实际职责（缺参补全、上下文推断、用户追问生成）拆 2 个文件：
 
 ```text
-app/agent/application/smart_fill.py        (主入口, ≤ 300 行)
-app/agent/application/smart_fill_inference.py (上下文推断, ≤ 250 行)
+app/application/smart_fill.py        (主入口, ≤ 300 行)
+app/application/smart_fill_inference.py (上下文推断, ≤ 250 行)
 ```
 
 ### Phase R2：同源碎片合并
@@ -174,7 +174,7 @@ app/agent/application/smart_fill_inference.py (上下文推断, ≤ 250 行)
 整改为：
 
 ```text
-app/agent/application/stream_chat/
+app/application/chat/stream_chat/
   __init__.py        # re-export use_case 主入口
   use_case.py        # 主流程
   finalization.py    # 收尾
@@ -320,16 +320,16 @@ Sprint 5 (按需)
 | --- | --- | --- |
 | `app/agent/router/classifier.py` | 关键词外移到 yaml，本文件保留匹配引擎 | 路由行为必须不变 |
 | `app/agent/router/rules/*.yaml` | 新建（按 domain 分文件） | — |
-| `app/agent/application/smart_fill.py` | 拆分为主入口 + 推断模块 | 内部重构 |
-| `app/agent/application/smart_fill_inference.py` | 新建 | — |
+| `app/application/smart_fill.py` | 拆分为主入口 + 推断模块 | 内部重构 |
+| `app/application/smart_fill_inference.py` | 新建 | — |
 
 ### 第四阶段（R2 + R3）必须改动
 
 | 文件或目录 | 改造内容 | 影响面 |
 | --- | --- | --- |
-| `app/agent/application/stream_chat/` | 新建子包，5 个 stream_chat_*.py 移入 | import 路径变化 |
-| `app/agent/application/chat_use_case.py` | 合并 helpers | 单文件变更 |
-| `app/agent/application/chat_use_case_helpers.py` | 删除 | — |
+| `app/application/chat/` | 已承接 stream/chat use case 子包；进一步合并需先控制 500 行预算 | import 路径变化 |
+| `app/application/chat/use_case.py` | 已承接非流式 chat use case；helpers 已归入真实子包 | 单文件变更 |
+| 旧 application 根兼容入口 | 已删除，不再作为后续改造对象 | — |
 | `app/agent/router/selection.py` | 合并 tool_selector + tool_selection_rules | 保留 re-export 兼容层 |
 | `app/agent/tool_selector.py` | 降级为 re-export，后续下线 | 20+ 处 import 兼容 |
 | `app/agent/tool_selection_rules.py` | 同上 | — |
@@ -342,8 +342,8 @@ Sprint 5 (按需)
 | `app/services/**` | 业务服务保持稳定 |
 | `app/api/**` | API 契约不变 |
 | `app/models/**` | 数据模型不变 |
-| `app/agent/skills/<skill-name>/scripts/main.py` | skill handler 重构属于 governance Phase 6 |
-| `app/agent/skills/registry/` | 已由 governance Phase 1 完成建设 |
+| `app/skills/<skill-name>/scripts/main.py` | skill handler 重构属于 governance Phase 6 |
+| `app/skills/registry/` | 已由 governance Phase 1 完成建设 |
 | 现有 trace payload 字段 | 行为不变约束 |
 
 ## 验收标准

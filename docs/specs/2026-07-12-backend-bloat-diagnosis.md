@@ -94,7 +94,7 @@
 | 9 | 531 | [app/infra/pending_actions.py](../../backend/app/infra/pending_actions.py) | infra | ❌ |
 | 10 | 528 | [app/infra/pending_action_presenter.py](../../backend/app/infra/pending_action_presenter.py) | infra | ❌ |
 | 11 | 524 | [app/modules/data_flywheel/review_issue_chain_repository.py](../../backend/app/modules/data_flywheel/review_issue_chain_repository.py) | data_flywheel | ❌ |
-| 12 | 515 | [app/agent/application/smart_fill.py](../../backend/app/agent/application/smart_fill.py) | agent | ✅ |
+| 12 | 515 | [app/application/smart_fill.py](../../backend/app/application/smart_fill.py) | application | ✅ |
 | 13 | 508 | [app/agent/executor/pending_actions.py](../../backend/app/agent/executor/pending_actions.py) | agent | ❌（spec 漏列） |
 | 14 | 501 | [app/modules/data_flywheel/router.py](../../backend/app/modules/data_flywheel/router.py) | data_flywheel | ❌ |
 
@@ -117,7 +117,7 @@ app/modules/data_flywheel/   27 files  9,034 lines  (占 modules/ 的 91%)
 #### 2.2 内部出现"_helpers"切片文件
 
 [review_issue_chain_helpers.py](../../backend/app/modules/data_flywheel/review_issue_chain_helpers.py) 378 行——
-命名模式与 [agent/application/chat_use_case_helpers.py](../../backend/app/agent/application/chat_use_case_helpers.py) 229 行一致，
+命名模式与旧 chat helpers 切片一致，
 是"主类太大把私有方法外移"的典型切片式拆分。
 
 #### 2.3 同模块内"分层"过度
@@ -239,15 +239,15 @@ backend/app/logs/   74 MB 本地日志文件
 ```
 5   app/observability/__init__.py
 8   app/agent/runtime/errors.py
-14  app/agent/skills/context.py
+14  app/skills/context.py
 15  app/agent/planner/__init__.py
 17  app/agent/planner/models.py
 18  app/agent/runtime/quota.py
 19  app/agent/executor/tool_calls.py
-19  app/agent/application/response_trace.py
-19  app/agent/application/context_invalidation.py
+19  旧 response_trace.py 切片（已在 P0-6 合并删除）
+19  旧 context_invalidation.py 切片（已在 P0-6 合并删除）
 20  app/agent/runtime/graph_factory.py
-21  app/agent/application/context_memory.py
+21  旧 context_memory.py 切片（已在 P0-6 合并删除）
 ...
 ```
 
@@ -530,7 +530,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P0-3 | 合并 `ContextSelector` Protocol 双定义 | `context/policy.py`、`context/builder.py` | 9-#1 | ✅ e481ee56 | `ContextSelector` 仅保留 `app.context.policy.ContextSelector`；builder 只在 `TYPE_CHECKING` 下引用；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/context/test_context_selector_protocol.py -q` 通过；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/context/test_context_selector_protocol.py tests/agent/test_chat_use_case.py -q` 因本地 MySQL `localhost:3306` 不可用失败（11 failed, 10 passed）；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过 |
 | P0-4 | 合并 runtime 顶部碎片 | `agent/runtime/{errors,quota,graph_factory}.py` | 7、附录 A | ✅ 568529e7 | 合并为 `agent/runtime/support.py`，旧碎片已删除且旧 import 搜索为空；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/agent/runtime/test_runtime_support.py -q` 通过；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/agent/runtime/test_runtime_support.py tests/agent/test_chat_use_case.py -q` 因本地 MySQL `localhost:3306` 不可用失败（11 failed, 10 passed）；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过 |
 | P0-5 | 合并 `observability/` 整包 | `observability/{__init__,lifecycle,metrics}.py` | 8.3 | ✅ 54960408 | 平铺为 `observability.py` 单文件；旧 `app.observability.lifecycle/metrics` import 搜索为空；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/observability/test_observability_module.py -q` 通过；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/memory/test_maybe_summarize.py tests/memory/test_summarizer.py tests/evaluation/test_trace_events.py -q` 通过；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过（复杂度检查保留既有警告） |
-| P0-6 | 合并 `agent/application/` 三碎片 | `context_invalidation.py`、`context_memory.py`、`response_trace.py` | 7、附录 A | ✅ a7f23c6a | 已并入 `agent/application/chat_use_case_helpers.py`，旧碎片已删除且旧 import 搜索为空；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/agent/application/test_chat_runtime_helpers.py tests/agent/test_response_trace.py -q` 通过；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/agent/test_chat_use_case.py -q` 因本地 MySQL `localhost:3306` 不可用失败（11 failed, 8 passed）；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过（复杂度检查保留既有警告） |
+| P0-6 | 合并旧 application 三碎片 | `context_invalidation.py`、`context_memory.py`、`response_trace.py` | 7、附录 A | ✅ a7f23c6a | 已并入 chat helpers，旧碎片已删除且旧 import 搜索为空；chat runtime helper 与 response trace 聚焦测试通过；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/agent/test_chat_use_case.py -q` 因本地 MySQL `localhost:3306` 不可用失败（11 failed, 8 passed）；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过（复杂度检查保留既有警告） |
 
 ### P1 — 一周内处理（需轻度测试）
 
@@ -571,17 +571,17 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 ```
 5   app/observability/__init__.py
 8   app/agent/runtime/errors.py
-14  app/agent/skills/context.py
+14  app/skills/context.py
 15  app/agent/planner/__init__.py
 17  app/agent/planner/models.py
 18  app/agent/runtime/quota.py
 19  app/agent/executor/tool_calls.py
-19  app/agent/application/response_trace.py
-19  app/agent/application/context_invalidation.py
+19  旧 response_trace.py 切片（已在 P0-6 合并删除）
+19  旧 context_invalidation.py 切片（已在 P0-6 合并删除）
 20  app/agent/runtime/graph_factory.py
-21  app/agent/application/context_memory.py
-25  app/agent/skills/registry/__init__.py
-30  app/agent/application/admin_config_use_case.py
+21  旧 context_memory.py 切片（已在 P0-6 合并删除）
+25  app/skills/registry/__init__.py
+30  app/application/admin_config_use_case.py
 ... (其余 23 个略)
 ```
 
