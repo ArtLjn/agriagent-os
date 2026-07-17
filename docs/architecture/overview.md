@@ -18,6 +18,7 @@ backend/app/
 ├── models/       # SQLAlchemy 数据模型
 ├── schemas/      # Pydantic 输入输出模型
 ├── application/  # 业务 use case 编排
+├── platforms/    # evaluation/data_flywheel 迁移前的共享前置层
 ├── agent/        # Agent runtime/planner/executor/response 等框架能力
 ├── skills/       # Skill 实现、注册、权限、schema 和执行适配
 ├── prompt/       # Prompt 注册、组合、渲染、回放
@@ -43,6 +44,7 @@ backend/app/
 │   ├── data_flywheel/
 │   └── farm/
 ├── application/     # 聊天、流式聊天、每日建议、报告、历史等业务 use case
+├── platforms/       # shared 前置层，承载跨 evaluation 与 data_flywheel 的共享能力
 ├── agent/           # Agent 平台主域
 ├── skills/          # 平台级 Skill 实现、注册、权限、schema 和执行适配
 ├── prompt/          # Prompt 工程：版本、片段、渲染、快照
@@ -53,7 +55,7 @@ backend/app/
 └── infra/           # 外部 provider、cache、queue、vector store adapter
 ```
 
-`modules/data_flywheel` 已承接 Agent 数据飞轮的 admin router、样本服务、问题链服务和 repair pack 闭环；`api/` 不再保留 DataFlywheel 的平铺路由入口。`modules/crop`、`modules/cycle`、`modules/ledger`、`modules/weather`、`modules/conversation`、`modules/feedback`、`modules/admin` 以及平台级 `skills/` 属于后续迁移目标。当前不保留只有 `__init__.py` 的空壳目录，避免目录树和真实职责脱节。
+`modules/data_flywheel` 已承接 Agent 数据飞轮的 admin router、样本服务、问题链服务和 repair pack 闭环；`platforms/shared` 已落地 evaluation 与 data_flywheel 迁移前共享能力，当前包含 judge service 与 repository selector，A4/A5 仍待把 `evaluation/` 和 `modules/data_flywheel/` 整体迁入 `platforms/`。`api/` 不再保留 DataFlywheel 的平铺路由入口。`modules/crop`、`modules/cycle`、`modules/ledger`、`modules/weather`、`modules/conversation`、`modules/feedback`、`modules/admin` 以及平台级 `skills/` 属于后续迁移目标。当前不保留只有 `__init__.py` 的空壳目录，避免目录树和真实职责脱节。
 
 更细的后端结构、请求链路和分图见 [backend-architecture.md](/Users/ljn/Documents/demo/explore/docs/architecture/backend-architecture.md)。
 Agent 数据飞轮的工业级完成态、AI 预标注边界和分阶段闭环路线见 [agent-data-flywheel-industrial-roadmap.md](/Users/ljn/Documents/demo/explore/docs/architecture/agent-data-flywheel-industrial-roadmap.md)。

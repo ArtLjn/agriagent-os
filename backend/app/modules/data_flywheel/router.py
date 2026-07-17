@@ -23,7 +23,7 @@ from app.modules.data_flywheel.service import (
     get_sample_detail,
     list_samples,
 )
-from app.modules.data_flywheel.judge_service import (
+from app.platforms.shared.judge_service import (
     DataFlywheelJudgeClient,
     OpenAIDataFlywheelJudgeClient,
 )

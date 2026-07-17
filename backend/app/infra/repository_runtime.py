@@ -21,7 +21,7 @@ from app.infra.online_document_repositories import (
     build_guardrails_log_repository,
 )
 from app.infra.trace_repository import build_trace_repository
-from app.modules.data_flywheel.document_repositories import (
+from app.platforms.shared.repository_selector import (
     build_data_flywheel_repository,
 )
 
