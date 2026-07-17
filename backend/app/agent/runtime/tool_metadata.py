@@ -432,11 +432,7 @@ async def _invoke_read_tool_message(
         )
     except Exception as e:
         duration_ms = int((_time.perf_counter() - start) * 1000)
-        logger.error(
-            "Skill 失败 | name=%s | error=%s",
-            name,
-            e,
-        )
+        logger.error("Skill 失败 | name=%s | error=%s", name, e)
         collector.record(
             node_type="skill_call",
             node_name=name,
