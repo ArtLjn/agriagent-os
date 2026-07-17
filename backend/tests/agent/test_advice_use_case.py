@@ -10,7 +10,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_get_daily_runs_service_in_worker_thread(monkeypatch) -> None:
-    from app.agent.application import advice_use_case
+    from app.application import advice_use_case
 
     caller_thread = threading.get_ident()
     observed: dict[str, int] = {}

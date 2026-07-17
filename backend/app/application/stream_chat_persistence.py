@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.agent.application import chat_use_case_helpers as _chat_helpers
+from app.application import chat_use_case_helpers as _chat_helpers
 from app.infra.repository_runtime import (
     get_agent_record_repository,
     get_trace_repository,

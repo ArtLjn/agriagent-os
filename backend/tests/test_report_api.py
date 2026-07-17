@@ -59,7 +59,7 @@ class TestReportListAPI:
 class TestRefreshDailyAdviceAPI:
     """测试强制刷新每日建议接口。"""
 
-    @patch("app.agent.application.advice_use_case.refresh_daily_advice")
+    @patch("app.application.advice_use_case.refresh_daily_advice")
     def test_refresh_endpoint(self, mock_refresh):
         """POST /agent/daily/refresh 返回新的建议。"""
         from app.schemas.agent import DailyAdviceResponse
@@ -75,7 +75,7 @@ class TestRefreshDailyAdviceAPI:
         assert "新建议" in resp.json()["advice"]
         mock_refresh.assert_called_once()
 
-    @patch("app.agent.application.advice_use_case.refresh_daily_advice")
+    @patch("app.application.advice_use_case.refresh_daily_advice")
     def test_refresh_without_cycle_id(self, mock_refresh):
         """不带 cycle_id 也能正常刷新。"""
         from app.schemas.agent import DailyAdviceResponse

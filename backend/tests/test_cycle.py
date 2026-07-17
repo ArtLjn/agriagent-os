@@ -214,7 +214,7 @@ def test_parse_cycle_returns_422_on_invalid_data():
     from unittest.mock import patch
     from app.schemas.cycle import CycleParseResponse
 
-    with patch("app.agent.application.smart_fill.parse_with_llm") as mock_parse:
+    with patch("app.application.smart_fill.parse_with_llm") as mock_parse:
         mock_parse.return_value = CycleParseResponse(
             name="", crop_template_id=None, start_date=""
         )

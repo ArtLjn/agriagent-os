@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-06-08
+last_updated: 2026-07-17
 status: active
 ---
 
@@ -9,14 +9,14 @@ status: active
 
 ## 1. 当前分层
 
-后端是 FastAPI + SQLAlchemy + LangGraph + Skillify Skill 体系。入口已从单文件启动迁移到 `app/bootstrap/`，Agent 平台也已拆出 application、runtime、planner、executor、response、context、memory、evaluation 等子域。
+后端是 FastAPI + SQLAlchemy + LangGraph + Skillify Skill 体系。入口已从单文件启动迁移到 `app/bootstrap/`，业务 use case 已迁移到顶层 `app/application/`，Agent 平台继续承载 runtime、planner、executor、response 等框架子域。
 
 ```mermaid
 flowchart TB
     Client["移动端 / Admin Web"]
     Bootstrap["bootstrap\n应用工厂、路由、中间件、异常、lifespan"]
     API["api\nHTTP 路由和依赖注入"]
-    AppUseCase["agent/application\n聊天、流式、每日建议、报告、历史"]
+    AppUseCase["application\n聊天、流式、每日建议、报告、历史"]
     Service["services / modules\n业务服务、认证、天气、配额"]
     AgentPlatform["agent 平台\nadvisor、runtime、planner、executor、skills"]
     ContextMemory["context / memory\n上下文选择、预算、短时/长时记忆"]
@@ -47,7 +47,7 @@ flowchart TB
 | `app/api/` | HTTP 入口、参数校验、FastAPI Depends；Agent 路由已主要调用 application use case，智能填写通过 `api/smart_fill.py` 暴露统一场景入口。 |
 | `app/modules/auth`、`app/modules/farm` | 已迁移的模块化认证和农场依赖能力。 |
 | `app/services/` | 迁移期业务服务：作物、周期、日志、成本、债务、天气、会话、报告、配额。 |
-| `app/agent/application/` | Agent 应用用例：聊天、SSE、每日建议、报告、历史、上下文失效。 |
+| `app/application/` | 业务 use case：聊天、SSE、每日建议、报告、历史、上下文失效；`app/agent/application` 仅保留旧路径兼容入口。 |
 | `app/agent/runtime/` | LangGraph 图工厂、节点、消息压缩、工具执行、最终 prompt 预算、流式事件。 |
 | `app/agent/executor/` | Tool call 执行计划和并行执行适配。 |
 | `app/skills/` | Skillify Skill 实现、注册、权限、schema 和执行适配；`app/agent/skills` 仅保留旧路径兼容入口。 |
@@ -64,7 +64,7 @@ flowchart TB
 sequenceDiagram
     participant C as 客户端
     participant API as api/agent.py
-    participant UC as agent/application
+    participant UC as application
     participant SVC as services/agent_service.py
     participant ADV as agent/advisor.py
     participant RT as agent/runtime

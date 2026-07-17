@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 
-from app.agent.application.advisor import invoke_advisor, stream_advisor
+from app.application.advisor import invoke_advisor, stream_advisor
 from app.agent.executor.pending_actions import handle_pending_action
 from app.core.llm import get_llm
 from app.prompt.composer import get_composer
@@ -69,7 +69,7 @@ async def chat_with_agent(
     """兼容旧 service 入口，委托 Application 聊天用例。"""
     global application_chat
     if application_chat is None:
-        from app.agent.application.chat_use_case import chat as application_chat
+        from app.application.chat_use_case import chat as application_chat
 
     farm = _load_farm_for_application(db, farm_id)
     application_farm = SimpleNamespace(id=farm.id, user_id=user_id) if user_id else farm

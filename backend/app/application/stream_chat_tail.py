@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 
-from app.agent.application.stream_chat_types import (
+from app.application.stream_chat_types import (
     ResponseEvent,
     StreamMetadata,
     StreamReplyState,

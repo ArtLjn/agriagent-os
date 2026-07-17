@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.prompt.registry import get_registry
-from app.agent.application.smart_fill import _build_cache_key, parse_with_llm
+from app.application.smart_fill import _build_cache_key, parse_with_llm
 from app.main import app
 from app.schemas.cost import CostParseResult
 from app.schemas.planting import WorkerCreate
@@ -56,7 +56,7 @@ def test_list_smart_fill_scenarios_exposes_registered_business_scenes():
     assert "工人" in worker["title"]
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_ledger_record_returns_unified_draft(mock_get_llm):
     result = CostParseResult(
         record_type="cost",
@@ -85,7 +85,7 @@ def test_parse_smart_fill_ledger_record_returns_unified_draft(mock_get_llm):
     assert data["warnings"] == []
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_ledger_record_infers_note_when_llm_omits_it(mock_get_llm):
     result = CostParseResult(
         record_type="cost",
@@ -113,7 +113,7 @@ def test_parse_smart_fill_ledger_record_infers_note_when_llm_omits_it(mock_get_l
     assert data["draft"]["note"] == "买化肥"
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_ledger_record_infers_structured_debt(mock_get_llm):
     result = CostParseResult(
         record_type="cost",
@@ -140,7 +140,7 @@ def test_parse_smart_fill_ledger_record_infers_structured_debt(mock_get_llm):
     assert data["draft"]["note"] == "买苹果种子，向王秉着赊账"
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_ledger_record_handles_owed_counterparty(mock_get_llm):
     result = CostParseResult(
         record_type="cost",
@@ -166,7 +166,7 @@ def test_parse_smart_fill_ledger_record_handles_owed_counterparty(mock_get_llm):
     assert data["draft"]["counterparty"] == "张三"
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parsed_debt_draft_can_create_unsettled_cost_record(mock_get_llm):
     result = CostParseResult(
         record_type="cost",
@@ -233,7 +233,7 @@ async def test_parse_with_llm_logs_structured_validation_failure_without_traceba
         ),
     )
 
-    with caplog.at_level("WARNING", logger="app.agent.application.smart_fill"):
+    with caplog.at_level("WARNING", logger="app.application.smart_fill"):
         result = await parse_with_llm(mock_llm, "prompt", WorkerCreate)
 
     assert result.name == "李树梅"
@@ -246,7 +246,7 @@ async def test_parse_with_llm_logs_structured_validation_failure_without_traceba
     assert "ValidationError" not in caplog.text
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_returns_create_draft(mock_get_llm):
     result = WorkerCreate(
         name="老王",
@@ -280,7 +280,7 @@ def test_parse_smart_fill_worker_returns_create_draft(mock_get_llm):
     }
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_normalizes_pay_type_and_status(mock_get_llm):
     result = WorkerCreate(
         name="李师傅",
@@ -303,7 +303,7 @@ def test_parse_smart_fill_worker_normalizes_pay_type_and_status(mock_get_llm):
     assert data["draft"]["status"] == "inactive"
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_returns_422_when_name_missing(mock_get_llm):
     result = WorkerCreate(
         name="未知",
@@ -325,7 +325,7 @@ def test_parse_smart_fill_worker_returns_422_when_name_missing(mock_get_llm):
     assert "无法识别工人信息" in response.json()["detail"]
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_idempotency_uses_cached_draft(mock_get_llm):
     result = WorkerCreate(
         name="张三",
@@ -353,7 +353,7 @@ def test_parse_smart_fill_worker_idempotency_uses_cached_draft(mock_get_llm):
     assert mock_get_llm.call_count == 1
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_batch_cases(mock_get_llm):
     cases = [
         (
@@ -419,7 +419,7 @@ def test_parse_smart_fill_request_rejects_oversized_scene_key():
     assert response.status_code == 422
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_boundary_accepts_max_lengths(mock_get_llm):
     result = WorkerCreate(
         name="工" * 100,
@@ -445,7 +445,7 @@ def test_parse_smart_fill_worker_boundary_accepts_max_lengths(mock_get_llm):
     assert draft["default_unit_price"] == "100000"
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_boundary_trims_optional_text(mock_get_llm):
     result = WorkerCreate.model_construct(
         name="老王",
@@ -471,7 +471,7 @@ def test_parse_smart_fill_worker_boundary_trims_optional_text(mock_get_llm):
     assert draft["note"].startswith("备注")
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_marks_invalid_mobile_phone(mock_get_llm):
     result = WorkerCreate(
         name="张桂梅",
@@ -499,7 +499,7 @@ def test_parse_smart_fill_worker_marks_invalid_mobile_phone(mock_get_llm):
     assert any("手机号格式不正确" in item for item in data["warnings"])
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_handles_crop_words_in_worker_description(mock_get_llm):
     result = WorkerCreate(
         name="李树梅",
@@ -529,7 +529,7 @@ def test_parse_smart_fill_worker_handles_crop_words_in_worker_description(mock_g
     assert "phone" in data["missing_fields"]
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_phone_boundary_matrix(mock_get_llm):
     cases = [
         (
@@ -572,7 +572,7 @@ def test_parse_smart_fill_worker_phone_boundary_matrix(mock_get_llm):
         assert data["missing_fields"] == expected_missing
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_marks_missing_unit_price_when_pay_mentioned(
     mock_get_llm,
 ):
@@ -600,7 +600,7 @@ def test_parse_smart_fill_worker_marks_missing_unit_price_when_pay_mentioned(
     assert any("默认单价" in item for item in data["warnings"])
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_boundary_rejects_name_too_long(mock_get_llm):
     result = WorkerCreate.model_construct(
         name="工" * 101,
@@ -620,7 +620,7 @@ def test_parse_smart_fill_worker_boundary_rejects_name_too_long(mock_get_llm):
     assert "无法识别工人信息" in response.json()["detail"]
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_boundary_rejects_invalid_prices(mock_get_llm):
     cases = [
         WorkerCreate.model_construct(
@@ -649,7 +649,7 @@ def test_parse_smart_fill_worker_boundary_rejects_invalid_prices(mock_get_llm):
         assert "无法识别工人信息" in response.json()["detail"]
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_worker_boundary_defaults_unknown_enums(mock_get_llm):
     result = WorkerCreate(
         name="枚举工人",
@@ -671,7 +671,7 @@ def test_parse_smart_fill_worker_boundary_defaults_unknown_enums(mock_get_llm):
     assert draft["status"] == "active"
 
 
-@patch("app.agent.application.smart_fill.get_llm")
+@patch("app.application.smart_fill.get_llm")
 def test_parse_smart_fill_idempotency_cache_is_isolated_by_scene(mock_get_llm):
     worker_result = WorkerCreate(
         name="隔离工人",

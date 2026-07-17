@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.modules.auth.dependencies import require_admin
-from app.agent.application.admin_config_use_case import (
+from app.application.admin_config_use_case import (
     list_prompt_templates,
     reload_prompt_templates,
 )

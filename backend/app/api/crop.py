@@ -18,7 +18,7 @@ from app.schemas.crop import (
 )
 from app.schemas.smart_fill import SmartFillParseRequest
 from app.services import crop_service
-from app.agent.application.smart_fill import parse_smart_fill
+from app.application.smart_fill import parse_smart_fill
 
 router = APIRouter(prefix="/crops", tags=["crops"])
 

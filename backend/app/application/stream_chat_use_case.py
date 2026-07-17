@@ -7,8 +7,8 @@ from collections.abc import AsyncGenerator
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.agent.application.advisor import stream_advisor
-from app.agent.application.chat_use_case_helpers import (
+from app.application.advisor import stream_advisor
+from app.application.chat_use_case_helpers import (
     flush_trace_queue as _flush_trace_queue,
     merge_skill_names as _merge_skill_names,
     record_agent_response,
@@ -16,27 +16,27 @@ from app.agent.application.chat_use_case_helpers import (
     skill_names_from_pending_plan as _skill_names_from_pending_plan,
     stream_start_turn as _stream_start_turn,
 )
-from app.agent.application.pending_responses import (
+from app.application.pending_responses import (
     build_pending_action_response,
     build_pending_plan_response,
 )
-from app.agent.application.stream_chat_persistence import (
+from app.application.stream_chat_persistence import (
     StreamReplyPersistencePayload,
     get_skill_names as _get_skill_names,
     save_stream_reply as _save_stream_reply,
 )
-from app.agent.application.stream_chat_finalization import (
+from app.application.stream_chat_finalization import (
     build_stream_turn_finalization_payload as _build_stream_turn_finalization_payload,
     log_stream_stage as _log_stream_stage,
     schedule_stream_background_finalization as _schedule_stream_background_finalization,
 )
-from app.agent.application.query_capability_menu import resolve_query_menu_or_message
-from app.agent.application.session_flywheel import SessionFlywheelRecorder
-from app.agent.application.stream_chat_tail import (
+from app.application.query_capability_menu import resolve_query_menu_or_message
+from app.application.session_flywheel import SessionFlywheelRecorder
+from app.application.stream_chat_tail import (
     log_stream_completed as _log_stream_completed,
     yield_metadata_events as _yield_metadata_events,
 )
-from app.agent.application.stream_chat_types import (
+from app.application.stream_chat_types import (
     ResponseEvent,
     StreamMetadata,
     StreamReplyState,

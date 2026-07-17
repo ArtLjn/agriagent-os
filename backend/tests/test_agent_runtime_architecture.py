@@ -414,7 +414,7 @@ def test_current_architecture_has_no_empty_placeholder_directories():
         "core",
         "modules/auth",
         "modules/farm",
-        "agent/application",
+        "application",
         "agent/runtime",
         "agent/executor",
         "agent/guardrails",
@@ -439,6 +439,7 @@ def test_current_architecture_has_no_empty_placeholder_directories():
 
     assert missing == []
 
+    compatibility_dirs = {"agent/application", "agent/skills"}
     placeholder_dirs = []
     for directory in app_dir.rglob("*"):
         if not directory.is_dir() or directory.name == "__pycache__":
@@ -449,8 +450,11 @@ def test_current_architecture_has_no_empty_placeholder_directories():
             for child in directory.iterdir()
             if child.is_dir() and child.name != "__pycache__"
         ]
+        relative_path = directory.relative_to(app_dir).as_posix()
+        if relative_path in compatibility_dirs:
+            continue
         if files and all(file.name == "__init__.py" for file in files) and not dirs:
-            placeholder_dirs.append(directory.relative_to(app_dir).as_posix())
+            placeholder_dirs.append(relative_path)
 
     assert placeholder_dirs == []
 
@@ -466,7 +470,7 @@ def test_guardrails_package_keeps_legacy_import_contract():
 def test_agent_platform_subdomains_expose_domain_models():
     """Planner/Executor/Memory 暴露可演进的边界模型。"""
     from app.agent.executor import build_tool_execution_plan
-    from app.agent.application.stream_chat_use_case import (
+    from app.application.stream_chat_use_case import (
         ResponseEvent,
         format_sse_event,
     )

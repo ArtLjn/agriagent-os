@@ -2,7 +2,7 @@
 
 import json
 
-from app.agent.application.history_use_case import parse_structured_data
+from app.application.history_use_case import parse_structured_data
 
 
 def test_parse_structured_data_accepts_new_contract():
