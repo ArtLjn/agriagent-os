@@ -94,7 +94,7 @@ def _existing_message_id(db: Session, message_id: int | None) -> int | None:
 
 def _evaluate_discovery_rules(db: Session, turn: AgentTurn) -> None:
     try:
-        from app.evaluation.discovery.rule_engine import evaluate_turn
+        from app.platforms.evaluation.discovery.rule_engine import evaluate_turn
 
         evaluate_turn(db, turn)
     except Exception as exc:

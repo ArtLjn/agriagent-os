@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from app.evaluation.diagnostics import SkillDiagnosticService
+from app.platforms.evaluation.diagnostics import SkillDiagnosticService
 
 
 def _record(

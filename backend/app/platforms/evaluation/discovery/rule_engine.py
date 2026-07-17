@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 
-from app.evaluation.discovery.risk_scorer import calculate_risk
+from app.platforms.evaluation.discovery.risk_scorer import calculate_risk
 from app.infra.agent_events import read_event_segment
 from app.models.trace import TraceRecord
 

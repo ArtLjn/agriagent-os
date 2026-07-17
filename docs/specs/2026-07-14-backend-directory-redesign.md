@@ -189,13 +189,15 @@ api  →  application/ 或 modules/*/router
 `app/evaluation/`（24 文件 2,414 行）与 `app/modules/data_flywheel/`（27 文件 9,034 行）
 合计 51 文件 / 11,448 行，占总代码 **18.7%**，但都不在用户请求主链路上：
 
-- evaluation 仅被 `api/admin_trace.py` 和 `services/agent_turn_service.py` 调用（2 处）
+- evaluation 真实代码已迁入 `app.platforms.evaluation`，生产调用方改用新路径；
+  `app.evaluation` 仅保留兼容入口
 - data_flywheel 仅通过 `bootstrap/routes.py` 注册 4 个 router（HTTP 入口）
 - A1/A2 前置后，evaluation 与 data_flywheel 已共同依赖
   `app.platforms.shared.judge_service`，不再由 evaluation 反向 import
   `app.modules.data_flywheel.judge_service`
 - A3 评估后，`rule_engine.py` 当前没有被 `modules/data_flywheel` 直接依赖，
-  暂不迁入 shared；`services/agent_turn_service.py` 的运行时导入仍指向 evaluation discovery
+  暂不迁入 shared；A4 后 `services/agent_turn_service.py` 的运行时导入已指向
+  `app.platforms.evaluation.discovery`
 - `infra/repository_runtime.py` 已改用 `app.platforms.shared.repository_selector`，
   不再直接 import `app.modules.data_flywheel.*`
 
@@ -245,7 +247,7 @@ app/platforms/
 
 | 步 | 动作 | 风险 |
 | --- | --- | --- |
-| A4 | `git mv app/evaluation app/platforms/evaluation` + 全局搜替换 import | 低 |
+| A4 | `git mv app/evaluation app/platforms/evaluation` + 全局搜替换 import；保留 `app.evaluation` 兼容 alias | 低 |
 | A5 | `git mv app/modules/data_flywheel app/platforms/data_flywheel` + 全局搜替换 import | 低 |
 | A6 | 更新 [boundaries.md](../architecture/boundaries.md) 中相关章节 | 低 |
 
@@ -290,7 +292,7 @@ agent/
 | `agent/skills/*` | `app/skills/` | 决策 C |
 | `agent/advisor.py` | 已随 D1-D2 迁至 `app/application/advisor.py`；后续 D3 可再归入 `app/application/advice/` | 新增 |
 | `agent/report.py` | 已随 D1-D2 迁至 `app/application/report.py` | 新增 |
-| `agent/skill_coverage.py` | 阶段性迁至 `app/evaluation/skill_coverage.py`；最终随决策 A 进入 `app/platforms/evaluation/` | 决策 A |
+| `agent/skill_coverage.py` | 已随 A4 迁至 `app/platforms/evaluation/skill_coverage.py`；`agent/skill_coverage.py` 仅保留兼容入口 | 决策 A |
 | `agent/intent_router.py` | `agent/router/intent.py` | 新增 |
 | `agent/tool_selector.py` | `agent/router/tool_selector.py` | 新增 |
 | `agent/tool_selection_rules.py` | `agent/router/rules.py` | 新增 |
@@ -604,10 +606,10 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| A1 | 抽 `judge_service` 到 `platforms/shared/` | ✅ | 本工作树待提交 |
-| A2 | 抽 `repository_selector`；修 infra 反向调用 | ✅ | 本工作树待提交 |
-| A3 | 评估 `rule_engine` 是否共享 | ✅ 暂不迁移 | 本工作树待提交 |
-| A4 | `evaluation/` 迁入 `platforms/` | ⏳ | — |
+| A1 | 抽 `judge_service` 到 `platforms/shared/` | ✅ | PR #16 |
+| A2 | 抽 `repository_selector`；修 infra 反向调用 | ✅ | PR #16 |
+| A3 | 评估 `rule_engine` 是否共享 | ✅ 暂不迁移 | PR #16 |
+| A4 | `evaluation/` 迁入 `platforms/` | ✅ | 本轮 PR |
 | A5 | `data_flywheel/` 迁入 `platforms/` | ⏳ | — |
 | A6 | 更新 boundaries.md | ⏳ | — |
 

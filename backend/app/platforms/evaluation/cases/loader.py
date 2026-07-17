@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.evaluation.cases.schemas import (
+from app.platforms.evaluation.cases.schemas import (
     AgentReplayCase,
     ContextExpectation,
     ExpectedSkillCall,

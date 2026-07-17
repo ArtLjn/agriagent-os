@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from app.evaluation.metrics.models import EvaluationMetrics
+from app.platforms.evaluation.metrics.models import EvaluationMetrics
 
 
 @dataclass

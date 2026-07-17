@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.evaluation.discovery.rule_engine import (
+from app.platforms.evaluation.discovery.rule_engine import (
     PollingRuleWatcher,
     RuleConfigError,
     RuleEngine,

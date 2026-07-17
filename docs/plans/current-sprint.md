@@ -22,5 +22,5 @@ status: active
 - Auth 模块化：密码、Token、权限、用户依赖和稳定错误码已迁移到 `app.modules.auth`。
 - Bootstrap 与 API 瘦身：应用启动逻辑进入 `app.bootstrap`，Agent API 业务编排已迁移到顶层 `app.application`，旧 `app.agent.application` 仅保留兼容入口。
 - Agent Runtime 拆分：`app.agent.graph` 已收敛为兼容门面，Runtime、Planner、Executor、Response、Sessions、Ports 边界已建立。
-- Prompt、Context、Memory、Evaluation 平台骨架：已建立 `app.prompt`、`app.context`、`app.memory`、`app.evaluation`，并补充对应单元测试与回归测试。
+- Prompt、Context、Memory、Evaluation 平台骨架：已建立 `app.prompt`、`app.context`、`app.memory`、`app.platforms.evaluation`，`app.evaluation` 仅作为兼容入口保留，并补充对应单元测试与回归测试。
 - 架构门禁债务：`services -> core` 违规依赖已通过 `infra` 适配层修复；`agent_service.py` 与 `web_search/scripts/main.py` 已拆分到 500 行以内。

@@ -56,7 +56,7 @@ flowchart TB
 | `app/prompt/` 与 `backend/prompts/` | Prompt registry/composer/renderer/replay 代码与 Jinja2 模板文件。 |
 | `app/infra/` | trace、pending action、limiter、skill cache、circuit breaker、兼容 settings/database/json_repair。 |
 | `app/core/` | 配置、数据库、日志、安全、日期上下文、LLM client manager。 |
-| `app/evaluation/`、`app/simulation/`、`app/observability/` | 回放评测、仿真测试、平台观测事件骨架。 |
+| `app/platforms/evaluation/`、`app/simulation/`、`app/observability/` | 回放评测、仿真测试、平台观测事件骨架；`app/evaluation` 仅保留旧 import 兼容入口。 |
 
 ## 3. Agent 请求链路
 

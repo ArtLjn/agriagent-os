@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from app.evaluation.metrics.models import EvaluationMetrics
+from app.platforms.evaluation.metrics.models import EvaluationMetrics
 
 
 @dataclass

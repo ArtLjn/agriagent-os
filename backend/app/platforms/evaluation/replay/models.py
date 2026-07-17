@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.evaluation.cases.schemas import ExpectedSkillCall, ExpectedWriteOperation
+from app.platforms.evaluation.cases.schemas import ExpectedSkillCall, ExpectedWriteOperation
 
 
 @dataclass
