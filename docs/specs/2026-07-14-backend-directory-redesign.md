@@ -190,12 +190,12 @@ api  →  application/ 或 modules/*/router
 合计 51 文件 / 11,448 行，占总代码 **18.7%**，但都不在用户请求主链路上：
 
 - evaluation 真实代码已迁入 `app.platforms.evaluation`，生产调用方改用新路径；
-  `app.evaluation` 仅保留兼容入口
+  旧 Evaluation 根包已下线
 - data_flywheel 真实代码已迁入 `app.platforms.data_flywheel`，仅通过
   `bootstrap/routes.py` 注册 4 个 router（HTTP 入口）
 - A1/A2 前置后，evaluation 与 data_flywheel 已共同依赖
   `app.platforms.shared.judge_service`，不再由 evaluation 反向 import
-  `app.modules.data_flywheel.judge_service`
+  DataFlywheel 兼容路径
 - A3 评估后，`rule_engine.py` 当前没有被 `platforms/data_flywheel` 直接依赖，
   暂不迁入 shared；A4 后 `services/agent_turn_service.py` 的运行时导入已指向
   `app.platforms.evaluation.discovery`
@@ -234,8 +234,7 @@ app/platforms/
 #### 2026-07-17 前置层落地状态
 
 - `app.platforms.shared.judge_service` 已承载 DataFlywheel judge 真实实现；
-  `app.modules.data_flywheel.judge_service` 通过旧路径兼容 alias 映射到同一模块对象，
-  旧 import API 不变。
+  DataFlywheel root 下的 judge service 兼容入口已下线。
 - `app.platforms.shared.repository_selector` 已承载
   `build_data_flywheel_repository`；`infra/repository_runtime.py` 通过 shared selector
   创建 data_flywheel 文档仓库，消除 infra → DataFlywheel 真实目录的反向依赖。
@@ -243,8 +242,8 @@ app/platforms/
   `app.platforms.data_flywheel.document_repository_*` 实现类，A1-A3 的迁移期旧路径依赖已解除。
 - `app.platforms.data_flywheel.review_issue_chain` 与
   `app.platforms.data_flywheel.repair_pack` 已承载问题链与 repair pack 子域真实代码；
-  原 data_flywheel root 下的 `review_issue_chain_*` / `repair_pack_*` 文件仅保留兼容入口。
-- `app.modules.data_flywheel` 仅保留兼容入口，用于旧动态 import 与 monkeypatch target。
+  原 data_flywheel root 下的问题链与 repair pack 兼容薄壳已下线。
+- 旧 DataFlywheel 根包已下线；动态 import 与 monkeypatch target 使用平台真实路径。
 - `rule_engine.py` 暂不迁移：当前没有 data_flywheel 直接依赖，只有 evaluation
   discovery 自身测试与 `services/agent_turn_service.py` 的运行时评估入口使用。
 
@@ -252,8 +251,8 @@ app/platforms/
 
 | 步 | 动作 | 风险 |
 | --- | --- | --- |
-| A4 | `git mv app/evaluation app/platforms/evaluation` + 全局搜替换 import；保留 `app.evaluation` 兼容 alias | ✅ PR #17 |
-| A5 | `git mv app/modules/data_flywheel app/platforms/data_flywheel` + 全局搜替换 import；保留 `app.modules.data_flywheel` 兼容 alias | ✅ PR #18 |
+| A4 | `git mv app/evaluation app/platforms/evaluation` + 全局搜替换 import；旧 Evaluation 根包已下线 | ✅ PR #17 / 2026-07-17 清理 |
+| A5 | `git mv app/modules/data_flywheel app/platforms/data_flywheel` + 全局搜替换 import；旧 DataFlywheel 根包已下线 | ✅ PR #18 / 2026-07-17 清理 |
 | A6 | 更新 [boundaries.md](../architecture/boundaries.md) 中相关章节 | ✅ PR #18 |
 
 ---
@@ -630,7 +629,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | A4 | `evaluation/` 迁入 `platforms/` | ✅ | PR #17 |
 | A5 | `data_flywheel/` 迁入 `platforms/` | ✅ | PR #18 |
 | A6 | 更新 boundaries.md | ✅ | PR #18 |
-| A7 | `review_issue_chain_*` / `repair_pack_*` 归位到 DataFlywheel 子包并保留 root 兼容入口 | ✅ 本 PR | 本轮 PR |
+| A7 | 问题链与 repair pack 归位到 DataFlywheel 子包，root 兼容薄壳已下线 | ✅ | 2026-07-17 清理 |
 
 ### 决策 B：agent/ 瘦身
 

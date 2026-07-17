@@ -1,12 +1,11 @@
 """数据飞轮 LLM judge service primitives 测试。"""
 
-import importlib
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from app.platforms.data_flywheel.judge_service import (
+from app.platforms.shared.judge_service import (
     DEFAULT_PROMPT_VERSION,
     DataFlywheelJudgeClient,
     OpenAIDataFlywheelJudgeClient,
@@ -17,9 +16,10 @@ from app.platforms.data_flywheel.judge_service import (
 pytestmark = pytest.mark.no_db
 
 
-def test_shared_and_legacy_judge_exports_same_objects() -> None:
+def test_data_flywheel_modules_use_shared_judge_objects() -> None:
+    import importlib
+
     shared = importlib.import_module("app.platforms.shared.judge_service")
-    legacy = importlib.import_module("app.platforms.data_flywheel.judge_service")
     data_flywheel_service = importlib.import_module(
         "app.platforms.data_flywheel.service"
     )
@@ -30,10 +30,6 @@ def test_shared_and_legacy_judge_exports_same_objects() -> None:
         "app.platforms.evaluation.discovery.judge_worker"
     )
 
-    assert legacy.OpenAIDataFlywheelJudgeClient is shared.OpenAIDataFlywheelJudgeClient
-    assert legacy.DataFlywheelJudgeClient is shared.DataFlywheelJudgeClient
-    assert legacy.build_judge_input is shared.build_judge_input
-    assert legacy.normalize_judge_output is shared.normalize_judge_output
     assert (
         data_flywheel_service.DataFlywheelJudgeClient is shared.DataFlywheelJudgeClient
     )

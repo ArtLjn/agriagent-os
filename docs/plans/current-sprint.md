@@ -24,6 +24,6 @@ status: active
 - Context selector 与茬口小 operation 收束：`conversation/cycle/farm/ledger/retrieval/user_settings/weather` 旧 selector 子模块兼容壳已删除，真实入口为 `app.context.selectors.core` 或包级 `app.context.selectors`；`create_cycle/delete_cycle/query_cycles/query_cycle_info` 旧小脚本兼容壳已删除，真实入口为 `app.skills.manage-crop-cycle.scripts.main`。
 - Agent 根兼容壳清理：`advisor`、`report`、`skill_coverage`、`intent_router`、`tool_selector`、`tool_selection_rules`、`llm`、`assistant_roles` 旧入口已删除，生产代码和测试使用真实路径。
 - Agent Runtime 拆分：`app.agent.graph` 已收敛为兼容门面，Runtime、Planner、Executor、Response、Sessions、Ports 边界已建立。
-- Prompt、Context、Memory、Evaluation 平台骨架：已建立 `app.prompt`、`app.context`、`app.memory`、`app.platforms.evaluation`，`app.evaluation` 仅作为兼容入口保留，并补充对应单元测试与回归测试。
-- DataFlywheel 平台迁移：真实代码已迁入 `app.platforms.data_flywheel`，旧 `app.modules.data_flywheel` 仅作为兼容入口保留。
+- Prompt、Context、Memory、Evaluation 平台骨架：已建立 `app.prompt`、`app.context`、`app.memory`、`app.platforms.evaluation`，旧 Evaluation 根包已下线，并补充对应单元测试与回归测试。
+- DataFlywheel 平台迁移：真实代码已迁入 `app.platforms.data_flywheel`，旧 DataFlywheel 根包与 root 兼容薄壳已下线。
 - 架构门禁债务：`services -> core` 违规依赖已通过 `infra` 适配层修复；`agent_service.py` 与 `web_search/scripts/main.py` 已拆分到 500 行以内。

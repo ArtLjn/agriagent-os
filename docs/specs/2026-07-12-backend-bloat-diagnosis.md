@@ -72,7 +72,7 @@
 
 > 2026-07-17 状态补充：上方统计与后续“发现”章节保留 2026-07-12 快照的当时路径，
 > 不回写历史行数。DataFlywheel 真实代码已在 A5 迁入 `platforms/data_flywheel/`，
-> 旧 `app.modules.data_flywheel` 仅作为 import 兼容入口。
+> 旧 DataFlywheel 根包已在 2026-07-17 清理，下游使用平台真实路径。
 `agent/` 已有独立整改 spec；其余两个为本报告新发现的重灾区。
 
 ## 关键发现
@@ -540,8 +540,8 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P1-2 | 删除 `_ComparableStage(Protocol)` | `backend/app/services/crop_service.py` | 9-#6 | ✅ 本 worktree/PR 已处理 | `crop_service.py` 已删除私有 `_ComparableStage(Protocol)`，阶段比较改用 `Iterable[Any]` 和显式属性读取；新增 `tests/services/test_crop_service_stage_compare.py` 锁住顺序无关、重复阶段数量保留、`key_tasks` 空白归一化和私有 Protocol 清理；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/services/test_crop_service_stage_compare.py tests/test_cost.py tests/api/test_planting_operations.py -q` 通过（35 passed, 1 skipped）；`ruff check backend/app backend/tests` 通过；`bash scripts/check-complexity-budget.sh` 通过（保留既有复杂度预算警告）；`rg "_ComparableStage\|Protocol" backend/app/services/crop_service.py` 无输出 |
 | P1-3 | 评估 `core/compat.py` 是否仍必要 | `backend/app/core/compat.py` 及 9 处引用 | 9-#8 | ✅ 已评估：暂保留，待 Python baseline 升级至 3.11+ | `backend/tests/test_python_compat.py` 明确记录生产服务器仍为 Python 3.10，并禁止直接使用标准库 `StrEnum` / `datetime.UTC`；`backend/requirements.txt` 未声明 Python baseline；`backend/Dockerfile` 为 `python:3.11-slim`，但不足以覆盖测试门禁和缺失的包级 baseline；`rg -n "from app\\.core\\.compat import\|app\\.core\\.compat\|\\bUTC\\b\|\\bStrEnum\\b" backend/app backend/tests` 确认当前兼容层仍覆盖 `StrEnum` 与 `UTC` 引用；验证命令：`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/test_python_compat.py tests/test_config.py tests/test_mongo_config.py -q`、`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` |
 | P1-4 | 合并 `stream_chat_*` 切片群 | `application/chat/stream_*.py`（5 文件，已从根目录归位） | 7 | ✅ 子包归位完成 / 进一步合并待后续 | `stream_chat_*` 已归入 `application/chat/`，本轮同步删除旧根模块同对象兼容入口；直接合并会让 `stream_chat.py` 超过 500 行预算，后续需先拆职责再收敛为更少文件 |
-| P1-5 | `review_issue_chain_*` 切片收回 | `platforms/data_flywheel/review_issue_chain/` | 2.2 | ✅ 子包归位完成 / 单文件收回因 500 行预算待后续继续拆职责 | `review_issue_chain_{helpers,case,repair}.py` 已归位到 `review_issue_chain/{helpers,case,repair}.py`；`review_issue_chain_service.py` 改为 root 兼容入口，真实入口为 `review_issue_chain/service.py`，并拆出 `inbox/operations/cards/builders/queries/support`；旧 root import 与 monkeypatch target 映射到同一模块对象 |
-| P1-6 | `repair_pack_*` 切片收回 | `platforms/data_flywheel/repair_pack/` | 2 | ✅ 子包归位完成 / 单文件收回因 500 行预算待后续继续拆职责 | `repair_pack_{chain,readme}.py` 已归位到 `repair_pack/{chain,readme}.py`；`repair_pack_service.py` 改为 root 兼容入口，真实入口为 `repair_pack/service.py`，并拆出 `candidate/constants/redaction`；旧 root import 与 monkeypatch target 映射到同一模块对象 |
+| P1-5 | `review_issue_chain_*` 切片收回 | `platforms/data_flywheel/review_issue_chain/` | 2.2 | ✅ 子包归位完成 / root 兼容薄壳已下线 | `review_issue_chain/{helpers,case,repair,service}.py` 为真实入口，并拆出 `inbox/operations/cards/builders/queries/support`；生产代码、测试和 monkeypatch target 使用子包真实路径 |
+| P1-6 | `repair_pack_*` 切片收回 | `platforms/data_flywheel/repair_pack/` | 2 | ✅ 子包归位完成 / root 兼容薄壳已下线 | `repair_pack/{chain,readme,service}.py` 为真实入口，并拆出 `candidate/constants/redaction`；生产代码、测试和 monkeypatch target 使用子包真实路径 |
 | P1-7 | `context/selectors/` 轻量 selector 收束 | `backend/app/context/selectors/` | 9-#7、附录 A | ✅ 已归位并删除旧兼容壳 / 单文件完全合并待后续继续拆职责 | `conversation/cycle/farm/ledger/retrieval/user_settings/weather` 已收束到 `selectors/core.py`，旧子模块兼容壳已删除；新代码使用 `app.context.selectors.core` 或包级 `app.context.selectors`，`memory.py`、`planting.py` 因职责独立与 500 行预算继续保留；`tests/context/test_selector_relocation_compat.py` 覆盖真实入口与包级 API |
 | P1-8 | `manage-crop-cycle/scripts/` 小 operation 收束 | `skills/manage-crop-cycle/scripts/` | 7 | ✅ 已归位并删除旧兼容壳 / 重更新逻辑继续独立 | `create_cycle/delete_cycle/query_cycles/query_cycle_info` 已合入 `scripts/main.py`，旧小脚本兼容壳已删除；新代码使用 `app.skills.manage-crop-cycle.scripts.main`，`update_cycle.py`、`update_stage.py` 因职责和行数预算继续保留；`tests/skills/test_manage_crop_cycle_script_compat.py` 覆盖真实入口与重逻辑真实模块 |
 | P1-9 | 删除 agent 根兼容壳 | `agent/{advisor,report,skill_coverage,intent_router,tool_selector,tool_selection_rules,llm,assistant_roles}.py` | 7、9-#7 | ✅ 已下线 | 生产代码和普通测试改为真实路径：`app.application.advice.advisor`、`app.application.report`、`app.platforms.evaluation.skill_coverage`、`app.agent.router.*`、`app.core.llm`、`app.core.settings.roles`；不再断言旧路径可 import 或旧 patch target 生效 |
@@ -555,7 +555,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P2-3 | `services/` 21 个 `*_service.py` 评估合并 | `backend/app/services/` | 3 | ⚠️ | 业务方确认实体边界 |
 | P2-4 | `tests/` 根目录 78 个 test_*.py 下沉 | `backend/tests/` | 5 | ⏳ | 按源码镜像目录重构 |
 | P2-5 | 日志轮转配置补全 | `backend/app/logs/` | 6 | ⏳ | 配置 logrotate；磁盘监控 |
-| P2-6 | 删除 4 个空目录 | `app/memory/long_term/`、`app/memory/retrieval/` 等 | 4 | ⏳ | 删除或加 `.gitkeep` + 说明 |
+| P2-6 | 删除空目录 | `app/memory/long_term/`、`app/memory/retrieval/`、旧 Evaluation 根包、旧 DataFlywheel 根包等 | 4 | ✅ 部分推进 | 2026-07-17 已删除只含 `__init__.py` 的旧 Evaluation / DataFlywheel 空壳包；其余空目录按后续扫描继续处理 |
 
 ### P3 — 长期治理（结构性）
 
