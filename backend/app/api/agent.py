@@ -12,13 +12,13 @@ from app.models.user import User
 from app.infra.limiter import limiter
 from app.core.llm import LlmNotConfiguredError
 from app.models.farm import Farm
-from app.application.chat_use_case import chat, new_request_id
-from app.application.advice_use_case import (
+from app.application.chat.use_case import chat, new_request_id
+from app.application.advice.use_case import (
     create_report,
     get_daily,
     refresh_daily,
 )
-from app.application.history_use_case import (
+from app.application.session.history import (
     delete_report_item,
     list_conversation_items,
     list_message_items,
@@ -26,7 +26,7 @@ from app.application.history_use_case import (
     list_report_page,
 )
 from app.application.skill_catalog import list_app_skills
-from app.application.stream_chat_use_case import (
+from app.application.chat.stream_chat import (
     resolve_stream_user_and_farm,
     stream_chat_events,
 )

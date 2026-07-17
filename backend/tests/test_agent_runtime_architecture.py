@@ -470,7 +470,7 @@ def test_guardrails_package_keeps_legacy_import_contract():
 def test_agent_platform_subdomains_expose_domain_models():
     """Planner/Executor/Memory 暴露可演进的边界模型。"""
     from app.agent.executor import build_tool_execution_plan
-    from app.application.stream_chat_use_case import (
+    from app.application.chat.stream_chat import (
         ResponseEvent,
         format_sse_event,
     )

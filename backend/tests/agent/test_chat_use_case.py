@@ -5,15 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.application import (
-    chat_use_case,
-    stream_chat_finalization,
-    stream_chat_persistence,
-    stream_chat_use_case,
+from app.application.chat import (
+    stream_chat,
+    stream_finalization,
+    stream_persistence,
+    use_case,
 )
-from app.application.chat_use_case import chat
-from app.application.stream_chat_use_case import stream_chat_events
-from app.application.session_summary import (
+from app.application.chat.stream_chat import stream_chat_events
+from app.application.chat.use_case import chat
+from app.application.session.summary import (
     run_session_summary_task,
     schedule_session_summary,
 )
@@ -21,6 +21,11 @@ from app.schemas.agent import ChatRequest
 
 
 pytestmark = pytest.mark.asyncio
+
+chat_use_case = use_case
+stream_chat_use_case = stream_chat
+stream_chat_finalization = stream_finalization
+stream_chat_persistence = stream_persistence
 
 
 def _mock_farm() -> MagicMock:
@@ -44,15 +49,15 @@ async def test_chat_invokes_pending_executor_and_advisor_without_legacy_service(
 
     with (
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ) as mock_observe,
         patch(
@@ -92,15 +97,15 @@ async def test_chat_saves_handled_pending_reply_without_invoking_advisor():
 
     with (
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ) as mock_observe,
         patch(
@@ -144,27 +149,27 @@ async def test_chat_with_session_id_saves_user_and_assistant_messages():
 
     with (
         patch(
-            "app.application.chat_use_case.get_or_create_conversation",
+            "app.application.chat.use_case.get_or_create_conversation",
             return_value=conversation,
         ) as mock_get_conversation,
         patch(
-            "app.application.chat_use_case.SessionFlywheelRecorder",
+            "app.application.chat.use_case.SessionFlywheelRecorder",
             return_value=recorder,
         ),
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
         patch(
-            "app.application.chat_use_case.schedule_session_summary",
+            "app.application.chat.use_case.schedule_session_summary",
         ) as mock_schedule_summary,
     ):
         from app.agent.executor.models import PendingActionDecision
@@ -214,23 +219,23 @@ async def test_chat_with_session_id_passes_conversation_context_to_advisor():
 
     with (
         patch(
-            "app.application.chat_use_case.get_or_create_conversation",
+            "app.application.chat.use_case.get_or_create_conversation",
             return_value=conversation,
         ),
-        patch("app.application.chat_use_case.SessionFlywheelRecorder"),
+        patch("app.application.chat.use_case.SessionFlywheelRecorder"),
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
-        patch("app.application.chat_use_case.schedule_session_summary"),
+        patch("app.application.chat.use_case.schedule_session_summary"),
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -263,19 +268,19 @@ async def test_chat_without_session_id_does_not_save_conversation_messages():
 
     with (
         patch(
-            "app.application.chat_use_case.SessionFlywheelRecorder",
+            "app.application.chat.use_case.SessionFlywheelRecorder",
             return_value=recorder,
         ),
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
     ):
@@ -308,26 +313,26 @@ async def test_chat_pending_confirm_saves_to_conversation():
 
     with (
         patch(
-            "app.application.chat_use_case.get_or_create_conversation",
+            "app.application.chat.use_case.get_or_create_conversation",
             return_value=conversation,
         ),
         patch(
-            "app.application.chat_use_case.SessionFlywheelRecorder",
+            "app.application.chat.use_case.SessionFlywheelRecorder",
             return_value=recorder,
         ),
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
-        patch("app.application.chat_use_case.schedule_session_summary"),
+        patch("app.application.chat.use_case.schedule_session_summary"),
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -354,26 +359,26 @@ async def test_stream_chat_handles_pending_without_legacy_service_or_advisor():
 
     with (
         patch(
-            "app.application.stream_chat_use_case.handle_pending_action",
+            "app.application.chat.stream_chat.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.stream_chat_use_case.stream_advisor",
+            "app.application.chat.stream_chat.stream_advisor",
         ) as mock_stream_advisor,
         patch(
-            "app.application.stream_chat_use_case._flush_trace_queue",
+            "app.application.chat.stream_chat._flush_trace_queue",
             new_callable=AsyncMock,
         ) as mock_flush,
         patch(
-            "app.application.stream_chat_use_case._get_skill_names",
+            "app.application.chat.stream_chat._get_skill_names",
             new_callable=AsyncMock,
             return_value=[],
         ) as mock_get_skills,
         patch(
-            "app.application.stream_chat_use_case._schedule_stream_background_finalization",
+            "app.application.chat.stream_chat._schedule_stream_background_finalization",
         ) as mock_schedule_background,
         patch(
-            "app.application.stream_chat_use_case.build_pending_action_response",
+            "app.application.chat.stream_chat.build_pending_action_response",
             return_value=None,
         ),
     ):
@@ -457,35 +462,35 @@ async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():
 
     with (
         patch(
-            "app.application.stream_chat_use_case.get_or_create_conversation",
+            "app.application.chat.stream_chat.get_or_create_conversation",
             return_value=conversation,
         ),
-        patch("app.application.stream_chat_use_case.SessionFlywheelRecorder"),
+        patch("app.application.chat.stream_chat.SessionFlywheelRecorder"),
         patch(
-            "app.application.stream_chat_use_case.handle_pending_action",
+            "app.application.chat.stream_chat.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.stream_chat_use_case.stream_advisor",
+            "app.application.chat.stream_chat.stream_advisor",
             side_effect=_fake_stream,
         ) as mock_stream_advisor,
         patch(
-            "app.application.stream_chat_use_case._flush_trace_queue",
+            "app.application.chat.stream_chat._flush_trace_queue",
             new_callable=AsyncMock,
         ),
         patch(
-            "app.application.stream_chat_use_case._get_skill_names",
+            "app.application.chat.stream_chat._get_skill_names",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.application.stream_chat_use_case._schedule_stream_background_finalization",
+            "app.application.chat.stream_chat._schedule_stream_background_finalization",
         ),
         patch(
-            "app.application.stream_chat_use_case.build_pending_action_response",
+            "app.application.chat.stream_chat.build_pending_action_response",
             return_value=None,
         ),
-        patch("app.application.stream_chat_finalization.schedule_session_summary"),
+        patch("app.application.chat.stream_finalization.schedule_session_summary"),
     ):
         from app.agent.executor.models import PendingActionDecision
 
@@ -521,7 +526,7 @@ async def test_stream_chat_routes_unhandled_pending_to_stream_advisor():
 
 async def test_save_stream_reply_filters_conversation_by_farm_id(monkeypatch):
     """流式回复落库时必须按当前 farm 限定 session_id。"""
-    from app.application.stream_chat_use_case import _save_stream_reply
+    from app.application.chat.stream_chat import _save_stream_reply
 
     db = MagicMock()
     user = _mock_user()
@@ -558,7 +563,7 @@ async def test_save_stream_reply_filters_conversation_by_farm_id(monkeypatch):
 
 async def test_save_stream_reply_awaits_async_agent_record_repository(monkeypatch):
     """流式回复在 async 链路中直接 await AgentRecord 文档仓储。"""
-    from app.application.stream_chat_use_case import _save_stream_reply
+    from app.application.chat.stream_chat import _save_stream_reply
 
     db = MagicMock()
     user = _mock_user()
@@ -716,32 +721,32 @@ async def test_stream_chat_completion_schedules_session_summary():
 
     with (
         patch(
-            "app.application.stream_chat_use_case.get_or_create_conversation",
+            "app.application.chat.stream_chat.get_or_create_conversation",
             return_value=conversation,
         ),
         patch(
-            "app.application.stream_chat_use_case.SessionFlywheelRecorder",
+            "app.application.chat.stream_chat.SessionFlywheelRecorder",
             return_value=recorder,
         ),
         patch(
-            "app.application.stream_chat_use_case.handle_pending_action",
+            "app.application.chat.stream_chat.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.stream_chat_use_case.stream_advisor",
+            "app.application.chat.stream_chat.stream_advisor",
             side_effect=_fake_stream,
         ),
         patch(
-            "app.application.stream_chat_use_case._flush_trace_queue",
+            "app.application.chat.stream_chat._flush_trace_queue",
             new_callable=AsyncMock,
         ),
         patch(
-            "app.application.stream_chat_use_case._get_skill_names",
+            "app.application.chat.stream_chat._get_skill_names",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.application.stream_chat_use_case._schedule_stream_background_finalization",
+            "app.application.chat.stream_chat._schedule_stream_background_finalization",
         ) as mock_schedule_background,
     ):
         from app.agent.executor.models import PendingActionDecision
@@ -763,7 +768,7 @@ async def test_stream_chat_completion_schedules_session_summary():
     mock_schedule_background.assert_called_once()
     turn_payload = mock_schedule_background.call_args.kwargs["turn_payload"]
     with patch(
-        "app.application.stream_chat_finalization.schedule_session_summary",
+        "app.application.chat.stream_finalization.schedule_session_summary",
     ) as mock_schedule_summary:
         await stream_chat_finalization.finish_stream_turn_payload(
             db,

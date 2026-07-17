@@ -94,7 +94,7 @@ Discovery 只能依赖 `models/`、`platforms/shared` 中稳定的 judge client 
 from app.memory.retrieval import search_memory
 
 # 正确：API 调用 Agent application use case
-from app.application.chat_use_case import ChatUseCase
+from app.application.chat.use_case import chat
 ```
 
 ```python

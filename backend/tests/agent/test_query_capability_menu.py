@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.application.chat_use_case import chat
+from app.application.chat.use_case import chat
 from app.application.query_capability_menu import resolve_query_capability_menu
-from app.application.stream_chat_use_case import stream_chat_events
+from app.application.chat.stream_chat import stream_chat_events
 from app.memory.models import TemporaryTaskState
 from app.memory.service import InMemoryMemoryService
 from app.schemas.agent import ChatRequest
@@ -104,32 +104,32 @@ async def test_chat_query_capability_menu_uses_advisor_and_stores_selection_stat
 
     with (
         patch(
-            "app.application.chat_use_case.get_or_create_conversation",
+            "app.application.chat.use_case.get_or_create_conversation",
             return_value=conversation,
         ),
         patch(
-            "app.application.chat_use_case.SessionFlywheelRecorder",
+            "app.application.chat.use_case.SessionFlywheelRecorder",
             return_value=recorder,
         ),
-        patch("app.application.chat_use_case.schedule_session_summary"),
+        patch("app.application.chat.use_case.schedule_session_summary"),
         patch(
-            "app.application.chat_use_case.get_agent_record_repository",
+            "app.application.chat.use_case.get_agent_record_repository",
             return_value=_SyncAgentRecordRepo(),
         ),
         patch(
-            "app.application.chat_use_case.get_memory_service",
+            "app.application.chat.use_case.get_memory_service",
             return_value=memory_service,
         ),
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
     ):
@@ -185,32 +185,32 @@ async def test_chat_query_capability_menu_number_selection_returns_to_model():
 
     with (
         patch(
-            "app.application.chat_use_case.get_or_create_conversation",
+            "app.application.chat.use_case.get_or_create_conversation",
             return_value=conversation,
         ),
         patch(
-            "app.application.chat_use_case.SessionFlywheelRecorder",
+            "app.application.chat.use_case.SessionFlywheelRecorder",
             return_value=recorder,
         ),
-        patch("app.application.chat_use_case.schedule_session_summary"),
+        patch("app.application.chat.use_case.schedule_session_summary"),
         patch(
-            "app.application.chat_use_case.get_agent_record_repository",
+            "app.application.chat.use_case.get_agent_record_repository",
             return_value=_SyncAgentRecordRepo(),
         ),
         patch(
-            "app.application.chat_use_case.get_memory_service",
+            "app.application.chat.use_case.get_memory_service",
             return_value=memory_service,
         ),
         patch(
-            "app.application.chat_use_case.invoke_advisor",
+            "app.application.chat.use_case.invoke_advisor",
             new_callable=AsyncMock,
         ) as mock_advisor,
         patch(
-            "app.application.chat_use_case.handle_pending_action",
+            "app.application.chat.use_case.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.chat_use_case._observe_chat_completion",
+            "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
     ):
@@ -242,28 +242,28 @@ async def test_stream_query_capability_menu_uses_stream_advisor():
 
     with (
         patch(
-            "app.application.stream_chat_use_case.get_memory_service",
+            "app.application.chat.stream_chat.get_memory_service",
             return_value=memory_service,
         ),
         patch(
-            "app.application.stream_chat_use_case.handle_pending_action",
+            "app.application.chat.stream_chat.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
         patch(
-            "app.application.stream_chat_use_case.stream_advisor",
+            "app.application.chat.stream_chat.stream_advisor",
             side_effect=_fake_stream_options,
         ) as mock_stream,
         patch(
-            "app.application.stream_chat_use_case._flush_trace_queue",
+            "app.application.chat.stream_chat._flush_trace_queue",
             new_callable=AsyncMock,
         ),
         patch(
-            "app.application.stream_chat_use_case._get_skill_names",
+            "app.application.chat.stream_chat._get_skill_names",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "app.application.stream_chat_use_case._schedule_stream_background_finalization",
+            "app.application.chat.stream_chat._schedule_stream_background_finalization",
         ),
     ):
         from app.agent.executor.models import PendingActionDecision
