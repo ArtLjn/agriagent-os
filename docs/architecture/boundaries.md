@@ -102,7 +102,7 @@ from app.application.chat.use_case import chat
 
 ```python
 # 错误：Runtime 直接选择业务上下文
-from app.context.selectors.farm import select_farm_context
+from app.context.selectors import FarmSelector
 
 # 正确：Runtime 接收 application 已准备好的 ContextBundle
 state.context_bundle = context_bundle

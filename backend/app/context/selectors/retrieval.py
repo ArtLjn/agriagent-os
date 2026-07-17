@@ -1,25 +1,7 @@
-"""检索结果 selector。"""
+"""旧检索 selector 模块兼容入口。"""
 
-from app.context.models import ContextBlock
+import importlib
+import sys
 
-
-class RetrievalSelector:
-    """选择语义检索结果。"""
-
-    def select(self, results: list[str] | None = None, **_kwargs) -> list[ContextBlock]:
-        if not results:
-            return []
-        return [
-            ContextBlock(
-                key="retrieval",
-                source="retrieval",
-                purpose="检索结果",
-                content="\n".join(results[:5]),
-                priority=25,
-                compressible=True,
-                min_tokens=24,
-            )
-        ]
-
-
-__all__ = ["RetrievalSelector"]
+_target = importlib.import_module("app.context.selectors.core")
+sys.modules[__name__] = _target
