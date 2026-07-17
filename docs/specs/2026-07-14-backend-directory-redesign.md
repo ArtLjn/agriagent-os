@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-16
+last_updated: 2026-07-17
 status: draft
 ---
 
@@ -270,8 +270,8 @@ agent/
 | --- | --- | --- |
 | `agent/application/*` | `app/application/` | 决策 D |
 | `agent/skills/*` | `app/skills/` | 决策 C |
-| `agent/advisor.py` | 阶段性迁至 `app/agent/application/advisor.py`；最终随决策 D 进入 `app/application/advice/` | 新增 |
-| `agent/report.py` | 阶段性迁至 `app/agent/application/report.py`；最终随决策 D 进入 `app/application/report.py` | 新增 |
+| `agent/advisor.py` | 已随 D1-D2 迁至 `app/application/advisor.py`；后续 D3 可再归入 `app/application/advice/` | 新增 |
+| `agent/report.py` | 已随 D1-D2 迁至 `app/application/report.py` | 新增 |
 | `agent/skill_coverage.py` | 阶段性迁至 `app/evaluation/skill_coverage.py`；最终随决策 A 进入 `app/platforms/evaluation/` | 决策 A |
 | `agent/intent_router.py` | `agent/router/intent.py` | 新增 |
 | `agent/tool_selector.py` | `agent/router/tool_selector.py` | 新增 |
@@ -341,7 +341,7 @@ app/skills/                       # 🆕 顶层包，与 agent/ 平级
 
 #### 现状与问题
 
-业务 use case 当前位于 `agent/application/`（19 文件 3,200+ 行），与 agent 框架耦合：
+业务 use case 在 D1-D2 迁移前位于 `agent/application/`（19 文件 3,200+ 行），与 agent 框架耦合：
 - `chat_use_case.py` 调用 agent 完成"聊天"业务流程
 - `stream_chat_use_case.py` 流式聊天
 - `history_use_case.py` 历史查询
@@ -399,6 +399,11 @@ app/application/                  # 🆕 业务编排层
 | D2 | 分批搜替换 `from app.agent.application` / `import app.agent.application` / 动态 import 字符串 → `app.application` | 中 |
 | D3 | 内部重组：合并 `stream_chat_*` 5 文件、合并 3 个 context 碎片、按业务子目录归位 | 中 |
 | D4 | 测试全部切到新路径后，移除旧 `app.agent.application` 兼容层 | 低 |
+
+D1-D2 已在 2026-07-17 本轮迁移中完成：真实业务 use case 目录已迁至
+`app/application/`，生产代码和非兼容测试优先引用 `app.application.*`；
+`app.agent.application.*` 仅作为旧路径兼容入口保留。D3 内部重组与 D4 删除兼容层
+仍保持待办。
 
 ---
 
@@ -610,9 +615,9 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| D0 | 建立 `app.agent.application` 旧路径兼容别名 | ✅ 本 worktree/PR 已处理 | test: 锁定 application 旧路径兼容 |
-| D1 | `git mv app/agent/application app/application` | ⏳ | — |
-| D2 | 全局搜替换 import | ⏳ | — |
+| D0 | 建立 `app.agent.application` 旧路径兼容别名 | ✅ 已处理 | test: 锁定 application 旧路径兼容 |
+| D1 | `git mv app/agent/application app/application` | ✅ 本轮已处理 | refactor: 迁移 application 到顶层包 |
+| D2 | 全局搜替换 import | ✅ 本轮已处理 | 生产代码与普通行为测试改为 `app.application`；旧路径兼容测试继续保留 `app.agent.application` 并断言新旧模块同对象 |
 | D3 | 内部重组（合并 stream_chat、context 碎片） | ⏳ | — |
 | D4 | 移除旧路径兼容层 | ⏳ | — |
 

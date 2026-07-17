@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from app.agent.application.session_flywheel import SessionFlywheelRecorder, StartedTurn
+from app.application.session_flywheel import SessionFlywheelRecorder, StartedTurn
 from app.models.conversation import Conversation
 from app.schemas.agent import PendingActionResponse, PendingPlanResponse
 

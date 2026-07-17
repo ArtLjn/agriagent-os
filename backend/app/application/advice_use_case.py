@@ -6,7 +6,7 @@ import time
 
 from sqlalchemy.orm import Session
 
-from app.agent.application.chat_use_case import new_request_id
+from app.application.chat_use_case import new_request_id
 from app.models.farm import Farm
 from app.schemas.agent import DailyAdviceResponse, ReportRequest, ReportResponse
 from app.services.agent_service import (

@@ -134,7 +134,7 @@ def test_chat_passes_current_user_to_advisor(client):
     """POST /agent/chat 将当前用户透传给 advisor。"""
     advisor = AsyncMock(return_value="ok")
 
-    with patch("app.agent.application.chat_use_case.invoke_advisor", advisor):
+    with patch("app.application.chat_use_case.invoke_advisor", advisor):
         response = client.post(
             "/agent/chat",
             json={"message": "帮我看看农场状态", "session_id": "sess-user-1"},

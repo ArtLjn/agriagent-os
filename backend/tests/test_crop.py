@@ -197,7 +197,7 @@ def test_delete_template_not_found():
 class TestParseCropTemplateStructured:
     """测试作物模板解析端点 — with_structured_output 路径。"""
 
-    @patch("app.agent.application.smart_fill.get_llm")
+    @patch("app.application.smart_fill.get_llm")
     def test_structured_output_normal(self, mock_get_llm):
         """structured output 正常路径：直接返回 Pydantic model。"""
         result = _mock_structured_response("西瓜", variety=None)
@@ -218,7 +218,7 @@ class TestParseCropTemplateStructured:
         mock_llm.with_structured_output.assert_called_once()
         mock_llm.ainvoke.assert_not_called()
 
-    @patch("app.agent.application.smart_fill.get_llm")
+    @patch("app.application.smart_fill.get_llm")
     def test_structured_output_with_variety(self, mock_get_llm):
         """structured output 含品种：正确提取品种信息。"""
         result = _mock_structured_response(
@@ -252,7 +252,7 @@ class TestParseCropTemplateStructured:
         assert data["variety"] == "8424"
         assert len(data["stages"]) == 2
 
-    @patch("app.agent.application.smart_fill.get_llm")
+    @patch("app.application.smart_fill.get_llm")
     def test_structured_output_empty_stages(self, mock_get_llm):
         """structured output 返回空 stages 时应返回 422。"""
         result = _mock_structured_response("未知", variety=None, stages=[])
@@ -269,7 +269,7 @@ class TestParseCropTemplateStructured:
 class TestParseCropTemplateFallback:
     """测试作物模板解析端点 — structured output 失败后的 fallback 路径。"""
 
-    @patch("app.agent.application.smart_fill.get_llm")
+    @patch("app.application.smart_fill.get_llm")
     def test_fallback_to_safe_parse_json(self, mock_get_llm):
         """with_structured_output 异常时，fallback 到 safe_parse_json。"""
         mock_llm = _build_llm_fallback(
@@ -291,7 +291,7 @@ class TestParseCropTemplateFallback:
         assert data["variety"] is None
         assert len(data["stages"]) == 1
 
-    @patch("app.agent.application.smart_fill.get_llm")
+    @patch("app.application.smart_fill.get_llm")
     def test_fallback_invalid_json(self, mock_get_llm):
         """fallback 路径返回无效 JSON 时应返回 422。"""
         mock_llm = _build_llm_fallback(_mock_llm_response("这不是有效的 JSON"))
@@ -307,7 +307,7 @@ class TestParseCropTemplateFallback:
 class TestParseCropTemplateIdempotency:
     """测试幂等键缓存逻辑（两种路径均适用）。"""
 
-    @patch("app.agent.application.smart_fill.get_llm")
+    @patch("app.application.smart_fill.get_llm")
     def test_idempotency_cache_hit(self, mock_get_llm):
         """幂等键缓存：相同 key 直接返回缓存结果，不重复调用 AI。"""
         result = _mock_structured_response("番茄", variety=None)
@@ -340,7 +340,7 @@ def test_parse_crop_template_returns_422_on_invalid_data():
     from unittest.mock import patch
     from app.schemas.crop import CropTemplateParseResponse
 
-    with patch("app.agent.application.smart_fill.parse_with_llm") as mock_parse:
+    with patch("app.application.smart_fill.parse_with_llm") as mock_parse:
         mock_parse.return_value = CropTemplateParseResponse(
             name="未知作物", variety=None, stages=[]
         )

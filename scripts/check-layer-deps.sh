@@ -13,7 +13,7 @@ is_size_baseline_file() {
     backend/app/infra/pending_action_presenter.py|\
     backend/app/agent/runtime/nodes.py|\
     backend/app/agent/runtime/tool_executor.py|\
-    backend/app/agent/application/smart_fill.py|\
+    backend/app/application/smart_fill.py|\
     backend/app/agent/router/classifier.py|\
     backend/app/modules/data_flywheel/router.py|\
     backend/app/modules/data_flywheel/review_issue_chain_repository.py|\
@@ -188,9 +188,9 @@ if [ -d "$BACKEND" ]; then
     "$BACKEND/agent/advisor.py"
 
   check_python_imports_recursive_excluding \
-    "$BACKEND/agent/application" \
+    "$BACKEND/application" \
     "^[[:space:]]*from[[:space:]]+app\\.services\\.agent_service[[:space:]]+import[[:space:]]+.*\\b(chat_with_agent|stream_chat_with_agent)\\b" \
-    "agent/application/ 依赖了旧 service 聊天编排入口" \
+    "application/ 依赖了旧 service 聊天编排入口" \
     "Agent Application 应拥有聊天生命周期编排，不能导入 services.agent_service 的 chat_with_agent/stream_chat_with_agent"
 
   check_python_imports \

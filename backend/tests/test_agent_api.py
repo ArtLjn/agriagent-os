@@ -55,7 +55,7 @@ class TestAgentChat:
 
     async def test_chat_use_case_observes_memory_after_completion(self, db_session):
         """验证聊天完成后提交 Memory observation event。"""
-        from app.agent.application.chat_use_case import chat
+        from app.application.chat_use_case import chat
         from app.agent.executor.models import PendingActionDecision
         from app.models.farm import Farm
         from app.schemas.agent import ChatRequest
@@ -65,20 +65,20 @@ class TestAgentChat:
 
         with (
             patch(
-                "app.agent.application.chat_use_case.handle_pending_action",
+                "app.application.chat_use_case.handle_pending_action",
                 new_callable=AsyncMock,
                 return_value=PendingActionDecision.unhandled(),
             ),
             patch(
-                "app.agent.application.chat_use_case.invoke_advisor",
+                "app.application.chat_use_case.invoke_advisor",
                 new_callable=AsyncMock,
                 return_value="建议：今天浇水。",
             ),
             patch(
-                "app.agent.application.chat_use_case.get_memory_service",
+                "app.application.chat_use_case.get_memory_service",
                 return_value=memory_service,
             ),
-            patch("app.agent.application.chat_use_case.schedule_session_summary"),
+            patch("app.application.chat_use_case.schedule_session_summary"),
         ):
             response = await chat(
                 db_session,
@@ -102,18 +102,16 @@ class TestAgentChat:
 class TestAgentChatStream:
     """测试流式对话接口。"""
 
-    @patch("app.agent.application.chat_use_case._observe_chat_completion")
-    @patch("app.agent.application.chat_use_case.schedule_session_summary")
-    @patch("app.agent.application.chat_use_case.SessionFlywheelRecorder")
-    @patch("app.agent.application.chat_use_case.handle_pending_action")
-    @patch("app.agent.application.chat_use_case.stream_advisor")
+    @patch("app.application.stream_chat_use_case._schedule_stream_background_finalization")
+    @patch("app.application.stream_chat_use_case.SessionFlywheelRecorder")
+    @patch("app.application.stream_chat_use_case.handle_pending_action")
+    @patch("app.application.stream_chat_use_case.stream_advisor")
     def test_stream_endpoint_passes_session_id(
         self,
         mock_stream,
         mock_pending,
         mock_recorder_cls,
-        mock_schedule_summary,
-        mock_observe,
+        mock_schedule_finalization,
     ) -> None:
         """验证 POST /agent/chat/stream 传递 session_id。"""
         from app.agent.executor.models import PendingActionDecision
@@ -134,14 +132,13 @@ class TestAgentChatStream:
         assert response.status_code == 200
         mock_stream.assert_called_once()
         assert mock_stream.call_args.kwargs["session_id"] == "sess-stream"
-        mock_schedule_summary.assert_called_once()
-        mock_observe.assert_awaited_once()
+        mock_schedule_finalization.assert_called_once()
 
 
 class TestAgentDaily:
     """测试每日建议接口。"""
 
-    @patch("app.agent.application.advice_use_case.get_daily_advice")
+    @patch("app.application.advice_use_case.get_daily_advice")
     def test_daily_advice_endpoint(self, mock_daily) -> None:
         """验证 GET /agent/daily 返回建议。"""
         from app.schemas.agent import AdviceItem, DailyAdviceResponse
@@ -162,7 +159,7 @@ class TestAgentDaily:
 class TestAgentReport:
     """测试报告接口。"""
 
-    @patch("app.agent.application.advice_use_case.generate_report")
+    @patch("app.application.advice_use_case.generate_report")
     def test_report_endpoint(self, mock_report) -> None:
         """验证 POST /agent/report 返回报告。"""
         from app.schemas.agent import ReportResponse
@@ -195,7 +192,7 @@ class TestAgentHistory:
         assert response.status_code == 200
         assert response.json() == []
 
-    @patch("app.agent.application.history_use_case.get_report_history")
+    @patch("app.application.history_use_case.get_report_history")
     def test_report_history_endpoint(self, mock_history) -> None:
         """验证 GET /agent/report-history 返回列表。"""
         mock_history.return_value = []
@@ -209,8 +206,8 @@ class TestAgentHistory:
         """历史会话消息应保留 pending_action，前端切回会话后继续显示按钮。"""
         import json
 
-        from app.agent.application.chat_use_case import build_pending_action_response
-        from app.agent.application.history_use_case import list_message_items
+        from app.application.chat_use_case import build_pending_action_response
+        from app.application.history_use_case import list_message_items
         from app.models.conversation import Conversation, ConversationMessage
         from app.models.farm import Farm
         from app.infra.pending_actions import remove_pending, store_pending
@@ -258,7 +255,7 @@ class TestAgentHistory:
         """历史会话消息应保留 pending_plan，前端不再只靠文案正则判断。"""
         import json
 
-        from app.agent.application.history_use_case import list_message_items
+        from app.application.history_use_case import list_message_items
         from app.models.conversation import Conversation, ConversationMessage
         from app.models.farm import Farm
 

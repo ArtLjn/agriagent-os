@@ -8,16 +8,16 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.agent.application.chat_use_case_helpers import (
+from app.application.chat_use_case_helpers import (
     observe_chat_completion as _observe_chat_completion,
     stream_finish_turn as _stream_finish_turn,
 )
-from app.agent.application.session_summary import schedule_session_summary
-from app.agent.application.stream_chat_persistence import (
+from app.application.session_summary import schedule_session_summary
+from app.application.stream_chat_persistence import (
     StreamReplyPersistencePayload,
     save_stream_reply_payload as _save_stream_reply_payload,
 )
-from app.agent.application.stream_chat_types import (
+from app.application.stream_chat_types import (
     StreamMetadata,
     StreamReplyState,
     StreamTurnContext,

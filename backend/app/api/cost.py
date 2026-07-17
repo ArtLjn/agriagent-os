@@ -21,7 +21,7 @@ from app.schemas.cost import (
 )
 from app.schemas.smart_fill import SmartFillParseRequest
 from app.services import cost_service
-from app.agent.application.smart_fill import parse_smart_fill
+from app.application.smart_fill import parse_smart_fill
 
 router = APIRouter(prefix="/costs", tags=["costs"])
 

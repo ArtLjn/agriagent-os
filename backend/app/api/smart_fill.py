@@ -9,7 +9,7 @@ from app.schemas.smart_fill import (
     SmartFillParseResponse,
     SmartFillScenarioListResponse,
 )
-from app.agent.application.smart_fill import list_scenarios, parse_smart_fill
+from app.application.smart_fill import list_scenarios, parse_smart_fill
 
 router = APIRouter(prefix="/smart-fill", tags=["smart-fill"])
 
