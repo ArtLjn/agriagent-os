@@ -20,19 +20,22 @@ pytestmark = pytest.mark.no_db
 def test_shared_and_legacy_judge_exports_same_objects() -> None:
     shared = importlib.import_module("app.platforms.shared.judge_service")
     legacy = importlib.import_module("app.platforms.data_flywheel.judge_service")
-    data_flywheel_service = importlib.import_module("app.platforms.data_flywheel.service")
-    review_chain_service = importlib.import_module(
-        "app.platforms.data_flywheel.review_issue_chain_service"
+    data_flywheel_service = importlib.import_module(
+        "app.platforms.data_flywheel.service"
     )
-    judge_worker = importlib.import_module("app.platforms.evaluation.discovery.judge_worker")
+    review_chain_service = importlib.import_module(
+        "app.platforms.data_flywheel.review_issue_chain.service"
+    )
+    judge_worker = importlib.import_module(
+        "app.platforms.evaluation.discovery.judge_worker"
+    )
 
     assert legacy.OpenAIDataFlywheelJudgeClient is shared.OpenAIDataFlywheelJudgeClient
     assert legacy.DataFlywheelJudgeClient is shared.DataFlywheelJudgeClient
     assert legacy.build_judge_input is shared.build_judge_input
     assert legacy.normalize_judge_output is shared.normalize_judge_output
     assert (
-        data_flywheel_service.DataFlywheelJudgeClient
-        is shared.DataFlywheelJudgeClient
+        data_flywheel_service.DataFlywheelJudgeClient is shared.DataFlywheelJudgeClient
     )
     assert review_chain_service.LABEL_DEFINITIONS is shared.LABEL_DEFINITIONS
     assert (

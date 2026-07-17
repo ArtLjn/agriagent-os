@@ -17,9 +17,9 @@
 
 ## 读取路径
 
-- `app.modules.data_flywheel.service`：样本列表和详情直接返回 `rule_hits`，并基于 rule hits 生成 issue candidates。
-- `app.modules.data_flywheel.review_issue_chain_service`：按 `risk_score`、`risk_severity` 筛选候选，结合 rule hits 生成问题链上下文。
-- `app.modules.data_flywheel.review_issue_chain_helpers`：在风险上下文、诊断摘要和证据完整性判断中读取 rule hits。
+- `app.platforms.data_flywheel.service`：样本列表和详情直接返回 `rule_hits`，并基于 rule hits 生成 issue candidates。
+- `app.platforms.data_flywheel.review_issue_chain.service`：按 `risk_score`、`risk_severity` 筛选候选，结合 rule hits 生成问题链上下文。
+- `app.platforms.data_flywheel.review_issue_chain.helpers`：在风险上下文、诊断摘要和证据完整性判断中读取 rule hits。
 - `app.evaluation.discovery.judge_worker`：构造 judge 输入时读取 rule hits；低风险闲聊判断也依赖 rule hits 是否为空。
 - 测试覆盖包括 `backend/tests/services/test_agent_turn_service.py`、`backend/tests/api/test_admin_data_flywheel.py`、`backend/tests/api/test_admin_data_flywheel_review_issue_chain_closure.py`。
 

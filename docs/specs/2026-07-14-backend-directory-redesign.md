@@ -241,6 +241,9 @@ app/platforms/
   创建 data_flywheel 文档仓库，消除 infra → DataFlywheel 真实目录的反向依赖。
 - `app.platforms.data_flywheel` 已承载 DataFlywheel 真实代码；shared selector 已改向
   `app.platforms.data_flywheel.document_repository_*` 实现类，A1-A3 的迁移期旧路径依赖已解除。
+- `app.platforms.data_flywheel.review_issue_chain` 与
+  `app.platforms.data_flywheel.repair_pack` 已承载问题链与 repair pack 子域真实代码；
+  原 data_flywheel root 下的 `review_issue_chain_*` / `repair_pack_*` 文件仅保留兼容入口。
 - `app.modules.data_flywheel` 仅保留兼容入口，用于旧动态 import 与 monkeypatch target。
 - `rule_engine.py` 暂不迁移：当前没有 data_flywheel 直接依赖，只有 evaluation
   discovery 自身测试与 `services/agent_turn_service.py` 的运行时评估入口使用。
@@ -529,7 +532,7 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | P1-5 | **决策 B**：业务根文件归位（advisor、report、skill_coverage、intent_router 等；graph/state/ports 绑定 runtime 后续任务） | 决策 B |
 | P1-6 | **决策 E**：移除 LangGraph，改纯 Python ReAct 循环 | 决策 E |
 | P1-7 | 合并 `stream_chat_*` 切片群 | diagnosis 7 |
-| P1-8 | `review_issue_chain_*` / `repair_pack_*` 切片收回 | diagnosis 2.2 |
+| P1-8 | `review_issue_chain_*` / `repair_pack_*` 切片收回 | diagnosis 2.2（✅ 子包归位完成；继续单文件收回需先满足 500 行预算） |
 
 ### 6.3 阶段 P2：子系统拆分（第 4-5 周）
 
@@ -620,6 +623,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | A4 | `evaluation/` 迁入 `platforms/` | ✅ | PR #17 |
 | A5 | `data_flywheel/` 迁入 `platforms/` | ✅ | PR #18 |
 | A6 | 更新 boundaries.md | ✅ | PR #18 |
+| A7 | `review_issue_chain_*` / `repair_pack_*` 归位到 DataFlywheel 子包并保留 root 兼容入口 | ✅ 本 PR | 本轮 PR |
 
 ### 决策 B：agent/ 瘦身
 
