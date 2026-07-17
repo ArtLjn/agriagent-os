@@ -1,16 +1,157 @@
-"""茬口域聚合 Skill。"""
+"""茬口域聚合 Skill 与轻量 operation。"""
+
+from datetime import date
 
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
+from app.core.database import SessionLocal
+from app.models.cycle import CropCycle
+from app.schemas.cycle import CropCycleCreate
+from app.services import crop_service, cycle_service, farm_context_service
+from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 
-from .create_cycle import create_cycle
-from .delete_cycle import delete_cycle
-from .query_cycle_info import query_cycle_info
-from .query_cycles import query_cycles
 from .update_cycle import update_cycle
 from .update_stage import update_stage
+
+
+async def create_cycle(params: dict, context) -> SkillResult:
+    """执行建茬口操作。"""
+    crop_name = params.get("crop_name")
+    if not crop_name or not isinstance(crop_name, str) or not crop_name.strip():
+        return SkillResult(
+            status=ResultStatus.FAILED,
+            reply="建茬口失败：请提供作物名称。",
+        )
+
+    crop_name = crop_name.strip()
+    season = params.get("season") or _current_season()
+    start_date = _parse_date(params.get("start_date"))
+    field_name = params.get("field_name")
+    farm_id, context_error = require_farm_context(context, "建茬口")
+    if context_error:
+        return context_error
+
+    db = SessionLocal()
+    try:
+        template = crop_service.find_template_by_name(db, crop_name, farm_id)
+        if not template:
+            return SkillResult(
+                status=ResultStatus.NEED_CLARIFY,
+                reply=f"系统还没有{crop_name}模板，要帮你创建一个吗？",
+            )
+
+        cycle_name = f"{season}{crop_name}"
+        cycle_create = CropCycleCreate(
+            name=cycle_name,
+            crop_template_id=template.id,
+            start_date=start_date,
+            field_name=field_name,
+        )
+        created = cycle_service.create_crop_cycle(db, cycle_create, farm_id=farm_id)
+
+        reply = _format_create_reply(created)
+        return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
+    except Exception as exc:
+        return SkillResult(
+            status=ResultStatus.FAILED,
+            reply=f"建茬口失败：{exc}",
+        )
+    finally:
+        db.close()
+
+
+async def delete_cycle(params: dict, context) -> SkillResult:
+    """执行删除茬口操作。"""
+    farm_id, context_error = require_farm_context(context, "删除茬口")
+    if context_error:
+        return context_error
+    cycle_id = params.get("cycle_id")
+    if not cycle_id:
+        return SkillResult(
+            status=ResultStatus.NEED_CLARIFY, reply="删除茬口需要 cycle_id。"
+        )
+    db = SessionLocal()
+    try:
+        cycle_service.delete_crop_cycle(db, int(cycle_id), farm_id)
+        return SkillResult(
+            status=ResultStatus.SUCCESS, reply=f"已删除茬口 #{cycle_id}。"
+        )
+    except Exception as exc:
+        return SkillResult(status=ResultStatus.FAILED, reply=f"删除茬口失败：{exc}")
+    finally:
+        db.close()
+
+
+async def query_cycles(params: dict, context) -> SkillResult:
+    """执行茬口列表查询。"""
+    farm_id, context_error = require_farm_context(context, "查询茬口列表")
+    if context_error:
+        return context_error
+    db = SessionLocal()
+    try:
+        limit = int(params.get("limit") or 100)
+        status = params.get("status")
+        cycles = cycle_service.get_crop_cycles(db, farm_id=farm_id, limit=limit)
+        if status:
+            cycles = [cycle for cycle in cycles if cycle.status == status]
+        if not cycles:
+            return SkillResult(status=ResultStatus.SUCCESS, reply="暂无茬口。")
+
+        lines = ["茬口列表："]
+        for cycle in cycles:
+            lines.append(_format_cycle(cycle))
+        return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
+    except Exception as exc:
+        return SkillResult(status=ResultStatus.FAILED, reply=f"查询茬口列表失败：{exc}")
+    finally:
+        db.close()
+
+
+async def query_cycle_info(params: dict, context) -> SkillResult:
+    """执行茬口详情查询。"""
+    cycle_id = params.get("cycle_id")
+    farm_id, context_error = require_farm_context(context, "查询茬口")
+    if context_error:
+        return context_error
+    db = SessionLocal()
+    try:
+        if cycle_id is None:
+            summary = await farm_context_service.build_summary(db, farm_id=farm_id)
+            reply = "未指定茬口 ID，已先返回当前农场状态：\n" + summary
+            return SkillResult(status=ResultStatus.SUCCESS, reply=reply)
+
+        cycle = (
+            db.query(CropCycle)
+            .filter(CropCycle.id == cycle_id, CropCycle.farm_id == farm_id)
+            .first()
+        )
+        if not cycle:
+            return SkillResult(
+                status=ResultStatus.SUCCESS,
+                reply=f"未找到 ID 为 {cycle_id} 的种植周期。",
+            )
+
+        lines = [
+            f"茬口：{cycle.name}",
+            f"开始日期：{cycle.start_date}",
+            f"地块：{cycle.field_name or '未指定'}",
+            f"状态：{cycle.status}",
+            "阶段安排：",
+        ]
+        for stage in sorted(cycle.stages, key=lambda s: s.order_index):
+            current_marker = " [当前]" if stage.is_current else ""
+            lines.append(
+                f"  {stage.name}{current_marker}: "
+                f"{stage.start_date} ~ {stage.end_date} "
+                f"({stage.duration_days}天) "
+                f"关键任务：{stage.key_tasks or '无'}"
+            )
+
+        return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
+    finally:
+        db.close()
 
 
 class ManageCropCycleSkill(Skill):
@@ -149,3 +290,71 @@ class ManageCropCycleSkill(Skill):
                 reply="请说明要新建、查询列表、查看详情、修改还是删除茬口。",
             )
         return await handler(params, context)
+
+
+def _current_season() -> str:
+    """根据当前月份推算季节。"""
+    month = date.today().month
+    if 3 <= month <= 5:
+        return "春季"
+    if 6 <= month <= 8:
+        return "夏季"
+    if 9 <= month <= 11:
+        return "秋季"
+    return "冬季"
+
+
+def _parse_date(date_str: str | None) -> date:
+    """解析日期字符串，无效时回退到今天。"""
+    if not date_str:
+        return date.today()
+    try:
+        return date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return date.today()
+
+
+def _format_date_m_d(date_val) -> str:
+    """将 date 对象或字符串转为 M/D 格式。"""
+    if isinstance(date_val, str):
+        parts = date_val.split("-")
+        return f"{int(parts[1])}/{int(parts[2])}"
+    if isinstance(date_val, date):
+        return f"{date_val.month}/{date_val.day}"
+    return str(date_val)
+
+
+def _format_create_reply(cycle) -> str:
+    """格式化建茬口成功回复。"""
+    sorted_stages = sorted(cycle.stages, key=lambda s: s.order_index)
+    stage_lines = [
+        f"{i + 1}. {s.name}（{_format_date_m_d(s.start_date)} ~ "
+        f"{_format_date_m_d(s.end_date)}，{s.duration_days}天）"
+        for i, s in enumerate(sorted_stages)
+    ]
+    stages_text = "\n".join(stage_lines)
+    return f"✅ 茬口「{cycle.name}」已创建！\n\n📋 **阶段规划**\n{stages_text}"
+
+
+def _format_cycle(cycle) -> str:
+    template_name = getattr(getattr(cycle, "crop_template", None), "name", "未知作物")
+    current = next((stage for stage in cycle.stages if stage.is_current), None)
+    stage_text = current.name if current else "未知阶段"
+    area_text = f"，{cycle.total_area_mu}亩" if cycle.total_area_mu is not None else ""
+    field_text = f"，地块：{cycle.field_name}" if cycle.field_name else ""
+    season_text = f"，{cycle.season}" if cycle.season else ""
+    return (
+        f"- #{cycle.id} {cycle.name}（{template_name}，{cycle.status}，"
+        f"{stage_text}，开始 {cycle.start_date}{season_text}{area_text}{field_text}）"
+    )
+
+
+__all__ = [
+    "ManageCropCycleSkill",
+    "create_cycle",
+    "delete_cycle",
+    "query_cycle_info",
+    "query_cycles",
+    "update_cycle",
+    "update_stage",
+]

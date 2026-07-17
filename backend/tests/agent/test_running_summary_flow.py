@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.context.selectors.conversation import ConversationSelector
+from app.context.selectors import ConversationSelector
 from app.memory.service import InMemoryMemoryService
 from app.models.conversation import Conversation, ConversationMessage
 
