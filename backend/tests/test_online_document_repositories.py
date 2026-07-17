@@ -21,7 +21,7 @@ from app.models.cycle import CropCycle
 from app.models.data_flywheel import AgentReviewIssueChain
 from app.models.guardrails_log import GuardrailsLog
 from app.models.user import User
-from app.platforms.data_flywheel.document_repository_selector import (
+from app.platforms.shared.repository_selector import (
     build_data_flywheel_repository,
 )
 

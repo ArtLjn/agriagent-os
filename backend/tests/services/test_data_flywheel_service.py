@@ -26,9 +26,9 @@ from app.platforms.data_flywheel.service import (
     reject_sample_prelabel,
     resolve_sample_label,
 )
-from app.platforms.data_flywheel.judge_service import DataFlywheelJudgeClient
 from app.platforms.data_flywheel.session_sync_service import sync_session_events
 from app.platforms.data_flywheel.session_review_service import get_session_review
+from app.platforms.shared.judge_service import DataFlywheelJudgeClient
 
 pytestmark = pytest.mark.no_db
 

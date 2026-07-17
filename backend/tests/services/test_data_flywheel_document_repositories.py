@@ -163,14 +163,10 @@ def _chain(**overrides) -> AgentReviewIssueChain:
     return AgentReviewIssueChain(**values)
 
 
-def test_shared_and_legacy_repository_selector_exports_same_builder() -> None:
+def test_data_flywheel_aggregate_uses_shared_repository_selector() -> None:
     shared = importlib.import_module("app.platforms.shared.repository_selector")
-    legacy = importlib.import_module(
-        "app.platforms.data_flywheel.document_repository_selector"
-    )
     aggregate = importlib.import_module("app.platforms.data_flywheel.document_repositories")
 
-    assert legacy.build_data_flywheel_repository is shared.build_data_flywheel_repository
     assert (
         aggregate.build_data_flywheel_repository
         is shared.build_data_flywheel_repository

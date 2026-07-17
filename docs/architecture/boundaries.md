@@ -38,7 +38,7 @@ api/
 
 ### DataFlywheel Discovery 边界
 
-`app/platforms/evaluation/discovery/` 负责 DataFlywheel 标注候选发现层；`app.evaluation` 仅作为旧 import 兼容入口保留：
+`app/platforms/evaluation/discovery/` 负责 DataFlywheel 标注候选发现层；Evaluation 代码只通过平台真实路径访问：
 
 - Rule Engine：读取 `rules.yaml`，基于 turn 的白名单上下文计算 `rule_hits`、`rule_score`、`risk_severity`。
 - Risk Scorer：融合规则信号和 Judge 信号，写出 `risk_score` 与 `risk_dominant_signal`。
@@ -53,14 +53,12 @@ Discovery 只能依赖 `models/`、`platforms/shared` 中稳定的 judge client 
 - `judge_service.py`：DataFlywheel judge 协议、OpenAI-compatible client、judge 输入构造和输出归一化。
 - `repository_selector.py`：DataFlywheel 文档 Repository selector，供 `infra/repository_runtime.py` 创建仓库，避免 infra 直接依赖 `platforms/data_flywheel` 聚合出口。
 
-迁移期旧入口必须保留 re-export 或 alias，确保 `app.evaluation`、
-`app.modules.data_flywheel.judge_service` 和
-`app.modules.data_flywheel.document_repository_selector` 的旧 import API 可用。
-`app.modules.data_flywheel` 仅作为兼容入口，真实 DataFlywheel 代码位于
-`app.platforms.data_flywheel`。其中问题链与 repair pack 子域真实代码分别位于
+旧 Evaluation 根包、旧 DataFlywheel 根包，以及 DataFlywheel root 下的 judge service、
+repository selector、问题链和 repair pack 兼容薄壳均已下线。真实 DataFlywheel 代码位于
+`app.platforms.data_flywheel`，共享 judge 与 repository selector 位于
+`app.platforms.shared`。其中问题链与 repair pack 子域真实代码分别位于
 `app.platforms.data_flywheel.review_issue_chain` 与
-`app.platforms.data_flywheel.repair_pack`；data_flywheel root 下同名旧文件仅做
-`sys.modules` alias，供旧动态 import 与 monkeypatch target 过渡使用。
+`app.platforms.data_flywheel.repair_pack`；生产代码、测试和 monkeypatch target 必须使用真实路径。
 
 ## 禁止规则
 
