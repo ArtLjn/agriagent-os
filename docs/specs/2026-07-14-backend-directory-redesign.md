@@ -555,7 +555,7 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 
 | 编号 | 动作 | 来源 |
 | --- | --- | --- |
-| P3-1 | 巨石文件拆分（tool_executor 1517、classifier 1233、nodes 1049） | diagnosis 1 |
+| P3-1 | 巨石文件拆分（tool_executor 1517、classifier 1233、nodes 1049）；2026-07-17 已完成 `tool_executor.py` 第一阶段：权限/metadata 决策与读工具结果辅助迁入 `agent/runtime/tool_metadata.py`，入口仍由 `tool_executor.py` 重导出，P3-1 继续进行中 | diagnosis 1 |
 | P3-2 | 引入"新增 Protocol/ABC 必须列出 ≥2 实现"CI sensor | diagnosis 9 |
 | P3-3 | 引入"新增 backend 实现必须证明使用"CI sensor | diagnosis 9-#2 |
 | P3-4 | 日志轮转配置补全 | diagnosis 6 |
