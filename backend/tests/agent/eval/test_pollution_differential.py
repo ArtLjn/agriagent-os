@@ -10,7 +10,7 @@
 
 import pytest
 
-from app.agent.tool_selector import select_tools
+from app.agent.router.tool_selector import select_tools
 from tests.agent.eval.cases import E2_MULTITURN_CASES, B_QUERY_CASES
 
 

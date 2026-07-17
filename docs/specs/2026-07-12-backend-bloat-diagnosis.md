@@ -544,6 +544,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P1-6 | `repair_pack_*` 切片收回 | `platforms/data_flywheel/repair_pack/` | 2 | ✅ 子包归位完成 / 单文件收回因 500 行预算待后续继续拆职责 | `repair_pack_{chain,readme}.py` 已归位到 `repair_pack/{chain,readme}.py`；`repair_pack_service.py` 改为 root 兼容入口，真实入口为 `repair_pack/service.py`，并拆出 `candidate/constants/redaction`；旧 root import 与 monkeypatch target 映射到同一模块对象 |
 | P1-7 | `context/selectors/` 轻量 selector 收束 | `backend/app/context/selectors/` | 9-#7、附录 A | ✅ 已归位并删除旧兼容壳 / 单文件完全合并待后续继续拆职责 | `conversation/cycle/farm/ledger/retrieval/user_settings/weather` 已收束到 `selectors/core.py`，旧子模块兼容壳已删除；新代码使用 `app.context.selectors.core` 或包级 `app.context.selectors`，`memory.py`、`planting.py` 因职责独立与 500 行预算继续保留；`tests/context/test_selector_relocation_compat.py` 覆盖真实入口与包级 API |
 | P1-8 | `manage-crop-cycle/scripts/` 小 operation 收束 | `skills/manage-crop-cycle/scripts/` | 7 | ✅ 已归位并删除旧兼容壳 / 重更新逻辑继续独立 | `create_cycle/delete_cycle/query_cycles/query_cycle_info` 已合入 `scripts/main.py`，旧小脚本兼容壳已删除；新代码使用 `app.skills.manage-crop-cycle.scripts.main`，`update_cycle.py`、`update_stage.py` 因职责和行数预算继续保留；`tests/skills/test_manage_crop_cycle_script_compat.py` 覆盖真实入口与重逻辑真实模块 |
+| P1-9 | 删除 agent 根兼容壳 | `agent/{advisor,report,skill_coverage,intent_router,tool_selector,tool_selection_rules,llm,assistant_roles}.py` | 7、9-#7 | ✅ 已下线 | 生产代码和普通测试改为真实路径：`app.application.advice.advisor`、`app.application.report`、`app.platforms.evaluation.skill_coverage`、`app.agent.router.*`、`app.core.llm`、`app.core.settings.roles`；不再断言旧路径可 import 或旧 patch target 生效 |
 
 ### P2 — 需业务确认（高风险高收益）
 
@@ -562,7 +563,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | --- | --- | --- | --- | --- | --- |
 | P3-1 | 巨石文件拆分（在合并完成后） | `tool_executor.py` (1517)、`classifier.py` (1233)、`nodes.py` (1049) | 1 | ⏳ | 按 lifecycle / 规则族 / 节点类型分别拆；2026-07-17 第一阶段先拆 `agent/router/policy.py` 的候选选择状态与预算辅助逻辑，以解除 501 行硬错误；同日继续拆 `agent/router/classifier.py`，将 hint 常量迁入 `classifier_hints.py`、无状态 `IntentFrame` 构造迁入 `classifier_frames.py`，`classifier.py` 从 1341 行降至 736 行，不代表 P3-1 全部完成 |
 | P3-2 | 引入"新增 Protocol/ABC 必须列出 ≥2 实现"规则 | `.claude/rules/python-style.md` + CI sensor | 9 | ⏳ | sensor 脚本扫描单实现 Protocol |
-| P3-3 | 引入"新增 backend 实现必须证明使用"规则 | `.claude/rules/` + CI sensor | 9-#2 | ⏳ | 与 P3-2 类似 |
+| P3-3 | 引入"新增 backend 实现必须证明使用"规则 | `.claude/rules/` + CI sensor | 9-#2 | ⏳ | 与 P3-2 类似；agent 根兼容壳下线后，活跃代码应持续保持旧 import / patch 路径扫描为空 |
 
 ## 附录 A：微型文件清单（43 个 ≤ 30 行非 init）
 

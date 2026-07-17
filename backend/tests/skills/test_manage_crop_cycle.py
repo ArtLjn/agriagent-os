@@ -10,7 +10,7 @@ from skillify.core.context import SkillContext
 
 from app.skills import get_skill_manager
 from app.skills.registry import load_skill_registry
-from app.agent.tool_selector import select_tools
+from app.agent.router.tool_selector import select_tools
 from app.models.cost import CostRecord
 from app.models.crop import CropTemplate, GrowthStage
 from app.models.cycle import CropCycle, CycleStage

@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.agent.intent_router import (
+from app.agent.router.intent import (
     IntentType,
     classify_intent,
     get_greeting_reply,

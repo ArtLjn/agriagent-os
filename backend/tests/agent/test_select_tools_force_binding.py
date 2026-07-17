@@ -3,7 +3,7 @@
 
 from unittest.mock import MagicMock
 
-from app.agent.tool_selector import select_tools
+from app.agent.router.tool_selector import select_tools
 
 
 def _fake_tool(name: str) -> MagicMock:

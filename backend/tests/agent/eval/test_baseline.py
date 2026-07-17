@@ -12,7 +12,7 @@ from tests.agent.eval.cases import all_eval_cases, B_QUERY_CASES, B_CHITCHAT_CAS
 def _select_tools_safe(user_message, tools):
     """安全调用 select_tools，捕获异常返回 None。"""
     try:
-        from app.agent.tool_selector import select_tools
+        from app.agent.router.tool_selector import select_tools
 
         return select_tools(user_message, tools)
     except Exception:

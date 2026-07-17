@@ -295,14 +295,14 @@ agent/
 | --- | --- | --- |
 | `agent/application/*` | `app/application/` | 决策 D |
 | `agent/skills/*` | `app/skills/` | 决策 C |
-| `agent/advisor.py` | 已随 D3 归入 `app/application/advice/advisor.py`；`app.agent.advisor` 保留同模块对象兼容入口 | 新增 |
-| `agent/report.py` | 已随 D1-D2 迁至 `app/application/report.py` | 新增 |
-| `agent/skill_coverage.py` | 已随 A4 迁至 `app/platforms/evaluation/skill_coverage.py`；`agent/skill_coverage.py` 仅保留兼容入口 | 决策 A |
-| `agent/intent_router.py` | `agent/router/intent.py` | 新增 |
-| `agent/tool_selector.py` | `agent/router/tool_selector.py` | 新增 |
-| `agent/tool_selection_rules.py` | `agent/router/rules.py` | 新增 |
-| `agent/llm.py` | `core/llm.py` | 新增 |
-| `agent/assistant_roles.py` | `core/settings/roles.py` | 新增，本轮按既有 `core/settings/` 包落位 |
+| `agent/advisor.py` | 已下线；真实入口为 `app/application/advice/advisor.py` | 新增 |
+| `agent/report.py` | 已下线；真实入口为 `app/application/report.py` | 新增 |
+| `agent/skill_coverage.py` | 已下线；真实入口为 `app/platforms/evaluation/skill_coverage.py` | 决策 A |
+| `agent/intent_router.py` | 已下线；真实入口为 `agent/router/intent.py` | 新增 |
+| `agent/tool_selector.py` | 已下线；真实入口为 `agent/router/tool_selector.py` | 新增 |
+| `agent/tool_selection_rules.py` | 已下线；真实入口为 `agent/router/rules.py` | 新增 |
+| `agent/llm.py` | 已下线；真实入口为 `core/llm.py` | 新增 |
+| `agent/assistant_roles.py` | 已下线；真实入口为 `core/settings/roles.py` | 新增，本轮按既有 `core/settings/` 包落位 |
 | `agent/planner/` | 删除 | P0-1 |
 | `agent/planning/` | 已迁移/收敛到 `agent/runtime/planning/`，保留现有 PlanDraft 语义 | P0-2 |
 
@@ -312,7 +312,7 @@ agent/
 | --- | --- | --- |
 | B1 | 删 `agent/planner/`（0 外部引用，当前工作树已无版本目录） | 低 |
 | B2 | 已迁移/收拢 `agent/planning/` 到 `agent/runtime/planning/`，保留 PlanDraft / DomainValidator 语义 | 中 |
-| B3 | 业务根文件归位（advisor / report / skill_coverage / intent_router / tool_selector / tool_selection_rules / llm / assistant_roles）；已完成 routing/core 子集与 `advisor` / `report` / `skill_coverage` 阶段性归位，并保留旧路径兼容入口；`graph` / `state` / `ports` 属 runtime 根文件，留给 P1-6/P1-runtime 后续处理 | 中 |
+| B3 | 业务根文件归位（advisor / report / skill_coverage / intent_router / tool_selector / tool_selection_rules / llm / assistant_roles）已完成，8 个 agent 根兼容入口已下线；`graph` / `state` / `ports` 属 runtime 根文件，留给 P1-6/P1-runtime 后续处理 | 中 |
 | B4 | `application/` 与 `skills/` 的迁移见决策 C、D | 见对应章节 |
 
 ---
@@ -638,7 +638,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | --- | --- | --- | --- |
 | B1 | 删 `agent/planner/` | ✅ | 本工作树待提交 |
 | B2 | 评估并迁移/收拢 `agent/planning/` | ✅ | 本工作树待提交 |
-| B3 | 业务根文件归位 | ✅ 业务根文件完成；runtime 根文件待 P1-6/P1-runtime | 已完成 routing/core 子集：`intent_router`、`tool_selector`、`tool_selection_rules`、`llm`、`assistant_roles`；本轮完成 `advisor`、`report`、`skill_coverage` 阶段性归位并保留旧路径兼容入口 |
+| B3 | 业务根文件归位 | ✅ 业务根文件完成且 agent 根兼容入口已下线；runtime 根文件待 P1-6/P1-runtime | `advisor`、`report`、`skill_coverage`、`intent_router`、`tool_selector`、`tool_selection_rules`、`llm`、`assistant_roles` 均使用真实入口；旧 agent 根兼容壳已删除 |
 
 ### 决策 C：skills/ 拆出
 

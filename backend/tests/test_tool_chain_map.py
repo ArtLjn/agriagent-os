@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.agent.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
+from app.agent.router.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
 
 pytestmark = pytest.mark.no_db
 

@@ -22,7 +22,7 @@ class TestTraceEvents:
 
     def test_force_binding_trace_payload_structure(self):
         """tool_call_forced 事件的 payload 必须含 skill 名和 tool_choice。"""
-        from app.agent.tool_selector import ToolSelectionResult
+        from app.agent.router.tool_selector import ToolSelectionResult
         from app.agent.runtime.llm_support import _resolve_tool_choice
 
         selection = ToolSelectionResult(

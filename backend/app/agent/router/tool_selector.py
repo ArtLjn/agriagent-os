@@ -20,7 +20,7 @@ from app.agent.router.rules import (
     WRITE_PATTERNS,
 )
 
-logger = logging.getLogger("app.agent.tool_selector")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
