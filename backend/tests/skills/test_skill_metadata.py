@@ -1,12 +1,12 @@
 """Skill metadata contract tests。"""
 
 from app.agent import skills as skills_module
-from app.agent.skills import (
+from app.skills import (
     get_skill_manager,
     get_skill_registry,
     skills_to_langchain_tools,
 )
-from app.agent.skills.metadata import (
+from app.skills.metadata import (
     SkillMetadata,
     SkillPermissionLevel,
     SkillRiskLevel,
@@ -600,7 +600,7 @@ def test_registered_runtime_skills_have_complete_metadata():
 
 
 def test_langchain_tool_has_skill_metadata(monkeypatch):
-    monkeypatch.setattr("app.agent.skills.get_category_enum", lambda farm_id: [])
+    monkeypatch.setattr("app.skills.get_category_enum", lambda farm_id: [])
 
     tools = skills_to_langchain_tools(_SkillManager(_ReadSkill()))
 
@@ -611,7 +611,7 @@ def test_langchain_tool_has_skill_metadata(monkeypatch):
 def test_registry_skill_has_skill_metadata(monkeypatch):
     monkeypatch.setattr(skills_module, "_SKILL_REGISTRY", {})
     monkeypatch.setattr(
-        "app.agent.skills.get_skill_manager",
+        "app.skills.get_skill_manager",
         lambda: _SkillManager(_ReadSkill()),
     )
 

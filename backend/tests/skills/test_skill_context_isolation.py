@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from skillify.models.schemas import ResultStatus, SkillResult
 
-from app.agent.skills import skills_to_langchain_tools
+from app.skills import skills_to_langchain_tools
 
 pytestmark = pytest.mark.no_db
 
@@ -57,8 +57,8 @@ async def test_langchain_tool_injects_trusted_farm_context(monkeypatch):
     def fake_context_builder(farm_id: int, farm_uid: str | None = None):
         return SimpleNamespace(farm_id=farm_id, farm_uid=farm_uid)
 
-    monkeypatch.setattr("app.agent.skills.get_category_enum", lambda _farm_id: [])
-    monkeypatch.setattr("app.agent.skills.build_skill_context", fake_context_builder)
+    monkeypatch.setattr("app.skills.get_category_enum", lambda _farm_id: [])
+    monkeypatch.setattr("app.skills.build_skill_context", fake_context_builder)
 
     tool = skills_to_langchain_tools(_FakeManager(skill), farm_id=7, farm_uid=farm_uid)[
         0

@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.agent.skills.registry import load_skill_registry, validate_skill_registry
-from app.agent.skills.registry.governance import check_skill_registry
+from app.skills.registry import load_skill_registry, validate_skill_registry
+from app.skills.registry.governance import check_skill_registry
 
 pytestmark = pytest.mark.no_db
 
@@ -337,7 +337,7 @@ aliases:
 
 
 def _skill_doc_tool_names() -> set[str]:
-    skills_dir = Path(__file__).parents[2] / "app" / "agent" / "skills"
+    skills_dir = Path(__file__).parents[2] / "app" / "skills"
     tool_names = set()
     for skill_doc in sorted(skills_dir.glob("*/skill.md")):
         front_matter = skill_doc.read_text(encoding="utf-8").split("---", 2)[1]

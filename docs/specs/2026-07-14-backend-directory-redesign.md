@@ -601,9 +601,9 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
 | C0 | 建立 `app.agent.skills` 旧路径兼容别名 | ✅ 本 worktree/PR 已处理 | test: 锁定 skills 旧路径兼容 |
-| C1 | `git mv app/agent/skills app/skills` | ⏳ | — |
-| C2 | 全局搜替换 import | ⏳ | — |
-| C3 | 核对 registry 加载机制 | ⏳ | — |
+| C1 | `git mv app/agent/skills app/skills` | ✅ 本 PR 已处理 | refactor: 迁移 skills 到顶层包 |
+| C2 | 全局搜替换 import | ✅ 本 PR 已处理 | 生产代码与关键测试改为 `app.skills`；旧测试和旧 patch target 继续通过兼容层 |
+| C3 | 核对 registry 加载机制 | ✅ 本 PR 已处理 | `SkillManager` 扫描 `app.skills`；registry YAML 跟随迁移到 `app/skills/registry`；`agent/executor` 仍仅依赖 registry/metadata/tool manager，不直接 import 具体业务 skill |
 | C4 | 移除旧路径兼容层 | ⏳ | — |
 
 ### 决策 D：新建 application/

@@ -13,4 +13,4 @@ else
   PYTHON="python"
 fi
 
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m app.agent.skills.registry.governance
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m app.skills.registry.governance

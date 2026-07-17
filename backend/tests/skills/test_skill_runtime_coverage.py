@@ -5,8 +5,8 @@ import re
 
 import pytest
 
-from app.agent.skills import get_langchain_tools, get_skill_manager
-from app.agent.skills.metadata import (
+from app.skills import get_langchain_tools, get_skill_manager
+from app.skills.metadata import (
     SkillPermissionLevel,
     get_skill_metadata,
 )
@@ -71,7 +71,7 @@ RETIRED_LABOR_PAYMENT_ALIASES = {
     "manage_wages",
 }
 
-SKILLS_DIR = Path(__file__).parents[2] / "app" / "agent" / "skills"
+SKILLS_DIR = Path(__file__).parents[2] / "app" / "skills"
 
 
 def _registered_skills() -> dict[str, object]:

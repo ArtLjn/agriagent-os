@@ -7,11 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-from app.agent.skills import get_skill_manager
+from app.skills import get_skill_manager
 
-_main_mod = importlib.import_module("app.agent.skills.manage-crop-cycle.scripts.main")
+_main_mod = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
 _update_stage_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.update_stage"
+    "app.skills.manage-crop-cycle.scripts.update_stage"
 )
 
 ManageCropCycleSkill = _main_mod.ManageCropCycleSkill

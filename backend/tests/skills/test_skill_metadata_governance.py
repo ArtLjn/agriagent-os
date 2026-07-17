@@ -2,9 +2,9 @@
 
 import pytest
 
-from app.agent.skills import get_langchain_tools
-from app.agent.skills import metadata as metadata_module
-from app.agent.skills.metadata import (
+from app.skills import get_langchain_tools
+from app.skills import metadata as metadata_module
+from app.skills.metadata import (
     SkillPermissionLevel,
     get_skill_metadata,
 )

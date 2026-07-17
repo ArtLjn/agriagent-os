@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.skills import (
+from app.skills import (
     _schema_to_pydantic,
     clear_category_cache,
     get_category_enum,
@@ -36,8 +36,8 @@ class TestGetCategoryEnum:
             _make_category("人工"),
         ]
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = mock_cats
             result = get_category_enum(farm_id=1)
@@ -46,8 +46,8 @@ class TestGetCategoryEnum:
     def test_returns_default_when_no_categories(self):
         """数据库无分类时返回默认列表。"""
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = []
             result = get_category_enum(farm_id=1)
@@ -59,8 +59,8 @@ class TestGetCategoryEnum:
         """同一 farm_id 的第二次调用使用缓存。"""
         mock_cats = [_make_category("化肥")]
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
@@ -72,8 +72,8 @@ class TestGetCategoryEnum:
         """不同 farm_id 查询不同次数。"""
         mock_cats = [_make_category("化肥")]
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
@@ -82,7 +82,7 @@ class TestGetCategoryEnum:
 
     def test_returns_default_on_db_error(self):
         """数据库异常时返回默认列表。"""
-        with patch("app.agent.skills.SessionLocal", side_effect=Exception("db down")):
+        with patch("app.skills.SessionLocal", side_effect=Exception("db down")):
             result = get_category_enum(farm_id=1)
         assert "化肥" in result
         assert len(result) > 0
@@ -101,8 +101,8 @@ class TestClearCategoryCache:
         """清除指定 farm 的缓存。"""
         mock_cats = [_make_category("化肥")]
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
@@ -110,8 +110,8 @@ class TestClearCategoryCache:
         clear_category_cache(farm_id=1)
 
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
@@ -122,8 +122,8 @@ class TestClearCategoryCache:
         """清除全部缓存。"""
         mock_cats = [_make_category("化肥")]
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)
@@ -132,8 +132,8 @@ class TestClearCategoryCache:
         clear_category_cache()
 
         with (
-            patch("app.agent.skills.cost_category_service") as mock_svc,
-            patch("app.agent.skills.SessionLocal"),
+            patch("app.skills.cost_category_service") as mock_svc,
+            patch("app.skills.SessionLocal"),
         ):
             mock_svc.get_categories.return_value = mock_cats
             get_category_enum(farm_id=1)

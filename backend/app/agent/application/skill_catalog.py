@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
-from app.agent.skills import get_skill_manager
-from app.agent.skills.metadata import metadata_to_dict
+from app.skills import get_skill_manager
+from app.skills.metadata import metadata_to_dict
 from app.schemas.agent import AppSkillItem
 
 

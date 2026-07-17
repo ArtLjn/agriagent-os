@@ -7,7 +7,7 @@ from langchain_core.tools import BaseTool
 
 from app.agent.router.models import ToolCandidate
 from app.agent.router.registry import CATALOG_REGISTRY, default_risk_for_tool
-from app.agent.skills.registry import (
+from app.skills.registry import (
     AliasDefinition,
     CapabilityDefinition,
     OperationDefinition,

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-from app.agent.skills.registry import load_skill_registry
+from app.skills.registry import load_skill_registry
 
-_mod = importlib.import_module("app.agent.skills.manage-crop-templates.scripts.main")
+_mod = importlib.import_module("app.skills.manage-crop-templates.scripts.main")
 ManageCropTemplatesSkill = _mod.ManageCropTemplatesSkill
 
 pytestmark = pytest.mark.no_db

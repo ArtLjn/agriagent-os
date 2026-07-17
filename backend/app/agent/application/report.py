@@ -9,7 +9,7 @@ from app.agent.guardrails import filter_output
 from app.core.llm import get_llm
 from app.prompt.composer import get_composer
 from app.core.date_context import get_request_date
-from app.agent.skills import get_langchain_tools
+from app.skills import get_langchain_tools
 
 logger = logging.getLogger(__name__)
 
