@@ -1,4 +1,4 @@
-"""Context selector 归位兼容测试。"""
+"""Context selector 真实入口测试。"""
 
 import importlib
 
@@ -7,21 +7,16 @@ import pytest
 pytestmark = pytest.mark.no_db
 
 
-def test_lightweight_selector_legacy_modules_alias_to_core_module() -> None:
+def test_lightweight_selectors_resolve_from_core_module() -> None:
     core = importlib.import_module("app.context.selectors.core")
 
-    for module_name in (
-        "conversation",
-        "cycle",
-        "farm",
-        "ledger",
-        "retrieval",
-        "user_settings",
-        "weather",
-    ):
-        legacy = importlib.import_module(f"app.context.selectors.{module_name}")
-
-        assert legacy is core
+    assert core.ConversationSelector.__module__ == "app.context.selectors.core"
+    assert core.CycleSelector.__module__ == "app.context.selectors.core"
+    assert core.FarmSelector.__module__ == "app.context.selectors.core"
+    assert core.LedgerSelector.__module__ == "app.context.selectors.core"
+    assert core.RetrievalSelector.__module__ == "app.context.selectors.core"
+    assert core.UserSettingsSelector.__module__ == "app.context.selectors.core"
+    assert core.WeatherSelector.__module__ == "app.context.selectors.core"
 
 
 def test_selector_package_exports_resolve_from_real_modules() -> None:

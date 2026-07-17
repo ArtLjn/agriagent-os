@@ -19,9 +19,7 @@ _cost_analytics_mod = importlib.import_module(
 _crop_cycle_mod = importlib.import_module(
     "app.skills.manage-crop-cycle.scripts.main"
 )
-_crop_cycle_query_info_mod = importlib.import_module(
-    "app.skills.manage-crop-cycle.scripts.query_cycle_info"
-)
+_crop_cycle_query_info_mod = _crop_cycle_mod
 ManageCostSkill = _manage_cost_mod.ManageCostSkill
 ManageCropCycleSkill = _crop_cycle_mod.ManageCropCycleSkill
 

@@ -534,9 +534,10 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | P1-7 | 合并 `stream_chat_*` 切片群 | diagnosis 7 |
 | P1-8 | `review_issue_chain_*` / `repair_pack_*` 切片收回 | diagnosis 2.2（✅ 子包归位完成；继续单文件收回需先满足 500 行预算） |
 
-> 2026-07-17 同步：diagnosis 剩余 P1-7/P1-8 的第一阶段已处理，
-> `context/selectors/` 轻量 selector 收束到 `selectors/core.py`，
-> `manage-crop-cycle/scripts/` 小 operation 收束到 `scripts/main.py`。
+> 2026-07-17 同步：diagnosis 剩余 P1-7/P1-8 已完成旧壳删除，
+> `context/selectors/` 轻量 selector 真实入口为 `selectors/core.py` 或包级
+> `app.context.selectors`，`manage-crop-cycle/scripts/` 小 operation 真实入口为
+> `scripts/main.py`。
 > `memory.py`、`planting.py`、`update_cycle.py`、`update_stage.py` 因职责独立与
 > 单文件 500 行预算继续保留；LangGraph E 与 P2 document_repository 仍未标记完成。
 

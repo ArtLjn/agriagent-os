@@ -17,24 +17,16 @@ from app.models.cycle import CropCycle, CycleStage
 from app.models.log import FarmLog
 
 _manage_mod = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
-_create_mod = importlib.import_module(
-    "app.skills.manage-crop-cycle.scripts.create_cycle"
-)
-_query_cycles_mod = importlib.import_module(
-    "app.skills.manage-crop-cycle.scripts.query_cycles"
-)
-_query_info_mod = importlib.import_module(
-    "app.skills.manage-crop-cycle.scripts.query_cycle_info"
-)
+_create_mod = _manage_mod
+_query_cycles_mod = _manage_mod
+_query_info_mod = _manage_mod
 _update_mod = importlib.import_module(
     "app.skills.manage-crop-cycle.scripts.update_cycle"
 )
 _update_stage_mod = importlib.import_module(
     "app.skills.manage-crop-cycle.scripts.update_stage"
 )
-_delete_mod = importlib.import_module(
-    "app.skills.manage-crop-cycle.scripts.delete_cycle"
-)
+_delete_mod = _manage_mod
 
 ManageCropCycleSkill = _manage_mod.ManageCropCycleSkill
 

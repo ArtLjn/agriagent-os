@@ -29,18 +29,14 @@ _manage_units_mod = importlib.import_module(
 _manage_cycles_mod = importlib.import_module(
     "app.skills.manage-crop-cycle.scripts.main"
 )
-_manage_cycles_query_mod = importlib.import_module(
-    "app.skills.manage-crop-cycle.scripts.query_cycles"
-)
+_manage_cycles_query_mod = _manage_cycles_mod
 _manage_templates_mod = importlib.import_module(
     "app.skills.manage-crop-templates.scripts.main"
 )
 _manage_logs_mod = importlib.import_module(
     "app.skills.manage-farm-logs.scripts.main"
 )
-_manage_cycles_delete_mod = importlib.import_module(
-    "app.skills.manage-crop-cycle.scripts.delete_cycle"
-)
+_manage_cycles_delete_mod = _manage_cycles_mod
 _manage_settings_mod = importlib.import_module(
     "app.skills.manage-user-settings.scripts.main"
 )

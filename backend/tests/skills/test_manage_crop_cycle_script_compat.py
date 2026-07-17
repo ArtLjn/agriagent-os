@@ -1,4 +1,4 @@
-"""manage-crop-cycle 脚本归位兼容测试。"""
+"""manage-crop-cycle 脚本真实入口测试。"""
 
 import importlib
 
@@ -9,20 +9,13 @@ from skillify.models.schemas import ResultStatus, SkillResult
 pytestmark = pytest.mark.no_db
 
 
-def test_small_operation_legacy_modules_alias_to_main_module() -> None:
+def test_small_operations_resolve_from_main_module() -> None:
     main = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
 
-    for module_name in (
-        "create_cycle",
-        "delete_cycle",
-        "query_cycles",
-        "query_cycle_info",
-    ):
-        legacy = importlib.import_module(
-            f"app.skills.manage-crop-cycle.scripts.{module_name}"
-        )
-
-        assert legacy is main
+    assert main.create_cycle.__module__ == main.__name__
+    assert main.delete_cycle.__module__ == main.__name__
+    assert main.query_cycles.__module__ == main.__name__
+    assert main.query_cycle_info.__module__ == main.__name__
 
 
 def test_heavy_update_modules_keep_stable_real_modules() -> None:
@@ -34,23 +27,25 @@ def test_heavy_update_modules_keep_stable_real_modules() -> None:
         assert module.__name__ == f"app.skills.manage-crop-cycle.scripts.{module_name}"
 
 
-def test_agent_legacy_small_operation_paths_share_main_module() -> None:
+def test_main_entry_exports_small_operations() -> None:
     main = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
-    legacy = importlib.import_module(
-        "app.skills.manage-crop-cycle.scripts.create_cycle"
-    )
 
-    assert legacy is main
+    assert set(main.__all__) >= {
+        "ManageCropCycleSkill",
+        "create_cycle",
+        "delete_cycle",
+        "query_cycle_info",
+        "query_cycles",
+        "update_cycle",
+        "update_stage",
+    }
 
 
 @pytest.mark.asyncio
-async def test_patch_on_legacy_small_operation_path_hits_main_dispatch(
+async def test_patch_on_main_small_operation_hits_dispatch(
     monkeypatch,
 ) -> None:
     main = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
-    legacy = importlib.import_module(
-        "app.skills.manage-crop-cycle.scripts.create_cycle"
-    )
 
     async def fake_create_cycle(params: dict, context) -> SkillResult:
         return SkillResult(
@@ -58,7 +53,7 @@ async def test_patch_on_legacy_small_operation_path_hits_main_dispatch(
             reply=f"patched:{params['operation']}:{context.farm_id}",
         )
 
-    monkeypatch.setattr(legacy, "create_cycle", fake_create_cycle)
+    monkeypatch.setattr(main, "create_cycle", fake_create_cycle)
 
     result = await main.ManageCropCycleSkill().execute(
         {"operation": "create_cycle"},
