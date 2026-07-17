@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.agent.skill_coverage import (
+from app.platforms.evaluation.skill_coverage import (
     CoveragePriority,
     CoverageStatus,
     high_priority_unclassified_entries,

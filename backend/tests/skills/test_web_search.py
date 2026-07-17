@@ -250,7 +250,7 @@ class TestRewriteQuery:
 
     @pytest.mark.asyncio
     async def test_llm_not_configured_fallback(self):
-        from app.agent.llm import LlmNotConfiguredError
+        from app.core.llm import LlmNotConfiguredError
 
         with patch(
             "app.skills.web_search.scripts.main.get_llm",

@@ -5,7 +5,7 @@
 class TestToolChoiceRequired:
     def test_force_binding_sets_tool_choice_required(self):
         """select_tools 返回 force_binding 时，tool_choice 必须为 'required'。"""
-        from app.agent.tool_selector import ToolSelectionResult
+        from app.agent.router.tool_selector import ToolSelectionResult
         from app.agent.runtime.llm_support import _resolve_tool_choice
 
         selection = ToolSelectionResult(
@@ -15,7 +15,7 @@ class TestToolChoiceRequired:
         assert _resolve_tool_choice(selection) == "required"
 
     def test_no_force_binding_keeps_auto(self):
-        from app.agent.tool_selector import ToolSelectionResult
+        from app.agent.router.tool_selector import ToolSelectionResult
         from app.agent.runtime.llm_support import _resolve_tool_choice
 
         selection = ToolSelectionResult(
@@ -25,7 +25,7 @@ class TestToolChoiceRequired:
         assert _resolve_tool_choice(selection) == "auto"
 
     def test_empty_tools_no_force_binding_keeps_auto(self):
-        from app.agent.tool_selector import ToolSelectionResult
+        from app.agent.router.tool_selector import ToolSelectionResult
         from app.agent.runtime.llm_support import _resolve_tool_choice
 
         selection = ToolSelectionResult(

@@ -64,14 +64,6 @@ def test_legacy_evaluation_root_aliases_platform_root():
     assert legacy_root is platform_root
 
 
-def test_legacy_agent_skill_coverage_aliases_platform_module():
-    """旧 agent.skill_coverage 入口应直接转发到新平台模块对象。"""
-    legacy_module = importlib.import_module("app.agent.skill_coverage")
-    platform_module = importlib.import_module("app.platforms.evaluation.skill_coverage")
-
-    assert legacy_module is platform_module
-
-
 def test_agent_turn_service_runtime_import_uses_platform_path():
     """agent turn 运行时 discovery 规则导入应使用新平台路径。"""
     import app.services.agent_turn_service as agent_turn_service

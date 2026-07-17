@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.agent.tool_selector import select_tools
+from app.agent.router.tool_selector import select_tools
 
 pytestmark = pytest.mark.no_db
 
@@ -252,7 +252,7 @@ class TestQueryKeywordMatching:
         assert "manage_cost" in result
 
     def test_keyword_match_logs_tool_select_layer(self, caplog):
-        with caplog.at_level("INFO", logger="app.agent.tool_selector"):
+        with caplog.at_level("INFO", logger="app.agent.router.tool_selector"):
             result = select_tools("今天天气", _make_tools())
 
         assert result == ["weather"]
@@ -359,7 +359,7 @@ class TestFallback:
         assert len(result) <= 2
 
     def test_router_fallback_logs_returned_tools(self, caplog):
-        with caplog.at_level("INFO", logger="app.agent.tool_selector"):
+        with caplog.at_level("INFO", logger="app.agent.router.tool_selector"):
             result = select_tools("帮我看看最近账怎么样", _make_tools())
 
         assert isinstance(result.tools, list)
@@ -367,7 +367,7 @@ class TestFallback:
         assert "returned=" in caplog.text
 
     def test_fallback_all_log_is_removed(self, caplog):
-        with caplog.at_level("INFO", logger="app.agent.tool_selector"):
+        with caplog.at_level("INFO", logger="app.agent.router.tool_selector"):
             result = select_tools("你好", _make_tools())
 
         assert result == []

@@ -5,7 +5,7 @@ import hashlib
 import logging
 import re
 
-logger = logging.getLogger("app.agent.intent_router")
+logger = logging.getLogger(__name__)
 
 
 class IntentType(enum.Enum):

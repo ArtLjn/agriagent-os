@@ -1,9 +1,10 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.agent.advisor import invoke_advisor, stream_advisor
+from app.agent.executor.models import PendingActionDecision
+from app.application.advice.advisor import invoke_advisor, stream_advisor
 from app.prompt.registry import get_registry
-from app.agent.report import generate_cycle_report
+from app.application.report import generate_cycle_report
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +36,14 @@ class TestAdvisorGuardrails:
 
     @pytest.mark.asyncio
     async def test_output_pii_filtered(self):
-        with patch("app.agent.advisor._get_advisor_graph") as mock_get:
+        with (
+            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch(
+                "app.application.advice.advisor.handle_pending_action",
+                new_callable=AsyncMock,
+                return_value=PendingActionDecision.unhandled(),
+            ),
+        ):
             mock_graph = MagicMock()
             mock_graph.ainvoke = AsyncMock(
                 return_value={"messages": [MagicMock(content="联系 13800138000")]}
@@ -48,7 +56,14 @@ class TestAdvisorGuardrails:
     async def test_recursion_limit_caught(self):
         from langgraph.errors import GraphRecursionError
 
-        with patch("app.agent.advisor._get_advisor_graph") as mock_get:
+        with (
+            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch(
+                "app.application.advice.advisor.handle_pending_action",
+                new_callable=AsyncMock,
+                return_value=PendingActionDecision.unhandled(),
+            ),
+        ):
             mock_graph = MagicMock()
             mock_graph.ainvoke = AsyncMock(
                 side_effect=GraphRecursionError("Too many steps")
@@ -61,8 +76,8 @@ class TestAdvisorGuardrails:
     async def test_daily_advice_uses_direct_llm_without_chat_graph(self):
         """DailyAdvice 结构化生成不应进入聊天图，避免注入长系统上下文。"""
         with (
-            patch("app.agent.advisor._get_advisor_graph") as mock_graph,
-            patch("app.agent.advisor.get_llm") as mock_get_llm,
+            patch("app.application.advice.advisor._get_advisor_graph") as mock_graph,
+            patch("app.application.advice.advisor.get_llm") as mock_get_llm,
         ):
             mock_llm = MagicMock()
             mock_llm.ainvoke = AsyncMock(
@@ -98,7 +113,14 @@ class TestStreamAdvisorGuardrails:
     async def test_stream_recursion_limit_caught(self):
         from langgraph.errors import GraphRecursionError
 
-        with patch("app.agent.advisor._get_advisor_graph") as mock_get:
+        with (
+            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch(
+                "app.application.advice.advisor.handle_pending_action",
+                new_callable=AsyncMock,
+                return_value=PendingActionDecision.unhandled(),
+            ),
+        ):
             mock_graph = MagicMock()
             mock_graph.astream = _make_mock_astream(
                 GraphRecursionError("Too many steps")
@@ -112,7 +134,14 @@ class TestStreamAdvisorGuardrails:
 
     @pytest.mark.asyncio
     async def test_stream_generic_exception_fallback(self):
-        with patch("app.agent.advisor._get_advisor_graph") as mock_get:
+        with (
+            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch(
+                "app.application.advice.advisor.handle_pending_action",
+                new_callable=AsyncMock,
+                return_value=PendingActionDecision.unhandled(),
+            ),
+        ):
             mock_graph = MagicMock()
             mock_graph.astream = _make_mock_astream(
                 RuntimeError("LLM connection failed")
@@ -128,7 +157,7 @@ class TestStreamAdvisorGuardrails:
 class TestReportGuardrails:
     @pytest.mark.asyncio
     async def test_report_output_filtered(self):
-        with patch("app.agent.report._get_report_llm") as mock_get:
+        with patch("app.application.report._get_report_llm") as mock_get:
             mock_llm = MagicMock()
             mock_llm.ainvoke = AsyncMock(
                 return_value=MagicMock(content="报告人联系方式：13800138000")

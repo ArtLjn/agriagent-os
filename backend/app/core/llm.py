@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 
-logger = logging.getLogger("app.agent.llm")
+logger = logging.getLogger(__name__)
 
 
 class LlmNotConfiguredError(Exception):

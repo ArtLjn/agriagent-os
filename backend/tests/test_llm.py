@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.llm import LlmNotConfiguredError
+from app.core.llm import LlmNotConfiguredError
 
 
 def _make_fallback_manager():
@@ -23,7 +23,7 @@ class TestGetLlm:
     """测试 LLM 客户端工厂。"""
 
     @patch("app.core.llm_client_manager.get_llm_manager")
-    @patch("app.agent.llm.settings")
+    @patch("app.core.llm.settings")
     def test_get_llm_raises_when_api_key_empty(self, mock_settings, mock_get_manager):
         """API key 未配置且 Manager fallback 时抛出 LlmNotConfiguredError。"""
         mock_settings.ai_api_key = ""
@@ -34,15 +34,15 @@ class TestGetLlm:
         _reset_llm_singletons()
 
         with pytest.raises(LlmNotConfiguredError) as exc_info:
-            from app.agent.llm import get_llm
+            from app.core.llm import get_llm
 
             get_llm()
 
         assert "AI API key 未配置" in str(exc_info.value)
 
-    @patch("app.agent.llm.ChatOpenAI")
+    @patch("app.core.llm.ChatOpenAI")
     @patch("app.core.llm_client_manager.get_llm_manager")
-    @patch("app.agent.llm.settings")
+    @patch("app.core.llm.settings")
     def test_get_llm_returns_chat_openai_instance(
         self, mock_settings, mock_get_manager, mock_chat_openai: MagicMock
     ) -> None:
@@ -61,7 +61,7 @@ class TestGetLlm:
 
         _reset_llm_singletons()
 
-        from app.agent.llm import get_llm
+        from app.core.llm import get_llm
 
         llm = get_llm()
 
@@ -78,7 +78,7 @@ class TestGetLlm:
         assert call_kwargs["stream_usage"] is True
 
     @patch("app.core.llm_client_manager.get_llm_manager")
-    @patch("app.agent.llm.settings")
+    @patch("app.core.llm.settings")
     def test_get_llm_uses_manager_when_available(
         self, mock_settings, mock_get_manager, caplog
     ):
@@ -107,9 +107,9 @@ class TestGetLlm:
 
         _reset_llm_singletons()
 
-        from app.agent.llm import get_llm
+        from app.core.llm import get_llm
 
-        with caplog.at_level("INFO", logger="app.agent.llm"):
+        with caplog.at_level("INFO", logger="app.core.llm"):
             llm = get_llm()
 
         assert llm is mock_llm
@@ -123,9 +123,9 @@ class TestGetLlm:
 class TestEnableThinking:
     """测试 enable_thinking 配置不再传递给 API。"""
 
-    @patch("app.agent.llm.ChatOpenAI")
+    @patch("app.core.llm.ChatOpenAI")
     @patch("app.core.llm_client_manager.get_llm_manager")
-    @patch("app.agent.llm.settings")
+    @patch("app.core.llm.settings")
     def test_no_model_kwargs_passed(
         self, mock_settings, mock_get_manager, mock_chat_openai: MagicMock
     ) -> None:
@@ -145,7 +145,7 @@ class TestEnableThinking:
 
         _reset_llm_singletons()
 
-        from app.agent.llm import get_llm
+        from app.core.llm import get_llm
 
         get_llm()
 

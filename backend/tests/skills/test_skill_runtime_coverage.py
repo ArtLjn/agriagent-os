@@ -10,7 +10,7 @@ from app.skills.metadata import (
     SkillPermissionLevel,
     get_skill_metadata,
 )
-from app.agent.tool_selector import QUERY_TRIGGERS, TOOL_CHAIN_MAP, WRITE_PATTERNS
+from app.agent.router.tool_selector import QUERY_TRIGGERS, TOOL_CHAIN_MAP, WRITE_PATTERNS
 from app.infra.pending_actions import WRITE_SKILLS
 
 pytestmark = pytest.mark.no_db

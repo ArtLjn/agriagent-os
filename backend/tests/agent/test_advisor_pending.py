@@ -2,16 +2,20 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.agent.advisor import invoke_advisor, stream_advisor
+from app.application.advice.advisor import invoke_advisor, stream_advisor
 from app.agent.executor.models import PendingActionDecision
 from app.infra.pending_actions import remove_pending, store_pending
 
 
 @pytest.fixture(autouse=True)
 def clean_pending_action():
-    remove_pending(1)
-    yield
-    remove_pending(1)
+    with (
+        patch("app.infra.pending_actions._cancel_pending_plan_in_db"),
+        patch("app.infra.pending_actions._load_pending_plan_from_db", return_value=None),
+    ):
+        remove_pending(1)
+        yield
+        remove_pending(1)
 
 
 @pytest.mark.asyncio
@@ -19,7 +23,7 @@ async def test_advisor_delegates_pending_confirm_to_executor():
     store_pending(1, "create_cost_record", {"amount": 100, "category": "化肥"})
 
     with patch(
-        "app.agent.advisor.handle_pending_action",
+        "app.application.advice.advisor.handle_pending_action",
         new_callable=AsyncMock,
     ) as mock_pending:
         mock_pending.return_value = PendingActionDecision.confirmed("已执行：已记账")
@@ -40,10 +44,10 @@ async def test_advisor_clears_trace_for_pending_handled_reply():
 
     with (
         patch(
-            "app.agent.advisor.handle_pending_action",
+            "app.application.advice.advisor.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
-        patch("app.agent.advisor.clear_trace") as mock_clear_trace,
+        patch("app.application.advice.advisor.clear_trace") as mock_clear_trace,
     ):
         mock_pending.return_value = PendingActionDecision.confirmed("已执行：已记账")
         reply = await invoke_advisor("确认", farm_id=1)
@@ -58,10 +62,10 @@ async def test_stream_advisor_clears_trace_for_pending_handled_reply():
 
     with (
         patch(
-            "app.agent.advisor.handle_pending_action",
+            "app.application.advice.advisor.handle_pending_action",
             new_callable=AsyncMock,
         ) as mock_pending,
-        patch("app.agent.advisor.clear_trace") as mock_clear_trace,
+        patch("app.application.advice.advisor.clear_trace") as mock_clear_trace,
     ):
         mock_pending.return_value = PendingActionDecision.confirmed("已执行：已记账")
         chunks = [chunk async for chunk in stream_advisor("确认", farm_id=1)]
@@ -73,7 +77,7 @@ async def test_stream_advisor_clears_trace_for_pending_handled_reply():
 @pytest.mark.asyncio
 async def test_stream_advisor_refuses_unsupported_delete_cost_request():
     """没有删除账单 Skill 时，不应让模型承诺清理所有账单。"""
-    with patch("app.agent.advisor._get_advisor_graph") as mock_graph:
+    with patch("app.application.advice.advisor._get_advisor_graph") as mock_graph:
         chunks = [
             chunk
             async for chunk in stream_advisor(
@@ -89,8 +93,8 @@ async def test_stream_advisor_refuses_unsupported_delete_cost_request():
 @pytest.mark.asyncio
 async def test_stream_advisor_records_trace_for_greeting_reply():
     with (
-        patch("app.agent.advisor.record_agent_response") as mock_record_response,
-        patch("app.agent.advisor.clear_trace") as mock_clear_trace,
+        patch("app.application.advice.advisor.record_agent_response") as mock_record_response,
+        patch("app.application.advice.advisor.clear_trace") as mock_clear_trace,
     ):
         chunks = [
             chunk
@@ -112,8 +116,8 @@ async def test_stream_advisor_records_trace_for_greeting_reply():
 @pytest.mark.asyncio
 async def test_advisor_records_trace_for_unsupported_capability_reply():
     with (
-        patch("app.agent.advisor.record_agent_response") as mock_record_response,
-        patch("app.agent.advisor.clear_trace") as mock_clear_trace,
+        patch("app.application.advice.advisor.record_agent_response") as mock_record_response,
+        patch("app.application.advice.advisor.clear_trace") as mock_clear_trace,
     ):
         reply = await invoke_advisor(
             "清理所有账单",

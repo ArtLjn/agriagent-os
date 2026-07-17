@@ -148,27 +148,27 @@ class TestToolChainExpansion:
     """验证 TOOL_CHAIN_MAP + expand_by_chain。"""
 
     def test_map_is_dict(self):
-        from app.agent.tool_selector import TOOL_CHAIN_MAP
+        from app.agent.router.tool_selector import TOOL_CHAIN_MAP
 
         assert isinstance(TOOL_CHAIN_MAP, dict)
 
     def test_weather_does_not_expand_to_farm_status(self):
         """普通天气查询不应隐式扩展到 get_farm_status。"""
-        from app.agent.tool_selector import expand_by_chain
+        from app.agent.router.tool_selector import expand_by_chain
 
         result = expand_by_chain({"weather"})
         assert result == {"weather"}
 
     def test_cost_summary_does_not_expand_to_farm_status(self):
         """账务查询不应隐式扩展到 get_farm_status。"""
-        from app.agent.tool_selector import expand_by_chain
+        from app.agent.router.tool_selector import expand_by_chain
 
         result = expand_by_chain({"manage_cost"})
         assert result == {"manage_cost"}
 
     def test_write_skills_no_chain(self):
         """写操作 Skill 不会被扩展。"""
-        from app.agent.tool_selector import expand_by_chain
+        from app.agent.router.tool_selector import expand_by_chain
 
         write_tools = [
             "manage_cost",
@@ -181,21 +181,21 @@ class TestToolChainExpansion:
 
     def test_get_farm_status_no_chain(self):
         """get_farm_status 自身无链式扩展。"""
-        from app.agent.tool_selector import expand_by_chain
+        from app.agent.router.tool_selector import expand_by_chain
 
         result = expand_by_chain({"get_farm_status"})
         assert result == {"get_farm_status"}
 
     def test_empty_input(self):
         """空输入返回空集合。"""
-        from app.agent.tool_selector import expand_by_chain
+        from app.agent.router.tool_selector import expand_by_chain
 
         result = expand_by_chain(set())
         assert result == set()
 
     def test_original_tools_preserved(self):
         """扩展后保留所有原始工具。"""
-        from app.agent.tool_selector import expand_by_chain
+        from app.agent.router.tool_selector import expand_by_chain
 
         original = {"weather", "manage_cost"}
         result = expand_by_chain(original)
@@ -208,7 +208,7 @@ class TestCrossCuttingIntegration:
 
     def test_query_tools_do_not_implicitly_call_farm_status(self):
         """查询类工具需要上下文时应由 ContextBundle 提供，不隐式调用农场状态。"""
-        from app.agent.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
+        from app.agent.router.tool_selector import TOOL_CHAIN_MAP, expand_by_chain
 
         query_tools = [
             "weather",
@@ -225,7 +225,7 @@ class TestCrossCuttingIntegration:
 
     def test_tool_chain_handles_farm_status_routing(self, _composer):
         """prompt 保留工具引导，但具体查询不通过 TOOL_CHAIN_MAP 隐式调用农场状态。"""
-        from app.agent.tool_selector import expand_by_chain
+        from app.agent.router.tool_selector import expand_by_chain
 
         text = _composer.compose(
             "system_base",

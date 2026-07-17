@@ -66,7 +66,7 @@ sequenceDiagram
     participant API as api/agent.py
     participant UC as application
     participant SVC as services/agent_service.py
-    participant ADV as agent/advisor.py
+    participant ADV as application/advice/advisor.py
     participant RT as agent/runtime
     participant CTX as context + memory
     participant LLM as LLM Provider
@@ -97,7 +97,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     Application["application\n用例编排"]
-    Advisor["advisor.py\n兼容入口、Guardrails、pending action"]
+    Advisor["application/advice/advisor.py\nGuardrails、pending action"]
     Planner["planner / tool_selector\n意图识别、候选工具"]
     Runtime["runtime\nLangGraph 节点、消息、预算、流事件"]
     Executor["executor / runtime.tool_executor\n并行工具执行"]
@@ -184,7 +184,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     Runtime["agent/runtime"]
-    LLMFactory["agent/llm.py"]
+    LLMFactory["core/llm.py"]
     Manager["core/llm_client_manager.py\n角色路由、权重、API Key 轮换、熔断"]
     Providers["providers.json\n多 provider / model 配置"]
     LLM["OpenAI 兼容 LLM 服务"]
@@ -233,7 +233,7 @@ erDiagram
 
 ## 9. 迁移关注点
 
-- `api/agent.py` 已经瘦身，但仍通过 `services.agent_service` 进入旧 `advisor.py` 兼容入口。
+- `api/agent.py` 已经瘦身，聊天编排通过 `application/chat` 进入真实 `application/advice/advisor.py`。
 - `agent/runtime/llm_support.py` 当前会构建 runtime context bundle，后续可继续向 application 注入端口的方向收敛。
 - `services/` 仍承担大量业务模块职责，后续可逐步迁移到 `modules/farm`、`modules/ledger`、`modules/weather`、`modules/conversation` 等真实模块。
 - `app/skills/` 当前是平台能力和业务写入的交汇点，新增 Skill 要明确只读/写操作权限、缓存策略和 pending action 行为。
