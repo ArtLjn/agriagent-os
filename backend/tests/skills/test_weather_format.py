@@ -11,7 +11,7 @@ from app.infra.skill_cache import clear_cache
 from app.models.user import User
 from app.models.user_setting import UserSetting
 
-_weather_mod = importlib.import_module("app.agent.skills.weather.scripts.main")
+_weather_mod = importlib.import_module("app.skills.weather.scripts.main")
 WeatherSkill = _weather_mod.WeatherSkill
 
 
@@ -33,6 +33,13 @@ def _make_weather_data(days=3) -> dict:
             "windspeed_10m_max": [5, 12, 8],
         }
     }
+
+
+def _make_empty_location_db():
+    """构造无 Farm 和用户设置的空位置查询会话。"""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    return db
 
 
 class _SessionProxy:
@@ -160,10 +167,12 @@ class TestWeatherLocationMissing:
 
     @pytest.mark.asyncio
     @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    @patch.object(_weather_mod, "SessionLocal")
     async def test_explicit_location_parameter_is_supported(
-        self, mock_fetch_weather
+        self, mock_session_local, mock_fetch_weather
     ):
         """兼容 skill.md 声明的 location 参数，避免 LLM 传参被忽略。"""
+        mock_session_local.return_value = _make_empty_location_db()
         mock_fetch_weather.return_value = _make_weather_data()
 
         result = await WeatherSkill().execute(
@@ -181,10 +190,13 @@ class TestWeatherLocationMissing:
 
     @pytest.mark.asyncio
     @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    @patch.object(_weather_mod, "SessionLocal")
     async def test_ambiguous_location_requires_clarification(
-        self, mock_fetch_weather
+        self, mock_session_local, mock_fetch_weather
     ):
         """裸鼓楼区可能属于南京或徐州，不能静默查询。"""
+        mock_session_local.return_value = _make_empty_location_db()
+
         result = await WeatherSkill().execute(
             {"location": "鼓楼区"},
             SkillContext(farm_id=1),
@@ -231,10 +243,12 @@ class TestWeatherLocationMissing:
 
     @pytest.mark.asyncio
     @patch.object(_weather_mod, "fetch_weather", new_callable=AsyncMock)
+    @patch.object(_weather_mod, "SessionLocal")
     async def test_qualified_ambiguous_location_uses_alias_coords(
-        self, mock_fetch_weather
+        self, mock_session_local, mock_fetch_weather
     ):
         """带上级城市的重名区县可安全解析坐标。"""
+        mock_session_local.return_value = _make_empty_location_db()
         mock_fetch_weather.return_value = _make_weather_data()
 
         result = await WeatherSkill().execute(

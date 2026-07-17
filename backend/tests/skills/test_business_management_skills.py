@@ -16,33 +16,33 @@ from app.models.planting import PlantingUnit
 from app.models.user import User
 from app.models.user_setting import UserSetting
 
-_manage_cost_mod = importlib.import_module("app.agent.skills.manage-cost.scripts.main")
+_manage_cost_mod = importlib.import_module("app.skills.manage-cost.scripts.main")
 _manage_cost_records_mod = importlib.import_module(
-    "app.agent.skills.manage-cost.scripts.records"
+    "app.skills.manage-cost.scripts.records"
 )
 _manage_categories_mod = importlib.import_module(
-    "app.agent.skills.manage-cost-categories.scripts.main"
+    "app.skills.manage-cost-categories.scripts.main"
 )
 _manage_units_mod = importlib.import_module(
-    "app.agent.skills.manage-planting-units.scripts.main"
+    "app.skills.manage-planting-units.scripts.main"
 )
 _manage_cycles_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.main"
+    "app.skills.manage-crop-cycle.scripts.main"
 )
 _manage_cycles_query_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.query_cycles"
+    "app.skills.manage-crop-cycle.scripts.query_cycles"
 )
 _manage_templates_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-templates.scripts.main"
+    "app.skills.manage-crop-templates.scripts.main"
 )
 _manage_logs_mod = importlib.import_module(
-    "app.agent.skills.manage-farm-logs.scripts.main"
+    "app.skills.manage-farm-logs.scripts.main"
 )
 _manage_cycles_delete_mod = importlib.import_module(
-    "app.agent.skills.manage-crop-cycle.scripts.delete_cycle"
+    "app.skills.manage-crop-cycle.scripts.delete_cycle"
 )
 _manage_settings_mod = importlib.import_module(
-    "app.agent.skills.manage-user-settings.scripts.main"
+    "app.skills.manage-user-settings.scripts.main"
 )
 
 ManageCostSkill = _manage_cost_mod.ManageCostSkill

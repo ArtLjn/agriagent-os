@@ -37,7 +37,7 @@ def test_heavy_update_modules_keep_stable_real_modules() -> None:
 def test_agent_legacy_small_operation_paths_share_main_module() -> None:
     main = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
     legacy = importlib.import_module(
-        "app.agent.skills.manage-crop-cycle.scripts.create_cycle"
+        "app.skills.manage-crop-cycle.scripts.create_cycle"
     )
 
     assert legacy is main

@@ -14,7 +14,7 @@ from app.agent.reflector import (
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.reflector.models import ReflectionIssue
 from app.agent.router import SkillRouter
-from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
+from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_action_presenter import (
     build_confirm_message,
     build_plan_confirm_message,
@@ -240,6 +240,10 @@ async def test_confirmed_pending_action_reflection_blocks_execution():
             "phase": "confirm_pending_action",
             "action_id": pending_action.action_id,
             "tool_name": "create_cost_record",
+            "legacy_tool_name": "create_cost_record",
+            "resolved_capability": "manage_cost",
+            "resolved_operation": "create_record",
+            "operation_risk": "write_confirm",
         },
     )
 
@@ -308,6 +312,20 @@ async def test_confirmed_pending_plan_reflection_blocks_execution():
             "tool_names": [
                 "manage_workers",
                 "create_operation_work_order",
+            ],
+            "resolved_operations": [
+                {
+                    "legacy_tool_name": "manage_workers",
+                    "resolved_capability": "manage_workers",
+                    "resolved_operation": "manage_worker",
+                    "operation_risk": "write_confirm",
+                },
+                {
+                    "legacy_tool_name": "create_operation_work_order",
+                    "resolved_capability": "manage_work_orders",
+                    "resolved_operation": "create_work_order",
+                    "operation_risk": "write_confirm",
+                },
             ],
         },
     )

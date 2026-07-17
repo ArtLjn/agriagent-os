@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.agent.skills.web_search.scripts.main import (
+from app.skills.web_search.scripts.main import (
     WebSearchSkill,
     _format_results,
     _detect_search_category,
@@ -213,7 +213,7 @@ class TestRewriteQuery:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         with patch(
-            "app.agent.skills.web_search.scripts.main.get_llm", return_value=mock_llm
+            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
         ):
             result = await _rewrite_query("西瓜价格")
 
@@ -227,7 +227,7 @@ class TestRewriteQuery:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         with patch(
-            "app.agent.skills.web_search.scripts.main.get_llm", return_value=mock_llm
+            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
         ):
             result = await _rewrite_query("西瓜")
 
@@ -241,7 +241,7 @@ class TestRewriteQuery:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         with patch(
-            "app.agent.skills.web_search.scripts.main.get_llm", return_value=mock_llm
+            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
         ):
             result = await _rewrite_query("西瓜")
 
@@ -253,7 +253,7 @@ class TestRewriteQuery:
         from app.agent.llm import LlmNotConfiguredError
 
         with patch(
-            "app.agent.skills.web_search.scripts.main.get_llm",
+            "app.skills.web_search.scripts.main.get_llm",
             side_effect=LlmNotConfiguredError("no key"),
         ):
             result = await _rewrite_query("西瓜价格")
@@ -269,7 +269,7 @@ class TestRewriteQuery:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         with patch(
-            "app.agent.skills.web_search.scripts.main.get_llm", return_value=mock_llm
+            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
         ):
             result = await _rewrite_query("西瓜价格")
 
@@ -284,7 +284,7 @@ class TestRewriteQuery:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         with patch(
-            "app.agent.skills.web_search.scripts.main.get_llm", return_value=mock_llm
+            "app.skills.web_search.scripts.main.get_llm", return_value=mock_llm
         ):
             result = await _rewrite_query("西瓜价格行情走势")
 
@@ -438,7 +438,7 @@ class TestFormatResults:
         }
         # mock 网页抓取避免真实网络请求
         with patch(
-            "app.agent.skills.web_search.scripts.main._fetch_page_content",
+            "app.skills.web_search.scripts.main._fetch_page_content",
             return_value=None,
         ):
             result = await _format_results("test", data)
@@ -544,7 +544,7 @@ class TestFormatResults:
         mock_fetched = "这是从网页抓取到的完整内容，足够长以替代短摘要。"
 
         with patch(
-            "app.agent.skills.web_search.scripts.main._fetch_page_content",
+            "app.skills.web_search.scripts.main._fetch_page_content",
             return_value=mock_fetched,
         ):
             result = await _format_results("test", data)
@@ -589,16 +589,16 @@ class TestWebSearchNormal:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="西瓜价格",
             ),
             patch(
-                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                "app.skills.web_search.scripts.main._fetch_page_content",
                 return_value=None,
             ),
         ):
@@ -628,12 +628,12 @@ class TestWebSearchNormal:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="不存在的关键词",
             ),
         ):
@@ -670,16 +670,16 @@ class TestWebSearchNormal:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="test",
             ),
             patch(
-                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                "app.skills.web_search.scripts.main._fetch_page_content",
                 return_value=None,
             ),
         ):
@@ -717,16 +717,16 @@ class TestWebSearchNormal:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="最新西瓜新闻",
             ),
             patch(
-                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                "app.skills.web_search.scripts.main._fetch_page_content",
                 return_value=None,
             ),
         ):
@@ -741,9 +741,9 @@ class TestWebSearchNormal:
         mock_settings.secrets.searxng_url = ""
 
         with (
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="test",
             ),
         ):
@@ -786,12 +786,12 @@ class TestWebSearchError:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="test",
             ),
         ):
@@ -822,12 +822,12 @@ class TestWebSearchError:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="test",
             ),
         ):
@@ -848,12 +848,12 @@ class TestWebSearchError:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="test",
             ),
         ):
@@ -900,16 +900,16 @@ class TestWebSearchError:
 
         with (
             patch(
-                "app.agent.skills.web_search.scripts.main.httpx.AsyncClient",
+                "app.skills.web_search.scripts.main.httpx.AsyncClient",
                 return_value=mock_client,
             ),
-            patch("app.agent.skills.web_search.scripts.main.settings", mock_settings),
+            patch("app.skills.web_search.scripts.main.settings", mock_settings),
             patch(
-                "app.agent.skills.web_search.scripts.main._rewrite_query",
+                "app.skills.web_search.scripts.main._rewrite_query",
                 return_value="fallback_test_unique",
             ),
             patch(
-                "app.agent.skills.web_search.scripts.main._fetch_page_content",
+                "app.skills.web_search.scripts.main._fetch_page_content",
                 return_value=None,
             ),
         ):

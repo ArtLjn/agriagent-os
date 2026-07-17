@@ -242,7 +242,7 @@ R0.1 删除 `planner/` 后，自然消除 `ToolCandidatePlan`。
 #### R3.3 `router/registry.py` legacy fallback 退场
 
 [router/registry.py](../../backend/app/agent/router/registry.py) 注释自述："长期事实源是
-`app.agent.skills.registry`，这里只是 fallback"。但当前仍是 143 行的 `CATALOG_REGISTRY` 静态 dict。
+`app.skills.registry`，这里只是 fallback"。但当前仍是 143 行的 `CATALOG_REGISTRY` 静态 dict。
 
 整改（与 skill-capability-governance spec Phase 5 协调）：
 

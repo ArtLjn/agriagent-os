@@ -13,7 +13,7 @@ from app.models.cycle import CropCycle, CycleStage
 from app.models.planting import LaborEntry
 
 _manage_labor_payment_mod = importlib.import_module(
-    "app.agent.skills.manage-labor-payment.scripts.main"
+    "app.skills.manage-labor-payment.scripts.main"
 )
 
 ManageLaborPaymentSkill = _manage_labor_payment_mod.ManageLaborPaymentSkill

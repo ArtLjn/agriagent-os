@@ -9,14 +9,19 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.runtime import tool_executor
 from app.agent.runtime.tool_executor import _parallel_tool_node
-from app.agent.skills.metadata import SkillMetadata, SkillPermissionLevel
+from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_actions import get_pending, remove_pending
 from app.models.crop import CropTemplate
 from app.models.cycle import CropCycle
 
 
 @pytest.fixture(autouse=True)
-def clean_pending():
+def clean_pending(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.infra.pending_actions.SessionLocal",
+        lambda: db_session,
+        raising=False,
+    )
     remove_pending(1)
     yield
     remove_pending(1)

@@ -8,7 +8,7 @@ import pytest
 
 from skillify.core.context import SkillContext
 
-_mod = importlib.import_module("app.agent.skills.manage-farm-logs.scripts.main")
+_mod = importlib.import_module("app.skills.manage-farm-logs.scripts.main")
 ManageFarmLogsSkill = _mod.ManageFarmLogsSkill
 
 

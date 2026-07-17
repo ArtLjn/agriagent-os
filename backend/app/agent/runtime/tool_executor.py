@@ -1476,7 +1476,9 @@ async def _call_one(
 ) -> ToolMessage:
     """执行单个 tool_call，保持原有权限、pending 和 trace 顺序。"""
     name = tc["name"]
-    args = _execution_args_for_call(name, tc["args"])
+    raw_args = _execution_args_for_call(name, tc["args"])
+    # 权限判定必须使用已补齐的确定性 operation，否则“结工资”这类写意图会被误判为查询。
+    args = _build_pending_execution_args(name, raw_args, farm_id, original_input)
     tool_call_id = tc["id"]
     logger.info("Skill 调用 %s(%s)", name, args)
     start = _time.perf_counter()

@@ -12,9 +12,9 @@ from app.models.cost import CostRecord
 from app.models.planting import LaborEntry, OperationWorkOrder, Worker
 from app.services.debt_service import SUBTYPE_DEBT
 
-_manage_cost_mod = importlib.import_module("app.agent.skills.manage-cost.scripts.main")
-_records_mod = importlib.import_module("app.agent.skills.manage-cost.scripts.records")
-_debt_mod = importlib.import_module("app.agent.skills.manage-cost.scripts.debt")
+_manage_cost_mod = importlib.import_module("app.skills.manage-cost.scripts.main")
+_records_mod = importlib.import_module("app.skills.manage-cost.scripts.records")
+_debt_mod = importlib.import_module("app.skills.manage-cost.scripts.debt")
 
 ManageCostSkill = _manage_cost_mod.ManageCostSkill
 
