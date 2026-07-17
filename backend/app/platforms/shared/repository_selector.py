@@ -6,9 +6,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-# 迁移期依赖：A1-A3 只抽 shared 前置层，不整体移动 data_flywheel repository
-# 实现类；A5 完成 data_flywheel 目录迁移后，这些导入会改向 platforms/data_flywheel。
-from app.modules.data_flywheel.document_repository_dual import (
+from app.platforms.data_flywheel.document_repository_dual import (
     DualWriteCaseDraftRepository,
     DualWritePrelabelRepository,
     DualWriteRepairPackRepository,
@@ -18,13 +16,13 @@ from app.modules.data_flywheel.document_repository_dual import (
     MongoReadRepairPackRepository,
     MongoReadReviewIssueChainRepository,
 )
-from app.modules.data_flywheel.document_repository_mongo import (
+from app.platforms.data_flywheel.document_repository_mongo import (
     MongoCaseDraftRepository,
     MongoPrelabelRepository,
     MongoRepairPackRepository,
     MongoReviewIssueChainRepository,
 )
-from app.modules.data_flywheel.document_repository_mysql import (
+from app.platforms.data_flywheel.document_repository_mysql import (
     MySQLCaseDraftRepository,
     MySQLPrelabelRepository,
     MySQLRepairPackRepository,

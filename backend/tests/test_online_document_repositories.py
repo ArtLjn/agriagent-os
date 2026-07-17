@@ -21,7 +21,7 @@ from app.models.cycle import CropCycle
 from app.models.data_flywheel import AgentReviewIssueChain
 from app.models.guardrails_log import GuardrailsLog
 from app.models.user import User
-from app.modules.data_flywheel.document_repository_selector import (
+from app.platforms.data_flywheel.document_repository_selector import (
     build_data_flywheel_repository,
 )
 
@@ -145,7 +145,7 @@ def test_repository_runtime_uses_platform_shared_selector() -> None:
     source = inspect.getsource(repository_runtime)
 
     assert repository_runtime.build_data_flywheel_repository is shared_builder
-    assert "app.modules.data_flywheel" not in source
+    assert "app.platforms.data_flywheel" not in source
 
 
 def test_run_maybe_awaitable_uses_registered_main_loop_from_worker_thread():

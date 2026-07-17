@@ -28,16 +28,16 @@ from app.api import (
 from app.infra.limiter import limiter
 from app.infra.mongo import check_mongo_health
 from app.modules.auth.router import router as auth_router
-from app.modules.data_flywheel.annotations_router import (
+from app.platforms.data_flywheel.annotations_router import (
     router as data_flywheel_annotations_router,
 )
-from app.modules.data_flywheel.repair_packs_router import (
+from app.platforms.data_flywheel.repair_packs_router import (
     router as data_flywheel_repair_packs_router,
 )
-from app.modules.data_flywheel.review_issue_chains_router import (
+from app.platforms.data_flywheel.review_issue_chains_router import (
     router as data_flywheel_review_issue_chains_router,
 )
-from app.modules.data_flywheel.router import router as data_flywheel_router
+from app.platforms.data_flywheel.router import router as data_flywheel_router
 from app.simulation.routes import router as simulation_router
 
 

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.modules.data_flywheel.judge_service import (
+from app.platforms.data_flywheel.judge_service import (
     DEFAULT_PROMPT_VERSION,
     DataFlywheelJudgeClient,
     OpenAIDataFlywheelJudgeClient,
@@ -19,10 +19,10 @@ pytestmark = pytest.mark.no_db
 
 def test_shared_and_legacy_judge_exports_same_objects() -> None:
     shared = importlib.import_module("app.platforms.shared.judge_service")
-    legacy = importlib.import_module("app.modules.data_flywheel.judge_service")
-    data_flywheel_service = importlib.import_module("app.modules.data_flywheel.service")
+    legacy = importlib.import_module("app.platforms.data_flywheel.judge_service")
+    data_flywheel_service = importlib.import_module("app.platforms.data_flywheel.service")
     review_chain_service = importlib.import_module(
-        "app.modules.data_flywheel.review_issue_chain_service"
+        "app.platforms.data_flywheel.review_issue_chain_service"
     )
     judge_worker = importlib.import_module("app.platforms.evaluation.discovery.judge_worker")
 

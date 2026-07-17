@@ -12,8 +12,8 @@ from app.modules.auth.dependencies import get_current_user, require_admin
 from app.modules.farm.dependencies import get_current_farm
 from app.models.farm import Farm
 from app.models.user import User
-from app.modules.data_flywheel.service import SAMPLE_TYPE_SESSION_TURN
-from app.modules.data_flywheel.repair_pack_repository import (
+from app.platforms.data_flywheel.service import SAMPLE_TYPE_SESSION_TURN
+from app.platforms.data_flywheel.repair_pack_repository import (
     create_repair_pack,
     get_repair_pack,
     list_repair_candidates,

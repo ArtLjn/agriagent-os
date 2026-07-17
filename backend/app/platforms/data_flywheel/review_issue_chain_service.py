@@ -10,7 +10,7 @@ from app.infra.repository_runtime import (
 )
 from app.models.agent_turn import AgentTurn
 from app.models.data_flywheel import AgentReviewIssueChain
-from app.modules.data_flywheel.service import (
+from app.platforms.data_flywheel.service import (
     _events_for_turn,
     _labels_by_sample,
     _prelabels_by_sample,
@@ -23,11 +23,11 @@ from app.platforms.shared.judge_service import (
     LABEL_SELECTION_RULES,
     normalize_judge_output,
 )
-from app.modules.data_flywheel.issue_repository import (
+from app.platforms.data_flywheel.issue_repository import (
     build_issue_repository_entry,
     build_rule_candidate_package,
 )
-from app.modules.data_flywheel.review_issue_chain_helpers import (
+from app.platforms.data_flywheel.review_issue_chain_helpers import (
     ai_judge,
     chain_id,
     diagnosis,
@@ -47,7 +47,7 @@ from app.modules.data_flywheel.review_issue_chain_helpers import (
     turn_debug_summary,
     virtual_related_turns,
 )
-from app.modules.data_flywheel.review_issue_chain_repository import (
+from app.platforms.data_flywheel.review_issue_chain_repository import (
     get_saved_review_issue_chain,
     overlay_saved_review,
     save_review_issue_chain_ai_judge,

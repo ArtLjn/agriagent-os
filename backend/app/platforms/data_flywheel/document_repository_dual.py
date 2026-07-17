@@ -10,7 +10,7 @@ from app.models.data_flywheel import (
     AgentRepairPack,
     AgentReviewIssueChain,
 )
-from app.modules.data_flywheel.document_repository_common import (
+from app.platforms.data_flywheel.document_repository_common import (
     business_id,
     handle_secondary_failure,
     log_read_fallback,

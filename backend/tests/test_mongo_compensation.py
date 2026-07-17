@@ -76,7 +76,7 @@ async def test_compensation_replay_marks_completed_and_logs_context(db_session, 
         MongoCompensationReplayService,
         MongoCompensationTask,
     )
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         MySQLRepairPackRepository,
     )
 
@@ -122,7 +122,7 @@ async def test_compensation_replay_marks_failed_without_leaking_uri(db_session, 
         MongoCompensationReplayService,
         MongoCompensationTask,
     )
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         MySQLRepairPackRepository,
     )
 

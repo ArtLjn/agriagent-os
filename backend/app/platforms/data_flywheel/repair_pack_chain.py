@@ -3,13 +3,13 @@
 import re
 from typing import Any
 
-from app.modules.data_flywheel.repair_pack_readme import build_repair_pack_readme
-from app.modules.data_flywheel.repair_pack_service import (
+from app.platforms.data_flywheel.repair_pack_readme import build_repair_pack_readme
+from app.platforms.data_flywheel.repair_pack_service import (
     _merge_commands,
     _verification_commands,
     sanitize_debug_evidence,
 )
-from app.modules.data_flywheel.review_issue_chain_case import build_chain_case_json
+from app.platforms.data_flywheel.review_issue_chain_case import build_chain_case_json
 
 _ROUTER_SCOPE_TYPES = {
     "tool_parameter_mismatch",

@@ -166,9 +166,9 @@ def _chain(**overrides) -> AgentReviewIssueChain:
 def test_shared_and_legacy_repository_selector_exports_same_builder() -> None:
     shared = importlib.import_module("app.platforms.shared.repository_selector")
     legacy = importlib.import_module(
-        "app.modules.data_flywheel.document_repository_selector"
+        "app.platforms.data_flywheel.document_repository_selector"
     )
-    aggregate = importlib.import_module("app.modules.data_flywheel.document_repositories")
+    aggregate = importlib.import_module("app.platforms.data_flywheel.document_repositories")
 
     assert legacy.build_data_flywheel_repository is shared.build_data_flywheel_repository
     assert (
@@ -179,7 +179,7 @@ def test_shared_and_legacy_repository_selector_exports_same_builder() -> None:
 
 @pytest.mark.asyncio
 async def test_data_flywheel_mongo_repositories_always_filter_by_farm_id():
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         MongoCaseDraftRepository,
         MongoPrelabelRepository,
         MongoRepairPackRepository,
@@ -242,7 +242,7 @@ async def test_data_flywheel_mongo_repositories_always_filter_by_farm_id():
 
 @pytest.mark.asyncio
 async def test_data_flywheel_mongo_repository_assigns_id_without_mysql_row():
-    from app.modules.data_flywheel.document_repositories import MongoCaseDraftRepository
+    from app.platforms.data_flywheel.document_repositories import MongoCaseDraftRepository
 
     collection = FakeCollection()
     repo = MongoCaseDraftRepository(collection)
@@ -256,7 +256,7 @@ async def test_data_flywheel_mongo_repository_assigns_id_without_mysql_row():
 
 
 def test_data_flywheel_mysql_repositories_cover_core_crud(db_session):
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         MySQLCaseDraftRepository,
         MySQLPrelabelRepository,
         MySQLRepairPackRepository,
@@ -310,7 +310,7 @@ def test_data_flywheel_mysql_repositories_cover_core_crud(db_session):
 
 @pytest.mark.asyncio
 async def test_data_flywheel_dual_write_order_and_mongo_failure_tolerance(db_session):
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         DualWriteRepairPackRepository,
         MongoRepairPackRepository,
         MySQLRepairPackRepository,
@@ -341,7 +341,7 @@ async def test_data_flywheel_dual_write_can_record_compensation_task(db_session)
         MongoCompensationRecorder,
         MongoCompensationTask,
     )
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         DualWriteRepairPackRepository,
         MongoRepairPackRepository,
         MySQLRepairPackRepository,
@@ -369,7 +369,7 @@ async def test_data_flywheel_dual_write_can_record_compensation_task(db_session)
 async def test_data_flywheel_dual_write_ignores_compensation_recorder_failure(
     db_session,
 ):
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         DualWriteRepairPackRepository,
         MongoRepairPackRepository,
         MySQLRepairPackRepository,
@@ -392,7 +392,7 @@ async def test_data_flywheel_dual_write_ignores_compensation_recorder_failure(
 
 @pytest.mark.asyncio
 async def test_data_flywheel_dual_write_updates_secondary_after_mysql(db_session):
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         DualWriteRepairPackRepository,
         MongoRepairPackRepository,
         MySQLRepairPackRepository,
@@ -420,7 +420,7 @@ async def test_data_flywheel_dual_write_updates_secondary_after_mysql(db_session
 
 @pytest.mark.asyncio
 async def test_data_flywheel_selector_modes(db_session):
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         DualWritePrelabelRepository,
         MongoReadPrelabelRepository,
         MongoPrelabelRepository,
@@ -452,7 +452,7 @@ async def test_data_flywheel_selector_modes(db_session):
 
 @pytest.mark.asyncio
 async def test_data_flywheel_mongo_read_falls_back_to_mysql_on_miss(db_session, caplog):
-    from app.modules.data_flywheel.document_repositories import (
+    from app.platforms.data_flywheel.document_repositories import (
         MongoPrelabelRepository,
         MongoReadPrelabelRepository,
         MySQLPrelabelRepository,
