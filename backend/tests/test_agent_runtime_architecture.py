@@ -265,15 +265,18 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
         ),
         patch("app.agent.runtime.nodes.expand_by_chain") as mock_expand,
         patch("app.agent.runtime.nodes.get_llm", return_value=llm),
-        patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model"),
-        patch("app.agent.runtime.nodes._record_llm_success"),
-        patch("app.agent.runtime.nodes._record_llm_failure"),
         patch(
-            "app.agent.runtime.nodes._get_runtime_context_bundle",
+            "app.agent.runtime.llm_invocation._build_circuit_key",
+            return_value="test/model",
+        ),
+        patch("app.agent.runtime.llm_invocation._record_llm_success"),
+        patch("app.agent.runtime.llm_invocation._record_llm_failure"),
+        patch(
+            "app.agent.runtime.llm_prompt._get_runtime_context_bundle",
             new_callable=AsyncMock,
         ) as mock_runtime_context,
         patch(
-            "app.agent.runtime.nodes._get_farm_context",
+            "app.agent.runtime.llm_prompt._get_farm_context",
             new_callable=AsyncMock,
             return_value={
                 "display_name": "农友",
@@ -282,15 +285,17 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
                 "active_crops": "",
             },
         ) as mock_farm_context,
-        patch("app.agent.runtime.nodes.get_prompt_cache") as mock_prompt_cache,
-        patch("app.agent.runtime.nodes.get_composer") as mock_composer,
+        patch("app.agent.runtime.llm_prompt.get_prompt_cache") as mock_prompt_cache,
+        patch("app.agent.runtime.llm_prompt.get_composer") as mock_composer,
         patch("app.agent.runtime.nodes.increment_round", return_value=1),
         patch("app.agent.runtime.nodes.get_collector", return_value=MagicMock()),
         patch(
             "app.agent.runtime.nodes.sliding_window_compact",
             side_effect=lambda messages: messages,
         ),
-        patch("app.agent.runtime.nodes._warm_tool_caches", new_callable=AsyncMock),
+        patch(
+            "app.agent.runtime.llm_node_steps._warm_tool_caches", new_callable=AsyncMock
+        ),
         patch("app.agent.runtime.nodes.settings") as mock_settings,
     ):
         mock_settings.ai.parallel_tool_calls = False
@@ -355,11 +360,14 @@ async def test_llm_node_does_not_bind_tools_after_tool_results():
             return_value=[weather_tool],
         ),
         patch("app.agent.runtime.nodes.get_llm", return_value=llm),
-        patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model"),
-        patch("app.agent.runtime.nodes._record_llm_success"),
-        patch("app.agent.runtime.nodes._record_llm_failure"),
         patch(
-            "app.agent.runtime.nodes._get_farm_context",
+            "app.agent.runtime.llm_invocation._build_circuit_key",
+            return_value="test/model",
+        ),
+        patch("app.agent.runtime.llm_invocation._record_llm_success"),
+        patch("app.agent.runtime.llm_invocation._record_llm_failure"),
+        patch(
+            "app.agent.runtime.llm_prompt._get_farm_context",
             new_callable=AsyncMock,
             return_value={
                 "display_name": "农友",
@@ -374,7 +382,9 @@ async def test_llm_node_does_not_bind_tools_after_tool_results():
             "app.agent.runtime.nodes.sliding_window_compact",
             side_effect=lambda messages: messages,
         ),
-        patch("app.agent.runtime.nodes._warm_tool_caches", new_callable=AsyncMock),
+        patch(
+            "app.agent.runtime.llm_node_steps._warm_tool_caches", new_callable=AsyncMock
+        ),
         patch("app.agent.runtime.nodes.settings") as mock_settings,
     ):
         mock_settings.ai.parallel_tool_calls = False

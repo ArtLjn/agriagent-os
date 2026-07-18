@@ -82,9 +82,9 @@ def mock_env():
     with (
         patch("app.agent.runtime.nodes.get_llm") as mock_get_llm,
         patch("app.agent.runtime.nodes.get_langchain_tools") as mock_get_tools,
-        patch("app.agent.runtime.nodes.get_composer") as mock_get_composer,
+        patch("app.agent.runtime.llm_prompt.get_composer") as mock_get_composer,
         patch("app.agent.runtime.nodes.get_collector") as mock_get_collector,
-        patch("app.agent.runtime.nodes.get_request_date") as mock_get_date,
+        patch("app.agent.runtime.llm_prompt.get_request_date") as mock_get_date,
         patch("app.agent.runtime.nodes.check_quota", return_value=True),
         patch("app.agent.runtime.nodes.select_tools", return_value=[]),
         patch("app.agent.runtime.nodes._get_classifier", return_value=None),
@@ -117,7 +117,7 @@ async def _run_llm_node(mock_render, *query_results):
     with (
         patch("app.agent.runtime.llm_support.SessionLocal", return_value=mock_session),
         patch(
-            "app.agent.runtime.nodes._get_runtime_context_bundle",
+            "app.agent.runtime.llm_prompt._get_runtime_context_bundle",
             return_value=(
                 empty_bundle,
                 {
