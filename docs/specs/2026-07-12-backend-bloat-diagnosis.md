@@ -11,7 +11,7 @@
 | 关联文档 | [2026-07-12-agent-module-remediation.md](./2026-07-12-agent-module-remediation.md)（agent 模块整改 spec） |
 | 关联 spec | [2026-07-10-skill-capability-governance-design.md](./2026-07-10-skill-capability-governance-design.md) |
 | 关联设计 | [2026-07-14-backend-directory-redesign.md](./2026-07-14-backend-directory-redesign.md)（目标架构与 5 大决策迁移路径） |
-| 最近更新 | 2026-07-18（补充 P3-1 classifier 第二阶段拆分进度） |
+| 最近更新 | 2026-07-18（补充 P2-1/P2-2 DataFlywheel 文档仓储收束进度） |
 
 本报告最初（2026-07-12）只做诊断与量化。**2026-07-14 起扩展为整改追踪文档**：
 新增"发现 9：过度设计与不稳定因素"与"整改计划追踪"章节。
@@ -342,6 +342,13 @@ storage:
 依赖默认值。删除 MySQL / Dual / MongoRead 实现前，必须同时确认生产配置、测试默认、回滚策略
 和 MongoDB 迁移 OpenSpec 状态，不能只凭 `config.yaml` 一处判断。
 
+2026-07-18 PR #32 状态：已删除 DataFlywheel `DualWrite*` 与 `MongoRead*`
+8 个迁移期灰度类，shared selector 仅保留 `mysql` 与 `mongo` 两条可验证路径。
+配置模型已将 DataFlywheel 四个 storage 字段收窄为 `mysql`/`mongo`，
+避免 `dual`/`mongo-read` stale 配置延迟到运行时才失败。
+`MySQL*` 4 个类暂不删除，因为 settings 无配置默认值仍为 `mysql`，且 admin data flywheel
+回归测试仍覆盖该路径；待默认值、测试基线与回滚策略统一迁至 Mongo 后再单独删除。
+
 ```python
 # document_repository_selector.py 维护 4 种 backend × 4 个对象 = 16 个类
 "MySQLPrelabelRepository", "MongoPrelabelRepository",
@@ -392,7 +399,11 @@ class AgentRecordRepository(Protocol)
 class GuardrailsLogRepository(Protocol)
 ```
 
-**不稳定因素**：与 #2 同源——为 mongo/mysql 切换设计，但实际只用 mongo。3 个 Protocol 各自有 mysql/mongo 实现，**mysql 实现是死代码**。
+**不稳定因素**：与 #2 同源——为 mongo/mysql 切换设计，但 Protocol 仅作为导出类型存在，
+运行时由具体 repository 和工厂函数 duck typing。2026-07-18 本 PR 已删除
+`ConversationMessageRepository`、`AgentRecordRepository`、`GuardrailsLogRepository`
+3 个 Protocol；online document 的 MySQL/Dual/MongoRead/Mongo 具体实现仍是活跃灰度路径，
+本轮不删除。
 
 ##### 🟠 #6 `_ComparableStage(Protocol)` 单文件内的局部 Protocol
 
@@ -550,8 +561,8 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
-| P2-1 | **`document_repository_*` 砍掉 12 个未用 backend 类** | `platforms/data_flywheel/document_repository_*.py`（2026-07-17 A5 已从 `modules/data_flywheel/` 迁入） | 9-#2 | ⚠️ | 确认生产 config、settings 默认、测试路径、回滚策略和 Mongo 迁移状态；保留 `Mongo*`，再删 `MySQL*`/`Dual*`/`MongoRead*` |
-| P2-2 | `infra/online_document_common.py` 3 Protocol 同步处理 | `backend/app/infra/online_document_common.py` | 9-#5 | ⚠️ | 与 P2-1 同步决策 |
+| P2-1 | **`document_repository_*` 砍掉 12 个未用 backend 类** | `platforms/data_flywheel/document_repository_*.py`（2026-07-17 A5 已从 `modules/data_flywheel/` 迁入） | 9-#2 | 🟡 PR #32 部分完成 | 已删除 `document_repository_dual.py`，下线 `DualWrite*`/`MongoRead*` 8 个灰度类；`document_repository_mysql.py` 的 4 个 `MySQL*` 类因 settings 默认值与 admin 回归仍依赖 `mysql` 暂保留；DataFlywheel storage 配置收窄为 `mysql`/`mongo`，shared selector 仅支持 `mysql`/`mongo`，`dual`/`mongo-read` 会返回 `INVALID_STORAGE_BACKEND` 或在配置解析阶段失败；验证：DataFlywheel repository、admin data flywheel、online document、mongo config/compensation 目标 pytest 94 passed |
+| P2-2 | `infra/online_document_common.py` 3 Protocol 同步处理 | `backend/app/infra/online_document_common.py` | 9-#5 | ✅ PR #32 | 已删除 `ConversationMessageRepository`、`AgentRecordRepository`、`GuardrailsLogRepository` 3 个仅导出的 Protocol；保留 `RepositoryPage`、`DualWriteBase`、Mongo read helper 等运行时 helper；online document 具体多后端仍为活跃灰度路径，未删除 |
 | P2-3 | `services/` 21 个 `*_service.py` 评估合并 | `backend/app/services/` | 3 | ⚠️ | 业务方确认实体边界 |
 | P2-4 | `tests/` 根目录 78 个 test_*.py 下沉 | `backend/tests/` | 5 | ⏳ | 按源码镜像目录重构 |
 | P2-5 | 日志轮转配置补全 | `backend/app/logs/` | 6 | ⏳ | 配置 logrotate；磁盘监控 |

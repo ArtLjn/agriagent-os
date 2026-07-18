@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+import pytest
 import yaml
 
 
@@ -50,10 +51,10 @@ def test_mongo_and_storage_config_load_from_yaml(tmp_path):
                 },
                 "storage": {
                     "trace": "dual",
-                    "case_drafts": "mongo-read",
+                    "case_drafts": "mongo",
                     "repair_packs": "mongo",
-                    "review_issue_chains": "mysql",
-                    "prelabels": "dual",
+                    "review_issue_chains": "mongo",
+                    "prelabels": "mongo",
                     "conversation_messages": "dual",
                     "agent_records": "mongo-read",
                     "guardrails_logs": "mongo",
@@ -77,13 +78,26 @@ def test_mongo_and_storage_config_load_from_yaml(tmp_path):
     assert settings.mongodb.server_selection_timeout_ms == 2500
     assert settings.mongodb.max_pool_size == 32
     assert settings.storage.trace == "dual"
-    assert settings.storage.case_drafts == "mongo-read"
+    assert settings.storage.case_drafts == "mongo"
     assert settings.storage.repair_packs == "mongo"
-    assert settings.storage.review_issue_chains == "mysql"
-    assert settings.storage.prelabels == "dual"
+    assert settings.storage.review_issue_chains == "mongo"
+    assert settings.storage.prelabels == "mongo"
     assert settings.storage.conversation_messages == "dual"
     assert settings.storage.agent_records == "mongo-read"
     assert settings.storage.guardrails_logs == "mongo"
     assert settings.storage.mongo_write_failure_rate_threshold == 0.002
     assert settings.storage.mongo_read_error_rate_threshold == 0.02
     assert settings.storage.mongo_consistency_mismatch_rate_threshold == 0.0002
+
+
+def test_data_flywheel_storage_config_rejects_removed_gray_backends(tmp_path):
+    from app.core.config import Settings
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        yaml.dump({"storage": {"prelabels": "dual"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError):
+        Settings(_config_path=str(config_file))

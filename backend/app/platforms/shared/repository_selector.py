@@ -6,16 +6,6 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.platforms.data_flywheel.document_repository_dual import (
-    DualWriteCaseDraftRepository,
-    DualWritePrelabelRepository,
-    DualWriteRepairPackRepository,
-    DualWriteReviewIssueChainRepository,
-    MongoReadCaseDraftRepository,
-    MongoReadPrelabelRepository,
-    MongoReadRepairPackRepository,
-    MongoReadReviewIssueChainRepository,
-)
 from app.platforms.data_flywheel.document_repository_mongo import (
     MongoCaseDraftRepository,
     MongoPrelabelRepository,
@@ -37,48 +27,26 @@ def build_data_flywheel_repository(
     collection: Any | None = None,
     on_secondary_failure=None,
 ) -> Any:
-    """按对象名和 storage backend 创建 Data Flywheel Repository。"""
+    """按对象名和可验证 backend 创建 Data Flywheel Repository。"""
+    _ = on_secondary_failure
     registry = {
-        "prelabels": (
-            MySQLPrelabelRepository,
-            MongoPrelabelRepository,
-            DualWritePrelabelRepository,
-            MongoReadPrelabelRepository,
-        ),
-        "case_drafts": (
-            MySQLCaseDraftRepository,
-            MongoCaseDraftRepository,
-            DualWriteCaseDraftRepository,
-            MongoReadCaseDraftRepository,
-        ),
-        "repair_packs": (
-            MySQLRepairPackRepository,
-            MongoRepairPackRepository,
-            DualWriteRepairPackRepository,
-            MongoReadRepairPackRepository,
-        ),
+        "prelabels": (MySQLPrelabelRepository, MongoPrelabelRepository),
+        "case_drafts": (MySQLCaseDraftRepository, MongoCaseDraftRepository),
+        "repair_packs": (MySQLRepairPackRepository, MongoRepairPackRepository),
         "review_issue_chains": (
             MySQLReviewIssueChainRepository,
             MongoReviewIssueChainRepository,
-            DualWriteReviewIssueChainRepository,
-            MongoReadReviewIssueChainRepository,
         ),
     }
     if object_name not in registry:
         raise ValueError(
             {"code": "UNKNOWN_DATA_FLYWHEEL_OBJECT", "object": object_name}
         )
-    mysql_cls, mongo_cls, dual_cls, mongo_read_cls = registry[object_name]
-    mysql_repo = mysql_cls(db)
+    mysql_cls, mongo_cls = registry[object_name]
     if backend == "mysql":
-        return mysql_repo
+        return mysql_cls(db)
+    if backend != "mongo":
+        raise ValueError({"code": "INVALID_STORAGE_BACKEND", "backend": backend})
     if collection is None:
         raise ValueError("MONGO_COLLECTION_REQUIRED")
-    mongo_repo = mongo_cls(collection)
-    if backend == "dual":
-        return dual_cls(mysql_repo, mongo_repo, on_secondary_failure)
-    if backend == "mongo-read":
-        return mongo_read_cls(mysql_repo, mongo_repo, on_secondary_failure)
-    if backend == "mongo":
-        return mongo_repo
-    raise ValueError({"code": "INVALID_STORAGE_BACKEND", "backend": backend})
+    return mongo_cls(collection)
