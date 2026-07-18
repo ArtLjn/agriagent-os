@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.infra.mongo import set_mongo_client
 from app.modules.auth.dependencies import get_current_user
 from app.main import app

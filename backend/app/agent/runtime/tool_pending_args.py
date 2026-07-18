@@ -8,7 +8,7 @@ from app.agent.runtime.tool_metadata import (
     _LABOR_SETTLE_OPERATION,
     _operation_name_from_args,
 )
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.cycle import CropCycle
 from app.models.planting import Worker
 

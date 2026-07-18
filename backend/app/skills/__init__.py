@@ -10,7 +10,7 @@ from skillify.core.context import SkillContext
 from skillify.manager import SkillManager
 
 from app.skills.metadata import get_skill_metadata
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.services import cost_category_service
 
 logger = logging.getLogger(__name__)
@@ -213,14 +213,14 @@ def build_skill_context(farm_id: int, farm_uid: str | None = None) -> SkillConte
     """构建 skillify SkillContext，优先从 Manager 获取 LLM 配置。"""
     from openai import AsyncOpenAI
 
-    from app.core.config import settings
+    from app.shared.config import settings
 
     api_key = settings.ai_api_key
     base_url = settings.ai_base_url
     model = settings.ai_model
 
     try:
-        from app.core.llm_client_manager import get_llm_manager
+        from app.shared.llm import get_llm_manager
 
         manager = get_llm_manager()
         if not manager.fallback_mode:

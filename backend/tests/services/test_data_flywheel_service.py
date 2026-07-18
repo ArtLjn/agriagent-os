@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.infra.agent_events import AgentEventWriter
 from app.models import Farm
 from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range

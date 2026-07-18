@@ -140,7 +140,7 @@ class TestAuthMe:
             json={"phone": "13800138013", "password": "password123"},
         )
         token = reg.json()["access_token"]
-        from app.core.dependencies import get_db
+        from app.shared.database import get_db
 
         db = next(app.dependency_overrides[get_db]())
         try:
@@ -166,7 +166,7 @@ class TestAuthMe:
             json={"phone": "13800138014", "password": "password123"},
         )
         token = reg.json()["access_token"]
-        from app.core.dependencies import get_db
+        from app.shared.database import get_db
 
         db = next(app.dependency_overrides[get_db]())
         try:
@@ -209,7 +209,7 @@ class TestAuthMe:
             json={"phone": "13800138005", "password": "password123"},
         )
         token = reg.json()["access_token"]
-        from app.core.dependencies import get_db
+        from app.shared.database import get_db
 
         db = next(app.dependency_overrides[get_db]())
         try:
@@ -285,7 +285,7 @@ class TestAuthFarmLocation:
             json={"phone": "13800138018", "password": "password123"},
         )
         token = reg.json()["access_token"]
-        from app.core.dependencies import get_db
+        from app.shared.database import get_db
 
         db = next(app.dependency_overrides[get_db]())
         try:
@@ -325,7 +325,7 @@ class TestAuthFarmLocation:
             json={"phone": "13800138019", "password": "password123"},
         )
         token = reg.json()["access_token"]
-        from app.core.dependencies import get_db
+        from app.shared.database import get_db
 
         resp = client.put(
             "/auth/me/farm-location",
@@ -353,7 +353,7 @@ class TestAuthFarmLocation:
             json={"phone": "13800138017", "password": "password123"},
         )
         token = reg.json()["access_token"]
-        from app.core.dependencies import get_db
+        from app.shared.database import get_db
 
         db = next(app.dependency_overrides[get_db]())
         try:
@@ -399,7 +399,7 @@ class TestAuthFarmLocation:
             json={"phone": "13800138016", "password": "password123"},
         )
         token = reg.json()["access_token"]
-        from app.core.dependencies import get_db
+        from app.shared.database import get_db
 
         db = next(app.dependency_overrides[get_db]())
         try:

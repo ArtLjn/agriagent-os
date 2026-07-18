@@ -11,7 +11,7 @@ from app.agent.runtime.llm_support import (
     _get_season,
 )
 from app.context.models import ContextBundle
-from app.core.date_context import get_request_date
+from app.shared.time import get_request_date
 from app.prompt.cache import get_prompt_cache  # harness-exempt: 迁移期 prompt fallback
 from app.prompt.composer import get_composer  # harness-exempt: 迁移期 prompt fallback
 

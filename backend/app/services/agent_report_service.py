@@ -10,8 +10,8 @@ from langchain_core.messages import HumanMessage
 from sqlalchemy.orm import Session
 
 from app.agent.guardrails import filter_output
-from app.core.llm import get_llm
-from app.core.json_repair import safe_parse_json
+from app.shared.llm import get_llm
+from app.shared.json_repair import safe_parse_json
 from app.infra.repository_runtime import (
     get_agent_record_repository,
     run_maybe_awaitable,

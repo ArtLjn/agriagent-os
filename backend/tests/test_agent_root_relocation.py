@@ -32,28 +32,28 @@ def test_router_modules_export_expected_public_api() -> None:
     assert selector.WRITE_PATTERNS is rules.WRITE_PATTERNS
 
 
-def test_core_modules_export_expected_public_api() -> None:
-    llm = import_module("app.core.llm")
+def test_shared_modules_export_expected_public_api() -> None:
+    llm = import_module("app.shared.llm")
     assert llm.LlmNotConfiguredError is not None
     assert llm.get_llm is not None
 
-    roles = import_module("app.core.settings.roles")
+    roles = import_module("app.shared.config")
     assert roles.DEFAULT_ASSISTANT_ROLE
     assert roles.normalize_assistant_role is not None
     assert roles.assistant_role_prompt is not None
 
 
-def test_core_llm_patch_target_drives_get_llm() -> None:
-    llm = import_module("app.core.llm")
+def test_shared_llm_patch_target_drives_get_llm() -> None:
+    llm = import_module("app.shared.llm")
 
     manager = MagicMock()
     manager.fallback_mode = True
     chat_instance = MagicMock()
 
     with (
-        patch("app.core.llm_client_manager.get_llm_manager", return_value=manager),
-        patch("app.core.llm.settings") as mock_settings,
-        patch("app.core.llm.ChatOpenAI", return_value=chat_instance) as mock_chat,
+        patch("app.shared.llm.get_llm_manager", return_value=manager),
+        patch("app.shared.llm.settings") as mock_settings,
+        patch("app.shared.llm.ChatOpenAI", return_value=chat_instance) as mock_chat,
     ):
         mock_settings.ai_api_key = "test-key"
         mock_settings.ai_model = "qwen-test"

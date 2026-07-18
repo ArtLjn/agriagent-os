@@ -27,7 +27,7 @@ class TestYamlConfig:
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml.dump(config_data))
 
-        from app.core.config import Settings
+        from app.shared.config import Settings
 
         settings = Settings(_config_path=str(config_file))
         assert settings.server.host == "127.0.0.1"
@@ -36,7 +36,7 @@ class TestYamlConfig:
         assert settings.weather.latitude == 39.9
 
     def test_default_values_when_no_yaml(self):
-        from app.core.config import Settings
+        from app.shared.config import Settings
 
         # patch Path.exists 让默认 config.yaml 也找不到
         with patch("pathlib.Path.exists", return_value=False):
@@ -55,7 +55,7 @@ class TestYamlConfig:
         # pydantic-settings 嵌套模型使用双下划线分隔环境变量
         os.environ["AI__API_KEY"] = "env-key"
         try:
-            from app.core.config import Settings
+            from app.shared.config import Settings
 
             settings = Settings(_config_path=str(config_file))
             assert settings.ai.api_key == "env-key"
@@ -63,7 +63,7 @@ class TestYamlConfig:
             del os.environ["AI__API_KEY"]
 
     def test_backward_compatible_attributes(self):
-        from app.core.config import Settings
+        from app.shared.config import Settings
 
         settings = Settings(_config_path="/nonexistent/config.yaml")
         assert settings.database_url.startswith("mysql+pymysql://")
@@ -71,7 +71,7 @@ class TestYamlConfig:
         assert settings.weather_latitude == 34.26
 
     def test_data_flywheel_llm_prelabel_defaults_to_false(self):
-        from app.core.config import Settings
+        from app.shared.config import Settings
 
         with patch("pathlib.Path.exists", return_value=False):
             settings = Settings(_config_path="/nonexistent/config.yaml")
@@ -84,14 +84,14 @@ class TestYamlConfig:
             yaml.dump({"data_flywheel": {"llm_prelabel_enabled": True}})
         )
 
-        from app.core.config import Settings
+        from app.shared.config import Settings
 
         settings = Settings(_config_path=str(config_file))
 
         assert settings.data_flywheel.llm_prelabel_enabled is True
 
     def test_config_example_covers_settings_schema(self):
-        from app.core.config import Settings
+        from app.shared.config import Settings
 
         config_file = Path(__file__).resolve().parents[1] / "config.yaml.example"
         data = yaml.safe_load(config_file.read_text()) or {}
@@ -109,24 +109,24 @@ class TestYamlConfig:
 
 class TestAIConfig:
     def test_ai_config_default_model(self):
-        from app.core.config import AIConfig
+        from app.shared.config import AIConfig
 
         assert AIConfig().model == "qwen3.6-35b-a3b"
 
     def test_ai_config_default_enable_thinking_false(self):
-        from app.core.config import AIConfig
+        from app.shared.config import AIConfig
 
         ai_config = AIConfig()
         assert ai_config.enable_thinking is False
 
     def test_ai_config_enable_thinking_can_be_set(self):
-        from app.core.config import AIConfig
+        from app.shared.config import AIConfig
 
         ai_config = AIConfig(enable_thinking=True)
         assert ai_config.enable_thinking is True
 
     def test_ai_config_session_summary_defaults(self):
-        from app.core.config import AIConfig
+        from app.shared.config import AIConfig
 
         ai_config = AIConfig()
 
@@ -147,7 +147,7 @@ class TestAIConfig:
         self,
         field_name,
     ):
-        from app.core.config import AIConfig
+        from app.shared.config import AIConfig
 
         with pytest.raises(ValidationError):
             AIConfig(**{field_name: 0})

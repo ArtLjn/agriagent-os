@@ -6,8 +6,8 @@ from app.bootstrap.exceptions import register_exception_handlers
 from app.bootstrap.lifespan import lifespan
 from app.bootstrap.middleware import register_middlewares
 from app.bootstrap.routes import register_routes
-from app.core.config import settings
-from app.core.logger import setup_logging
+from app.shared.config import settings
+from app.shared.logging import setup_logging
 from app.infra.limiter import limiter
 
 

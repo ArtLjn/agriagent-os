@@ -5,7 +5,7 @@ import re
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from app.core.llm import get_llm
+from app.shared.llm import get_llm
 from app.agent.runtime.llm_node_steps import (
     _invoke_and_repair_response,
     _record_response_and_result,
@@ -23,7 +23,7 @@ from app.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.router.tool_selector import expand_by_chain as _expand_by_chain
 from app.agent.router.tool_selector import select_tools as _select_tools
-from app.core.config import settings
+from app.shared.config import settings
 from app.infra.pending_actions import is_pending_tool_message
 from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round

@@ -634,7 +634,7 @@ async def test_chat_records_turn_and_event_metadata(db_session, monkeypatch):
 
 
 async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch):
-    from app.core.config import settings
+    from app.shared.config import settings
     from app.models.agent_turn import AgentTurn
     from app.models.farm import Farm
     from app.models.user import User

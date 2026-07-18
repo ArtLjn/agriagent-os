@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.modules.farm.dependencies import get_current_farm
 from app.models.farm import Farm
 from app.models.simulation import SimulationRun, SimulationResultRecord
@@ -16,7 +16,7 @@ from app.simulation.agent_client import AgentClient
 from app.simulation.models import SimulationReport, SimulationResult
 from app.simulation.reporter import SimulationReporter
 from app.simulation.test_runner import SimulationRunner
-from app.core.config import settings
+from app.shared.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +255,7 @@ async def _execute_run(
     farm_id: int,
 ) -> None:
     """后台执行仿真测试。内部独立管理 session，不依赖请求级 session。"""
-    from app.core.database import SessionLocal
+    from app.shared.database import SessionLocal
 
     db = SessionLocal()
     try:

@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import settings
-from app.core.database import Base
+from app.shared.config import settings
+from app.shared.database import Base
 from app.infra.pending_actions import store_pending_plan
 from app.infra.agent_events import AgentEventWriter
 from app.models.farm import Farm

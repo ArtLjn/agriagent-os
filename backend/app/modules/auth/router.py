@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.models.user import User
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.errors import invalid_credentials_error, register_failed_error

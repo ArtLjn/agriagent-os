@@ -1,6 +1,6 @@
 """Tests for JSON repair utility."""
 
-from app.core.json_repair import extract_json, repair_json
+from app.shared.json_repair import extract_json, repair_json
 
 
 class TestJsonRepair:

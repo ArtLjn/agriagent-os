@@ -76,7 +76,7 @@ def test_redact_mongo_uri_preserves_ipv6_brackets():
 
 @pytest.mark.no_db
 def test_create_mongo_client_uses_configured_timeouts_and_pool(monkeypatch):
-    from app.core.config import MongoConfig
+    from app.shared.config import MongoConfig
     from app.infra import mongo
 
     calls = []

@@ -1,4 +1,4 @@
-"""Tests for app.core.trace_context。"""
+"""Tests for app.infra.trace_context。"""
 
 import pytest
 

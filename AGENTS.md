@@ -26,7 +26,7 @@ farm-manager，FastAPI 后端 + React+TS 前端
 <!-- Guide+Sensor 配对说明：以下每条规则都应对应 scripts/ 中的检查脚本。
      运行 bash scripts/check-guide-sensor-pairing.sh 验证配对完整性。 -->
 ## 硬性规则（CI 会验证）
-1. 依赖方向：后端以 api → application/modules/platform → shared/core/models/infra 为目标，兼容期旧分层由 check-layer-deps.sh 检查；前端 api → components → layouts → pages
+1. 依赖方向：后端以 api → application/domains/modules/platforms → shared/models/infra 为目标，不再新增 `app.core` 入口；前端 api → components → layouts → pages
 2. 横切关注点（auth/log/telemetry）只通过依赖注入
 3. 生产 Python 文件 ≤ 1000 行；500-1000 行为观察区间，按职责混杂度判断是否收束；单方法建议 ≤ 50 行，超过 80 行需说明或拆成步骤函数
 4. 新增代码必须有对应测试

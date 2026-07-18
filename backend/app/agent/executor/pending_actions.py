@@ -29,7 +29,7 @@ from app.infra.pending_actions import (
     remove_pending,
     store_pending,
 )
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.services.pending_plan_service import (
     cancel_active_plan,
     mark_step_executed,

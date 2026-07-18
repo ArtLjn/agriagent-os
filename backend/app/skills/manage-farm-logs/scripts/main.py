@@ -7,7 +7,7 @@ from skillify.skills.base import Skill
 
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.cycle import CropCycle
 from app.models.log import FarmLog
 from app.schemas.log import FarmLogCreate

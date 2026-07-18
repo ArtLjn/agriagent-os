@@ -123,7 +123,7 @@ backend/app/
 ├── observability/                # 观测（合并碎片后单文件）
 ├── simulation/                   # 仿真
 │
-├── core/                         # 配置、数据库、安全、llm 客户端
+├── shared/                       # 配置、数据库、日志、时间、LLM 客户端等共享基础设施
 ├── infra/                        # 基础设施（删除反向依赖后）
 ├── models/                       # SQLAlchemy
 ├── schemas/                      # Pydantic
@@ -145,7 +145,7 @@ api  →  application/ 或 modules/*/router
      application/  ──→  agent/、context/、memory/、prompt/、modules/、services/
                             │
                             ▼
-                        agent/  ──→  core/、models/、infra/
+                        agent/  ──→  shared/、models/、infra/
                             │
                             ▼
                 agent/executor  ──→  skills/registry（不直接 import 具体 skill）
@@ -304,8 +304,8 @@ agent/
 | `agent/intent_router.py` | 已下线；真实入口为 `agent/router/intent.py` | 新增 |
 | `agent/tool_selector.py` | 已下线；真实入口为 `agent/router/tool_selector.py` | 新增 |
 | `agent/tool_selection_rules.py` | 已下线；真实入口为 `agent/router/rules.py` | 新增 |
-| `agent/llm.py` | 已下线；真实入口为 `core/llm.py` | 新增 |
-| `agent/assistant_roles.py` | 已下线；真实入口为 `core/settings/roles.py` | 新增，本轮按既有 `core/settings/` 包落位 |
+| `agent/llm.py` | 已下线；真实入口为 `shared/llm.py` | 新增 |
+| `agent/assistant_roles.py` | 已下线；真实入口为 `shared/config.py` | 新增，助手角色配置随 shared 配置入口收束 |
 | `agent/planner/` | 删除 | P0-1 |
 | `agent/planning/` | 已迁移/收敛到 `agent/runtime/planning/`，保留现有 PlanDraft 语义 | P0-2 |
 
@@ -529,7 +529,8 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | 编号 | 动作 | 来源 |
 | --- | --- | --- |
 | P1-1 | 删单实现 Protocol（`MemoryServicePort`、`_ComparableStage`） | diagnosis 9-#4、9-#6 |
-| P1-2 | 评估并迁移 Python 兼容工具到 `shared/compatibility.py` | diagnosis 9-#8（✅ 本轮完成，旧 `app.core.compat` 入口不保留） |
+| P1-2 | 评估并迁移 Python 兼容工具到 `shared/compatibility.py` | diagnosis 9-#8（✅ 已完成，旧 `app.core.compat` 入口不保留） |
+| P1-2b | 收束 `core` 基础设施到 `shared`，删除旧 `app.core.*` 入口 | 目录收束 Round 2 |
 | P1-3 | **决策 D**：`agent/application/` → `app/application/` | 决策 D |
 | P1-4 | **决策 C**：`agent/skills/` → `app/skills/` | 决策 C |
 | P1-5 | **决策 B**：业务根文件归位（advisor、report、skill_coverage、intent_router 等；graph/state/ports 绑定 runtime 后续任务） | 决策 B |

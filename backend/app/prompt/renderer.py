@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Template
 
-from app.core.timezone import beijing_now
+from app.shared.time import beijing_now
 from app.prompt.models import PromptInput
 
 if TYPE_CHECKING:

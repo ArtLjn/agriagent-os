@@ -5,8 +5,8 @@ from fastapi import Depends
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
-from app.core.config import settings
+from app.shared.database import get_db
+from app.shared.config import settings
 from app.models.user import User
 from app.modules.auth.errors import (
     expired_token_error,

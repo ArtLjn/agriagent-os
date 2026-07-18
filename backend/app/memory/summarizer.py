@@ -17,7 +17,7 @@ from app.agent.runtime.llm_support import (
     _record_llm_failure,
     _record_llm_success,
 )
-from app.core.config import settings
+from app.shared.config import settings
 from app.infra.trace_collector import get_collector
 from app.observability import increment_counter
 from app.prompt.registry import MEMORY_RUNNING_SUMMARY_PROMPT, get_registry

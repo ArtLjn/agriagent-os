@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.models.agent_record import AgentRecord
 from app.models.farm import Farm
 

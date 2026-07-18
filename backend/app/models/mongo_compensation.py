@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Index, Integer, String, Text
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class MongoCompensationTask(Base):

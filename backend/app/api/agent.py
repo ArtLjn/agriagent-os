@@ -5,12 +5,12 @@ from starlette.responses import Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.farm.dependencies import get_current_farm
 from app.models.user import User
 from app.infra.limiter import limiter
-from app.core.llm import LlmNotConfiguredError
+from app.shared.llm import LlmNotConfiguredError
 from app.models.farm import Farm
 from app.application.chat.use_case import chat, new_request_id
 from app.application.advice.use_case import (

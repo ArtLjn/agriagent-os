@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.tokens import create_access_token
 from app.main import app

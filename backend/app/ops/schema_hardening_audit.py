@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.agent_record import AgentRecord
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.cost import CostRecord

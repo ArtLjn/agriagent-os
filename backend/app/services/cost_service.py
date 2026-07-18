@@ -5,7 +5,7 @@ from sqlalchemy import desc, extract
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
-from app.core.timezone import beijing_now  # harness-exempt: 迁移期 service 复用统一北京时间工具，后续下沉 shared 时间工具
+from app.shared.time import beijing_now  # harness-exempt: 迁移期 service 复用统一北京时间工具，后续下沉 shared 时间工具
 from app.models.cost import CostRecord
 from app.models.cost_category import CostCategory
 from app.schemas.cost import CostRecordCreate, CycleProfit, YearlySummary

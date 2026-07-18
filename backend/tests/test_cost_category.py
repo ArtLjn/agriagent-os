@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.models.cost_category import CostCategory
 from app.models.farm import Farm
 from app.models.user import User

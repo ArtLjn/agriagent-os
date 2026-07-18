@@ -3,7 +3,7 @@
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.models.user import User
 from app.modules.auth.errors import (
     admin_required_error,

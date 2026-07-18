@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.shared.config import settings
 from app.infra.mongo import get_mongo_database
 from app.infra.mongo_compensation import MongoCompensationRecorder
 from app.infra.online_document_repositories import (

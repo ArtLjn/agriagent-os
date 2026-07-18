@@ -7,7 +7,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.skills.context import require_farm_context
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.cycle import CropCycle
 from app.models.planting import PlantingUnit, Worker
 from app.schemas.planting import (

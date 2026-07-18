@@ -8,8 +8,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
-from app.core.llm import LlmNotConfiguredError, get_llm
-from app.core.config import settings
+from app.shared.llm import LlmNotConfiguredError, get_llm
+from app.shared.config import settings
 from app.infra.skill_cache import cached
 from app.skills.web_search.scripts.support import (
     _compute_relevance as _support_compute_relevance,

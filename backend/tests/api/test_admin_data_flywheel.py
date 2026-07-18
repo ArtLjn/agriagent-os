@@ -2312,7 +2312,7 @@ def test_build_prelabel_judge_client_uses_llm_manager(monkeypatch) -> None:
             return object(), {"model": "judge-model"}
 
     monkeypatch.setattr(
-        "app.core.llm_client_manager.get_llm_manager",
+        "app.shared.llm.get_llm_manager",
         lambda: FakeManager(),
     )
 
@@ -2326,7 +2326,7 @@ def test_build_prelabel_judge_client_requires_config(monkeypatch) -> None:
         fallback_mode = True
 
     monkeypatch.setattr(
-        "app.core.llm_client_manager.get_llm_manager",
+        "app.shared.llm.get_llm_manager",
         lambda: FakeManager(),
     )
     monkeypatch.setattr(admin_data_flywheel_api.settings.ai, "api_key", "")

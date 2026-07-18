@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.models.cost import CostRecord
 from app.models.farm import Farm
 from app.schemas.cost import CostRecordCreate

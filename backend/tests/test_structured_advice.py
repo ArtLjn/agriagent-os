@@ -159,7 +159,7 @@ class TestDailyAdviceV2Empty:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
-        from app.core.database import Base
+        from app.shared.database import Base
 
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(bind=engine)
@@ -193,7 +193,7 @@ class TestDailyAdviceFallback:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
-        from app.core.database import Base
+        from app.shared.database import Base
 
         mock_invoke.return_value = "这不是 JSON 格式，就是一段纯文本建议。"
         engine = create_engine("sqlite:///:memory:")
@@ -229,7 +229,7 @@ class TestRefreshDailyAdvice:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
-        from app.core.database import Base
+        from app.shared.database import Base
 
         mock_invoke.return_value = "bad json"
         engine = create_engine("sqlite:///:memory:")
@@ -262,7 +262,7 @@ class TestCycleIdPassthrough:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
 
-        from app.core.database import Base
+        from app.shared.database import Base
 
         mock_invoke.return_value = "bad json"
         engine = create_engine("sqlite:///:memory:")

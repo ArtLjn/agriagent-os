@@ -9,10 +9,23 @@ from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 
+import langchain
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from openai import AsyncOpenAI, OpenAI
 
-from app.core.config import settings
+from app.shared.config import settings
+
+try:
+    from watchfiles import watch as _watchfiles_watch
+
+    _HAS_WATCHFILES = True
+except ImportError:
+    _HAS_WATCHFILES = False
+
+for _attr in ("verbose", "debug", "llm_cache"):
+    if not hasattr(langchain, _attr):
+        setattr(langchain, _attr, False)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +37,69 @@ class ErrorLevel(Enum):
     PROVIDER = "provider"
     MODEL = "model"
     QUOTA_EXHAUSTED = "quota_exhausted"
+
+
+class LlmNotConfiguredError(Exception):
+    """LLM 未配置错误。"""
+
+
+def get_llm(*, role: str = "generation") -> BaseChatModel:
+    """获取 LLM 实例（每次返回新实例以支持负载均衡）。"""
+    cb = settings.circuit_breaker_config
+    extra_body: dict = {}
+    if not settings.ai.enable_thinking:
+        extra_body["enable_thinking"] = False
+
+    try:
+        manager = get_llm_manager()
+        if not manager.fallback_mode:
+            llm, info = manager.get_chat_model_with_info(
+                role=role,
+                temperature=0.7,
+                max_retries=cb.retry_max,
+                timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
+                extra_body=extra_body if extra_body else None,
+            )
+            logger.info(
+                (
+                    "LLM 请求模型选择 | provider=%s | model=%s | role=%s | "
+                    "api_key_slot=%s/%s | circuit_key=%s | base_url=%s"
+                ),
+                info["provider"],
+                info["model"],
+                info["role"],
+                int(info["api_key_index"]) + 1,
+                info["api_key_count"],
+                info["circuit_key"],
+                info["base_url"],
+            )
+            return llm
+    except Exception as e:
+        logger.warning("LLMClientManager 失败，回退 config.yaml | error=%s", e)
+
+    if not settings.ai_api_key:
+        raise LlmNotConfiguredError(
+            "AI API key 未配置。请在 providers.json 或 config.yaml 中设置。"
+        )
+
+    llm = ChatOpenAI(
+        model=settings.ai_model,
+        api_key=settings.ai_api_key,
+        base_url=settings.ai_base_url,
+        temperature=0.7,
+        streaming=False,
+        stream_usage=True,
+        max_retries=cb.retry_max,
+        timeout=cb.retry_backoff_base * (2**cb.retry_max) * 2,
+        extra_body=extra_body if extra_body else None,
+    )
+    logger.info(
+        "LLM 请求模型选择 | provider=config.yaml | model=%s | role=%s | base_url=%s",
+        settings.ai_model,
+        role,
+        settings.ai_base_url,
+    )
+    return llm
 
 
 class LLMCircuitState(Enum):
@@ -445,9 +521,31 @@ class LLMClientManager:
 
     def start_file_watcher(self) -> None:
         """启动后台线程监听 providers.json 变化，自动 reload。"""
-        from app.core.llm_config_watcher import start_llm_config_watcher
-
         start_llm_config_watcher(self)
+
+
+def start_llm_config_watcher(manager: object) -> None:
+    """启动后台线程监听 providers.json 变化，自动 reload。"""
+    if not _HAS_WATCHFILES:
+        logger.debug("watchfiles 未安装，跳过自动监听")
+        return
+    if getattr(manager, "_watcher_started", False):
+        return
+    setattr(manager, "_watcher_started", True)
+
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
+    config_path = Path(__file__).parent.parent.parent / "providers.json"
+
+    def _watch() -> None:
+        logger.info("providers.json 文件监听已启动 | path=%s", config_path)
+        for changes in _watchfiles_watch(config_path.parent):
+            for _change_type, changed_path in changes:
+                if Path(changed_path).name == config_path.name:
+                    logger.info("检测到 providers.json 变化，执行热更新")
+                    manager.reload()
+
+    threading.Thread(target=_watch, daemon=True, name="llm-config-watcher").start()
 
 
 _manager: LLMClientManager | None = None
@@ -479,3 +577,22 @@ def reload_llm_config() -> dict:
         "LLM 配置热更新 | provider=%s | model=%s", info["provider"], info["model"]
     )
     return info
+
+
+__all__ = [
+    "ChatOpenAI",
+    "CircuitEntry",
+    "ErrorLevel",
+    "LLMClientManager",
+    "LLMCircuitState",
+    "LLMSelection",
+    "LlmNotConfiguredError",
+    "ModelConfig",
+    "ProviderConfig",
+    "classify_error",
+    "get_llm",
+    "get_llm_manager",
+    "reload_llm_config",
+    "settings",
+    "start_llm_config_watcher",
+]

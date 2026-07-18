@@ -9,7 +9,7 @@ from app.application.session.flywheel import (
     _mysql_message_fk_id,
     build_message_meta,
 )
-from app.core.database import Base
+from app.shared.database import Base
 from app.infra.agent_events import read_event_segment
 from app.models.conversation import ConversationMessage
 from app.models.farm import Farm

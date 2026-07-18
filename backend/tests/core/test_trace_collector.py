@@ -1,4 +1,4 @@
-"""Tests for app.core.trace_collector。"""
+"""Tests for app.infra.trace_collector。"""
 
 from datetime import date
 

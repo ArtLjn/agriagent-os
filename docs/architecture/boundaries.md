@@ -13,17 +13,19 @@ status: active
 api/
   → modules/*/router 或 application
   → modules/*/service、agent/runtime、agent/executor、prompt、context、memory、skills
-  → platforms/shared、shared、core、models、infra
+  → platforms/shared、shared、models、infra
 ```
 
 允许迁移期保留旧 `api/`、`services/`、`agent/` 兼容入口，但新增代码必须优先进入目标边界。
+`app.core` 基础设施入口已下线；配置、数据库、日志、时间、LLM 与 JSON 工具统一从
+`app.shared.*` 导入，不再新增 `app.core.*` 兼容壳。
 
 ## Agent 平台依赖矩阵
 
 | 边界 | 可依赖 | 禁止依赖 |
 |---|---|---|
-| Auth `modules/auth/` | `shared/`, `core/`, `models/user.py`，必要时通过 Farm 模块端口创建默认农场 | 直接解析当前农场、直接绕过 Farm 模块操作农场业务规则 |
-| Farm `modules/farm/` | `modules/auth/dependencies.py`, `shared/`, `core/`, `models/farm.py` | 把用户认证、token、密码逻辑放入 Farm |
+| Auth `modules/auth/` | `shared/`, `models/user.py`，必要时通过 Farm 模块端口创建默认农场 | 直接解析当前农场、直接绕过 Farm 模块操作农场业务规则 |
+| Farm `modules/farm/` | `modules/auth/dependencies.py`, `shared/`, `models/farm.py` | 把用户认证、token、密码逻辑放入 Farm |
 | API `api/` | Pydantic schema、依赖注入、application use case、模块 router/service | 直接承载 Memory、Prompt、Context 选择或存储逻辑 |
 | Application `application/` | Auth/Farm 依赖结果、Context Builder、Prompt Composer、Agent Runtime、Memory Service、Evaluation capture、Observability | HTTP request 细节、数据库表直接操作 |
 | Agent Runtime `agent/runtime/` | Runtime state、nodes、graph factory、tool executor 协议、Agent ports | Prompt 版本治理、Context selector 实现、Memory 存储或检索实现 |
@@ -32,7 +34,7 @@ api/
 | Context `context/` | 业务 selector、Memory Service 接口、token budget、cache adapter | Prompt 版本治理、LLM Runtime 节点执行 |
 | Memory `memory/` | Memory models、schemas、retrieval、consolidation、infra adapter | API 路由、Agent Runtime 内部状态机细节 |
 | Skills `skills/` | Skill schema、权限、执行适配、业务模块端口 | API request 对象、Prompt/Context 存储实现 |
-| Platform Shared `platforms/shared/` | `core/`, `models/`, `infra/`，以及已迁入 `platforms/data_flywheel` 的 repository 实现 | API 路由、HTTP request 对象、跨平台业务编排 |
+| Platform Shared `platforms/shared/` | `shared/`, `models/`, `infra/`，以及已迁入 `platforms/data_flywheel` 的 repository 实现 | API 路由、HTTP request 对象、跨平台业务编排 |
 | Evaluation `platforms/evaluation/` | replay cases、Prompt 版本、Context 摘要、Skill 调用结果、trace、DataFlywheel discovery 风险信号 | 生产 API 路由编排、业务写入副作用 |
 | Observability `observability/` | trace、token、latency、tool call、memory observe、evaluation capture 事件 | 业务决策、Prompt 组合、Context 选择 |
 
@@ -81,12 +83,11 @@ repository selector、问题链和 repair pack 兼容薄壳均已下线。真实
 
 | 层 | 可依赖 | 不可依赖 |
 |---|--------|---------|
-| `schemas/` | 无 | `agent/`, `agents/`, `api/`, `core/`, `models/`, `services/` |
-| `agent/` | `core/`, `models/`, `services/`, `infra/` | `api/` |
-| `api/` | `core/`, `models/`, `schemas/`, `services/`, application use case | 平台实现细节、Agent Runtime 内部细节 |
-| `core/` | `models/` | `agent/`, `agents/`, `api/`, `schemas/`, `services/` |
-| `models/` | `core/` | `agent/`, `agents/`, `api/`, `schemas/`, `services/` |
-| `services/` | `agent/`, `core/`, `infra/`, `models/`, `schemas/`, `services/` | `api/` |
+| `schemas/` | 无 | `agent/`, `agents/`, `api/`, `models/`, `services/` |
+| `agent/` | `shared/`, `models/`, `services/`, `infra/` | `api/` |
+| `api/` | `shared/`, `models/`, `schemas/`, `services/`, application use case | 平台实现细节、Agent Runtime 内部细节 |
+| `models/` | `shared/` | `agent/`, `agents/`, `api/`, `schemas/`, `services/` |
+| `services/` | `agent/`, `shared/`, `infra/`, `models/`, `schemas/`, `services/` | `api/` |
 
 ## 违规示例
 
