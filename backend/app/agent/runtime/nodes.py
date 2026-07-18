@@ -4,7 +4,6 @@ import asyncio
 import logging
 import re
 import time as _time
-from dataclasses import replace
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END
@@ -20,7 +19,6 @@ from app.agent.runtime.llm_support import (
     _get_season,
     _record_llm_failure,
     _record_llm_success,
-    _resolve_tool_choice,
     _warm_tool_caches,
 )
 from app.agent.runtime.chat_fallbacks import (
@@ -28,9 +26,7 @@ from app.agent.runtime.chat_fallbacks import (
     retry_no_tool_json_leak,
     select_system_prompt_scene,
 )
-from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.agent.runtime.direct_routing import (
-    can_return_direct_tool_messages,
     filter_tool_calls_by_selected,
 )
 from app.agent.runtime.messages import (
@@ -41,26 +37,20 @@ from app.agent.runtime.messages import (
     extract_token_usage,
     sliding_window_compact,
 )
-from app.agent.runtime.reflection import apply_post_tool_reflection
+from app.agent.runtime import node_helpers as _node_helpers
 from app.agent.runtime.support import QUOTA_REJECT_MESSAGES, check_quota
 from app.agent.runtime.tool_executor import _parallel_tool_node
-from app.agent.runtime.planning import (
-    DomainValidator,
-    attach_validation,
-    plan_draft_from_router_decision,
-)
-from app.agent.router import RouterDecision, SkillRouter
+from app.agent.router import RouterDecision
 from app.skills import get_langchain_tools
 from app.agent.state import AgentState
 from app.agent.router.tool_selector import expand_by_chain as _expand_by_chain
 from app.agent.router.tool_selector import select_tools as _select_tools
-from app.agent.router.tool_selector import ToolSelectionResult
 from app.core.config import settings
 from app.core.date_context import get_request_date
 from app.context.models import ContextBundle
-from app.infra.pending_actions import PENDING_MARKER, is_pending_tool_message
+from app.infra.pending_actions import is_pending_tool_message
 from app.infra.trace_collector import get_collector
-from app.infra.trace_context import increment_round, set_round_index
+from app.infra.trace_context import increment_round
 
 logger = logging.getLogger(__name__)
 expand_by_chain = _expand_by_chain
@@ -69,107 +59,6 @@ select_tools = _select_tools
 _WORK_ORDER_CLARIFICATION_RE = re.compile(
     r"(?:创建|生成|安排|记录).{0,12}(?:农事)?作业单|创建农事作业单"
 )
-
-
-def _build_data_source_payload(tool_calls: list[dict] | None) -> dict:
-    """构造 final_reply_data_source trace payload。
-
-    判定 data_source：
-    - 有 tool_calls → tool:<最后一个 tool 的 name>
-    - 无 tool_calls → context_bundle（回复来自 ContextBundle 或 LLM 自身知识）
-    """
-    if tool_calls:
-        last_tool = tool_calls[-1]
-        tool_name = (
-            last_tool.get("name", "unknown")
-            if isinstance(last_tool, dict)
-            else "unknown"
-        )
-        return {
-            "data_source": f"tool:{tool_name}",
-            "has_tool_results": True,
-        }
-    return {
-        "data_source": "context_bundle",
-        "has_tool_results": False,
-    }
-
-
-def _tool_messages_for_data_source(messages: list) -> list[dict] | None:
-    """从消息历史里提取 final reply 真实依赖的最后一个工具名。"""
-    tool_call_names: dict[str, str] = {}
-    last_tool_msg: ToolMessage | None = None
-    for message in messages:
-        if isinstance(message, AIMessage):
-            for tool_call in message.tool_calls or []:
-                tool_call_id = str(tool_call.get("id") or "")
-                tool_name = str(tool_call.get("name") or "")
-                if tool_call_id and tool_name:
-                    tool_call_names[tool_call_id] = tool_name
-        elif isinstance(message, ToolMessage):
-            last_tool_msg = message
-
-    if last_tool_msg is None:
-        return None
-
-    tool_name = getattr(last_tool_msg, "name", None)
-    if not tool_name:
-        tool_call_id = str(getattr(last_tool_msg, "tool_call_id", "") or "")
-        tool_name = tool_call_names.get(tool_call_id)
-    return [{"name": tool_name or "unknown"}]
-
-
-def _record_tool_call_forced_trace(
-    *,
-    collector,
-    user_msg: str,
-    selected_names: list[str],
-    tool_choice: str,
-    force_binding: tuple[str, ...] = (),
-) -> None:
-    """记录 tool_call_forced trace（LLM bind_tools 前）。失败静默。
-
-    `force_binding` 来自 _route_tools 派生的 RouterDecision（基于真实工具列表计算），
-    不在此处重新计算，避免传入空工具导致 force_binding 永远为空。
-    """
-    try:
-        forced = set(force_binding) & set(selected_names)
-        _now = _time.time()
-        collector.record(
-            node_type="tool_selection",
-            node_name="tool_call_forced",
-            input_data={"user_message": user_msg[:200] if user_msg else ""},
-            output_data={
-                "forced_skills": sorted(forced),
-                "tool_choice": tool_choice,
-                "selected_tools": list(selected_names),
-            },
-            start_time=_now,
-            duration_ms=0,
-        )
-    except Exception:
-        return
-
-
-def _record_final_reply_data_source_trace(
-    *,
-    collector,
-    messages: list,
-) -> None:
-    """记录 final_reply_data_source trace。失败静默。"""
-    try:
-        last_tool_messages_for_trace = _tool_messages_for_data_source(messages)
-        _now = _time.time()
-        collector.record(
-            node_type="response",
-            node_name="final_reply_data_source",
-            input_data={"has_tool_results": bool(last_tool_messages_for_trace)},
-            output_data=_build_data_source_payload(last_tool_messages_for_trace),
-            start_time=_now,
-            duration_ms=0,
-        )
-    except Exception:
-        return
 
 
 def _should_continue(state: AgentState) -> str:
@@ -210,78 +99,6 @@ def _get_classifier():
     return None
 
 
-def _route_tools(user_msg: str, tools: list) -> RouterDecision:
-    """使用 SkillRouter，兼容测试/旧入口 patch select_tools 的场景。"""
-    if select_tools is not _select_tools:
-        # 旧入口/测试可能 patch select_tools 返回 list（无 force_binding）
-        selection = select_tools(user_msg, tools)
-        if isinstance(selection, ToolSelectionResult):
-            return RouterDecision(
-                selected_tools=list(selection.tools),
-                tool_choice=_resolve_tool_choice(selection),
-                force_binding=tuple(sorted(selection.force_binding)),
-            )
-        return RouterDecision(selected_tools=list(selection))
-    decision = SkillRouter().route(user_msg, tools)
-    return replace(
-        decision,
-        selected_tools=list(decision.selected_tools),
-        tool_choice="auto",
-        force_binding=(),
-    )
-
-
-def _direct_tool_message_response(
-    state: AgentState,
-    pending_msgs: list[ToolMessage],
-    normal_msgs: list[ToolMessage],
-) -> dict | None:
-    """处理无需再次进入 LLM 的 ToolMessage 结果。"""
-    trace_round_index = state.get("trace_round_index")
-    set_round_index(trace_round_index)
-    if pending_msgs and normal_msgs:
-        summaries = []
-        for m in normal_msgs:
-            content = str(m.content or "")
-            if content:
-                summaries.append(content[:200])
-        confirm_parts = []
-        for m in pending_msgs:
-            confirm = m.content.replace(PENDING_MARKER, "").strip()
-            confirm_parts.append(confirm)
-        combined = "\n\n".join(summaries) + "\n\n" + "\n\n".join(confirm_parts)
-        logger.info(
-            "混合 ToolMessage | pending=%d normal=%d | 跳过 LLM 合并回复",
-            len(pending_msgs),
-            len(normal_msgs),
-        )
-        return {
-            "messages": [AIMessage(content=combined)],
-            "trace_round_index": trace_round_index,
-        }
-
-    if pending_msgs:
-        confirm = pending_msgs[-1].content.replace(PENDING_MARKER, "").strip()
-        logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
-        return {
-            "messages": [AIMessage(content=confirm)],
-            "trace_round_index": trace_round_index,
-        }
-
-    if normal_msgs and can_return_direct_tool_messages(normal_msgs):
-        content = "\n\n".join(str(msg.content or "") for msg in normal_msgs).strip()
-        logger.info(
-            "检测到确定性直达 ToolMessage，跳过 LLM 直接返回 | count=%d",
-            len(normal_msgs),
-        )
-        return {
-            "messages": [AIMessage(content=content)],
-            "trace_round_index": trace_round_index,
-        }
-
-    return None
-
-
 def _quota_rejection_response(user_id: int | None) -> dict | None:
     """检查 token quota，返回拒绝响应或继续执行。"""
     quota = check_quota(user_id)
@@ -307,104 +124,6 @@ def _quota_rejection_response(user_id: int | None) -> dict | None:
             exceeded_period,
         )
     return None
-
-
-def _resolve_router_decision(
-    *,
-    prepared_router_decision,
-    normal_msgs: list[ToolMessage],
-    user_msg: str,
-    tools: list,
-) -> RouterDecision:
-    """确定本轮路由决策，保留工具结果后不重绑工具的行为。"""
-    if prepared_router_decision is not None:
-        return prepared_router_decision
-    if normal_msgs:
-        return RouterDecision(
-            selected_tools=[],
-            fallback="final_answer_no_tools",
-            reason="已有工具结果，final answer 默认不重新绑定工具",
-        )
-    return _route_tools(user_msg, tools)
-
-
-def _record_router_plan_trace(
-    *,
-    collector,
-    router_decision: RouterDecision,
-    user_msg: str,
-    farm_id: int,
-    session_id: str | None,
-) -> dict:
-    """记录 skill router trace，并返回 plan draft payload。"""
-    plan_draft = plan_draft_from_router_decision(
-        raw_user_input=user_msg,
-        decision=router_decision,
-        farm_id=farm_id,
-        session_id=session_id,
-    )
-    plan_validation = DomainValidator().validate(plan_draft)
-    plan_draft = attach_validation(plan_draft, plan_validation)
-    plan_draft_payload = plan_draft.to_trace_payload()
-    router_trace_payload = router_decision.to_trace_payload()
-    router_trace_payload["plan_draft"] = plan_draft_payload
-    collector.record(
-        node_type="skill_router",
-        node_name="skill_router",
-        input_data={"message": user_msg[:500]},
-        output_data=router_trace_payload,
-        token_usage={
-            "schema_token_estimate": router_decision.schema_token_estimate,
-            "usage_source": "router_estimate",
-        },
-    )
-    return plan_draft_payload
-
-
-def _existing_plan_draft_payload(state: AgentState) -> dict | None:
-    """读取上一轮 LLM 已生成的 plan_draft trace payload。"""
-    payload = state.get("plan_draft")
-    return payload if isinstance(payload, dict) else None
-
-
-def _resolve_selected_names(
-    *,
-    router_decision: RouterDecision,
-    messages: list,
-    tools: list,
-    prepared_selected_tool_names,
-    has_tool_results: bool,
-) -> list[str]:
-    """汇总最终可绑定工具名。"""
-    selected_names = list(router_decision.selected_tools)
-    if _is_operation_work_order_clarification(messages):
-        selected_names = _append_tool_name_once(
-            selected_names,
-            "create_operation_work_order",
-            tools,
-        )
-    if prepared_selected_tool_names is not None:
-        selected_names = list(prepared_selected_tool_names)
-    if has_tool_results:
-        selected_names = []
-    return _enabled_selected_tool_names(selected_names, tools)
-
-
-def _enabled_selected_tool_names(selected_names: list[str], tools: list) -> list[str]:
-    """按 Router allowlist 过滤实际可绑定工具，disabled 工具不进入 LLM。"""
-    tool_by_name = {tool.name: tool for tool in tools}
-    enabled_names: list[str] = []
-    for name in selected_names:
-        tool = tool_by_name.get(name)
-        if tool is None:
-            continue
-        metadata = getattr(tool, "skill_metadata", None)
-        if getattr(metadata, "enabled", True) is False:
-            logger.warning("跳过 disabled Skill 绑定 | name=%s", name)
-            continue
-        if name not in enabled_names:
-            enabled_names.append(name)
-    return enabled_names
 
 
 def _bind_llm_for_tools(
@@ -508,62 +227,6 @@ def _compose_system_text(
         current_date=current_date,
     )
     return system_text, prompt_scene
-
-
-def _append_runtime_context(system_text: str, context_bundle: ContextBundle) -> str:
-    runtime_context_text = context_bundle.render_text()
-    if not runtime_context_text:
-        return system_text
-    return (
-        f"{system_text}\n\n<runtime_context>\n"
-        f"{runtime_context_text}\n"
-        f"</runtime_context>"
-    )
-
-
-def _record_prompt_budget(
-    *,
-    collector,
-    system_text: str,
-    prompt_scene: str,
-    context_bundle: ContextBundle,
-    state: AgentState,
-) -> tuple[SystemMessage, list, str]:
-    """记录 prompt 渲染与预算 trace，返回 LLM 输入。"""
-    collector.record(
-        node_type="prompt_render",
-        node_name="system_prompt",
-        input_data={
-            "template": prompt_scene,
-            "variables_count": 5,
-            "context_blocks": [block.key for block in context_bundle.blocks],
-        },
-        output_data=system_text[:2000],
-    )
-
-    system = SystemMessage(content=system_text)
-    messages = sliding_window_compact(state["messages"])
-    messages, final_budget = FinalPromptBudget().apply(system_text, messages)
-    input_summary = _find_last_human_message(state["messages"])[:200]
-    collector.record(
-        node_type="prompt_budget",
-        node_name="final_prompt",
-        input_data={
-            "system_prompt": True,
-            "context_blocks": [block.key for block in context_bundle.blocks],
-            "messages": len(messages),
-        },
-        output_data=final_budget.summary(),
-        token_usage={"prompt_tokens": final_budget.total_tokens},
-    )
-    if final_budget.over_budget:
-        logger.warning(
-            "最终 prompt 仍超预算 | total=%d max=%d actions=%s",
-            final_budget.total_tokens,
-            final_budget.max_tokens,
-            final_budget.actions,
-        )
-    return system, messages, input_summary
 
 
 async def _invoke_llm_with_retry(
@@ -778,85 +441,6 @@ async def _retry_missed_tool_call(
     return response
 
 
-def _record_llm_response(
-    *,
-    response: AIMessage,
-    collector,
-    model_role: str,
-    circuit_key: str,
-    model_name: str,
-    duration_ms: int,
-    selected_tools: list,
-    selected_tool_names: list[str],
-    normal_msgs: list[ToolMessage],
-    farm_id: int,
-    session_id: str | None,
-    intent: str,
-    user_msg: str,
-    plan_draft_payload: dict,
-    input_summary: str,
-) -> tuple[AIMessage, dict | None]:
-    """整理最终响应、记录 LLM trace，并返回 token usage。"""
-    token_usage = extract_token_usage(response)
-    tokens = (
-        token_usage["total_tokens"] if token_usage else _extract_tokens_used(response)
-    )
-
-    logger.info(
-        "LLM 调用完成 | role=%s | key=%s | model=%s | latency_ms=%d | "
-        "selected_tools=%d | tool_calls=%d | tokens=%s",
-        model_role,
-        circuit_key,
-        model_name,
-        duration_ms,
-        len(selected_tools),
-        len(response.tool_calls or []),
-        tokens if tokens is not None else "-",
-    )
-
-    if response.tool_calls:
-        tool_names = [tc["name"] for tc in response.tool_calls]
-        logger.info("LLM 工具选择 | tool_calls=%s | model=%s", tool_names, model_name)
-        output_summary = f"tool_calls: {tool_names}"
-    else:
-        content = response.content or ""
-        if not str(content).strip():
-            content = "这次没有生成有效回复，请换个说法再试一次。"
-            response = AIMessage(
-                content=content,
-                response_metadata=response.response_metadata,
-                id=response.id,
-            )
-            logger.warning(
-                "LLM 返回空内容，已使用兜底回复 | model=%s | selected_tools=%s",
-                model_name,
-                selected_tool_names,
-            )
-        response = apply_post_tool_reflection(
-            response=response,
-            tool_messages=normal_msgs,
-            selected_tool_names=selected_tool_names,
-            farm_id=farm_id,
-            session_id=session_id,
-            intent=intent,
-            user_message=user_msg,
-            plan_draft=plan_draft_payload,
-        )
-        content = response.content or ""
-        logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
-        output_summary = content[:200]
-
-    collector.record(
-        node_type="llm_call",
-        node_name=model_name,
-        input_data=input_summary,
-        output_data=output_summary,
-        duration_ms=duration_ms,
-        token_usage=token_usage,
-    )
-    return response, token_usage
-
-
 async def _llm_node(state: AgentState) -> dict:
     """LLM 推理节点 — 使用模板渲染 system prompt，带上下文压缩。"""
     messages = state["messages"]
@@ -865,7 +449,7 @@ async def _llm_node(state: AgentState) -> dict:
     pending_msgs = [m for m in tool_msgs if is_pending_tool_message(m)]
     normal_msgs = [m for m in tool_msgs if not is_pending_tool_message(m)]
 
-    direct_tool_response = _direct_tool_message_response(
+    direct_tool_response = _node_helpers._direct_tool_message_response(
         state,
         pending_msgs,
         normal_msgs,
@@ -891,20 +475,26 @@ async def _llm_node(state: AgentState) -> dict:
     has_tool_results = bool(tool_msgs)
     intent = state.get("intent", "agent")
     user_msg = _find_last_human_message(messages)
-    router_decision = _resolve_router_decision(
+    router_decision = _node_helpers._resolve_router_decision(
         prepared_router_decision=prepared_router_decision,
         normal_msgs=normal_msgs,
         user_msg=user_msg,
         tools=tools,
+        route_tools_func=lambda message, runtime_tools: _node_helpers._route_tools(
+            message,
+            runtime_tools,
+            select_tools_func=select_tools,
+            default_select_tools_func=_select_tools,
+        ),
     )
 
     trace_round_index = increment_round()
     collector = get_collector()
     session_id = state.get("session_id")
-    plan_draft_payload = _existing_plan_draft_payload(state)
+    plan_draft_payload = _node_helpers._existing_plan_draft_payload(state)
     should_record_router_trace = not has_tool_results
     if plan_draft_payload is None or should_record_router_trace:
-        plan_draft_payload = _record_router_plan_trace(
+        plan_draft_payload = _node_helpers._record_router_plan_trace(
             collector=collector,
             router_decision=router_decision,
             user_msg=user_msg,
@@ -912,12 +502,16 @@ async def _llm_node(state: AgentState) -> dict:
             session_id=session_id,
         )
 
-    selected_names = _resolve_selected_names(
+    selected_names = _node_helpers._resolve_selected_names(
         router_decision=router_decision,
         messages=messages,
         tools=tools,
         prepared_selected_tool_names=prepared_selected_tool_names,
         has_tool_results=has_tool_results,
+        is_operation_work_order_clarification_func=(
+            _is_operation_work_order_clarification
+        ),
+        append_tool_name_once_func=_append_tool_name_once,
     )
 
     model_role = "lightweight" if intent == "query" else "generation"
@@ -926,7 +520,7 @@ async def _llm_node(state: AgentState) -> dict:
     selected_tools = [t for t in tools if t.name in selected_names]
     tool_choice = router_decision.tool_choice
     if should_record_router_trace:
-        _record_tool_call_forced_trace(
+        _node_helpers._record_tool_call_forced_trace(
             collector=collector,
             user_msg=user_msg,
             selected_names=selected_names,
@@ -953,14 +547,16 @@ async def _llm_node(state: AgentState) -> dict:
         has_tool_results=has_tool_results,
         router_decision=router_decision,
     )
-    system_text = _append_runtime_context(system_text, context_bundle)
+    system_text = _node_helpers._append_runtime_context(system_text, context_bundle)
 
-    system, messages, input_summary = _record_prompt_budget(
+    system, messages, input_summary = _node_helpers._record_prompt_budget(
         collector=collector,
         system_text=system_text,
         prompt_scene=prompt_scene,
         context_bundle=context_bundle,
         state=state,
+        compact_messages_func=sliding_window_compact,
+        find_last_human_message_func=_find_last_human_message,
     )
 
     # 并行缓存预热（与 LLM 调用并行执行）
@@ -1009,7 +605,7 @@ async def _llm_node(state: AgentState) -> dict:
         user_msg=user_msg,
         selected_tools=selected_tools,
     )
-    response, _token_usage = _record_llm_response(
+    response, _token_usage = _node_helpers._record_llm_response(
         response=response,
         collector=collector,
         model_role=model_role,
@@ -1025,9 +621,11 @@ async def _llm_node(state: AgentState) -> dict:
         user_msg=user_msg,
         plan_draft_payload=plan_draft_payload,
         input_summary=input_summary,
+        extract_token_usage_func=extract_token_usage,
+        extract_tokens_used_func=_extract_tokens_used,
     )
 
-    _record_final_reply_data_source_trace(
+    _node_helpers._record_final_reply_data_source_trace(
         collector=collector,
         messages=messages,
     )

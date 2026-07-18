@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-17
+last_updated: 2026-07-18
 status: draft
 ---
 
@@ -555,7 +555,7 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 
 | 编号 | 动作 | 来源 |
 | --- | --- | --- |
-| P3-1 | 巨石文件拆分（tool_executor 1517、classifier 1233、nodes 1049）；2026-07-17 已完成 `tool_executor.py` 第一阶段：权限/metadata 决策与读工具结果辅助迁入 `agent/runtime/tool_metadata.py`，入口仍由 `tool_executor.py` 重导出，P3-1 继续进行中 | diagnosis 1 |
+| P3-1 | 巨石文件拆分（tool_executor 1517、classifier 1233、nodes 1049）；2026-07-17 已完成 `tool_executor.py` 第一阶段：权限/metadata 决策与读工具结果辅助迁入 `agent/runtime/tool_metadata.py`；2026-07-18 第二阶段（PR #TBD）新增 `agent/runtime/node_helpers.py` 承载 data_source trace、router 决策、prompt budget、LLM response 记录等无状态节点辅助，`nodes.py` 从 1049 行降至 647 行；新增 `agent/runtime/tool_pending_args.py` 与 `agent/runtime/tool_pending.py` 承载 pending 参数补齐、pending plan / pending action 确认与存储辅助，`tool_executor.py` 从 1198 行降至 311 行；验证：`PYTHONDONTWRITEBYTECODE=1 ruff check --no-cache backend/app backend/tests` 通过，目标 pytest 17 passed，`bash scripts/check-complexity-budget.sh` exit 0（保留 4 类 baseline 警告），`bash scripts/check-layer-deps.sh` exit 0（保留 53 个 baseline 警告）；P3-1 继续进行中 | diagnosis 1 |
 | P3-2 | 引入"新增 Protocol/ABC 必须列出 ≥2 实现"CI sensor | diagnosis 9 |
 | P3-3 | 引入"新增 backend 实现必须证明使用"CI sensor | diagnosis 9-#2 |
 | P3-4 | 日志轮转配置补全 | diagnosis 6 |

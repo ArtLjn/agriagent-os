@@ -70,7 +70,7 @@ class TestTraceEvents:
 
     def test_data_source_payload_from_tool(self):
         """当有 tool_messages 时，data_source 必须是 tool:<skill_name>。"""
-        from app.agent.runtime.nodes import _build_data_source_payload
+        from app.agent.runtime.node_helpers import _build_data_source_payload
 
         tool_calls = [{"name": "weather"}]
         payload = _build_data_source_payload(tool_calls=tool_calls)
@@ -79,7 +79,7 @@ class TestTraceEvents:
 
     def test_data_source_payload_without_tools(self):
         """当无 tool_messages 时，data_source 必须是 context_bundle。"""
-        from app.agent.runtime.nodes import _build_data_source_payload
+        from app.agent.runtime.node_helpers import _build_data_source_payload
 
         payload = _build_data_source_payload(tool_calls=None)
         assert payload["data_source"] == "context_bundle"
@@ -91,7 +91,7 @@ class TestTraceEvents:
         """ToolMessage 无 name 时，应从上一条 AIMessage.tool_calls 反查 skill 名。"""
         from langchain_core.messages import AIMessage, ToolMessage
 
-        from app.agent.runtime.nodes import _tool_messages_for_data_source
+        from app.agent.runtime.node_helpers import _tool_messages_for_data_source
 
         messages = [
             AIMessage(
