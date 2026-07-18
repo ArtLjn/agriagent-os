@@ -3,95 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Protocol
+from typing import Any
 
 from app.infra.trace_repository import _handle_secondary_failure, _log_read_fallback
 from app.infra.mongo_identity import ensure_doc_mysql_id
-from app.models.agent_record import AgentRecord
-from app.models.conversation import ConversationMessage
-from app.models.guardrails_log import GuardrailsLog
 
 
 @dataclass(frozen=True)
 class RepositoryPage:
     items: list[Any]
     total: int
-
-
-class ConversationMessageRepository(Protocol):
-    def save_one(self, row: ConversationMessage) -> ConversationMessage: ...
-
-    def save_batch(
-        self, rows: list[ConversationMessage]
-    ) -> list[ConversationMessage]: ...
-
-    def get_recent(
-        self, *, farm_id: int, conversation_id: int, limit: int
-    ) -> list[ConversationMessage]: ...
-
-    def list_by_session(
-        self, *, farm_id: int, session_id: str
-    ) -> list[ConversationMessage]: ...
-
-    def list_by_turn_ids(
-        self, *, farm_id: int, turn_ids: list[int]
-    ) -> list[ConversationMessage]: ...
-
-    def get_by_mysql_id(
-        self, *, farm_id: int, mysql_id: int
-    ) -> ConversationMessage | None: ...
-
-
-class AgentRecordRepository(Protocol):
-    def create(self, row: AgentRecord) -> AgentRecord: ...
-
-    def delete_daily_cache(
-        self,
-        *,
-        farm_id: int,
-        cycle_id: int | None = None,
-        since: datetime | None = None,
-    ) -> int: ...
-
-    def list_advice_history(
-        self, *, farm_id: int, cycle_id: int | None = None, limit: int = 20
-    ) -> list[AgentRecord]: ...
-
-    def list_report_history(
-        self, *, farm_id: int, cycle_id: int | None = None, limit: int = 20
-    ) -> list[AgentRecord]: ...
-
-    def list_report_page(
-        self, *, farm_id: int, page: int, size: int
-    ) -> RepositoryPage: ...
-
-    def get_report_by_id(
-        self, *, farm_id: int, report_id: int
-    ) -> AgentRecord | None: ...
-
-    def delete_report(self, *, farm_id: int, report_id: int) -> bool: ...
-
-    def find_daily_cache(
-        self, *, farm_id: int, since: datetime
-    ) -> AgentRecord | None: ...
-
-    def clear_cycle_reference(self, *, cycle_id: int) -> int: ...
-
-
-class GuardrailsLogRepository(Protocol):
-    def create(self, row: GuardrailsLog) -> GuardrailsLog: ...
-
-    def list_admin_page(
-        self,
-        *,
-        trigger_type: str | None,
-        page: int,
-        size: int,
-        farm_id: int | None = None,
-    ) -> RepositoryPage: ...
-
-    def cleanup_before(self, *, cutoff: datetime) -> int: ...
 
 
 class DualWriteBase:

@@ -49,14 +49,15 @@ class MongoConfig(BaseModel):
 
 
 StorageBackend = Literal["mysql", "dual", "mongo-read", "mongo"]
+DataFlywheelStorageBackend = Literal["mysql", "mongo"]
 
 
 class StorageConfig(BaseModel):
     trace: StorageBackend = "mysql"
-    case_drafts: StorageBackend = "mysql"
-    repair_packs: StorageBackend = "mysql"
-    review_issue_chains: StorageBackend = "mysql"
-    prelabels: StorageBackend = "mysql"
+    case_drafts: DataFlywheelStorageBackend = "mysql"
+    repair_packs: DataFlywheelStorageBackend = "mysql"
+    review_issue_chains: DataFlywheelStorageBackend = "mysql"
+    prelabels: DataFlywheelStorageBackend = "mysql"
     conversation_messages: StorageBackend = "mysql"
     agent_records: StorageBackend = "mysql"
     guardrails_logs: StorageBackend = "mysql"

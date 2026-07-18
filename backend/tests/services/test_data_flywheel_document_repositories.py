@@ -1,16 +1,13 @@
-"""Data Flywheel 文档 Repository 行为测试。"""
+"""Data Flywheel Mongo 文档 Repository 行为测试。"""
 
 from __future__ import annotations
 
 import importlib
-from datetime import datetime
 
 import pytest
 
 from app.models.data_flywheel import (
     AgentCaseDraft,
-    AgentDataFlywheelPrelabel,
-    AgentRepairPack,
     AgentReviewIssueChain,
 )
 
@@ -33,16 +30,13 @@ class FakeCursor:
 
 
 class FakeCollection:
-    def __init__(self, docs: list[dict] | None = None, fail_replace: bool = False):
+    def __init__(self, docs: list[dict] | None = None):
         self.docs = docs or []
-        self.fail_replace = fail_replace
         self.filters: list[dict] = []
         self.replacements: list[dict] = []
         self.updates: list[dict] = []
 
     async def replace_one(self, filter_doc, replacement, upsert=False):
-        if self.fail_replace:
-            raise RuntimeError("mongodb://user:secret@example/db failed")
         self.filters.append(dict(filter_doc))
         self.replacements.append(dict(replacement))
         return {"upserted": upsert}
@@ -51,70 +45,40 @@ class FakeCollection:
         self.filters.append(dict(filter_doc))
         self.updates.append(dict(update_doc))
         for doc in self.docs:
-            if all(doc.get(key) == value for key, value in filter_doc.items()):
+            if _matches(doc, filter_doc):
                 doc.update(update_doc.get("$set", {}))
         return {"matched_count": 1}
 
     async def find_one(self, filter_doc):
         self.filters.append(dict(filter_doc))
         for doc in self.docs:
-            if all(doc.get(key) == value for key, value in filter_doc.items()):
+            if _matches(doc, filter_doc):
                 return doc
         return None
 
     def find(self, filter_doc):
         self.filters.append(dict(filter_doc))
-        docs = [
-            doc
-            for doc in self.docs
-            if all(
-                doc.get(key) in value["$in"]
-                if isinstance(value, dict) and "$in" in value
-                else (
-                    doc.get(key) != value["$ne"]
-                    if isinstance(value, dict) and "$ne" in value
-                    else doc.get(key) == value
-                )
-                for key, value in filter_doc.items()
-            )
-        ]
-        return FakeCursor(docs)
+        return FakeCursor([doc for doc in self.docs if _matches(doc, filter_doc)])
 
     async def count_documents(self, filter_doc):
         self.filters.append(dict(filter_doc))
-        return len(
-            [
-                doc
-                for doc in self.docs
-                if all(
-                    doc.get(key) != value["$ne"]
-                    if isinstance(value, dict) and "$ne" in value
-                    else doc.get(key) == value
-                    for key, value in filter_doc.items()
-                )
-            ]
-        )
+        return len([doc for doc in self.docs if _matches(doc, filter_doc)])
 
 
-def _prelabel(**overrides) -> AgentDataFlywheelPrelabel:
-    values = {
-        "farm_id": 1,
-        "sample_id": "turn:1:s1:1",
-        "sample_type": "session_turn",
-        "session_id": "s1",
-        "turn_id": 1,
-        "request_id": "req-1",
-        "source": "llm_judge",
-        "status": "pending",
-        "labels": ["bad_reply"],
-        "severity": "P1",
-        "confidence": 0.8,
-        "reason": "reason",
-        "judge_model": "judge",
-        "prompt_version": "v1",
-    }
-    values.update(overrides)
-    return AgentDataFlywheelPrelabel(**values)
+def _matches(doc: dict, filter_doc: dict) -> bool:
+    for key, value in filter_doc.items():
+        actual = doc.get(key)
+        if isinstance(value, dict) and "$in" in value:
+            if actual not in value["$in"]:
+                return False
+            continue
+        if isinstance(value, dict) and "$ne" in value:
+            if actual == value["$ne"]:
+                return False
+            continue
+        if actual != value:
+            return False
+    return True
 
 
 def _case_draft(**overrides) -> AgentCaseDraft:
@@ -128,21 +92,6 @@ def _case_draft(**overrides) -> AgentCaseDraft:
     }
     values.update(overrides)
     return AgentCaseDraft(**values)
-
-
-def _repair_pack(**overrides) -> AgentRepairPack:
-    values = {
-        "farm_id": 1,
-        "pack_id": "pack-1",
-        "fix_target": "skill",
-        "labels": ["bad_reply"],
-        "source_sample_ids": ["turn:1:s1:1"],
-        "source_label_ids": [],
-        "dedup_key": "dedup-1",
-        "status": "exported",
-    }
-    values.update(overrides)
-    return AgentRepairPack(**values)
 
 
 def _chain(**overrides) -> AgentReviewIssueChain:
@@ -251,174 +200,9 @@ async def test_data_flywheel_mongo_repository_assigns_id_without_mysql_row():
     assert collection.replacements[0]["mysqlId"] == saved.id
 
 
-def test_data_flywheel_mysql_repositories_cover_core_crud(db_session):
-    from app.platforms.data_flywheel.document_repositories import (
-        MySQLCaseDraftRepository,
-        MySQLPrelabelRepository,
-        MySQLRepairPackRepository,
-        MySQLReviewIssueChainRepository,
-    )
-
-    prelabels = MySQLPrelabelRepository(db_session)
-    prelabel = prelabels.create(_prelabel())
-    prelabels.update_review_fields(
-        farm_id=1,
-        prelabel_id=prelabel.id,
-        sample_id="turn:1:s1:1",
-        status="accepted",
-        reviewed_by="admin",
-        reviewed_at=datetime(2026, 1, 1),
-        accepted_label_ids=[9],
-    )
-    assert (
-        prelabels.get_by_id_and_sample(
-            farm_id=1, prelabel_id=prelabel.id, sample_id="turn:1:s1:1"
-        ).status
-        == "accepted"
-    )
-
-    drafts = MySQLCaseDraftRepository(db_session)
-    draft = drafts.create(_case_draft())
-    assert drafts.get_by_draft_id(farm_id=1, draft_id=draft.draft_id).id == draft.id
-    assert (
-        drafts.list_by_source_sample(farm_id=1, source_sample_id="turn:1:s1:1").total
-        == 1
-    )
-
-    packs = MySQLRepairPackRepository(db_session)
-    pack = packs.create(_repair_pack())
-    assert packs.find_active_by_dedup_key(farm_id=1, dedup_key="dedup-1").id == pack.id
-    packs.update_fields(
-        farm_id=1, pack_id="pack-1", status="resolved", repair_note="done"
-    )
-    assert packs.get_by_pack_id(farm_id=1, pack_id="pack-1").status == "resolved"
-
-    chains = MySQLReviewIssueChainRepository(db_session)
-    chain = chains.save(_chain())
-    chains.update_review_fields(
-        farm_id=1, chain_id=chain.chain_id, reviewer_comment="ok"
-    )
-    assert (
-        chains.get_by_chain_id(farm_id=1, chain_id="chain-1").reviewer_comment == "ok"
-    )
-    assert chains.list_by_session(farm_id=1, session_id="s1").total == 1
-
-
 @pytest.mark.asyncio
-async def test_data_flywheel_dual_write_order_and_mongo_failure_tolerance(db_session):
+async def test_data_flywheel_selector_rejects_removed_gray_backends(db_session):
     from app.platforms.data_flywheel.document_repositories import (
-        DualWriteRepairPackRepository,
-        MongoRepairPackRepository,
-        MySQLRepairPackRepository,
-    )
-
-    events = []
-    mysql_repo = MySQLRepairPackRepository(db_session)
-    mongo_repo = MongoRepairPackRepository(FakeCollection(fail_replace=True))
-    repo = DualWriteRepairPackRepository(
-        mysql_repo,
-        mongo_repo,
-        on_secondary_failure=lambda payload: events.append(payload),
-    )
-
-    row = await repo.create(_repair_pack())
-
-    assert row.id is not None
-    assert db_session.query(AgentRepairPack).count() == 1
-    assert events[0]["code"] == "mongo_secondary_write_failed"
-    assert events[0]["object_type"] == "repair_pack"
-    assert events[0]["business_id"] == "pack-1"
-    assert "secret" not in events[0]["error"]
-
-
-@pytest.mark.asyncio
-async def test_data_flywheel_dual_write_can_record_compensation_task(db_session):
-    from app.infra.mongo_compensation import (
-        MongoCompensationRecorder,
-        MongoCompensationTask,
-    )
-    from app.platforms.data_flywheel.document_repositories import (
-        DualWriteRepairPackRepository,
-        MongoRepairPackRepository,
-        MySQLRepairPackRepository,
-    )
-
-    recorder = MongoCompensationRecorder(db_session)
-    repo = DualWriteRepairPackRepository(
-        MySQLRepairPackRepository(db_session),
-        MongoRepairPackRepository(FakeCollection(fail_replace=True)),
-        on_secondary_failure=recorder.record_failure,
-    )
-
-    row = await repo.create(_repair_pack())
-
-    task = db_session.query(MongoCompensationTask).one()
-    assert task.object_type == "repair_pack"
-    assert task.farm_id == 1
-    assert task.business_id == row.pack_id
-    assert task.mysql_id == row.id
-    assert task.status == "pending"
-    assert "secret" not in task.last_error
-
-
-@pytest.mark.asyncio
-async def test_data_flywheel_dual_write_ignores_compensation_recorder_failure(
-    db_session,
-):
-    from app.platforms.data_flywheel.document_repositories import (
-        DualWriteRepairPackRepository,
-        MongoRepairPackRepository,
-        MySQLRepairPackRepository,
-    )
-
-    def broken_recorder(_payload):
-        raise RuntimeError("mongodb://user:secret@example/db failed")
-
-    repo = DualWriteRepairPackRepository(
-        MySQLRepairPackRepository(db_session),
-        MongoRepairPackRepository(FakeCollection(fail_replace=True)),
-        on_secondary_failure=broken_recorder,
-    )
-
-    row = await repo.create(_repair_pack())
-
-    assert row.id is not None
-    assert db_session.query(AgentRepairPack).count() == 1
-
-
-@pytest.mark.asyncio
-async def test_data_flywheel_dual_write_updates_secondary_after_mysql(db_session):
-    from app.platforms.data_flywheel.document_repositories import (
-        DualWriteRepairPackRepository,
-        MongoRepairPackRepository,
-        MySQLRepairPackRepository,
-    )
-
-    mysql_repo = MySQLRepairPackRepository(db_session)
-    saved = mysql_repo.create(_repair_pack())
-    collection = FakeCollection()
-    repo = DualWriteRepairPackRepository(
-        mysql_repo,
-        MongoRepairPackRepository(collection),
-    )
-
-    updated = await repo.update_fields(
-        farm_id=1,
-        pack_id=saved.pack_id,
-        status="resolved",
-        repair_note="done",
-    )
-
-    assert updated.status == "resolved"
-    assert collection.replacements[-1]["status"] == "resolved"
-    assert collection.replacements[-1]["repairNote"] == "done"
-
-
-@pytest.mark.asyncio
-async def test_data_flywheel_selector_modes(db_session):
-    from app.platforms.data_flywheel.document_repositories import (
-        DualWritePrelabelRepository,
-        MongoReadPrelabelRepository,
         MongoPrelabelRepository,
         MySQLPrelabelRepository,
         build_data_flywheel_repository,
@@ -431,43 +215,76 @@ async def test_data_flywheel_selector_modes(db_session):
         MySQLPrelabelRepository,
     )
     assert isinstance(
-        build_data_flywheel_repository("prelabels", "dual", db_session, collection),
-        DualWritePrelabelRepository,
-    )
-    assert isinstance(
-        build_data_flywheel_repository(
-            "prelabels", "mongo-read", db_session, collection
-        ),
-        MongoReadPrelabelRepository,
-    )
-    assert isinstance(
         build_data_flywheel_repository("prelabels", "mongo", db_session, collection),
         MongoPrelabelRepository,
     )
 
+    with pytest.raises(ValueError) as exc:
+        build_data_flywheel_repository("prelabels", "dual", db_session, collection)
+    assert exc.value.args[0]["code"] == "INVALID_STORAGE_BACKEND"
+    assert exc.value.args[0]["backend"] == "dual"
+
 
 @pytest.mark.asyncio
-async def test_data_flywheel_mongo_read_falls_back_to_mysql_on_miss(db_session, caplog):
+async def test_data_flywheel_review_issue_chain_mongo_list_uses_expected_order():
     from app.platforms.data_flywheel.document_repositories import (
-        MongoPrelabelRepository,
-        MongoReadPrelabelRepository,
-        MySQLPrelabelRepository,
+        MongoReviewIssueChainRepository,
     )
 
-    mysql_repo = MySQLPrelabelRepository(db_session)
-    saved = mysql_repo.create(_prelabel())
-    mongo_repo = MongoPrelabelRepository(FakeCollection())
-    repo = MongoReadPrelabelRepository(mysql_repo, mongo_repo)
+    collection = FakeCollection(
+        [
+            {
+                "mysqlId": 1,
+                "farmId": 1,
+                "chainId": "chain-1",
+                "sessionId": "s1",
+                "status": "accepted",
+                "severity": "P1",
+            },
+            {
+                "mysqlId": 2,
+                "farmId": 1,
+                "chainId": "chain-2",
+                "sessionId": "s1",
+                "status": "accepted",
+                "severity": "P0",
+            },
+        ]
+    )
 
-    with caplog.at_level("WARNING"):
-        row = await repo.get_by_id_and_sample(
-            farm_id=1,
-            prelabel_id=saved.id,
-            sample_id="turn:1:s1:1",
-        )
+    page = await MongoReviewIssueChainRepository(collection).list_by_session(
+        farm_id=1,
+        session_id="s1",
+    )
 
-    assert row.id == saved.id
-    assert "code=mongo_read_fallback_to_mysql" in caplog.text
-    assert "object_type=prelabel" in caplog.text
-    assert "farm_id=1" in caplog.text
-    assert f"business_id={saved.id}" in caplog.text
+    assert page.total == 2
+    assert [row.chain_id for row in page.items] == ["chain-1", "chain-2"]
+
+
+@pytest.mark.asyncio
+async def test_data_flywheel_mongo_repository_updates_mapped_fields():
+    from app.platforms.data_flywheel.document_repositories import (
+        MongoReviewIssueChainRepository,
+    )
+
+    collection = FakeCollection(
+        [
+            {
+                "mysqlId": 4,
+                "farmId": 1,
+                "chainId": "chain-1",
+                "sessionId": "s1",
+                "status": "accepted",
+            }
+        ]
+    )
+
+    row = await MongoReviewIssueChainRepository(collection).update_review_fields(
+        farm_id=1,
+        chain_id="chain-1",
+        reviewer_comment="ok",
+    )
+
+    assert row is not None
+    assert row.reviewer_comment == "ok"
+    assert collection.updates[-1] == {"$set": {"reviewerComment": "ok"}}

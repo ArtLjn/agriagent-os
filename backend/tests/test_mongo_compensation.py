@@ -36,6 +36,16 @@ class FakeMongoRepo:
         return row
 
 
+class FakeMySQLRepairPackRepo:
+    def __init__(self, row: AgentRepairPack) -> None:
+        self._row = row
+
+    def get_by_pack_id(self, *, farm_id: int, pack_id: str):
+        if self._row.farm_id == farm_id and self._row.pack_id == pack_id:
+            return self._row
+        return None
+
+
 @pytest.mark.asyncio
 async def test_compensation_recorder_persists_sanitized_task(db_session):
     from app.infra.mongo_compensation import (
@@ -76,12 +86,8 @@ async def test_compensation_replay_marks_completed_and_logs_context(db_session, 
         MongoCompensationReplayService,
         MongoCompensationTask,
     )
-    from app.platforms.data_flywheel.document_repositories import (
-        MySQLRepairPackRepository,
-    )
-
-    mysql_repo = MySQLRepairPackRepository(db_session)
-    row = mysql_repo.create(_repair_pack())
+    row = _repair_pack(id=12)
+    mysql_repo = FakeMySQLRepairPackRepo(row)
     recorder = MongoCompensationRecorder(db_session)
     task = recorder.record_failure(
         {
@@ -122,12 +128,8 @@ async def test_compensation_replay_marks_failed_without_leaking_uri(db_session, 
         MongoCompensationReplayService,
         MongoCompensationTask,
     )
-    from app.platforms.data_flywheel.document_repositories import (
-        MySQLRepairPackRepository,
-    )
-
-    mysql_repo = MySQLRepairPackRepository(db_session)
-    row = mysql_repo.create(_repair_pack())
+    row = _repair_pack(id=12)
+    mysql_repo = FakeMySQLRepairPackRepo(row)
     task = MongoCompensationRecorder(db_session).record_failure(
         {
             "object_type": "repair_pack",

@@ -112,7 +112,7 @@ def get_trace_repository(db: Session) -> Any:
 
 
 def get_data_flywheel_repository(db: Session, object_name: str) -> Any:
-    """按配置创建 Data Flywheel 文档 Repository，默认 mysql 不依赖 Mongo。"""
+    """按配置创建 Data Flywheel Mongo 文档 Repository。"""
     backend = _effective_backend(
         getattr(settings.storage, object_name), db, object_name
     )

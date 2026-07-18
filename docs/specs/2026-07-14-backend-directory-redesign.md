@@ -240,6 +240,10 @@ app/platforms/
   创建 data_flywheel 文档仓库，消除 infra → DataFlywheel 真实目录的反向依赖。
 - `app.platforms.data_flywheel` 已承载 DataFlywheel 真实代码；shared selector 已改向
   `app.platforms.data_flywheel.document_repository_*` 实现类，A1-A3 的迁移期旧路径依赖已解除。
+- 2026-07-18 PR #32 已继续收束 DataFlywheel document repository：删除
+  `document_repository_dual.py`，下线 `DualWrite*` 与 `MongoRead*` 8 个迁移期类；
+  DataFlywheel storage 配置与 shared selector 均仅保留 `mysql`/`mongo`。
+  `MySQL*` 4 个类因 settings 默认值仍为 `mysql` 且 admin data flywheel 回归仍依赖该路径，暂不删除。
 - `app.platforms.data_flywheel.review_issue_chain` 与
   `app.platforms.data_flywheel.repair_pack` 已承载问题链与 repair pack 子域真实代码；
   原 data_flywheel root 下的问题链与 repair pack 兼容薄壳已下线。
@@ -538,7 +542,9 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 > `app.context.selectors`，`manage-crop-cycle/scripts/` 小 operation 真实入口为
 > `scripts/main.py`。
 > `memory.py`、`planting.py`、`update_cycle.py`、`update_stage.py` 因职责独立与
-> 单文件 500 行预算继续保留；LangGraph E 与 P2 document_repository 仍未标记完成。
+> 单文件 500 行预算继续保留；LangGraph E 仍未标记完成。
+> P2 document_repository PR #32 已删除 Dual/MongoRead 灰度后端，MySQL 后端因默认配置与
+> 测试基线保守保留，待后续 Mongo-only 切换完成后继续删除。
 
 ### 6.3 阶段 P2：子系统拆分（第 4-5 周）
 
@@ -546,8 +552,8 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | --- | --- | --- |
 | P2-1 | **决策 A 前置**：抽 `judge_service` / `repository_selector` 到共享层 | 决策 A |
 | P2-2 | **决策 A**：`evaluation/` 与 `data_flywheel/` 迁入 `platforms/` | 决策 A |
-| P2-3 | 确认生产配置、settings 默认、测试路径、回滚策略和 Mongo 迁移状态后，砍掉 `document_repository_*` 12 个未用 backend 类 | diagnosis 9-#2 |
-| P2-4 | `infra/online_document_common.py` 3 Protocol 同步处理 | diagnosis 9-#5 |
+| P2-3 | 确认生产配置、settings 默认、测试路径、回滚策略和 Mongo 迁移状态后，砍掉 `document_repository_*` 12 个未用 backend 类；PR #32 已先删 Dual/MongoRead 8 类，MySQL 4 类暂保留 | diagnosis 9-#2 |
+| P2-4 | `infra/online_document_common.py` 3 Protocol 同步处理；PR #32 已删除 3 个仅导出 Protocol，保留活跃 helper 与具体多后端实现 | diagnosis 9-#5 |
 | P2-5 | `services/` 21 个 *_service.py 评估合并 | diagnosis 3 |
 | P2-6 | `tests/` 根目录 78 个 test_*.py 下沉 | diagnosis 5 |
 
@@ -581,7 +587,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | 大量 import 搜替换可能漏改 | 中 | 每步 PR 后跑 CI + `check-layer-deps.sh` + `harness-check.sh` |
 | 旧 import / 动态 patch 路径一次性迁移导致测试大面积失败 | 中 | C0/D0 先建兼容别名，再分批迁移生产代码与测试，最后删除旧路径 |
 | LangGraph 移除后流式行为不一致 | 中 | E1-E3 单独 PR，必须用真实对话回归测试 |
-| `document_repository_*` 删除破坏测试默认或回滚路径 | 中 | 删除前同时确认 `backend/config.yaml`、settings 默认值、Mongo 迁移 OpenSpec 状态和回滚策略 |
+| `document_repository_*` 删除破坏测试默认或回滚路径 | 中 | PR #32 已验证 settings 默认值与 admin 回归仍需要 DataFlywheel MySQL 路径，因此只删除 Dual/MongoRead；后续删除 MySQL 前需先完成 Mongo-only 默认值、测试基线与回滚策略切换 |
 | `application/` 与 `agent/` 边界未严格执行 | 中 | 写入 boundaries.md 并加 sensor（P3-2） |
 | `platforms/` 迁移打破 evaluation ↔ data_flywheel 依赖 | 中 | A1-A3 前置必须先做且单独验证 |
 | 业务方对 services/ 合并有异议 | 低 | P2-5 标记为待评审，可暂缓 |
