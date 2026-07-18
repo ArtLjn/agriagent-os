@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from app.agent.graph import _llm_node
+from app.agent.runtime.nodes import _llm_node
 from app.infra.pending_actions import PENDING_MARKER
 
 

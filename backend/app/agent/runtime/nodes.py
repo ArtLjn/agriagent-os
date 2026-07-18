@@ -4,7 +4,6 @@ import logging
 import re
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langgraph.graph import END
 
 from app.core.llm import get_llm
 from app.agent.runtime.llm_node_steps import (
@@ -43,7 +42,7 @@ def _should_continue(state: AgentState) -> str:
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
         return "tools"
-    return END
+    return "done"
 
 
 def _is_operation_work_order_clarification(messages: list) -> bool:
@@ -72,7 +71,7 @@ def _append_tool_name_once(names: list[str], tool_name: str, tools: list) -> lis
 
 
 def _get_classifier():
-    """兼容旧 graph 入口导出的 classifier 工厂。"""
+    """保留测试注入点；真实分类器由 router 运行时选择。"""
     return None
 
 

@@ -30,16 +30,13 @@ def test_new_business_modules_are_importable():
 
 @pytest.mark.asyncio
 async def test_advisor_real_patch_target_drives_execution():
-    """patch 真实 advisor 图入口应影响真实函数执行路径。"""
+    """patch 真实 advisor loop 入口应影响真实函数执行路径。"""
     import app.application.advice.advisor as advisor
 
-    mock_graph = MagicMock()
-    mock_graph.ainvoke = AsyncMock(
-        return_value={"messages": [MagicMock(content="迁移后回复")]}
-    )
+    mock_loop = AsyncMock(return_value={"messages": [MagicMock(content="迁移后回复")]})
 
     with (
-        patch("app.application.advice.advisor._get_advisor_graph", return_value=mock_graph),
+        patch("app.application.advice.advisor.run_agent_loop", mock_loop),
         patch(
             "app.application.advice.advisor.handle_pending_action",
             new_callable=AsyncMock,
@@ -50,7 +47,7 @@ async def test_advisor_real_patch_target_drives_execution():
 
     assert result == "迁移后回复"
     mock_pending.assert_awaited_once()
-    mock_graph.ainvoke.assert_awaited_once()
+    mock_loop.assert_awaited_once()
 
 
 @pytest.mark.asyncio

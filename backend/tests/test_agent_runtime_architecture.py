@@ -8,16 +8,11 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 
-def test_agent_graph_is_compatibility_facade():
-    """graph.py 保持薄兼容入口，真实实现位于 runtime。"""
-    import app.agent.graph as graph
-    import app.agent.runtime.nodes as nodes
-    import app.agent.runtime.support as support
-    import app.agent.runtime.tool_executor as tool_executor
+def test_agent_graph_compatibility_facade_is_removed():
+    """旧 graph.py 兼容入口应下线，测试和生产代码使用 runtime 真实路径。"""
+    app_dir = Path(__file__).resolve().parents[1] / "app"
 
-    assert graph.compile_advisor_graph is support.compile_advisor_graph
-    assert graph._llm_node is nodes._llm_node
-    assert graph._parallel_tool_node is tool_executor._parallel_tool_node
+    assert not (app_dir / "agent" / "graph.py").exists()
 
 
 def test_agent_state_exposes_prepared_runtime_inputs():

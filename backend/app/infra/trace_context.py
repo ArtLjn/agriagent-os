@@ -81,7 +81,7 @@ def increment_round() -> int:
 
 
 def set_round_index(round_index: int | None) -> None:
-    """设置当前 trace 轮次，用于跨 LangGraph node 传递 trace 分组。"""
+    """设置当前 trace 轮次，用于跨 runtime node 传递 trace 分组。"""
     if round_index is None:
         return
     _round_ctx.set(round_index)

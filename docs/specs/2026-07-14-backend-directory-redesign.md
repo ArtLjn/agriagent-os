@@ -542,7 +542,7 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 > `app.context.selectors`，`manage-crop-cycle/scripts/` 小 operation 真实入口为
 > `scripts/main.py`。
 > `memory.py`、`planting.py`、`update_cycle.py`、`update_stage.py` 因职责独立与
-> 单文件 500 行预算继续保留；LangGraph E 仍未标记完成。
+> 单文件 500 行预算继续保留；LangGraph E 已由 PR #33 改为纯 Python ReAct loop。
 > P2 document_repository PR #32 已删除 Dual/MongoRead 灰度后端，MySQL 后端因默认配置与
 > 测试基线保守保留，待后续 Mongo-only 切换完成后继续删除。
 
@@ -669,10 +669,10 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| E1 | 实现 `loop.py` 等价 ReAct 循环 | ⏳ | — |
-| E2 | 替换 graph_factory 调用方 | ⏳ | — |
-| E3 | 核对流式输出与 trace 重放 | ⏳ | — |
-| E4 | 删除 langgraph 依赖 | ⏳ | — |
+| E1 | 实现 `loop.py` 等价 ReAct 循环 | ✅ 本 PR 已处理 | `run_agent_loop` / `stream_agent_loop` |
+| E2 | 替换 graph_factory 调用方 | ✅ 本 PR 已处理 | `invoke_advisor` / `stream_advisor` 直接调用 loop；旧 `app.agent.graph` 门面下线 |
+| E3 | 核对流式输出与 trace 重放 | ✅ 本 PR 已处理 | `stream_agent_loop` 保持按节点 updates 暴露 LLM / tools 增量；advisor final reply 继续记录 trace round |
+| E4 | 删除 langgraph 依赖 | ✅ 本 PR 已处理 | `backend/requirements.txt` 移除 `langgraph`；`langchain-core` 保留供 Message / StructuredTool 使用 |
 
 ### 状态图例
 

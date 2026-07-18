@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.agent.graph import _parallel_tool_node
+from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.reflector import (
     ReflectionDecision,
     ReflectionResult,

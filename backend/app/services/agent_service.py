@@ -116,7 +116,7 @@ async def stream_chat_with_agent(
             yield decision.reply
             return
 
-    # 统一走 LangGraph Function Calling 流式路由
+    # 统一走 ReAct Function Calling 流式路由
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
     full_input = context + message
     full_reply = ""
@@ -162,7 +162,7 @@ async def invoke_daily_advice_llm(
     user_id: str | None = None,
     call_type: str = "daily_advice",
 ) -> str:
-    """每日建议专用 LLM 入口：保持兼容签名，实际绕过聊天图。"""
+    """每日建议专用 LLM 入口：保持既有签名，实际绕过聊天 loop。"""
     return await invoke_advisor(
         prompt,
         farm_id=farm_id,

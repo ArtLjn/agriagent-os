@@ -178,7 +178,7 @@ async def test_no_tool_chat_retries_json_tool_leak_as_natural_reply(
     )
     mock_get_llm.return_value = llm
 
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     result = await _llm_node(
         {"messages": [HumanMessage(content="你有啥爱好")], "farm_id": 1}
@@ -269,7 +269,7 @@ async def test_no_tool_chat_retry_still_leaks_uses_friendly_fallback(
     )
     mock_get_llm.return_value = llm
 
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     result = await _llm_node(
         {"messages": [HumanMessage(content="你喜欢啥")], "farm_id": 1}
@@ -372,7 +372,7 @@ async def test_operation_work_order_clarification_keeps_write_tool_bound(
     llm.ainvoke = AsyncMock(return_value=AIMessage(content="", tool_calls=[tool_call]))
     mock_get_llm.return_value = llm
 
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     result = await _llm_node(
         {
@@ -491,7 +491,7 @@ async def test_write_success_claim_retry_accepts_native_tool_calls(
     llm.ainvoke = AsyncMock(side_effect=[first_response, retry_response])
     mock_get_llm.return_value = llm
 
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     result = await _llm_node(
         {"messages": [HumanMessage(content="今天买橘子种子130张三赊账")], "farm_id": 1}
@@ -584,7 +584,7 @@ async def test_write_success_claim_retry_fails_closed_without_tool_call(
     llm.ainvoke = AsyncMock(side_effect=[first_response, retry_response])
     mock_get_llm.return_value = llm
 
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     result = await _llm_node(
         {"messages": [HumanMessage(content="今天买橘子种子130张三赊账")], "farm_id": 1}
@@ -679,7 +679,7 @@ async def test_polite_write_success_claim_with_clarification_fails_closed(
     )
     mock_get_llm.return_value = llm
 
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     result = await _llm_node(
         {"messages": [HumanMessage(content="今天买橘子种子130张三赊账")], "farm_id": 1}
@@ -770,7 +770,7 @@ async def test_empty_write_response_fails_closed_without_retry_tool_call(
     )
     mock_get_llm.return_value = llm
 
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     result = await _llm_node(
         {"messages": [HumanMessage(content="买了200块化肥")], "farm_id": 1}
@@ -854,7 +854,7 @@ class TestDualPhaseModelSelection:
         llm, resp = _make_llm_mock()
         mock_get_llm.return_value = llm
 
-        from app.agent.graph import _llm_node
+        from app.agent.runtime.nodes import _llm_node
 
         state = _make_state([HumanMessage(content="你好")])
         asyncio.get_event_loop().run_until_complete(_llm_node(state))
@@ -919,7 +919,7 @@ class TestDualPhaseModelSelection:
         llm, resp = _make_llm_mock()
         mock_get_llm.return_value = llm
 
-        from app.agent.graph import _llm_node
+        from app.agent.runtime.nodes import _llm_node
 
         tool_msg = ToolMessage(content="晴，25度", tool_call_id="tc1")
         state = _make_state(
@@ -1000,7 +1000,7 @@ class TestRetryLoop:
         llm, resp = _make_llm_mock(response_content="你好")
         mock_get_llm.return_value = llm
 
-        from app.agent.graph import _llm_node
+        from app.agent.runtime.nodes import _llm_node
 
         with caplog.at_level("INFO", logger="app.agent.runtime.nodes"):
             state = _make_state([HumanMessage(content="你好")])
@@ -1071,7 +1071,7 @@ class TestRetryLoop:
         llm, resp = _make_llm_mock()
         mock_get_llm.return_value = llm
 
-        from app.agent.graph import _llm_node
+        from app.agent.runtime.nodes import _llm_node
 
         state = _make_state([HumanMessage(content="你好")])
         asyncio.get_event_loop().run_until_complete(_llm_node(state))
@@ -1167,7 +1167,7 @@ class TestRetryLoop:
             "app.core.llm_client_manager.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
-            from app.agent.graph import _llm_node
+            from app.agent.runtime.nodes import _llm_node
 
             state = _make_state([HumanMessage(content="你好")])
             asyncio.get_event_loop().run_until_complete(_llm_node(state))
@@ -1244,7 +1244,7 @@ class TestRetryLoop:
         with patch(
             "app.core.llm_client_manager.classify_error", return_value=ErrorLevel.MODEL
         ):
-            from app.agent.graph import _llm_node
+            from app.agent.runtime.nodes import _llm_node
 
             state = _make_state([HumanMessage(content="你好")])
             with pytest.raises(RuntimeError, match="400 schema error"):
@@ -1330,7 +1330,7 @@ class TestRetryLoop:
             "app.core.llm_client_manager.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
-            from app.agent.graph import _llm_node
+            from app.agent.runtime.nodes import _llm_node
 
             state = _make_state([HumanMessage(content="你好")])
             with pytest.raises(ConnectionError, match="持续连接失败"):
@@ -1430,7 +1430,7 @@ class TestRetryLoop:
             "app.core.llm_client_manager.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
-            from app.agent.graph import _llm_node
+            from app.agent.runtime.nodes import _llm_node
 
             state = _make_state([HumanMessage(content="你好")])
             asyncio.get_event_loop().run_until_complete(_llm_node(state))
@@ -1510,7 +1510,7 @@ class TestRetryWithSingleAttempt:
             "app.core.llm_client_manager.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
-            from app.agent.graph import _llm_node
+            from app.agent.runtime.nodes import _llm_node
 
             state = _make_state([HumanMessage(content="你好")])
             with pytest.raises(ConnectionError):

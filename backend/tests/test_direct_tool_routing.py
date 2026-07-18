@@ -99,7 +99,7 @@ def _enter_runtime_patches(stack: ExitStack, fake_llm: _FakeLLM, tools: list):
 @pytest.mark.asyncio
 async def test_query_request_enters_llm_with_read_tools():
     """普通 query 请求不再跳过 LLM，而是绑定只读候选工具。"""
-    from app.agent.graph import _llm_node
+    from app.agent.runtime.nodes import _llm_node
 
     fake_llm = _FakeLLM()
     tools = [

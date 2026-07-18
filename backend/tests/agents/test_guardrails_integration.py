@@ -37,46 +37,38 @@ class TestAdvisorGuardrails:
     @pytest.mark.asyncio
     async def test_output_pii_filtered(self):
         with (
-            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch("app.application.advice.advisor.run_agent_loop") as mock_loop,
             patch(
                 "app.application.advice.advisor.handle_pending_action",
                 new_callable=AsyncMock,
                 return_value=PendingActionDecision.unhandled(),
             ),
         ):
-            mock_graph = MagicMock()
-            mock_graph.ainvoke = AsyncMock(
-                return_value={"messages": [MagicMock(content="联系 13800138000")]}
-            )
-            mock_get.return_value = mock_graph
+            mock_loop.return_value = {"messages": [MagicMock(content="联系 13800138000")]}
             result = await invoke_advisor("正常问题", farm_id=1)
             assert "[手机号已隐藏]" in result
 
     @pytest.mark.asyncio
     async def test_recursion_limit_caught(self):
-        from langgraph.errors import GraphRecursionError
+        from app.agent.runtime.loop import AgentLoopMaxStepsExceeded
 
         with (
-            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch("app.application.advice.advisor.run_agent_loop") as mock_loop,
             patch(
                 "app.application.advice.advisor.handle_pending_action",
                 new_callable=AsyncMock,
                 return_value=PendingActionDecision.unhandled(),
             ),
         ):
-            mock_graph = MagicMock()
-            mock_graph.ainvoke = AsyncMock(
-                side_effect=GraphRecursionError("Too many steps")
-            )
-            mock_get.return_value = mock_graph
+            mock_loop.side_effect = AgentLoopMaxStepsExceeded("Too many steps")
             result = await invoke_advisor("正常问题", farm_id=1)
             assert "步数超出限制" in result
 
     @pytest.mark.asyncio
     async def test_daily_advice_uses_direct_llm_without_chat_graph(self):
-        """DailyAdvice 结构化生成不应进入聊天图，避免注入长系统上下文。"""
+        """DailyAdvice 结构化生成不应进入聊天 loop，避免注入长系统上下文。"""
         with (
-            patch("app.application.advice.advisor._get_advisor_graph") as mock_graph,
+            patch("app.application.advice.advisor.run_agent_loop") as mock_loop,
             patch("app.application.advice.advisor.get_llm") as mock_get_llm,
         ):
             mock_llm = MagicMock()
@@ -93,7 +85,7 @@ class TestAdvisorGuardrails:
             )
 
         assert result == '{"preview":"今日建议","items":[]}'
-        mock_graph.assert_not_called()
+        mock_loop.assert_not_called()
         mock_get_llm.assert_called_once_with(role="generation")
         messages = mock_llm.ainvoke.await_args.args[0]
         assert len(messages) == 1
@@ -111,21 +103,19 @@ class TestStreamAdvisorGuardrails:
 
     @pytest.mark.asyncio
     async def test_stream_recursion_limit_caught(self):
-        from langgraph.errors import GraphRecursionError
+        from app.agent.runtime.loop import AgentLoopMaxStepsExceeded
 
         with (
-            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch("app.application.advice.advisor.stream_agent_loop") as mock_stream,
             patch(
                 "app.application.advice.advisor.handle_pending_action",
                 new_callable=AsyncMock,
                 return_value=PendingActionDecision.unhandled(),
             ),
         ):
-            mock_graph = MagicMock()
-            mock_graph.astream = _make_mock_astream(
-                GraphRecursionError("Too many steps")
+            mock_stream.side_effect = _make_mock_astream(
+                AgentLoopMaxStepsExceeded("Too many steps")
             )
-            mock_get.return_value = mock_graph
             results = []
             async for chunk in stream_advisor("正常问题", farm_id=1):
                 results.append(chunk)
@@ -135,18 +125,16 @@ class TestStreamAdvisorGuardrails:
     @pytest.mark.asyncio
     async def test_stream_generic_exception_fallback(self):
         with (
-            patch("app.application.advice.advisor._get_advisor_graph") as mock_get,
+            patch("app.application.advice.advisor.stream_agent_loop") as mock_stream,
             patch(
                 "app.application.advice.advisor.handle_pending_action",
                 new_callable=AsyncMock,
                 return_value=PendingActionDecision.unhandled(),
             ),
         ):
-            mock_graph = MagicMock()
-            mock_graph.astream = _make_mock_astream(
+            mock_stream.side_effect = _make_mock_astream(
                 RuntimeError("LLM connection failed")
             )
-            mock_get.return_value = mock_graph
             results = []
             async for chunk in stream_advisor("正常问题", farm_id=1):
                 results.append(chunk)

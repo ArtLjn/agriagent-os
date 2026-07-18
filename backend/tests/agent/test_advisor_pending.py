@@ -77,7 +77,7 @@ async def test_stream_advisor_clears_trace_for_pending_handled_reply():
 @pytest.mark.asyncio
 async def test_stream_advisor_refuses_unsupported_delete_cost_request():
     """没有删除账单 Skill 时，不应让模型承诺清理所有账单。"""
-    with patch("app.application.advice.advisor._get_advisor_graph") as mock_graph:
+    with patch("app.application.advice.advisor.stream_agent_loop") as mock_loop:
         chunks = [
             chunk
             async for chunk in stream_advisor(
@@ -87,7 +87,7 @@ async def test_stream_advisor_refuses_unsupported_delete_cost_request():
 
     assert "暂不支持" in "".join(chunks)
     assert "删除账单" in "".join(chunks)
-    mock_graph.assert_not_called()
+    mock_loop.assert_not_called()
 
 
 @pytest.mark.asyncio

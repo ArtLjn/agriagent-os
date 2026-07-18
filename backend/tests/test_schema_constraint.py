@@ -216,7 +216,7 @@ class TestPydanticValidationInToolNode:
     @pytest.mark.asyncio
     async def test_missing_required_param_returns_error(self):
         """缺少必填参数时返回错误 ToolMessage，不生成 pending action。"""
-        from app.agent.graph import _parallel_tool_node
+        from app.agent.runtime.tool_executor import _parallel_tool_node
         from langchain_core.messages import AIMessage
         from app.infra.pending_actions import get_pending
 
@@ -258,7 +258,7 @@ class TestPydanticValidationInToolNode:
     @pytest.mark.asyncio
     async def test_valid_params_proceed_normally(self):
         """参数正确时正常走 pending action 流程。"""
-        from app.agent.graph import _parallel_tool_node
+        from app.agent.runtime.tool_executor import _parallel_tool_node
         from langchain_core.messages import AIMessage
         from app.infra.pending_actions import get_pending
 
@@ -298,7 +298,7 @@ class TestPydanticValidationInToolNode:
     @pytest.mark.asyncio
     async def test_invalid_param_type_returns_error(self):
         """参数类型错误时返回错误 ToolMessage。"""
-        from app.agent.graph import _parallel_tool_node
+        from app.agent.runtime.tool_executor import _parallel_tool_node
         from langchain_core.messages import AIMessage
         from app.infra.pending_actions import get_pending
 

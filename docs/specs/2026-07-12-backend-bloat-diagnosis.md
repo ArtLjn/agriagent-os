@@ -11,7 +11,7 @@
 | 关联文档 | [2026-07-12-agent-module-remediation.md](./2026-07-12-agent-module-remediation.md)（agent 模块整改 spec） |
 | 关联 spec | [2026-07-10-skill-capability-governance-design.md](./2026-07-10-skill-capability-governance-design.md) |
 | 关联设计 | [2026-07-14-backend-directory-redesign.md](./2026-07-14-backend-directory-redesign.md)（目标架构与 5 大决策迁移路径） |
-| 最近更新 | 2026-07-18（补充 P2-1/P2-2 DataFlywheel 文档仓储收束进度） |
+| 最近更新 | 2026-07-18（补充 P1-10 移除 LangGraph 运行时依赖） |
 
 本报告最初（2026-07-12）只做诊断与量化。**2026-07-14 起扩展为整改追踪文档**：
 新增"发现 9：过度设计与不稳定因素"与"整改计划追踪"章节。
@@ -556,6 +556,7 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P1-7 | `context/selectors/` 轻量 selector 收束 | `backend/app/context/selectors/` | 9-#7、附录 A | ✅ 已归位并删除旧兼容壳 / 单文件完全合并待后续继续拆职责 | `conversation/cycle/farm/ledger/retrieval/user_settings/weather` 已收束到 `selectors/core.py`，旧子模块兼容壳已删除；新代码使用 `app.context.selectors.core` 或包级 `app.context.selectors`，`memory.py`、`planting.py` 因职责独立与 500 行预算继续保留；`tests/context/test_selector_relocation_compat.py` 覆盖真实入口与包级 API |
 | P1-8 | `manage-crop-cycle/scripts/` 小 operation 收束 | `skills/manage-crop-cycle/scripts/` | 7 | ✅ 已归位并删除旧兼容壳 / 重更新逻辑继续独立 | `create_cycle/delete_cycle/query_cycles/query_cycle_info` 已合入 `scripts/main.py`，旧小脚本兼容壳已删除；新代码使用 `app.skills.manage-crop-cycle.scripts.main`，`update_cycle.py`、`update_stage.py` 因职责和行数预算继续保留；`tests/skills/test_manage_crop_cycle_script_compat.py` 覆盖真实入口与重逻辑真实模块 |
 | P1-9 | 删除 agent 根兼容壳 | `agent/{advisor,report,skill_coverage,intent_router,tool_selector,tool_selection_rules,llm,assistant_roles}.py` | 7、9-#7 | ✅ 已下线 | 生产代码和普通测试改为真实路径：`app.application.advice.advisor`、`app.application.report`、`app.platforms.evaluation.skill_coverage`、`app.agent.router.*`、`app.core.llm`、`app.core.settings.roles`；不再断言旧路径可 import 或旧 patch target 生效 |
+| P1-10 | 移除 LangGraph，改纯 Python ReAct loop | `agent/runtime/loop.py`、`agent/state.py`、`application/advice/advisor.py`、`bootstrap/exceptions.py`、`requirements.txt` | 9-#7、目录重设计决策 E | ✅ 本 PR 已处理 | 新增 `run_agent_loop` / `stream_agent_loop` 与 `AgentLoopMaxStepsExceeded`，显式追加节点返回的 `messages`；`invoke_advisor` / `stream_advisor` 改为直接调用 loop，删除 `app.agent.graph` 旧门面与 `langgraph` 依赖；生产代码、测试和 requirements 中 `rg -n "langgraph\|LangGraph\|StateGraph\|GraphRecursionError\|add_messages\|app\\.agent\\.graph" backend/app backend/tests backend/requirements.txt` 无输出；聚焦 pytest 31 passed；用户指定目标 pytest 因本地 MySQL `farm_manager@localhost` 权限失败（17 failed, 56 passed），失败链路为既有 `pending_plan` DB 读取基线；`ruff check --no-cache backend/app backend/tests`、`check-layer-deps.sh`、`check-complexity-budget.sh` 通过（保留历史 baseline 警告） |
 
 ### P2 — 需业务确认（高风险高收益）
 
