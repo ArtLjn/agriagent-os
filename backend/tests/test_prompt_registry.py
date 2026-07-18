@@ -157,12 +157,12 @@ class TestGetSeason:
         ],
     )
     def test_season_by_month(self, test_date, expected):
-        from app.agent.graph import _get_season
+        from app.agent.runtime.llm_support import _get_season
 
         assert _get_season(test_date) == expected
 
     def test_season_default_uses_today(self):
-        from app.agent.graph import _get_season
+        from app.agent.runtime.llm_support import _get_season
 
         result = _get_season()
         assert result in ("春季", "夏季", "秋季", "冬季")

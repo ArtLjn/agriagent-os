@@ -161,7 +161,7 @@ def skills_to_langchain_tools(
 def get_langchain_tools(
     farm_id: int = 1, farm_uid: str | None = None
 ) -> list[StructuredTool]:
-    """获取 LangChain Tool 列表（供 LangGraph 使用）。"""
+    """获取 LangChain Tool 列表（供 Agent runtime 使用）。"""
     return skills_to_langchain_tools(
         get_skill_manager(), farm_id=farm_id, farm_uid=farm_uid
     )

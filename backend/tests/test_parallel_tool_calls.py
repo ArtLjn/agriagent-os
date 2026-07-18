@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.agent.graph import compile_advisor_graph
+from app.agent.runtime.loop import run_agent_loop
 from app.prompt.registry import get_registry
 from app.core.config import AIConfig
 
@@ -59,8 +59,7 @@ class TestBindToolsParallel:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="明天晴"))
         mock_get_llm.return_value = mock_llm
 
-        graph = compile_advisor_graph()
-        await graph.ainvoke({"messages": [HumanMessage(content="明天天气")]})
+        await run_agent_loop({"messages": [HumanMessage(content="明天天气")]})
 
         mock_llm.bind_tools.assert_called_once()
         call_kwargs = mock_llm.bind_tools.call_args[1]
@@ -92,8 +91,7 @@ class TestBindToolsParallel:
             mock_settings.ai.parallel_tool_calls = False
             mock_settings.ai.enable_thinking = False
             mock_settings.token_quota.over_quota_action = "warn"
-            graph = compile_advisor_graph()
-            await graph.ainvoke({"messages": [HumanMessage(content="明天天气")]})
+            await run_agent_loop({"messages": [HumanMessage(content="明天天气")]})
 
         mock_llm.bind_tools.assert_called_once()
         call_kwargs = mock_llm.bind_tools.call_args[1]
@@ -151,7 +149,8 @@ class TestParallelBatchTrace:
 
         mock_get_tools.return_value = [weather_tool, cost_tool]
 
-        from app.agent.graph import _parallel_tool_node, AgentState
+        from app.agent.runtime.tool_executor import _parallel_tool_node
+        from app.agent.state import AgentState
 
         state: AgentState = {
             "messages": [
@@ -199,7 +198,8 @@ class TestParallelBatchTrace:
         weather_tool.ainvoke = AsyncMock(return_value="晴天 25度")
         mock_get_tools.return_value = [weather_tool]
 
-        from app.agent.graph import _parallel_tool_node, AgentState
+        from app.agent.runtime.tool_executor import _parallel_tool_node
+        from app.agent.state import AgentState
 
         state: AgentState = {
             "messages": [

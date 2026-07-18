@@ -669,10 +669,10 @@ P0 ──→ P1 ──→ P2 ──→ P3
 
 | 步骤 | 动作 | 状态 | commit |
 | --- | --- | --- | --- |
-| E1 | 实现 `loop.py` 等价 ReAct 循环 | ⏳ | — |
-| E2 | 替换 graph_factory 调用方 | ⏳ | — |
-| E3 | 核对流式输出与 trace 重放 | ⏳ | — |
-| E4 | 删除 langgraph 依赖 | ⏳ | — |
+| E1 | 实现 `loop.py` 等价 ReAct 循环 | ✅ 本 PR 已处理 | `run_agent_loop` / `stream_agent_loop` |
+| E2 | 替换 graph_factory 调用方 | ✅ 本 PR 已处理 | `invoke_advisor` / `stream_advisor` 直接调用 loop；旧 `app.agent.graph` 门面下线 |
+| E3 | 核对流式输出与 trace 重放 | ✅ 本 PR 已处理 | `stream_agent_loop` 保持按节点 updates 暴露 LLM / tools 增量；advisor final reply 继续记录 trace round |
+| E4 | 删除 langgraph 依赖 | ✅ 本 PR 已处理 | `backend/requirements.txt` 移除 `langgraph`；`langchain-core` 保留供 Message / StructuredTool 使用 |
 
 ### 状态图例
 

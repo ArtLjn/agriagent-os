@@ -3,11 +3,11 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from langgraph.errors import GraphRecursionError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.agent.runtime.loop import AgentLoopMaxStepsExceeded
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,9 +40,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             content={"detail": "请求参数校验失败", "errors": errors},
         )
 
-    @app.exception_handler(GraphRecursionError)
-    async def graph_recursion_handler(request, exc):
-        logger.warning("GraphRecursionError | path=%s", request.url.path)
+    @app.exception_handler(AgentLoopMaxStepsExceeded)
+    async def agent_loop_max_steps_handler(request, exc):
+        logger.warning("AgentLoopMaxStepsExceeded | path=%s", request.url.path)
         return JSONResponse(
             status_code=429,
             content={"detail": "Agent 处理步数超出限制，请简化问题后重试"},

@@ -5,16 +5,19 @@ import logging
 from collections.abc import AsyncGenerator
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langgraph.errors import GraphRecursionError
 from sqlalchemy.orm import Session
 
 from app.agent.executor.pending_actions import handle_pending_action
-from app.agent.graph import compile_advisor_graph
 from app.agent.guardrails import check_input, filter_output
 from app.agent.router.intent import IntentType, classify_intent, get_greeting_reply
 from app.core.llm import get_llm
 from app.application.chat.helpers import record_agent_response
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
+from app.agent.runtime.loop import (
+    AgentLoopMaxStepsExceeded,
+    run_agent_loop,
+    stream_agent_loop,
+)
 from app.infra.trace_context import clear_trace, init_trace, set_round_index
 from app.models.farm import Farm
 from app.services.conversation_service import (
@@ -24,7 +27,6 @@ from app.services.conversation_service import (
 
 logger = logging.getLogger(__name__)
 
-_ADVISOR_GRAPH = None
 _UNSUPPORTED_DELETE_COST_PATTERNS = (
     "清理所有账单",
     "删除所有账单",
@@ -34,17 +36,9 @@ _UNSUPPORTED_DELETE_COST_PATTERNS = (
 )
 
 
-def _get_advisor_graph():
-    """获取全局 Advisor 图实例（单例）。"""
-    global _ADVISOR_GRAPH
-    if _ADVISOR_GRAPH is None:
-        _ADVISOR_GRAPH = compile_advisor_graph()
-    return _ADVISOR_GRAPH
-
-
 def build_advisor_agent():
-    """构建并返回建议 Agent 图（主要用于测试）。"""
-    return compile_advisor_graph()
+    """构建并返回建议 Agent 运行入口（主要用于测试）。"""
+    return run_agent_loop
 
 
 def _build_history_messages(
@@ -156,7 +150,7 @@ async def invoke_advisor(
     )
     logger.info("Agent 收到请求 | farm_id=%s: %s", farm_id, user_input[:200])
 
-    # 意图路由：问候语直接回复，跳过 LangGraph
+    # 意图路由：问候语直接回复，跳过 ReAct loop
     intent = classify_intent(user_input)
     farm_uid = _resolve_farm_uid(db, farm_id)
 
@@ -207,15 +201,13 @@ async def invoke_advisor(
             )
             return reply
 
-        graph = _get_advisor_graph()
-
         # 构建历史消息 + 当前消息
         history = await _async_build_history_messages(
             db, conversation_id, current_user_input=user_input
         )
         messages = history + [HumanMessage(content=user_input)]
 
-        result = await graph.ainvoke(
+        result = await run_agent_loop(
             {
                 "messages": messages,
                 "farm_id": farm_id,
@@ -224,15 +216,7 @@ async def invoke_advisor(
                 "user_id": user_id,
                 "session_id": session_id,
             },
-            config={
-                "recursion_limit": 15,
-                "run_name": "advisor_invoke",
-                "metadata": {
-                    "farm_id": farm_id,
-                    "request_type": call_type,
-                    "user_id": user_id,
-                },
-            },
+            max_steps=15,
         )
         reply = result["messages"][-1].content
         filtered = filter_output(reply)
@@ -241,11 +225,11 @@ async def invoke_advisor(
             node_name="final_reply",
             user_input=user_input,
             reply=filtered,
-            reason="graph_final_response",
+            reason="react_loop_final_response",
         )
         logger.info("Agent 回复完成 | farm_id=%s, 长度 %d 字符", farm_id, len(filtered))
         return filtered
-    except GraphRecursionError:
+    except AgentLoopMaxStepsExceeded:
         logger.error("Agent 步数超限 | farm_id=%s", farm_id)
         return "Agent 处理步数超出限制，请简化您的问题后重试。"
     finally:
@@ -286,7 +270,7 @@ async def stream_advisor(
     )
     logger.info("Agent 流式请求 | farm_id=%s: %s", farm_id, user_input[:200])
 
-    # 意图路由：问候语直接回复，跳过 LangGraph
+    # 意图路由：问候语直接回复，跳过 ReAct loop
     intent = classify_intent(user_input)
     farm_uid = _resolve_farm_uid(db, farm_id)
 
@@ -331,15 +315,13 @@ async def stream_advisor(
             yield reply
             return
 
-        graph = _get_advisor_graph()
-
         # 构建历史消息 + 当前消息
         history = await _async_build_history_messages(
             db, conversation_id, current_user_input=user_input
         )
         messages = history + [HumanMessage(content=user_input)]
 
-        async for event in graph.astream(
+        async for event in stream_agent_loop(
             {
                 "messages": messages,
                 "farm_id": farm_id,
@@ -348,16 +330,7 @@ async def stream_advisor(
                 "user_id": user_id,
                 "session_id": session_id,
             },
-            config={
-                "recursion_limit": 15,
-                "run_name": "advisor_stream",
-                "metadata": {
-                    "farm_id": farm_id,
-                    "request_type": call_type,
-                    "user_id": user_id,
-                },
-            },
-            stream_mode="updates",
+            max_steps=15,
         ):
             for node, state in event.items():
                 step += 1
@@ -390,14 +363,14 @@ async def stream_advisor(
                                 node_name="final_reply",
                                 user_input=user_input,
                                 reply=filtered,
-                                reason="graph_final_response",
+                                reason="react_loop_final_response",
                             )
                             chunk_size = 3
                             delay = 0.02
                             for i in range(0, len(filtered), chunk_size):
                                 yield filtered[i : i + chunk_size]
                                 await asyncio.sleep(delay)
-    except GraphRecursionError:
+    except AgentLoopMaxStepsExceeded:
         logger.error("Agent 流式步数超限 | farm_id=%s", farm_id)
         yield "Agent 处理步数超出限制，请简化您的问题后重试。"
         return

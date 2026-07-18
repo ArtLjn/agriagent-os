@@ -1,18 +1,15 @@
 """Agent 状态定义。"""
 
-from typing import Annotated
-
 from app.agent.router import RouterDecision
 from app.context.models import ContextBundle
 from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
 from typing_extensions import NotRequired, TypedDict
 
 
 class AgentState(TypedDict):
-    """LangGraph 状态。"""
+    """Agent runtime 状态。"""
 
-    messages: Annotated[list[BaseMessage], add_messages]
+    messages: list[BaseMessage]
     farm_id: int
     farm_uid: str | None
     intent: str  # "greeting" | "query" | "write" | "agent"

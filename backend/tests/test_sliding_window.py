@@ -2,7 +2,7 @@
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from app.agent.graph import sliding_window_compact
+from app.agent.runtime.messages import sliding_window_compact
 
 
 def _make_messages(rounds: int) -> list:

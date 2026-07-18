@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.agent.graph import compile_advisor_graph
+from app.agent.runtime.loop import run_agent_loop
 from app.prompt.registry import get_registry
 
 
@@ -63,8 +63,7 @@ class TestFunctionCallingE2E:
         )
         mock_get_llm.return_value = mock_llm
 
-        graph = compile_advisor_graph()
-        result = await graph.ainvoke(
+        result = await run_agent_loop(
             {"messages": [HumanMessage(content="明天苏州什么天气")]}
         )
 
@@ -103,8 +102,7 @@ class TestFunctionCallingE2E:
         )
         mock_get_llm.return_value = mock_llm
 
-        graph = compile_advisor_graph()
-        result = await graph.ainvoke({"messages": [HumanMessage(content="你好")]})
+        result = await run_agent_loop({"messages": [HumanMessage(content="你好")]})
 
         last_msg = result["messages"][-1]
         assert last_msg.content == "你好老李，有啥事？"
@@ -142,8 +140,7 @@ class TestFunctionCallingE2E:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="明天苏州晴"))
         mock_get_llm.return_value = mock_llm
 
-        graph = compile_advisor_graph()
-        await graph.ainvoke({"messages": [HumanMessage(content="明天苏州什么天气")]})
+        await run_agent_loop({"messages": [HumanMessage(content="明天苏州什么天气")]})
 
         mock_llm.bind_tools.assert_called_once()
         bound_tools = mock_llm.bind_tools.call_args[0][0]
@@ -191,8 +188,7 @@ class TestFunctionCallingE2E:
         mock_llm.ainvoke = AsyncMock(side_effect=[tool_call_msg, final_msg])
         mock_get_llm.return_value = mock_llm
 
-        graph = compile_advisor_graph()
-        await graph.ainvoke({"messages": [HumanMessage(content="农场最近怎么样")]})
+        await run_agent_loop({"messages": [HumanMessage(content="农场最近怎么样")]})
 
         bind_calls = mock_llm.bind_tools.call_args_list
         assert len(bind_calls) == 1

@@ -97,13 +97,13 @@ class TestSlidingWindowCompact:
 
     def test_function_exists(self):
         """sliding_window_compact 可以导入。"""
-        from app.agent.graph import sliding_window_compact
+        from app.agent.runtime.messages import sliding_window_compact
 
         assert callable(sliding_window_compact)
 
     def test_short_history_unchanged(self):
         """短对话不做压缩。"""
-        from app.agent.graph import sliding_window_compact
+        from app.agent.runtime.messages import sliding_window_compact
 
         msgs = [
             HumanMessage(content="问题1"),
@@ -116,7 +116,7 @@ class TestSlidingWindowCompact:
 
     def test_long_history_compressed(self):
         """超过 keep_rounds 的对话压缩旧 ToolMessage。"""
-        from app.agent.graph import sliding_window_compact
+        from app.agent.runtime.messages import sliding_window_compact
 
         # 构建 6 轮完整对话，超过 keep_rounds=3
         expanded = []
@@ -244,7 +244,7 @@ class TestCrossCuttingIntegration:
 
     def test_sliding_window_preserves_recent_context(self):
         """sliding_window_compact 保留最近 N 轮完整上下文。"""
-        from app.agent.graph import sliding_window_compact
+        from app.agent.runtime.messages import sliding_window_compact
 
         # 构建 4 轮对话，保留 2 轮
         msgs = []

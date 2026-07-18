@@ -4,7 +4,6 @@ import logging
 import re
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langgraph.graph import END
 
 from app.core.llm import get_llm
 from app.agent.runtime.llm_node_steps import (
@@ -43,7 +42,7 @@ def _should_continue(state: AgentState) -> str:
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.tool_calls:
         return "tools"
-    return END
+    return "done"
 
 
 def _is_operation_work_order_clarification(messages: list) -> bool:

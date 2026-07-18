@@ -153,49 +153,45 @@ class TestAdvisorInvoke:
         "app.application.advice.advisor.handle_pending_action",
         new_callable=AsyncMock,
     )
-    @patch("app.application.advice.advisor._get_advisor_graph")
+    @patch("app.application.advice.advisor.run_agent_loop", new_callable=AsyncMock)
     def test_invoke_advisor_returns_response(
-        self, mock_get_graph: MagicMock, mock_pending: AsyncMock
+        self, mock_loop: AsyncMock, mock_pending: AsyncMock
     ) -> None:
         """验证 invoke_advisor 返回 LLM 响应文本。"""
         mock_pending.return_value = PendingActionDecision.unhandled()
-        mock_graph = MagicMock()
         mock_msg = MagicMock()
         mock_msg.content = "建议：今天适合浇水。"
-        mock_graph.ainvoke = AsyncMock(return_value={"messages": [mock_msg]})
-        mock_get_graph.return_value = mock_graph
+        mock_loop.return_value = {"messages": [mock_msg]}
 
         from app.application.advice.advisor import invoke_advisor
 
         result = asyncio.run(invoke_advisor("今天该做什么？", farm_id=1))
 
         assert result == "建议：今天适合浇水。"
-        mock_graph.ainvoke.assert_called_once()
-        call_args = mock_graph.ainvoke.call_args[0][0]
+        mock_loop.assert_awaited_once()
+        call_args = mock_loop.await_args.args[0]
         assert call_args["farm_id"] == 1
 
     @patch(
         "app.application.advice.advisor.handle_pending_action",
         new_callable=AsyncMock,
     )
-    @patch("app.application.advice.advisor._get_advisor_graph")
+    @patch("app.application.advice.advisor.run_agent_loop", new_callable=AsyncMock)
     def test_invoke_advisor_passes_farm_id(
-        self, mock_get_graph: MagicMock, mock_pending: AsyncMock
+        self, mock_loop: AsyncMock, mock_pending: AsyncMock
     ) -> None:
         """验证 invoke_advisor 正确传递 farm_id。"""
         mock_pending.return_value = PendingActionDecision.unhandled()
-        mock_graph = MagicMock()
         mock_msg = MagicMock()
         mock_msg.content = "建议内容"
-        mock_graph.ainvoke = AsyncMock(return_value={"messages": [mock_msg]})
-        mock_get_graph.return_value = mock_graph
+        mock_loop.return_value = {"messages": [mock_msg]}
 
         from app.application.advice.advisor import invoke_advisor
 
         result = asyncio.run(invoke_advisor("问题", farm_id=42))
 
         assert result == "建议内容"
-        call_args = mock_graph.ainvoke.call_args[0][0]
+        call_args = mock_loop.await_args.args[0]
         assert call_args["farm_id"] == 42
 
     @patch(
@@ -203,20 +199,18 @@ class TestAdvisorInvoke:
         new_callable=AsyncMock,
     )
     @patch("app.application.advice.advisor._async_build_history_messages")
-    @patch("app.application.advice.advisor._get_advisor_graph")
+    @patch("app.application.advice.advisor.run_agent_loop", new_callable=AsyncMock)
     def test_invoke_advisor_with_history(
         self,
-        mock_get_graph: MagicMock,
+        mock_loop: AsyncMock,
         mock_build_history: MagicMock,
         mock_pending: AsyncMock,
     ) -> None:
         """验证 invoke_advisor 注入历史消息。"""
         mock_pending.return_value = PendingActionDecision.unhandled()
-        mock_graph = MagicMock()
         mock_msg = MagicMock()
         mock_msg.content = "回复内容"
-        mock_graph.ainvoke = AsyncMock(return_value={"messages": [mock_msg]})
-        mock_get_graph.return_value = mock_graph
+        mock_loop.return_value = {"messages": [mock_msg]}
         mock_build_history.return_value = [
             HumanMessage(content="之前的问题"),
             AIMessage(content="之前的回复"),
@@ -230,7 +224,7 @@ class TestAdvisorInvoke:
         )
 
         assert result == "回复内容"
-        call_args = mock_graph.ainvoke.call_args[0][0]
+        call_args = mock_loop.await_args.args[0]
         messages = call_args["messages"]
         # 历史 2 条 + 当前 1 条
         assert len(messages) == 3
@@ -245,24 +239,22 @@ class TestAdvisorInvoke:
         "app.application.advice.advisor.handle_pending_action",
         new_callable=AsyncMock,
     )
-    @patch("app.application.advice.advisor._get_advisor_graph")
+    @patch("app.application.advice.advisor.run_agent_loop", new_callable=AsyncMock)
     def test_invoke_advisor_no_history_when_no_db(
-        self, mock_get_graph: MagicMock, mock_pending: AsyncMock
+        self, mock_loop: AsyncMock, mock_pending: AsyncMock
     ) -> None:
         """验证 db 为 None 时只有当前消息（无历史注入）。"""
         mock_pending.return_value = PendingActionDecision.unhandled()
-        mock_graph = MagicMock()
         mock_msg = MagicMock()
         mock_msg.content = "回复"
-        mock_graph.ainvoke = AsyncMock(return_value={"messages": [mock_msg]})
-        mock_get_graph.return_value = mock_graph
+        mock_loop.return_value = {"messages": [mock_msg]}
 
         from app.application.advice.advisor import invoke_advisor
 
         result = asyncio.run(invoke_advisor("问题", farm_id=1))
 
         assert result == "回复"
-        call_args = mock_graph.ainvoke.call_args[0][0]
+        call_args = mock_loop.await_args.args[0]
         messages = call_args["messages"]
         # 无历史时只有当前消息 1 条
         assert len(messages) == 1
@@ -278,11 +270,11 @@ class TestAdvisorStream:
         new_callable=AsyncMock,
     )
     @patch("app.application.advice.advisor._async_build_history_messages")
-    @patch("app.application.advice.advisor._get_advisor_graph")
+    @patch("app.application.advice.advisor.stream_agent_loop")
     @pytest.mark.asyncio
     async def test_stream_advisor_with_history(
         self,
-        mock_get_graph: MagicMock,
+        mock_stream_loop: MagicMock,
         mock_build_history: MagicMock,
         mock_pending: AsyncMock,
     ) -> None:
@@ -290,13 +282,11 @@ class TestAdvisorStream:
         from app.application.advice.advisor import stream_advisor
 
         mock_pending.return_value = PendingActionDecision.unhandled()
-        mock_graph = MagicMock()
 
         async def _fake_astream(*args, **kwargs):
-            yield {"agent": {"messages": [AIMessage(content="流式回复")]}}
+            yield {"llm": {"messages": [AIMessage(content="流式回复")]}}
 
-        mock_graph.astream = _fake_astream
-        mock_get_graph.return_value = mock_graph
+        mock_stream_loop.side_effect = _fake_astream
         mock_build_history.return_value = [
             HumanMessage(content="历史问题"),
         ]

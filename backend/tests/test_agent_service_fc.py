@@ -1,9 +1,9 @@
 """FC 迁移验证测试。
 
-验证 agent_service.py 已完成从 skillify 预路由到 LangGraph Function Calling 的迁移：
+验证 agent_service.py 已完成从 skillify 预路由到 ReAct Function Calling 的迁移：
 1. _try_skillify_route / _execute_skill 函数已移除
 2. build_skill_context / get_skill_manager 引用已清除
-3. chat_with_agent / stream_chat_with_agent 全部走 LangGraph 路径
+3. chat_with_agent / stream_chat_with_agent 全部走 ReAct loop 路径
 4. pending action confirm/cancel 流程保留完整
 """
 

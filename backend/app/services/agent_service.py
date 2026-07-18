@@ -116,7 +116,7 @@ async def stream_chat_with_agent(
             yield decision.reply
             return
 
-    # 统一走 LangGraph Function Calling 流式路由
+    # 统一走 ReAct Function Calling 流式路由
     context = f"【关联周期 ID: {cycle_id}】\n" if cycle_id else ""
     full_input = context + message
     full_reply = ""

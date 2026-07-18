@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from types import SimpleNamespace
 
 from app.agent.executor.pending_actions import handle_pending_action
-from app.agent.graph import _parallel_tool_node
+from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.router import SkillRouter
 from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_action_presenter import build_plan_confirm_message
