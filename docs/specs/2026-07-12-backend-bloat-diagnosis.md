@@ -22,7 +22,7 @@
 | 维度 | 采集方式 |
 | --- | --- |
 | 文件数与行数 | `find app/ -type f -name "*.py" -exec wc -l {} +` |
-| 超限文件 | `awk '$1 > 500'` |
+| 500+ 文件观察 | `awk '$1 > 500'`；当前生产 Python 文件硬上限为 1000 行 |
 | 微型文件 | `awk '$1 <= 30'`（排除 `__init__.py`） |
 | 空目录 | `find app/ -type d -empty` |
 | 测试根污染 | `ls tests/*.db tests/*.db-* tests/test_*.py` |
@@ -38,7 +38,7 @@
 | 应用代码文件数 | **450 个 `.py` 文件** |
 | 应用代码总行数 | **61,248 行** |
 | 测试代码文件数 | 234 个 `.py` 文件 |
-| 超限文件数（> 500 行） | **14 个** |
+| 500+ 观察文件数（2026-07-12 快照） | **14 个** |
 | 空目录数 | **4 个** |
 | 微型文件数（≤ 30 行非 init） | **43 个** |
 | `*_service.py` 文件数（backend 全量） | 26 个 |
@@ -52,9 +52,9 @@
 | `agent/` | 184 | 20,301 | 33.2% | 🔴 已单独分析（详见 agent-module-remediation spec） |
 | `modules/` | 40 | 9,947 | 16.3% | 🔴 `data_flywheel` 独占 91% |
 | `services/` | 40 | 9,736 | 15.9% | 🟡 26 个 *_service.py，可能过度细化 |
-| `infra/` | 25 | 5,156 | 8.4% | 🟡 2 个文件 > 500 行 |
+| `infra/` | 25 | 5,156 | 8.4% | 🟡 2 个文件进入 500+ 观察区间 |
 | `api/` | 21 | 3,279 | 5.4% | 🟢 |
-| `evaluation/` | 24 | 2,414 | 3.9% | 🟡 1 个文件 > 500 行 |
+| `evaluation/` | 24 | 2,414 | 3.9% | 🟡 1 个文件进入 500+ 观察区间 |
 | `schemas/` | 15 | 1,799 | 2.9% | 🟢 |
 | `context/` | 21 | 1,732 | 2.8% | 🟢 |
 | `simulation/` | 9 | 1,389 | 2.3% | 🟢 |
@@ -77,7 +77,7 @@
 
 ## 关键发现
 
-### 发现 1：超限文件全清单（14 个 > 500 行）
+### 发现 1：500+ 观察文件全清单（2026-07-12 快照）
 
 按行数降序：
 
@@ -110,7 +110,7 @@
 app/modules/data_flywheel/   27 files  9,034 lines  (占 modules/ 的 91%)
 ```
 
-#### 2.1 6 个文件超 500 行
+#### 2.1 6 个文件进入 500+ 观察区间
 
 见上表 #3、#4、#6、#7、#11、#14。
 
@@ -469,8 +469,8 @@ except ImportError:
 
 | 项目硬规则 | 当前状态 | 缺口 |
 | --- | --- | --- |
-| 单文件 ≤ 500 行 | 14 个文件违规 | 🔴 严重 |
-| 单方法 ≤ 50 行 | 未全量扫描 | ⚠ 待量化 |
+| 生产 Python 文件 ≤ 1000 行；500-1000 行观察 | 2026-07-12 快照中 2 个文件超过 1000 行，12 个文件进入 500-1000 观察区间 | 🔴 需按新阈值持续收束 |
+| 单方法建议 ≤ 50 行，超过 80 行需说明或拆分 | 未全量扫描 | ⚠ 待量化 |
 | 类 ≤ 200 行 | 未全量扫描 | ⚠ 待量化 |
 | 删除不再使用的代码 | 4 个空目录、`planner/` 死代码 | 🔴 已识别 |
 | 三次重复再抽象 | 26 个 `*_service.py` | 🟡 需评审 |
@@ -478,7 +478,7 @@ except ImportError:
 
 ### 模块健康度评分
 
-| 模块 | 文件数 | 行数 | 超限文件 | 空目录 | 死代码 | 评分 |
+| 模块 | 文件数 | 行数 | 500+ 观察文件 | 空目录 | 死代码 | 评分 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `agent/` | 184 | 20301 | 5 | 2 | 1 包 | 🔴 重度（已有整改 spec） |
 | `modules/data_flywheel/` | 27 | 9034 | 6 | 0 | 未知 | 🔴 重度 |
@@ -491,9 +491,9 @@ except ImportError:
 
 ## 整改 spec 覆盖度评估
 
-| 超限文件 | 整改 spec 覆盖 | 备注 |
+| 500+ 观察文件 | 整改 spec 覆盖 | 备注 |
 | --- | --- | --- |
-| 14 个 > 500 行 | 4 个（agent 部分的 4 个） | **覆盖率 28.6%** |
+| 14 个 500+ 观察文件 | 4 个（agent 部分的 4 个） | **覆盖率 28.6%** |
 | 4 个空目录 | 2 个（agent 部分） | **覆盖率 50%** |
 | `planner/` 死代码 | ✅ | 已覆盖 |
 | `data_flywheel` 重灾区 | ❌ | **0% 覆盖** |
@@ -549,11 +549,11 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | --- | --- | --- | --- | --- | --- |
 | P1-1 | 删除 `MemoryServicePort` Protocol | `backend/app/memory/ports.py` | 9-#4 | ✅ bff22473 | `backend/app/memory/ports.py` 已删除；`rg -n "MemoryServicePort\|MemoryContextProviderPort\|app\\.memory\\.ports\|from app\\.memory\\.ports\|import app\\.memory\\.ports" backend/app backend/tests` 无输出；新增 `tests/memory/test_memory_service_contract.py` 锁住 `InMemoryMemoryService` 运行时方法；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/memory/test_memory_service_contract.py -q` 通过（2 passed）；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/memory/test_memory_service_contract.py tests/memory/test_memory_service.py tests/test_agent_service.py -q` 因本地 MySQL `localhost:3306` 不可用失败（1 failed, 28 passed），失败用例为 `tests/test_agent_service.py::TestStreamChatWithAgent::test_stream_cycle_confirm_missing_template_creates_template_pending`；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过（复杂度检查保留既有警告） |
 | P1-2 | 删除 `_ComparableStage(Protocol)` | `backend/app/services/crop_service.py` | 9-#6 | ✅ 本 worktree/PR 已处理 | `crop_service.py` 已删除私有 `_ComparableStage(Protocol)`，阶段比较改用 `Iterable[Any]` 和显式属性读取；新增 `tests/services/test_crop_service_stage_compare.py` 锁住顺序无关、重复阶段数量保留、`key_tasks` 空白归一化和私有 Protocol 清理；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/services/test_crop_service_stage_compare.py tests/test_cost.py tests/api/test_planting_operations.py -q` 通过（35 passed, 1 skipped）；`ruff check backend/app backend/tests` 通过；`bash scripts/check-complexity-budget.sh` 通过（保留既有复杂度预算警告）；`rg "_ComparableStage\|Protocol" backend/app/services/crop_service.py` 无输出 |
-| P1-3 | 评估 `core/compat.py` 是否仍必要 | `backend/app/core/compat.py` 及 9 处引用 | 9-#8 | ✅ 已评估：暂保留，待 Python baseline 升级至 3.11+ | `backend/tests/test_python_compat.py` 明确记录生产服务器仍为 Python 3.10，并禁止直接使用标准库 `StrEnum` / `datetime.UTC`；`backend/requirements.txt` 未声明 Python baseline；`backend/Dockerfile` 为 `python:3.11-slim`，但不足以覆盖测试门禁和缺失的包级 baseline；`rg -n "from app\\.core\\.compat import\|app\\.core\\.compat\|\\bUTC\\b\|\\bStrEnum\\b" backend/app backend/tests` 确认当前兼容层仍覆盖 `StrEnum` 与 `UTC` 引用；验证命令：`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/test_python_compat.py tests/test_config.py tests/test_mongo_config.py -q`、`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` |
-| P1-4 | 合并 `stream_chat_*` 切片群 | `application/chat/stream_*.py`（5 文件，已从根目录归位） | 7 | ✅ 子包归位完成 / 进一步合并待后续 | `stream_chat_*` 已归入 `application/chat/`，本轮同步删除旧根模块同对象兼容入口；直接合并会让 `stream_chat.py` 超过 500 行预算，后续需先拆职责再收敛为更少文件 |
+| P1-3 | 评估并迁移 Python 兼容工具 | `backend/app/shared/compatibility.py` | 9-#8 | ✅ 本轮完成 | Python 3.10 兼容能力仍保留，但真实入口从 `app.core.compat` 迁到 `app.shared.compatibility`；旧 core 兼容入口不保留，生产代码和测试已改用 shared 路径；`backend/tests/test_python_compat.py` 改为排除 `shared/compatibility.py` 这个唯一兼容实现；验证命令：`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/test_python_compat.py tests/memory/test_maybe_summarize.py tests/memory/test_memory_service.py -q`、`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` |
+| P1-4 | 合并 `stream_chat_*` 切片群 | `application/chat/stream_*.py`（5 文件，已从根目录归位） | 7 | ✅ 子包归位完成 / 进一步合并待后续 | `stream_chat_*` 已归入 `application/chat/`，本轮同步删除旧根模块同对象兼容入口；后续合并不再受 500 行硬预算阻塞，但需证明职责内聚且不得超过 1000 行硬上限 |
 | P1-5 | `review_issue_chain_*` 切片收回 | `platforms/data_flywheel/review_issue_chain/` | 2.2 | ✅ 子包归位完成 / root 兼容薄壳已下线 | `review_issue_chain/{helpers,case,repair,service}.py` 为真实入口，并拆出 `inbox/operations/cards/builders/queries/support`；生产代码、测试和 monkeypatch target 使用子包真实路径 |
 | P1-6 | `repair_pack_*` 切片收回 | `platforms/data_flywheel/repair_pack/` | 2 | ✅ 子包归位完成 / root 兼容薄壳已下线 | `repair_pack/{chain,readme,service}.py` 为真实入口，并拆出 `candidate/constants/redaction`；生产代码、测试和 monkeypatch target 使用子包真实路径 |
-| P1-7 | `context/selectors/` 轻量 selector 收束 | `backend/app/context/selectors/` | 9-#7、附录 A | ✅ 已归位并删除旧兼容壳 / 单文件完全合并待后续继续拆职责 | `conversation/cycle/farm/ledger/retrieval/user_settings/weather` 已收束到 `selectors/core.py`，旧子模块兼容壳已删除；新代码使用 `app.context.selectors.core` 或包级 `app.context.selectors`，`memory.py`、`planting.py` 因职责独立与 500 行预算继续保留；`tests/context/test_selector_relocation_compat.py` 覆盖真实入口与包级 API |
+| P1-7 | `context/selectors/` 轻量 selector 收束 | `backend/app/context/selectors/` | 9-#7、附录 A | ✅ 已归位并删除旧兼容壳 / 单文件完全合并待后续继续按职责评审 | `conversation/cycle/farm/ledger/retrieval/user_settings/weather` 已收束到 `selectors/core.py`，旧子模块兼容壳已删除；新代码使用 `app.context.selectors.core` 或包级 `app.context.selectors`，`memory.py`、`planting.py` 因职责独立继续保留；`tests/context/test_selector_relocation_compat.py` 覆盖真实入口与包级 API |
 | P1-8 | `manage-crop-cycle/scripts/` 小 operation 收束 | `skills/manage-crop-cycle/scripts/` | 7 | ✅ 已归位并删除旧兼容壳 / 重更新逻辑继续独立 | `create_cycle/delete_cycle/query_cycles/query_cycle_info` 已合入 `scripts/main.py`，旧小脚本兼容壳已删除；新代码使用 `app.skills.manage-crop-cycle.scripts.main`，`update_cycle.py`、`update_stage.py` 因职责和行数预算继续保留；`tests/skills/test_manage_crop_cycle_script_compat.py` 覆盖真实入口与重逻辑真实模块 |
 | P1-9 | 删除 agent 根兼容壳 | `agent/{advisor,report,skill_coverage,intent_router,tool_selector,tool_selection_rules,llm,assistant_roles}.py` | 7、9-#7 | ✅ 已下线 | 生产代码和普通测试改为真实路径：`app.application.advice.advisor`、`app.application.report`、`app.platforms.evaluation.skill_coverage`、`app.agent.router.*`、`app.core.llm`、`app.core.settings.roles`；不再断言旧路径可 import 或旧 patch target 生效 |
 | P1-10 | 移除 LangGraph，改纯 Python ReAct loop | `agent/runtime/loop.py`、`agent/state.py`、`application/advice/advisor.py`、`bootstrap/exceptions.py`、`requirements.txt` | 9-#7、目录重设计决策 E | ✅ 本 PR 已处理 | 新增 `run_agent_loop` / `stream_agent_loop` 与 `AgentLoopMaxStepsExceeded`，显式追加节点返回的 `messages`；`invoke_advisor` / `stream_advisor` 改为直接调用 loop，删除 `app.agent.graph` 旧门面与 `langgraph` 依赖；生产代码、测试和 requirements 中 `rg -n "langgraph\|LangGraph\|StateGraph\|GraphRecursionError\|add_messages\|app\\.agent\\.graph" backend/app backend/tests backend/requirements.txt` 无输出；聚焦 pytest 31 passed；用户指定目标 pytest 因本地 MySQL `farm_manager@localhost` 权限失败（17 failed, 56 passed），失败链路为既有 `pending_plan` DB 读取基线；`ruff check --no-cache backend/app backend/tests`、`check-layer-deps.sh`、`check-complexity-budget.sh` 通过（保留历史 baseline 警告） |
@@ -568,12 +568,13 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P2-4 | `tests/` 根目录 78 个 test_*.py 下沉 | `backend/tests/` | 5 | ⏳ | 按源码镜像目录重构 |
 | P2-5 | 日志轮转配置补全 | `backend/app/logs/` | 6 | ⏳ | 配置 logrotate；磁盘监控 |
 | P2-6 | 删除空目录 | `app/memory/long_term/`、`app/memory/retrieval/`、旧 Evaluation 根包、旧 DataFlywheel 根包等 | 4 | ✅ 部分推进 | 2026-07-17 已删除只含 `__init__.py` 的旧 Evaluation / DataFlywheel 空壳包；其余空目录按后续扫描继续处理 |
+| P2-7 | `seed/scripts` 一级小模块归位 | `backend/app/ops/` | 8.2 | ✅ 本轮完成 | `core/seed.py` 迁为 `ops/bootstrap_seed.py`，`seed/system_crop_templates.py` 迁为 `ops/system_crop_templates.py`，`scripts/schema_hardening_audit.py` 迁为 `ops/schema_hardening_audit.py`；旧 `app.seed` / `app.scripts` / `app.core.seed` 活动引用清空且不保留兼容壳 |
 
 ### P3 — 长期治理（结构性）
 
 | # | 整改项 | 范围 | 关联发现 | 状态 | 验证方式 |
 | --- | --- | --- | --- | --- | --- |
-| P3-1 | 巨石文件拆分（在合并完成后） | `tool_executor.py` (1517)、`classifier.py` (1233)、`nodes.py` (1049) | 1 | ⏳ | 按 lifecycle / 规则族 / 节点类型分别拆；2026-07-17 第一阶段先拆 `agent/router/policy.py` 的候选选择状态与预算辅助逻辑，以解除 501 行硬错误；同日继续拆 `agent/router/classifier.py`，将 hint 常量迁入 `classifier_hints.py`、无状态 `IntentFrame` 构造迁入 `classifier_frames.py`，`classifier.py` 从 1341 行降至 736 行；同日 `agent/runtime/tool_executor.py` 第一阶段将权限/metadata 决策、operation 解析、读工具 trace/result 归一化迁入 `tool_metadata.py`，`tool_executor.py` 从 1622 行降至 1198 行，不代表 P3-1 全部完成；2026-07-18 第二阶段（PR #29）新增 `agent/runtime/node_helpers.py` 承载 data_source trace、router 决策、prompt budget、LLM response 记录等无状态节点辅助，`nodes.py` 从 1049 行降至 647 行；新增 `agent/runtime/tool_pending_args.py` 与 `agent/runtime/tool_pending.py` 承载 pending 参数补齐、pending plan / pending action 确认与存储辅助，`tool_executor.py` 从 1198 行降至 311 行；2026-07-18 第三阶段（PR #30）新增 `agent/runtime/llm_invocation.py`、`llm_response_repair.py`、`llm_prompt.py`、`llm_node_steps.py`，分别承载 LLM 请求内重试、响应修正、system prompt / context 输入准备、节点后半流程记录，`nodes.py` 从 647 行降至 426 行，低于 500 行，且本轮新增/修改的 runtime 节点拆分文件未新增单函数 >50 行问题；2026-07-18 classifier 第二阶段（PR #31）新增 `agent/router/classifier_extractors.py` 承载 worker、工资、作业单参数与证据抽取，新增 `agent/router/classifier_signals.py` 承载 hint/正则信号与规则条件判断，`RuleIntentClassifier` 保留分类流程编排与 frame 组装边界，`classifier.py` 从 736 行降至 158 行，`classifier_frames.py` 保持 478 行未继续增长，新文件分别为 213 / 383 行且未新增单函数 >50 行问题；验证：`PYTHONDONTWRITEBYTECODE=1 ruff check --no-cache backend/app backend/tests` 通过，目标 pytest 179 passed / 4 deselected / 4 warnings，`bash scripts/check-complexity-budget.sh` exit 0（保留 4 类 baseline 警告），`bash scripts/check-layer-deps.sh` exit 0（保留 51 个 baseline/TODO 警告），`git diff --check origin/main...HEAD && git diff --check` 通过；额外行数确认：`classifier.py` 158 行，`classifier_extractors.py` 213 行，`classifier_frames.py` 478 行，`classifier_hints.py` 107 行，`classifier_signals.py` 383 行 |
+| P3-1 | 巨石文件拆分（在合并完成后） | `tool_executor.py` (1517)、`classifier.py` (1233)、`nodes.py` (1049) | 1 | ⏳ | 按 lifecycle / 规则族 / 节点类型分别拆；2026-07-17 第一阶段先拆 `agent/router/policy.py` 的候选选择状态与预算辅助逻辑；同日继续拆 `agent/router/classifier.py`，将 hint 常量迁入 `classifier_hints.py`、无状态 `IntentFrame` 构造迁入 `classifier_frames.py`；同日 `agent/runtime/tool_executor.py` 第一阶段将权限/metadata 决策、operation 解析、读工具 trace/result 归一化迁入 `tool_metadata.py`；2026-07-18 PR #29/30/31 已继续收束 runtime 与 classifier；本轮规则改为生产 Python 文件 1000 行硬上限，并将 `platforms/data_flywheel/service.py` 的响应序列化 helper 迁入 `service_serializers.py`，`service.py` 从 1045 行降到 844 行、`service_serializers.py` 为 242 行；后续 500-1000 行文件按职责混杂度评审，不再为 500 行预算拆碎片 |
 | P3-2 | 引入"新增 Protocol/ABC 必须列出 ≥2 实现"规则 | `.claude/rules/python-style.md` + CI sensor | 9 | ⏳ | sensor 脚本扫描单实现 Protocol |
 | P3-3 | 引入"新增 backend 实现必须证明使用"规则 | `.claude/rules/` + CI sensor | 9-#2 | ⏳ | 与 P3-2 类似；agent 根兼容壳下线后，活跃代码应持续保持旧 import / patch 路径扫描为空 |
 
@@ -608,7 +609,7 @@ cd backend
 # 文件数与行数
 find app/ -type f -name "*.py" -exec wc -l {} + | tail -1
 
-# 超限文件
+# 500+ 观察文件
 find app/ -type f -name "*.py" -exec wc -l {} + \
   | awk '$1 > 500 && $2 != "total"' | sort -n
 

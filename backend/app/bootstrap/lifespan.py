@@ -11,7 +11,7 @@ from app.prompt.registry import get_registry
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logger import get_logger, setup_logging
-from app.core.seed import seed_admin_user, seed_default_farm
+from app.ops.bootstrap_seed import seed_admin_user, seed_default_farm
 from app.infra.mongo import close_mongo_client, init_mongo_client
 from app.infra.repository_runtime import set_main_event_loop
 from app.infra.trace_cleaner import clean_expired_traces

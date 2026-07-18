@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.core.compat import StrEnum
+from app.shared.compatibility import StrEnum
 from app.infra.pending_actions import WRITE_SKILLS, get_cache_groups_for_skill
 from app.skills.registry import load_skill_registry
 
@@ -270,8 +270,7 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
         return (
             "manage_units"
             if any(
-                params.get(key) not in (None, "")
-                for key in _PLANTING_UNIT_WRITE_FIELDS
+                params.get(key) not in (None, "") for key in _PLANTING_UNIT_WRITE_FIELDS
             )
             else "query_units"
         )
@@ -313,9 +312,7 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
 
 def _only_labor_payment_worker_id_wage_field(params: Mapping[str, Any]) -> bool:
     wage_keys = {
-        key
-        for key in _LABOR_PAYMENT_WAGE_FIELDS
-        if params.get(key) not in (None, "")
+        key for key in _LABOR_PAYMENT_WAGE_FIELDS if params.get(key) not in (None, "")
     }
     return wage_keys == {"worker_id"}
 

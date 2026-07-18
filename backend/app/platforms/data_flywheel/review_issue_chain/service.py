@@ -16,7 +16,6 @@ from app.platforms.data_flywheel.service import (
     _events_for_turn,
     _labels_by_sample,
     _prelabels_by_sample,
-    _sample_row,
 )
 from app.platforms.shared.judge_service import (
     LABEL_DEFINITIONS,
@@ -30,7 +29,6 @@ __all__ = [
     "_events_for_turn",
     "_labels_by_sample",
     "_prelabels_by_sample",
-    "_sample_row",
     "create_review_issue_chain_candidate",
     "get_review_issue_chain_detail",
     "list_daily_review_inbox",

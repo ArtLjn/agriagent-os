@@ -265,10 +265,18 @@ backend/app/
 第一轮不迁业务大域，先做规则和低风险结构：
 
 1. 修改复杂度预算为 1000 行生产文件阈值。
-2. 新增 `shared/` 设计占位和导入边界文档，不马上大规模搬代码。
-3. 将 `core/seed.py`、`seed/system_crop_templates.py`、`scripts/schema_hardening_audit.py` 归入 `ops/` 或对应业务目录。
-4. 清理无使用点的空目录。
+2. 建立 `shared/`，先迁入低风险 Python 兼容工具 `shared/compatibility.py`，不做 core 全量迁移。
+3. 将 `core/seed.py`、`seed/system_crop_templates.py`、`scripts/schema_hardening_audit.py` 归入 `ops/`。
+4. 清理无使用点的空目录；若扫描无空目录，则记录为本轮无清理对象。
 5. 更新两份既有 spec 的整改方向：从“继续拆巨石”改为“领域聚合 + 合并碎片”。
+
+### 9.1 Round 1 落地记录（2026-07-18）
+
+- 复杂度规则已切到生产 Python 文件 1000 行硬上限，500-1000 行只作为观察区间。
+- `backend/app/ops/` 已承接启动 seed、系统作物模板 seed 和 schema hardening audit；旧 `app.seed`、`app.scripts`、`app.core.seed` 活动引用清空，不保留兼容入口。
+- `backend/app/shared/compatibility.py` 已承接 Python 3.10/3.11 兼容工具；旧 `app.core.compat` 活动引用清空，不保留兼容入口。
+- `platforms/data_flywheel/service.py` 的响应序列化 helper 已归入 `service_serializers.py`，唯一超过 1000 行的生产文件降至 1000 行以内。
+- `models/` / `schemas/` 本轮未做大规模迁移；后续按单一领域或平台能力逐批收束。
 
 这轮 PR 的目标是建立新规则，而不是一次性移动所有 models/schemas。
 

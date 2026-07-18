@@ -22,7 +22,7 @@ status: draft
 
 - models/: `CropTemplate.farm_id` 允许为空，`category` 记录作物分类。
 - services/: 系统模版查询、导入和精确查重复用 `crop_service`。
-- seed/: `backend/app/seed/system_crop_templates.py` 定义初始系统模版和加载函数。
+- ops/: `backend/app/ops/system_crop_templates.py` 定义初始系统模版和加载函数。
 - alembic/: data migration 调用 seed 模块写入 `farm_id IS NULL` 的系统模版记录。
 - api/: 已提供系统模版列表与导入接口，系统模版写保护由服务层/API 层共同约束。
 - admin-web/: 业务运营下提供“系统模板”平台资产入口；管理员个人 app 账号下的作物模板、种植周期、农事日志、成本记账、天气预报归入“业务调试”。

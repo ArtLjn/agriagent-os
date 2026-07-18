@@ -4,12 +4,12 @@
 
 `backend/app/agent/` 当前共 184 个 `.py` 文件、20,151 行代码。基于对
 目录结构、文件行数、import 依赖图、空目录检测与现有 trace 的系统性扫描，
-识别出以下四类与项目硬性规则（[python-style.md](../../.claude/rules/python-style.md)
-的"单文件 ≤ 500 行"、"删除不再使用的代码"；[CLAUDE.md](../../.claude/CLAUDE.md) 的硬性规则）
+识别出以下四类与项目治理规则（[python-style.md](../../.claude/rules/python-style.md)
+的"生产 Python 文件 ≤ 1000 行、500-1000 行观察"、"删除不再使用的代码"；[CLAUDE.md](../../.claude/CLAUDE.md) 的硬性规则）
 冲突的问题：
 
 1. **死代码与空目录**：`planner/` 整个包零外部引用，`response/`、`sessions/` 为空目录。
-2. **超限文件**：4 个文件违反"单文件 ≤ 500 行"硬规则，其中 2 个超 1000 行。
+2. **超限文件**：4 个文件进入 500-1000 行观察区间或超过 1000 行硬上限，其中 2 个超 1000 行。
 3. **同源碎片**：同一关注点被切成多个 ≤ 30 行的微型文件，部分仅为转发层。
 4. **重复抽象**：三处 registry、三个相邻"候选/计划"模型、五处路由逻辑散落。
 
@@ -22,7 +22,7 @@
 
 ## 目标
 
-把 agent 模块从"混合了过度拆分与局部巨型文件"的状态，整理为符合硬性规则、
+把 agent 模块从"混合了过度拆分与局部巨型文件"的状态，整理为符合当前治理规则、
 关注点收敛、可支撑后续 skill-capability-governance Phase 4 落地的状态。
 
 ## 非目标
@@ -83,7 +83,7 @@ skill-capability-governance Phase 4。
 
 ### Phase R1：超限文件拆分
 
-完成条件：所有 `.py` 文件 ≤ 500 行；`runtime/`、`router/`、`application/` 内部职责清晰。
+完成条件：生产 `.py` 文件全部低于 1000 行硬上限；500-1000 行只在职责明显混杂时继续收束；`runtime/`、`router/`、`application/` 内部职责清晰。
 
 #### R1.1 `runtime/tool_executor.py` 拆分（1264 行 → ≤ 350 行/文件）
 
@@ -185,7 +185,7 @@ app/application/chat/stream_chat/
 
 #### R2.2 `chat_use_case*.py` 2 连号合并
 
-`chat_use_case.py` (214) + `chat_use_case_helpers.py` (229) = 443 行，未超 500 限。
+`chat_use_case.py` (214) + `chat_use_case_helpers.py` (229) = 443 行，低于 500 观察区间。
 helpers 文件本质是把主类的私有方法外移，**合并回一个文件**。
 
 #### R2.3 微型文件合并
@@ -327,7 +327,7 @@ Sprint 5 (按需)
 
 | 文件或目录 | 改造内容 | 影响面 |
 | --- | --- | --- |
-| `app/application/chat/` | 已承接 stream/chat use case 子包；进一步合并需先控制 500 行预算 | import 路径变化 |
+| `app/application/chat/` | 已承接 stream/chat use case 子包；进一步合并需证明职责内聚且不超过 1000 行硬上限 | import 路径变化 |
 | `app/application/chat/use_case.py` | 已承接非流式 chat use case；helpers 已归入真实子包 | 单文件变更 |
 | 旧 application 根兼容入口 | 已删除，不再作为后续改造对象 | — |
 | `app/agent/router/selection.py` | 合并 tool_selector + tool_selection_rules | 保留 re-export 兼容层 |
@@ -350,8 +350,8 @@ Sprint 5 (按需)
 
 ### 硬性指标
 
-- [ ] `app/agent/` 内所有 `.py` 文件 ≤ 500 行（`find app/agent -name "*.py" -exec wc -l {} + | sort -n` 检查）
-- [ ] `app/agent/` 内所有方法 ≤ 50 行
+- [ ] `app/agent/` 内所有 `.py` 文件 ≤ 1000 行；500-1000 行需按职责混杂度评审（`find app/agent -name "*.py" -exec wc -l {} + | sort -n` 检查）
+- [ ] `app/agent/` 内方法建议 ≤ 50 行，超过 80 行需说明或拆成步骤函数
 - [ ] 零空目录：`find app/agent -type d -empty` 返回空
 - [ ] `planner/` 包完全删除
 - [ ] `app/agent/` 内零外部引用的死代码（通过 `grep -rn "from app.agent.X " app/ tests/` 反向核对）
@@ -471,8 +471,8 @@ pytest backend/tests/agent/router/test_skill_router.py \
 | --- | --- | --- |
 | `app/agent/` 文件数 | 184 | ≤ 175 |
 | `app/agent/` 总行数 | 20,151 | ≤ 18,000 |
-| 最大文件行数 | 1264 (`tool_executor.py`) | ≤ 500 |
-| 超限文件数（> 500） | 4 | 0 |
+| 最大文件行数 | 1264 (`tool_executor.py`) | ≤ 1000 |
+| 硬超限文件数（> 1000） | 2 | 0 |
 | 空目录数 | 2 | 0 |
 | 死代码包数 | 1 (`planner/`) | 0 |
 | 路由关注点散落处 | 5 | ≤ 2 |

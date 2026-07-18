@@ -16,7 +16,7 @@ mysqldump -h <host> -u <user> -p --single-transaction --routines --triggers farm
 
 ```bash
 cd backend
-.venv/bin/python -m app.scripts.schema_hardening_audit --phase pre --pretty
+.venv/bin/python -m app.ops.schema_hardening_audit --phase pre --pretty
 ```
 
 如果报告中存在悬挂引用、非法 JSON 或无法匹配分类，需要先修复或确认处理策略。
@@ -42,7 +42,7 @@ cd backend
 
 ```bash
 cd backend
-.venv/bin/python -m app.scripts.schema_hardening_audit --phase post --pretty
+.venv/bin/python -m app.ops.schema_hardening_audit --phase post --pretty
 ```
 
 期望输出：

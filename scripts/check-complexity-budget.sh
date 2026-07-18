@@ -88,28 +88,37 @@ from pathlib import Path
 import subprocess
 
 limits = [
-    ("backend/app", (".py",), 500),
-    ("backend/tests", (".py",), 500),
-    ("admin-web/src", (".ts", ".tsx"), 300),
-    ("farm-index/app/src", (".ts", ".tsx"), 300),
-    ("mobile-app/lib", (".dart",), 500),
-    ("mobile-app/test", (".dart",), 500),
+    ("backend/app", (".py",), 1000, 500, True),
+    ("backend/tests", (".py",), 500, None, False),
+    ("admin-web/src", (".ts", ".tsx"), 300, None, False),
+    ("farm-index/app/src", (".ts", ".tsx"), 300, None, False),
+    ("mobile-app/lib", (".dart",), 500, None, False),
+    ("mobile-app/test", (".dart",), 500, None, False),
 ]
 
 tracked = set(subprocess.check_output(["git", "ls-files"], text=True).splitlines())
-for root, suffixes, limit in limits:
+for item in limits:
+    root, suffixes, limit, observe_from, hard_fail = item
     for path in sorted(Path(root).rglob("*")):
         rel = path.as_posix()
         if rel not in tracked or not path.is_file() or not rel.endswith(suffixes):
             continue
         lines = sum(1 for _ in path.open("rb"))
         if lines > limit:
-            print(f"{lines}\t{limit}\t{rel}")
+            status = "ERROR" if hard_fail else "WARN"
+            print(f"{status}\t{lines}\t{limit}\t{rel}")
+        elif observe_from is not None and lines > observe_from:
+            print(f"WARN\t{lines}\t{observe_from}-{limit}\t{rel}")
 PY
 
 if [ -s /tmp/harness_complexity_files.txt ]; then
   sed -n '1,80p' /tmp/harness_complexity_files.txt
-  maybe_fail "存在源码文件超过复杂度预算；大文件会显著降低审查速度和可理解性。"
+  if rg -q '^ERROR' /tmp/harness_complexity_files.txt; then
+    fail "存在源码文件超过硬性复杂度预算；生产 Python 文件超过 1000 行必须收束。"
+  fi
+  if rg -q '^WARN' /tmp/harness_complexity_files.txt; then
+    warn "存在生产 Python 文件超过 500 行；500-1000 行仅作观察，按职责混杂度判断是否收束。"
+  fi
 else
   echo "OK: 源码文件大小在预算内。"
 fi

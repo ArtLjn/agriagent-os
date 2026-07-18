@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 
 from app.skills.registry import load_skill_registry
-from app.core.compat import StrEnum
+from app.shared.compatibility import StrEnum
 from pydantic import BaseModel, Field
 
 

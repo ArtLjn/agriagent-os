@@ -11,7 +11,7 @@ from alembic import op
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
-from app.seed.system_crop_templates import (
+from app.ops.system_crop_templates import (
     iter_system_template_keys,
     seed_system_crop_templates,
 )

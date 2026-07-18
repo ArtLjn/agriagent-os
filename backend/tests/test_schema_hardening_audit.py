@@ -9,7 +9,7 @@ from app.models.cost_category import CostCategory
 from app.schemas.cost import CostRecordCreate
 from app.services.debt_service import create_debt_record
 from app.services.cost_service import create_record
-from app.scripts.schema_hardening_audit import (
+from app.ops.schema_hardening_audit import (
     run_post_migration_audit,
     run_preflight_audit,
 )

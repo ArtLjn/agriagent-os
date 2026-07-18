@@ -7,7 +7,7 @@ from datetime import date
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from app.core.compat import StrEnum
+from app.shared.compatibility import StrEnum
 
 
 class PromptLayer(StrEnum):

@@ -260,20 +260,23 @@ fi
 # ── 文件大小检查 ──
 echo "🔍 检查文件大小..."
 
-# Python 文件
+# Python 文件。生产代码 1000 行以内可接受；500-1000 行只观察职责边界。
 for f in $(find backend/app \
   \( -name "__pycache__" -o -name ".venv" -o -name "build" -o -name "vendor" -o -name "_vendor" \) -prune \
   -o -name "*.py" -type f -print 2>/dev/null); do
   lines=$(wc -l < "$f")
-  if [ "$lines" -gt 500 ]; then
+  if [ "$lines" -gt 1000 ]; then
+    echo "❌ ERROR: $f 有 ${lines} 行（生产 Python 文件硬上限 1000）"
+    echo "✅ FIX: 按职责收束为领域/平台内聚文件，不要拆出 20-50 行碎片"
+    ERRORS=$((ERRORS + 1))
+  elif [ "$lines" -gt 500 ]; then
     if is_size_baseline_file "$f"; then
-      echo "⚠️  BASELINE: $f 有 ${lines} 行（历史超限，需专项拆分）"
+      echo "⚠️  BASELINE: $f 有 ${lines} 行（500-1000 行观察区间，按职责混杂度判断是否收束）"
       WARNINGS=$((WARNINGS + 1))
       continue
     fi
-    echo "❌ ERROR: $f 有 ${lines} 行（上限 500）"
-    echo "✅ FIX: 拆分为更小的模块，将辅助函数移至 utils/"
-    ERRORS=$((ERRORS + 1))
+    echo "⚠️  WARN: $f 有 ${lines} 行（500-1000 行观察区间，非硬失败）"
+    WARNINGS=$((WARNINGS + 1))
   fi
 done
 
