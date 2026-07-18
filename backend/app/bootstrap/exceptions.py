@@ -7,7 +7,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.agent.runtime.loop import AgentLoopMaxStepsExceeded
+from app.agent.runtime.support import AgentLoopMaxStepsExceeded
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)

@@ -8,6 +8,10 @@ class AgentRuntimeError(RuntimeError):
     """Agent Runtime 基础错误。"""
 
 
+class AgentLoopMaxStepsExceeded(AgentRuntimeError):
+    """Agent loop 超过最大步数。"""
+
+
 QUOTA_REJECT_MESSAGES = {
     "month": "本月用量已达上限，配额将在下月重置。",
     "week": "本周用量已达上限，配额将在下周一重置。",
@@ -24,6 +28,7 @@ def check_quota(user_id: str | None) -> QuotaCheckResult:
 
 
 __all__ = [
+    "AgentLoopMaxStepsExceeded",
     "AgentRuntimeError",
     "QUOTA_REJECT_MESSAGES",
     "check_quota",

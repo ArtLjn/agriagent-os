@@ -5,13 +5,9 @@ from collections.abc import AsyncGenerator
 from langchain_core.messages import AIMessage
 
 from app.agent.runtime.nodes import _llm_node
-from app.agent.runtime.support import AgentRuntimeError
+from app.agent.runtime.support import AgentLoopMaxStepsExceeded
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.agent.state import AgentState
-
-
-class AgentLoopMaxStepsExceeded(AgentRuntimeError):
-    """Agent loop 超过最大步数。"""
 
 
 def _merge_state_update(state: AgentState, update: dict) -> AgentState:
