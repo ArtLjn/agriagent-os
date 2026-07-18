@@ -34,7 +34,7 @@ class TestMultiturnPollution:
 
     def test_tool_call_data_source_can_reach_trace(self, case, fake_tool_factory):
         """工具调用结果能传递到 trace 层（验证可观测性）。"""
-        from app.agent.runtime.nodes import _build_data_source_payload
+        from app.agent.runtime.node_helpers import _build_data_source_payload
 
         tools = [fake_tool_factory(case.expected_skill)] if case.expected_skill else []
         if not tools:
@@ -58,7 +58,7 @@ class TestMultiturnPollution:
         if not case.expected_skill:
             pytest.skip()
 
-        from app.agent.runtime.nodes import _build_data_source_payload
+        from app.agent.runtime.node_helpers import _build_data_source_payload
 
         # 模拟：LLM 调用了 Skill
         payload_with_tool = _build_data_source_payload(

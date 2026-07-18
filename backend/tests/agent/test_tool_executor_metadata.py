@@ -253,7 +253,7 @@ async def test_manage_workers_pending_stores_resolved_worker_id(
     db_session.commit()
     db_session.refresh(worker)
     monkeypatch.setattr(
-        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+        "app.agent.runtime.tool_pending_args.SessionLocal", lambda: db_session
     )
     tool = SimpleNamespace(
         name="manage_workers",
@@ -312,7 +312,7 @@ async def test_manage_workers_pending_recovers_full_name_from_original_input(
     db_session.commit()
     db_session.refresh(worker)
     monkeypatch.setattr(
-        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+        "app.agent.runtime.tool_pending_args.SessionLocal", lambda: db_session
     )
     tool = SimpleNamespace(
         name="manage_workers",
@@ -392,7 +392,7 @@ async def test_settle_labor_pending_preview_accepts_worker_name_alias(
     )
     db_session.commit()
     monkeypatch.setattr(
-        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+        "app.agent.runtime.tool_pending_args.SessionLocal", lambda: db_session
     )
     tool = SimpleNamespace(
         name="settle_labor_payment",
@@ -455,7 +455,7 @@ async def test_operation_work_order_pending_uses_worker_default_wage(
     db_session.add(worker)
     db_session.commit()
     monkeypatch.setattr(
-        "app.agent.runtime.tool_executor.SessionLocal", lambda: db_session
+        "app.agent.runtime.tool_pending_args.SessionLocal", lambda: db_session
     )
     tool = SimpleNamespace(
         name="create_operation_work_order",

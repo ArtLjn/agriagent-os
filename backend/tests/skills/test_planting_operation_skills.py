@@ -72,7 +72,7 @@ def skill_sessions(monkeypatch, db_session):
     for target in (
         "app.infra.pending_actions.SessionLocal",
         "app.agent.executor.pending_actions.SessionLocal",
-        "app.agent.runtime.tool_executor.SessionLocal",
+        "app.agent.runtime.tool_pending_args.SessionLocal",
     ):
         monkeypatch.setattr(target, lambda: _SessionProxy(db_session), raising=False)
     for module in (

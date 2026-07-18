@@ -359,7 +359,7 @@ def test_manage_labor_payment_call_metadata_infers_operation_risk():
 
 
 def test_manage_labor_payment_pending_args_infer_single_settlement_only():
-    from app.agent.runtime.tool_executor import _build_pending_execution_args
+    from app.agent.runtime.tool_pending_args import _build_pending_execution_args
 
     settle_args = _build_pending_execution_args(
         "manage_labor_payment",
