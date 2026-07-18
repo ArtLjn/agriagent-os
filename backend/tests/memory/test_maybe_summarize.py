@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.core.compat import UTC
+from app.shared.compatibility import UTC
 from app.memory.service import InMemoryMemoryService
 from app.models.conversation import Conversation, ConversationMessage
 

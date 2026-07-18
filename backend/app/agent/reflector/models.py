@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.core.compat import StrEnum
+from app.shared.compatibility import StrEnum
 
 
 class ReflectionTrigger(StrEnum):

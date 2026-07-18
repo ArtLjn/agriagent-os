@@ -3,7 +3,7 @@
 from collections import Counter
 from threading import Lock
 
-from app.core.compat import StrEnum
+from app.shared.compatibility import StrEnum
 
 
 class AgentLifecycleEvent(StrEnum):

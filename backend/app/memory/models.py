@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-from app.core.compat import UTC
+from app.shared.compatibility import UTC
 
 
 MemoryRole = Literal["user", "assistant", "system", "tool"]

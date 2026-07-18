@@ -23,7 +23,7 @@ status: draft
 
 系统作物模版（`crop_templates.farm_id IS NULL`）目前只能通过改 Python seed 代码维护：
 
-- 数据来源：[backend/app/seed/system_crop_templates.py](../../backend/app/seed/system_crop_templates.py) 硬编码 10 种作物
+- 数据来源：[backend/app/ops/system_crop_templates.py](../../backend/app/ops/system_crop_templates.py) 硬编码 10 种作物
 - 数据生命周期：写代码 → Alembic 迁移 → 灌库；运营/农艺师无法在 admin-web 自助维护
 
 ### 1.2 现有 API 能力盘点

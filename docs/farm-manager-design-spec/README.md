@@ -127,7 +127,7 @@
 
 1. **依赖方向**：`schemas/ → agent/application → agent/runtime → modules → services → core/infra → models`；前端 `api/ → components → layouts → pages`。详见 [01.01 Agent平台架构](./01_正式设计/01_Agent平台架构.md)。
 2. **横切关注点**：auth / log / telemetry / trace 只通过依赖注入，禁止业务层直接 import。
-3. **文件与方法限制**：单文件 ≤ 500 行、方法 ≤ 50 行、类 ≤ 200 行；方法参数 ≤ 5 个。
+3. **文件与方法限制**：生产 Python 文件 ≤ 1000 行，500-1000 行按职责观察评审；方法建议 ≤ 50 行，超过 80 行需说明或拆分；类 ≤ 200 行；方法参数 ≤ 5 个。
 4. **新代码必有测试**：覆盖率 ≥ 80% 为目标，关键路径必须覆盖。
 5. **Skill 契约**：每个 Skill 必须有 `skill.md` + `scripts/main.py`，且符合 [01.02 Skill引擎与契约](./01_正式设计/02_Skill引擎与契约.md)。
 6. **结构化日志**：禁止 `print` / `console.log` 调试；日志带 `trace_id`。

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from app.core.compat import UTC
+from app.shared.compatibility import UTC
 
 logger = logging.getLogger(__name__)
 _SAFE_SEGMENT_RE = re.compile(r"[^a-zA-Z0-9_.=-]+")

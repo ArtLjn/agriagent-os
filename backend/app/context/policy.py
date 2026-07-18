@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from app.core.compat import StrEnum
+from app.shared.compatibility import StrEnum
 from app.context.models import ContextBlock
 from app.context.selectors import (
     ConversationSelector,

@@ -1,5 +1,5 @@
 from app.models.crop import CropTemplate
-from app.seed.system_crop_templates import (
+from app.ops.system_crop_templates import (
     SYSTEM_CROP_TEMPLATES,
     seed_system_crop_templates,
 )

@@ -7,12 +7,17 @@ from sqlalchemy.orm import Session
 
 from app.models.agent_turn import AgentTurn
 from app.platforms.data_flywheel.service import (
+    _actual_tools,
+    _event_log_status,
     _events_for_turn,
     _labels_by_sample,
+    _pending_lifecycle,
     _prelabels_by_sample,
+    _router_decision,
     _sample_id,
-    _sample_row,
+    _selected_tools,
 )
+from app.platforms.data_flywheel.service_serializers import sample_row
 from app.platforms.shared.judge_service import (
     DataFlywheelJudgeClient,
     LABEL_DEFINITIONS,
@@ -48,7 +53,16 @@ def _chain_for_turn(
         sample_id, []
     )
     events = _patchable_events_for_turn(trigger)
-    sample = _sample_row(trigger, labels, events, prelabels=prelabels)
+    sample = sample_row(
+        trigger,
+        labels,
+        events,
+        selected_tools=_selected_tools(_router_decision(events)),
+        actual_tools=_actual_tools(events),
+        pending_lifecycle=_pending_lifecycle(events),
+        event_log_status=_event_log_status(trigger, events),
+        prelabels=prelabels,
+    )
     evidence = evidence_checklist(db, trigger, events)
     status = (
         "needs_evidence"

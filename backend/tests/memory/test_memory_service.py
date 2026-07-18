@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from app.core.compat import UTC
+from app.shared.compatibility import UTC
 from app.memory.models import MemoryMessage, PendingActionSnapshot, TemporaryTaskState
 from app.memory.schemas import MemoryObservationEvent, MemorySearchQuery
 from app.memory.service import InMemoryMemoryService

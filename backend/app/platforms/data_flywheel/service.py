@@ -17,14 +17,26 @@ from app.infra.repository_runtime import (
     run_maybe_awaitable,
 )
 from app.models.agent_turn import AgentTurn
-from app.models.conversation import ConversationMessage
 from app.models.data_flywheel import (
     AgentCaseDraft,
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,
 )
 from app.platforms.data_flywheel.case_builder import build_case_json
-from app.platforms.data_flywheel.issue_detector import detect_issue_candidates
+from app.platforms.data_flywheel.service_serializers import (
+    EVENT_LOG_STATUS_AVAILABLE,
+    EVENT_LOG_STATUS_MISSING,
+    EVENT_LOG_STATUS_UNBOUND,
+    draft_to_dict,
+    label_to_dict,
+    message_content,
+    message_to_dict,
+    open_quality_labels,
+    prelabel_to_dict,
+    sample_row,
+    source_to_dict,
+    turn_to_dict,
+)
 from app.platforms.shared.judge_service import (
     DataFlywheelJudgeClient,
     build_judge_input,
@@ -58,10 +70,6 @@ PRELABEL_STATUS_ACCEPTED = "accepted"
 PRELABEL_STATUS_REJECTED = "rejected"
 PRELABEL_SOURCE_LLM_JUDGE = "llm_judge"
 _ALLOWED_TARGET_TYPES = {"simulation", "evaluation_replay"}
-CHAT_RECORD_SOURCE_MYSQL = "mysql_conversation_messages"
-EVENT_LOG_STATUS_AVAILABLE = "available"
-EVENT_LOG_STATUS_MISSING = "missing"
-EVENT_LOG_STATUS_UNBOUND = "unbound"
 
 
 def _sample_id(turn: AgentTurn) -> str:
@@ -283,19 +291,25 @@ def list_samples(
         for turn in turns
     ]
     session_labels = _labels_by_sample(db, session_sample_ids)
-    items = [
-        _sample_row(
-            turn,
-            labels.get(_sample_id(turn), []),
-            _events_for_turn(turn),
-            session_labels=session_labels.get(
-                session_sample_id(farm_id=turn.farm_id, session_id=turn.session_id),
-                [],
-            ),
-            prelabels=prelabels.get(_sample_id(turn), []),
+    items = []
+    for turn in turns:
+        events = _events_for_turn(turn)
+        items.append(
+            sample_row(
+                turn,
+                labels.get(_sample_id(turn), []),
+                events,
+                selected_tools=_selected_tools(_router_decision(events)),
+                actual_tools=_actual_tools(events),
+                pending_lifecycle=_pending_lifecycle(events),
+                event_log_status=_event_log_status(turn, events),
+                session_labels=session_labels.get(
+                    session_sample_id(farm_id=turn.farm_id, session_id=turn.session_id),
+                    [],
+                ),
+                prelabels=prelabels.get(_sample_id(turn), []),
+            )
         )
-        for turn in turns
-    ]
     return {"items": items, "total": total}
 
 
@@ -343,7 +357,7 @@ def add_sample_label(
     )
     db.commit()
     db.refresh(row)
-    return _label_to_dict(row)
+    return label_to_dict(row)
 
 
 def _add_session_label(
@@ -399,7 +413,7 @@ def _add_session_label(
         db.add(row)
     db.commit()
     db.refresh(row)
-    return _label_to_dict(row)
+    return label_to_dict(row)
 
 
 def _upsert_sample_label_row(
@@ -504,7 +518,7 @@ def resolve_sample_label(
     row.status = LABEL_STATUS_RESOLVED
     db.commit()
     db.refresh(row)
-    return _label_to_dict(row)
+    return label_to_dict(row)
 
 
 def get_session_annotation_detail(
@@ -519,8 +533,8 @@ def get_session_annotation_detail(
         "sample_id": sample_id,
         "sample_type": SAMPLE_TYPE_SESSION,
         "session_id": session_id,
-        "quality_labels": _open_quality_labels(labels),
-        "labels": [_label_to_dict(row) for row in labels],
+        "quality_labels": open_quality_labels(labels),
+        "labels": [label_to_dict(row) for row in labels],
     }
 
 
@@ -532,22 +546,31 @@ def get_sample_detail(db: Session, *, farm_id: int, sample_id: str) -> dict[str,
     prelabels = _prelabels_by_sample(db, farm_id=farm_id, sample_ids=[sample_id]).get(
         sample_id, []
     )
-    sample = _sample_row(turn, labels, events, prelabels=prelabels)
+    sample = sample_row(
+        turn,
+        labels,
+        events,
+        selected_tools=_selected_tools(_router_decision(events)),
+        actual_tools=_actual_tools(events),
+        pending_lifecycle=_pending_lifecycle(events),
+        event_log_status=_event_log_status(turn, events),
+        prelabels=prelabels,
+    )
     return {
         "sample": sample,
-        "quality_labels": _open_quality_labels(labels),
-        "labels": [_label_to_dict(row) for row in labels],
-        "prelabels": [_prelabel_to_dict(row) for row in prelabels],
-        "latest_prelabel": _prelabel_to_dict(prelabels[0]) if prelabels else None,
+        "quality_labels": open_quality_labels(labels),
+        "labels": [label_to_dict(row) for row in labels],
+        "prelabels": [prelabel_to_dict(row) for row in prelabels],
+        "latest_prelabel": prelabel_to_dict(prelabels[0]) if prelabels else None,
         "messages": _messages_for_turn(db, turn),
-        "turn": _turn_to_dict(turn),
+        "turn": turn_to_dict(turn),
         "router_decision": _router_decision(events),
         "tool_events": _tool_events(events),
         "pending_lifecycle": _pending_lifecycle(events),
         "debug_export": build_session_debug_export(
             db, farm_id=farm_id, session_id=turn.session_id
         ),
-        "source": _source_to_dict(turn),
+        "source": source_to_dict(turn, _event_log_status(turn, events)),
         "issue_candidates": sample["issue_candidates"],
     }
 
@@ -586,7 +609,7 @@ def create_sample_prelabel(
         raw_response=raw,
     )
     row = _repo_call(_prelabel_repo(db).create, row)
-    return _prelabel_to_dict(row)
+    return prelabel_to_dict(row)
 
 
 def accept_sample_prelabel(
@@ -639,7 +662,7 @@ def accept_sample_prelabel(
     )
     if row is None:
         raise ValueError("PRELABEL_NOT_FOUND")
-    return _prelabel_to_dict(row)
+    return prelabel_to_dict(row)
 
 
 def reject_sample_prelabel(
@@ -668,7 +691,7 @@ def reject_sample_prelabel(
     )
     if row is None:
         raise ValueError("PRELABEL_NOT_FOUND")
-    return _prelabel_to_dict(row)
+    return prelabel_to_dict(row)
 
 
 def export_sample_jsonl(db: Session, *, farm_id: int, sample_id: str) -> dict[str, str]:
@@ -682,9 +705,9 @@ def export_sample_jsonl(db: Session, *, farm_id: int, sample_id: str) -> dict[st
         "session_id": sample["session_id"],
         "turn_id": sample["turn_id"],
         "request_id": sample["request_id"],
-        "user_input": _message_content(detail, "user")
+        "user_input": message_content(detail, "user")
         or sample.get("user_input_preview"),
-        "assistant_reply": _message_content(detail, "assistant")
+        "assistant_reply": message_content(detail, "assistant")
         or sample.get("assistant_reply_preview"),
         "selected_tools": sample["selected_tools"],
         "actual_tools": sample["actual_tools"],
@@ -734,7 +757,7 @@ def build_case_draft(
         created_by=created_by,
     )
     draft = _repo_call(_case_draft_repo(db).create, draft)
-    return _draft_to_dict(draft)
+    return draft_to_dict(draft)
 
 
 def _turn_for_sample(db: Session, *, farm_id: int, sample_id: str) -> AgentTurn:
@@ -790,64 +813,6 @@ def _session_exists(db: Session, *, farm_id: int, session_id: str) -> bool:
     )
 
 
-def _sample_row(
-    turn: AgentTurn,
-    labels: list[AgentDataFlywheelLabel],
-    events: list[dict[str, Any]],
-    *,
-    session_labels: list[AgentDataFlywheelLabel] | None = None,
-    prelabels: list[AgentDataFlywheelPrelabel] | None = None,
-) -> dict[str, Any]:
-    router_decision = _router_decision(events)
-    selected_tools = _selected_tools(router_decision)
-    pending_lifecycle = _pending_lifecycle(events)
-    session_labels = session_labels or []
-    prelabels = prelabels or []
-    quality_labels = _open_quality_labels(labels)
-    session_quality_labels = _open_quality_labels(session_labels)
-    event_log_status = _event_log_status(turn, events)
-    return {
-        "sample_id": _sample_id(turn),
-        "sample_type": SAMPLE_TYPE_SESSION_TURN,
-        "session_id": turn.session_id,
-        "turn_id": turn.id,
-        "request_id": turn.request_id,
-        "user_input_preview": turn.input_preview,
-        "assistant_reply_preview": turn.reply_preview,
-        "source_type": _source_type_for_event_status(event_log_status),
-        "event_log_status": event_log_status,
-        "chat_record_source": CHAT_RECORD_SOURCE_MYSQL,
-        "selected_tools": selected_tools,
-        "actual_tools": _actual_tools(events),
-        "issue_candidates": _issue_candidates_for_turn(
-            turn=turn,
-            selected_tools=selected_tools,
-            events=events,
-            pending_lifecycle=pending_lifecycle,
-        ),
-        "risk_score": turn.risk_score,
-        "rule_score": turn.rule_score,
-        "risk_dominant_signal": turn.risk_dominant_signal,
-        "risk_severity": turn.risk_severity,
-        "rule_hits": turn.rule_hits or [],
-        "judge_bad_prob": turn.judge_bad_prob,
-        "judge_issue_type": turn.judge_issue_type,
-        "judge_suggested_label": turn.judge_suggested_label,
-        "quality_labels": quality_labels,
-        "annotation_status": "labeled" if quality_labels else "unlabeled",
-        "prelabels": [_prelabel_to_dict(row) for row in prelabels],
-        "latest_prelabel": _prelabel_to_dict(prelabels[0]) if prelabels else None,
-        "session_quality_labels": session_quality_labels,
-        "session_annotation_status": (
-            "labeled" if session_quality_labels else "unlabeled"
-        ),
-        "session_labels": [_label_to_dict(row) for row in session_labels],
-        "token_total": turn.token_total,
-        "latency_ms": turn.latency_ms,
-        "created_at": turn.created_at.isoformat() if turn.created_at else None,
-    }
-
-
 def _messages_for_turn(db: Session, turn: AgentTurn) -> list[dict[str, Any]]:
     repo = get_conversation_message_repository(db)
     rows = run_maybe_awaitable(
@@ -864,145 +829,8 @@ def _messages_for_turn(db: Session, turn: AgentTurn) -> list[dict[str, Any]]:
                 repo.get_by_mysql_id(farm_id=turn.farm_id, mysql_id=message_id)
             )
         if row is not None:
-            items.append(_message_to_dict(row))
+            items.append(message_to_dict(row))
     return items
-
-
-def _issue_candidates_for_turn(
-    *,
-    turn: AgentTurn,
-    selected_tools: list[str],
-    events: list[dict[str, Any]],
-    pending_lifecycle: list[dict[str, Any]],
-) -> list[dict[str, str]]:
-    detected = detect_issue_candidates(
-        user_input=turn.input_preview,
-        assistant_reply=turn.reply_preview,
-        selected_tools=selected_tools,
-        events=events,
-        pending_lifecycle=pending_lifecycle,
-    )
-    rule_candidates = [
-        _rule_hit_candidate(rule_hit)
-        for rule_hit in turn.rule_hits or []
-        if rule_hit in _CHAIN_RULE_HIT_EXPECTED
-    ]
-    merged: list[dict[str, str]] = []
-    for candidate in [*rule_candidates, *detected]:
-        if not any(item.get("type") == candidate.get("type") for item in merged):
-            merged.append(candidate)
-    return merged
-
-
-_CHAIN_RULE_HIT_EXPECTED = {
-    "tool_parameter_mismatch": {
-        "reason": "工具参数与用户表达的对象或作用域不一致",
-        "evidence": "router parameter extraction",
-        "suggested_label": "wrong_tool_selection",
-    },
-    "bulk_intent_narrowed_to_single_entity": {
-        "reason": "批量意图在参数抽取或确认流程中被收窄为单个实体",
-        "evidence": "bulk scope narrowed",
-        "suggested_label": "wrong_tool_selection",
-    },
-}
-
-
-def _rule_hit_candidate(rule_hit: str) -> dict[str, str]:
-    meta = _CHAIN_RULE_HIT_EXPECTED[rule_hit]
-    return {
-        "type": rule_hit,
-        "severity": "high",
-        "reason": meta["reason"],
-        "evidence": meta["evidence"],
-        "suggested_label": meta["suggested_label"],
-    }
-
-
-def _message_to_dict(message: ConversationMessage) -> dict[str, Any]:
-    return {
-        "id": message.id,
-        "role": message.role,
-        "content": message.content,
-    }
-
-
-def _turn_to_dict(turn: AgentTurn) -> dict[str, Any]:
-    return {
-        "id": turn.id,
-        "request_id": turn.request_id,
-        "token_total": turn.token_total,
-        "latency_ms": turn.latency_ms,
-        "risk_score": turn.risk_score,
-        "rule_score": turn.rule_score,
-        "risk_dominant_signal": turn.risk_dominant_signal,
-        "risk_severity": turn.risk_severity,
-        "rule_hits": turn.rule_hits or [],
-        "judge_bad_prob": turn.judge_bad_prob,
-        "judge_issue_type": turn.judge_issue_type,
-        "judge_suggested_label": turn.judge_suggested_label,
-        "status": turn.status,
-    }
-
-
-def _source_to_dict(turn: AgentTurn) -> dict[str, Any]:
-    events = _events_for_turn(turn)
-    return {
-        "event_file": turn.event_file,
-        "event_seq_start": turn.event_seq_start,
-        "event_seq_end": turn.event_seq_end,
-        "event_log_status": _event_log_status(turn, events),
-        "chat_record_source": CHAT_RECORD_SOURCE_MYSQL,
-    }
-
-
-def _source_type_for_event_status(event_log_status: str) -> str:
-    if event_log_status == EVENT_LOG_STATUS_AVAILABLE:
-        return "agent_event_log"
-    if event_log_status == EVENT_LOG_STATUS_MISSING:
-        return "missing_event_log"
-    return "agent_turns"
-
-
-def _label_to_dict(row: AgentDataFlywheelLabel) -> dict[str, Any]:
-    return {
-        "id": row.id,
-        "sample_id": row.sample_id,
-        "sample_type": row.sample_type,
-        "session_id": row.session_id,
-        "turn_id": row.turn_id,
-        "request_id": row.request_id,
-        "label": row.label,
-        "status": row.status,
-        "comment": row.comment,
-        "annotator_id": row.annotator_id,
-    }
-
-
-def _prelabel_to_dict(row: AgentDataFlywheelPrelabel) -> dict[str, Any]:
-    return {
-        "id": row.id,
-        "sample_id": row.sample_id,
-        "sample_type": row.sample_type,
-        "session_id": row.session_id,
-        "turn_id": row.turn_id,
-        "request_id": row.request_id,
-        "source": row.source,
-        "status": row.status,
-        "labels": row.labels or [],
-        "root_cause": row.root_cause,
-        "severity": row.severity,
-        "confidence": row.confidence,
-        "reason": row.reason,
-        "recommended_fix": row.recommended_fix,
-        "judge_model": row.judge_model,
-        "prompt_version": row.prompt_version,
-        "accepted_label_ids": row.accepted_label_ids or [],
-        "reviewed_by": row.reviewed_by,
-        "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
 
 
 def _unique_labels(labels: list[str]) -> list[str]:
@@ -1014,32 +842,3 @@ def _unique_labels(labels: list[str]) -> list[str]:
         seen.add(label)
         unique.append(label)
     return unique
-
-
-def _open_quality_labels(
-    labels: list[AgentDataFlywheelLabel],
-) -> list[str]:
-    return [
-        row.label
-        for row in labels
-        if (row.status or LABEL_STATUS_OPEN) != LABEL_STATUS_RESOLVED
-    ]
-
-
-def _draft_to_dict(draft: AgentCaseDraft) -> dict[str, Any]:
-    return {
-        "id": draft.id,
-        "draft_id": draft.draft_id,
-        "source_sample_id": draft.source_sample_id,
-        "target_type": draft.target_type,
-        "status": draft.status,
-        "case_json": draft.case_json,
-        "created_by": draft.created_by,
-    }
-
-
-def _message_content(detail: dict[str, Any], role: str) -> str | None:
-    for message in detail["messages"]:
-        if message.get("role") == role:
-            return message.get("content")
-    return None

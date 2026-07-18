@@ -417,7 +417,7 @@ app/application/                  # 🆕 业务编排层
 
 | 当前 | 目标 |
 | --- | --- |
-| `stream_chat_use_case.py` (460) + `stream_chat_finalization.py` (248) + `stream_chat_persistence.py` (79) + `stream_chat_tail.py` (64) + `stream_chat_types.py` (59) | 已归位到 `chat/stream_chat.py`、`chat/stream_finalization.py`、`chat/stream_persistence.py`、`chat/stream_tail.py`、`chat/stream_types.py`；进一步合并需先拆职责，避免单文件超过 500 行 |
+| `stream_chat_use_case.py` (460) + `stream_chat_finalization.py` (248) + `stream_chat_persistence.py` (79) + `stream_chat_tail.py` (64) + `stream_chat_types.py` (59) | 已归位到 `chat/stream_chat.py`、`chat/stream_finalization.py`、`chat/stream_persistence.py`、`chat/stream_tail.py`、`chat/stream_types.py`；进一步合并按职责混杂度判断，生产文件超过 1000 行才必须拆分 |
 | `chat_use_case.py` + `chat_use_case_helpers.py` | `chat/use_case.py` + `chat/helpers.py` |
 | `context_invalidation.py` (19) + `context_memory.py` (21) + `response_trace.py` (19) | 并入 `chat/helpers.py` |
 | `history_use_case.py` + `session_flywheel.py` + `session_summary.py` | `session/` 目录 |
@@ -436,8 +436,8 @@ D1-D2 已在 2026-07-17 PR #18 迁移中完成：真实业务 use case 目录已
 `app/application/`，生产代码和测试引用真实新路径。D3 第一阶段已完成
 `chat/`、`session/`、`advice/` 子包归位。本轮完成 C4/D4，旧 agent
 application、旧 agent skills 与旧 application 根 use case 兼容入口均已删除；
-旧路径不再作为 import 或 monkeypatch 契约。`stream_chat_*` 进一步合并会超过
-500 行预算，后续需先拆分职责再收敛。
+旧路径不再作为 import 或 monkeypatch 契约。`stream_chat_*` 后续不再受 500 行硬预算阻塞，
+但合并前仍需证明职责内聚且不会超过 1000 行硬上限。
 
 ---
 
@@ -529,20 +529,20 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | 编号 | 动作 | 来源 |
 | --- | --- | --- |
 | P1-1 | 删单实现 Protocol（`MemoryServicePort`、`_ComparableStage`） | diagnosis 9-#4、9-#6 |
-| P1-2 | 评估 `core/compat.py` 是否仍必要 | diagnosis 9-#8 |
+| P1-2 | 评估并迁移 Python 兼容工具到 `shared/compatibility.py` | diagnosis 9-#8（✅ 本轮完成，旧 `app.core.compat` 入口不保留） |
 | P1-3 | **决策 D**：`agent/application/` → `app/application/` | 决策 D |
 | P1-4 | **决策 C**：`agent/skills/` → `app/skills/` | 决策 C |
 | P1-5 | **决策 B**：业务根文件归位（advisor、report、skill_coverage、intent_router 等；graph/state/ports 绑定 runtime 后续任务） | 决策 B |
 | P1-6 | **决策 E**：移除 LangGraph，改纯 Python ReAct 循环 | 决策 E |
 | P1-7 | 合并 `stream_chat_*` 切片群 | diagnosis 7 |
-| P1-8 | `review_issue_chain_*` / `repair_pack_*` 切片收回 | diagnosis 2.2（✅ 子包归位完成；继续单文件收回需先满足 500 行预算） |
+| P1-8 | `review_issue_chain_*` / `repair_pack_*` 切片收回 | diagnosis 2.2（✅ 子包归位完成；继续单文件收回按职责内聚判断，生产文件不得超过 1000 行） |
 
 > 2026-07-17 同步：diagnosis 剩余 P1-7/P1-8 已完成旧壳删除，
 > `context/selectors/` 轻量 selector 真实入口为 `selectors/core.py` 或包级
 > `app.context.selectors`，`manage-crop-cycle/scripts/` 小 operation 真实入口为
 > `scripts/main.py`。
-> `memory.py`、`planting.py`、`update_cycle.py`、`update_stage.py` 因职责独立与
-> 单文件 500 行预算继续保留；LangGraph E 已由 PR #33 改为纯 Python ReAct loop。
+> `memory.py`、`planting.py`、`update_cycle.py`、`update_stage.py` 因职责独立继续保留；
+> 不再为了 500 行预算拆分，LangGraph E 已由 PR #33 改为纯 Python ReAct loop。
 > P2 document_repository PR #32 已删除 Dual/MongoRead 灰度后端，MySQL 后端因默认配置与
 > 测试基线保守保留，待后续 Mongo-only 切换完成后继续删除。
 

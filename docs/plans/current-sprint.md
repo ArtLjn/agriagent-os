@@ -26,4 +26,4 @@ status: active
 - Agent Runtime 拆分：`app.agent.graph` 已收敛为兼容门面，Runtime、Planner、Executor、Response、Sessions、Ports 边界已建立。
 - Prompt、Context、Memory、Evaluation 平台骨架：已建立 `app.prompt`、`app.context`、`app.memory`、`app.platforms.evaluation`，旧 Evaluation 根包已下线，并补充对应单元测试与回归测试。
 - DataFlywheel 平台迁移：真实代码已迁入 `app.platforms.data_flywheel`，旧 DataFlywheel 根包与 root 兼容薄壳已下线。
-- 架构门禁债务：`services -> core` 违规依赖已通过 `infra` 适配层修复；`agent_service.py` 与 `web_search/scripts/main.py` 已拆分到 500 行以内。
+- 架构门禁债务：`services -> core` 违规依赖已通过 `infra` 适配层修复；生产 Python 文件策略已调整为 1000 行硬上限、500-1000 行观察区间，避免继续为 500 行预算制造碎片文件。

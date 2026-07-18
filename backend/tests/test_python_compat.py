@@ -8,7 +8,7 @@ def test_app_does_not_import_stdlib_strenum_directly():
     app_dir = Path(__file__).resolve().parents[1] / "app"
     offenders = []
     for path in app_dir.rglob("*.py"):
-        if path.name == "compat.py":
+        if path.as_posix().endswith("shared/compatibility.py"):
             continue
         text = path.read_text(encoding="utf-8")
         if "from enum import StrEnum" in text:
@@ -22,7 +22,7 @@ def test_app_does_not_import_stdlib_datetime_utc_directly():
     app_dir = Path(__file__).resolve().parents[1] / "app"
     offenders = []
     for path in app_dir.rglob("*.py"):
-        if path.name == "compat.py":
+        if path.as_posix().endswith("shared/compatibility.py"):
             continue
         text = path.read_text(encoding="utf-8")
         if "from datetime import UTC" in text or "datetime.UTC" in text:

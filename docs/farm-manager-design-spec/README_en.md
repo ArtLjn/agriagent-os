@@ -126,7 +126,7 @@ Conflict resolution priority: code > `docs/architecture/` > this spec > historic
 
 1. **Dependency direction**: `schemas/ → agent/application → agent/runtime → modules → services → core/infra → models`; frontend `api/ → components → layouts → pages`. See [01.01 agent_platform_architecture](./01_正式设计/01_Agent平台架构.md).
 2. **Cross-cutting concerns**: auth / log / telemetry / trace only via dependency injection. Business layers must not import them directly.
-3. **File & method size limits**: single file ≤ 500 lines, method ≤ 50 lines, class ≤ 200 lines; method parameters ≤ 5.
+3. **File & method size limits**: production Python files ≤ 1000 lines; 500-1000 lines is an observation/review range; methods should stay ≤ 50 lines and require justification or step extraction above 80 lines; classes ≤ 200 lines; method parameters ≤ 5.
 4. **New code must have tests**: target ≥ 80% coverage, critical paths must be covered.
 5. **Skill contract**: every Skill must ship a `skill.md` + `scripts/main.py` and conform to [01.02 skill_engine_and_contract](./01_正式设计/02_Skill引擎与契约.md).
 6. **Structured logging**: no `print` / `console.log` for debugging; logs must carry `trace_id`.

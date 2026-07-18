@@ -12,14 +12,17 @@ from app.infra.repository_runtime import (
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import ConversationMessage
 from app.platforms.data_flywheel.service import (
+    _event_log_status as _turn_event_log_status,
     _events_for_turn,
-    _label_to_dict,
     _messages_for_turn,
-    _open_quality_labels,
     _pending_lifecycle,
     _router_decision,
-    _source_to_dict,
     _tool_events,
+)
+from app.platforms.data_flywheel.service_serializers import (
+    label_to_dict,
+    open_quality_labels,
+    source_to_dict,
 )
 
 
@@ -75,7 +78,7 @@ def timeline_turn(
 def turn_debug_summary(db: Session, turn: AgentTurn) -> dict[str, Any]:
     events = _events_for_turn(turn)
     router_decision = _router_decision(events)
-    source = _source_to_dict(turn)
+    source = source_to_dict(turn, _turn_event_log_status(turn, events))
     backfilled = has_backfilled_event(db, turn, events)
     return {
         "turn_id": turn.id,
@@ -154,7 +157,8 @@ def evidence_status(checklist: list[dict[str, Any]]) -> str:
 
 
 def _event_log_status(trigger: AgentTurn) -> str:
-    source = _source_to_dict(trigger)
+    events = _events_for_turn(trigger)
+    source = source_to_dict(trigger, _turn_event_log_status(trigger, events))
     return "present" if source["event_log_status"] == "available" else "missing"
 
 
@@ -295,15 +299,15 @@ def ai_judge(sample: dict[str, Any]) -> dict[str, Any]:
 def human_review(labels: list[Any]) -> dict[str, Any]:
     return {
         "status": "unreviewed",
-        "labels": [_label_to_dict(row) for row in labels],
-        "quality_labels": _open_quality_labels(labels),
+        "labels": [label_to_dict(row) for row in labels],
+        "quality_labels": open_quality_labels(labels),
         "expected_behavior": None,
         "root_cause": None,
     }
 
 
 def regression_status(sample: dict[str, Any], labels: list[Any]) -> dict[str, Any]:
-    quality_labels = _open_quality_labels(labels)
+    quality_labels = open_quality_labels(labels)
     return {
         "needs_regression": "needs_regression" in quality_labels,
         "regression_ready": False,
