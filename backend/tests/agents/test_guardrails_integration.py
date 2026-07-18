@@ -66,7 +66,7 @@ class TestAdvisorGuardrails:
 
     @pytest.mark.asyncio
     async def test_daily_advice_uses_direct_llm_without_chat_graph(self):
-        """DailyAdvice 结构化生成不应进入聊天图，避免注入长系统上下文。"""
+        """DailyAdvice 结构化生成不应进入聊天 loop，避免注入长系统上下文。"""
         with (
             patch("app.application.advice.advisor.run_agent_loop") as mock_loop,
             patch("app.application.advice.advisor.get_llm") as mock_get_llm,

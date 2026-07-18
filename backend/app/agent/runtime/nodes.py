@@ -71,7 +71,7 @@ def _append_tool_name_once(names: list[str], tool_name: str, tools: list) -> lis
 
 
 def _get_classifier():
-    """兼容旧 graph 入口导出的 classifier 工厂。"""
+    """保留测试注入点；真实分类器由 router 运行时选择。"""
     return None
 
 

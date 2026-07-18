@@ -162,7 +162,7 @@ async def invoke_daily_advice_llm(
     user_id: str | None = None,
     call_type: str = "daily_advice",
 ) -> str:
-    """每日建议专用 LLM 入口：保持兼容签名，实际绕过聊天图。"""
+    """每日建议专用 LLM 入口：保持既有签名，实际绕过聊天 loop。"""
     return await invoke_advisor(
         prompt,
         farm_id=farm_id,

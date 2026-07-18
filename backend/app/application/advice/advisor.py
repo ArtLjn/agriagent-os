@@ -237,7 +237,7 @@ async def invoke_advisor(
 
 
 async def _invoke_direct_daily_advice_llm(prompt: str) -> str:
-    """每日建议结构化生成使用短 prompt，避免进入聊天图追加上下文。"""
+    """每日建议结构化生成使用短 prompt，避免进入聊天 loop 追加上下文。"""
     llm = get_llm(role="generation")
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     content = getattr(response, "content", response)

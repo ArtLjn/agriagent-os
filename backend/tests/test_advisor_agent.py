@@ -12,8 +12,8 @@ class TestBuildAdvisorAgent:
     """测试建议 Agent 构建。"""
 
     @patch("app.agent.runtime.nodes.get_llm")
-    def test_build_advisor_agent_returns_graph(self, mock_get_llm: MagicMock) -> None:
-        """验证 build_advisor_agent 返回编译后的图。"""
+    def test_build_advisor_agent_returns_loop(self, mock_get_llm: MagicMock) -> None:
+        """验证 build_advisor_agent 返回运行 loop。"""
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
 

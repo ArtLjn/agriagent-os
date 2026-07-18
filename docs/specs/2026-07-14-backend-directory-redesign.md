@@ -542,7 +542,7 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 > `app.context.selectors`，`manage-crop-cycle/scripts/` 小 operation 真实入口为
 > `scripts/main.py`。
 > `memory.py`、`planting.py`、`update_cycle.py`、`update_stage.py` 因职责独立与
-> 单文件 500 行预算继续保留；LangGraph E 仍未标记完成。
+> 单文件 500 行预算继续保留；LangGraph E 已由 PR #33 改为纯 Python ReAct loop。
 > P2 document_repository PR #32 已删除 Dual/MongoRead 灰度后端，MySQL 后端因默认配置与
 > 测试基线保守保留，待后续 Mongo-only 切换完成后继续删除。
 
