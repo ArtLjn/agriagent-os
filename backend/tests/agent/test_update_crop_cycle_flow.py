@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.agent.runtime import tool_executor
+from app.agent.runtime import tool_pending_args
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_actions import get_pending, remove_pending
@@ -70,7 +70,7 @@ async def test_update_crop_cycle_tool_call_stores_structured_pending_context(
     tool = _write_confirm_tool()
     collector = MagicMock()
     monkeypatch.setattr(
-        tool_executor, "SessionLocal", lambda: db_session, raising=False
+        tool_pending_args, "SessionLocal", lambda: db_session, raising=False
     )
 
     with (
@@ -137,7 +137,7 @@ async def test_update_crop_cycle_pending_context_uses_cycle_id_when_provided(
     _create_cycle(db_session, name="秋季玉米", crop_name="玉米")
     tool = _write_confirm_tool()
     monkeypatch.setattr(
-        tool_executor, "SessionLocal", lambda: db_session, raising=False
+        tool_pending_args, "SessionLocal", lambda: db_session, raising=False
     )
 
     with (
