@@ -40,11 +40,14 @@ def _runtime_patches(fake_llm: _FakeLLM, tools: list):
         patch("app.agent.runtime.nodes.check_quota", return_value=True),
         patch("app.agent.runtime.nodes.get_langchain_tools", return_value=tools),
         patch("app.agent.runtime.nodes.get_llm", return_value=fake_llm),
-        patch("app.agent.runtime.nodes._build_circuit_key", return_value="fake/model"),
-        patch("app.agent.runtime.nodes._record_llm_success"),
-        patch("app.agent.runtime.nodes._record_llm_failure"),
         patch(
-            "app.agent.runtime.nodes._get_runtime_context_bundle",
+            "app.agent.runtime.llm_invocation._build_circuit_key",
+            return_value="fake/model",
+        ),
+        patch("app.agent.runtime.llm_invocation._record_llm_success"),
+        patch("app.agent.runtime.llm_invocation._record_llm_failure"),
+        patch(
+            "app.agent.runtime.llm_prompt._get_runtime_context_bundle",
             new=AsyncMock(
                 return_value=(
                     MagicMock(blocks=[], render_text=lambda: ""),
@@ -58,7 +61,7 @@ def _runtime_patches(fake_llm: _FakeLLM, tools: list):
             ),
         ),
         patch(
-            "app.agent.runtime.nodes._get_farm_context",
+            "app.agent.runtime.llm_prompt._get_farm_context",
             new=AsyncMock(
                 return_value={
                     "farm_location": "睢宁",
@@ -68,14 +71,16 @@ def _runtime_patches(fake_llm: _FakeLLM, tools: list):
                 }
             ),
         ),
-        patch("app.agent.runtime.nodes.get_prompt_cache"),
-        patch("app.agent.runtime.nodes.get_composer"),
+        patch("app.agent.runtime.llm_prompt.get_prompt_cache"),
+        patch("app.agent.runtime.llm_prompt.get_composer"),
         patch("app.agent.runtime.nodes.get_collector", return_value=MagicMock()),
         patch(
             "app.agent.runtime.nodes.sliding_window_compact",
             side_effect=lambda messages: messages,
         ),
-        patch("app.agent.runtime.nodes._warm_tool_caches", new_callable=AsyncMock),
+        patch(
+            "app.agent.runtime.llm_node_steps._warm_tool_caches", new_callable=AsyncMock
+        ),
         patch("app.agent.runtime.nodes.settings"),
     ]
 

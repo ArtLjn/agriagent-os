@@ -47,7 +47,7 @@ def test_filter_tool_calls_by_selected_drops_unbound_tool():
 
 def test_detect_missed_tool_call_flags_write_success_claim_without_tool_call():
     """写操作被模型直接说已记录时，应视为漏调工具。"""
-    from app.agent.graph import _detect_missed_tool_call
+    from app.agent.runtime.messages import _detect_missed_tool_call
 
     selected_tool = MagicMock()
     selected_tool.name = "create_cost_record"
@@ -64,7 +64,7 @@ def test_detect_missed_tool_call_flags_write_success_claim_without_tool_call():
 
 def test_detect_missed_tool_call_flags_polite_write_success_claim():
     """“已为您记录”这类礼貌成功话术也不能绕过写工具。"""
-    from app.agent.graph import _detect_missed_tool_call
+    from app.agent.runtime.messages import _detect_missed_tool_call
 
     selected_tool = MagicMock()
     selected_tool.name = "create_cost_record"
@@ -84,7 +84,7 @@ def test_detect_missed_tool_call_flags_polite_write_success_claim():
 
 def test_detect_missed_tool_call_flags_worker_create_success_claim():
     """新增工人成功话术没有 tool_call 时，也必须 fail closed。"""
-    from app.agent.graph import _detect_missed_tool_call
+    from app.agent.runtime.messages import _detect_missed_tool_call
 
     selected_tool = MagicMock()
     selected_tool.name = "manage_workers"
@@ -101,15 +101,15 @@ def test_detect_missed_tool_call_flags_worker_create_success_claim():
 
 @pytest.mark.asyncio
 @pytest.mark.no_db
-@patch("app.agent.runtime.nodes._record_llm_success")
-@patch("app.agent.runtime.nodes._record_llm_failure")
-@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.llm_invocation._record_llm_success")
+@patch("app.agent.runtime.llm_invocation._record_llm_failure")
+@patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model")
 @patch("app.agent.runtime.nodes.get_llm")
 @patch("app.agent.runtime.nodes.get_langchain_tools")
 @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
 @patch("app.agent.runtime.nodes.select_tools", return_value=[])
 @patch(
-    "app.agent.runtime.nodes._get_farm_context",
+    "app.agent.runtime.llm_prompt._get_farm_context",
     return_value={
         "display_name": "农友",
         "farm_location": "苏州",
@@ -122,9 +122,9 @@ def test_detect_missed_tool_call_flags_worker_create_success_claim():
 @patch("app.agent.runtime.nodes.get_collector")
 @patch("app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs)
 @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你有啥爱好")
-@patch("app.agent.runtime.nodes.get_request_date")
-@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
-@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.llm_prompt.get_request_date")
+@patch("app.agent.runtime.llm_prompt._get_runtime_context_bundle")
+@patch("app.agent.runtime.llm_prompt.get_composer")
 @patch("app.agent.runtime.nodes.settings")
 async def test_no_tool_chat_retries_json_tool_leak_as_natural_reply(
     mock_settings,
@@ -196,15 +196,15 @@ async def test_no_tool_chat_retries_json_tool_leak_as_natural_reply(
 
 @pytest.mark.asyncio
 @pytest.mark.no_db
-@patch("app.agent.runtime.nodes._record_llm_success")
-@patch("app.agent.runtime.nodes._record_llm_failure")
-@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.llm_invocation._record_llm_success")
+@patch("app.agent.runtime.llm_invocation._record_llm_failure")
+@patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model")
 @patch("app.agent.runtime.nodes.get_llm")
 @patch("app.agent.runtime.nodes.get_langchain_tools")
 @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
 @patch("app.agent.runtime.nodes.select_tools", return_value=[])
 @patch(
-    "app.agent.runtime.nodes._get_farm_context",
+    "app.agent.runtime.llm_prompt._get_farm_context",
     return_value={
         "display_name": "农友",
         "farm_location": "苏州",
@@ -217,9 +217,9 @@ async def test_no_tool_chat_retries_json_tool_leak_as_natural_reply(
 @patch("app.agent.runtime.nodes.get_collector")
 @patch("app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs)
 @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你喜欢啥")
-@patch("app.agent.runtime.nodes.get_request_date")
-@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
-@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.llm_prompt.get_request_date")
+@patch("app.agent.runtime.llm_prompt._get_runtime_context_bundle")
+@patch("app.agent.runtime.llm_prompt.get_composer")
 @patch("app.agent.runtime.nodes.settings")
 async def test_no_tool_chat_retry_still_leaks_uses_friendly_fallback(
     mock_settings,
@@ -285,16 +285,16 @@ async def test_no_tool_chat_retry_still_leaks_uses_friendly_fallback(
 
 @pytest.mark.asyncio
 @pytest.mark.no_db
-@patch("app.agent.runtime.nodes._record_llm_success")
-@patch("app.agent.runtime.nodes._record_llm_failure")
-@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.llm_invocation._record_llm_success")
+@patch("app.agent.runtime.llm_invocation._record_llm_failure")
+@patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model")
 @patch("app.agent.runtime.nodes.get_llm")
 @patch("app.agent.runtime.nodes.get_langchain_tools")
 @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
 @patch("app.agent.runtime.nodes.select_tools", return_value=["get_crop_cycle_info"])
 @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"get_crop_cycle_info"})
 @patch(
-    "app.agent.runtime.nodes._get_farm_context",
+    "app.agent.runtime.llm_prompt._get_farm_context",
     return_value={
         "display_name": "农友",
         "farm_location": "",
@@ -310,9 +310,9 @@ async def test_no_tool_chat_retry_still_leaks_uses_friendly_fallback(
     "app.agent.runtime.nodes._find_last_human_message",
     return_value="水稻茬口1号棚今天",
 )
-@patch("app.agent.runtime.nodes.get_request_date")
-@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
-@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.llm_prompt.get_request_date")
+@patch("app.agent.runtime.llm_prompt._get_runtime_context_bundle")
+@patch("app.agent.runtime.llm_prompt.get_composer")
 @patch("app.agent.runtime.nodes.settings")
 async def test_operation_work_order_clarification_keeps_write_tool_bound(
     mock_settings,
@@ -398,16 +398,16 @@ async def test_operation_work_order_clarification_keeps_write_tool_bound(
 
 
 @pytest.mark.asyncio
-@patch("app.agent.runtime.nodes._record_llm_success")
-@patch("app.agent.runtime.nodes._record_llm_failure")
-@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.llm_invocation._record_llm_success")
+@patch("app.agent.runtime.llm_invocation._record_llm_failure")
+@patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model")
 @patch("app.agent.runtime.nodes.get_llm")
 @patch("app.agent.runtime.nodes.get_langchain_tools")
 @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
 @patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
 @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
 @patch(
-    "app.agent.runtime.nodes._get_farm_context",
+    "app.agent.runtime.llm_prompt._get_farm_context",
     return_value={
         "display_name": "农友",
         "farm_location": "",
@@ -423,9 +423,9 @@ async def test_operation_work_order_clarification_keeps_write_tool_bound(
     "app.agent.runtime.nodes._find_last_human_message",
     return_value="今天买橘子种子130张三赊账",
 )
-@patch("app.agent.runtime.nodes.get_request_date")
-@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
-@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.llm_prompt.get_request_date")
+@patch("app.agent.runtime.llm_prompt._get_runtime_context_bundle")
+@patch("app.agent.runtime.llm_prompt.get_composer")
 @patch("app.agent.runtime.nodes.settings")
 async def test_write_success_claim_retry_accepts_native_tool_calls(
     mock_settings,
@@ -503,16 +503,16 @@ async def test_write_success_claim_retry_accepts_native_tool_calls(
 
 
 @pytest.mark.asyncio
-@patch("app.agent.runtime.nodes._record_llm_success")
-@patch("app.agent.runtime.nodes._record_llm_failure")
-@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.llm_invocation._record_llm_success")
+@patch("app.agent.runtime.llm_invocation._record_llm_failure")
+@patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model")
 @patch("app.agent.runtime.nodes.get_llm")
 @patch("app.agent.runtime.nodes.get_langchain_tools")
 @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
 @patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
 @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
 @patch(
-    "app.agent.runtime.nodes._get_farm_context",
+    "app.agent.runtime.llm_prompt._get_farm_context",
     return_value={
         "display_name": "农友",
         "farm_location": "",
@@ -528,9 +528,9 @@ async def test_write_success_claim_retry_accepts_native_tool_calls(
     "app.agent.runtime.nodes._find_last_human_message",
     return_value="今天买橘子种子130张三赊账",
 )
-@patch("app.agent.runtime.nodes.get_request_date")
-@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
-@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.llm_prompt.get_request_date")
+@patch("app.agent.runtime.llm_prompt._get_runtime_context_bundle")
+@patch("app.agent.runtime.llm_prompt.get_composer")
 @patch("app.agent.runtime.nodes.settings")
 async def test_write_success_claim_retry_fails_closed_without_tool_call(
     mock_settings,
@@ -597,16 +597,16 @@ async def test_write_success_claim_retry_fails_closed_without_tool_call(
 
 
 @pytest.mark.asyncio
-@patch("app.agent.runtime.nodes._record_llm_success")
-@patch("app.agent.runtime.nodes._record_llm_failure")
-@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.llm_invocation._record_llm_success")
+@patch("app.agent.runtime.llm_invocation._record_llm_failure")
+@patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model")
 @patch("app.agent.runtime.nodes.get_llm")
 @patch("app.agent.runtime.nodes.get_langchain_tools")
 @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
 @patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
 @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
 @patch(
-    "app.agent.runtime.nodes._get_farm_context",
+    "app.agent.runtime.llm_prompt._get_farm_context",
     return_value={
         "display_name": "农友",
         "farm_location": "",
@@ -622,9 +622,9 @@ async def test_write_success_claim_retry_fails_closed_without_tool_call(
     "app.agent.runtime.nodes._find_last_human_message",
     return_value="今天买橘子种子130张三赊账",
 )
-@patch("app.agent.runtime.nodes.get_request_date")
-@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
-@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.llm_prompt.get_request_date")
+@patch("app.agent.runtime.llm_prompt._get_runtime_context_bundle")
+@patch("app.agent.runtime.llm_prompt.get_composer")
 @patch("app.agent.runtime.nodes.settings")
 async def test_polite_write_success_claim_with_clarification_fails_closed(
     mock_settings,
@@ -692,16 +692,16 @@ async def test_polite_write_success_claim_with_clarification_fails_closed(
 
 
 @pytest.mark.asyncio
-@patch("app.agent.runtime.nodes._record_llm_success")
-@patch("app.agent.runtime.nodes._record_llm_failure")
-@patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+@patch("app.agent.runtime.llm_invocation._record_llm_success")
+@patch("app.agent.runtime.llm_invocation._record_llm_failure")
+@patch("app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model")
 @patch("app.agent.runtime.nodes.get_llm")
 @patch("app.agent.runtime.nodes.get_langchain_tools")
 @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
 @patch("app.agent.runtime.nodes.select_tools", return_value=["create_cost_record"])
 @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"create_cost_record"})
 @patch(
-    "app.agent.runtime.nodes._get_farm_context",
+    "app.agent.runtime.llm_prompt._get_farm_context",
     return_value={
         "display_name": "农友",
         "farm_location": "",
@@ -717,9 +717,9 @@ async def test_polite_write_success_claim_with_clarification_fails_closed(
     "app.agent.runtime.nodes._find_last_human_message",
     return_value="买了200块化肥",
 )
-@patch("app.agent.runtime.nodes.get_request_date")
-@patch("app.agent.runtime.nodes._get_runtime_context_bundle")
-@patch("app.agent.runtime.nodes.get_composer")
+@patch("app.agent.runtime.llm_prompt.get_request_date")
+@patch("app.agent.runtime.llm_prompt._get_runtime_context_bundle")
+@patch("app.agent.runtime.llm_prompt.get_composer")
 @patch("app.agent.runtime.nodes.settings")
 async def test_empty_write_response_fails_closed_without_retry_tool_call(
     mock_settings,
@@ -797,16 +797,18 @@ class TestDualPhaseModelSelection:
     """测试双阶段模型：无 tool 结果用 tool-selection，有 tool 结果用 generation。"""
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=["web_search"])
     @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"web_search"})
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -821,9 +823,9 @@ class TestDualPhaseModelSelection:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     def test_no_tool_results_uses_generation_role(
         self,
         mock_composer,
@@ -860,16 +862,18 @@ class TestDualPhaseModelSelection:
         mock_get_llm.assert_called_once_with(role="generation")
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=["web_search"])
     @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"web_search"})
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -884,9 +888,9 @@ class TestDualPhaseModelSelection:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="天气如何")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     def test_with_tool_results_uses_generation_role(
         self,
         mock_composer,
@@ -937,15 +941,17 @@ class TestRetryLoop:
     """测试请求内重试循环。"""
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=[])
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -960,9 +966,9 @@ class TestRetryLoop:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     @patch("app.agent.runtime.nodes.settings")
     def test_successful_llm_call_logs_completion(
         self,
@@ -1005,16 +1011,18 @@ class TestRetryLoop:
         assert "model=test-model" in caplog.text
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=["web_search"])
     @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"web_search"})
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -1029,9 +1037,9 @@ class TestRetryLoop:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     @patch("app.agent.runtime.nodes.settings")
     def test_success_on_first_attempt_no_retry(
         self,
@@ -1073,15 +1081,17 @@ class TestRetryLoop:
         mock_failure.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=[])
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -1096,9 +1106,9 @@ class TestRetryLoop:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     @patch("app.agent.runtime.nodes.settings")
     def test_provider_error_triggers_retry(
         self,
@@ -1168,15 +1178,17 @@ class TestRetryLoop:
         mock_success.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=[])
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -1191,9 +1203,9 @@ class TestRetryLoop:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     @patch("app.agent.runtime.nodes.settings")
     def test_model_error_no_retry(
         self,
@@ -1244,15 +1256,17 @@ class TestRetryLoop:
         mock_success.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=[])
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -1267,9 +1281,9 @@ class TestRetryLoop:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     @patch("app.agent.runtime.nodes.settings")
     def test_all_retries_exhausted_raises(
         self,
@@ -1328,16 +1342,18 @@ class TestRetryLoop:
         mock_success.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=["web_search"])
     @patch("app.agent.runtime.nodes.expand_by_chain", return_value={"web_search"})
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -1352,9 +1368,9 @@ class TestRetryLoop:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     @patch("app.agent.runtime.nodes.settings")
     def test_retry_rebinds_tools(
         self,
@@ -1427,15 +1443,17 @@ class TestRetryWithSingleAttempt:
     """测试 failover_max_retries=1 时退化为无重试行为。"""
 
     @pytest.mark.asyncio
-    @patch("app.agent.runtime.nodes._record_llm_success")
-    @patch("app.agent.runtime.nodes._record_llm_failure")
-    @patch("app.agent.runtime.nodes._build_circuit_key", return_value="test/model")
+    @patch("app.agent.runtime.llm_invocation._record_llm_success")
+    @patch("app.agent.runtime.llm_invocation._record_llm_failure")
+    @patch(
+        "app.agent.runtime.llm_invocation._build_circuit_key", return_value="test/model"
+    )
     @patch("app.agent.runtime.nodes.get_llm")
     @patch("app.agent.runtime.nodes.get_langchain_tools")
     @patch("app.agent.runtime.nodes._get_classifier", return_value=None)
     @patch("app.agent.runtime.nodes.select_tools", return_value=[])
     @patch(
-        "app.agent.runtime.nodes._get_farm_context",
+        "app.agent.runtime.llm_prompt._get_farm_context",
         return_value={
             "farm_location": "睢宁",
             "display_name": "农友",
@@ -1450,9 +1468,9 @@ class TestRetryWithSingleAttempt:
         "app.agent.runtime.nodes.sliding_window_compact", side_effect=lambda msgs: msgs
     )
     @patch("app.agent.runtime.nodes._find_last_human_message", return_value="你好")
-    @patch("app.agent.runtime.nodes.get_request_date")
-    @patch("app.agent.runtime.nodes._get_season", return_value="春季")
-    @patch("app.agent.runtime.nodes.get_composer")
+    @patch("app.agent.runtime.llm_prompt.get_request_date")
+    @patch("app.agent.runtime.llm_prompt._get_season", return_value="春季")
+    @patch("app.agent.runtime.llm_prompt.get_composer")
     @patch("app.agent.runtime.nodes.settings")
     def test_single_attempt_no_retry_on_failure(
         self,
