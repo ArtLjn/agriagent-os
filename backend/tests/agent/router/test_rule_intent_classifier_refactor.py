@@ -3,8 +3,10 @@
 import pytest
 
 from app.agent.router.classifier import RuleIntentClassifier
+from app.agent.router.classifier_extractors import extract_worker_name
 from app.agent.router.classifier_frames import build_query_weather_frame
 from app.agent.router.classifier_hints import OPERATION_HINTS, USER_SETTINGS_HINTS
+from app.agent.router.classifier_signals import looks_like_manage_wage
 
 pytestmark = pytest.mark.no_db
 
@@ -17,6 +19,8 @@ def test_classifier_refactor_modules_expose_stable_hint_and_frame_boundaries() -
     assert "压蔓" in OPERATION_HINTS
     assert "助手回复角色" in USER_SETTINGS_HINTS
     assert build_query_weather_frame().intent == "query_weather"
+    assert extract_worker_name("工人李海工资100一天") == "李海"
+    assert looks_like_manage_wage("记录李海压蔓工资100一天")
 
 
 @pytest.mark.parametrize(
