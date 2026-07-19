@@ -41,6 +41,18 @@ def _tools(names: list[str]):
             "query_payables",
         ),
         (
+            "人工费还有多少没结清",
+            "manage_labor_payment",
+            "manage_labor_payment",
+            "query_payables",
+        ),
+        (
+            "我说的是工人工资",
+            "manage_labor_payment",
+            "manage_labor_payment",
+            "query_payables",
+        ),
+        (
             "我的默认天气城市是什么",
             "manage_user_settings",
             "manage_settings",
@@ -184,6 +196,26 @@ def test_router_top3_recall_for_farm_overview_includes_core_read_context() -> No
         "manage_crop_cycle",
     ]
     assert decision.fallback != "fallback_all"
+
+
+def test_multiturn_labor_payable_correction_stays_on_read_operation() -> None:
+    tools = _tools(_governance_tool_pool())
+    messages = [
+        "人工费还有多少没结清",
+        "我说的是工人工资",
+    ]
+
+    decisions = [SkillRouter().route(message, tools) for message in messages]
+
+    for decision in decisions:
+        assert decision.selected_tools[:1] == ["manage_labor_payment"]
+        assert decision.selected_operations == {
+            "manage_labor_payment": ["query_payables"]
+        }
+        assert decision.frames[0].risk == "read"
+        assert decision.frames[0].requires_confirmation is False
+        assert "manage_workers" not in decision.selected_tools
+        assert "create_cost_record" not in decision.selected_tools
 
 
 @pytest.mark.parametrize(

@@ -15,6 +15,7 @@ from app.agent.runtime.tool_executor import _parallel_tool_node, _permission_dec
 from app.infra import pending_actions
 from app.skills import get_langchain_tools
 from app.skills.metadata import (
+    ConfirmationSchema,
     SkillMetadata,
     SkillPermissionLevel,
     get_skill_metadata,
@@ -36,6 +37,56 @@ _WRITE_LIKE_ARGS_BY_TOOL = {
     "manage_user_settings": {"display_name": "测试用户"},
     "manage_work_orders": {"operation_type": "浇水"},
     "manage_workers": {"action": "create", "name": "老王"},
+}
+
+_WRITE_ARGS_BY_OPERATION = {
+    ("manage_cost", "create_record"): {"amount": 100, "category": "化肥"},
+    ("manage_cost", "delete_record"): {"record_id": 1},
+    ("manage_cost", "settle_debt"): {"counterparty": "张老板", "amount": 100},
+    ("manage_cost_categories", "manage_category"): {
+        "action": "create",
+        "name": "肥料",
+    },
+    ("manage_crop_cycle", "create_cycle"): {"crop_name": "西瓜", "area": 30},
+    ("manage_crop_cycle", "delete_cycle"): {"cycle_id": 1},
+    ("manage_crop_cycle", "update_cycle"): {"cycle_id": 1, "start_date": "2026-06-01"},
+    ("manage_crop_cycle", "update_stage"): {"cycle_id": 1, "current_stage": "膨大期"},
+    ("manage_crop_templates", "create_template"): {
+        "name": "西瓜模板",
+        "crop_name": "西瓜",
+    },
+    ("manage_crop_templates", "manage_template"): {
+        "action": "update",
+        "template_id": 1,
+        "name": "西瓜模板",
+    },
+    ("manage_farm_logs", "create_log"): {"operation_type": "浇水", "cycle_id": 1},
+    ("manage_farm_logs", "manage_log"): {
+        "action": "update",
+        "log_id": 1,
+        "operation_type": "浇水",
+    },
+    ("manage_labor_payment", "manage_wage"): {
+        "worker": "老王",
+        "quantity": 1,
+        "unit_price": 100,
+        "work_date": "2026-06-04",
+    },
+    ("manage_labor_payment", "settle_payment"): {
+        "worker_name": "老王",
+        "amount": 100,
+    },
+    ("manage_planting_units", "manage_units"): {
+        "action": "create",
+        "name": "一号棚",
+    },
+    ("manage_settings", "update_settings"): {"display_name": "测试用户"},
+    ("manage_work_orders", "create_work_order"): {"operation_type": "浇水"},
+    ("manage_work_orders", "update_work_order"): {
+        "work_order_id": 1,
+        "operation_type": "浇水",
+    },
+    ("manage_workers", "manage_worker"): {"action": "create", "name": "老王"},
 }
 
 
@@ -77,6 +128,18 @@ def _runtime_write_tool_names_from_registry() -> set[str]:
         _runtime_tool_name_for_write_capability(capability_name)
         for capability_name, _operation, _risk in _WRITE_OPERATION_CASES
     }
+
+
+def _write_args_for_registry_operation(
+    capability_name: str,
+    operation_name: str,
+) -> dict:
+    try:
+        return dict(_WRITE_ARGS_BY_OPERATION[(capability_name, operation_name)])
+    except KeyError as exc:
+        raise AssertionError(
+            f"缺少 registry 写操作真实参数样本: {capability_name}.{operation_name}"
+        ) from exc
 
 
 def _clear_pending_memory(session_id: str) -> None:
@@ -493,6 +556,7 @@ async def test_all_registry_write_operations_pending_then_confirm_multiturn(
     collector = MagicMock()
     execute_write = AsyncMock(return_value=f"{capability_name}.{operation_name} 已执行")
     args = {
+        **_write_args_for_registry_operation(capability_name, operation_name),
         "operation": operation_name,
         "write_marker": f"{capability_name}.{operation_name}",
     }
@@ -659,6 +723,163 @@ async def test_mixed_risk_capability_explicit_read_operation_executes_directly()
     assert pending is None
     assert result["messages"][0].content == "最近日志"
     tool.ainvoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_invalid_explicit_operation_rejects_instead_of_pending_fallback():
+    tool = SimpleNamespace(
+        name="manage_workers",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            capability="manage_workers",
+            confirmation_schema=ConfirmationSchema(
+                target_fields=["worker_id", "name", "action"],
+            ),
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="我说的是工人工资"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_workers",
+                        "args": {
+                            "operation": "get_unpaid_wages",
+                            "active_only": False,
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1) is None
+    assert "未知 operation" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+    output_data = collector.record.call_args.kwargs["output_data"]
+    assert output_data["status"] == "rejected"
+    assert output_data["invalid_operation"] == "get_unpaid_wages"
+
+
+@pytest.mark.no_db
+@pytest.mark.parametrize(
+    "tool_name",
+    sorted(_runtime_write_tool_names_from_registry()),
+)
+@pytest.mark.asyncio
+async def test_all_runtime_write_tools_reject_unknown_explicit_operation_before_pending(
+    tool_name: str,
+):
+    session_id = f"sess-invalid-operation-{tool_name}"
+    _clear_pending_memory(session_id)
+    collector = MagicMock()
+    invalid_operation = "__not_a_registered_operation__"
+    state = {
+        "messages": [
+            HumanMessage(content=f"{tool_name} 幻觉 operation"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": tool_name,
+                        "args": {"operation": invalid_operation},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": session_id,
+    }
+
+    try:
+        with patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ):
+            result = await _parallel_tool_node(state)
+
+        assert get_pending(1, session_id=session_id) is None
+        assert "未知 operation" in result["messages"][0].content
+        output_data = collector.record.call_args.kwargs["output_data"]
+        assert output_data["status"] == "rejected"
+        assert output_data["invalid_operation"] == invalid_operation
+    finally:
+        _clear_pending_memory(session_id)
+
+
+@pytest.mark.asyncio
+async def test_write_operation_without_required_target_rejects_before_pending():
+    tool = SimpleNamespace(
+        name="manage_workers",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.WRITE_CONFIRM,
+            capability="manage_workers",
+            confirmation_schema=ConfirmationSchema(
+                target_fields=["worker_id", "name", "action"],
+            ),
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="最近忙完了所有员工我都安排离职了"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_workers",
+                        "args": {
+                            "action": "deactivate",
+                            "content": "我都安排离职了",
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    assert get_pending(1) is None
+    assert "缺少明确目标" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+    output_data = collector.record.call_args.kwargs["output_data"]
+    assert output_data["status"] == "rejected"
+    assert output_data["missing_required_target_fields"] == ["worker_id", "name"]
 
 
 @pytest.mark.asyncio
@@ -1273,7 +1494,12 @@ def test_manage_user_settings_query_operation_uses_read_permission():
             True,
         ),
         (
-            {"work_date": "2026-06-04", "quantity": 15, "unit_price": 180},
+            {
+                "worker": "老王",
+                "work_date": "2026-06-04",
+                "quantity": 15,
+                "unit_price": 180,
+            },
             "manage_wage",
             "write_confirm",
             SkillPermissionLevel.WRITE_CONFIRM.value,

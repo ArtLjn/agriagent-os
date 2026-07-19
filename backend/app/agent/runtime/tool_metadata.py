@@ -28,6 +28,8 @@ class _PermissionDecision:
     operation_risk: str | None = None
     registry_enabled: bool | None = None
     registry_disabled_reason: str | None = None
+    invalid_operation: str | None = None
+    missing_required_target_fields: list[str] | None = None
 
     @property
     def is_disabled(self) -> bool:
@@ -54,6 +56,27 @@ _LABOR_PAYMENT_WAGE_FIELDS = (
     "client_request_id",
 )
 _WRITE_OPERATION_RISKS = frozenset({"write_confirm", "write_high"})
+_IGNORED_TARGET_FIELDS = frozenset({"operation", "action", "skill_name"})
+_TARGET_FALLBACK_FIELDS = frozenset(
+    {
+        "id",
+        "worker_id",
+        "worker",
+        "worker_name",
+        "name",
+        "scope",
+        "cycle_id",
+        "cycle_name",
+        "record_id",
+        "category_id",
+        "template_id",
+        "unit_id",
+        "log_id",
+        "work_order_id",
+        "labor_entry_id",
+        "counterparty",
+    }
+)
 
 
 def _permission_decision(
@@ -84,6 +107,18 @@ def _permission_decision(
             getattr(metadata, "disabled_reason", None),
             capability_metadata,
         )
+    invalid_operation_decision = _invalid_operation_permission_decision(
+        capability_metadata
+    )
+    if invalid_operation_decision is not None:
+        return invalid_operation_decision
+    missing_target_decision = _missing_required_target_permission_decision(
+        metadata,
+        args,
+        capability_metadata,
+    )
+    if missing_target_decision is not None:
+        return missing_target_decision
     if _must_honor_metadata_permission_before_operation(
         permission_value,
         skill_name,
@@ -236,12 +271,20 @@ def _capability_metadata_from_runtime(
 ) -> dict:
     """读取 Tool metadata；缺失时用 Registry alias 做兼容解析。"""
     operation_name = _operation_name_from_args(skill_name, args)
+    invalid_operation = _invalid_explicit_operation_name(skill_name, args)
     ignore_default_operation = (
-        operation_name is None
-        and _is_registry_capability_name(skill_name)
-        and _capability_has_write_operations(skill_name)
+        invalid_operation is not None
+        or (
+            operation_name is None
+            and _is_registry_capability_name(skill_name)
+            and _capability_has_write_operations(skill_name)
+        )
     )
-    resolved = resolve_skill_capability_metadata(skill_name, operation_name) or {}
+    resolved = (
+        {}
+        if invalid_operation is not None
+        else resolve_skill_capability_metadata(skill_name, operation_name) or {}
+    )
     if ignore_default_operation:
         operation = None
         operation_risk = None
@@ -256,11 +299,13 @@ def _capability_metadata_from_runtime(
         "legacy_alias": getattr(metadata, "legacy_alias", None)
         or resolved.get("legacy_alias"),
         "capability": getattr(metadata, "capability", None)
-        or resolved.get("capability"),
+        or resolved.get("capability")
+        or _registry_capability_name_for_skill(skill_name),
         "operation": operation,
         "operation_risk": operation_risk,
         "registry_enabled": resolved.get("enabled"),
         "registry_disabled_reason": resolved.get("disabled_reason"),
+        "invalid_operation": invalid_operation,
     }
 
 
@@ -326,6 +371,53 @@ def _mixed_operation_write_guard_decision(
     return _write_confirm_decision(guarded_metadata)
 
 
+def _invalid_operation_permission_decision(
+    capability_metadata: dict,
+) -> _PermissionDecision | None:
+    invalid_operation = capability_metadata.get("invalid_operation")
+    if invalid_operation is None:
+        return None
+    return _PermissionDecision(
+        permission_level=SkillPermissionLevel.READ.value,
+        reject_message=f"工具调用失败：未知 operation「{invalid_operation}」。",
+        **capability_metadata,
+    )
+
+
+def _missing_required_target_permission_decision(
+    metadata,
+    args: dict | None,
+    capability_metadata: dict,
+) -> _PermissionDecision | None:
+    if capability_metadata.get("operation_risk") not in _WRITE_OPERATION_RISKS:
+        return None
+    missing_fields = _missing_required_target_fields(metadata, args)
+    if not missing_fields:
+        return None
+    return _PermissionDecision(
+        permission_level=SkillPermissionLevel.READ.value,
+        reject_message="工具调用失败：写操作缺少明确目标，请补充要操作的对象。",
+        missing_required_target_fields=missing_fields,
+        **capability_metadata,
+    )
+
+
+def _missing_required_target_fields(metadata, args: dict | None) -> list[str]:
+    if not isinstance(args, dict):
+        args = {}
+    confirmation_schema = getattr(metadata, "confirmation_schema", None)
+    target_fields = list(getattr(confirmation_schema, "target_fields", None) or [])
+    required_targets = [
+        field for field in target_fields if field not in _IGNORED_TARGET_FIELDS
+    ]
+    if not required_targets:
+        return []
+    accepted_targets = set(required_targets) | _TARGET_FALLBACK_FIELDS
+    if any(args.get(field) not in (None, "", [], {}) for field in accepted_targets):
+        return []
+    return required_targets
+
+
 def _has_meaningful_args(args: dict | None) -> bool:
     if not isinstance(args, dict):
         return False
@@ -350,6 +442,38 @@ def _alias_default_operation_name(skill_name: str) -> str | None:
         return None
     alias = registry.resolve_alias(skill_name)
     return alias.operation if alias is not None else None
+
+
+def _invalid_explicit_operation_name(
+    skill_name: str,
+    args: dict | None,
+) -> str | None:
+    if not isinstance(args, dict) or not args.get("operation"):
+        return None
+    operation_name = str(args["operation"])
+    try:
+        registry = load_skill_registry()
+    except (OSError, ValueError):
+        return None
+    capability_name = _registry_capability_name_for_skill(skill_name, registry)
+    capability = registry.capabilities.get(capability_name or "")
+    if capability is None:
+        return None
+    return None if operation_name in capability.operations else operation_name
+
+
+def _registry_capability_name_for_skill(skill_name: str, registry=None) -> str | None:
+    if registry is None:
+        try:
+            registry = load_skill_registry()
+        except (OSError, ValueError):
+            return None
+    alias = registry.resolve_alias(skill_name)
+    if alias is not None:
+        return alias.capability
+    if skill_name in registry.capabilities:
+        return skill_name
+    return None
 
 
 def _capability_has_write_operations(skill_name: str) -> bool:
@@ -446,6 +570,12 @@ def _permission_trace_output(permission_decision: _PermissionDecision) -> dict:
         payload["resolved_operation"] = permission_decision.operation
     if permission_decision.operation_risk:
         payload["operation_risk"] = permission_decision.operation_risk
+    if permission_decision.invalid_operation:
+        payload["invalid_operation"] = permission_decision.invalid_operation
+    if permission_decision.missing_required_target_fields:
+        payload["missing_required_target_fields"] = (
+            permission_decision.missing_required_target_fields
+        )
     return payload
 
 
