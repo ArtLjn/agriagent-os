@@ -29,9 +29,9 @@ from app.context.selectors import (
     WorkerSelector,
 )
 from app.infra.trace_collector import get_collector
-from app.models.farm import Farm
-from app.models.user import User
-from app.models.user_setting import UserSetting
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
 
 if TYPE_CHECKING:
     from app.context.policy import ContextBuildRequest, ContextPolicy, ContextSelector

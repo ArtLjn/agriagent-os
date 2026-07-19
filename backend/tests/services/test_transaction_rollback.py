@@ -6,26 +6,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.cost_service import create_record
-from app.services.crop_service import create_crop_template
-from app.services.cycle_service import (
+from app.domains.finance.cost_service import create_record
+from app.domains.planting.crop_service import create_crop_template
+from app.domains.planting.cycle_service import (
     advance_stage,
     create_crop_cycle,
     update_stage,
     _recalculate_stages,
 )
-from app.services.log_service import create_log
+from app.domains.planting.log_service import create_log
 import asyncio
-from app.services.agent_service import (
+from app.domains.conversation.agent_service import (
     chat_with_agent,
     get_daily_advice,
     generate_report,
 )
-from app.services.daily_advice_models import DailyAdviceCandidate
+from app.domains.conversation.daily_advice_models import DailyAdviceCandidate
 
 
 def _make_report_data():
-    from app.services.report_data_service import ReportData
+    from app.domains.farm.report_data_service import ReportData
 
     return ReportData(
         report_type="weekly",
@@ -52,7 +52,7 @@ class TestCostServiceRollback:
         mock_db = MagicMock()
         mock_db.commit.side_effect = RuntimeError("DB error")
 
-        from app.schemas.cost import CostRecordCreate
+        from app.domains.finance.cost_schemas import CostRecordCreate
 
         record = CostRecordCreate(
             cycle_id=1,
@@ -76,7 +76,7 @@ class TestCropServiceRollback:
         mock_db = MagicMock()
         mock_db.commit.side_effect = RuntimeError("DB error")
 
-        from app.schemas.crop import CropTemplateCreate, GrowthStageCreate
+        from app.domains.planting.crop_schemas import CropTemplateCreate, GrowthStageCreate
 
         template = CropTemplateCreate(
             name="西瓜",
@@ -100,7 +100,7 @@ class TestCropServiceRollback:
 class TestCycleServiceRollback:
     """测试周期服务事务回滚。"""
 
-    @patch("app.services.cycle_service.CropTemplate")
+    @patch("app.domains.planting.cycle_service.CropTemplate")
     def test_create_crop_cycle_rollback_on_commit_failure(
         self, mock_template_cls: MagicMock
     ) -> None:
@@ -113,7 +113,7 @@ class TestCycleServiceRollback:
         mock_template_cls.return_value = mock_template
         mock_db.query.return_value.filter.return_value.filter.return_value.first.return_value = mock_template
 
-        from app.schemas.cycle import CropCycleCreate
+        from app.domains.planting.cycle_schemas import CropCycleCreate
 
         cycle = CropCycleCreate(
             name="1号棚西瓜",
@@ -152,7 +152,7 @@ class TestCycleServiceRollback:
         mock_db.commit.assert_not_called()
         mock_db.rollback.assert_not_called()
 
-    @patch("app.services.cycle_service.invalidate_farm_context")
+    @patch("app.domains.planting.cycle_service.invalidate_farm_context")
     def test_advance_stage_invalidates_context_after_commit(
         self, mock_invalidate: MagicMock
     ) -> None:
@@ -184,7 +184,7 @@ class TestLogServiceRollback:
         mock_db.query.return_value.filter.return_value.first.return_value = MagicMock()
         mock_db.commit.side_effect = RuntimeError("DB error")
 
-        from app.schemas.log import FarmLogCreate
+        from app.domains.planting.log_schemas import FarmLogCreate
 
         log = FarmLogCreate(
             cycle_id=1,
@@ -201,7 +201,7 @@ class TestLogServiceRollback:
 class TestAgentServiceRollback:
     """测试 Agent 服务事务回滚。"""
 
-    @patch("app.services.agent_service.invoke_advisor")
+    @patch("app.domains.conversation.agent_service.invoke_advisor")
     def test_chat_with_agent_rollback_on_commit_failure(
         self, mock_invoke: MagicMock
     ) -> None:
@@ -215,9 +215,9 @@ class TestAgentServiceRollback:
 
         mock_db.rollback.assert_called_once()
 
-    @patch("app.services.agent_service.invoke_advisor")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.invoke_advisor")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
     def test_get_daily_advice_rollback_on_commit_failure(
         self,
         mock_collect_candidates: AsyncMock,
@@ -270,8 +270,8 @@ class TestAgentServiceRollback:
 
         mock_db.rollback.assert_called_once()
 
-    @patch("app.services.agent_service.get_llm")
-    @patch("app.services.report_data_service.get_weekly_report_data")
+    @patch("app.domains.conversation.agent_service.get_llm")
+    @patch("app.domains.farm.report_data_service.get_weekly_report_data")
     def test_generate_report_rollback_on_commit_failure(
         self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
     ) -> None:

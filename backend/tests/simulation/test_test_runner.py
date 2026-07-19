@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.simulation.models import SimulationResult, SimulationTestCase
-from app.simulation.test_runner import SimulationRunner
+from app.platforms.simulation.models import SimulationResult, SimulationTestCase
+from app.platforms.simulation.test_runner import SimulationRunner
 
 
 class TestParseCase:
@@ -74,7 +74,7 @@ class TestLoadCases:
             )
         )
 
-        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
+        monkeypatch.setattr("app.platforms.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)
@@ -113,7 +113,7 @@ class TestLoadCases:
             )
         )
 
-        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
+        monkeypatch.setattr("app.platforms.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)
@@ -126,7 +126,7 @@ class TestLoadCases:
         cases_dir = tmp_path / "simulation_cases"
         cases_dir.mkdir()
 
-        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
+        monkeypatch.setattr("app.platforms.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)
@@ -140,7 +140,7 @@ class TestLoadCases:
         cases_file = cases_dir / "bad.json"
         cases_file.write_text("not json")
 
-        monkeypatch.setattr("app.simulation.test_runner.CASES_DIR", cases_dir)
+        monkeypatch.setattr("app.platforms.simulation.test_runner.CASES_DIR", cases_dir)
 
         mock_db = MagicMock()
         runner = SimulationRunner(MagicMock(), mock_db)

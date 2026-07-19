@@ -11,7 +11,7 @@ from alembic import op
 from sqlalchemy import inspect
 
 from app.shared.database import Base
-from app.models import *  # noqa: F401,F403
+import app.shared.model_registry  # noqa: F401
 
 
 revision: str = "706a5f7f11b9"

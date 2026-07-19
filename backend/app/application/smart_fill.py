@@ -14,18 +14,18 @@ from app.shared.llm import get_llm
 from app.prompt.composer import get_composer
 from app.shared.time import get_request_date
 from app.shared.json_repair import safe_parse_json
-from app.models.farm import Farm
-from app.models.idempotency_key import IdempotencyKey
-from app.schemas.cost import CostParseResponse, CostParseResult
-from app.schemas.crop import CropTemplateParseResponse
-from app.schemas.cycle import CycleParseResponse
-from app.schemas.planting import WorkerCreate
-from app.schemas.smart_fill import (
+from app.domains.farm.models import Farm
+from app.shared.idempotency_models import IdempotencyKey
+from app.domains.finance.cost_schemas import CostParseResponse, CostParseResult
+from app.domains.planting.crop_schemas import CropTemplateParseResponse
+from app.domains.planting.cycle_schemas import CycleParseResponse
+from app.domains.planting.schemas import WorkerCreate
+from app.domains.planting.smart_fill_schemas import (
     SmartFillParseRequest,
     SmartFillParseResponse,
     SmartFillScenarioResponse,
 )
-from app.services import crop_service
+from app.domains.planting import crop_service
 
 logger = logging.getLogger(__name__)
 

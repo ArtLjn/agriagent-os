@@ -3,8 +3,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.shared.database import Base
-from app.models.agent_record import AgentRecord
-from app.models.farm import Farm
+from app.agent.models import AgentRecord
+from app.domains.farm.models import Farm
 
 
 def test_farm_generates_external_uid(db_session: Session) -> None:

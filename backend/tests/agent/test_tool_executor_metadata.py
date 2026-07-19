@@ -16,7 +16,7 @@ from app.skills.metadata import (
     get_skill_metadata,
 )
 from app.infra.pending_actions import get_pending, remove_pending
-from app.models.planting import LaborEntry, OperationWorkOrder, Worker
+from app.domains.planting.models import LaborEntry, OperationWorkOrder, Worker
 
 
 @pytest.fixture(autouse=True)

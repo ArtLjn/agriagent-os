@@ -7,7 +7,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from app.skills.context import require_farm_context
 from app.context.invalidation import invalidate_farm_context
 from app.shared.database import SessionLocal
-from app.models.cycle import CropCycle, CycleStage
+from app.domains.planting.cycle_models import CropCycle, CycleStage
 
 
 async def update_stage(params: dict, context) -> SkillResult:

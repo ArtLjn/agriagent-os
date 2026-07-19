@@ -30,7 +30,7 @@ def test_evaluation_platform_modules_import_from_real_path(module_suffix: str):
 
 def test_agent_turn_service_runtime_import_uses_platform_path():
     """agent turn 运行时 discovery 规则导入应使用新平台路径。"""
-    import app.services.agent_turn_service as agent_turn_service
+    import app.agent.turn_service as agent_turn_service
 
     source = inspect.getsource(agent_turn_service._evaluate_discovery_rules)
 

@@ -4,14 +4,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.shared.database import get_db
-from app.modules.farm.dependencies import get_current_farm
-from app.models.farm import Farm
+from app.domains.farm.dependencies import get_current_farm
+from app.domains.farm.models import Farm
 
 
 @pytest.fixture
 def client(db_session):
     """创建测试客户端。"""
-    from app.api.cost_categories import router
+    from app.domains.finance.cost_category_routes import router
 
     from fastapi import FastAPI
 

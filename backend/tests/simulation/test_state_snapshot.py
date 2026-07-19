@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.simulation.state_snapshot import DbStateSnapshot, _TABLE_PRIMARY_KEYS
+from app.platforms.simulation.state_snapshot import DbStateSnapshot, _TABLE_PRIMARY_KEYS
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -37,7 +37,7 @@ class TestDbStateSnapshot:
     def _get_db(self):
         Base.metadata.create_all(bind=_test_engine)
         db = _TestSession()
-        from app.models.farm import Farm
+        from app.domains.farm.models import Farm
 
         db.add(Farm(id=1, name="农场1"))
         db.add(Farm(id=2, name="农场2"))
@@ -58,7 +58,7 @@ class TestDbStateSnapshot:
 
     @pytest.mark.asyncio
     async def test_take_snapshot_with_data(self):
-        from app.models.cost import CostRecord
+        from app.domains.finance.cost_models import CostRecord
 
         db = self._get_db()
         try:
@@ -82,7 +82,7 @@ class TestDbStateSnapshot:
 
     @pytest.mark.asyncio
     async def test_take_snapshot_farm_isolation(self):
-        from app.models.cost import CostRecord
+        from app.domains.finance.cost_models import CostRecord
 
         db = self._get_db()
         try:

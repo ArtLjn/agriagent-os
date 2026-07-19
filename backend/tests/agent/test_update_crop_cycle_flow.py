@@ -11,8 +11,8 @@ from app.agent.runtime import tool_pending_args
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 from app.infra.pending_actions import get_pending, remove_pending
-from app.models.crop import CropTemplate
-from app.models.cycle import CropCycle
+from app.domains.planting.crop_models import CropTemplate
+from app.domains.planting.cycle_models import CropCycle
 
 
 @pytest.fixture(autouse=True)

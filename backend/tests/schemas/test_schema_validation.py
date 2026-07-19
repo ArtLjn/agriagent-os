@@ -3,8 +3,8 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.cost import CostRecordCreate, CostRecordUpdate, CostParseResponse
-from app.schemas.agent import ChatRequest
+from app.domains.finance.cost_schemas import CostRecordCreate, CostRecordUpdate, CostParseResponse
+from app.domains.conversation.agent_schemas import ChatRequest
 
 
 class TestCostRecordCreate:

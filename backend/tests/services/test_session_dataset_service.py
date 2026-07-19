@@ -1,6 +1,6 @@
 """Session dataset service 测试。"""
 
-from app.services.session_dataset_service import (
+from app.domains.conversation.session_dataset_service import (
     build_sft_samples,
     build_tool_selection_samples,
 )

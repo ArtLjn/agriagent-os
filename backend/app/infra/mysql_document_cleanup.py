@@ -27,8 +27,8 @@ from app.infra.mysql_document_cleanup_types import (
     sha256_file,
     table_names,
 )
-from app.models.conversation import ConversationMessage
-from app.models.mongo_compensation import MongoCompensationTask
+from app.domains.conversation.models import ConversationMessage
+from app.shared.mongo_compensation_models import MongoCompensationTask
 
 BACKLOG_STATUSES = ("pending", "failed")
 

@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.shared.database import get_db
 from app.main import app
-from app.models.trace import TraceRecord
-from app.models.user import User
+from app.platforms.evaluation.trace_models import TraceRecord
+from app.domains.users.models import User
 from tests.api.auth_helpers import admin_headers, auth_override_scope, ensure_admin_user
 
 
@@ -75,7 +75,7 @@ class TestGetTraces:
     def test_list_traces_with_farm_id_uses_repository_fallback(
         self, db_session, monkeypatch
     ) -> None:
-        import app.api.admin_trace as admin_trace
+        import app.platforms.admin.trace_routes as admin_trace
         from app.shared.config import settings
 
         admin_user = ensure_admin_user(db_session)
@@ -116,7 +116,7 @@ class TestGetTraces:
     def test_list_traces_uses_mongo_when_storage_is_mongo_even_if_mysql_table_exists(
         self, db_session, monkeypatch
     ) -> None:
-        import app.api.admin_trace as admin_trace
+        import app.platforms.admin.trace_routes as admin_trace
 
         admin_user = ensure_admin_user(db_session)
         mock_db = _mock_db(admin_user)

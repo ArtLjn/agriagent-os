@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.models.data_flywheel import (
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,

@@ -2,7 +2,7 @@
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from app.bootstrap.routes import register_routes
 
@@ -21,7 +21,12 @@ async def test_health_includes_mongo_health(monkeypatch):
     app = FastAPI()
     register_routes(app)
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        trust_env=False,
+    ) as client:
         response = await client.get("/health")
 
     assert response.status_code == 200
@@ -52,7 +57,12 @@ async def test_health_reports_degraded_when_mongo_health_fails(monkeypatch):
     app = FastAPI()
     register_routes(app)
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        trust_env=False,
+    ) as client:
         response = await client.get("/health")
 
     assert response.status_code == 200

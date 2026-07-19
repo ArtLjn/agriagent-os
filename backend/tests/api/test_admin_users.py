@@ -6,12 +6,12 @@ from types import SimpleNamespace
 import pytest
 
 from app.shared.database import get_db
-from app.modules.auth.dependencies import get_current_user
-from app.modules.auth.tokens import create_access_token
+from app.domains.users.dependencies import get_current_user
+from app.domains.users.tokens import create_access_token
 from app.main import app
-from app.models.token_stats import TokenDailyStats
-from app.models.user import User
-from app.services.quota_service import get_month_range, get_week_range
+from app.platforms.evaluation.token_stats_models import TokenDailyStats
+from app.domains.users.models import User
+from app.domains.users.quota_service import get_month_range, get_week_range
 
 
 def _get_test_db():

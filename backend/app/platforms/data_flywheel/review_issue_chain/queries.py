@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.agent_turn import AgentTurn
+from app.agent.turn_models import AgentTurn
 
 
 def _reverse_sort_text(value: str) -> str:

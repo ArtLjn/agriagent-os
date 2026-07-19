@@ -10,8 +10,8 @@ from app.infra.repository_runtime import (
     get_data_flywheel_repository,
     run_maybe_awaitable,
 )
-from app.models.agent_turn import AgentTurn
-from app.models.data_flywheel import AgentDataFlywheelLabel, AgentReviewIssueChain
+from app.agent.turn_models import AgentTurn
+from app.platforms.data_flywheel.models import AgentDataFlywheelLabel, AgentReviewIssueChain
 from app.platforms.data_flywheel.service import (
     ALLOWED_LABELS,
     LABEL_STATUS_OPEN,

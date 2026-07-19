@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from app.simulation.models import (
+from app.platforms.simulation.models import (
     Claim,
     DbDiff,
     SimulationReport,

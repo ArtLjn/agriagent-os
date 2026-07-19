@@ -16,8 +16,8 @@ from app.infra.repository_runtime import (
     get_data_flywheel_repository,
     run_maybe_awaitable,
 )
-from app.models.agent_turn import AgentTurn
-from app.models.data_flywheel import (
+from app.agent.turn_models import AgentTurn
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,
@@ -42,7 +42,7 @@ from app.platforms.shared.judge_service import (
     build_judge_input,
     normalize_judge_output,
 )
-from app.services.session_debug_export_service import build_session_debug_export
+from app.domains.conversation.session_debug_export_service import build_session_debug_export
 
 ALLOWED_LABELS = {
     "good_reply",

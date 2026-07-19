@@ -7,14 +7,14 @@ from decimal import Decimal
 import pytest
 from skillify.core.context import SkillContext
 
-from app.models.cost import CostRecord
-from app.models.cost_category import CostCategory
-from app.models.crop import CropTemplate, GrowthStage
-from app.models.cycle import CropCycle, CycleStage
-from app.models.log import FarmLog
-from app.models.planting import PlantingUnit
-from app.models.user import User
-from app.models.user_setting import UserSetting
+from app.domains.finance.cost_models import CostRecord
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
+from app.domains.planting.cycle_models import CropCycle, CycleStage
+from app.domains.planting.log_models import FarmLog
+from app.domains.planting.models import PlantingUnit
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
 
 _manage_cost_mod = importlib.import_module("app.skills.manage-cost.scripts.main")
 _manage_cost_records_mod = importlib.import_module(

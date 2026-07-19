@@ -19,14 +19,14 @@ from app.context.selectors.planting import (
     WorkerSelector,
 )
 from app.memory.models import MemoryContext, MemoryMessage, PendingActionSnapshot
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.cost import CostRecord
-from app.models.cost_category import CostCategory
-from app.models.crop import CropTemplate
-from app.models.cycle import CropCycle
-from app.models.farm import Farm
-from app.models.planting import LaborEntry, OperationWorkOrder, PlantingUnit, Worker
-from app.models.user_setting import UserSetting
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.finance.cost_models import CostRecord
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.planting.crop_models import CropTemplate
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.farm.models import Farm
+from app.domains.planting.models import LaborEntry, OperationWorkOrder, PlantingUnit, Worker
+from app.domains.users.settings_models import UserSetting
 
 
 def test_farm_selector_returns_display_name_and_location(db_session) -> None:

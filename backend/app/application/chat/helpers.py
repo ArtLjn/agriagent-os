@@ -16,13 +16,13 @@ from app.infra.repository_runtime import (
 from app.infra.trace_collector import get_collector
 from app.memory.models import MemoryContext
 from app.memory.service import get_memory_service
-from app.models.agent_record import AgentRecord
-from app.models.conversation import Conversation
-from app.models.farm import Farm
-from app.models.trace import TraceRecord
-from app.models.user import User
-from app.modules.farm.service import get_farm_by_user_id
-from app.schemas.agent import ChatRequest, PendingActionResponse, PendingPlanResponse
+from app.agent.models import AgentRecord
+from app.domains.conversation.models import Conversation
+from app.domains.farm.models import Farm
+from app.platforms.evaluation.trace_models import TraceRecord
+from app.domains.users.models import User
+from app.domains.farm.service import get_farm_by_user_id
+from app.domains.conversation.agent_schemas import ChatRequest, PendingActionResponse, PendingPlanResponse
 
 logger = logging.getLogger(__name__)
 

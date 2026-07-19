@@ -1,6 +1,6 @@
 """Tests for AgentRecord 合并模型。"""
 
-from app.models.agent_record import AgentRecord
+from app.agent.models import AgentRecord
 
 
 class TestAgentRecord:

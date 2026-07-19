@@ -1,0 +1,1 @@
+"""Admin platform routes."""

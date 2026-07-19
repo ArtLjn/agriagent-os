@@ -4,11 +4,11 @@ from datetime import date
 
 from sqlalchemy import text
 
-from app.models.cost import CostRecord
-from app.models.cost_category import CostCategory
-from app.schemas.cost import CostRecordCreate
-from app.services.debt_service import create_debt_record
-from app.services.cost_service import create_record
+from app.domains.finance.cost_models import CostRecord
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.finance.cost_schemas import CostRecordCreate
+from app.domains.finance.debt_service import create_debt_record
+from app.domains.finance.cost_service import create_record
 from app.ops.schema_hardening_audit import (
     run_post_migration_audit,
     run_preflight_audit,

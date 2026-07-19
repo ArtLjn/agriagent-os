@@ -1,6 +1,6 @@
 """Skill metadata contract tests。"""
 
-from app.agent import skills as skills_module
+import app.skills as skills_module
 from app.skills import (
     get_skill_manager,
     get_skill_registry,

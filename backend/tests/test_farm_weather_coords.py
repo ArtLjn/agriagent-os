@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.models.farm import Farm
-from app.models.user_setting import UserSetting
-from app.services.farm_context_service import _build_weather_line
+from app.domains.farm.models import Farm
+from app.domains.users.settings_models import UserSetting
+from app.domains.farm.context_service import _build_weather_line
 
 
 @pytest.mark.asyncio
@@ -17,7 +17,7 @@ class TestWeatherLineCoords:
         """无 user_settings 记录时用默认坐标。"""
         fetch_weather = AsyncMock(return_value={"daily": {}})
         monkeypatch.setattr(
-            "app.services.farm_context_service.weather_service.fetch_weather",
+            "app.domains.farm.context_service.weather_service.fetch_weather",
             fetch_weather,
         )
 
@@ -48,7 +48,7 @@ class TestWeatherLineCoords:
         db_session.commit()
         fetch_weather = AsyncMock(return_value={"daily": {}})
         monkeypatch.setattr(
-            "app.services.farm_context_service.weather_service.fetch_weather",
+            "app.domains.farm.context_service.weather_service.fetch_weather",
             fetch_weather,
         )
 
@@ -74,7 +74,7 @@ class TestWeatherLineCoords:
         db_session.commit()
         fetch_weather = AsyncMock(return_value={"daily": {}})
         monkeypatch.setattr(
-            "app.services.farm_context_service.weather_service.fetch_weather",
+            "app.domains.farm.context_service.weather_service.fetch_weather",
             fetch_weather,
         )
 
@@ -99,7 +99,7 @@ class TestWeatherLineCoords:
         db_session.commit()
         fetch_weather = AsyncMock(return_value={"daily": {}})
         monkeypatch.setattr(
-            "app.services.farm_context_service.weather_service.fetch_weather",
+            "app.domains.farm.context_service.weather_service.fetch_weather",
             fetch_weather,
         )
 

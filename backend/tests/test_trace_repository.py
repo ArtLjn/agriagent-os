@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.models.trace import TraceRecord
+from app.platforms.evaluation.trace_models import TraceRecord
 
 
 class FakeCursor:

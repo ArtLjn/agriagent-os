@@ -11,7 +11,7 @@
 from unittest.mock import MagicMock, patch
 
 
-from app.simulation.models import SimulationResult, SimulationReport
+from app.platforms.simulation.models import SimulationResult, SimulationReport
 
 
 class TestListCases:
@@ -20,7 +20,7 @@ class TestListCases:
     def test_list_cases_success(self, client, auth_headers):
         """正常返回用例列表。"""
         with patch(
-            "app.simulation.routes.SimulationRunner.load_cases",
+            "app.platforms.simulation.routes.SimulationRunner.load_cases",
             return_value=[],
         ):
             resp = client.get("/simulation/cases", headers=auth_headers)
@@ -32,7 +32,7 @@ class TestListCases:
     def test_list_cases_with_category(self, client, auth_headers):
         """带 category 参数过滤。"""
         with patch(
-            "app.simulation.routes.SimulationRunner.load_cases",
+            "app.platforms.simulation.routes.SimulationRunner.load_cases",
             return_value=[],
         ) as mock_load:
             resp = client.get("/simulation/cases?category=basic", headers=auth_headers)
@@ -52,10 +52,10 @@ class TestStartRun:
         """指定 case_ids 启动运行。"""
         with (
             patch(
-                "app.simulation.routes.SimulationRunner.load_cases",
+                "app.platforms.simulation.routes.SimulationRunner.load_cases",
                 return_value=[],
             ),
-            patch("app.simulation.routes.asyncio.create_task") as mock_create_task,
+            patch("app.platforms.simulation.routes.asyncio.create_task") as mock_create_task,
         ):
             mock_task = MagicMock()
             mock_create_task.return_value = mock_task
@@ -79,10 +79,10 @@ class TestStartRun:
         """case_ids 为 null 时执行全部用例。"""
         with (
             patch(
-                "app.simulation.routes.SimulationRunner.load_cases",
+                "app.platforms.simulation.routes.SimulationRunner.load_cases",
                 return_value=[],
             ),
-            patch("app.simulation.routes.asyncio.create_task") as mock_create_task,
+            patch("app.platforms.simulation.routes.asyncio.create_task") as mock_create_task,
         ):
             mock_create_task.return_value = MagicMock()
             resp = client.post(
@@ -102,10 +102,10 @@ class TestStartRun:
         """case_ids 为空数组时执行全部用例。"""
         with (
             patch(
-                "app.simulation.routes.SimulationRunner.load_cases",
+                "app.platforms.simulation.routes.SimulationRunner.load_cases",
                 return_value=[],
             ),
-            patch("app.simulation.routes.asyncio.create_task") as mock_create_task,
+            patch("app.platforms.simulation.routes.asyncio.create_task") as mock_create_task,
         ):
             mock_create_task.return_value = MagicMock()
             resp = client.post(
@@ -191,7 +191,7 @@ class TestSerializeResult:
 
     def test_simulation_result_to_dict(self):
         """SimulationResult 转为可 JSON 序列化的 dict。"""
-        from app.simulation.routes import _result_to_dict
+        from app.platforms.simulation.routes import _result_to_dict
 
         result = SimulationResult(
             case_id="c1",
@@ -208,7 +208,7 @@ class TestSerializeResult:
 
     def test_simulation_report_to_dict(self):
         """SimulationReport 转为可 JSON 序列化的 dict。"""
-        from app.simulation.routes import _report_to_dict
+        from app.platforms.simulation.routes import _report_to_dict
 
         result = SimulationResult(case_id="c1", passed=True, latency_ms=100)
         report = SimulationReport(

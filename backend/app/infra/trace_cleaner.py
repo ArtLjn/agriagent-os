@@ -7,8 +7,8 @@ from sqlalchemy.exc import ProgrammingError
 
 from app.shared.config import settings
 from app.shared.database import SessionLocal
-from app.models.token_stats import TokenDailyStats
-from app.models.trace import TraceRecord
+from app.platforms.evaluation.token_stats_models import TokenDailyStats
+from app.platforms.evaluation.trace_models import TraceRecord
 
 logger = logging.getLogger(__name__)
 

@@ -12,16 +12,16 @@ from typing import Any
 from sqlalchemy.inspection import inspect as sqlalchemy_inspect
 from sqlalchemy.sql.sqltypes import Date, DateTime
 
-from app.models.agent_record import AgentRecord
-from app.models.conversation import ConversationMessage
-from app.models.data_flywheel import (
+from app.agent.models import AgentRecord
+from app.domains.conversation.models import ConversationMessage
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,
     AgentReviewIssueChain,
 )
-from app.models.guardrails_log import GuardrailsLog
-from app.models.trace import TraceRecord
+from app.agent.guardrails.models import GuardrailsLog
+from app.platforms.evaluation.trace_models import TraceRecord
 
 
 @dataclass(frozen=True)

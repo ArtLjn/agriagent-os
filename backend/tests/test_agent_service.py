@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.schemas.agent import ChatRequest
-from app.services.daily_advice_models import (
+from app.domains.conversation.agent_schemas import ChatRequest
+from app.domains.conversation.daily_advice_models import (
     DailyAdviceCandidate,
     build_daily_advice_item_skeletons,
 )
-from app.services.agent_service import (
+from app.domains.conversation.agent_service import (
     chat_with_agent,
     get_daily_advice,
     generate_report,
@@ -32,7 +32,7 @@ def _make_mock_db() -> MagicMock:
 
 
 def _make_report_data():
-    from app.services.report_data_service import ReportData
+    from app.domains.farm.report_data_service import ReportData
 
     return ReportData(
         report_type="weekly",
@@ -64,11 +64,11 @@ class TestChatWithAgent:
 
         with (
             patch(
-                "app.services.agent_service._load_farm_for_application",
+                "app.domains.conversation.agent_service._load_farm_for_application",
                 return_value=farm,
             ) as mock_load_farm,
             patch(
-                "app.services.agent_service.application_chat",
+                "app.domains.conversation.agent_service.application_chat",
                 new_callable=AsyncMock,
             ) as mock_chat,
         ):
@@ -105,11 +105,11 @@ class TestChatWithAgent:
 
         with (
             patch(
-                "app.services.agent_service._load_farm_for_application",
+                "app.domains.conversation.agent_service._load_farm_for_application",
                 return_value=farm,
             ),
             patch(
-                "app.services.agent_service.application_chat",
+                "app.domains.conversation.agent_service.application_chat",
                 new_callable=AsyncMock,
             ) as mock_chat,
         ):
@@ -141,11 +141,11 @@ class TestChatWithAgent:
 
         with (
             patch(
-                "app.services.agent_service._load_farm_for_application",
+                "app.domains.conversation.agent_service._load_farm_for_application",
                 return_value=farm,
             ),
             patch(
-                "app.services.agent_service.application_chat",
+                "app.domains.conversation.agent_service.application_chat",
                 new_callable=AsyncMock,
             ) as mock_chat,
         ):
@@ -165,7 +165,7 @@ class TestChatWithAgent:
     @pytest.mark.asyncio
     async def test_load_farm_for_application_raises_when_missing(self) -> None:
         """验证兼容入口加载不到农场时抛出明确错误。"""
-        from app.services.agent_service import _load_farm_for_application
+        from app.domains.conversation.agent_service import _load_farm_for_application
 
         mock_db = _make_mock_db()
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -180,9 +180,9 @@ class TestStreamChatWithAgent:
     """测试流式对话服务。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.stream_advisor")
-    @patch("app.services.agent_service.save_message")
-    @patch("app.services.agent_service.get_or_create_conversation")
+    @patch("app.domains.conversation.agent_service.stream_advisor")
+    @patch("app.domains.conversation.agent_service.save_message")
+    @patch("app.domains.conversation.agent_service.get_or_create_conversation")
     async def test_stream_with_session_id_saves_messages(
         self,
         mock_get_conv: MagicMock,
@@ -201,7 +201,7 @@ class TestStreamChatWithAgent:
         mock_stream.side_effect = _fake_stream
         mock_db = _make_mock_db()
 
-        from app.services.agent_service import stream_chat_with_agent
+        from app.domains.conversation.agent_service import stream_chat_with_agent
 
         chunks = []
         async for chunk in stream_chat_with_agent(
@@ -219,7 +219,7 @@ class TestStreamChatWithAgent:
     ) -> None:
         """流式确认创建茬口但缺模板时，也应先请求确认创建模板。"""
         from app.infra.pending_actions import get_pending, remove_pending, store_pending
-        from app.services.agent_service import stream_chat_with_agent
+        from app.domains.conversation.agent_service import stream_chat_with_agent
 
         remove_pending(1)
         store_pending(
@@ -289,9 +289,9 @@ class TestGetDailyAdvice:
         )
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_uses_ranked_candidates_for_generation(
         self,
         mock_invoke: AsyncMock,
@@ -329,9 +329,9 @@ class TestGetDailyAdvice:
         assert saved_meta["candidate_fingerprint"]
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_retries_invalid_then_caches_repaired(
         self,
         mock_invoke: AsyncMock,
@@ -364,9 +364,9 @@ class TestGetDailyAdvice:
         assert "daily_advice_content_too_thin" in saved_meta["validation_errors"]
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_retry_exhausted_returns_fallback(
         self,
         mock_invoke: AsyncMock,
@@ -394,9 +394,9 @@ class TestGetDailyAdvice:
         assert "candidate_id_not_allowed" in saved_meta["validation_errors"]
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_empty_candidates_skips_llm(
         self,
         mock_invoke: AsyncMock,
@@ -417,10 +417,10 @@ class TestGetDailyAdvice:
         mock_db.commit.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("app.services.farm_context_service.build_summary")
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.farm.context_service.build_summary")
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_does_not_fallback_to_debt_summary(
         self,
         mock_invoke: AsyncMock,
@@ -447,9 +447,9 @@ class TestGetDailyAdvice:
         mock_invoke.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_returns_structured_items(
         self,
         mock_invoke: AsyncMock,
@@ -472,9 +472,9 @@ class TestGetDailyAdvice:
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_passes_trusted_user_context(
         self,
         mock_invoke: AsyncMock,
@@ -502,9 +502,9 @@ class TestGetDailyAdvice:
         )
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_new_format_with_preview(
         self,
         mock_invoke: AsyncMock,
@@ -530,9 +530,9 @@ class TestGetDailyAdvice:
         assert result.items[0].icon == "ClipboardList"
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_old_format_backward_compatible(
         self,
         mock_invoke: AsyncMock,
@@ -557,9 +557,9 @@ class TestGetDailyAdvice:
         assert result.items[0].id == candidate.id
 
     @pytest.mark.asyncio
-    @patch("app.services.daily_advice_generation.collect_daily_advice_candidates")
-    @patch("app.services.agent_service.get_composer")
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates")
+    @patch("app.domains.conversation.agent_service.get_composer")
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_get_daily_advice_fallback_on_plain_text(
         self,
         mock_invoke: AsyncMock,
@@ -587,8 +587,8 @@ class TestGenerateReport:
 
     @pytest.mark.asyncio
     @pytest.mark.no_db
-    @patch("app.services.agent_service.get_llm")
-    @patch("app.services.report_data_service.get_weekly_report_data")
+    @patch("app.domains.conversation.agent_service.get_llm")
+    @patch("app.domains.farm.report_data_service.get_weekly_report_data")
     async def test_generate_report_returns_content(
         self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
     ) -> None:
@@ -613,8 +613,8 @@ class TestGenerateReport:
 
     @pytest.mark.asyncio
     @pytest.mark.no_db
-    @patch("app.services.agent_service.get_llm")
-    @patch("app.services.report_data_service.get_weekly_report_data")
+    @patch("app.domains.conversation.agent_service.get_llm")
+    @patch("app.domains.farm.report_data_service.get_weekly_report_data")
     async def test_generate_report_ignores_llm_fact_overrides(
         self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
     ) -> None:
@@ -692,8 +692,8 @@ class TestGenerateReport:
 
     @pytest.mark.asyncio
     @pytest.mark.no_db
-    @patch("app.services.agent_service.get_llm")
-    @patch("app.services.report_data_service.get_weekly_report_data")
+    @patch("app.domains.conversation.agent_service.get_llm")
+    @patch("app.domains.farm.report_data_service.get_weekly_report_data")
     async def test_generate_report_rebuilds_facts_after_cycle_filter(
         self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
     ) -> None:
@@ -815,8 +815,8 @@ class TestGenerateReport:
 
     @pytest.mark.asyncio
     @pytest.mark.no_db
-    @patch("app.services.agent_service.get_llm")
-    @patch("app.services.report_data_service.get_monthly_report_data")
+    @patch("app.domains.conversation.agent_service.get_llm")
+    @patch("app.domains.farm.report_data_service.get_monthly_report_data")
     async def test_generate_monthly_cycle_report_does_not_mix_previous_period(
         self, mock_report_data: AsyncMock, mock_get_llm: MagicMock
     ) -> None:

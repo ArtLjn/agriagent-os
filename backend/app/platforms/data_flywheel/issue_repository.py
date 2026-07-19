@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.models.data_flywheel import AgentReviewIssueChain
+from app.platforms.data_flywheel.models import AgentReviewIssueChain
 
 
 DEFAULT_CROP_INVENTORY_POSITIVE_CASES = [

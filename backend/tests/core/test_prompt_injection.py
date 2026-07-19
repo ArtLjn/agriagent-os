@@ -5,7 +5,7 @@ from datetime import date
 
 from app.prompt.renderer import render_prompt
 from app.prompt.registry import PromptRegistry
-from app.models.farm import Farm
+from app.domains.farm.models import Farm
 
 
 class TestFarmContextSummaryInjection:

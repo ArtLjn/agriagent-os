@@ -8,11 +8,11 @@ from app.shared.config import settings
 from app.shared.database import Base
 from app.infra.pending_actions import store_pending_plan
 from app.infra.agent_events import AgentEventWriter
-from app.models.farm import Farm
-from app.services.agent_turn_service import create_turn, mark_event_range
-from app.services.conversation_service import get_or_create_conversation, save_message
-from app.services.pending_plan_service import create_pending_plan
-from app.services.session_debug_export_service import build_session_debug_export
+from app.domains.farm.models import Farm
+from app.agent.turn_service import create_turn, mark_event_range
+from app.domains.conversation.service import get_or_create_conversation, save_message
+from app.agent.pending_plan_service import create_pending_plan
+from app.domains.conversation.session_debug_export_service import build_session_debug_export
 
 pytestmark = pytest.mark.no_db
 

@@ -19,8 +19,8 @@ from app.agent.runtime.loop import (
     stream_agent_loop,
 )
 from app.infra.trace_context import clear_trace, init_trace, set_round_index
-from app.models.farm import Farm
-from app.services.conversation_service import (
+from app.domains.farm.models import Farm
+from app.domains.conversation.service import (
     async_get_recent_messages,
     get_recent_messages,
 )

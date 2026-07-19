@@ -206,8 +206,8 @@ class TestRuntimeContextBundleHelper:
         from sqlalchemy.orm import sessionmaker
 
         from app.agent.runtime.llm_support import _get_runtime_context_bundle
-        from app.models.farm import Farm
-        from app.models.user_setting import UserSetting
+        from app.domains.farm.models import Farm
+        from app.domains.users.settings_models import UserSetting
 
         db_session.query(Farm).filter(Farm.id == 1).update({"location": "旧地址"})
         db_session.add(

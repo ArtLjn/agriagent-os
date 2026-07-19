@@ -9,8 +9,8 @@ from app.infra.repository_runtime import (
     get_trace_repository,
     run_maybe_awaitable,
 )
-from app.models.agent_turn import AgentTurn
-from app.models.conversation import ConversationMessage
+from app.agent.turn_models import AgentTurn
+from app.domains.conversation.models import ConversationMessage
 from app.platforms.data_flywheel.service import (
     _event_log_status as _turn_event_log_status,
     _events_for_turn,

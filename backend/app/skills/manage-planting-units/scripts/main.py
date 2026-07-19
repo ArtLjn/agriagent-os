@@ -9,8 +9,8 @@ from skillify.skills.base import Skill
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.shared.database import SessionLocal
-from app.schemas.planting import PlantingUnitCreate, PlantingUnitUpdate
-from app.services import planting_service
+from app.domains.planting.schemas import PlantingUnitCreate, PlantingUnitUpdate
+from app.domains.planting import service as planting_service
 
 
 class ManagePlantingUnitsSkill(Skill):

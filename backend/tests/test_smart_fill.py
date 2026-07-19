@@ -8,8 +8,8 @@ from pydantic import ValidationError
 from app.prompt.registry import get_registry
 from app.application.smart_fill import _build_cache_key, parse_with_llm
 from app.main import app
-from app.schemas.cost import CostParseResult
-from app.schemas.planting import WorkerCreate
+from app.domains.finance.cost_schemas import CostParseResult
+from app.domains.planting.schemas import WorkerCreate
 
 client = TestClient(app)
 get_registry().reload(Path(__file__).parent.parent / "prompts")

@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-from app.models.cost import CostRecord
-from app.models.planting import LaborEntry, OperationWorkOrder, Worker
-from app.services.debt_service import SUBTYPE_DEBT
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.models import LaborEntry, OperationWorkOrder, Worker
+from app.domains.finance.debt_service import SUBTYPE_DEBT
 
 _manage_cost_mod = importlib.import_module("app.skills.manage-cost.scripts.main")
 _records_mod = importlib.import_module("app.skills.manage-cost.scripts.records")
@@ -213,7 +213,7 @@ async def test_query_debt_total_payable_includes_labor(monkeypatch, db_session, 
 
 @pytest.mark.asyncio
 @patch.object(_debt_mod, "SessionLocal")
-@patch("app.services.debt_service.settle_debt")
+@patch("app.domains.finance.debt_service.settle_debt")
 async def test_settle_debt_operation(mock_settle, mock_session, ctx):
     mock_db = MagicMock()
     mock_session.return_value = mock_db

@@ -8,14 +8,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.api.agent import router
+from app.domains.conversation.routes import router
 from app.shared.database import get_db
-from app.modules.auth.dependencies import get_current_user
-from app.modules.farm.dependencies import get_current_farm
+from app.domains.users.dependencies import get_current_user
+from app.domains.farm.dependencies import get_current_farm
 from app.shared.database import Base
 from app.infra.limiter import limiter
-from app.models.farm import Farm
-from app.models.user import User
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):
@@ -150,7 +150,7 @@ class TestConversationApi:
 
     def test_list_conversations(self, client, clean_db):
         """GET /agent/conversations 返回会话列表。"""
-        from app.services.conversation_service import (
+        from app.domains.conversation.service import (
             get_or_create_conversation,
             save_message,
         )
@@ -173,7 +173,7 @@ class TestConversationApi:
 
     def test_get_conversation_messages(self, client, clean_db):
         """GET /agent/conversations/{session_id}/messages 返回消息列表。"""
-        from app.services.conversation_service import (
+        from app.domains.conversation.service import (
             get_or_create_conversation,
             save_message,
         )
@@ -196,7 +196,7 @@ class TestConversationApi:
         self, admin_client, clean_db
     ):
         """管理员切换模拟用户后，返回目标用户 farm 的会话列表。"""
-        from app.services.conversation_service import (
+        from app.domains.conversation.service import (
             get_or_create_conversation,
             save_message,
         )
@@ -231,7 +231,7 @@ class TestConversationApi:
         self, admin_client, clean_db
     ):
         """管理员切换模拟用户后，消息接口读取目标用户 farm。"""
-        from app.services.conversation_service import (
+        from app.domains.conversation.service import (
             get_or_create_conversation,
             save_message,
         )
@@ -261,7 +261,7 @@ class TestConversationApi:
 
     def test_get_messages_rejects_other_farm_session(self, client, clean_db):
         """不能读取其他 farm 的会话消息。"""
-        from app.services.conversation_service import (
+        from app.domains.conversation.service import (
             get_or_create_conversation,
             save_message,
         )

@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.data_flywheel import AgentReviewIssueChain
+from app.platforms.data_flywheel.models import AgentReviewIssueChain
 from app.platforms.data_flywheel.review_issue_chain.cards import (
     _session_card,
     _session_card_from_saved_chain,

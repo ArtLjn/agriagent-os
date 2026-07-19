@@ -13,7 +13,7 @@ from app.infra.mongo_mappers import (
 )
 from app.infra.mongo_identity import ensure_row_mysql_id
 from app.infra.online_document_common import DualWriteBase, mongo_read_many, replace_doc
-from app.models.conversation import Conversation, ConversationMessage
+from app.domains.conversation.models import Conversation, ConversationMessage
 
 
 class MySQLConversationMessageRepository:

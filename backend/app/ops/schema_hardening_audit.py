@@ -11,17 +11,17 @@ from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.shared.database import SessionLocal
-from app.models.agent_record import AgentRecord
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.cost import CostRecord
-from app.models.cost_category import CostCategory
-from app.models.cycle import CropCycle
-from app.models.farm import Farm
-from app.models.feedback import FeedbackRecord
-from app.models.token_stats import TokenDailyStats
-from app.models.trace import TraceRecord
-from app.models.user import User
-from app.models.user_setting import UserSetting
+from app.agent.models import AgentRecord
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.finance.cost_models import CostRecord
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.farm.models import Farm
+from app.domains.conversation.feedback_models import FeedbackRecord
+from app.platforms.evaluation.token_stats_models import TokenDailyStats
+from app.platforms.evaluation.trace_models import TraceRecord
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
 
 
 @dataclass

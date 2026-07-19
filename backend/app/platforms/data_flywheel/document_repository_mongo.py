@@ -16,7 +16,7 @@ from app.infra.mongo_mappers import (
     review_issue_chain_to_mongo_doc,
 )
 from app.infra.mongo_identity import ensure_row_mysql_id
-from app.models.data_flywheel import (
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,

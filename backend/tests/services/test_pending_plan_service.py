@@ -7,8 +7,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.models.farm import Farm
-from app.services.pending_plan_service import (
+from app.domains.farm.models import Farm
+from app.agent.pending_plan_service import (
     cancel_active_plan,
     create_pending_plan,
     expire_stale_plans,

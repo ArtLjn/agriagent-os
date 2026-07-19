@@ -5,14 +5,14 @@ from datetime import date, timedelta
 import pytest
 
 from app.main import app
-from app.models.conversation import Conversation
-from app.models.cost import CostRecord
-from app.models.crop import CropTemplate
-from app.models.cycle import CropCycle
-from app.models.farm import Farm
-from app.models.log import FarmLog
-from app.models.user import User
-from app.modules.auth.dependencies import get_current_user
+from app.domains.conversation.models import Conversation
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.crop_models import CropTemplate
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.farm.models import Farm
+from app.domains.planting.log_models import FarmLog
+from app.domains.users.models import User
+from app.domains.users.dependencies import get_current_user
 
 
 _ADMIN = User(

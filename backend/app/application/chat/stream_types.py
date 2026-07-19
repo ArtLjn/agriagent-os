@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from app.application.session.flywheel import SessionFlywheelRecorder, StartedTurn
-from app.models.conversation import Conversation
-from app.schemas.agent import PendingActionResponse, PendingPlanResponse
+from app.domains.conversation.models import Conversation
+from app.domains.conversation.agent_schemas import PendingActionResponse, PendingPlanResponse
 
 ResponseEventType = Literal["content", "skills", "pending_action", "error", "done"]
 

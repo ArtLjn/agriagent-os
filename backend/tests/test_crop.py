@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.prompt.registry import get_registry
 from app.main import app
-from app.schemas.crop import CropTemplateParseResponse, GrowthStageCreate
+from app.domains.planting.crop_schemas import CropTemplateParseResponse, GrowthStageCreate
 
 # 确保 prompt 模板在测试中已加载
 _registry = get_registry()
@@ -338,7 +338,7 @@ class TestParseCropTemplateIdempotency:
 def test_parse_crop_template_returns_422_on_invalid_data():
     """当 LLM 返回不合法数据时，应返回 422 而非 500。"""
     from unittest.mock import patch
-    from app.schemas.crop import CropTemplateParseResponse
+    from app.domains.planting.crop_schemas import CropTemplateParseResponse
 
     with patch("app.application.smart_fill.parse_with_llm") as mock_parse:
         mock_parse.return_value = CropTemplateParseResponse(

@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.weather.base import (
+from app.domains.weather.providers.base import (
     DailyForecast,
     ProviderError,
     WeatherData,
 )
-from app.services.weather.cache import WeatherCache, weather_cache
+from app.domains.weather.providers.cache import WeatherCache, weather_cache
 
 
 def _make_weather_data(
@@ -273,7 +273,7 @@ class TestFetchCacheMissFallback:
 
 def _make_strategy(providers: list):
     """构造 WeatherStrategy 实例，使用 mock alert_scraper。"""
-    from app.services.weather.strategy import WeatherStrategy
+    from app.domains.weather.providers.strategy import WeatherStrategy
 
     mock_scraper = MagicMock()
     mock_scraper.fetch_alerts = MagicMock(return_value=[])

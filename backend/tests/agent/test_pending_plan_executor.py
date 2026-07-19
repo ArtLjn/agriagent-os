@@ -16,8 +16,8 @@ from app.infra.pending_actions import (
     remove_pending,
     store_pending_plan,
 )
-from app.models.farm import Farm
-from app.models.pending_plan import AgentPendingPlan
+from app.domains.farm.models import Farm
+from app.agent.pending_plan_models import AgentPendingPlan
 
 
 def _tool(name: str, description: str = ""):

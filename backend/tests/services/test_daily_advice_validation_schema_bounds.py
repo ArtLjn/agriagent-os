@@ -2,9 +2,9 @@
 
 from datetime import date
 
-from app.schemas.agent import DailyAdviceResponse
-from app.services.daily_advice_models import DailyAdviceCandidate
-from app.services.daily_advice_validation import validate_daily_advice_payload
+from app.domains.conversation.agent_schemas import DailyAdviceResponse
+from app.domains.conversation.daily_advice_models import DailyAdviceCandidate
+from app.domains.conversation.daily_advice_validation import validate_daily_advice_payload
 
 
 def _candidate() -> DailyAdviceCandidate:

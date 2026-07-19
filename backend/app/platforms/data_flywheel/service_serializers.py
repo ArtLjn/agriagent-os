@@ -2,9 +2,9 @@
 
 from typing import Any
 
-from app.models.agent_turn import AgentTurn
-from app.models.conversation import ConversationMessage
-from app.models.data_flywheel import (
+from app.agent.turn_models import AgentTurn
+from app.domains.conversation.models import ConversationMessage
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,

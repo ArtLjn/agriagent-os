@@ -142,6 +142,15 @@ if [ -d "$BACKEND" ]; then
     ERRORS=$((ERRORS + 1))
   fi
 
+  for retired_dir in api models schemas services modules simulation; do
+    if [ -d "$BACKEND/$retired_dir" ]; then
+      echo "❌ ERROR: backend/app/$retired_dir 已收束下线，不得重新创建旧技术层入口"
+      echo "✅ FIX: 业务代码放入 app.domains.*，平台能力放入 app.platforms.*，共享基础设施放入 app.shared.*"
+      echo "📖 See: docs/architecture/boundaries.md"
+      ERRORS=$((ERRORS + 1))
+    fi
+  done
+
   CORE_IMPORT_PATTERN="app\\.co""re\\.|from app\\.co""re|import app\\.co""re"
   CORE_IMPORT_MATCHES=$(rg -n "$CORE_IMPORT_PATTERN" \
     backend/app backend/tests backend/alembic scripts 2>/dev/null || true)
@@ -149,6 +158,17 @@ if [ -d "$BACKEND" ]; then
     echo "$CORE_IMPORT_MATCHES"
     echo "❌ ERROR: 检测到已下线的旧 core 活动引用"
     echo "✅ FIX: 改用 app.shared.config/database/time/logging/llm/json_repair 等真实入口"
+    echo "📖 See: docs/architecture/boundaries.md"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  RETIRED_IMPORT_PATTERN="app\\.(api|models|schemas|services|modules|simulation)\\.|from app\\.(api|models|schemas|services|modules|simulation)([[:space:]]|$)|import app\\.(api|models|schemas|services|modules|simulation)([[:space:]]|$)"
+  RETIRED_IMPORT_MATCHES=$(rg -n "$RETIRED_IMPORT_PATTERN" \
+    backend/app backend/tests backend/alembic scripts 2>/dev/null || true)
+  if [ -n "$RETIRED_IMPORT_MATCHES" ]; then
+    echo "$RETIRED_IMPORT_MATCHES"
+    echo "❌ ERROR: 检测到已下线旧技术层活动引用"
+    echo "✅ FIX: 改用 app.domains.*、app.platforms.*、app.shared.* 或 app.agent.* 真实入口"
     echo "📖 See: docs/architecture/boundaries.md"
     ERRORS=$((ERRORS + 1))
   fi

@@ -6,12 +6,12 @@ from skillify.skills.base import Skill
 from app.skills.context import require_farm_context
 from app.shared.database import SessionLocal
 from app.infra.skill_cache import cached
-from app.modules.farm.city_coords import is_ambiguous_city_name, resolve_city_coords
-from app.services.location_resolver import (
+from app.domains.farm.city_coords import is_ambiguous_city_name, resolve_city_coords
+from app.domains.weather.location_resolver import (
     AmbiguousWeatherLocationError,
     resolve_weather_location,
 )
-from app.services.weather_service import check_weather_warnings, fetch_weather
+from app.domains.weather.service import check_weather_warnings, fetch_weather
 
 # 常见城市名列表（用于从消息中提取）
 _CITIES = {

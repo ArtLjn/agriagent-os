@@ -7,10 +7,10 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.models.agent_turn import AgentTurn
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.farm import Farm
-from app.models.pending_plan import AgentPendingPlan, AgentPendingPlanStep
+from app.agent.turn_models import AgentTurn
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.farm.models import Farm
+from app.agent.pending_plan_models import AgentPendingPlan, AgentPendingPlanStep
 
 pytestmark = pytest.mark.no_db
 

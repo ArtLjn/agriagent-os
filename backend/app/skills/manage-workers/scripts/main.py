@@ -8,9 +8,9 @@ from skillify.skills.base import Skill
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.shared.database import SessionLocal
-from app.models.planting import Worker
-from app.schemas.planting import WorkerCreate, WorkerUpdate
-from app.services import planting_service
+from app.domains.planting.models import Worker
+from app.domains.planting.schemas import WorkerCreate, WorkerUpdate
+from app.domains.planting import service as planting_service
 
 _ACTIVE_STATUS = "active"
 _INACTIVE_STATUS = "inactive"

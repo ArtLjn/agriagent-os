@@ -96,10 +96,10 @@ def test_agent_application_does_not_import_legacy_chat_orchestration():
             relative_path = file_path.relative_to(app_dir)
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "app.services.agent_service":
+                    if alias.name == "app.domains.conversation.agent_service":
                         service_aliases.add(alias.asname or "app")
             elif isinstance(node, ast.ImportFrom):
-                if node.module == "app.services.agent_service":
+                if node.module == "app.domains.conversation.agent_service":
                     imported_names = {alias.name for alias in node.names}
                     forbidden_imports = sorted(imported_names & forbidden_names)
                     if forbidden_imports:
@@ -199,8 +199,8 @@ def _uses_legacy_chat_service_attribute(
         return False
     path = _attribute_path(node)
     if path in {
-        "app.services.agent_service.chat_with_agent",
-        "app.services.agent_service.stream_chat_with_agent",
+        "app.domains.conversation.agent_service.chat_with_agent",
+        "app.domains.conversation.agent_service.stream_chat_with_agent",
     }:
         return True
     if isinstance(node.value, ast.Name):
@@ -416,9 +416,12 @@ def test_current_architecture_has_no_empty_placeholder_directories():
     app_dir = Path(__file__).resolve().parents[1] / "app"
     directories = [
         "bootstrap",
-        "core",
-        "modules/auth",
-        "modules/farm",
+        "domains/users",
+        "domains/farm",
+        "domains/weather",
+        "domains/finance",
+        "domains/planting",
+        "domains/conversation",
         "application",
         "agent/runtime",
         "agent/executor",
@@ -428,13 +431,14 @@ def test_current_architecture_has_no_empty_placeholder_directories():
         "context/compressors",
         "memory/short_term",
         "memory/consolidation",
-        "evaluation/cases",
-        "evaluation/runners",
-        "evaluation/replay",
-        "evaluation/metrics",
-        "evaluation/reports",
-        "evaluation/baselines",
-        "observability",
+        "platforms/admin",
+        "platforms/evaluation/cases",
+        "platforms/evaluation/runners",
+        "platforms/evaluation/replay",
+        "platforms/evaluation/metrics",
+        "platforms/evaluation/reports",
+        "platforms/evaluation/baselines",
+        "platforms/simulation",
         "infra",
     ]
 
@@ -443,6 +447,9 @@ def test_current_architecture_has_no_empty_placeholder_directories():
     ]
 
     assert missing == []
+
+    retired_dirs = {"api", "models", "schemas", "services", "modules", "simulation"}
+    assert [directory for directory in retired_dirs if (app_dir / directory).exists()] == []
 
     compatibility_dirs = {"agent/application", "agent/skills"}
     placeholder_dirs = []

@@ -10,9 +10,9 @@ from app.infra.repository_runtime import (
     get_trace_repository,
     resolve_maybe_awaitable,
 )
-from app.models.farm import Farm
-from app.models.user import User
-from app.schemas.agent import ChatRequest, PendingActionResponse
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
+from app.domains.conversation.agent_schemas import ChatRequest, PendingActionResponse
 
 
 @dataclass(frozen=True)

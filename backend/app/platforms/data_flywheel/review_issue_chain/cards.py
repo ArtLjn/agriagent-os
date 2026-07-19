@@ -4,8 +4,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.agent_turn import AgentTurn
-from app.models.data_flywheel import AgentReviewIssueChain
+from app.agent.turn_models import AgentTurn
+from app.platforms.data_flywheel.models import AgentReviewIssueChain
 from app.platforms.data_flywheel.issue_repository import (
     build_issue_repository_entry,
     build_rule_candidate_package,

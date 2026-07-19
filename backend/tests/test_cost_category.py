@@ -5,9 +5,9 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.shared.database import Base
-from app.models.cost_category import CostCategory
-from app.models.farm import Farm
-from app.models.user import User
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
 
 
 def _set_sqlite_pragma(dbapi_connection, _connection_record):

@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.guardrails_log import GuardrailsLog
-from app.models.mongo_compensation import MongoCompensationTask
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.agent.guardrails.models import GuardrailsLog
+from app.shared.mongo_compensation_models import MongoCompensationTask
 
 
 class FakeCollection:

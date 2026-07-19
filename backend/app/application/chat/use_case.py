@@ -31,10 +31,10 @@ from app.infra.repository_runtime import (
 )
 from app.infra.trace_context import clear_trace, init_trace
 from app.memory.service import get_memory_service
-from app.models.agent_record import AgentRecord
-from app.models.farm import Farm
-from app.schemas.agent import ChatRequest, ChatResponse
-from app.services.conversation_service import get_or_create_conversation
+from app.agent.models import AgentRecord
+from app.domains.farm.models import Farm
+from app.domains.conversation.agent_schemas import ChatRequest, ChatResponse
+from app.domains.conversation.service import get_or_create_conversation
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,7 @@ from app.infra.online_document_common import (
     mongo_read_page,
     replace_doc,
 )
-from app.models.guardrails_log import GuardrailsLog
+from app.agent.guardrails.models import GuardrailsLog
 
 
 class MySQLGuardrailsLogRepository:

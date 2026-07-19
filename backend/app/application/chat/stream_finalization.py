@@ -24,8 +24,8 @@ from app.application.chat.stream_types import (
 )
 from app.shared.database import SessionLocal
 from app.memory.service import get_memory_service
-from app.models.farm import Farm
-from app.schemas.agent import ChatRequest
+from app.domains.farm.models import Farm
+from app.domains.conversation.agent_schemas import ChatRequest
 
 logger = logging.getLogger(__name__)
 

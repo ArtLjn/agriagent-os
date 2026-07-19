@@ -7,16 +7,16 @@ import hashlib
 from collections.abc import Mapping
 from typing import Any, TypeVar
 
-from app.models.agent_record import AgentRecord
-from app.models.conversation import ConversationMessage
-from app.models.data_flywheel import (
+from app.agent.models import AgentRecord
+from app.domains.conversation.models import ConversationMessage
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,
     AgentReviewIssueChain,
 )
-from app.models.guardrails_log import GuardrailsLog
-from app.models.trace import TraceRecord
+from app.agent.guardrails.models import GuardrailsLog
+from app.platforms.evaluation.trace_models import TraceRecord
 
 ModelT = TypeVar("ModelT")
 

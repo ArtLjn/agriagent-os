@@ -3,15 +3,15 @@ from decimal import Decimal
 
 import pytest
 
-from app.models.cost import CostRecord
-from app.models.crop import CropTemplate
-from app.models.cycle import CropCycle, CycleStage
-from app.models.farm import Farm
-from app.models.log import FarmLog
-from app.models.planting import LaborEntry, OperationWorkOrder, Worker
-from app.models.user_setting import UserSetting
-from app.services import report_data_service
-from app.services.report_data_service import _get_month_range, _get_week_range
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.crop_models import CropTemplate
+from app.domains.planting.cycle_models import CropCycle, CycleStage
+from app.domains.farm.models import Farm
+from app.domains.planting.log_models import FarmLog
+from app.domains.planting.models import LaborEntry, OperationWorkOrder, Worker
+from app.domains.users.settings_models import UserSetting
+from app.domains.farm import report_data_service
+from app.domains.farm.report_data_service import _get_month_range, _get_week_range
 
 
 def test_natural_week_and_month_ranges():

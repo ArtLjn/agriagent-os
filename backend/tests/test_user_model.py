@@ -2,7 +2,7 @@
 
 import uuid
 
-from app.models.user import User
+from app.domains.users.models import User
 
 
 def test_create_user_with_required_fields(db_session):

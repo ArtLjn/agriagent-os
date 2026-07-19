@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.api.cycle import _parse_cycle_with_llm
-from app.schemas.cycle import CycleParseResponse
+from app.domains.planting.cycle_routes import _parse_cycle_with_llm
+from app.domains.planting.cycle_schemas import CycleParseResponse
 
 
 # ── _parse_cycle_with_llm: Meta ──────────────────────────────────────────

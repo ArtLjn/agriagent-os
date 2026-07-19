@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from app.models.data_flywheel import AgentDataFlywheelPrelabel, AgentRepairPack
-from app.models.user import User
-from app.models.token_stats import TokenDailyStats
-from app.models.trace import TraceRecord
+from app.platforms.data_flywheel.models import AgentDataFlywheelPrelabel, AgentRepairPack
+from app.domains.users.models import User
+from app.platforms.evaluation.token_stats_models import TokenDailyStats
+from app.platforms.evaluation.trace_models import TraceRecord
 
 
 class AsyncSpyRepository:

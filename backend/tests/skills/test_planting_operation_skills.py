@@ -14,16 +14,17 @@ from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.runtime.tool_executor import _parallel_tool_node
 from app.skills import _attach_skill_metadata
 from app.infra.pending_actions import get_pending, remove_pending
-from app.models.cost import CostRecord
-from app.models.crop import CropTemplate, GrowthStage
-from app.models.cycle import CropCycle, CycleStage
-from app.models.planting import LaborEntry, OperationWorkOrder, PlantingUnit, Worker
-from app.schemas.planting import (
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
+from app.domains.planting.cycle_models import CropCycle, CycleStage
+from app.domains.planting.models import LaborEntry, OperationWorkOrder, PlantingUnit, Worker
+from app.domains.planting.schemas import (
     LaborEntryCreate,
     OperationWorkOrderCreate,
     OperationWorkOrderUpdate,
 )
-from app.services import planting_read_service, planting_service
+from app.domains.planting import read_service as planting_read_service
+from app.domains.planting import service as planting_service
 
 _work_orders_mod = importlib.import_module(
     "app.skills.manage-work-orders.scripts.main"

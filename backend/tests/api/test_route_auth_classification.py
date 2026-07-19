@@ -5,8 +5,8 @@ from collections.abc import Iterable
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-from app.modules.auth.dependencies import get_current_user, require_admin
-from app.modules.farm.dependencies import get_current_farm
+from app.domains.users.dependencies import get_current_user, require_admin
+from app.domains.farm.dependencies import get_current_farm
 from app.main import app
 
 

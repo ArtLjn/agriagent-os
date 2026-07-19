@@ -1,7 +1,7 @@
 """Agent runtime shared support primitives."""
 
 from app.shared.database import SessionLocal
-from app.services.quota_service import QuotaCheckResult, check_user_quota
+from app.domains.users.quota_service import QuotaCheckResult, check_user_quota
 
 
 class AgentRuntimeError(RuntimeError):
