@@ -1,6 +1,6 @@
 """Agent runtime shared support primitives."""
 
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.services.quota_service import QuotaCheckResult, check_user_quota
 
 

@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 

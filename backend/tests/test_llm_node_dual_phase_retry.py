@@ -786,7 +786,7 @@ async def test_empty_write_response_fails_closed_without_retry_tool_call(
 @pytest.fixture(autouse=True)
 def _reset_singletons():
     """每个测试前后重置全局单例。"""
-    import app.core.llm_client_manager as mgr_module
+    import app.shared.llm as mgr_module
 
     mgr_module._manager = None
     yield
@@ -1161,10 +1161,10 @@ class TestRetryLoop:
         mock_get_llm.side_effect = make_llm
 
         # classify_error 对 ConnectionError 返回 PROVIDER
-        from app.core.llm_client_manager import ErrorLevel
+        from app.shared.llm import ErrorLevel
 
         with patch(
-            "app.core.llm_client_manager.classify_error",
+            "app.shared.llm.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
             from app.agent.runtime.nodes import _llm_node
@@ -1239,10 +1239,10 @@ class TestRetryLoop:
         llm.ainvoke = AsyncMock(side_effect=RuntimeError("400 schema error"))
         mock_get_llm.return_value = llm
 
-        from app.core.llm_client_manager import ErrorLevel
+        from app.shared.llm import ErrorLevel
 
         with patch(
-            "app.core.llm_client_manager.classify_error", return_value=ErrorLevel.MODEL
+            "app.shared.llm.classify_error", return_value=ErrorLevel.MODEL
         ):
             from app.agent.runtime.nodes import _llm_node
 
@@ -1324,10 +1324,10 @@ class TestRetryLoop:
 
         mock_get_llm.side_effect = make_llm
 
-        from app.core.llm_client_manager import ErrorLevel
+        from app.shared.llm import ErrorLevel
 
         with patch(
-            "app.core.llm_client_manager.classify_error",
+            "app.shared.llm.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
             from app.agent.runtime.nodes import _llm_node
@@ -1424,10 +1424,10 @@ class TestRetryLoop:
 
         mock_get_llm.side_effect = make_llm
 
-        from app.core.llm_client_manager import ErrorLevel
+        from app.shared.llm import ErrorLevel
 
         with patch(
-            "app.core.llm_client_manager.classify_error",
+            "app.shared.llm.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
             from app.agent.runtime.nodes import _llm_node
@@ -1504,10 +1504,10 @@ class TestRetryWithSingleAttempt:
         llm.ainvoke = AsyncMock(side_effect=ConnectionError("连接失败"))
         mock_get_llm.return_value = llm
 
-        from app.core.llm_client_manager import ErrorLevel
+        from app.shared.llm import ErrorLevel
 
         with patch(
-            "app.core.llm_client_manager.classify_error",
+            "app.shared.llm.classify_error",
             return_value=ErrorLevel.PROVIDER,
         ):
             from app.agent.runtime.nodes import _llm_node

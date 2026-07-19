@@ -11,7 +11,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class TokenDailyStats(Base):

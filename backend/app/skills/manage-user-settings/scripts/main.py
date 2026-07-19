@@ -4,13 +4,13 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.application.chat.helpers import invalidate_user_farm_context
-from app.core.settings.roles import (
+from app.shared.config import (
     DEFAULT_ASSISTANT_ROLE,
     assistant_role_label,
     normalize_assistant_role,
 )
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.user import User
 from app.models.user_setting import UserSetting
 

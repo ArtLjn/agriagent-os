@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.models.conversation import Conversation
 from app.models.cost import CostRecord
 from app.models.farm import Farm

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from skillify.models.schemas import ResultStatus, SkillResult
 
 from app.skills.context import require_farm_context
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.cost import CostRecord
 
 

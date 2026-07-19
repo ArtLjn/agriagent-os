@@ -131,11 +131,29 @@ check_python_files() {
 }
 
 # ── 后端检查 ──
-# 兼容期旧目录只拦截反向依赖；services/ 可依赖 core/infra 这类底层能力。
+# 兼容期旧目录只拦截反向依赖；services/ 可依赖 shared/infra 这类底层能力。
 BACKEND="backend/app"
 if [ -d "$BACKEND" ]; then
   echo "🔍 检查后端分层依赖..."
-  # schemas/ 层不能引用 agents, api, core, models, services
+  if [ -d "$BACKEND/core" ]; then
+    echo "❌ ERROR: backend/app/core 已下线，不得重新创建旧 core 入口"
+    echo "✅ FIX: 基础设施统一放入 app.shared.*，不要创建旧 core 兼容壳"
+    echo "📖 See: docs/architecture/boundaries.md"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  CORE_IMPORT_PATTERN="app\\.co""re\\.|from app\\.co""re|import app\\.co""re"
+  CORE_IMPORT_MATCHES=$(rg -n "$CORE_IMPORT_PATTERN" \
+    backend/app backend/tests backend/alembic scripts 2>/dev/null || true)
+  if [ -n "$CORE_IMPORT_MATCHES" ]; then
+    echo "$CORE_IMPORT_MATCHES"
+    echo "❌ ERROR: 检测到已下线的旧 core 活动引用"
+    echo "✅ FIX: 改用 app.shared.config/database/time/logging/llm/json_repair 等真实入口"
+    echo "📖 See: docs/architecture/boundaries.md"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  # schemas/ 层不能引用 agents, api, models, services
   check_python_imports_recursive_excluding \
     "$BACKEND/schemas" \
     "^[[:space:]]*(from|import)[[:space:]]+app\\.(agent|agents|api|core|models|services)(\\.|[[:space:]]|$)" \
@@ -147,35 +165,28 @@ if [ -d "$BACKEND" ]; then
     "$BACKEND/agents" \
     "^[[:space:]]*(from|import)[[:space:]]+app\\.(api|schemas)(\\.|[[:space:]]|$)" \
     "agents/ 层违规引用了其他层" \
-    "只允许导入: agents, core, models, services"
+    "只允许导入: agents, shared, models, services"
 
   # api/ 层不能引用 agents
   check_python_imports_recursive_excluding \
     "$BACKEND/api" \
     "^[[:space:]]*(from|import)[[:space:]]+app\\.agents(\\.|[[:space:]]|$)" \
     "api/ 层违规引用了其他层" \
-    "只允许导入: api, core, models, schemas, services"
-
-  # core/ 层不能引用 agents, api, schemas, services
-  check_python_imports_recursive_excluding \
-    "$BACKEND/core" \
-    "^[[:space:]]*(from|import)[[:space:]]+app\\.(agent|agents|api|schemas|services)(\\.|[[:space:]]|$)" \
-    "core/ 层违规引用了其他层" \
-    "只允许导入: core, models"
+    "只允许导入: api, shared, models, schemas, services"
 
   # models/ 层不能引用 agents, api, schemas, services
   check_python_imports_recursive_excluding \
     "$BACKEND/models" \
     "^[[:space:]]*(from|import)[[:space:]]+app\\.(agent|agents|api|schemas|services)(\\.|[[:space:]]|$)" \
     "models/ 层违规引用了其他层" \
-    "只允许导入: core, models"
+    "只允许导入: shared, models"
 
   # services/ 层不能引用 api
   check_python_imports_recursive_excluding \
     "$BACKEND/services" \
     "^[[:space:]]*(from|import)[[:space:]]+app\\.api(\\.|[[:space:]]|$)" \
     "services/ 层违规引用了其他层" \
-    "只允许导入底层能力、agent 编排、models、schemas、services；不得反向依赖 api"
+    "只允许导入 shared/infra 底层能力、agent 编排、models、schemas、services；不得反向依赖 api"
 
   echo "🔍 检查 Agent 平台边界..."
   check_python_files \

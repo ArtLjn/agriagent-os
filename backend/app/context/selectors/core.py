@@ -7,7 +7,7 @@ from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from app.context.models import ContextBlock
-from app.core.settings.roles import assistant_role_label, normalize_assistant_role
+from app.shared.config import assistant_role_label, normalize_assistant_role
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.cost import CostRecord
 from app.models.cycle import CropCycle

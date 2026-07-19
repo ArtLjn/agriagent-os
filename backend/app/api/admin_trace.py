@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
-from app.core.config import settings
+from app.shared.database import get_db
+from app.shared.config import settings
 from app.modules.auth.dependencies import require_admin
 from app.platforms.evaluation.diagnostics import SkillDiagnosticService
 from app.infra.mongo import get_mongo_database

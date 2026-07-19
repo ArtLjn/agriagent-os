@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import Column, DateTime, String, Text
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class IdempotencyKey(Base):

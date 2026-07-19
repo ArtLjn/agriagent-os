@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.runtime.loop import run_agent_loop
 from app.prompt.registry import get_registry
-from app.core.config import AIConfig
+from app.shared.config import AIConfig
 
 
 @pytest.fixture(autouse=True)

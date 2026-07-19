@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.simulation.state_snapshot import DbStateSnapshot, _TABLE_PRIMARY_KEYS
 
 

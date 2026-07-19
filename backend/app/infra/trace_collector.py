@@ -154,7 +154,7 @@ async def stop_trace_system() -> None:
 
 async def _flush_loop() -> None:
     """定时 flush：队列满时批量写入，超时时也写入避免数据积压。"""
-    from app.core.config import settings
+    from app.shared.config import settings
 
     interval = settings.trace.flush_interval
 

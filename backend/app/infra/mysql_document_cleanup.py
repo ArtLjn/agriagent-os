@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import null, or_
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.shared.config import settings
 from app.infra.mysql_document_cleanup_types import (
     BackupResult,
     CleanupError,

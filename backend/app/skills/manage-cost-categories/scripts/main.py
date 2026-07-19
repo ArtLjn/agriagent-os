@@ -6,7 +6,7 @@ from skillify.skills.base import Skill
 from app.skills import clear_category_cache
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.schemas.cost_category import CostCategoryCreate
 from app.services import cost_category_service
 

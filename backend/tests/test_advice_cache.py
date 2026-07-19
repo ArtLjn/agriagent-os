@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.models.agent_record import AgentRecord
 from app.services.daily_advice_models import DailyAdviceCandidate, fingerprint_candidates
 

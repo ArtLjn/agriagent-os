@@ -16,7 +16,7 @@ from app.skills.metadata import (
     metadata_to_dict,
     set_skill_enabled_state,
 )
-from app.core.config import settings
+from app.shared.config import settings
 from app.infra.skill_cache import clear_cache
 
 logger = logging.getLogger(__name__)

@@ -7,8 +7,8 @@ from sqlalchemy import inspect, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.config import settings
-from app.core.database import Base
+from app.shared.config import settings
+from app.shared.database import Base
 from app.models import *  # noqa: F401,F403
 
 config = context.config
@@ -25,7 +25,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    from app.core.database import engine
+    from app.shared.database import engine
 
     with engine.connect() as connection:
         if _ensure_version_num_capacity(connection, min_length=128):

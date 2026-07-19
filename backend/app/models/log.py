@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import relationship
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class FarmLog(Base):

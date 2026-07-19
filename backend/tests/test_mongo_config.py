@@ -6,8 +6,25 @@ import pytest
 import yaml
 
 
+_STORAGE_ENV_KEYS = (
+    "storage__conversation_messages",
+    "storage__case_drafts",
+    "storage__repair_packs",
+    "storage__review_issue_chains",
+    "storage__prelabels",
+    "storage__trace",
+    "storage__agent_records",
+    "storage__guardrails_logs",
+)
+
+
+def _clear_storage_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in _STORAGE_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
 def test_mongo_config_defaults_disable_client_and_keep_mysql_backends():
-    from app.core.config import Settings
+    from app.shared.config import Settings
 
     with patch("pathlib.Path.exists", return_value=False):
         settings = Settings(_config_path="/nonexistent/config.yaml")
@@ -33,8 +50,10 @@ def test_mongo_config_defaults_disable_client_and_keep_mysql_backends():
     assert settings.storage.mongo_consistency_mismatch_rate_threshold == 0.0001
 
 
-def test_mongo_and_storage_config_load_from_yaml(tmp_path):
-    from app.core.config import Settings
+def test_mongo_and_storage_config_load_from_yaml(tmp_path, monkeypatch):
+    _clear_storage_env(monkeypatch)
+
+    from app.shared.config import Settings
 
     config_file = tmp_path / "config.yaml"
     config_file.write_text(
@@ -90,8 +109,13 @@ def test_mongo_and_storage_config_load_from_yaml(tmp_path):
     assert settings.storage.mongo_consistency_mismatch_rate_threshold == 0.0002
 
 
-def test_data_flywheel_storage_config_rejects_removed_gray_backends(tmp_path):
-    from app.core.config import Settings
+def test_data_flywheel_storage_config_rejects_removed_gray_backends(
+    tmp_path,
+    monkeypatch,
+):
+    _clear_storage_env(monkeypatch)
+
+    from app.shared.config import Settings
 
     config_file = tmp_path / "config.yaml"
     config_file.write_text(

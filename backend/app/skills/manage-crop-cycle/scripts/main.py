@@ -5,7 +5,7 @@ from datetime import date
 from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.cycle import CropCycle
 from app.schemas.cycle import CropCycleCreate
 from app.services import crop_service, cycle_service, farm_context_service

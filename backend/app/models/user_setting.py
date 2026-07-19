@@ -2,7 +2,7 @@
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, func
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class UserSetting(Base):

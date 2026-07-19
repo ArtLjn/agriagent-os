@@ -8,7 +8,7 @@ from datetime import date
 from app.prompt.cache import get_farm_ctx_cache
 from app.agent.router.tool_selector import ToolSelectionResult
 from app.context.models import ContextBundle
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def _build_circuit_key(llm_instance) -> str:
 
     # 从 Manager chain 中匹配 provider name
     try:
-        from app.core.llm_client_manager import get_llm_manager
+        from app.shared.llm import get_llm_manager
 
         manager = get_llm_manager()
         if not manager.fallback_mode:
@@ -63,7 +63,7 @@ def _build_circuit_key(llm_instance) -> str:
 def _record_llm_failure(circuit_key: str, exc: Exception) -> None:
     """LLM 调用失败，记录到 Manager cooldown。"""
     try:
-        from app.core.llm_client_manager import get_llm_manager, classify_error
+        from app.shared.llm import get_llm_manager, classify_error
 
         manager = get_llm_manager()
         if not manager.fallback_mode:
@@ -82,7 +82,7 @@ def _record_llm_failure(circuit_key: str, exc: Exception) -> None:
 def _record_llm_success(circuit_key: str) -> None:
     """LLM 调用成功，清除 cooldown。"""
     try:
-        from app.core.llm_client_manager import get_llm_manager
+        from app.shared.llm import get_llm_manager
 
         manager = get_llm_manager()
         if not manager.fallback_mode:

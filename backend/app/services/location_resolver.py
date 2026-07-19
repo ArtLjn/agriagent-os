@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.shared.config import settings
 from app.models.farm import Farm
 from app.models.user_setting import UserSetting
 from app.modules.farm.city_coords import is_ambiguous_city_name

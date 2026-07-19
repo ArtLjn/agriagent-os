@@ -2,7 +2,7 @@
 
 import logging
 
-from app.core.logger import setup_logging
+from app.shared.logging import setup_logging
 
 
 def test_setup_logging_suppresses_watchfiles_info_noise():
@@ -15,7 +15,7 @@ def test_setup_logging_suppresses_watchfiles_info_noise():
 
 def test_setup_logging_reenables_project_loggers_disabled_by_alembic():
     """Alembic fileConfig 可能禁用已导入业务 logger，重建日志时应恢复。"""
-    agent_logger = logging.getLogger("app.core.llm")
+    agent_logger = logging.getLogger("app.shared.llm")
     agent_logger.disabled = True
 
     setup_logging()

@@ -4,7 +4,7 @@ import json
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text, func
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class SimulationRun(Base):

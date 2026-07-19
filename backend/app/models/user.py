@@ -4,7 +4,7 @@ import enum
 
 from sqlalchemy import Column, DateTime, Integer, String, func
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class UserRole(str, enum.Enum):

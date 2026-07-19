@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.infra.agent_events import AgentEventWriter
 from app.models.agent_turn import AgentTurn
 from app.models.conversation import Conversation, ConversationMessage

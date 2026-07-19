@@ -1,7 +1,7 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import relationship
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class CropTemplate(Base):

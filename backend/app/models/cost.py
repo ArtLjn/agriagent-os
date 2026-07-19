@@ -14,8 +14,8 @@ from sqlalchemy import (
 from sqlalchemy import event
 from sqlalchemy.orm import relationship
 
-from app.core.timezone import beijing_now, ensure_beijing_timezone
-from app.core.database import Base
+from app.shared.time import beijing_now, ensure_beijing_timezone
+from app.shared.database import Base
 
 ACTIVE_SOURCE_KEY = "active"
 PARTIAL = "partial"

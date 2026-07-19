@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.main import app
 from app.models.trace import TraceRecord
 from app.models.user import User
@@ -76,7 +76,7 @@ class TestGetTraces:
         self, db_session, monkeypatch
     ) -> None:
         import app.api.admin_trace as admin_trace
-        from app.core.config import settings
+        from app.shared.config import settings
 
         admin_user = ensure_admin_user(db_session)
         mock_record = MagicMock()
@@ -125,7 +125,7 @@ class TestGetTraces:
             assert kwargs["limit"] == 5
             return admin_trace.TracePage(items=[], total=3)
 
-        from app.core.config import settings
+        from app.shared.config import settings
 
         monkeypatch.setattr(settings.storage, "trace", "mongo")
         monkeypatch.setattr(admin_trace, "_list_traces_from_mongo", _mongo_page)
@@ -144,7 +144,7 @@ class TestGetTraces:
 
 class TestGetTraceRequests:
     def test_list_trace_requests_groups_nodes_by_request(self, db_session) -> None:
-        from app.core.config import settings
+        from app.shared.config import settings
         from pytest import MonkeyPatch
 
         admin_user = ensure_admin_user(db_session)
@@ -205,7 +205,7 @@ class TestGetTraceRequests:
 
 class TestGetTimeline:
     def test_timeline_orders_rounds_by_first_node_time(self, db_session) -> None:
-        from app.core.config import settings
+        from app.shared.config import settings
         from pytest import MonkeyPatch
 
         admin_user = ensure_admin_user(db_session)
@@ -259,7 +259,7 @@ class TestGetTimeline:
             monkeypatch.undo()
 
     def test_timeline_returns_rounds(self, db_session) -> None:
-        from app.core.config import settings
+        from app.shared.config import settings
 
         admin_user = ensure_admin_user(db_session)
         mock_record = MagicMock()
@@ -298,7 +298,7 @@ class TestGetTimeline:
             monkeypatch.undo()
 
     def test_timeline_serializes_trace_json_and_datetime(self, db_session) -> None:
-        from app.core.config import settings
+        from app.shared.config import settings
 
         admin_user = ensure_admin_user(db_session)
         mock_record = MagicMock()
@@ -341,7 +341,7 @@ class TestGetDiagnostics:
     def test_diagnostics_returns_structured_pending_and_context(
         self, db_session
     ) -> None:
-        from app.core.config import settings
+        from app.shared.config import settings
         from pytest import MonkeyPatch
 
         admin_user = ensure_admin_user(db_session)

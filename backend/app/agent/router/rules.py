@@ -8,6 +8,17 @@ WRITE_INTENT_HINTS = {"创建", "新建", "记录", "记下", "添加"}
 QUERY_INTENT_HINTS = {"查询", "查看", "最近", "有哪些", "多少", "还欠", "统计"}
 
 WRITE_PATTERNS: dict[str, list[re.Pattern]] = {
+    "create_cost_record": [
+        re.compile(r"(?:买了|卖了|花了|收入|支出|赊账|记账|记一笔|付了|收了)"),
+        re.compile(r"\d+\s*(?:元|块|万|w|W|千|百)"),
+        re.compile(r"(?:还[了钱账给]|清账|还款)"),
+        re.compile(r"还(?!欠).{1,20}\d+\s*(?:元|块|万|w|W|千|百)?"),
+        re.compile(r"(?:账[结清]|结了.*账|欠.*结)"),
+        re.compile(r"(?:删除|撤销|删掉|移除).*(?:账务|账单|流水|收支|成本|收入|费用)"),
+        re.compile(
+            r"(?:账务|账单|流水|收支|成本|收入|费用).*#?\d+.*(?:删除|撤销|删掉|移除)"
+        ),
+    ],
     "manage_cost": [
         re.compile(r"(?:买了|卖了|花了|收入|支出|赊账|记账|记一笔|付了|收了)"),
         re.compile(r"\d+\s*(?:元|块|万|w|W|千|百)"),

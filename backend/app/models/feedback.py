@@ -2,7 +2,7 @@
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class FeedbackRecord(Base):
