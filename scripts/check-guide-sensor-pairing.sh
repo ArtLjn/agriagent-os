@@ -4,7 +4,8 @@
 
 set -e
 
-CLAUDE_MD=".claude/CLAUDE.md"
+GUIDE_FILE="AGENTS.md"
+LEGACY_GUIDE_FILE=".claude/CLAUDE.md"
 SCRIPTS_DIR="scripts"
 PAIRED=0
 UNPAIRED=0
@@ -14,10 +15,14 @@ echo "║   Guide+Sensor 配对检查              ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 
-if [ ! -f "$CLAUDE_MD" ]; then
-  echo "❌ 找不到 $CLAUDE_MD，无法检查配对"
+if [ ! -f "$GUIDE_FILE" ] && [ -f "$LEGACY_GUIDE_FILE" ]; then
+  GUIDE_FILE="$LEGACY_GUIDE_FILE"
+fi
+
+if [ ! -f "$GUIDE_FILE" ]; then
+  echo "❌ 找不到 AGENTS.md 或 $LEGACY_GUIDE_FILE，无法检查配对"
   echo "✅ FIX: 先运行 init_harness.py 初始化项目"
-  echo "📖 See: .claude/CLAUDE.md"
+  echo "📖 See: AGENTS.md"
   exit 1
 fi
 
@@ -28,7 +33,7 @@ if [ ! -d "$SCRIPTS_DIR" ]; then
   exit 1
 fi
 
-echo "🔍 从 $CLAUDE_MD 解析硬性规则..."
+echo "🔍 从 $GUIDE_FILE 解析硬性规则..."
 echo ""
 
 # 使用函数映射规则关键词到脚本文件（兼容 bash 3.2，不使用 declare -A）
@@ -83,7 +88,7 @@ while IFS= read -r line; do
       UNPAIRED=$((UNPAIRED + 1))
     fi
   fi
-done < "$CLAUDE_MD"
+done < "$GUIDE_FILE"
 
 echo ""
 echo "╔══════════════════════════════════════╗"

@@ -26,7 +26,7 @@ farm-manager，FastAPI 后端 + React+TS 前端
 <!-- Guide+Sensor 配对说明：以下每条规则都应对应 scripts/ 中的检查脚本。
      运行 bash scripts/check-guide-sensor-pairing.sh 验证配对完整性。 -->
 ## 硬性规则（CI 会验证）
-1. 依赖方向：后端以 api → application/domains/modules/platforms → shared/models/infra 为目标，不再新增 `app.core` 入口；前端 api → components → layouts → pages
+1. 依赖方向：后端以 bootstrap/routes → application/domains/platforms/agent → shared/infra 为目标，不再新增 `app.core`、`app.api`、`app.models`、`app.schemas`、`app.services`、`app.modules`、`app.simulation` 旧入口；前端 api → components → layouts → pages
 2. 横切关注点（auth/log/telemetry）只通过依赖注入
 3. 生产 Python 文件 ≤ 1000 行；500-1000 行为观察区间，按职责混杂度判断是否收束；单方法建议 ≤ 50 行，超过 80 行需说明或拆成步骤函数
 4. 新增代码必须有对应测试
@@ -35,8 +35,9 @@ farm-manager，FastAPI 后端 + React+TS 前端
 7. 修改代码后必须运行复杂度预算检查；新增抽象、生成物入库、大文件和工作区污染由 check-complexity-budget.sh 拦截
 
 ## Codex 写代码前必须确认
+- 默认不要直接在 `main` 分支修改代码；除非用户明确要求热修或只做本地检查，开发任务应使用 `codex/*` 分支或独立 worktree，提交后通过 GitHub PR 审核合并
 - 关键业务、兼容、协议、并发、安全逻辑必须写“为什么”的注释；普通代码不写复述性注释
-- 默认不新增碎片文件；不要为了绕 500 行预算拆出 20-50 行小文件，只有边界清晰、超过 1000 行硬阈值、3 处以上复用或隔离外部依赖时才拆
+- 默认不新增碎片文件；不要为了绕 1000 行硬预算拆出 20-50 行小文件，只有边界清晰、超过 1000 行硬阈值、3 处以上复用或隔离外部依赖时才拆
 - 新增文件或抽象时，最终说明必须交代调用方、边界和不能留在原文件的理由
 
 ## 可测试性分级
@@ -65,3 +66,4 @@ farm-manager，FastAPI 后端 + React+TS 前端
 - feat: 新功能 | fix: 修复 | refactor: 重构 | docs: 文档 | test: 测试 | chore: 杂项
 - 禁止提交 .env、密钥、大文件
 - 同天多个 commit 合并为一个（squash）
+- 默认通过 PR 合并到 `main`；PR 描述需写清变更范围、验证结果和剩余风险，审核通过后再合并

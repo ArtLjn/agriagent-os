@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-17
+last_updated: 2026-07-19
 status: active
 ---
 
@@ -9,31 +9,34 @@ status: active
 
 ## 1. 当前分层
 
-后端是 FastAPI + SQLAlchemy + LangGraph + Skillify Skill 体系。入口已从单文件启动迁移到 `app/bootstrap/`，业务 use case 已迁移到顶层 `app/application/`，Agent 平台继续承载 runtime、planner、executor、response 等框架子域。
+后端是 FastAPI + SQLAlchemy + Skillify Skill 体系。入口已从单文件启动迁移到 `app/bootstrap/`，业务能力按领域目录收敛到 `app/domains/`，Agent 平台继续承载 runtime、planner、executor、response、guardrails 等框架子域。旧 `api/models/schemas/services/modules/core/simulation` 技术层入口已下线。
 
 ```mermaid
 flowchart TB
     Client["移动端 / Admin Web"]
     Bootstrap["bootstrap\n应用工厂、路由、中间件、异常、lifespan"]
-    API["api\nHTTP 路由和依赖注入"]
+    Routes["domains/platforms routes\nHTTP 路由和依赖注入"]
     AppUseCase["application\n聊天、流式、每日建议、报告、历史"]
-    Service["services / modules\n业务服务、认证、天气、配额"]
+    Domains["domains\n用户、农场、种植、财务、天气、会话"]
+    Platforms["platforms\nadmin、evaluation、data_flywheel、simulation"]
     AgentPlatform["agent 平台\nadvisor、runtime、planner、executor、skills"]
     ContextMemory["context / memory\n上下文选择、预算、短时/长时记忆"]
     Prompt["prompt + prompts/\nPrompt 注册、组合、渲染、模板文件"]
-    Infra["infra / core\n数据库、配置、日志、限流、trace、熔断"]
+    Infra["shared / infra\n数据库、配置、日志、限流、trace、熔断"]
     Data["MySQL 8.x\nSQLAlchemy Models + Alembic"]
     External["外部服务\nLLM Provider、天气 Provider"]
 
-    Client --> Bootstrap --> API
-    API --> AppUseCase
-    API --> Service
-    AppUseCase --> Service
+    Client --> Bootstrap --> Routes
+    Routes --> AppUseCase
+    Routes --> Domains
+    Routes --> Platforms
+    AppUseCase --> Domains
     AppUseCase --> AgentPlatform
     AgentPlatform --> ContextMemory
     AgentPlatform --> Prompt
     AgentPlatform --> Infra
-    Service --> Infra
+    Domains --> Infra
+    Platforms --> Infra
     Infra --> Data
     Infra --> External
 ```
@@ -44,28 +47,32 @@ flowchart TB
 | --- | --- |
 | `app/main.py` | 仅创建 FastAPI app；本地运行时读取 `settings.server` 启动 uvicorn。 |
 | `app/bootstrap/` | 应用工厂、路由注册、中间件、异常处理、lifespan。 |
-| `app/api/` | HTTP 入口、参数校验、FastAPI Depends；Agent 路由已主要调用 application use case，智能填写通过 `api/smart_fill.py` 暴露统一场景入口。 |
-| `app/modules/auth`、`app/modules/farm` | 已迁移的模块化认证和农场依赖能力。 |
-| `app/services/` | 迁移期业务服务：作物、周期、日志、成本、债务、天气、会话、报告、配额。 |
+| `app/domains/users/` | 认证、用户、设置、配额、后台用户管理。 |
+| `app/domains/farm/` | 农场、当前农场上下文、农场报告数据。 |
+| `app/domains/planting/` | 作物模板、种植周期、农事日志、用工和种植相关智能填写。 |
+| `app/domains/finance/` | 成本、分类、债务。 |
+| `app/domains/weather/` | 天气服务、地点解析和天气路由。 |
+| `app/domains/conversation/` | 会话、反馈、日报建议、Agent 记录和报告服务。 |
 | `app/application/` | 业务 use case：聊天、SSE、每日建议、报告、历史、上下文失效；旧 agent application 与旧根 use case 兼容入口已删除。 |
-| `app/agent/runtime/` | LangGraph 图工厂、节点、消息压缩、工具执行、最终 prompt 预算、流式事件。 |
+| `app/agent/runtime/` | Runtime 状态机、节点、消息压缩、工具执行、最终 prompt 预算、流式事件。 |
 | `app/agent/executor/` | Tool call 执行计划和并行执行适配。 |
 | `app/skills/` | Skillify Skill 实现、注册、权限、schema 和执行适配；旧 agent skills 兼容入口已删除。 |
 | `app/context/` | ContextBundle、selector、token budget、压缩、缓存、预加载和失效。 |
 | `app/memory/` | 短时记忆、长时记忆接口、检索空实现、observation event。 |
 | `app/prompt/` 与 `backend/prompts/` | Prompt registry/composer/renderer/replay 代码与 Jinja2 模板文件。 |
-| `app/infra/` | trace、pending action、limiter、skill cache、circuit breaker、兼容 settings/database/json_repair。 |
-| `app/core/` | 配置、数据库、日志、安全、日期上下文、LLM client manager。 |
-| `app/platforms/evaluation/`、`app/platforms/data_flywheel/`、`app/simulation/`、`app/observability/` | 回放评测、数据飞轮样本与 repair pack 闭环、仿真测试、平台观测事件骨架；`app/evaluation` 与 `app/modules/data_flywheel` 仅保留旧 import 兼容入口。 |
+| `app/shared/` | 配置、数据库、日志、安全、时间、LLM client manager、模型注册和通用 JSON 工具。 |
+| `app/infra/` | trace、pending action、limiter、skill cache、circuit breaker 等外部适配。 |
+| `app/platforms/admin/`、`app/platforms/evaluation/`、`app/platforms/data_flywheel/`、`app/platforms/simulation/`、`app/platforms/shared/` | 后台、回放评测、数据飞轮样本与 repair pack 闭环、仿真测试、跨平台共享前置层。 |
+| `app/observability/` | 平台观测事件。 |
 
 ## 3. Agent 请求链路
 
 ```mermaid
 sequenceDiagram
     participant C as 客户端
-    participant API as api/agent.py
+    participant API as domains/conversation/routes.py
     participant UC as application
-    participant SVC as services/agent_service.py
+    participant SVC as domains/conversation/agent_service.py
     participant ADV as application/advice/advisor.py
     participant RT as agent/runtime
     participant CTX as context + memory
@@ -79,7 +86,7 @@ sequenceDiagram
     SVC->>DB: 保存用户消息并读取会话
     SVC->>ADV: invoke_advisor / stream_advisor
     ADV->>ADV: Guardrails + 问候/待确认意图处理
-    ADV->>RT: LangGraph ainvoke / astream
+    ADV->>RT: Runtime ainvoke / astream
     RT->>CTX: 构建 ContextBundle 和 MemoryContext
     RT->>LLM: 绑定筛选后的 Tools 调用模型
     LLM-->>RT: AIMessage 或 tool_calls
@@ -99,7 +106,7 @@ flowchart LR
     Application["application\n用例编排"]
     Advisor["application/advice/advisor.py\nGuardrails、pending action"]
     Planner["planner / tool_selector\n意图识别、候选工具"]
-    Runtime["runtime\nLangGraph 节点、消息、预算、流事件"]
+    Runtime["runtime\n节点状态机、消息、预算、流事件"]
     Executor["executor / runtime.tool_executor\n并行工具执行"]
     Skills["skills\n只读查询 + 写操作确认"]
     Response["response\nSSE 与文本格式化"]
@@ -113,7 +120,7 @@ flowchart LR
     Skills --> Trace
 ```
 
-当前 `app.agent.graph` 仍是 Runtime 兼容入口；Prompt 相关调用已迁移到 `app.prompt`。新增实现应优先进入 `agent/runtime`、`prompt/`、`context/`、`memory/` 对应边界。
+Prompt 相关调用已迁移到 `app.prompt`。新增实现应优先进入 `agent/runtime`、`prompt/`、`context/`、`memory/` 对应边界，不新增 runtime 兼容入口。
 
 ## 5. Context、Prompt、Memory 链路
 
@@ -145,8 +152,8 @@ flowchart TB
 ```mermaid
 flowchart LR
     Client["移动端 / Admin Web"]
-    SmartAPI["api/smart_fill.py\n/scenarios + /parse"]
-    Registry["agent.application.smart_fill\n场景注册表"]
+    SmartAPI["domains/planting/smart_fill_routes.py\n/scenarios + /parse"]
+    Registry["application/smart_fill.py\n场景注册表"]
     Prompt["PromptComposer\ncost/crop/cycle parse"]
     LLM["LLM structured output\nJSON fallback"]
     Draft["表单草稿\n不直接落库"]
@@ -156,7 +163,7 @@ flowchart LR
     Legacy --> Registry
 ```
 
-智能填写统一为“自然语言 → 表单草稿”，当前注册 `ledger.record`、`crop.template`、`crop.cycle` 三个场景。场景注册项声明 prompt、输出 schema、上下文构建和业务校验；新增业务不再新增专属 parse 路由，优先扩展 `agent.application.smart_fill`。旧 `/costs/parse`、`/crops/templates/parse`、`/cycles/parse` 保留为兼容入口，内部转调统一服务并返回旧响应格式。
+智能填写统一为“自然语言 → 表单草稿”，当前注册 `ledger.record`、`crop.template`、`crop.cycle` 三个场景。场景注册项声明 prompt、输出 schema、上下文构建和业务校验；新增业务不再新增专属 parse 路由，优先扩展 `app.application.smart_fill` 和 `domains/planting/smart_fill_routes.py` 适配。旧 `/costs/parse`、`/crops/templates/parse`、`/cycles/parse` 保留为对外 API 兼容，内部转调统一服务并返回旧响应格式。
 
 ## 6. Skill 系统
 
@@ -168,7 +175,7 @@ flowchart TB
     Write["写操作 Skill\nmanage-cost、manage-crop-cycle、manage-crop-templates、log-farm-activity、settle-debt"]
     Pending["pending_actions\n确认、取消、修改、链式后续动作"]
     Cache["skill_cache\n只读缓存"]
-    Services["services\n业务读写"]
+    Services["domains/platforms\n业务读写"]
 
     Manager --> Adapter
     Adapter --> Read
@@ -184,14 +191,14 @@ flowchart TB
 ```mermaid
 flowchart LR
     Runtime["agent/runtime"]
-    LLMFactory["core/llm.py"]
-    Manager["core/llm_client_manager.py\n角色路由、权重、API Key 轮换、熔断"]
+    LLMFactory["shared/llm.py"]
+    Manager["shared/llm_client_manager.py\n角色路由、权重、API Key 轮换、熔断"]
     Providers["providers.json\n多 provider / model 配置"]
     LLM["OpenAI 兼容 LLM 服务"]
 
-    WeatherAPI["api/weather.py 或 weather skill"]
-    WeatherSvc["services/weather_service.py"]
-    Strategy["services/weather/strategy.py\n缓存、故障切换、预警注入"]
+    WeatherAPI["domains/weather/routes.py 或 weather skill"]
+    WeatherSvc["domains/weather/service.py"]
+    Strategy["domains/weather/service.py\n缓存、故障切换、预警注入"]
     QWeather["QWeather"]
     OpenMeteo["Open-Meteo"]
 
@@ -229,12 +236,13 @@ erDiagram
     SimulationRun ||--o{ SimulationResultRecord : contains
 ```
 
-主要 ORM 位于 `app/models/`：用户、农场、作物模板、生长阶段、种植周期、周期阶段、日志、成本、分类、会话、消息、Agent 记录、反馈、trace、token 统计、幂等键和仿真记录。
+主要 ORM 按职责位于 `app/domains/*/*models.py`、`app/platforms/*/*models.py` 和 `app/shared/model_registry.py` 引用的真实模块：用户、农场、作物模板、生长阶段、种植周期、周期阶段、日志、成本、分类、会话、消息、Agent 记录、反馈、trace、token 统计、幂等键和仿真记录。
 
-## 9. 迁移关注点
+## 9. 架构治理关注点
 
-- `api/agent.py` 已经瘦身，聊天编排通过 `application/chat` 进入真实 `application/advice/advisor.py`。
+- 旧 `app.api`、`app.models`、`app.schemas`、`app.services`、`app.modules`、`app.core`、`app.simulation` 入口已下线，不得为兼容或临时方便重新创建。
+- 聊天编排通过 `application/chat` 进入真实 `application/advice/advisor.py`，HTTP 入口落在 `domains/conversation/routes.py`。
 - `agent/runtime/llm_support.py` 当前会构建 runtime context bundle，后续可继续向 application 注入端口的方向收敛。
-- `services/` 仍承担大量业务模块职责，后续可逐步迁移到 `modules/farm`、`modules/ledger`、`modules/weather`、`modules/conversation` 等真实模块。
 - `app/skills/` 当前是平台能力和业务写入的交汇点，新增 Skill 要明确只读/写操作权限、缓存策略和 pending action 行为。
 - 架构图应保持分图维护；不要把 API、Agent、Skill、DB、外部服务全部塞进一张图。
+- 目录级变更默认通过 `codex/*` 分支和 GitHub PR 合并；PR 描述必须列出移动/删除目录、验证命令和剩余风险。
