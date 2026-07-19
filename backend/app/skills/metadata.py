@@ -228,7 +228,7 @@ def _metadata_from_legacy_read(skill_name: str) -> SkillMetadata:
 def get_skill_call_metadata(skill: Any, params: Mapping[str, Any]) -> SkillMetadata:
     skill_name = _get_skill_name(skill)
     metadata = get_skill_metadata(skill)
-    operation_name = _operation_name_from_params(skill_name, params)
+    operation_name = infer_skill_operation_name(skill_name, params)
     registry_metadata = (
         resolve_skill_capability_metadata(skill_name, operation_name)
         if operation_name is not None
@@ -241,7 +241,11 @@ def get_skill_call_metadata(skill: Any, params: Mapping[str, Any]) -> SkillMetad
     return SkillMetadata.model_validate(_apply_runtime_enablement(skill_name, payload))
 
 
-def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | None):
+def infer_skill_operation_name(
+    skill_name: str,
+    params: Mapping[str, Any] | None,
+) -> str | None:
+    """按参数推断多 operation Skill 的实际 operation。"""
     if not isinstance(params, Mapping):
         return None
     operation = params.get("operation")
@@ -308,6 +312,13 @@ def _operation_name_from_params(skill_name: str, params: Mapping[str, Any] | Non
         if any(params.get(key) is not None for key in _USER_SETTINGS_WRITE_FIELDS)
         else "query_settings"
     )
+
+
+def _operation_name_from_params(
+    skill_name: str,
+    params: Mapping[str, Any] | None,
+) -> str | None:
+    return infer_skill_operation_name(skill_name, params)
 
 
 def _only_labor_payment_worker_id_wage_field(params: Mapping[str, Any]) -> bool:

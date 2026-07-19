@@ -9,8 +9,10 @@ from app.agent.state import AgentState
 from app.infra.pending_actions import is_write_skill_call
 from app.skills.metadata import (
     SkillPermissionLevel,
+    infer_skill_operation_name,
     resolve_skill_capability_metadata,
 )
+from app.skills.registry import load_skill_registry
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,7 @@ _LABOR_PAYMENT_WAGE_FIELDS = (
     "work_date",
     "client_request_id",
 )
+_WRITE_OPERATION_RISKS = frozenset({"write_confirm", "write_high"})
 
 
 def _permission_decision(
@@ -95,6 +98,13 @@ def _permission_decision(
     operation_decision = _operation_risk_decision(capability_metadata)
     if operation_decision is not None:
         return operation_decision
+    mixed_operation_decision = _mixed_operation_write_guard_decision(
+        skill_name,
+        args,
+        capability_metadata,
+    )
+    if mixed_operation_decision is not None:
+        return mixed_operation_decision
     return _metadata_permission_decision(
         permission_value,
         skill_name,
@@ -116,7 +126,9 @@ def _must_honor_metadata_permission_before_operation(
     if permission_value == SkillPermissionLevel.ADMIN.value:
         return True
     if permission_value == SkillPermissionLevel.WRITE_CONFIRM.value:
-        return capability_metadata.get("operation_risk") != SkillPermissionLevel.READ.value
+        return (
+            capability_metadata.get("operation_risk") != SkillPermissionLevel.READ.value
+        )
     if permission_value in {SkillPermissionLevel.EXTERNAL_NETWORK.value}:
         return True
     return isinstance(permission_value, str) and (
@@ -224,13 +236,22 @@ def _capability_metadata_from_runtime(
 ) -> dict:
     """读取 Tool metadata；缺失时用 Registry alias 做兼容解析。"""
     operation_name = _operation_name_from_args(skill_name, args)
-    resolved = resolve_skill_capability_metadata(skill_name, operation_name) or {}
-    operation = resolved.get("operation") or getattr(metadata, "operation", None)
-    operation_risk = resolved.get("operation_risk") or getattr(
-        metadata,
-        "operation_risk",
-        None,
+    ignore_default_operation = (
+        operation_name is None
+        and _is_registry_capability_name(skill_name)
+        and _capability_has_write_operations(skill_name)
     )
+    resolved = resolve_skill_capability_metadata(skill_name, operation_name) or {}
+    if ignore_default_operation:
+        operation = None
+        operation_risk = None
+    else:
+        operation = resolved.get("operation") or getattr(metadata, "operation", None)
+        operation_risk = resolved.get("operation_risk") or getattr(
+            metadata,
+            "operation_risk",
+            None,
+        )
     return {
         "legacy_alias": getattr(metadata, "legacy_alias", None)
         or resolved.get("legacy_alias"),
@@ -249,9 +270,23 @@ def _operation_name_from_args(skill_name: str, args: dict | None) -> str | None:
     operation = args.get("operation")
     if operation:
         return str(operation)
+    inferred = infer_skill_operation_name(skill_name, args)
+    if inferred:
+        if (
+            _has_meaningful_args(args)
+            or _alias_default_operation_name(skill_name) is None
+        ):
+            return inferred
+    else:
+        if _is_registry_capability_name(
+            skill_name
+        ) and _capability_has_write_operations(skill_name):
+            return None
     resolved = resolve_skill_capability_metadata(skill_name)
     if resolved is not None and resolved.get("operation"):
         return str(resolved["operation"])
+    if inferred:
+        return inferred
     if skill_name == _LABOR_PAYMENT_SKILL:
         return _labor_payment_operation_from_args(args)
     if skill_name == "manage_user_settings":
@@ -268,6 +303,69 @@ def _operation_name_from_args(skill_name: str, args: dict | None) -> str | None:
             else "query_settings"
         )
     return None
+
+
+def _mixed_operation_write_guard_decision(
+    skill_name: str,
+    args: dict | None,
+    capability_metadata: dict,
+) -> _PermissionDecision | None:
+    if capability_metadata.get("operation") or not _has_meaningful_args(args):
+        return None
+    if (
+        not _is_registry_capability_name(skill_name)
+        and _alias_default_operation_name(skill_name) is not None
+    ):
+        return None
+    if not _capability_has_write_operations(skill_name):
+        return None
+    guarded_metadata = {
+        **capability_metadata,
+        "operation_risk": SkillPermissionLevel.WRITE_CONFIRM.value,
+    }
+    return _write_confirm_decision(guarded_metadata)
+
+
+def _has_meaningful_args(args: dict | None) -> bool:
+    if not isinstance(args, dict):
+        return False
+    return any(
+        key != "operation" and value not in (None, "", [], {})
+        for key, value in args.items()
+    )
+
+
+def _is_registry_capability_name(skill_name: str) -> bool:
+    try:
+        registry = load_skill_registry()
+    except (OSError, ValueError):
+        return False
+    return skill_name in registry.capabilities
+
+
+def _alias_default_operation_name(skill_name: str) -> str | None:
+    try:
+        registry = load_skill_registry()
+    except (OSError, ValueError):
+        return None
+    alias = registry.resolve_alias(skill_name)
+    return alias.operation if alias is not None else None
+
+
+def _capability_has_write_operations(skill_name: str) -> bool:
+    try:
+        registry = load_skill_registry()
+    except (OSError, ValueError):
+        return False
+    alias = registry.resolve_alias(skill_name)
+    capability_name = alias.capability if alias is not None else skill_name
+    capability = registry.capabilities.get(capability_name)
+    if capability is None:
+        return False
+    return any(
+        operation.risk in _WRITE_OPERATION_RISKS
+        for operation in capability.operations.values()
+    )
 
 
 def _labor_payment_operation_from_args(args: dict) -> str | None:
@@ -290,9 +388,7 @@ def _labor_payment_operation_from_args(args: dict) -> str | None:
 
 def _only_labor_payment_worker_id_wage_field(args: dict) -> bool:
     wage_keys = {
-        key
-        for key in _LABOR_PAYMENT_WAGE_FIELDS
-        if args.get(key) not in (None, "")
+        key for key in _LABOR_PAYMENT_WAGE_FIELDS if args.get(key) not in (None, "")
     }
     return wage_keys == {"worker_id"}
 
@@ -385,6 +481,21 @@ def _runtime_tool_for_call(name: str, args: dict, tool_map: dict):
 def _execution_args_for_call(name: str, args: dict) -> dict:
     """为 legacy alias 调用补齐 registry operation。"""
     execution_args = dict(args or {})
+    if execution_args.get("operation"):
+        return execution_args
+    inferred = infer_skill_operation_name(name, execution_args)
+    if inferred:
+        if (
+            _has_meaningful_args(execution_args)
+            or _alias_default_operation_name(name) is None
+        ):
+            execution_args.setdefault("operation", inferred)
+            return execution_args
+    else:
+        if _is_registry_capability_name(name) and _capability_has_write_operations(
+            name
+        ):
+            return execution_args
     resolved = resolve_skill_capability_metadata(
         name,
         execution_args.get("operation"),

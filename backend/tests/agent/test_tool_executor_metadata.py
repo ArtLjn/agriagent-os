@@ -1,6 +1,7 @@
 """Tool executor metadata 权限测试。"""
 
 from datetime import date
+from functools import lru_cache
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,15 +9,94 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
+from app.agent.executor.pending_actions import handle_pending_action
+from app.agent.reflector.models import ReflectionDecision
 from app.agent.runtime.tool_executor import _parallel_tool_node, _permission_decision
+from app.infra import pending_actions
 from app.skills import get_langchain_tools
 from app.skills.metadata import (
     SkillMetadata,
     SkillPermissionLevel,
     get_skill_metadata,
 )
+from app.skills.registry import load_skill_registry
 from app.infra.pending_actions import get_pending, remove_pending
 from app.domains.planting.models import LaborEntry, OperationWorkOrder, Worker
+
+_WRITE_OPERATION_RISKS = {"write_confirm", "write_high"}
+
+_WRITE_LIKE_ARGS_BY_TOOL = {
+    "manage_cost": {"amount": 100, "category": "化肥"},
+    "manage_cost_categories": {"action": "create", "name": "肥料"},
+    "manage_crop_cycle": {"crop_name": "西瓜", "area": 30},
+    "manage_crop_templates": {"name": "西瓜模板", "crop_name": "西瓜"},
+    "manage_farm_logs": {"operation_type": "浇水", "note": "西瓜浇水"},
+    "manage_labor_payment": {"amount": 100, "worker": "老王"},
+    "manage_planting_units": {"action": "create", "name": "一号棚"},
+    "manage_user_settings": {"display_name": "测试用户"},
+    "manage_work_orders": {"operation_type": "浇水"},
+    "manage_workers": {"action": "create", "name": "老王"},
+}
+
+
+def _registry_write_operation_cases() -> list[tuple[str, str, str]]:
+    registry = load_skill_registry()
+    return sorted(
+        (capability_name, operation.name, operation.risk)
+        for capability_name, capability in registry.capabilities.items()
+        for operation in capability.operations.values()
+        if operation.risk in _WRITE_OPERATION_RISKS
+    )
+
+
+_WRITE_OPERATION_CASES = _registry_write_operation_cases()
+
+
+@lru_cache(maxsize=1)
+def _real_runtime_tool_names() -> frozenset[str]:
+    return frozenset(tool.name for tool in get_langchain_tools())
+
+
+def _runtime_tool_name_for_write_capability(capability_name: str) -> str:
+    real_tool_names = _real_runtime_tool_names()
+    if capability_name in real_tool_names:
+        return capability_name
+    registry = load_skill_registry()
+    aliases = sorted(
+        alias.legacy_name
+        for alias in registry.aliases.values()
+        if alias.capability == capability_name and alias.legacy_name in real_tool_names
+    )
+    if not aliases:
+        raise AssertionError(f"找不到写能力对应的 runtime tool: {capability_name}")
+    return aliases[0]
+
+
+def _runtime_write_tool_names_from_registry() -> set[str]:
+    return {
+        _runtime_tool_name_for_write_capability(capability_name)
+        for capability_name, _operation, _risk in _WRITE_OPERATION_CASES
+    }
+
+
+def _clear_pending_memory(session_id: str) -> None:
+    key = (1, session_id)
+    pending_actions._pending.pop(key, None)
+    pending_actions._pending_plans.pop(key, None)
+
+
+def _remove_pending_from_memory(farm_id: int, session_id: str | None = None) -> None:
+    key = (farm_id, session_id or None)
+    pending_actions._pending.pop(key, None)
+    pending_actions._pending_plans.pop(key, None)
+
+
+class _PassReflection:
+    decision = ReflectionDecision.PASS
+    reason = ""
+
+    def to_trace_payload(self) -> dict:
+        return {}
 
 
 @pytest.fixture(autouse=True)
@@ -197,6 +277,388 @@ async def test_operation_risk_write_confirm_creates_pending_even_with_read_permi
     assert output_data["resolved_capability"] == "manage_cost"
     assert output_data["resolved_operation"] == "create_record"
     assert output_data["operation_risk"] == "write_confirm"
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "args", "user_message"),
+    [
+        ("manage_cost", {"amount": 100, "category": "化肥"}, "今天买了100元化肥"),
+        (
+            "manage_crop_cycle",
+            {"crop_name": "西瓜", "area": 30},
+            "帮我建个西瓜茬口30亩",
+        ),
+        (
+            "manage_farm_logs",
+            {"operation_type": "浇水", "note": "西瓜浇水"},
+            "记录今天给西瓜浇水",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_mixed_risk_capability_missing_operation_fails_closed_to_pending(
+    tool_name,
+    args,
+    user_message,
+):
+    tool = SimpleNamespace(
+        name=tool_name,
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.READ,
+            capability=tool_name,
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content=user_message),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": tool_name,
+                        "args": args,
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is not None
+    assert pending.skill_name == tool_name
+    assert pending.params == args
+    assert "[PENDING_ACTION]" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+    output_data = collector.record.call_args.kwargs["output_data"]
+    assert output_data["status"] == "pending"
+    assert output_data["resolved_capability"] == tool_name
+    assert "resolved_operation" not in output_data
+    assert output_data["operation_risk"] == "write_confirm"
+
+
+@pytest.mark.asyncio
+async def test_mixed_risk_pending_happens_before_required_operation_validation():
+    class OperationRequiredArgs(BaseModel):
+        operation: str
+
+    tool = SimpleNamespace(
+        name="manage_cost",
+        args_schema=OperationRequiredArgs,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.READ,
+            capability="manage_cost",
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="今天买了100元化肥"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_cost",
+                        "args": {"amount": 100, "category": "化肥"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is not None
+    assert pending.skill_name == "manage_cost"
+    assert pending.params == {"amount": 100, "category": "化肥"}
+    assert "[PENDING_ACTION]" in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+    output_data = collector.record.call_args.kwargs["output_data"]
+    assert output_data["status"] == "pending"
+    assert output_data["operation_risk"] == "write_confirm"
+
+
+def test_write_like_arg_samples_cover_all_registry_write_runtime_tools():
+    assert set(_WRITE_LIKE_ARGS_BY_TOOL) == _runtime_write_tool_names_from_registry()
+
+
+@pytest.mark.no_db
+@pytest.mark.parametrize(
+    ("tool_name", "args"),
+    sorted(_WRITE_LIKE_ARGS_BY_TOOL.items()),
+    ids=[name for name, _args in sorted(_WRITE_LIKE_ARGS_BY_TOOL.items())],
+)
+@pytest.mark.asyncio
+async def test_all_runtime_write_tools_without_explicit_operation_create_pending(
+    tool_name,
+    args,
+):
+    session_id = f"sess-write-like-{tool_name}"
+    _clear_pending_memory(session_id)
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content=f"{tool_name} 写意图缺少 explicit operation"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": tool_name,
+                        "args": dict(args),
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": session_id,
+    }
+
+    try:
+        with (
+            patch(
+                "app.agent.runtime.tool_executor.get_collector",
+                return_value=collector,
+            ),
+            patch(
+                "app.agent.runtime.tool_pending.ReflectorService",
+            ) as reflector_cls,
+        ):
+            reflector_cls.return_value.check_write_plan.return_value = _PassReflection()
+            result = await _parallel_tool_node(state)
+
+        pending = get_pending(1, session_id=session_id)
+        assert pending is not None
+        assert pending.skill_name == tool_name
+        assert "[PENDING_ACTION]" in result["messages"][0].content
+        output_data = collector.record.call_args.kwargs["output_data"]
+        assert output_data["status"] == "pending"
+        assert (
+            output_data["permission_level"] == SkillPermissionLevel.WRITE_CONFIRM.value
+        )
+        if "operation_risk" in output_data:
+            assert output_data["operation_risk"] in _WRITE_OPERATION_RISKS
+    finally:
+        _clear_pending_memory(session_id)
+
+
+@pytest.mark.no_db
+@pytest.mark.parametrize(
+    ("capability_name", "operation_name", "operation_risk"),
+    _WRITE_OPERATION_CASES,
+    ids=[
+        f"{capability_name}.{operation_name}"
+        for capability_name, operation_name, _risk in _WRITE_OPERATION_CASES
+    ],
+)
+@pytest.mark.asyncio
+async def test_all_registry_write_operations_pending_then_confirm_multiturn(
+    capability_name,
+    operation_name,
+    operation_risk,
+):
+    tool_name = _runtime_tool_name_for_write_capability(capability_name)
+    session_id = f"sess-write-op-{capability_name}-{operation_name}"
+    _clear_pending_memory(session_id)
+    collector = MagicMock()
+    execute_write = AsyncMock(return_value=f"{capability_name}.{operation_name} 已执行")
+    args = {
+        "operation": operation_name,
+        "write_marker": f"{capability_name}.{operation_name}",
+    }
+    state = {
+        "messages": [
+            HumanMessage(content=f"执行 {capability_name}.{operation_name}"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": tool_name,
+                        "args": args,
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": session_id,
+    }
+
+    try:
+        with (
+            patch(
+                "app.agent.runtime.tool_executor.get_collector",
+                return_value=collector,
+            ),
+            patch(
+                "app.agent.runtime.tool_pending.ReflectorService",
+            ) as pending_reflector_cls,
+        ):
+            pending_reflector_cls.return_value.check_write_plan.return_value = (
+                _PassReflection()
+            )
+            result = await _parallel_tool_node(state)
+
+        pending = get_pending(1, session_id=session_id)
+        assert pending is not None
+        assert pending.skill_name == tool_name
+        assert pending.params["operation"] == operation_name
+        assert "[PENDING_ACTION]" in result["messages"][0].content
+        output_data = collector.record.call_args.kwargs["output_data"]
+        assert output_data["status"] == "pending"
+        assert output_data["operation_risk"] == operation_risk
+
+        with (
+            patch(
+                "app.agent.executor.pending_actions._execute_write_skill",
+                execute_write,
+            ),
+            patch(
+                "app.agent.executor.pending_actions._get_metadata_cache_groups",
+                return_value=[],
+            ),
+            patch(
+                "app.agent.executor.pending_actions._clear_cache_groups",
+                return_value=[],
+            ),
+            patch(
+                "app.agent.executor.pending_actions.remove_pending",
+                side_effect=_remove_pending_from_memory,
+            ),
+            patch(
+                "app.agent.executor.pending_actions.ReflectorService",
+            ) as executor_reflector_cls,
+        ):
+            executor_reflector_cls.return_value.check_write_plan.return_value = (
+                _PassReflection()
+            )
+            decision = await handle_pending_action(
+                farm_id=1,
+                message="确认",
+                session_id=session_id,
+            )
+
+        assert decision.handled is True
+        assert decision.status == "confirmed"
+        assert "已执行" in decision.reply
+        execute_write.assert_awaited_once()
+        execute_kwargs = execute_write.await_args.kwargs
+        assert execute_kwargs["farm_id"] == 1
+        assert execute_kwargs["skill_name"] == tool_name
+        assert execute_kwargs["params"]["operation"] == operation_name
+        assert get_pending(1, session_id=session_id) is None
+    finally:
+        _clear_pending_memory(session_id)
+
+
+@pytest.mark.asyncio
+async def test_mixed_risk_capability_empty_args_does_not_create_pending():
+    tool = SimpleNamespace(
+        name="manage_crop_cycle",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="已查询"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.READ,
+            capability="manage_crop_cycle",
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="有哪些茬口"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_crop_cycle",
+                        "args": {},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is None
+    assert result["messages"][0].content == "已查询"
+    tool.ainvoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_mixed_risk_capability_explicit_read_operation_executes_directly():
+    tool = SimpleNamespace(
+        name="manage_farm_logs",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="最近日志"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.READ,
+            capability="manage_farm_logs",
+        ),
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="最近7天农事日志"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_farm_logs",
+                        "args": {"operation": "query_logs", "days": 7},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+    }
+
+    with patch(
+        "app.agent.runtime.tool_executor.get_langchain_tools",
+        return_value=[tool],
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1)
+    assert pending is None
+    assert result["messages"][0].content == "最近日志"
+    tool.ainvoke.assert_awaited_once()
 
 
 @pytest.mark.asyncio
