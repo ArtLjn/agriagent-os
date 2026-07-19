@@ -5,7 +5,7 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app.core.llm_client_manager import LLMCircuitState, CircuitEntry, LLMClientManager
+from app.shared.llm import LLMCircuitState, CircuitEntry, LLMClientManager
 
 
 def _write_cfg(path: Path, data: dict):

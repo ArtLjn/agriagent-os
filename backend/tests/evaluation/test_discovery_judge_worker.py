@@ -14,7 +14,7 @@ from app.platforms.evaluation.discovery.judge_worker import (
     should_degrade_for_cost,
     parse_judge_response,
 )
-from app.core.database import Base
+from app.shared.database import Base
 from app.models.agent_turn import AgentTurn
 from app.models.data_flywheel import AgentDataFlywheelLabel
 from app.models.farm import Farm
@@ -233,7 +233,7 @@ def test_build_default_judge_client_uses_lightweight_llm_manager(monkeypatch) ->
     fake_manager = FakeManager()
 
     monkeypatch.setattr(
-        "app.core.llm_client_manager.get_llm_manager",
+        "app.shared.llm.get_llm_manager",
         lambda: fake_manager,
     )
 

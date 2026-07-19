@@ -7,8 +7,8 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.database import SessionLocal
+from app.shared.config import settings
+from app.shared.database import SessionLocal
 from app.models.farm import Farm
 from app.models.token_stats import TokenDailyStats
 from app.models.user import User

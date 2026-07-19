@@ -6,7 +6,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.skills.context import require_farm_context
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.infra.skill_cache import cached
 from app.services import farm_context_service
 

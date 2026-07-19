@@ -1,4 +1,4 @@
-"""Tests for app.core.trace_dao。"""
+"""Tests for app.infra.trace_dao。"""
 
 import asyncio
 from unittest.mock import MagicMock, patch

@@ -1,4 +1,4 @@
-"""Tests for app.core.trace_cleaner。"""
+"""Tests for app.infra.trace_cleaner。"""
 
 from unittest.mock import MagicMock, patch
 

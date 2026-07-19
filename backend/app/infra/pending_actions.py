@@ -10,7 +10,7 @@ from datetime import datetime
 
 from langchain_core.messages import ToolMessage
 
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.infra.pending_action_presenter import (
     build_confirm_message,
     build_confirmation_context,

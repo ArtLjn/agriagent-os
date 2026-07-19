@@ -24,7 +24,7 @@ from app.application.chat.stream_chat import (
     stream_chat_events,
 )
 from app.agent.executor.pending_actions import handle_pending_action
-from app.core.logger import request_id_var
+from app.shared.logging import request_id_var
 from app.infra.repository_runtime import (
     get_agent_record_repository,
     run_maybe_awaitable,

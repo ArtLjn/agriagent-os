@@ -5,8 +5,8 @@ from datetime import date
 from skillify.models.schemas import ResultStatus, SkillResult
 
 from app.skills.context import require_farm_context
-from app.core.database import SessionLocal
-from app.core.date_context import get_request_date
+from app.shared.database import SessionLocal
+from app.shared.time import get_request_date
 from app.models.cost_category import CostCategory
 from app.schemas.cost import CostRecordCreate
 from app.services import cost_service

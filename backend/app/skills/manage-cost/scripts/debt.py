@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from skillify.models.schemas import ResultStatus, SkillResult
 
 from app.skills.context import require_farm_context
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.models.cost import CostRecord
 from app.services import debt_service
 from app.services.cost_service import SETTLED

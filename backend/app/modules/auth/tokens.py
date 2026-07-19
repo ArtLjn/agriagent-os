@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 
-from app.core.config import settings
+from app.shared.config import settings
 
 
 class TokenExpiredError(Exception):

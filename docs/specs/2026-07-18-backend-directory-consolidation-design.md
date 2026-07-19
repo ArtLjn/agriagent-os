@@ -166,9 +166,9 @@ backend/app/
 
 | 当前目录/文件 | 目标位置 | 说明 |
 | --- | --- | --- |
-| `core/config.py`、`core/settings/*` | `shared/config.py` 或 `shared/config/*` | 配置聚合，若超过 1000 行再保留子包 |
+| `core/config.py`、`core/settings/*` | `shared/config.py` | 配置聚合到单文件，不为几十行 settings 子文件保留子包 |
 | `core/database.py` | `shared/database.py` | 基础设施 |
-| `core/llm*.py` | `shared/llm.py` 或 `shared/llm/*` | LLM 客户端基础设施 |
+| `core/llm*.py` | `shared/llm.py` | LLM 客户端基础设施，当前合并后仍低于 1000 行 |
 | `core/compat.py` | `shared/compatibility.py` | 仅保留 Python 版本兼容，不做旧 import 壳 |
 | `core/seed.py`、`seed/system_crop_templates.py` | `domains/farm/seed.py` 或 `ops/seed.py` | 系统模板 seed 属于业务初始化，不占一级模块 |
 | `models/*.py` | `domains/*/models.py` 或 `platforms/*/models.py` | 按实体归属迁移 |
@@ -197,7 +197,7 @@ backend/app/
 
 ## 6. core 目录收束
 
-`core/` 当前包含配置、DB、日志、LLM、时间、兼容、seed 等不同性质内容。新设计中改为 `shared/`：
+`core/` 曾包含配置、DB、日志、LLM、时间、兼容、seed 等不同性质内容。新设计中改为 `shared/`：
 
 - `shared/config.py`：对外暴露 `settings`，内部可保留 `shared/config/*`，但不为几十行文件拆子包。
 - `shared/database.py`：DB session、engine、Base。
@@ -207,6 +207,7 @@ backend/app/
 - `shared/compatibility.py`：仅保留 Python 3.10/3.11 兼容能力。
 
 不再让 seed、业务 helper 或一次性脚本进入 `shared`。
+不再保留 `app.core.*` 兼容入口；活动代码和测试应直接导入 `app.shared.*`。
 
 ## 7. 小工具与空目录
 
@@ -279,6 +280,22 @@ backend/app/
 - `models/` / `schemas/` 本轮未做大规模迁移；后续按单一领域或平台能力逐批收束。
 
 这轮 PR 的目标是建立新规则，而不是一次性移动所有 models/schemas。
+
+### 9.2 Round 2 落地记录（2026-07-18）
+
+- `backend/app/shared/config.py` 已承接 `core/config.py` 与 `core/settings/*`：统一暴露
+  `Settings`、`settings`、`AIConfig`、`StorageConfig`、`MongoConfig`、助手角色配置等 public symbols。
+- `backend/app/shared/database.py` 已承接 `core/database.py` 与 `core/dependencies.py`：
+  统一暴露 `Base`、`engine`、`SessionLocal`、`get_db`。
+- `backend/app/shared/time.py` 已承接 `core/timezone.py` 与 `core/date_context.py`：
+  统一暴露北京时间工具与请求日期 ContextVar。
+- `backend/app/shared/logging.py` 已承接日志初始化、`get_logger`、`request_id_var`。
+- `backend/app/shared/llm.py` 已承接 `core/llm.py`、`core/llm_client_manager.py`、
+  `core/llm_config_watcher.py`，保留 LLM factory、manager、熔断、热更新和 watcher 能力。
+- `backend/app/shared/json_repair.py` 已承接 JSON 提取、修复和安全解析工具。
+- 旧 `backend/app/core` 目录已删除，不保留 `app.core.*` re-export 壳；活动代码与测试的
+  `app.core.*` 扫描结果为空。
+- 本轮仍不做 `models/` / `schemas/` 全站领域迁移；后续按单一领域或平台能力逐批收束。
 
 ## 10. 风险与缓解
 

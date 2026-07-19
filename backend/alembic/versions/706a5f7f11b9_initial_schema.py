@@ -10,7 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 from sqlalchemy import inspect
 
-from app.core.database import Base
+from app.shared.database import Base
 from app.models import *  # noqa: F401,F403
 
 

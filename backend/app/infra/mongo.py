@@ -8,8 +8,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
-from app.core.config import MongoConfig
-from app.core.logger import get_logger
+from app.shared.config import MongoConfig
+from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
 

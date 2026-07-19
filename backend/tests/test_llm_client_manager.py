@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.core.llm_client_manager import (
+from app.shared.llm import (
     ErrorLevel,
     LLMCircuitState,
     LLMClientManager,

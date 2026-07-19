@@ -7,9 +7,9 @@ from typing import Any
 
 from sqlalchemy import update
 
-from app.core.llm import get_llm
+from app.shared.llm import get_llm
 from app.shared.compatibility import UTC
-from app.core.config import settings
+from app.shared.config import settings
 from app.infra.repository_runtime import (
     get_conversation_message_repository,
     resolve_maybe_awaitable,

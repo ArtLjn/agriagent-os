@@ -31,7 +31,7 @@ class ReflectorService:
     """组合反思策略、规则检查和 trace 记录。"""
 
     def __init__(self, policy: ReflectionPolicy | None = None) -> None:
-        from app.core.config import settings
+        from app.shared.config import settings
 
         config = settings.reflection
         self.policy = policy or ReflectionPolicy(

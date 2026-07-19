@@ -10,7 +10,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.core.timezone import beijing_today, ensure_beijing_timezone  # harness-exempt: 迁移期成本 schema 复用统一时区校验，后续下沉 shared 时间工具
+from app.shared.time import beijing_today, ensure_beijing_timezone  # harness-exempt: 迁移期成本 schema 复用统一时区校验，后续下沉 shared 时间工具
 
 
 RECORD_TYPE_ENUM = {"cost", "income"}

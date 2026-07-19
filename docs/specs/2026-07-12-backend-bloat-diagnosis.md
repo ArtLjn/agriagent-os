@@ -265,9 +265,14 @@ infra/  25 files / 5156 lines   ← 基础设施
 ```
 
 两者定义重叠：`infra/pending_actions.py` (531) 与 `infra/pending_action_presenter.py` (528)
-属于"业务基础设施"还是"业务逻辑"？项目 [CLAUDE.md](../../.claude/CLAUDE.md) 第 7 条提到的依赖方向
-是 `api → application/modules/platform → shared/core/models/infra`，把 infra 和 core 都放在底层。
+属于"业务基础设施"还是"业务逻辑"？项目早期依赖方向
+曾是 `api → application/modules/platform → shared/core/models/infra`，把 infra 和 core 都放在底层。
 但实际 infra/ 内部出现了 500+ 行业务逻辑文件，与"基础设施"语义不符。
+
+2026-07-18 Round 2 状态：`core/` 基础设施已收束到 `shared/`，活动入口改为
+`api → application/domains/modules/platforms → shared/models/infra`。旧 `app.core.*`
+生产与测试导入已清空，`backend/app/core` 目录删除，不再鼓励新增 core 代码。
+`infra/` 内部职责混杂问题仍需后续专项处理。
 
 #### 8.2 `app/scripts/` 与项目根 `scripts/` 重叠
 
@@ -289,7 +294,7 @@ app/observability/   3 files  77 lines
 
 单独成包的收益不明显，可考虑：
 
-- 合并到 `core/`
+- 合并到 `shared/`
 - 或合并到 `infra/`
 - 或保留但明确未来扩展计划
 
@@ -338,7 +343,7 @@ storage:
   # ... 全部 mongo
 ```
 
-注意：`app/core/settings/models.py` 中 storage 默认值仍是 `mysql`，测试与无配置启动路径可能
+注意：`app/shared/config.py` 中 storage 默认值仍是 `mysql`，测试与无配置启动路径可能
 依赖默认值。删除 MySQL / Dual / MongoRead 实现前，必须同时确认生产配置、测试默认、回滚策略
 和 MongoDB 迁移 OpenSpec 状态，不能只凭 `config.yaml` 一处判断。
 
@@ -550,12 +555,13 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | P1-1 | 删除 `MemoryServicePort` Protocol | `backend/app/memory/ports.py` | 9-#4 | ✅ bff22473 | `backend/app/memory/ports.py` 已删除；`rg -n "MemoryServicePort\|MemoryContextProviderPort\|app\\.memory\\.ports\|from app\\.memory\\.ports\|import app\\.memory\\.ports" backend/app backend/tests` 无输出；新增 `tests/memory/test_memory_service_contract.py` 锁住 `InMemoryMemoryService` 运行时方法；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/memory/test_memory_service_contract.py -q` 通过（2 passed）；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/memory/test_memory_service_contract.py tests/memory/test_memory_service.py tests/test_agent_service.py -q` 因本地 MySQL `localhost:3306` 不可用失败（1 failed, 28 passed），失败用例为 `tests/test_agent_service.py::TestStreamChatWithAgent::test_stream_cycle_confirm_missing_template_creates_template_pending`；`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` 通过（复杂度检查保留既有警告） |
 | P1-2 | 删除 `_ComparableStage(Protocol)` | `backend/app/services/crop_service.py` | 9-#6 | ✅ 本 worktree/PR 已处理 | `crop_service.py` 已删除私有 `_ComparableStage(Protocol)`，阶段比较改用 `Iterable[Any]` 和显式属性读取；新增 `tests/services/test_crop_service_stage_compare.py` 锁住顺序无关、重复阶段数量保留、`key_tasks` 空白归一化和私有 Protocol 清理；`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/services/test_crop_service_stage_compare.py tests/test_cost.py tests/api/test_planting_operations.py -q` 通过（35 passed, 1 skipped）；`ruff check backend/app backend/tests` 通过；`bash scripts/check-complexity-budget.sh` 通过（保留既有复杂度预算警告）；`rg "_ComparableStage\|Protocol" backend/app/services/crop_service.py` 无输出 |
 | P1-3 | 评估并迁移 Python 兼容工具 | `backend/app/shared/compatibility.py` | 9-#8 | ✅ 本轮完成 | Python 3.10 兼容能力仍保留，但真实入口从 `app.core.compat` 迁到 `app.shared.compatibility`；旧 core 兼容入口不保留，生产代码和测试已改用 shared 路径；`backend/tests/test_python_compat.py` 改为排除 `shared/compatibility.py` 这个唯一兼容实现；验证命令：`PYTHONDONTWRITEBYTECODE=1 pytest -p no:cacheprovider tests/test_python_compat.py tests/memory/test_maybe_summarize.py tests/memory/test_memory_service.py -q`、`ruff check backend/app backend/tests`、`bash scripts/check-complexity-budget.sh` |
+| P1-3b | 收束 `core` 基础设施到 `shared` | `backend/app/shared/{config,database,time,logging,llm,json_repair}.py` | 8.1、7 | ✅ 本轮完成 | `core/config.py` 与 `core/settings/*` 合入 `shared/config.py`；`core/database.py` 与 `core/dependencies.py` 合入 `shared/database.py`；`core/timezone.py` 与 `core/date_context.py` 合入 `shared/time.py`；`core/logger.py` 迁为 `shared/logging.py`；`core/llm.py`、`core/llm_client_manager.py`、`core/llm_config_watcher.py` 合入 `shared/llm.py`；`core/json_repair.py` 迁为 `shared/json_repair.py`；旧 `backend/app/core` 目录删除，不保留 `app.core.*` 兼容壳 |
 | P1-4 | 合并 `stream_chat_*` 切片群 | `application/chat/stream_*.py`（5 文件，已从根目录归位） | 7 | ✅ 子包归位完成 / 进一步合并待后续 | `stream_chat_*` 已归入 `application/chat/`，本轮同步删除旧根模块同对象兼容入口；后续合并不再受 500 行硬预算阻塞，但需证明职责内聚且不得超过 1000 行硬上限 |
 | P1-5 | `review_issue_chain_*` 切片收回 | `platforms/data_flywheel/review_issue_chain/` | 2.2 | ✅ 子包归位完成 / root 兼容薄壳已下线 | `review_issue_chain/{helpers,case,repair,service}.py` 为真实入口，并拆出 `inbox/operations/cards/builders/queries/support`；生产代码、测试和 monkeypatch target 使用子包真实路径 |
 | P1-6 | `repair_pack_*` 切片收回 | `platforms/data_flywheel/repair_pack/` | 2 | ✅ 子包归位完成 / root 兼容薄壳已下线 | `repair_pack/{chain,readme,service}.py` 为真实入口，并拆出 `candidate/constants/redaction`；生产代码、测试和 monkeypatch target 使用子包真实路径 |
 | P1-7 | `context/selectors/` 轻量 selector 收束 | `backend/app/context/selectors/` | 9-#7、附录 A | ✅ 已归位并删除旧兼容壳 / 单文件完全合并待后续继续按职责评审 | `conversation/cycle/farm/ledger/retrieval/user_settings/weather` 已收束到 `selectors/core.py`，旧子模块兼容壳已删除；新代码使用 `app.context.selectors.core` 或包级 `app.context.selectors`，`memory.py`、`planting.py` 因职责独立继续保留；`tests/context/test_selector_relocation_compat.py` 覆盖真实入口与包级 API |
 | P1-8 | `manage-crop-cycle/scripts/` 小 operation 收束 | `skills/manage-crop-cycle/scripts/` | 7 | ✅ 已归位并删除旧兼容壳 / 重更新逻辑继续独立 | `create_cycle/delete_cycle/query_cycles/query_cycle_info` 已合入 `scripts/main.py`，旧小脚本兼容壳已删除；新代码使用 `app.skills.manage-crop-cycle.scripts.main`，`update_cycle.py`、`update_stage.py` 因职责和行数预算继续保留；`tests/skills/test_manage_crop_cycle_script_compat.py` 覆盖真实入口与重逻辑真实模块 |
-| P1-9 | 删除 agent 根兼容壳 | `agent/{advisor,report,skill_coverage,intent_router,tool_selector,tool_selection_rules,llm,assistant_roles}.py` | 7、9-#7 | ✅ 已下线 | 生产代码和普通测试改为真实路径：`app.application.advice.advisor`、`app.application.report`、`app.platforms.evaluation.skill_coverage`、`app.agent.router.*`、`app.core.llm`、`app.core.settings.roles`；不再断言旧路径可 import 或旧 patch target 生效 |
+| P1-9 | 删除 agent 根兼容壳 | `agent/{advisor,report,skill_coverage,intent_router,tool_selector,tool_selection_rules,llm,assistant_roles}.py` | 7、9-#7 | ✅ 已下线 | 生产代码和普通测试改为真实路径：`app.application.advice.advisor`、`app.application.report`、`app.platforms.evaluation.skill_coverage`、`app.agent.router.*`、`app.shared.llm`、`app.shared.config`；不再断言旧路径可 import 或旧 patch target 生效 |
 | P1-10 | 移除 LangGraph，改纯 Python ReAct loop | `agent/runtime/loop.py`、`agent/state.py`、`application/advice/advisor.py`、`bootstrap/exceptions.py`、`requirements.txt` | 9-#7、目录重设计决策 E | ✅ 本 PR 已处理 | 新增 `run_agent_loop` / `stream_agent_loop` 与 `AgentLoopMaxStepsExceeded`，显式追加节点返回的 `messages`；`invoke_advisor` / `stream_advisor` 改为直接调用 loop，删除 `app.agent.graph` 旧门面与 `langgraph` 依赖；生产代码、测试和 requirements 中 `rg -n "langgraph\|LangGraph\|StateGraph\|GraphRecursionError\|add_messages\|app\\.agent\\.graph" backend/app backend/tests backend/requirements.txt` 无输出；聚焦 pytest 31 passed；用户指定目标 pytest 因本地 MySQL `farm_manager@localhost` 权限失败（17 failed, 56 passed），失败链路为既有 `pending_plan` DB 读取基线；`ruff check --no-cache backend/app backend/tests`、`check-layer-deps.sh`、`check-complexity-budget.sh` 通过（保留历史 baseline 警告） |
 
 ### P2 — 需业务确认（高风险高收益）

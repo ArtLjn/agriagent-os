@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.agent.executor.pending_actions import handle_pending_action
 from app.agent.guardrails import check_input, filter_output
 from app.agent.router.intent import IntentType, classify_intent, get_greeting_reply
-from app.core.llm import get_llm
+from app.shared.llm import get_llm
 from app.application.chat.helpers import record_agent_response
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.agent.runtime.loop import (

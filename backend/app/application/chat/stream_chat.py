@@ -46,7 +46,7 @@ from app.application.chat.stream_types import (
 )
 from app.agent.executor.models import PendingActionDecision
 from app.agent.executor.pending_actions import handle_pending_action
-from app.core.llm import LlmNotConfiguredError
+from app.shared.llm import LlmNotConfiguredError
 from app.infra.trace_context import clear_trace, init_trace
 from app.memory.service import get_memory_service
 from app.models.conversation import Conversation

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class TraceRecord(Base):

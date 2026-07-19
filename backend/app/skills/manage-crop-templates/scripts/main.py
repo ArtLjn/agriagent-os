@@ -8,7 +8,7 @@ from skillify.skills.base import Skill
 
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.schemas.crop import CropTemplateCreate, GrowthStageCreate
 from app.services import crop_service
 

@@ -143,7 +143,7 @@ _composer: PromptComposer | None = None
 def get_composer() -> PromptComposer:
     global _composer
     if _composer is None:
-        from app.core.config import settings
+        from app.shared.config import settings
         from app.prompt.registry import get_registry
 
         _composer = PromptComposer(get_registry(), settings.prompts_dir)

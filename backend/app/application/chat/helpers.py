@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.context.invalidation import invalidate_farm_context
-from app.core.database import SessionLocal
+from app.shared.database import SessionLocal
 from app.infra.repository_runtime import (
     get_agent_record_repository,
     resolve_maybe_awaitable,

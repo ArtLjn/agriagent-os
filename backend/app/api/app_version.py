@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.core.config import settings
+from app.shared.config import settings
 
 router = APIRouter(prefix="/api/app", tags=["app"])
 

@@ -12,7 +12,7 @@ from app.agent.runtime.llm_support import (
     _record_llm_failure,
     _record_llm_success,
 )
-from app.core import llm_client_manager
+from app.shared import llm as llm_client_manager
 
 logger = logging.getLogger(__name__)
 

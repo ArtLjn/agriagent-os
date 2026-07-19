@@ -5,7 +5,7 @@ import enum
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
-from app.core.database import Base
+from app.shared.database import Base
 
 
 class ConversationStatus(str, enum.Enum):

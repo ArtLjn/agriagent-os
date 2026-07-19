@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.modules.auth.dependencies import require_admin
 from app.infra.repository_runtime import (
     get_guardrails_log_repository,

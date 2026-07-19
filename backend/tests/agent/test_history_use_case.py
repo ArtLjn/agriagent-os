@@ -11,7 +11,7 @@ from app.application.session.history import (
     list_conversation_items,
     list_message_items,
 )
-from app.core.database import Base
+from app.shared.database import Base
 from app.models.conversation import ConversationMessage
 from app.models.farm import Farm
 from app.services.conversation_service import get_or_create_conversation

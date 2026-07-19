@@ -8,11 +8,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.modules.auth.dependencies import get_current_user, require_admin
 from app.modules.farm.dependencies import get_current_farm
-from app.core.config import settings
-from app.core.database import SessionLocal
+from app.shared.config import settings
+from app.shared.database import SessionLocal
 from app.models.farm import Farm
 from app.models.user import User
 from app.platforms.data_flywheel.service import (
@@ -472,7 +472,7 @@ def _http_error(exc: ValueError) -> HTTPException:
 
 def build_data_flywheel_judge_client() -> DataFlywheelJudgeClient:
     try:
-        from app.core.llm_client_manager import get_llm_manager
+        from app.shared.llm import get_llm_manager
 
         manager = get_llm_manager()
         if not manager.fallback_mode:

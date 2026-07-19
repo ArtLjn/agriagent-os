@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 @pytest.fixture(autouse=True)
 def load_prompt_registry():
-    from app.core.config import settings
+    from app.shared.config import settings
     from app.prompt.registry import get_registry
 
     get_registry().reload(settings.prompts_dir)

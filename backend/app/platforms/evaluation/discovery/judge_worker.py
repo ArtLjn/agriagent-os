@@ -228,7 +228,7 @@ async def run_judge_batch_async(
 def build_default_judge_client() -> OpenAIDataFlywheelJudgeClient:
     """通过 LLM manager 构造轻量 Judge client。"""
 
-    from app.core.llm_client_manager import get_llm_manager
+    from app.shared.llm import get_llm_manager
 
     manager = get_llm_manager()
     client, info = manager.get_sync_client_with_info(role="lightweight")

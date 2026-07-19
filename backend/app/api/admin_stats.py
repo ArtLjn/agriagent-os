@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.infra.mongo import get_mongo_database
 from app.infra.repository_runtime import run_maybe_awaitable
 from app.modules.auth.dependencies import require_admin

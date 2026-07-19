@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import get_db
+from app.shared.database import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.feedback import FeedbackRequest, FeedbackResponse
