@@ -11,6 +11,10 @@ from app.agent.runtime.tool_metadata import (
 from app.shared.database import SessionLocal
 from app.domains.planting.cycle_models import CropCycle
 from app.domains.planting.models import Worker
+from app.skills.metadata import (
+    infer_skill_operation_name,
+    resolve_skill_capability_metadata,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +73,7 @@ def _build_pending_execution_args(
 ) -> dict:
     """构建待执行参数，只补齐确定性的目标标识。"""
     execution_args = dict(args or {})
+    _fill_inferred_write_operation(name, execution_args)
     if _operation_name_from_args(name, execution_args) == "create_work_order":
         _normalize_operation_work_order_args(execution_args)
         _fill_operation_default_wage(execution_args, farm_id)
@@ -78,6 +83,17 @@ def _build_pending_execution_args(
     if name == "manage_workers":
         _fill_manage_workers_target_args(execution_args, farm_id, original_input)
     return execution_args
+
+
+def _fill_inferred_write_operation(name: str, args: dict) -> None:
+    if args.get("operation"):
+        return
+    operation = infer_skill_operation_name(name, args)
+    if not operation:
+        return
+    metadata = resolve_skill_capability_metadata(name, operation) or {}
+    if metadata.get("operation_risk") in {"write_confirm", "write_high"}:
+        args["operation"] = operation
 
 
 def _normalize_operation_work_order_args(args: dict) -> None:
@@ -157,7 +173,7 @@ def _normalize_settle_labor_payment_args(args: dict, original_input: str) -> Non
     if _is_all_labor_payment_request(original_input):
         args.pop("worker", None)
         args.pop("worker_name", None)
-        args["operation"] = _LABOR_SETTLE_OPERATION
+        args.pop("operation", None)
         args["scope"] = "all_unpaid_labor"
 
 
@@ -220,7 +236,8 @@ def _collapse_all_labor_payment_tool_calls(
         *[
             tool_call
             for tool_call in tool_calls
-            if tool_call.get("name") not in {"settle_labor_payment", _LABOR_PAYMENT_SKILL}
+            if tool_call.get("name")
+            not in {"settle_labor_payment", _LABOR_PAYMENT_SKILL}
         ],
     ]
 
