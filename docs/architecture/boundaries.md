@@ -22,6 +22,14 @@ bootstrap/routes
 `app.core` 基础设施入口也已下线；配置、数据库、日志、时间、LLM 与 JSON 工具统一从
 `app.shared.*` 导入。
 
+## 架构变更工作流
+
+- 默认不要直接在 `main` 分支修改架构或代码；开发任务使用 `codex/*` 分支或独立 worktree，提交后通过 GitHub PR 审核合并。
+- PR 描述必须列出新增、删除、移动的目录或模块，说明调用方、边界、验证命令和剩余风险。
+- 目录级变更必须同步更新 `AGENTS.md`、`docs/architecture/overview.md`、本文件和 `docs/architecture/backend-architecture.md`；若依赖方向或文件预算变化，还要同步 `scripts/check-layer-deps.sh` 与 `scripts/check-complexity-budget.sh`。
+- 不得为了兼容或临时方便创建 re-export 薄壳、空目录或只有 `__init__.py` 的占位目录；新增目录必须有真实职责、真实调用方和测试落点。
+- 生产 Python 文件 1000 行以内可以接受；500-1000 行只进入观察区间，不以行数为唯一理由继续拆碎。
+
 ## Agent 平台依赖矩阵
 
 | 边界 | 可依赖 | 禁止依赖 |
