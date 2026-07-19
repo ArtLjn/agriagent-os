@@ -55,7 +55,8 @@ def looks_like_create_worker(message: str) -> bool:
         return False
     has_create_action = has_any(message, hints.WORKER_CREATE_HINTS)
     has_pay_hint = has_any(message, hints.WORKER_PAY_HINTS)
-    return has_create_action or has_pay_hint
+    has_wage_amount = extractors.extract_unit_price(message) is not None
+    return has_create_action or (has_pay_hint and has_wage_amount)
 
 
 def looks_like_manage_worker(message: str) -> bool:
@@ -164,7 +165,11 @@ def looks_like_delete_cost_record(message: str) -> bool:
 
 
 def looks_like_settle_debt(message: str) -> bool:
+    if looks_like_labor_payable_query(message):
+        return False
     if looks_like_debt_summary_query(message):
+        return False
+    if has_any(message, ("未结清", "没结清")):
         return False
     return has_any(message, hints.SETTLE_DEBT_HINTS)
 
@@ -178,11 +183,16 @@ def looks_like_labor_payable_query(message: str) -> bool:
         return False
     if looks_like_manage_wage(message):
         return False
-    return has_any(message, hints.LABOR_PAYABLE_HINTS)
+    return has_any(message, hints.LABOR_PAYABLE_HINTS) and (
+        has_any(message, hints.LABOR_PAYABLE_QUERY_HINTS)
+        or has_any(message, hints.QUERY_HINTS)
+    )
 
 
 def looks_like_settle_labor_payment(message: str) -> bool:
     has_labor = has_any(message, ("人工", "工钱", "工资"))
+    if has_any(message, ("未结清", "没结清")):
+        return False
     return has_labor and has_any(message, hints.LABOR_SETTLE_HINTS)
 
 

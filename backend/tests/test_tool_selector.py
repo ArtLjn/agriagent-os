@@ -155,6 +155,14 @@ class TestWritePatternMatching:
         result = select_tools("哈哈哈工资结清了", _make_tools())
         assert result == ["manage_labor_payment"]
 
+    def test_labor_fee_unsettled_query_uses_labor_payment(self):
+        result = select_tools("人工费还有多少没结清", _make_tools())
+        assert result == ["manage_labor_payment"]
+
+    def test_worker_wage_correction_query_uses_labor_payment(self):
+        result = select_tools("我说的是工人工资", _make_tools())
+        assert result == ["manage_labor_payment"]
+
     def test_update_operation_work_order_correction(self):
         result = select_tools("刚才那条授粉记录不是付老王，是付老李200", _make_tools())
         assert result == ["update_operation_work_order"]
