@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.mongo_compensation import MongoCompensationTask
+from app.shared.mongo_compensation_models import MongoCompensationTask
 
 logger = logging.getLogger(__name__)
 

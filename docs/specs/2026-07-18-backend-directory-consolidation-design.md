@@ -297,6 +297,36 @@ backend/app/
   `app.core.*` 扫描结果为空。
 - 本轮仍不做 `models/` / `schemas/` 全站领域迁移；后续按单一领域或平台能力逐批收束。
 
+### 9.3 Round 3 落地记录（2026-07-19）
+
+- 新增 `backend/app/domains/`，承接 `users`、`farm`、`weather`、`finance`、
+  `planting`、`conversation` 六个业务领域。
+- 旧 `backend/app/modules/auth` 已迁入 `domains/users`；旧
+  `backend/app/modules/farm` 已迁入 `domains/farm`；`backend/app/modules`
+  目录删除，不保留兼容入口。
+- 旧 `backend/app/api` 路由按领域或平台迁出：业务路由进入 `domains/*/*routes.py`，
+  admin 路由进入 `platforms/admin`，simulation 路由进入 `platforms/simulation`。
+- 旧 `backend/app/models`、`backend/app/schemas`、`backend/app/services` 已清空删除；
+  ORM / schema / service 按领域、平台或 shared 真实边界归位。
+- `simulation/` 已收束到 `platforms/simulation`；运行时 dataclass 保持
+  `platforms/simulation/models.py`，ORM 表模型为 `platforms/simulation/orm_models.py`。
+- Alembic metadata 加载改为 `app.shared.model_registry`，只负责导入真实模型模块以注册
+  SQLAlchemy metadata，不提供旧 `app.models` re-export。
+- `scripts/check-layer-deps.sh` 已增加旧目录和旧 import sensor，阻止
+  `app.api`、`app.models`、`app.schemas`、`app.services`、`app.modules`、
+  `app.simulation` 回潮。
+
+#### Round 3 剩余未迁清单
+
+- `context/`、`memory/`、`prompt/` 仍保留顶层平台工程目录。它们属于 Agent 上下文工程、
+  记忆工程和 Prompt 治理，不是单一业务领域；直接迁入 `agent/` 会扩大 runtime 依赖面，
+  需后续按平台边界专项评审。
+- `infra/` 仍保留顶层基础设施目录。`online_document_*`、trace、pending action 等仍是
+  多存储/运行时基础设施，贸然并入领域会隐藏横切依赖；后续应按 shared persistence 或
+  agent/platform 子域继续收束。
+- `application/` 和 `skills/` 仍保留顶层。它们分别承载业务编排层和 Agent 可调用业务能力，
+  本轮仅更新其 import 到新的 domains 路径，不改变执行协议。
+
 ## 10. 风险与缓解
 
 | 风险 | 缓解 |

@@ -16,7 +16,7 @@ from app.infra.pending_action_presenter import (
     build_confirmation_context,
     build_plan_confirm_message,
 )
-from app.services import pending_plan_service
+from app.agent import pending_plan_service
 
 _CONFIRM_PATTERNS = re.compile(r"(确认|好的|是的|没问题|对)")
 _CANCEL_PATTERNS = re.compile(r"(算了|取消|不要了|不需要了)")

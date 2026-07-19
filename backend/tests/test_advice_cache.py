@@ -9,8 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.models.agent_record import AgentRecord
-from app.services.daily_advice_models import DailyAdviceCandidate, fingerprint_candidates
+from app.agent.models import AgentRecord
+from app.domains.conversation.daily_advice_models import DailyAdviceCandidate, fingerprint_candidates
 
 
 def _today_start() -> datetime:
@@ -129,7 +129,7 @@ def db():
 @pytest.fixture
 def mock_composer():
     """隔离 prompt 渲染，缓存测试只关注命中/未命中行为。"""
-    with patch("app.services.agent_service.get_composer") as mock:
+    with patch("app.domains.conversation.agent_service.get_composer") as mock:
         mock.return_value.compose.return_value = "daily prompt"
         yield mock
 
@@ -138,7 +138,7 @@ def mock_composer():
 def mock_collect_candidates():
     """缓存测试默认不依赖真实候选采集。"""
     with patch(
-        "app.services.daily_advice_generation.collect_daily_advice_candidates",
+        "app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates",
         new_callable=AsyncMock,
     ) as mock:
         mock.return_value = []
@@ -156,10 +156,10 @@ class TestDailyAdviceCache:
         candidate = _candidate("weather:hot:miss")
         mock_collect_candidates.return_value = [candidate]
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(candidate)
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -186,9 +186,9 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -217,10 +217,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [new_candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(new_candidate)
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -247,10 +247,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(candidate)
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -277,10 +277,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(candidate)
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -309,10 +309,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(candidate, label="重新生成")
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -338,10 +338,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(candidate, label="重新生成")
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -369,10 +369,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [new_candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(new_candidate, label="农场2建议")
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=2)
 
@@ -400,10 +400,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [new_candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(new_candidate)
-            from app.services.agent_service import get_daily_advice
+            from app.domains.conversation.agent_service import get_daily_advice
 
             result = await get_daily_advice(db, farm_id=1)
 
@@ -431,10 +431,10 @@ class TestDailyAdviceCache:
         mock_collect_candidates.return_value = [new_candidate]
 
         with patch(
-            "app.services.agent_service.invoke_advisor", new_callable=AsyncMock
+            "app.domains.conversation.agent_service.invoke_advisor", new_callable=AsyncMock
         ) as mock_llm:
             mock_llm.return_value = _v2_content(new_candidate)
-            from app.services.agent_service import refresh_daily_advice
+            from app.domains.conversation.agent_service import refresh_daily_advice
 
             result = await refresh_daily_advice(db, farm_id=1)
 

@@ -10,7 +10,7 @@ from app.application.query_capability_menu import resolve_query_capability_menu
 from app.application.chat.stream_chat import stream_chat_events
 from app.memory.models import TemporaryTaskState
 from app.memory.service import InMemoryMemoryService
-from app.schemas.agent import ChatRequest
+from app.domains.conversation.agent_schemas import ChatRequest
 
 
 pytestmark = pytest.mark.asyncio

@@ -1,8 +1,8 @@
 import pytest
 
-from app.models.crop import CropTemplate, GrowthStage
-from app.schemas.crop import CropTemplateCreate, GrowthStageCreate
-from app.services.crop_service import (
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
+from app.domains.planting.crop_schemas import CropTemplateCreate, GrowthStageCreate
+from app.domains.planting.crop_service import (
     create_crop_template,
     delete_crop_template,
     find_exact_duplicate,

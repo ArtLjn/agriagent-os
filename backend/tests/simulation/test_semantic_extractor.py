@@ -1,6 +1,6 @@
 """测试语义提取器。"""
 
-from app.simulation.semantic_extractor import (
+from app.platforms.simulation.semantic_extractor import (
     CLAIM_PATTERNS,
     OP_TYPE_TO_TABLE,
     extract_claims,

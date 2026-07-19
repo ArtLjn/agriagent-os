@@ -13,8 +13,8 @@ from app.infra.repository_runtime import (
     resolve_maybe_awaitable,
     run_maybe_awaitable,
 )
-from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
-from app.services.conversation_service import async_save_message, save_message
+from app.agent.turn_service import create_turn, finish_turn, mark_event_range
+from app.domains.conversation.service import async_save_message, save_message
 
 _MYSQL_SIGNED_INT_MAX = 2_147_483_647
 

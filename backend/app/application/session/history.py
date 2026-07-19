@@ -9,8 +9,8 @@ from app.infra.repository_runtime import (
     get_agent_record_repository,
     run_maybe_awaitable,
 )
-from app.models.farm import Farm
-from app.schemas.agent import (
+from app.domains.farm.models import Farm
+from app.domains.conversation.agent_schemas import (
     ConversationListItem,
     ConversationMessageItem,
     PendingActionResponse,
@@ -18,8 +18,8 @@ from app.schemas.agent import (
     ReportHistoryItem,
     ReportListResponse,
 )
-from app.services.agent_service import get_report_history
-from app.services.conversation_service import (
+from app.domains.conversation.agent_service import get_report_history
+from app.domains.conversation.service import (
     get_conversation_by_session,
     get_conversation_messages,
     list_conversations,

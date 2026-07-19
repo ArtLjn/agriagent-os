@@ -49,11 +49,11 @@ from app.agent.executor.pending_actions import handle_pending_action
 from app.shared.llm import LlmNotConfiguredError
 from app.infra.trace_context import clear_trace, init_trace
 from app.memory.service import get_memory_service
-from app.models.conversation import Conversation
-from app.models.farm import Farm
-from app.models.user import User
-from app.schemas.agent import ChatRequest
-from app.services.conversation_service import (
+from app.domains.conversation.models import Conversation
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
+from app.domains.conversation.agent_schemas import ChatRequest
+from app.domains.conversation.service import (
     ConversationAccessError,
     get_or_create_conversation,
 )

@@ -11,8 +11,8 @@ from app.shared.config import (
 )
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.shared.database import SessionLocal
-from app.models.user import User
-from app.models.user_setting import UserSetting
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
 
 
 class ManageUserSettingsSkill(Skill):

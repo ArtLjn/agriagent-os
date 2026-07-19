@@ -1,7 +1,7 @@
 """Agent pending action/plan response builders."""
 
 from app.infra.pending_actions import get_pending, get_pending_plan
-from app.schemas.agent import (
+from app.domains.conversation.agent_schemas import (
     PendingActionContext,
     PendingActionResponse,
     PendingPlanResponse,

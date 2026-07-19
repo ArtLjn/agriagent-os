@@ -15,9 +15,9 @@ from app.platforms.evaluation.discovery.judge_worker import (
     parse_judge_response,
 )
 from app.shared.database import Base
-from app.models.agent_turn import AgentTurn
-from app.models.data_flywheel import AgentDataFlywheelLabel
-from app.models.farm import Farm
+from app.agent.turn_models import AgentTurn
+from app.platforms.data_flywheel.models import AgentDataFlywheelLabel
+from app.domains.farm.models import Farm
 
 pytestmark = pytest.mark.no_db
 

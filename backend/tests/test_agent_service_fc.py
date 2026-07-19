@@ -27,13 +27,13 @@ def mock_db() -> MagicMock:
 
 
 async def _call_chat(db, message, **kwargs):
-    from app.services.agent_service import chat_with_agent
+    from app.domains.conversation.agent_service import chat_with_agent
 
     return await chat_with_agent(db, message, **kwargs)
 
 
 async def _stream_chat(message, **kwargs):
-    from app.services.agent_service import stream_chat_with_agent
+    from app.domains.conversation.agent_service import stream_chat_with_agent
 
     return stream_chat_with_agent(message, **kwargs)
 
@@ -42,19 +42,19 @@ class TestSkillifyRouteRemoved:
     """验证 skillify 预路由相关函数和导入已移除。"""
 
     def test_try_skillify_route_does_not_exist(self):
-        import app.services.agent_service as mod
+        import app.domains.conversation.agent_service as mod
 
         assert not hasattr(mod, "_try_skillify_route"), (
             "_try_skillify_route 仍然存在，需要移除"
         )
 
     def test_execute_skill_does_not_exist(self):
-        import app.services.agent_service as mod
+        import app.domains.conversation.agent_service as mod
 
         assert not hasattr(mod, "_execute_skill"), "_execute_skill 仍然存在，需要移除"
 
     def test_build_skill_context_not_in_source(self):
-        import app.services.agent_service as mod
+        import app.domains.conversation.agent_service as mod
 
         source = inspect.getsource(mod)
         assert "build_skill_context" not in source, (
@@ -62,7 +62,7 @@ class TestSkillifyRouteRemoved:
         )
 
     def test_get_skill_manager_not_in_source(self):
-        import app.services.agent_service as mod
+        import app.domains.conversation.agent_service as mod
 
         source = inspect.getsource(mod)
         assert "get_skill_manager" not in source, (
@@ -75,7 +75,7 @@ class TestChatWithAgentRouting:
 
     @pytest.mark.asyncio
     @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.get_pending", return_value=None)
+    @patch("app.domains.conversation.agent_service.get_pending", return_value=None)
     async def test_routes_through_invoke_advisor(
         self,
         mock_get_pending: MagicMock,
@@ -89,7 +89,7 @@ class TestChatWithAgentRouting:
 
     @pytest.mark.asyncio
     @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.agent_service.get_pending", return_value=None)
+    @patch("app.domains.conversation.agent_service.get_pending", return_value=None)
     async def test_no_skillify_pre_route(
         self,
         mock_get_pending: MagicMock,
@@ -102,9 +102,9 @@ class TestChatWithAgentRouting:
 
     @pytest.mark.asyncio
     @patch("app.application.chat.use_case.invoke_advisor", new_callable=AsyncMock)
-    @patch("app.services.conversation_service.save_message")
+    @patch("app.domains.conversation.service.save_message")
     @patch("app.application.chat.use_case.get_or_create_conversation")
-    @patch("app.services.agent_service.get_pending", return_value=None)
+    @patch("app.domains.conversation.agent_service.get_pending", return_value=None)
     async def test_routes_with_session_id(
         self,
         mock_get_pending: MagicMock,
@@ -175,8 +175,8 @@ class TestStreamChatWithAgentRouting:
     """验证 stream_chat_with_agent 所有请求走 stream_advisor。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.stream_advisor")
-    @patch("app.services.agent_service.get_pending", return_value=None)
+    @patch("app.domains.conversation.agent_service.stream_advisor")
+    @patch("app.domains.conversation.agent_service.get_pending", return_value=None)
     async def test_routes_through_stream_advisor(
         self,
         mock_get_pending: MagicMock,
@@ -197,8 +197,8 @@ class TestStreamChatWithAgentRouting:
         mock_stream.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.stream_advisor")
-    @patch("app.services.agent_service.get_pending", return_value=None)
+    @patch("app.domains.conversation.agent_service.stream_advisor")
+    @patch("app.domains.conversation.agent_service.get_pending", return_value=None)
     async def test_no_skillify_pre_route_in_stream(
         self,
         mock_get_pending: MagicMock,

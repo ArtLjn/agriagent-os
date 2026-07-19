@@ -7,10 +7,10 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.models.conversation import ConversationStatus
-from app.models.conversation import ConversationMessage
-from app.models.farm import Farm
-from app.services.conversation_service import (
+from app.domains.conversation.models import ConversationStatus
+from app.domains.conversation.models import ConversationMessage
+from app.domains.farm.models import Farm
+from app.domains.conversation.service import (
     ConversationAccessError,
     async_get_recent_messages,
     close_expired_conversations,
@@ -152,7 +152,7 @@ class TestSaveAndGetMessages:
                 return [ConversationMessage(role="user", content="历史")]
 
         monkeypatch.setattr(
-            "app.services.conversation_service.get_conversation_message_repository",
+            "app.domains.conversation.service.get_conversation_message_repository",
             lambda _db: AsyncRepo(),
         )
 

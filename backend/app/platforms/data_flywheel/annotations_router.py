@@ -7,10 +7,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.shared.database import get_db
-from app.modules.auth.dependencies import get_current_user, require_admin
-from app.modules.farm.dependencies import get_current_farm
-from app.models.farm import Farm
-from app.models.user import User
+from app.domains.users.dependencies import get_current_user, require_admin
+from app.domains.farm.dependencies import get_current_farm
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
 from app.platforms.data_flywheel.service import (
     SAMPLE_TYPE_SESSION_TURN,
     accept_sample_prelabel,

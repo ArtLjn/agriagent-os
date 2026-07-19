@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.context.models import ContextBlock
 from app.shared.config import assistant_role_label, normalize_assistant_role
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.cost import CostRecord
-from app.models.cycle import CropCycle
-from app.models.farm import Farm
-from app.models.user import User
-from app.models.user_setting import UserSetting
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
 
 
 def _format_amount(amount: Decimal) -> str:

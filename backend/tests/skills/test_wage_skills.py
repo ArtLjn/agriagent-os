@@ -7,10 +7,10 @@ from decimal import Decimal
 import pytest
 from skillify.core.context import SkillContext
 
-from app.models.cost import CostRecord
-from app.models.crop import CropTemplate, GrowthStage
-from app.models.cycle import CropCycle, CycleStage
-from app.models.planting import LaborEntry
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
+from app.domains.planting.cycle_models import CropCycle, CycleStage
+from app.domains.planting.models import LaborEntry
 
 _manage_labor_payment_mod = importlib.import_module(
     "app.skills.manage-labor-payment.scripts.main"

@@ -10,7 +10,7 @@ from app.infra.repository_runtime import (
     get_data_flywheel_repository,
     run_maybe_awaitable,
 )
-from app.models.data_flywheel import AgentCaseDraft
+from app.platforms.data_flywheel.models import AgentCaseDraft
 from app.platforms.data_flywheel.review_issue_chain.service import (
     get_review_issue_chain_detail,
 )

@@ -14,13 +14,13 @@ from app.infra.online_document_repositories import (
     build_guardrails_log_repository,
 )
 from app.infra.repository_runtime import run_maybe_awaitable
-from app.models.agent_record import AgentRecord
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.crop import CropTemplate
-from app.models.cycle import CropCycle
-from app.models.data_flywheel import AgentReviewIssueChain
-from app.models.guardrails_log import GuardrailsLog
-from app.models.user import User
+from app.agent.models import AgentRecord
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.planting.crop_models import CropTemplate
+from app.domains.planting.cycle_models import CropCycle
+from app.platforms.data_flywheel.models import AgentReviewIssueChain
+from app.agent.guardrails.models import GuardrailsLog
+from app.domains.users.models import User
 from app.platforms.shared.repository_selector import (
     build_data_flywheel_repository,
 )

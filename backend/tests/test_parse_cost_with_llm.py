@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.api.cost import _parse_cost_with_llm
-from app.schemas.cost import CostParseResult
+from app.domains.finance.cost_routes import _parse_cost_with_llm
+from app.domains.finance.cost_schemas import CostParseResult
 
 
 @pytest.fixture
@@ -166,6 +166,6 @@ class TestMeta:
 
     def test_helper_exists(self):
         """确认 _parse_cost_with_llm 函数存在且可导入。"""
-        from app.api.cost import _parse_cost_with_llm
+        from app.domains.finance.cost_routes import _parse_cost_with_llm
 
         assert callable(_parse_cost_with_llm)

@@ -8,10 +8,10 @@ from skillify.skills.base import Skill
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.shared.database import SessionLocal
-from app.models.cycle import CropCycle
-from app.models.log import FarmLog
-from app.schemas.log import FarmLogCreate
-from app.services import log_service
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.planting.log_models import FarmLog
+from app.domains.planting.log_schemas import FarmLogCreate
+from app.domains.planting import log_service
 
 
 class ManageFarmLogsSkill(Skill):

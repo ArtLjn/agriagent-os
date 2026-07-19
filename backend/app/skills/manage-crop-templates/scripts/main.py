@@ -9,8 +9,8 @@ from skillify.skills.base import Skill
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.shared.database import SessionLocal
-from app.schemas.crop import CropTemplateCreate, GrowthStageCreate
-from app.services import crop_service
+from app.domains.planting.crop_schemas import CropTemplateCreate, GrowthStageCreate
+from app.domains.planting import crop_service
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 from skillify.core.context import SkillContext
 
-from app.models.planting import Worker
+from app.domains.planting.models import Worker
 
 _manage_workers_mod = importlib.import_module(
     "app.skills.manage-workers.scripts.main"

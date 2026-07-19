@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from app.schemas.agent import (
+from app.domains.conversation.agent_schemas import (
     AdviceItem,
     DailyAdviceAction,
     DailyAdviceCompact,
@@ -12,7 +12,7 @@ from app.schemas.agent import (
     DailyAdviceOverview,
     DailyAdviceStep,
 )
-from app.services.daily_advice_models import (
+from app.domains.conversation.daily_advice_models import (
     DAILY_ADVICE_CATEGORY_DEFAULTS,
     DailyAdviceCandidate,
     build_daily_advice_empty_response,

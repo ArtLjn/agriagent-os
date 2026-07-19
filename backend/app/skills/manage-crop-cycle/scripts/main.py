@@ -6,9 +6,11 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from skillify.skills.base import Skill
 
 from app.shared.database import SessionLocal
-from app.models.cycle import CropCycle
-from app.schemas.cycle import CropCycleCreate
-from app.services import crop_service, cycle_service, farm_context_service
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.planting.cycle_schemas import CropCycleCreate
+from app.domains.planting import crop_service
+from app.domains.planting import cycle_service
+from app.domains.farm import context_service as farm_context_service
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 

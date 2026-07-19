@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.shared.compatibility import UTC
 from app.memory.service import InMemoryMemoryService
-from app.models.conversation import Conversation, ConversationMessage
+from app.domains.conversation.models import Conversation, ConversationMessage
 
 
 def _新建会话(db_session, *, summary=None, summary_updated_at=None):

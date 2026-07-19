@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.prompt.registry import get_registry
-from app.schemas.agent import ChatRequest
+from app.domains.conversation.agent_schemas import ChatRequest
 
 pytestmark = pytest.mark.no_db
 

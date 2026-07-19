@@ -6,8 +6,8 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.context.models import ContextBlock
-from app.models.cost_category import CostCategory
-from app.models.planting import (
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.planting.models import (
     LaborEntry,
     OperationWorkOrder,
     PlantingUnit,

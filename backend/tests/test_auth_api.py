@@ -3,13 +3,13 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.modules.auth.dependencies import get_current_user
-from app.modules.auth.tokens import create_access_token
-from app.models.agent_record import AgentRecord
-from app.models.farm import Farm
+from app.domains.users.dependencies import get_current_user
+from app.domains.users.tokens import create_access_token
+from app.agent.models import AgentRecord
+from app.domains.farm.models import Farm
 from app.main import app
-from app.models.user import User
-from app.models.user_setting import UserSetting
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
 
 
 @pytest.fixture

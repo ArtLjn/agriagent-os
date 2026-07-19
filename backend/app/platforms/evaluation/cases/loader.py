@@ -14,7 +14,7 @@ from app.platforms.evaluation.cases.schemas import (
     ExpectedWriteOperation,
     ReplyAssertion,
 )
-from app.simulation.test_runner import CASES_DIR
+from app.platforms.simulation.test_runner import CASES_DIR
 
 
 def load_simulation_cases(

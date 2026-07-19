@@ -212,7 +212,7 @@ def test_advance_stage_not_found():
 def test_parse_cycle_returns_422_on_invalid_data():
     """当 LLM 返回不合法数据时，应返回 422 而非 500。"""
     from unittest.mock import patch
-    from app.schemas.cycle import CycleParseResponse
+    from app.domains.planting.cycle_schemas import CycleParseResponse
 
     with patch("app.application.smart_fill.parse_with_llm") as mock_parse:
         mock_parse.return_value = CycleParseResponse(

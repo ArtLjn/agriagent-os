@@ -13,7 +13,7 @@ import yaml
 
 from app.platforms.evaluation.discovery.risk_scorer import calculate_risk
 from app.infra.agent_events import read_event_segment
-from app.models.trace import TraceRecord
+from app.platforms.evaluation.trace_models import TraceRecord
 
 logger = logging.getLogger(__name__)
 

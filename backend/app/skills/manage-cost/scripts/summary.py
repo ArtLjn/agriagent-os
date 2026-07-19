@@ -6,7 +6,7 @@ from skillify.models.schemas import ResultStatus, SkillResult
 
 from app.skills.context import require_farm_context
 from app.shared.database import SessionLocal
-from app.models.cost import CostRecord
+from app.domains.finance.cost_models import CostRecord
 
 
 async def query_summary(params: dict, context) -> SkillResult:

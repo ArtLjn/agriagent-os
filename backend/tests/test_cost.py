@@ -9,9 +9,9 @@ from pydantic import ValidationError
 
 from app.main import app
 from app.prompt.registry import get_registry
-from app.models.cost import CostRecord
-from app.schemas.cost import CostRecordUpdate
-from app.services.report_data_service import _build_report_data
+from app.domains.finance.cost_models import CostRecord
+from app.domains.finance.cost_schemas import CostRecordUpdate
+from app.domains.farm.report_data_service import _build_report_data
 
 client = TestClient(app)
 get_registry().reload(Path(__file__).parent.parent / "prompts")
@@ -66,7 +66,7 @@ def test_create_cost_record(cycle_id):
 
 def test_create_cost_record_defaults_recorded_at_to_beijing_time(cycle_id, monkeypatch):
     fixed_time = datetime(2026, 6, 8, 9, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
-    monkeypatch.setattr("app.services.cost_service.beijing_now", lambda: fixed_time)
+    monkeypatch.setattr("app.domains.finance.cost_service.beijing_now", lambda: fixed_time)
     payload = {
         "cycle_id": cycle_id,
         "record_type": "cost",
@@ -502,7 +502,7 @@ def test_parse_cost_record():
 def test_parse_cost_record_returns_422_on_invalid_amount():
     """当 LLM 返回不合法 amount 时，应返回 422 而非 500。"""
     from unittest.mock import patch
-    from app.schemas.cost import CostParseResult
+    from app.domains.finance.cost_schemas import CostParseResult
 
     with patch("app.application.smart_fill.parse_with_llm") as mock_parse:
         mock_parse.return_value = CostParseResult(

@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from app.models.data_flywheel import AgentReviewIssueChain
+from app.platforms.data_flywheel.models import AgentReviewIssueChain
 from app.platforms.data_flywheel.issue_repository import (
     build_issue_repository_entry,
     build_rule_candidate_package,

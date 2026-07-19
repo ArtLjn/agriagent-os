@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from app.models.data_flywheel import AgentRepairPack
+from app.platforms.data_flywheel.models import AgentRepairPack
 
 
 def _repair_pack(**overrides) -> AgentRepairPack:

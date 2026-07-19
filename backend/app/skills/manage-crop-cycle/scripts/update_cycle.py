@@ -11,8 +11,8 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from app.skills.context import require_farm_context
 from app.context.invalidation import invalidate_farm_context
 from app.shared.database import SessionLocal
-from app.models.cycle import CropCycle
-from app.services import cycle_service
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.planting import cycle_service
 
 _ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _VALID_STATUSES = {"active", "planned", "finished"}

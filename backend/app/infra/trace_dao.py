@@ -8,8 +8,8 @@ from typing import Any
 
 from app.shared.database import SessionLocal
 from app.infra.repository_runtime import get_trace_repository, resolve_maybe_awaitable
-from app.models.token_stats import TokenDailyStats
-from app.models.trace import TraceRecord
+from app.platforms.evaluation.token_stats_models import TokenDailyStats
+from app.platforms.evaluation.trace_models import TraceRecord
 
 logger = logging.getLogger(__name__)
 

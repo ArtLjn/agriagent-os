@@ -1,8 +1,8 @@
 """反馈功能测试。"""
 
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.user import User
-from app.services.feedback_service import get_feedback_stats, submit_feedback
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.users.models import User
+from app.domains.conversation.feedback_service import get_feedback_stats, submit_feedback
 
 
 def _ensure_user(db, user_id: str) -> None:

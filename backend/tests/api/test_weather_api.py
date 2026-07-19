@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock, patch
 
-from app.models.farm import Farm
-from app.models.user_setting import UserSetting
+from app.domains.farm.models import Farm
+from app.domains.users.settings_models import UserSetting
 
 
 def test_forecast_uses_default_coordinates_when_location_is_placeholder(client):
@@ -19,7 +19,7 @@ def test_forecast_uses_default_coordinates_when_location_is_placeholder(client):
     }
 
     with patch(
-        "app.api.weather.fetch_weather",
+        "app.domains.weather.routes.fetch_weather",
         new_callable=AsyncMock,
         return_value=weather_data,
     ) as mock_fetch:
@@ -51,7 +51,7 @@ def test_authenticated_forecast_uses_farm_location(
     }
 
     with patch(
-        "app.api.weather.fetch_weather",
+        "app.domains.weather.routes.fetch_weather",
         new_callable=AsyncMock,
         return_value=weather_data,
     ) as mock_fetch:
@@ -75,7 +75,7 @@ def test_authenticated_forecast_fills_coordinates_from_farm_location(
     }
 
     with patch(
-        "app.api.weather.fetch_weather",
+        "app.domains.weather.routes.fetch_weather",
         new_callable=AsyncMock,
         return_value=weather_data,
     ) as mock_fetch:
@@ -93,7 +93,7 @@ def test_authenticated_forecast_rejects_ambiguous_district(
     farm.location = "鼓楼区"
     db_session.commit()
 
-    with patch("app.api.weather.fetch_weather", new_callable=AsyncMock) as mock_fetch:
+    with patch("app.domains.weather.routes.fetch_weather", new_callable=AsyncMock) as mock_fetch:
         response = client.get("/weather/forecast", headers=auth_headers)
 
     assert response.status_code == 400
@@ -121,7 +121,7 @@ def test_authenticated_forecast_uses_saved_coords_for_ambiguous_location(
     }
 
     with patch(
-        "app.api.weather.fetch_weather",
+        "app.domains.weather.routes.fetch_weather",
         new_callable=AsyncMock,
         return_value=weather_data,
     ) as mock_fetch:
@@ -148,7 +148,7 @@ def test_authenticated_forecast_explicit_location_does_not_update_farm(
     }
 
     with patch(
-        "app.api.weather.fetch_weather",
+        "app.domains.weather.routes.fetch_weather",
         new_callable=AsyncMock,
         return_value=weather_data,
     ) as mock_fetch:

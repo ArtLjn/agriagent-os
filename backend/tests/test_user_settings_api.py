@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from app.models.user_setting import UserSetting
+from app.domains.users.settings_models import UserSetting
 
 
 class TestGetSettings:

@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.agent_turn import AgentTurn
+from app.agent.turn_models import AgentTurn
 from app.platforms.data_flywheel.service import (
     _actual_tools,
     _event_log_status,

@@ -5,14 +5,14 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.models.data_flywheel import (
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelLabel,
     AgentDataFlywheelPrelabel,
     AgentRepairPack,
     AgentReviewIssueChain,
 )
-from app.models.farm import Farm
+from app.domains.farm.models import Farm
 
 pytestmark = pytest.mark.no_db
 

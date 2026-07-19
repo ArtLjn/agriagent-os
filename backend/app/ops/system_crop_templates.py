@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.crop import CropTemplate, GrowthStage
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
 
 SYSTEM_CROP_TEMPLATES: list[dict[str, Any]] = [
     {

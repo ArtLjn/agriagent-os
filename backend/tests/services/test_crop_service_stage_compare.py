@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services import crop_service
-from app.services.crop_service import _normalize_stages_for_compare
+from app.domains.planting import crop_service
+from app.domains.planting.crop_service import _normalize_stages_for_compare
 
 
 pytestmark = pytest.mark.no_db

@@ -30,7 +30,7 @@ from app.infra.pending_actions import (
     store_pending,
 )
 from app.shared.database import SessionLocal
-from app.services.pending_plan_service import (
+from app.agent.pending_plan_service import (
     cancel_active_plan,
     mark_step_executed,
     mark_step_failed,

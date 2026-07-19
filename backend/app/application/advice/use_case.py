@@ -7,9 +7,9 @@ import time
 from sqlalchemy.orm import Session
 
 from app.application.chat.use_case import new_request_id
-from app.models.farm import Farm
-from app.schemas.agent import DailyAdviceResponse, ReportRequest, ReportResponse
-from app.services.agent_service import (
+from app.domains.farm.models import Farm
+from app.domains.conversation.agent_schemas import DailyAdviceResponse, ReportRequest, ReportResponse
+from app.domains.conversation.agent_service import (
     generate_report,
     get_daily_advice,
     refresh_daily_advice,

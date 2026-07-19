@@ -7,9 +7,9 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.infra.agent_events import AgentEventWriter, read_event_segment
-from app.models.agent_turn import AgentTurn
-from app.models.conversation import Conversation, ConversationMessage
-from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
+from app.agent.turn_models import AgentTurn
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.agent.turn_service import create_turn, finish_turn, mark_event_range
 
 
 @dataclass

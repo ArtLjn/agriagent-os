@@ -17,7 +17,7 @@ from app.application.session.summary import (
     run_session_summary_task,
     schedule_session_summary,
 )
-from app.schemas.agent import ChatRequest
+from app.domains.conversation.agent_schemas import ChatRequest
 
 
 pytestmark = pytest.mark.asyncio
@@ -61,7 +61,7 @@ async def test_chat_invokes_pending_executor_and_advisor_without_legacy_service(
             new_callable=AsyncMock,
         ) as mock_observe,
         patch(
-            "app.services.agent_service.chat_with_agent",
+            "app.domains.conversation.agent_service.chat_with_agent",
             new_callable=AsyncMock,
         ) as mock_legacy_chat,
     ):
@@ -109,7 +109,7 @@ async def test_chat_saves_handled_pending_reply_without_invoking_advisor():
             new_callable=AsyncMock,
         ) as mock_observe,
         patch(
-            "app.services.agent_service.chat_with_agent",
+            "app.domains.conversation.agent_service.chat_with_agent",
             new_callable=AsyncMock,
         ) as mock_legacy_chat,
     ):
@@ -416,7 +416,7 @@ async def test_stream_chat_handles_pending_without_legacy_service_or_advisor():
 
 async def test_get_skill_names_reads_trace_repository(monkeypatch):
     """stream skill 统计从统一 trace repository 读取，支持 Mongo-read 后端。"""
-    from app.models.trace import TraceRecord
+    from app.platforms.evaluation.trace_models import TraceRecord
 
     records = [
         TraceRecord(
@@ -596,10 +596,10 @@ async def test_save_stream_reply_awaits_async_agent_record_repository(monkeypatc
 
 
 async def test_chat_records_turn_and_event_metadata(db_session, monkeypatch):
-    from app.models.agent_turn import AgentTurn
-    from app.models.conversation import ConversationMessage
-    from app.models.farm import Farm
-    from app.schemas.agent import ChatRequest
+    from app.agent.turn_models import AgentTurn
+    from app.domains.conversation.models import ConversationMessage
+    from app.domains.farm.models import Farm
+    from app.domains.conversation.agent_schemas import ChatRequest
 
     farm = db_session.query(Farm).filter_by(id=1).one()
     farm.user_id = "user-1"
@@ -635,10 +635,10 @@ async def test_chat_records_turn_and_event_metadata(db_session, monkeypatch):
 
 async def test_stream_chat_records_turn_after_completion(db_session, monkeypatch):
     from app.shared.config import settings
-    from app.models.agent_turn import AgentTurn
-    from app.models.farm import Farm
-    from app.models.user import User
-    from app.schemas.agent import ChatRequest
+    from app.agent.turn_models import AgentTurn
+    from app.domains.farm.models import Farm
+    from app.domains.users.models import User
+    from app.domains.conversation.agent_schemas import ChatRequest
 
     monkeypatch.setattr(settings.storage, "conversation_messages", "mysql")
 

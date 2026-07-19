@@ -14,8 +14,8 @@ from app.agent.reflector.models import (
     ReflectionTrigger,
 )
 from app.infra.trace_collector import get_collector
-from app.services.daily_advice_models import DailyAdviceCandidate
-from app.services.daily_advice_validation import (
+from app.domains.conversation.daily_advice_models import DailyAdviceCandidate
+from app.domains.conversation.daily_advice_validation import (
     DailyAdviceValidationIssue,
     validate_daily_advice_payload,
 )

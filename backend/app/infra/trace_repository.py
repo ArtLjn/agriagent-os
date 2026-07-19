@@ -16,7 +16,7 @@ from app.infra.mongo_mappers import (
     trace_record_to_mongo_doc,
 )
 from app.infra.mongo_identity import ensure_row_mysql_id
-from app.models.trace import TraceRecord
+from app.platforms.evaluation.trace_models import TraceRecord
 
 logger = logging.getLogger(__name__)
 

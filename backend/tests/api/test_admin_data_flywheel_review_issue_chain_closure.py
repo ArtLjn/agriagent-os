@@ -7,10 +7,10 @@ import pytest
 
 from app.infra.agent_events import AgentEventWriter
 from app.main import app
-from app.models.data_flywheel import AgentCaseDraft
-from app.models.farm import Farm
-from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
-from app.services.conversation_service import get_or_create_conversation, save_message
+from app.platforms.data_flywheel.models import AgentCaseDraft
+from app.domains.farm.models import Farm
+from app.agent.turn_service import create_turn, finish_turn, mark_event_range
+from app.domains.conversation.service import get_or_create_conversation, save_message
 from tests.api.auth_helpers import (
     ADMIN_USER_ID,
     admin_headers,
@@ -237,7 +237,7 @@ def test_chain_case_draft_rejects_missing_expected_behavior(
 ) -> None:
     _, trigger, _ = _seed_reviewed_chain(db_session, tmp_path)
     row = db_session.query(AgentCaseDraft).count()
-    from app.models.data_flywheel import AgentReviewIssueChain
+    from app.platforms.data_flywheel.models import AgentReviewIssueChain
 
     saved = (
         db_session.query(AgentReviewIssueChain)
@@ -311,7 +311,7 @@ def test_chain_repair_pack_rejects_needs_evidence_or_missing_expected(
     db_session, tmp_path, monkeypatch
 ) -> None:
     _, trigger, _ = _seed_reviewed_chain(db_session, tmp_path)
-    from app.models.data_flywheel import AgentReviewIssueChain
+    from app.platforms.data_flywheel.models import AgentReviewIssueChain
 
     import app.platforms.data_flywheel.review_issue_chains_router as chain_api
 

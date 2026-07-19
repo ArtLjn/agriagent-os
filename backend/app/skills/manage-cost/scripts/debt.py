@@ -8,11 +8,11 @@ from skillify.models.schemas import ResultStatus, SkillResult
 
 from app.skills.context import require_farm_context
 from app.shared.database import SessionLocal
-from app.models.cost import CostRecord
-from app.services import debt_service
-from app.services.cost_service import SETTLED
-from app.services.debt_service import SUBTYPE_DEBT
-from app.services.planting_read_service import get_unsettled_labor_summary
+from app.domains.finance.cost_models import CostRecord
+from app.domains.finance import debt_service
+from app.domains.finance.cost_service import SETTLED
+from app.domains.finance.debt_service import SUBTYPE_DEBT
+from app.domains.planting.read_service import get_unsettled_labor_summary
 
 _PAYABLE = "payable"
 _RECEIVABLE = "receivable"

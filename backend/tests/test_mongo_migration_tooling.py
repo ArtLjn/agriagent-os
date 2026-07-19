@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.data_flywheel import AgentRepairPack
-from app.models.farm import Farm
-from app.models.user import User
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.platforms.data_flywheel.models import AgentRepairPack
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
 
 
 class FakeCursor:

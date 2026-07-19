@@ -1,4 +1,4 @@
-from app.models.crop import CropTemplate, GrowthStage
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
 
 
 def _stage(name: str, duration_days: int, order_index: int, key_tasks: str | None):

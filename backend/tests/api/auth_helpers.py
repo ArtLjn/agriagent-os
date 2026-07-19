@@ -6,11 +6,11 @@ from contextlib import contextmanager
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from app.modules.auth.dependencies import get_current_user
-from app.modules.farm.dependencies import get_current_farm
-from app.modules.auth.tokens import create_access_token
-from app.models.farm import Farm
-from app.models.user import User
+from app.domains.users.dependencies import get_current_user
+from app.domains.farm.dependencies import get_current_farm
+from app.domains.users.tokens import create_access_token
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
 
 
 REGULAR_USER_ID = "auth-regular-001"

@@ -3,9 +3,9 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.modules.auth.password import hash_password
-from app.models.farm import Farm
-from app.models.user import User
+from app.domains.users.password import hash_password
+from app.domains.farm.models import Farm
+from app.domains.users.models import User
 
 logger = logging.getLogger(__name__)
 

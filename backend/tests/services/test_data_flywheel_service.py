@@ -9,9 +9,9 @@ from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
 from app.infra.agent_events import AgentEventWriter
-from app.models import Farm
-from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
-from app.services.conversation_service import get_or_create_conversation, save_message
+from app.domains.farm.models import Farm
+from app.agent.turn_service import create_turn, finish_turn, mark_event_range
+from app.domains.conversation.service import get_or_create_conversation, save_message
 from app.platforms.data_flywheel.service import (
     SAMPLE_TYPE_SESSION,
     accept_sample_prelabel,

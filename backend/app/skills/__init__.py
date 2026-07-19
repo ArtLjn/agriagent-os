@@ -11,7 +11,7 @@ from skillify.manager import SkillManager
 
 from app.skills.metadata import get_skill_metadata
 from app.shared.database import SessionLocal
-from app.services import cost_category_service
+from app.domains.finance import cost_category_service
 
 logger = logging.getLogger(__name__)
 

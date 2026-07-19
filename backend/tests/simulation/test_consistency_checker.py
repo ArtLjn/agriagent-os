@@ -1,6 +1,6 @@
 """测试一致性检查器。"""
 
-from app.simulation.consistency_checker import (
+from app.platforms.simulation.consistency_checker import (
     _check_attribution_error,
     _check_expected_changes,
     _check_hallucination,
@@ -8,7 +8,7 @@ from app.simulation.consistency_checker import (
     _check_silent_mutation,
     check_consistency,
 )
-from app.simulation.models import Claim, DbDiff, SimulationTestCase
+from app.platforms.simulation.models import Claim, DbDiff, SimulationTestCase
 
 
 class TestCheckHallucination:
@@ -70,7 +70,7 @@ class TestCheckHallucination:
 
     def test_execution_failure_all_op_types(self):
         """测试所有 op_type 到 skill_name 的映射。"""
-        from app.simulation.consistency_checker import _OP_TYPE_TO_SKILL_NAME
+        from app.platforms.simulation.consistency_checker import _OP_TYPE_TO_SKILL_NAME
 
         for op_type, skill_name in _OP_TYPE_TO_SKILL_NAME.items():
             claims = [

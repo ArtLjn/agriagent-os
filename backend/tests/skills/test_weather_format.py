@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from skillify.core.context import SkillContext
 
-from app.models.farm import Farm
+from app.domains.farm.models import Farm
 from app.infra.skill_cache import clear_cache
-from app.models.user import User
-from app.models.user_setting import UserSetting
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
 
 _weather_mod = importlib.import_module("app.skills.weather.scripts.main")
 WeatherSkill = _weather_mod.WeatherSkill

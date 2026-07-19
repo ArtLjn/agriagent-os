@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-18
+last_updated: 2026-07-19
 status: draft
 ---
 
@@ -135,6 +135,11 @@ backend/app/
     ├── evaluation/               # 从 app/evaluation/ 迁入
     └── data_flywheel/            # 从 app/modules/data_flywheel/ 迁入
 ```
+
+> 2026-07-19 状态：上方树保留 2026-07-14 的阶段性目标快照。当前真实落地已经进一步
+> 下线 `api/`、`models/`、`schemas/`、`services/`、`modules/` 与 `simulation/`
+> 旧一级入口；业务路由/模型/schema/service 进入 `domains/*`，admin 与 simulation 进入
+> `platforms/*`，Alembic metadata 由 `shared/model_registry.py` 加载真实模型模块。
 
 ### 4.2 依赖方向
 
@@ -558,6 +563,10 @@ async def run_agent_loop(state: AgentState, max_steps: int = 15) -> AgentState:
 | P2-5 | `services/` 21 个 *_service.py 评估合并 | diagnosis 3 |
 | P2-6 | `tests/` 根目录 78 个 test_*.py 下沉 | diagnosis 5 |
 
+> 2026-07-19 更新：P2-5 已通过领域目录收束完成，旧 `backend/app/services`
+> 目录删除且不保留 `app.services.*` 兼容入口；`api/models/schemas/modules/simulation`
+> 旧入口也同步下线。`tests/` 根目录下沉仍属独立测试组织任务，本轮只更新受影响 import。
+
 ### 6.4 阶段 P3：长期治理（持续）
 
 | 编号 | 动作 | 来源 |
@@ -591,7 +600,7 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | `document_repository_*` 删除破坏测试默认或回滚路径 | 中 | PR #32 已验证 settings 默认值与 admin 回归仍需要 DataFlywheel MySQL 路径，因此只删除 Dual/MongoRead；后续删除 MySQL 前需先完成 Mongo-only 默认值、测试基线与回滚策略切换 |
 | `application/` 与 `agent/` 边界未严格执行 | 中 | 写入 boundaries.md 并加 sensor（P3-2） |
 | `platforms/` 迁移打破 evaluation ↔ data_flywheel 依赖 | 中 | A1-A3 前置必须先做且单独验证 |
-| 业务方对 services/ 合并有异议 | 低 | P2-5 标记为待评审，可暂缓 |
+| 业务方对进一步合并领域内 service 文件有异议 | 低 | 旧 `services/` 已下线；领域内是否继续合并按职责混杂度和 1000 行预算评审 |
 
 ### 7.2 回滚策略
 
@@ -674,6 +683,16 @@ P0 ──→ P1 ──→ P2 ──→ P3
 | E2 | 替换 graph_factory 调用方 | ✅ 本 PR 已处理 | `invoke_advisor` / `stream_advisor` 直接调用 loop；旧 `app.agent.graph` 门面下线 |
 | E3 | 核对流式输出与 trace 重放 | ✅ 本 PR 已处理 | `stream_agent_loop` 保持按节点 updates 暴露 LLM / tools 增量；advisor final reply 继续记录 trace round |
 | E4 | 删除 langgraph 依赖 | ✅ 本 PR 已处理 | `backend/requirements.txt` 移除 `langgraph`；`langchain-core` 保留供 Message / StructuredTool 使用 |
+
+### 决策 F：领域目录收束（2026-07-19）
+
+| 步骤 | 动作 | 状态 | commit |
+| --- | --- | --- | --- |
+| F1 | 建立 `domains/users`、`domains/farm`、`domains/weather`、`domains/finance`、`domains/planting`、`domains/conversation` | ✅ 本 PR 已处理 | `refactor: 收束 backend 领域目录` |
+| F2 | 删除旧 `modules`，auth/farm 迁入 domains | ✅ 本 PR 已处理 | 不保留 `app.modules.*` |
+| F3 | 删除旧 `api/models/schemas/services`，按领域/平台/shared 迁移真实文件 | ✅ 本 PR 已处理 | 不保留 `app.api/app.models/app.schemas/app.services` |
+| F4 | `simulation` 迁入 `platforms/simulation`，admin 路由迁入 `platforms/admin` | ✅ 本 PR 已处理 | `simulation.models` dataclass 与 `simulation.orm_models` ORM 分离 |
+| F5 | 更新 boundaries 与 layer sensor，阻止旧入口回潮 | ✅ 本 PR 已处理 | `scripts/check-layer-deps.sh` 增加旧目录和旧 import 检查 |
 
 ### 状态图例
 

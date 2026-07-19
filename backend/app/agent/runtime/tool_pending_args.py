@@ -9,8 +9,8 @@ from app.agent.runtime.tool_metadata import (
     _operation_name_from_args,
 )
 from app.shared.database import SessionLocal
-from app.models.cycle import CropCycle
-from app.models.planting import Worker
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.planting.models import Worker
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +338,7 @@ def _fill_settle_labor_context_args(args: dict, farm_id: int) -> None:
         return
     db = SessionLocal()
     try:
-        from app.services import planting_read_service
+        from app.domains.planting import read_service as planting_read_service
 
         worker_name = _clean_text(args.get("worker") or args.get("worker_name"))
         if worker_name is None and args.get("worker_id") not in (None, ""):

@@ -9,9 +9,11 @@ from skillify.skills.base import Skill
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.shared.database import SessionLocal
-from app.models.planting import Worker
-from app.schemas.planting import WageSaveRequest, WageUpdateRequest
-from app.services import labor_service, planting_read_service, planting_service
+from app.domains.planting.models import Worker
+from app.domains.planting.schemas import WageSaveRequest, WageUpdateRequest
+from app.domains.planting import labor_service
+from app.domains.planting import read_service as planting_read_service
+from app.domains.planting import service as planting_service
 
 _QUERY_OPERATION = "query_payables"
 _SETTLE_OPERATION = "settle_payment"

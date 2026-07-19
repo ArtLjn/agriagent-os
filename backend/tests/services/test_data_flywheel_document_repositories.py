@@ -6,7 +6,7 @@ import importlib
 
 import pytest
 
-from app.models.data_flywheel import (
+from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentReviewIssueChain,
 )

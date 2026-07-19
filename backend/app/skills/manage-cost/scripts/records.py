@@ -7,10 +7,10 @@ from skillify.models.schemas import ResultStatus, SkillResult
 from app.skills.context import require_farm_context
 from app.shared.database import SessionLocal
 from app.shared.time import get_request_date
-from app.models.cost_category import CostCategory
-from app.schemas.cost import CostRecordCreate
-from app.services import cost_service
-from app.services.cost_service import create_record as create_cost_record
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.finance.cost_schemas import CostRecordCreate
+from app.domains.finance import cost_service
+from app.domains.finance.cost_service import create_record as create_cost_record
 
 
 async def create_record(params: dict, context) -> SkillResult:

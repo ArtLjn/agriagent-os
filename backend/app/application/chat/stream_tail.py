@@ -10,7 +10,7 @@ from app.application.chat.stream_types import (
     StreamReplyState,
     format_sse_event,
 )
-from app.models.conversation import Conversation
+from app.domains.conversation.models import Conversation
 
 logger = logging.getLogger(__name__)
 

@@ -570,11 +570,12 @@ agent 扩充到 backend 全量，建议升级为独立的 backend-module-remedia
 | --- | --- | --- | --- | --- | --- |
 | P2-1 | **`document_repository_*` 砍掉 12 个未用 backend 类** | `platforms/data_flywheel/document_repository_*.py`（2026-07-17 A5 已从 `modules/data_flywheel/` 迁入） | 9-#2 | 🟡 PR #32 部分完成 | 已删除 `document_repository_dual.py`，下线 `DualWrite*`/`MongoRead*` 8 个灰度类；`document_repository_mysql.py` 的 4 个 `MySQL*` 类因 settings 默认值与 admin 回归仍依赖 `mysql` 暂保留；DataFlywheel storage 配置收窄为 `mysql`/`mongo`，shared selector 仅支持 `mysql`/`mongo`，`dual`/`mongo-read` 会返回 `INVALID_STORAGE_BACKEND` 或在配置解析阶段失败；验证：DataFlywheel repository、admin data flywheel、online document、mongo config/compensation 目标 pytest 94 passed |
 | P2-2 | `infra/online_document_common.py` 3 Protocol 同步处理 | `backend/app/infra/online_document_common.py` | 9-#5 | ✅ PR #32 | 已删除 `ConversationMessageRepository`、`AgentRecordRepository`、`GuardrailsLogRepository` 3 个仅导出的 Protocol；保留 `RepositoryPage`、`DualWriteBase`、Mongo read helper 等运行时 helper；online document 具体多后端仍为活跃灰度路径，未删除 |
-| P2-3 | `services/` 21 个 `*_service.py` 评估合并 | `backend/app/services/` | 3 | ⚠️ | 业务方确认实体边界 |
+| P2-3 | `services/` 21 个 `*_service.py` 评估合并 | `backend/app/services/` | 3 | ✅ 2026-07-19 领域收束完成 | 旧 `backend/app/services` 已删除；成本、作物、种植、天气、会话、日报建议、报表、用户额度等 service 已按 `domains/*`、`agent/*` 或 `platforms/*` 真实边界迁出；不保留 `app.services.*` 兼容入口 |
 | P2-4 | `tests/` 根目录 78 个 test_*.py 下沉 | `backend/tests/` | 5 | ⏳ | 按源码镜像目录重构 |
 | P2-5 | 日志轮转配置补全 | `backend/app/logs/` | 6 | ⏳ | 配置 logrotate；磁盘监控 |
-| P2-6 | 删除空目录 | `app/memory/long_term/`、`app/memory/retrieval/`、旧 Evaluation 根包、旧 DataFlywheel 根包等 | 4 | ✅ 部分推进 | 2026-07-17 已删除只含 `__init__.py` 的旧 Evaluation / DataFlywheel 空壳包；其余空目录按后续扫描继续处理 |
+| P2-6 | 删除空目录 | `app/memory/long_term/`、`app/memory/retrieval/`、旧 Evaluation 根包、旧 DataFlywheel 根包等 | 4 | ✅ 继续推进 | 2026-07-17 已删除只含 `__init__.py` 的旧 Evaluation / DataFlywheel 空壳包；2026-07-19 删除旧 `api/models/schemas/services/modules/simulation` 空壳后，`find backend/app -type d -empty -print` 无输出 |
 | P2-7 | `seed/scripts` 一级小模块归位 | `backend/app/ops/` | 8.2 | ✅ 本轮完成 | `core/seed.py` 迁为 `ops/bootstrap_seed.py`，`seed/system_crop_templates.py` 迁为 `ops/system_crop_templates.py`，`scripts/schema_hardening_audit.py` 迁为 `ops/schema_hardening_audit.py`；旧 `app.seed` / `app.scripts` / `app.core.seed` 活动引用清空且不保留兼容壳 |
+| P2-8 | 旧技术层入口领域收束 | `backend/app/{api,models,schemas,services,modules,simulation}` | 3、8 | ✅ 2026-07-19 | 六类旧入口已下线：业务代码进入 `domains/users`、`domains/farm`、`domains/weather`、`domains/finance`、`domains/planting`、`domains/conversation`；admin/simulation 进入 `platforms/admin`、`platforms/simulation`；Alembic metadata 通过 `shared/model_registry.py` 加载真实模型模块；旧 import 扫描为空 |
 
 ### P3 — 长期治理（结构性）
 

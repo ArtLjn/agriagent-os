@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.platforms.evaluation.discovery.risk_scorer import apply_risk_score
-from app.models.agent_turn import AgentTurn
-from app.models.data_flywheel import AgentDataFlywheelLabel
+from app.agent.turn_models import AgentTurn
+from app.platforms.data_flywheel.models import AgentDataFlywheelLabel
 from app.platforms.shared.judge_service import OpenAIDataFlywheelJudgeClient
 
 JUDGE_MONTHLY_COST_LIMIT_USD = 200.0

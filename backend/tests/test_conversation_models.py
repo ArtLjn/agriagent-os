@@ -1,6 +1,6 @@
 """Conversation 模型测试。"""
 
-from app.models.conversation import (
+from app.domains.conversation.models import (
     Conversation,
     ConversationMessage,
     ConversationStatus,

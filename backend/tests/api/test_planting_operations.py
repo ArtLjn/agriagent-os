@@ -3,8 +3,8 @@
 from datetime import date
 from decimal import Decimal
 
-from app.models.cost import CostRecord
-from app.models.planting import LaborEntry
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.models import LaborEntry
 
 
 def _create_watermelon_template(client) -> int:

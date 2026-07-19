@@ -11,10 +11,10 @@ client = TestClient(app)
 class TestAgentChat:
     """测试 Agent 对话接口。"""
 
-    @patch("app.api.agent.chat")
+    @patch("app.domains.conversation.routes.chat")
     def test_chat_endpoint(self, mock_chat) -> None:
         """验证 POST /agent/chat 返回回复。"""
-        from app.schemas.agent import ChatResponse
+        from app.domains.conversation.agent_schemas import ChatResponse
 
         mock_chat.return_value = ChatResponse(reply="建议：浇水。")
 
@@ -23,10 +23,10 @@ class TestAgentChat:
         assert response.status_code == 200
         assert response.json()["reply"] == "建议：浇水。"
 
-    @patch("app.api.agent.chat")
+    @patch("app.domains.conversation.routes.chat")
     def test_chat_endpoint_passes_session_id(self, mock_chat) -> None:
         """验证 POST /agent/chat 传递 session_id 给 use case。"""
-        from app.schemas.agent import ChatResponse
+        from app.domains.conversation.agent_schemas import ChatResponse
 
         mock_chat.return_value = ChatResponse(reply="回复")
 
@@ -40,10 +40,10 @@ class TestAgentChat:
         chat_request = mock_chat.call_args.args[1]
         assert chat_request.session_id == "sess-abc"
 
-    @patch("app.api.agent.chat")
+    @patch("app.domains.conversation.routes.chat")
     def test_chat_endpoint_without_session_id(self, mock_chat) -> None:
         """验证 POST /agent/chat 无 session_id 时传 None。"""
-        from app.schemas.agent import ChatResponse
+        from app.domains.conversation.agent_schemas import ChatResponse
 
         mock_chat.return_value = ChatResponse(reply="回复")
 
@@ -57,8 +57,8 @@ class TestAgentChat:
         """验证聊天完成后提交 Memory observation event。"""
         from app.application.chat.use_case import chat
         from app.agent.executor.models import PendingActionDecision
-        from app.models.farm import Farm
-        from app.schemas.agent import ChatRequest
+        from app.domains.farm.models import Farm
+        from app.domains.conversation.agent_schemas import ChatRequest
 
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
         memory_service = AsyncMock()
@@ -141,7 +141,7 @@ class TestAgentDaily:
     @patch("app.application.advice.use_case.get_daily_advice")
     def test_daily_advice_endpoint(self, mock_daily) -> None:
         """验证 GET /agent/daily 返回建议。"""
-        from app.schemas.agent import AdviceItem, DailyAdviceResponse
+        from app.domains.conversation.agent_schemas import AdviceItem, DailyAdviceResponse
 
         items = [AdviceItem(title="施肥", detail="追施复合肥", priority=1)]
         mock_daily.return_value = DailyAdviceResponse(
@@ -162,7 +162,7 @@ class TestAgentReport:
     @patch("app.application.advice.use_case.generate_report")
     def test_report_endpoint(self, mock_report) -> None:
         """验证 POST /agent/report 返回报告。"""
-        from app.schemas.agent import ReportResponse
+        from app.domains.conversation.agent_schemas import ReportResponse
 
         mock_report.return_value = ReportResponse(
             cycle_id=1,
@@ -182,7 +182,7 @@ class TestAgentReport:
 class TestAgentHistory:
     """测试历史记录接口。"""
 
-    @patch("app.api.agent.get_advice_history")
+    @patch("app.domains.conversation.routes.get_advice_history")
     def test_advice_history_endpoint(self, mock_history) -> None:
         """验证 GET /agent/advice-history 返回列表。"""
         mock_history.return_value = []
@@ -208,8 +208,8 @@ class TestAgentHistory:
 
         from app.application.chat.use_case import build_pending_action_response
         from app.application.session.history import list_message_items
-        from app.models.conversation import Conversation, ConversationMessage
-        from app.models.farm import Farm
+        from app.domains.conversation.models import Conversation, ConversationMessage
+        from app.domains.farm.models import Farm
         from app.infra.pending_actions import remove_pending, store_pending
 
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
@@ -256,8 +256,8 @@ class TestAgentHistory:
         import json
 
         from app.application.session.history import list_message_items
-        from app.models.conversation import Conversation, ConversationMessage
-        from app.models.farm import Farm
+        from app.domains.conversation.models import Conversation, ConversationMessage
+        from app.domains.farm.models import Farm
 
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
         session_id = "sess-pending-plan-history"
@@ -296,7 +296,7 @@ class TestAgentTraceFilter:
     def test_stream_trace_query_no_routing(self) -> None:
         """验证 event_generator 查询 skills 时不含 routing。"""
         import inspect
-        from app.api import agent as agent_module
+        from app.domains.conversation import routes as agent_module
 
         source = inspect.getsource(agent_module)
         assert '"routing"' not in source

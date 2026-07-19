@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.schemas.agent import AdviceItem, DailyAdviceResponse
-from app.services.agent_service import get_daily_advice, refresh_daily_advice
-from app.services.daily_advice_models import DailyAdviceCandidate
+from app.domains.conversation.agent_schemas import AdviceItem, DailyAdviceResponse
+from app.domains.conversation.agent_service import get_daily_advice, refresh_daily_advice
+from app.domains.conversation.daily_advice_models import DailyAdviceCandidate
 
 
 def _candidate() -> DailyAdviceCandidate:
@@ -28,7 +28,7 @@ def _candidate() -> DailyAdviceCandidate:
 @pytest.fixture(autouse=True)
 def mock_composer():
     """隔离 prompt 渲染，让结构化建议测试聚焦解析行为。"""
-    with patch("app.services.agent_service.get_composer") as mock:
+    with patch("app.domains.conversation.agent_service.get_composer") as mock:
         mock.return_value.compose.return_value = "daily prompt"
         yield mock
 
@@ -151,7 +151,7 @@ class TestDailyAdviceV2Empty:
     """测试无候选时的 v2 empty 响应。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_empty_candidates_do_not_call_llm(
         self, mock_invoke: AsyncMock
     ) -> None:
@@ -165,7 +165,7 @@ class TestDailyAdviceV2Empty:
         Base.metadata.create_all(bind=engine)
         session = sessionmaker(bind=engine)()
         with patch(
-            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            "app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates",
             new_callable=AsyncMock,
         ) as mock_collect:
             mock_collect.return_value = []
@@ -185,7 +185,7 @@ class TestDailyAdviceFallback:
     """测试 v2 生成失败时的候选 skeleton fallback。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_plain_text_fallback_uses_candidate_skeleton(
         self, mock_invoke: AsyncMock
     ) -> None:
@@ -201,7 +201,7 @@ class TestDailyAdviceFallback:
         session = sessionmaker(bind=engine)()
         candidate = _candidate()
         with patch(
-            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            "app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates",
             new_callable=AsyncMock,
         ) as mock_collect:
             mock_collect.return_value = [candidate]
@@ -221,7 +221,7 @@ class TestRefreshDailyAdvice:
     """测试强制刷新每日建议。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_refresh_returns_structured_items(
         self, mock_invoke: AsyncMock
     ) -> None:
@@ -236,7 +236,7 @@ class TestRefreshDailyAdvice:
         Base.metadata.create_all(bind=engine)
         session = sessionmaker(bind=engine)()
         with patch(
-            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            "app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates",
             new_callable=AsyncMock,
         ) as mock_collect:
             mock_collect.return_value = [_candidate()]
@@ -256,7 +256,7 @@ class TestCycleIdPassthrough:
     """测试 cycle_id 正确传递到记录和响应。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
+    @patch("app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock)
     async def test_cycle_id_in_response(self, mock_invoke: AsyncMock) -> None:
         """返回的 DailyAdviceResponse 包含正确的 cycle_id。"""
         from sqlalchemy import create_engine
@@ -269,7 +269,7 @@ class TestCycleIdPassthrough:
         Base.metadata.create_all(bind=engine)
         session = sessionmaker(bind=engine)()
         with patch(
-            "app.services.daily_advice_generation.collect_daily_advice_candidates",
+            "app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates",
             new_callable=AsyncMock,
         ) as mock_collect:
             mock_collect.return_value = [_candidate()]

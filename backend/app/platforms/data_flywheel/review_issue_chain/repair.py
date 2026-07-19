@@ -13,7 +13,7 @@ from app.infra.repository_runtime import (
     get_data_flywheel_repository,
     run_maybe_awaitable,
 )
-from app.models.data_flywheel import AgentRepairPack
+from app.platforms.data_flywheel.models import AgentRepairPack
 from app.platforms.data_flywheel.repair_pack.chain import (
     build_chain_repair_pack_payload,
     derive_chain_repair_candidate,

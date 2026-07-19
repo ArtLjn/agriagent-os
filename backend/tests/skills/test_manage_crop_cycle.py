@@ -11,10 +11,10 @@ from skillify.core.context import SkillContext
 from app.skills import get_skill_manager
 from app.skills.registry import load_skill_registry
 from app.agent.router.tool_selector import select_tools
-from app.models.cost import CostRecord
-from app.models.crop import CropTemplate, GrowthStage
-from app.models.cycle import CropCycle, CycleStage
-from app.models.log import FarmLog
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
+from app.domains.planting.cycle_models import CropCycle, CycleStage
+from app.domains.planting.log_models import FarmLog
 
 _manage_mod = importlib.import_module("app.skills.manage-crop-cycle.scripts.main")
 _create_mod = _manage_mod

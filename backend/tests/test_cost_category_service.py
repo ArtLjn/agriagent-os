@@ -2,9 +2,9 @@
 
 import pytest
 
-from app.models.cost_category import CostCategory
-from app.schemas.cost_category import CostCategoryCreate
-from app.services.cost_category_service import (
+from app.domains.finance.cost_category_models import CostCategory
+from app.domains.finance.cost_category_schemas import CostCategoryCreate
+from app.domains.finance.cost_category_service import (
     create_category,
     delete_category,
     get_categories,

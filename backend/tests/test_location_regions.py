@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-from app.modules.farm.city_coords import is_ambiguous_city_name
-from app.modules.farm.city_coords import resolve_city_coords
+from app.domains.farm.city_coords import is_ambiguous_city_name
+from app.domains.farm.city_coords import resolve_city_coords
 
 
 def test_shared_regions_cover_existing_city_picker_dataset():

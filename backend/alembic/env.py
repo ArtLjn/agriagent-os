@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.shared.config import settings
 from app.shared.database import Base
-from app.models import *  # noqa: F401,F403
+import app.shared.model_registry  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))

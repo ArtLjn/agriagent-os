@@ -11,9 +11,9 @@ from app.application.session.flywheel import (
 )
 from app.shared.database import Base
 from app.infra.agent_events import read_event_segment
-from app.models.conversation import ConversationMessage
-from app.models.farm import Farm
-from app.services.conversation_service import get_or_create_conversation
+from app.domains.conversation.models import ConversationMessage
+from app.domains.farm.models import Farm
+from app.domains.conversation.service import get_or_create_conversation
 
 pytestmark = pytest.mark.no_db
 

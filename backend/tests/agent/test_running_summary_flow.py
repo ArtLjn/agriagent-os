@@ -6,7 +6,7 @@ import pytest
 
 from app.context.selectors import ConversationSelector
 from app.memory.service import InMemoryMemoryService
-from app.models.conversation import Conversation, ConversationMessage
+from app.domains.conversation.models import Conversation, ConversationMessage
 
 
 @pytest.mark.asyncio

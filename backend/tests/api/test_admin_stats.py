@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 
 from app.shared.database import get_db
 from app.infra.mongo import set_mongo_client
-from app.modules.auth.dependencies import get_current_user
+from app.domains.users.dependencies import get_current_user
 from app.main import app
-from app.models.farm import Farm
-from app.models.token_stats import TokenDailyStats
-from app.models.trace import TraceRecord
-from app.models.user import User
+from app.domains.farm.models import Farm
+from app.platforms.evaluation.token_stats_models import TokenDailyStats
+from app.platforms.evaluation.trace_models import TraceRecord
+from app.domains.users.models import User
 
 
 def _mock_db():
@@ -345,7 +345,7 @@ class TestTokenHourly:
     def test_returns_hourly_usage_from_mongo_when_trace_table_missing(
         self, client, db_session, admin_user
     ) -> None:
-        import app.api.admin_stats as admin_stats
+        import app.platforms.admin.stats_routes as admin_stats
 
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
         farm.user_id = "hourly-mongo-user"

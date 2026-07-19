@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.structured_report import StructuredReportData
+from app.domains.conversation.report_schemas import StructuredReportData
 
 
 def test_structured_report_data_accepts_a2ui_contract():

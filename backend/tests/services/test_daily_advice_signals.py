@@ -4,20 +4,20 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
-from app.models.cost import CostRecord
-from app.models.crop import CropTemplate
-from app.models.cycle import CropCycle, CycleStage
-from app.models.farm import Farm
-from app.models.planting import OperationWorkOrder
-from app.models.user import User
-from app.models.user_setting import UserSetting
-from app.services.daily_advice_models import (
+from app.domains.finance.cost_models import CostRecord
+from app.domains.planting.crop_models import CropTemplate
+from app.domains.planting.cycle_models import CropCycle, CycleStage
+from app.domains.farm.models import Farm
+from app.domains.planting.models import OperationWorkOrder
+from app.domains.users.models import User
+from app.domains.users.settings_models import UserSetting
+from app.domains.conversation.daily_advice_models import (
     DailyAdviceCandidate,
     DailyAdviceCategory,
     rank_daily_advice_candidates,
     render_candidate_context,
 )
-from app.services.daily_advice_signals import collect_daily_advice_candidates
+from app.domains.conversation.daily_advice_signals import collect_daily_advice_candidates
 
 
 def _candidate(
@@ -409,7 +409,7 @@ async def test_collect_weather_candidates_includes_high_temperature_p1(
     today = date(2026, 6, 12)
     fetch_weather = AsyncMock(return_value=_weather_data(temps=[36, 32, 31]))
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         fetch_weather,
     )
 
@@ -448,7 +448,7 @@ async def test_collect_weather_candidates_uses_farm_location_first(
     db_session.commit()
     fetch_weather = AsyncMock(return_value=_weather_data(temps=[36, 32, 31]))
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         fetch_weather,
     )
 
@@ -484,7 +484,7 @@ async def test_collect_weather_candidates_falls_back_to_user_setting_coordinates
     db_session.commit()
     fetch_weather = AsyncMock(return_value=_weather_data(temps=[36, 32, 31]))
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         fetch_weather,
     )
 
@@ -508,7 +508,7 @@ async def test_collect_weather_candidates_falls_back_to_farm_location(
     db_session.commit()
     fetch_weather = AsyncMock(return_value=_weather_data(temps=[36, 32, 31]))
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         fetch_weather,
     )
 
@@ -528,7 +528,7 @@ async def test_collect_weather_candidates_merges_continuous_high_temperature(
 ):
     today = date(2026, 6, 12)
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         AsyncMock(return_value=_weather_data(temps=[35, 36, 37])),
     )
 
@@ -547,7 +547,7 @@ async def test_collect_weather_candidates_ignores_expired_hot_days(
 ):
     today = date(2026, 6, 12)
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         AsyncMock(
             return_value=_weather_data(
                 times=["2026-06-14", "2026-06-11", "2026-06-13"],
@@ -572,7 +572,7 @@ async def test_collect_weather_candidates_checks_future_third_day_after_expired_
 ):
     today = date(2026, 6, 12)
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         AsyncMock(
             return_value=_weather_data(
                 times=["2026-06-11", "2026-06-12", "2026-06-13", "2026-06-15"],
@@ -597,7 +597,7 @@ async def test_collect_crop_stage_candidates_from_current_active_cycle(
 ):
     today = date(2026, 6, 12)
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         AsyncMock(return_value=_weather_data(temps=[30, 31, 32])),
     )
     cycle = _create_active_cycle(db_session, today=today)
@@ -624,7 +624,7 @@ async def test_collect_crop_stage_candidates_suppresses_recent_same_operation(
 ):
     today = date(2026, 6, 12)
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         AsyncMock(return_value=_weather_data(temps=[30, 31, 32])),
     )
     cycle = _create_active_cycle(db_session, today=today, key_tasks="巡田、理蔓")
@@ -652,7 +652,7 @@ async def test_collect_crop_stage_candidates_suppresses_by_cycle_only(
 ):
     today = date(2026, 6, 12)
     monkeypatch.setattr(
-        "app.services.daily_advice_signals.weather_service.fetch_weather",
+        "app.domains.conversation.daily_advice_signals.weather_service.fetch_weather",
         AsyncMock(return_value=_weather_data(temps=[30, 31, 32])),
     )
     cycle_a = _create_active_cycle(

@@ -8,14 +8,16 @@ from skillify.skills.base import Skill
 
 from app.skills.context import require_farm_context
 from app.shared.database import SessionLocal
-from app.models.cycle import CropCycle
-from app.models.planting import PlantingUnit, Worker
-from app.schemas.planting import (
+from app.domains.planting.cycle_models import CropCycle
+from app.domains.planting.models import PlantingUnit, Worker
+from app.domains.planting.schemas import (
     LaborEntryCreate,
     OperationWorkOrderCreate,
     OperationWorkOrderUpdate,
 )
-from app.services import labor_service, planting_read_service, planting_service
+from app.domains.planting import labor_service
+from app.domains.planting import read_service as planting_read_service
+from app.domains.planting import service as planting_service
 
 from .schema import work_order_metadata, work_order_parameters_schema
 

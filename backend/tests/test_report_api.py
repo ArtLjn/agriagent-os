@@ -6,7 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.schemas.agent import AdviceItem
+from app.domains.conversation.agent_schemas import AdviceItem
 
 client = TestClient(app)
 
@@ -62,7 +62,7 @@ class TestRefreshDailyAdviceAPI:
     @patch("app.application.advice.use_case.refresh_daily_advice")
     def test_refresh_endpoint(self, mock_refresh):
         """POST /agent/daily/refresh 返回新的建议。"""
-        from app.schemas.agent import DailyAdviceResponse
+        from app.domains.conversation.agent_schemas import DailyAdviceResponse
 
         items = [AdviceItem(title="新建议", detail="施肥浇水", priority=1)]
         mock_refresh.return_value = DailyAdviceResponse(
@@ -78,7 +78,7 @@ class TestRefreshDailyAdviceAPI:
     @patch("app.application.advice.use_case.refresh_daily_advice")
     def test_refresh_without_cycle_id(self, mock_refresh):
         """不带 cycle_id 也能正常刷新。"""
-        from app.schemas.agent import DailyAdviceResponse
+        from app.domains.conversation.agent_schemas import DailyAdviceResponse
 
         items = [AdviceItem(title="综合建议", detail="注意天气", priority=2)]
         mock_refresh.return_value = DailyAdviceResponse(

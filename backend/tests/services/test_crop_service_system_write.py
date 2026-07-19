@@ -1,9 +1,9 @@
 import pytest
 
-from app.models.crop import CropTemplate, GrowthStage
-from app.models.farm import Farm
-from app.schemas.crop import CropTemplateCreate, GrowthStageCreate
-from app.services import crop_service
+from app.domains.planting.crop_models import CropTemplate, GrowthStage
+from app.domains.farm.models import Farm
+from app.domains.planting.crop_schemas import CropTemplateCreate, GrowthStageCreate
+from app.domains.planting import crop_service
 
 
 def _payload(name: str = "西瓜", variety: str | None = "8424"):

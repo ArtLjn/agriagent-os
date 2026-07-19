@@ -11,11 +11,11 @@ import app.platforms.data_flywheel.review_issue_chain_repository as review_chain
 from app.platforms.evaluation.discovery.judge_worker import run_judge_batch
 from app.infra.agent_events import AgentEventWriter
 from app.main import app
-from app.models.data_flywheel import AgentDataFlywheelLabel, AgentReviewIssueChain
-from app.models.farm import Farm
-from app.models.trace import TraceRecord
-from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
-from app.services.conversation_service import get_or_create_conversation, save_message
+from app.platforms.data_flywheel.models import AgentDataFlywheelLabel, AgentReviewIssueChain
+from app.domains.farm.models import Farm
+from app.platforms.evaluation.trace_models import TraceRecord
+from app.agent.turn_service import create_turn, finish_turn, mark_event_range
+from app.domains.conversation.service import get_or_create_conversation, save_message
 from tests.api.auth_helpers import (
     ADMIN_USER_ID,
     admin_headers,

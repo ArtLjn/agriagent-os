@@ -9,8 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.models.agent_record import AgentRecord
-from app.services.daily_advice_models import DailyAdviceCandidate, fingerprint_candidates
+from app.agent.models import AgentRecord
+from app.domains.conversation.daily_advice_models import DailyAdviceCandidate, fingerprint_candidates
 
 
 def _candidate(key: str, title: str = "高温错峰采收") -> DailyAdviceCandidate:
@@ -96,7 +96,7 @@ def db():
 
 @pytest.fixture
 def mock_composer():
-    with patch("app.services.agent_service.get_composer") as mock:
+    with patch("app.domains.conversation.agent_service.get_composer") as mock:
         mock.return_value.compose.return_value = "daily prompt"
         yield mock
 
@@ -104,7 +104,7 @@ def mock_composer():
 @pytest.fixture(autouse=True)
 def mock_collect_candidates():
     with patch(
-        "app.services.daily_advice_generation.collect_daily_advice_candidates",
+        "app.domains.conversation.daily_advice_generation.collect_daily_advice_candidates",
         new_callable=AsyncMock,
     ) as mock:
         mock.return_value = []
@@ -123,13 +123,13 @@ async def test_retry_success_reuses_candidates_and_records_meta(
     valid_payload = _v2_payload(candidate)
 
     with patch(
-        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
+        "app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.side_effect = [
             '{"preview":"今日建议","items":[]}',
             json.dumps(valid_payload, ensure_ascii=False),
         ]
-        from app.services.agent_service import get_daily_advice
+        from app.domains.conversation.agent_service import get_daily_advice
 
         result = await get_daily_advice(db, farm_id=1)
 
@@ -165,13 +165,13 @@ async def test_json_parse_failure_adds_repair_instruction_before_retry(
     )
 
     with patch(
-        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
+        "app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.side_effect = [
             malformed_payload,
             json.dumps(valid_payload, ensure_ascii=False),
         ]
-        from app.services.agent_service import get_daily_advice
+        from app.domains.conversation.agent_service import get_daily_advice
 
         result = await get_daily_advice(db, farm_id=1)
 
@@ -209,10 +209,10 @@ async def test_truncated_daily_advice_json_falls_back_without_retry(
     )
 
     with patch(
-        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
+        "app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.return_value = truncated_payload
-        from app.services.agent_service import get_daily_advice
+        from app.domains.conversation.agent_service import get_daily_advice
 
         result = await get_daily_advice(db, farm_id=1)
 
@@ -236,10 +236,10 @@ async def test_retry_exhausted_returns_candidate_fallback(
     mock_collect_candidates.return_value = [candidate]
 
     with patch(
-        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
+        "app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.return_value = '{"preview":"今日建议","items":[]}'
-        from app.services.agent_service import get_daily_advice
+        from app.domains.conversation.agent_service import get_daily_advice
 
         result = await get_daily_advice(db, farm_id=1)
 
@@ -264,9 +264,9 @@ async def test_empty_candidates_return_empty_without_llm(
     mock_collect_candidates.return_value = []
 
     with patch(
-        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
+        "app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
-        from app.services.agent_service import get_daily_advice
+        from app.domains.conversation.agent_service import get_daily_advice
 
         result = await get_daily_advice(db, farm_id=1)
 
@@ -287,10 +287,10 @@ async def test_quota_like_llm_response_retries_then_fallback(
     mock_collect_candidates.return_value = [candidate]
 
     with patch(
-        "app.services.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
+        "app.domains.conversation.agent_service.invoke_daily_advice_llm", new_callable=AsyncMock
     ) as mock_llm:
         mock_llm.return_value = "缺少可信用户上下文，无法继续处理。"
-        from app.services.agent_service import get_daily_advice
+        from app.domains.conversation.agent_service import get_daily_advice
 
         result = await get_daily_advice(db, farm_id=1)
 

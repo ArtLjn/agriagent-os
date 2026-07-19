@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.simulation.agent_client import AgentClient
+from app.platforms.simulation.agent_client import AgentClient
 
 
 class TestAgentClientInit:

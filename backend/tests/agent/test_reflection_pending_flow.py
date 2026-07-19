@@ -26,7 +26,7 @@ from app.infra.pending_actions import (
     store_pending,
     store_pending_plan,
 )
-from app.models.farm import Farm
+from app.domains.farm.models import Farm
 
 
 def _tool(name: str, description: str = ""):

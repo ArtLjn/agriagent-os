@@ -2,15 +2,15 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from app.services.weather_service import check_weather_warnings, fetch_weather
-from app.services.weather.base import DailyForecast, ProviderError, WeatherData
+from app.domains.weather.service import check_weather_warnings, fetch_weather
+from app.domains.weather.providers.base import DailyForecast, ProviderError, WeatherData
 
 
 class TestFetchWeather:
     """测试天气查询功能。"""
 
     @pytest.mark.asyncio
-    @patch("app.services.weather_service.get_weather_strategy")
+    @patch("app.domains.weather.service.get_weather_strategy")
     async def test_fetch_weather_returns_dict_with_required_keys(
         self, mock_get_strategy: Mock
     ) -> None:
@@ -38,7 +38,7 @@ class TestFetchWeather:
         strategy.fetch.assert_awaited_once_with("", 7, 34.26, 117.18)
 
     @pytest.mark.asyncio
-    @patch("app.services.weather_service.get_weather_strategy")
+    @patch("app.domains.weather.service.get_weather_strategy")
     async def test_fetch_weather_raises_on_http_error(
         self, mock_get_strategy: Mock
     ) -> None:

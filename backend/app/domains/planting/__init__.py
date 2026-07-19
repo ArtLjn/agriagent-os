@@ -1,0 +1,1 @@
+"""Planting domain."""

@@ -6,11 +6,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
 from app.infra.agent_events import AgentEventWriter
-from app.models.agent_turn import AgentTurn
-from app.models.conversation import Conversation, ConversationMessage
-from app.models.farm import Farm
-from app.models.trace import TraceRecord
-from app.services.agent_turn_service import create_turn, finish_turn, mark_event_range
+from app.agent.turn_models import AgentTurn
+from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.farm.models import Farm
+from app.platforms.evaluation.trace_models import TraceRecord
+from app.agent.turn_service import create_turn, finish_turn, mark_event_range
 
 pytestmark = pytest.mark.no_db
 

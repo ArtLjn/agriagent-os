@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.weather.base import WeatherData
-from app.services.weather.cache import WeatherCache, weather_cache
+from app.domains.weather.providers.base import WeatherData
+from app.domains.weather.providers.cache import WeatherCache, weather_cache
 
 
 class TestAlertCacheBasicOps:
@@ -104,7 +104,7 @@ class TestAlertCacheInStrategy:
     @staticmethod
     def _make_provider(data: WeatherData | None = None) -> MagicMock:
         """构造 mock provider。"""
-        from app.services.weather.base import DailyForecast
+        from app.domains.weather.providers.base import DailyForecast
 
         if data is None:
             data = WeatherData(
@@ -131,7 +131,7 @@ class TestAlertCacheInStrategy:
 
     @staticmethod
     def _make_strategy(providers: list, alert_scraper=None):
-        from app.services.weather.strategy import WeatherStrategy
+        from app.domains.weather.providers.strategy import WeatherStrategy
 
         if alert_scraper is None:
             scraper = MagicMock()
@@ -214,7 +214,7 @@ class TestAlertCacheInStrategy:
     @pytest.mark.asyncio
     async def test_provider_alerts_are_merged_with_scraper_alerts(self) -> None:
         """Provider 自带预警不能被爬虫预警覆盖。"""
-        from app.services.weather.base import WeatherAlert
+        from app.domains.weather.providers.base import WeatherAlert
 
         provider_alert = WeatherAlert(
             title="苏州市气象台发布大风蓝色预警",

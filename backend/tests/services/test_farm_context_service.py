@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.farm_context_service import (
+from app.domains.farm.context_service import (
     _Cache,
     _format_weather_line,
     _MAX_LENGTH,
@@ -151,7 +151,7 @@ def _make_weather_data() -> dict:
 class TestBuildSummaryWithActiveCycles:
     """有活跃茬口时的摘要组装测试。"""
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_summary_contains_all_sections(self, mock_weather_svc):
         """摘要应包含所有五个部分：茬口、农事、欠账、花费、天气。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -178,7 +178,7 @@ class TestBuildSummaryWithActiveCycles:
         assert "5800" in result
         mock_weather_svc.fetch_weather.assert_called_once()
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_summary_includes_current_stage(self, mock_weather_svc):
         """茬口行应包含当前阶段名称。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -193,7 +193,7 @@ class TestBuildSummaryWithActiveCycles:
         assert "秋季豆角" in result
         assert "播种期" in result
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_summary_includes_recent_logs(self, mock_weather_svc):
         """近期农事应包含最近 3 天内的记录。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -221,7 +221,7 @@ class TestBuildSummaryWithActiveCycles:
 class TestBuildSummaryNoActiveCycles:
     """无活跃茬口时的摘要组装测试。"""
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_no_active_cycles_shows_placeholder(self, mock_weather_svc):
         """无活跃茬口时，应显示「当前无种植计划」。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -240,7 +240,7 @@ class TestBuildSummaryNoActiveCycles:
 class TestTrimmingRules:
     """各类型数据硬上限裁剪测试。"""
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_trim_cycles_to_three(self, mock_weather_svc):
         """超过 3 个茬口时只取前 3 个。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -257,7 +257,7 @@ class TestTrimmingRules:
         assert "作物3" not in result
         assert "作物4" not in result
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_trim_logs_to_three(self, mock_weather_svc):
         """超过 3 条农事记录时只取前 3 条。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -274,7 +274,7 @@ class TestTrimmingRules:
         assert "操作3" not in result
         assert "操作4" not in result
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_summary_length_within_limit(self, mock_weather_svc):
         """摘要总长度应不超过 300 字。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -387,7 +387,7 @@ class TestCache:
 class TestBuildSummaryCacheIntegration:
     """build_summary 与缓存集成测试。"""
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_second_call_hits_cache(self, mock_weather_svc):
         """第二次调用 build_summary 应命中缓存，不再查库。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -404,7 +404,7 @@ class TestBuildSummaryCacheIntegration:
 
         assert result1 == result2
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_different_farm_id_not_shared(self, mock_weather_svc):
         """不同 farm_id 的缓存应互相独立。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -435,7 +435,7 @@ class TestBuildSummaryCacheIntegration:
 class TestMonthlyCost:
     """月度成本汇总测试。"""
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_monthly_cost_displayed(self, mock_weather_svc):
         """月度花费金额应出现在摘要中。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -445,7 +445,7 @@ class TestMonthlyCost:
 
         assert "12345.67" in result
 
-    @patch("app.services.farm_context_service.weather_service")
+    @patch("app.domains.farm.context_service.weather_service")
     async def test_zero_monthly_cost(self, mock_weather_svc):
         """当月无花费时，应显示 0。"""
         mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
@@ -467,7 +467,7 @@ class TestWeatherFallback:
     async def test_weather_failure_shows_fallback(self):
         """天气 API 失败时，摘要应包含降级提示而不是报错。"""
         with patch(
-            "app.services.farm_context_service.weather_service"
+            "app.domains.farm.context_service.weather_service"
         ) as mock_weather_svc:
             mock_weather_svc.fetch_weather = AsyncMock(
                 side_effect=RuntimeError("API 超时")

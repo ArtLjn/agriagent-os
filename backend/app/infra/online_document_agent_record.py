@@ -23,7 +23,7 @@ from app.infra.online_document_common import (
     replace_doc,
     report_filter,
 )
-from app.models.agent_record import AgentRecord
+from app.agent.models import AgentRecord
 
 
 class MySQLAgentRecordRepository:

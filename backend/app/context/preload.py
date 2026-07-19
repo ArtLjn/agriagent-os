@@ -53,7 +53,7 @@ async def warm_tool_caches(
     for data_type in preload_types:
         if data_type == "weather" and farm_ctx.get("farm_location"):
             try:
-                from app.services.weather_service import fetch_weather
+                from app.domains.weather.service import fetch_weather
 
                 coords = farm_ctx.get("farm_coords", "")
                 lat = float(coords.split(",")[0]) if coords else None

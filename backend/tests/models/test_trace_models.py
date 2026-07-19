@@ -1,7 +1,7 @@
 """Tests for trace 相关数据模型。"""
 
-from app.models.trace import TraceRecord
-from app.models.token_stats import TokenDailyStats
+from app.platforms.evaluation.trace_models import TraceRecord
+from app.platforms.evaluation.token_stats_models import TokenDailyStats
 
 
 class TestTraceRecord:

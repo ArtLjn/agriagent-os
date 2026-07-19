@@ -2,8 +2,8 @@
 
 from datetime import datetime
 
-from app.simulation.models import SimulationResult
-from app.simulation.reporter import SimulationReporter
+from app.platforms.simulation.models import SimulationResult
+from app.platforms.simulation.reporter import SimulationReporter
 
 
 class TestSimulationReporterGenerate:

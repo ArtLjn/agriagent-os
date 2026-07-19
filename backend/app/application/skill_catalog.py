@@ -5,7 +5,7 @@ from typing import Any
 
 from app.skills import get_skill_manager
 from app.skills.metadata import metadata_to_dict
-from app.schemas.agent import AppSkillItem
+from app.domains.conversation.agent_schemas import AppSkillItem
 
 
 @dataclass(frozen=True)

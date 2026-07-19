@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from app.schemas.agent import (
+from app.domains.conversation.agent_schemas import (
     ChatRequest,
     ConversationListItem,
     ConversationMessageItem,

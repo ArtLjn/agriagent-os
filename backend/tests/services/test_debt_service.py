@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import Base
-from app.models.cost import CostRecord
-from app.models.farm import Farm
-from app.schemas.cost import CostRecordCreate
-from app.services.debt_service import (
+from app.domains.finance.cost_models import CostRecord
+from app.domains.farm.models import Farm
+from app.domains.finance.cost_schemas import CostRecordCreate
+from app.domains.finance.debt_service import (
     CATEGORY_REPAY,
     InvalidSettlementAmountError,
     SUBTYPE_DEBT,
