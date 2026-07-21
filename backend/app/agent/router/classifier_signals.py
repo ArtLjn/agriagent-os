@@ -207,7 +207,9 @@ def looks_like_manage_wage(message: str) -> bool:
         and extractors.extract_worker_name(message) is not None
         and extractors.extract_unit_price(message) is not None
     )
-    has_work_order_target = extractors.extract_unit_name(message) is not None or has_any(
+    has_work_order_target = extractors.extract_unit_name(
+        message
+    ) is not None or has_any(
         message,
         ("去", "到", "安排", "让", "叫", "派"),
     )
@@ -283,8 +285,7 @@ def looks_like_update_user_settings(message: str) -> bool:
     if has_any(message, hints.USER_SETTINGS_READ_HINTS):
         return False
     return has_any(message, hints.USER_SETTINGS_HINTS) and any(
-        re.search(pattern, message)
-        for pattern in hints.USER_SETTINGS_UPDATE_PATTERNS
+        re.search(pattern, message) for pattern in hints.USER_SETTINGS_UPDATE_PATTERNS
     )
 
 
@@ -295,16 +296,23 @@ def looks_like_worker_query(message: str) -> bool:
 
 
 def looks_like_ambiguous_write(message: str) -> bool:
+    if looks_like_create_cost_record(message):
+        return False
     if looks_like_manage_worker(message):
         return False
     if looks_like_manage_cost_category(message):
         return False
     if looks_like_manage_planting_unit(message):
         return False
-    return has_any(message, hints.WRITE_ACTION_HINTS) and has_any(
+    has_generic_write = has_any(message, hints.WRITE_ACTION_HINTS) and has_any(
         message,
         hints.WRITE_ENTITY_HINTS,
     )
+    has_incomplete_cost_write = has_any(
+        message,
+        hints.COST_RECORD_WRITE_HINTS,
+    ) and has_any(message, hints.COST_RECORD_ENTITIES)
+    return has_generic_write or has_incomplete_cost_write
 
 
 def looks_like_update_worker(message: str) -> bool:

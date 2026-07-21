@@ -355,6 +355,7 @@ capabilities:
       - 修改昨天的作业单备注
       - 查询未付款作业单
       - 把5号棚采收作业改到明天
+      - show recent work orders
     anti_examples:
       - 新增工人王大妈
       - 给老王补付300人工
@@ -416,9 +417,13 @@ capabilities:
       - 新来一个工人李丽工资100一天
       - 删除工人李四
       - 把王大妈恢复为在职
+      - show my worker list
+      - list active workers
     anti_examples:
       - 给老王补付300人工
       - 查询未付工资
+      - 工人工资还有多少没付
+      - how much unpaid worker wages remain
       - 创建作业单
       - 今天买了化肥
       - 查询棚列表
@@ -459,8 +464,13 @@ capabilities:
       - 结算李丽这个月工资
       - 保存张三工资记录
       - 查看某个作业单的人工欠款
+      - 工人工资还有多少没付
+      - how much unpaid worker wages remain
+      - show unpaid labor payments
     anti_examples:
       - 新增工人王大妈
+      - create a worker profile
+      - list active workers
       - 查询农资赊账
       - 创建作业单
       - 今天买了化肥

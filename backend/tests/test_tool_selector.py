@@ -163,6 +163,14 @@ class TestWritePatternMatching:
         result = select_tools("我说的是工人工资", _make_tools())
         assert result == ["manage_labor_payment"]
 
+    def test_english_unpaid_wages_query_uses_labor_payment(self):
+        result = select_tools("how much unpaid worker wages remain", _make_tools())
+        assert result == ["manage_labor_payment"]
+
+    def test_english_worker_list_query_uses_manage_workers(self):
+        result = select_tools("show my worker list", _make_tools())
+        assert result == ["manage_workers"]
+
     def test_update_operation_work_order_correction(self):
         result = select_tools("刚才那条授粉记录不是付老王，是付老李200", _make_tools())
         assert result == ["update_operation_work_order"]

@@ -223,8 +223,8 @@ async def test_read_query_binds_router_selected_canonical_tool_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_model_choice_read_runtime_does_not_expand_to_all_read_tools() -> None:
-    """fallback read 也只绑定 Router 预算内候选，不在 runtime fallback all。"""
+async def test_registry_read_runtime_does_not_expand_to_all_read_tools() -> None:
+    """registry 召回也只绑定 Router 候选，不在 runtime fallback all。"""
     fake_llm = _FakeLLM()
     tools = [
         _FakeTool("get_cost_summary"),
@@ -247,8 +247,11 @@ async def test_model_choice_read_runtime_does_not_expand_to_all_read_tools() -> 
             }
         )
 
-    assert result["router_decision"].fallback == "model_choice_read_default"
-    assert len(fake_llm.bound_tool_names) == 3
+    assert result["router_decision"].fallback is None
+    assert result["router_decision"].frames[0].evidence["source"] == (
+        "candidate_retriever"
+    )
+    assert fake_llm.bound_tool_names == ["get_farm_status"]
     assert "create_cost_record" not in fake_llm.bound_tool_names
     assert "weather" not in fake_llm.bound_tool_names
 

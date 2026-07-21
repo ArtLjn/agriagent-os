@@ -14,6 +14,7 @@ class DisclosureBudget:
     max_tools_complex: int = 5
     max_write_tools: int = 1
     max_schema_tokens: int = 1800
+    max_retrieved_tools_default: int = 3
 
 
 @dataclass(frozen=True)

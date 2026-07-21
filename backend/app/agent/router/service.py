@@ -6,6 +6,7 @@ from dataclasses import replace
 from langchain_core.tools import BaseTool
 
 from app.agent.router.catalog import SkillCatalog
+from app.agent.router.candidate_retriever import CandidateRetriever
 from app.agent.router.classifier import RuleIntentClassifier
 from app.agent.router.models import (
     DisclosureBudget,
@@ -14,6 +15,33 @@ from app.agent.router.models import (
     ToolCandidate,
 )
 from app.agent.router.policy import RouterPolicy
+from app.skills.registry import load_skill_registry
+
+
+_READ_OPERATION_RISKS = frozenset({"read", "external_network"})
+_RETRIEVABLE_READ_HINTS = (
+    "查询",
+    "查看",
+    "看看",
+    "看一下",
+    "有哪些",
+    "多少",
+    "还欠",
+    "未付",
+    "未结清",
+    "没结清",
+    "列表",
+    "明细",
+    "统计",
+    "show",
+    "list",
+    "how much",
+    "what",
+    "which",
+    "remaining",
+    "remain",
+    "unpaid",
+)
 
 
 class SkillRouter:
@@ -26,17 +54,79 @@ class SkillRouter:
         budget: DisclosureBudget | None = None,
     ) -> None:
         self._classifier = classifier or RuleIntentClassifier()
-        self._policy = policy or RouterPolicy(budget)
+        self._budget = budget or DisclosureBudget()
+        self._policy = policy or RouterPolicy(self._budget)
+        self._retriever = CandidateRetriever()
 
     def route(self, message: str, tools: list[BaseTool]) -> RouterDecision:
         """根据用户输入和可用工具返回路由决策。"""
         catalog = SkillCatalog.from_tools(tools)
         frames = self._enrich_frames(self._classifier.classify(message), catalog)
+        if not frames and self._looks_like_retrievable_read(message):
+            frames = self._retrieved_frames(message, catalog)
         return self._policy.apply(
             message=message,
             frames=frames,
             candidates=catalog.candidates(),
         )
+
+    def _retrieved_frames(
+        self,
+        message: str,
+        catalog: SkillCatalog,
+    ) -> list[IntentFrame]:
+        retrieved = self._retriever.retrieve(
+            message,
+            catalog.candidates(),
+            limit=self._budget.max_retrieved_tools_default,
+        )
+        if not retrieved.selected_names:
+            return []
+        frames: list[IntentFrame] = []
+        for name in retrieved.selected_names:
+            candidate = catalog.get(name)
+            operation = self._read_operation_for(candidate)
+            frames.append(
+                IntentFrame(
+                    domain=candidate.domain if candidate else "general",
+                    intent="retrieved_candidate",
+                    risk="read",
+                    capability=candidate.capability if candidate else None,
+                    operation=operation,
+                    operation_hint=operation,
+                    candidate_tools=[name],
+                    confidence=0.6,
+                    score=0.6,
+                    evidence={
+                        "source": "candidate_retriever",
+                        "scores": retrieved.scores,
+                        "retrieval_evidence": {name: retrieved.evidence.get(name, {})},
+                    },
+                )
+            )
+        return frames
+
+    @staticmethod
+    def _read_operation_for(candidate: ToolCandidate | None) -> str | None:
+        if candidate is None or not candidate.capability:
+            return None
+        if candidate.operation and candidate.risk in _READ_OPERATION_RISKS:
+            return candidate.operation
+        try:
+            capability = load_skill_registry().capabilities.get(candidate.capability)
+        except (OSError, ValueError):
+            return None
+        if capability is None:
+            return None
+        for operation in capability.operations.values():
+            if operation.risk in _READ_OPERATION_RISKS:
+                return operation.name
+        return None
+
+    @staticmethod
+    def _looks_like_retrievable_read(message: str) -> bool:
+        normalized = message.strip().lower()
+        return any(hint in normalized for hint in _RETRIEVABLE_READ_HINTS)
 
     def build_pending_plan_steps(self, decision: RouterDecision) -> list[dict]:
         """把多写入意图帧转换为 pending plan 存储步骤。"""
