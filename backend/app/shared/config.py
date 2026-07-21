@@ -57,6 +57,21 @@ class MongoConfig(BaseModel):
     max_pool_size: int = Field(default=20, gt=0)
 
 
+class RAGServiceConfig(BaseModel):
+    """外部 QuillRAG 只读检索配置。"""
+
+    enabled: bool = False
+    url: str = ""
+    timeout_seconds: float = Field(default=3.0, gt=0)
+    retry: int = Field(default=1, ge=0)
+    fallback_enabled: bool = True
+    api_key: str = ""
+    default_collection: str = "agri_knowledge"
+    default_mode: Literal["vector", "bm25", "hybrid"] = "hybrid"
+    top_k: int = Field(default=5, ge=1, le=20)
+    use_hyde: bool = False
+
+
 StorageBackend = Literal["mysql", "dual", "mongo-read", "mongo"]
 DataFlywheelStorageBackend = Literal["mysql", "mongo"]
 
@@ -221,6 +236,7 @@ class Settings(BaseSettings):
     server: ServerConfig = ServerConfig()
     database: DatabaseConfig = DatabaseConfig()
     mongodb: MongoConfig = MongoConfig()
+    rag_service: RAGServiceConfig = RAGServiceConfig()
     storage: StorageConfig = StorageConfig()
     ai: AIConfig = AIConfig()
     weather: WeatherConfig = WeatherConfig()
@@ -323,6 +339,7 @@ __all__ = [
     "MongoConfig",
     "PROJECT_ROOT",
     "RateLimitConfig",
+    "RAGServiceConfig",
     "ReflectionConfig",
     "SecretsConfig",
     "ServerConfig",

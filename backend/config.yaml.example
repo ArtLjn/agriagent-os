@@ -28,6 +28,20 @@ mongodb:
   server_selection_timeout_ms: 2000 # 服务选择超时，单位毫秒。
   max_pool_size: 20           # AsyncIOMotorClient 连接池上限。
 
+# 外部 QuillRAG 只读检索配置。本项目只调用 /health 和 /retrieve，
+# 不调用 /ingest，不保存 embedding key，也不配置 embedding provider。
+rag_service:
+  enabled: false              # true 时按知识/诊断/种植建议等意图触发外部检索。
+  url: ""                     # 例如：http://127.0.0.1:8001；为空时不调用。
+  timeout_seconds: 3.0        # 单次 HTTP 请求超时，单位秒。
+  retry: 1                    # 网络错误/超时后的额外重试次数；5xx 不重试。
+  fallback_enabled: true      # 检索失败时降级为空知识块，主问答继续执行。
+  api_key: ""                 # 通过 RAG_SERVICE__API_KEY 环境变量或私密 config.yaml 设置；模板保持空。
+  default_collection: "agri_knowledge" # 默认知识库 collection。
+  default_mode: "hybrid"      # vector / bm25 / hybrid。
+  top_k: 5                    # 注入 prompt 前最多取前 5 条摘要。
+  use_hyde: false             # 是否请求 QuillRAG 执行 HyDE 查询改写。
+
 # MongoDB 迁移对象存储后端。可选：mysql、dual、mongo-read、mongo。
 storage:
   trace: "mongo"               # traceRecords。

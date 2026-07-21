@@ -9,6 +9,7 @@ from app.context.selectors.core import (
     UserSettingsSelector,
     WeatherSelector,
 )
+from app.context.selectors.knowledge import KnowledgeSelector
 from app.context.selectors.memory import MemorySelector
 from app.context.selectors.planting import (
     CostCategorySelector,
@@ -23,6 +24,7 @@ __all__ = [
     "CycleSelector",
     "FarmSelector",
     "LedgerSelector",
+    "KnowledgeSelector",
     "MemorySelector",
     "CostCategorySelector",
     "OperationWorkOrderSelector",

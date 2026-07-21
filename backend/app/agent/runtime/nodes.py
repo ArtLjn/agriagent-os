@@ -287,6 +287,7 @@ def _prepare_route_context(
         "trace_round_index": trace_round_index,
         "collector": collector,
         "session_id": session_id,
+        "user_msg": user_msg,
         "plan_draft_payload": plan_draft_payload,
         "should_record_router_trace": should_record_router_trace,
         "selected_names": selected_names,
@@ -386,6 +387,7 @@ async def _prepare_llm_prompt(
         intent=intent,
         selected_tool_names=llm_context["selected_tool_names"],
         router_decision=route_context["router_decision"],
+        query=route_context.get("user_msg", ""),
         user_id=state.get("user_id"),
         session_id=route_context["session_id"],
     )

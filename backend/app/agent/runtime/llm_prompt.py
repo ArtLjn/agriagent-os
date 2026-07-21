@@ -25,6 +25,7 @@ async def _prepare_context_bundle(
     router_decision: RouterDecision,
     user_id: int | None,
     session_id: str | None,
+    query: str = "",
 ):
     """准备 runtime context bundle 和 farm context。"""
     if prepared_context_bundle is not None:
@@ -38,6 +39,7 @@ async def _prepare_context_bundle(
             intent=intent,
             selected_tool_names=selected_tool_names,
             context_dependencies=router_decision.context_dependencies,
+            query=query,
             user_id=user_id,
             session_id=session_id,
         )

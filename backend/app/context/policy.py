@@ -10,6 +10,7 @@ from app.context.selectors import (
     CostCategorySelector,
     CycleSelector,
     FarmSelector,
+    KnowledgeSelector,
     LedgerSelector,
     MemorySelector,
     OperationWorkOrderSelector,
@@ -20,6 +21,7 @@ from app.context.selectors import (
     WeatherSelector,
     WorkerSelector,
 )
+from app.shared.config import settings
 
 
 class ContextLayer(StrEnum):
@@ -41,6 +43,7 @@ class ContextBuildRequest:
     """Context 构建请求。"""
 
     intent: str = "chat"
+    query: str = ""
     selected_tool_names: list[str] = field(default_factory=list)
     context_dependencies: list[str] = field(default_factory=list)
     selected_skill_metadata: dict[str, dict] = field(default_factory=dict)
@@ -63,6 +66,66 @@ class ContextPolicyResult:
 class ContextPolicy:
     """根据意图和工具选择 Context 构建策略。"""
 
+    RAG_INTENT_HINTS = frozenset(
+        {
+            "query_planting_advice",
+            "query_daily_operation_advice",
+            "query_weather_crop_impact",
+            "query_diagnosis",
+            "diagnosis",
+            "knowledge",
+            "planting_advice",
+            "plan",
+            "方案",
+        }
+    )
+    RAG_QUERY_HINTS = frozenset(
+        {
+            "病",
+            "虫",
+            "霜霉",
+            "黄叶",
+            "黄斑",
+            "诊断",
+            "防治",
+            "打药",
+            "施肥",
+            "控旺",
+            "育苗",
+            "定植",
+            "种植",
+            "方案",
+            "建议",
+            "怎么办",
+        }
+    )
+    RAG_BLOCKED_INTENT_HINTS = frozenset(
+        {
+            "cost",
+            "finance",
+            "debt",
+            "labor",
+            "wage",
+            "pending",
+            "confirm",
+            "confirmation",
+        }
+    )
+    RAG_BLOCKED_QUERY_HINTS = frozenset(
+        {
+            "花了",
+            "多少钱",
+            "账",
+            "支出",
+            "收入",
+            "人工",
+            "工资",
+            "工钱",
+            "确认",
+            "取消",
+        }
+    )
+
     COST_TOOLS = frozenset({"manage_cost"})
     WEATHER_TOOLS = frozenset({"weather"})
     CROP_CYCLE_TOOLS = frozenset(
@@ -83,6 +146,11 @@ class ContextPolicy:
     LABOR_TOOLS = frozenset({"manage_labor_payment"})
     COST_CATEGORY_TOOLS = frozenset({"manage_cost_categories"})
     PLANTING_UNIT_TOOLS = frozenset({"manage_planting_units"})
+
+    def __init__(self, rag_enabled: bool | None = None) -> None:
+        self.rag_enabled = (
+            settings.rag_service.enabled if rag_enabled is None else rag_enabled
+        )
 
     DEPENDENCY_SELECTORS = {
         "crop_cycle": (CycleSelector, "cycle"),
@@ -117,50 +185,19 @@ class ContextPolicy:
         """解析 Context 层、selector 和 token 预算。"""
         selected_tool_names = set(request.selected_tool_names)
         layers = [ContextLayer.HOT, ContextLayer.WORKING]
-        selectors: list[ContextSelector] = [
-            FarmSelector(),
-            UserSettingsSelector(),
-            CycleSelector(),
-            MemorySelector(),
-            ConversationSelector(),
-        ]
-        max_tokens = 512
-        dependency_map: dict[str, list[str]] = {}
-
-        dependencies = self._dependencies_from_request(request)
-        for dependency in dependencies:
-            selector_spec = self.DEPENDENCY_SELECTORS.get(dependency)
-            if selector_spec is None:
-                continue
-            selector_cls, block_key = selector_spec
-            if not any(isinstance(selector, selector_cls) for selector in selectors):
-                selectors.append(selector_cls())
-            dependency_map.setdefault(block_key, []).append(dependency)
-
-        if selected_tool_names & self.COST_TOOLS:
-            if not any(isinstance(selector, LedgerSelector) for selector in selectors):
-                selectors.append(LedgerSelector())
-            layers.append(ContextLayer.RETRIEVAL)
-            max_tokens = max(max_tokens, 900)
-
-        if selected_tool_names & self.CROP_CYCLE_TOOLS:
-            max_tokens = max(max_tokens, 700)
-
-        if selected_tool_names & self.WEATHER_TOOLS:
-            if not any(isinstance(selector, WeatherSelector) for selector in selectors):
-                selectors.append(WeatherSelector())
-            if not any(
-                isinstance(selector, RetrievalSelector) for selector in selectors
-            ):
-                selectors.append(RetrievalSelector())
-            layers.append(ContextLayer.RETRIEVAL)
-
-        if request.include_retrieval:
-            if not any(
-                isinstance(selector, RetrievalSelector) for selector in selectors
-            ):
-                selectors.append(RetrievalSelector())
-            layers.append(ContextLayer.RETRIEVAL)
+        selectors = self._base_selectors()
+        dependency_map = self._apply_dependency_selectors(selectors, request)
+        max_tokens = self._apply_tool_selectors(
+            selectors,
+            layers,
+            selected_tool_names,
+        )
+        max_tokens = self._apply_retrieval_selectors(
+            selectors,
+            layers,
+            request,
+            max_tokens,
+        )
 
         if dependency_map:
             layers.append(ContextLayer.RETRIEVAL)
@@ -172,6 +209,87 @@ class ContextPolicy:
             max_tokens=max_tokens,
             dependency_map=dependency_map,
         )
+
+    @staticmethod
+    def _base_selectors() -> list[ContextSelector]:
+        return [
+            FarmSelector(),
+            UserSettingsSelector(),
+            CycleSelector(),
+            MemorySelector(),
+            ConversationSelector(),
+        ]
+
+    def _apply_dependency_selectors(
+        self,
+        selectors: list[ContextSelector],
+        request: ContextBuildRequest,
+    ) -> dict[str, list[str]]:
+        dependency_map: dict[str, list[str]] = {}
+        for dependency in self._dependencies_from_request(request):
+            selector_spec = self.DEPENDENCY_SELECTORS.get(dependency)
+            if selector_spec is None:
+                continue
+            selector_cls, block_key = selector_spec
+            self._append_selector_once(selectors, selector_cls)
+            dependency_map.setdefault(block_key, []).append(dependency)
+        return dependency_map
+
+    def _apply_tool_selectors(
+        self,
+        selectors: list[ContextSelector],
+        layers: list[ContextLayer],
+        selected_tool_names: set[str],
+    ) -> int:
+        max_tokens = 512
+        if selected_tool_names & self.COST_TOOLS:
+            self._append_selector_once(selectors, LedgerSelector)
+            layers.append(ContextLayer.RETRIEVAL)
+            max_tokens = max(max_tokens, 900)
+        if selected_tool_names & self.CROP_CYCLE_TOOLS:
+            max_tokens = max(max_tokens, 700)
+        if selected_tool_names & self.WEATHER_TOOLS:
+            self._append_selector_once(selectors, WeatherSelector)
+            self._append_selector_once(selectors, RetrievalSelector)
+            layers.append(ContextLayer.RETRIEVAL)
+        return max_tokens
+
+    def _apply_retrieval_selectors(
+        self,
+        selectors: list[ContextSelector],
+        layers: list[ContextLayer],
+        request: ContextBuildRequest,
+        max_tokens: int,
+    ) -> int:
+        if request.include_retrieval:
+            self._append_selector_once(selectors, RetrievalSelector)
+            layers.append(ContextLayer.RETRIEVAL)
+        if self._should_trigger_rag(request):
+            self._append_selector_once(selectors, KnowledgeSelector)
+            layers.append(ContextLayer.RETRIEVAL)
+            max_tokens = max(max_tokens, 900)
+        return max_tokens
+
+    @staticmethod
+    def _append_selector_once(
+        selectors: list[ContextSelector],
+        selector_cls: type,
+    ) -> None:
+        if not any(isinstance(selector, selector_cls) for selector in selectors):
+            selectors.append(selector_cls())
+
+    def _should_trigger_rag(self, request: ContextBuildRequest) -> bool:
+        if not self.rag_enabled:
+            return False
+        intent = request.intent.lower()
+        query = request.query.strip()
+        if any(hint in intent for hint in self.RAG_BLOCKED_INTENT_HINTS):
+            return False
+        if any(hint in query for hint in self.RAG_BLOCKED_QUERY_HINTS):
+            return False
+        if any(hint in intent for hint in self.RAG_INTENT_HINTS):
+            return True
+        return bool(query) and any(hint in query for hint in self.RAG_QUERY_HINTS)
 
     def _dependencies_from_request(self, request: ContextBuildRequest) -> list[str]:
         selected_tool_names = set(request.selected_tool_names)
