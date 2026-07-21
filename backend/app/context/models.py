@@ -133,7 +133,10 @@ class ContextBundle:
 
     def summary(self) -> dict[str, Any]:
         """输出 ContextBundle trace 摘要。"""
-        return {
+        from app.context.renderer import ContextRenderer
+
+        section_summary = ContextRenderer().debug_summary(self)
+        summary = {
             "token_budget": self.token_budget,
             "token_estimate": self.token_estimate,
             "blocks": [block.summary() for block in self.blocks],
@@ -141,6 +144,8 @@ class ContextBundle:
             "dropped_blocks": [block.summary() for block in self.dropped_blocks],
             **self.metadata,
         }
+        summary["sections"] = section_summary["sections"]
+        return summary
 
 
 __all__ = ["ContextBlock", "ContextBundle", "estimate_tokens"]
