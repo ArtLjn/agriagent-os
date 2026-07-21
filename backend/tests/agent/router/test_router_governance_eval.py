@@ -53,6 +53,18 @@ def _tools(names: list[str]):
             "query_payables",
         ),
         (
+            "how much unpaid worker wages remain",
+            "manage_labor_payment",
+            "manage_labor_payment",
+            "query_payables",
+        ),
+        (
+            "show my worker list",
+            "manage_workers",
+            "manage_workers",
+            "query_workers",
+        ),
+        (
             "我的默认天气城市是什么",
             "manage_user_settings",
             "manage_settings",
@@ -165,7 +177,7 @@ def test_router_top1_capability_accuracy(
     assert decision.fallback != "fallback_all"
 
 
-def test_router_top3_recall_for_uncategorized_business_read_stays_read_only() -> None:
+def test_router_registry_recall_for_business_read_stays_read_only() -> None:
     budget = DisclosureBudget()
     tools = _tools(_governance_tool_pool())
 
@@ -173,8 +185,9 @@ def test_router_top3_recall_for_uncategorized_business_read_stays_read_only() ->
     selected_candidates = _selected_candidates(decision.selected_tools, tools)
 
     assert 0 < len(decision.selected_tools) <= budget.max_tools_default
-    assert decision.fallback == "model_choice_read_default"
+    assert decision.fallback is None
     assert decision.fallback != "fallback_all"
+    assert decision.frames[0].evidence["source"] == "candidate_retriever"
     assert all(candidate.risk == "read" for candidate in selected_candidates)
     assert "create_cost_record" not in decision.selected_tools
 
