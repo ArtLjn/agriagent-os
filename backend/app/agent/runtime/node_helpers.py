@@ -19,6 +19,7 @@ from app.agent.runtime.planning import (
 from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.agent.state import AgentState
 from app.context.models import ContextBundle
+from app.context.renderer import ContextRenderer
 from app.infra.pending_actions import PENDING_MARKER
 from app.infra.trace_context import set_round_index
 
@@ -282,7 +283,7 @@ def _enabled_selected_tool_names(selected_names: list[str], tools: list) -> list
 
 
 def _append_runtime_context(system_text: str, context_bundle: ContextBundle) -> str:
-    runtime_context_text = context_bundle.render_text()
+    runtime_context_text = ContextRenderer().render_prompt_text(context_bundle)
     if not runtime_context_text:
         return system_text
     return (
@@ -338,6 +339,7 @@ def _record_prompt_budget(
     return system, messages, input_summary
 
 
+# fmt: off
 def _record_llm_response(
     *, response: AIMessage, collector, model_role: str, circuit_key: str,
     model_name: str, duration_ms: int, selected_tools: list,
@@ -346,17 +348,18 @@ def _record_llm_response(
     plan_draft_payload: dict, input_summary: str, extract_token_usage_func,
     extract_tokens_used_func,
 ) -> tuple[AIMessage, dict | None]:
+# fmt: on
     """整理最终响应、记录 LLM trace，并返回 token usage。"""
     token_usage = extract_token_usage_func(response)
     tokens = _response_token_count(response, token_usage, extract_tokens_used_func)
     _log_llm_response(
-        model_role=model_role,
-        circuit_key=circuit_key,
-        model_name=model_name,
-        duration_ms=duration_ms,
-        selected_tools=selected_tools,
-        response=response,
-        tokens=tokens,
+        model_role,
+        circuit_key,
+        model_name,
+        duration_ms,
+        selected_tools,
+        response,
+        tokens,
     )
     if response.tool_calls:
         output_summary = _tool_call_output_summary(response, model_name)
@@ -390,7 +393,6 @@ def _response_token_count(response: AIMessage, token_usage: dict | None, fallbac
 
 
 def _log_llm_response(
-    *,
     model_role: str,
     circuit_key: str,
     model_name: str,
