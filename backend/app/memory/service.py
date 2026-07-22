@@ -22,6 +22,7 @@ from app.memory.models import (
     MemoryHit,
     MemoryMessage,
 )
+from app.memory.long_term import SQLLongTermMemoryStore
 from app.memory.schemas import MemoryObservationEvent, MemorySearchQuery
 from app.memory.short_term import InMemoryShortTermMemory
 from app.domains.conversation.models import Conversation
@@ -52,11 +53,11 @@ class EmptyMemoryRetrievalStore:
 class InMemoryMemoryService:
     """Memory Service 的进程内实现。"""
 
-    def __init__(self, recent_message_limit: int = 12) -> None:
+    def __init__(self, recent_message_limit: int = 12, long_term=None) -> None:
         self.short_term = InMemoryShortTermMemory(
             recent_message_limit=recent_message_limit
         )
-        self.long_term = EmptyLongTermMemoryStore()
+        self.long_term = long_term or EmptyLongTermMemoryStore()
         self.retrieval = EmptyMemoryRetrievalStore()
         self.observation_sink = InMemoryObservationEventSink()
 
@@ -452,9 +453,15 @@ def _update_summary_if_version_matches(
     return True
 
 
-_memory_service = InMemoryMemoryService()
+_memory_service = InMemoryMemoryService(long_term=SQLLongTermMemoryStore())
 
 
 def get_memory_service() -> InMemoryMemoryService:
     """返回默认 Memory Service 实例。"""
     return _memory_service
+
+
+__all__ = [
+    "InMemoryMemoryService",
+    "get_memory_service",
+]

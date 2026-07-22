@@ -26,6 +26,10 @@ from app.application.chat.task_state_updater import (
     TaskStateTurn,
     update_task_state_after_turn,
 )
+from app.memory.explicit import (
+    ExplicitMemoryTurn,
+    record_explicit_memory_after_turn,
+)
 from app.shared.database import SessionLocal
 from app.memory.service import get_memory_service
 from app.domains.farm.models import Farm
@@ -185,6 +189,7 @@ async def run_stream_background_finalization(
         await _save_stream_reply_payload(db, payload)
         log_stream_stage(request_id, "background_save_reply", save_started_at)
         await update_stream_task_state_payload(db, payload, request_id=request_id)
+        await record_stream_explicit_memory_payload(db, payload, request_id=request_id)
     except Exception:
         db.rollback()
         logger.exception("[%s] stream 后台保存回复失败", request_id)
@@ -227,6 +232,30 @@ async def update_stream_task_state_payload(
         ),
     )
     log_stream_stage(request_id, "background_task_state", task_state_started_at)
+
+
+async def record_stream_explicit_memory_payload(
+    db: Session,
+    payload: StreamReplyPersistencePayload,
+    *,
+    request_id: str,
+) -> None:
+    """在流式后台收尾阶段记录用户显式长期记忆。"""
+    memory_started_at = time.perf_counter()
+    await record_explicit_memory_after_turn(
+        db,
+        ExplicitMemoryTurn(
+            farm_id=payload.farm_id,
+            user_id=payload.user_id,
+            session_id=payload.session_id,
+            user_input=payload.user_input,
+            assistant_reply=payload.full_reply,
+            pending_action=payload.pending_action,
+            pending_plan=payload.pending_plan,
+            pending_decision_handled=payload.pending_decision_handled,
+        ),
+    )
+    log_stream_stage(request_id, "background_explicit_memory", memory_started_at)
 
 
 async def finish_stream_turn_payload(

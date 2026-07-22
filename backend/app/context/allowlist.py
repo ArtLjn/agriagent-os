@@ -27,6 +27,7 @@ ALLOWED_CONTEXT_KEYS: frozenset[str] = frozenset(
         "user_settings",
         "assistant_role",
         "short_term_recent",
+        "long_term_memory",
     }
 )
 

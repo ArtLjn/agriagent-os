@@ -22,6 +22,7 @@ from app.domains.planting.models import (
 )
 from app.domains.users.models import User
 from app.domains.users.settings_models import UserSetting
+from app.memory.long_term.models import MemoryRecord
 from app.platforms.data_flywheel.models import (
     AgentCaseDraft,
     AgentDataFlywheelLabel,
@@ -60,6 +61,7 @@ __all__ = [
     "GuardrailsLog",
     "IdempotencyKey",
     "LaborEntry",
+    "MemoryRecord",
     "MongoCompensationTask",
     "OperationWorkOrder",
     "OperationWorkOrderUnit",

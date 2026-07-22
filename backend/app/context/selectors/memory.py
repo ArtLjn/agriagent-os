@@ -3,7 +3,12 @@
 import json
 
 from app.context.models import ContextBlock
-from app.memory.models import MemoryContext, MemoryMessage, PendingActionSnapshot
+from app.memory.models import (
+    LongTermMemoryContext,
+    MemoryContext,
+    MemoryMessage,
+    PendingActionSnapshot,
+)
 
 
 class MemorySelector:
@@ -19,11 +24,44 @@ class MemorySelector:
         blocks = []
         if memory_context is not None:
             blocks.extend(self._select_short_term(memory_context))
+            long_term_block = self._select_long_term(memory_context.long_term)
+            if long_term_block is not None:
+                blocks.append(long_term_block)
 
         legacy_block = self._select_legacy(memory_summary, memory_hits)
         if legacy_block is not None:
             blocks.append(legacy_block)
         return blocks
+
+    def _select_long_term(
+        self,
+        long_term: LongTermMemoryContext,
+    ) -> ContextBlock | None:
+        if long_term.is_empty():
+            return None
+
+        lines: list[str] = []
+        lines.extend(f"偏好：{item.value}" for item in long_term.user_preferences[:3])
+        lines.extend(
+            f"农场画像：{item.summary}" for item in long_term.farm_profiles[:2]
+        )
+        lines.extend(f"事实：{item.fact}" for item in long_term.key_facts[:3])
+        lines.extend(
+            f"账务摘要：{item.summary}" for item in long_term.ledger_summaries[:2]
+        )
+        if not lines:
+            return None
+
+        return ContextBlock(
+            key="long_term_memory",
+            source="memory.long_term",
+            purpose="长期记忆",
+            content="\n".join(lines[:5]),
+            priority=55,
+            compressible=True,
+            min_tokens=48,
+            metadata={"layer": "working", "cache_scope": "farm_user"},
+        )
 
     def _select_legacy(
         self,

@@ -364,6 +364,10 @@ async def test_chat_use_case_updates_task_state_after_advisor_reply() -> None:
             new_callable=AsyncMock,
         ) as mock_update,
         patch(
+            "app.application.chat.use_case.record_explicit_memory_after_turn",
+            new_callable=AsyncMock,
+        ) as mock_memory,
+        patch(
             "app.application.chat.use_case._observe_chat_completion",
             new_callable=AsyncMock,
         ),
@@ -385,6 +389,15 @@ async def test_chat_use_case_updates_task_state_after_advisor_reply() -> None:
     assert turn.pending_action is None
     assert turn.pending_plan is None
     assert turn.pending_decision_handled is False
+    mock_memory.assert_awaited_once()
+    memory_turn = mock_memory.await_args.args[1]
+    assert memory_turn.farm_id == 1
+    assert memory_turn.user_id == "user-1"
+    assert memory_turn.session_id == "sess-chat"
+    assert memory_turn.user_input == "帮我制定番茄补光计划"
+    assert memory_turn.pending_action is None
+    assert memory_turn.pending_plan is None
+    assert memory_turn.pending_decision_handled is False
 
 
 async def test_stream_background_finalization_updates_task_state() -> None:
@@ -423,6 +436,10 @@ async def test_stream_background_finalization_updates_task_state() -> None:
             "app.application.chat.stream_finalization.update_task_state_after_turn",
             new_callable=AsyncMock,
         ) as mock_update,
+        patch(
+            "app.application.chat.stream_finalization.record_explicit_memory_after_turn",
+            new_callable=AsyncMock,
+        ) as mock_memory,
     ):
         await stream_finalization.run_stream_background_finalization(
             payload,
@@ -434,3 +451,8 @@ async def test_stream_background_finalization_updates_task_state() -> None:
     assert turn.session_id == "sess-stream"
     assert turn.user_input == "帮我制定番茄补光计划"
     assert turn.assistant_reply == "还需要补充：棚室面积。"
+    mock_memory.assert_awaited_once()
+    memory_turn = mock_memory.await_args.args[1]
+    assert memory_turn.session_id == "sess-stream"
+    assert memory_turn.user_input == "帮我制定番茄补光计划"
+    assert memory_turn.assistant_reply == "还需要补充：棚室面积。"
