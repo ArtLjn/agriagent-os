@@ -37,6 +37,7 @@ Farm Manager 不配置、不调用、不保存 embedding provider 或 embedding 
 - 网络错误和超时：按 `retry` 重试，仍失败则标准化为 `rag_unavailable` 元数据。
 - HTTP 4xx/5xx：不重试，标准化为 `http_<status>` 错误码。
 - `fallback_enabled=true` 时，失败不会抛出到主问答，只在 bundle metadata 中留下失败摘要。
+- `fallback_enabled=false` 时，失败会从 `ContextBuilder` 向上冒泡，由 runtime/API 层决定如何返回可解释错误。
 - 空检索结果返回空 block，并记录 `rag_empty=true`。
 
 ## 明确不做

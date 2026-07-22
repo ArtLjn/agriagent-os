@@ -13,6 +13,7 @@ from app.shared.config import (
 from app.context.allowlist import is_allowed_key
 from app.context.budget import TokenBudget
 from app.context.models import ContextBlock, ContextBundle
+from app.context.rag_provider import RAGUnavailableError
 from app.context.selectors import (
     ConversationSelector,
     CostCategorySelector,
@@ -129,6 +130,8 @@ class ContextBuilder:
                     )
                 )
                 self._collect_selector_metadata(selector_metadata, selector)
+            except RAGUnavailableError:
+                raise
             except Exception as exc:
                 selector_errors.append(
                     {

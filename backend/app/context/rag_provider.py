@@ -16,6 +16,22 @@ class RAGRetrieveClient(Protocol):
     def retrieve(self, **kwargs) -> QuillRAGRetrieveResult: ...
 
 
+class RAGUnavailableError(RuntimeError):
+    """RAG fail-closed 异常，用于跳过 Builder 的普通 selector 降级。"""
+
+    def __init__(
+        self,
+        *,
+        error_code: str,
+        error_message: str,
+        status_code: int | None = None,
+    ) -> None:
+        super().__init__(f"QuillRAG retrieve failed: {error_code}")
+        self.error_code = error_code
+        self.error_message = error_message
+        self.status_code = status_code
+
+
 @dataclass(frozen=True, slots=True)
 class RAGKnowledgeSelection:
     """RAG selector 的 block 与 trace 元数据。"""
@@ -61,7 +77,11 @@ class RAGKnowledgeProvider:
         if not result.ok:
             if self.config.fallback_enabled:
                 return RAGKnowledgeSelection(metadata=metadata)
-            raise RuntimeError(f"QuillRAG retrieve failed: {result.error_code}")
+            raise RAGUnavailableError(
+                error_code=result.error_code or "unknown",
+                error_message=result.error_message,
+                status_code=result.status_code,
+            )
         if not result.results:
             metadata["rag_empty"] = True
             return RAGKnowledgeSelection(metadata=metadata)
@@ -136,5 +156,6 @@ def _compact_text(text: str, *, limit: int) -> str:
 __all__ = [
     "RAGKnowledgeProvider",
     "RAGKnowledgeSelection",
+    "RAGUnavailableError",
     "RAGRetrieveClient",
 ]

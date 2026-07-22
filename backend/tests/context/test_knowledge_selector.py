@@ -1,7 +1,9 @@
 """外部 RAG 知识 selector 测试。"""
 
-from app.context.models import ContextBundle
+import pytest
+
 from app.context.builder import ContextBuilder
+from app.context.models import ContextBundle
 from app.context.renderer import ContextRenderer
 from app.context.rag_provider import RAGKnowledgeProvider
 from app.context.selectors.knowledge import KnowledgeSelector
@@ -22,12 +24,17 @@ class FakeRAGClient:
         return self.result
 
 
-def _provider(result: QuillRAGRetrieveResult) -> RAGKnowledgeProvider:
+def _provider(
+    result: QuillRAGRetrieveResult,
+    *,
+    fallback_enabled: bool = True,
+) -> RAGKnowledgeProvider:
     return RAGKnowledgeProvider(
         client=FakeRAGClient(result),
         config=RAGServiceConfig(
             enabled=True,
             url="http://rag.local",
+            fallback_enabled=fallback_enabled,
             api_key=PLACEHOLDER_API_KEY,
             default_collection="agri_knowledge",
             default_mode="hybrid",
@@ -126,6 +133,32 @@ def test_builder_attaches_rag_fallback_metadata_to_bundle(db_session) -> None:
     assert metadata["rag_unavailable"] is True
     assert metadata["rag_error_code"] == "timeout"
     assert PLACEHOLDER_API_KEY not in str(bundle.summary())
+
+
+def test_builder_propagates_rag_error_when_fallback_disabled(db_session) -> None:
+    selector = KnowledgeSelector(
+        provider=_provider(
+            QuillRAGRetrieveResult(
+                ok=False,
+                error_code="http_503",
+                error_message="service unavailable",
+            ),
+            fallback_enabled=False,
+        )
+    )
+    builder = ContextBuilder(selectors=[selector], max_tokens=128)
+
+    with pytest.raises(Exception) as excinfo:
+        builder.build(
+            db=db_session,
+            farm_id=1,
+            query="黄瓜霜霉病怎么处理",
+        )
+
+    exc = excinfo.value
+    assert exc.__class__.__name__ == "RAGUnavailableError"
+    assert getattr(exc, "error_code") == "http_503"
+    assert getattr(exc, "error_message") == "service unavailable"
 
 
 def test_rag_prompt_and_debug_summary_do_not_expose_api_key_or_raw_json() -> None:
