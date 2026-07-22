@@ -80,6 +80,45 @@ def test_knowledge_selector_generates_rag_knowledge_block() -> None:
     assert block.metadata["warning"] == "hybrid_to_bm25_fallback"
 
 
+def test_knowledge_selector_keeps_safe_rag_source_trace_metadata() -> None:
+    selector = KnowledgeSelector(
+        provider=_provider(
+            QuillRAGRetrieveResult(
+                ok=True,
+                actual_mode="hybrid",
+                results=[
+                    QuillRAGDocument(
+                        content="黄瓜霜霉病原始正文不会进入 metadata 摘要。",
+                        score=0.91,
+                        doc_id="cucumber-guide",
+                        chunk_index=4,
+                        metadata={
+                            "source": "guide.md",
+                            "api_key": PLACEHOLDER_API_KEY,
+                            "raw_chunk": "原始 chunk",
+                        },
+                    )
+                ],
+            )
+        )
+    )
+
+    block = selector.select(query="黄瓜霜霉病怎么处理")[0]
+
+    assert block.metadata["source_count"] == 1
+    assert block.metadata["top_score"] == 0.91
+    assert block.metadata["sources"] == [
+        {
+            "doc_id": "cucumber-guide",
+            "chunk_index": 4,
+            "score": 0.91,
+            "metadata": {"source": "guide.md"},
+        }
+    ]
+    assert PLACEHOLDER_API_KEY not in str(block.metadata)
+    assert "raw_chunk" not in str(block.metadata)
+
+
 def test_knowledge_selector_returns_empty_block_for_empty_results() -> None:
     selector = KnowledgeSelector(
         provider=_provider(

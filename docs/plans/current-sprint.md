@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-17
+last_updated: 2026-07-22
 status: active
 ---
 
@@ -18,6 +18,7 @@ status: active
 
 ## 已完成
 
+- Phase 5 Context trace 摘要证据链：Mongo trace 只保存 Context/RAG/Policy/Section 安全摘要，RAG 原文、完整 prompt、密钥和 Mongo URI 密码不进入 trace；trace 写入失败不影响 Agent 回复。
 - Auth 模块化：密码、Token、权限、用户依赖和稳定错误码已迁移到 `app.modules.auth`。
 - 平台级 `skills/` 迁移已整体迁出 `agent/skills/` 的注册、权限、schema 和执行适配；旧 agent skills 兼容入口已删除，新增 Skill 必须进入 `app.skills`。
 - Bootstrap 与 API 瘦身：应用启动逻辑进入 `app.bootstrap`，Agent API 业务编排已迁移到顶层 `app.application`，旧 agent application 兼容入口已删除。
