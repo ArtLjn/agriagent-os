@@ -135,6 +135,7 @@ async def _get_runtime_context_bundle(
     context_dependencies: list[str] | None = None,
     user_id: str | None = None,
     session_id: str | None = None,
+    query: str = "",
     memory_context_loader=None,
 ) -> tuple[ContextBundle, dict]:
     """构建 Runtime ContextBundle，并返回兼容旧 prompt 的 farm context。"""
@@ -165,6 +166,7 @@ async def _get_runtime_context_bundle(
             context_builder = ContextBuilder()
             request = ContextBuildRequest(
                 intent=intent,
+                query=query,
                 selected_tool_names=list(selected_tool_names),
                 context_dependencies=list(context_dependencies or []),
                 farm_id=farm_id,

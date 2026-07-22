@@ -16,6 +16,7 @@ ALLOWED_CONTEXT_KEYS: frozenset[str] = frozenset(
         "current_crop_cycle_pointer",  # 只放 ID，不放详情
         "cycle",
         "ledger",
+        "rag_knowledge",
         # 状态
         "pending_action_pointer",
         "pending_plan_pointer",

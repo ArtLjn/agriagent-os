@@ -13,6 +13,7 @@ from app.shared.config import (
 from app.context.allowlist import is_allowed_key
 from app.context.budget import TokenBudget
 from app.context.models import ContextBlock, ContextBundle
+from app.context.rag_provider import RAGUnavailableError
 from app.context.selectors import (
     ConversationSelector,
     CostCategorySelector,
@@ -77,8 +78,42 @@ class ContextBuilder:
     ) -> ContextBundle:
         """选择上下文、应用预算并记录 trace。"""
         start = time.time()
+        blocks, selector_errors, selector_metadata = self._select_blocks(
+            db=db,
+            farm_id=farm_id,
+            user_id=user_id,
+            session_id=session_id,
+            **kwargs,
+        )
+
+        # 白名单过滤：违禁字段不进入 prompt（设计意图见 13_Agent范式规范化设计.md §5.9.2）
+        original_keys = {b.key for b in blocks}
+        blocks = self._apply_allowlist_filter(blocks)
+        filtered_keys = original_keys - {b.key for b in blocks}
+
+        bundle = self.budget.apply(blocks)
+        bundle.metadata["selector_errors"] = selector_errors
+        bundle.metadata["selector_metadata"] = selector_metadata
+        bundle.metadata["allowlist_filtered_keys"] = sorted(filtered_keys)
+        self._attach_dependency_summary(
+            bundle,
+            kwargs.get("context_dependency_map") or {},
+        )
+        self._record_trace(bundle, start)
+        return bundle
+
+    def _select_blocks(
+        self,
+        *,
+        db: Session,
+        farm_id: int,
+        user_id: str | None,
+        session_id: str | None,
+        **kwargs,
+    ) -> tuple[list[ContextBlock], list[dict[str, str]], dict[str, dict]]:
         blocks: list[ContextBlock] = []
         selector_errors: list[dict[str, str]] = []
+        selector_metadata: dict[str, dict] = {}
         for selector in self.selectors:
             try:
                 selected_blocks = selector.select(
@@ -94,6 +129,9 @@ class ContextBuilder:
                         kwargs.get("context_dependency_map") or {},
                     )
                 )
+                self._collect_selector_metadata(selector_metadata, selector)
+            except RAGUnavailableError:
+                raise
             except Exception as exc:
                 selector_errors.append(
                     {
@@ -101,21 +139,7 @@ class ContextBuilder:
                         "error": str(exc)[:200],
                     }
                 )
-
-        # 白名单过滤：违禁字段不进入 prompt（设计意图见 13_Agent范式规范化设计.md §5.9.2）
-        original_keys = {b.key for b in blocks}
-        blocks = self._apply_allowlist_filter(blocks)
-        filtered_keys = original_keys - {b.key for b in blocks}
-
-        bundle = self.budget.apply(blocks)
-        bundle.metadata["selector_errors"] = selector_errors
-        bundle.metadata["allowlist_filtered_keys"] = sorted(filtered_keys)
-        self._attach_dependency_summary(
-            bundle,
-            kwargs.get("context_dependency_map") or {},
-        )
-        self._record_trace(bundle, start)
-        return bundle
+        return blocks, selector_errors, selector_metadata
 
     def build_runtime_context_bundle(
         self,
@@ -141,6 +165,7 @@ class ContextBuilder:
                 session_id=request.session_id,
                 memory_context=memory_context,
                 context_dependency_map=policy_result.dependency_map,
+                query=request.query,
             )
         finally:
             self.selectors = previous_selectors
@@ -263,6 +288,17 @@ class ContextBuilder:
                 }
             )
         bundle.metadata["context_dependency_diagnostics"] = diagnostics
+
+    @staticmethod
+    def _collect_selector_metadata(
+        selector_metadata: dict[str, dict],
+        selector,
+    ) -> None:
+        metadata = getattr(selector, "last_metadata", None)
+        if not isinstance(metadata, dict) or not metadata:
+            return
+        if "rag_called" in metadata:
+            selector_metadata["knowledge"] = dict(metadata)
 
     def _record_trace(self, bundle: ContextBundle, start: float) -> None:
         collector = self.trace_collector

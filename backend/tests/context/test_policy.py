@@ -173,3 +173,61 @@ def test_policy_request_keeps_runtime_identity_and_retrieval_flag() -> None:
     assert request.session_id == "session-1"
     assert ContextLayer.RETRIEVAL in result.enabled_layers
     assert "RetrievalSelector" in _selector_names(result)
+
+
+def test_policy_triggers_external_rag_for_planting_and_diagnosis_questions() -> None:
+    policy = ContextPolicy(rag_enabled=True)
+
+    planting = policy.resolve(
+        ContextBuildRequest(
+            intent="query_planting_advice",
+            query="大棚番茄现在怎么控旺",
+            farm_id=1,
+        )
+    )
+    diagnosis = policy.resolve(
+        ContextBuildRequest(
+            intent="query_diagnosis",
+            query="黄瓜叶片黄斑像霜霉病怎么办",
+            farm_id=1,
+        )
+    )
+
+    assert ContextLayer.RETRIEVAL in planting.enabled_layers
+    assert ContextLayer.RETRIEVAL in diagnosis.enabled_layers
+    assert "KnowledgeSelector" in _selector_names(planting)
+    assert "KnowledgeSelector" in _selector_names(diagnosis)
+
+
+def test_policy_does_not_trigger_external_rag_for_accounting_or_pending_confirm() -> (
+    None
+):
+    policy = ContextPolicy(rag_enabled=True)
+
+    accounting_write = policy.resolve(
+        ContextBuildRequest(
+            intent="create_cost_record",
+            query="买肥料花了 80 元",
+            selected_tool_names=["manage_cost"],
+            farm_id=1,
+        )
+    )
+    accounting_read = policy.resolve(
+        ContextBuildRequest(
+            intent="query_cost_summary",
+            query="这个月花了多少钱",
+            selected_tool_names=["manage_cost"],
+            farm_id=1,
+        )
+    )
+    pending_confirm = policy.resolve(
+        ContextBuildRequest(
+            intent="pending_confirmation",
+            query="确认",
+            farm_id=1,
+        )
+    )
+
+    assert "KnowledgeSelector" not in _selector_names(accounting_write)
+    assert "KnowledgeSelector" not in _selector_names(accounting_read)
+    assert "KnowledgeSelector" not in _selector_names(pending_confirm)
