@@ -36,6 +36,7 @@ class ContextRenderer:
         "conversation_summary": "Context",
         "short_term_recent": "Context",
         "short_term_summary": "Context",
+        "long_term_memory": "Context",
         "user_settings": "Context",
         "output_contract": "Output",
         "citation_rule": "Output",

@@ -18,14 +18,26 @@ from app.context.selectors.planting import (
     UnpaidLaborSummarySelector,
     WorkerSelector,
 )
-from app.memory.models import MemoryContext, MemoryMessage, PendingActionSnapshot
+from app.memory.models import (
+    KeyFactMemory,
+    LongTermMemoryContext,
+    MemoryContext,
+    MemoryMessage,
+    PendingActionSnapshot,
+    UserPreferenceMemory,
+)
 from app.domains.conversation.models import Conversation, ConversationMessage
 from app.domains.finance.cost_models import CostRecord
 from app.domains.finance.cost_category_models import CostCategory
 from app.domains.planting.crop_models import CropTemplate
 from app.domains.planting.cycle_models import CropCycle
 from app.domains.farm.models import Farm
-from app.domains.planting.models import LaborEntry, OperationWorkOrder, PlantingUnit, Worker
+from app.domains.planting.models import (
+    LaborEntry,
+    OperationWorkOrder,
+    PlantingUnit,
+    Worker,
+)
 from app.domains.users.settings_models import UserSetting
 
 
@@ -216,6 +228,39 @@ def test_memory_selector_returns_short_term_memory_blocks() -> None:
         blocks_by_key["short_term_recent"].metadata
         is not blocks_by_key["short_term_summary"].metadata
     )
+
+
+def test_memory_selector_injects_confirmed_long_term_memory() -> None:
+    memory_context = MemoryContext(
+        user_id="user-1",
+        farm_id=1,
+        session_id="session-1",
+        long_term=LongTermMemoryContext(
+            user_preferences=[
+                UserPreferenceMemory(
+                    key="preference",
+                    value="以后面积单位用亩",
+                    confidence=1.0,
+                )
+            ],
+            key_facts=[
+                KeyFactMemory(
+                    fact="老王就是农资店老板",
+                    source="user_explicit",
+                    confidence=1.0,
+                )
+            ],
+        ),
+    )
+
+    blocks = MemorySelector().select(memory_context=memory_context)
+    blocks_by_key = {block.key: block for block in blocks}
+
+    assert blocks_by_key["long_term_memory"].source == "memory.long_term"
+    assert blocks_by_key["long_term_memory"].priority == 55
+    assert blocks_by_key["long_term_memory"].metadata["layer"] == "working"
+    assert "偏好：以后面积单位用亩" in blocks_by_key["long_term_memory"].content
+    assert "事实：老王就是农资店老板" in blocks_by_key["long_term_memory"].content
 
 
 def test_planting_selectors_summarize_units_work_orders_workers_and_unpaid_labor(
