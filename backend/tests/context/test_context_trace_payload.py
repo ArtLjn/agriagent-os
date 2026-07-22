@@ -131,6 +131,82 @@ def test_context_trace_payload_preserves_rag_diagnostics_without_raw_chunks() ->
     assert "rag-auth-token" not in payload_text
 
 
+def test_context_trace_payload_redacts_prefixed_secret_keys_and_text() -> None:
+    bundle = ContextBundle(
+        blocks=[
+            ContextBlock(
+                key="farm",
+                source="farm",
+                purpose="农场状态",
+                content="block metadata 包含 api_token=DEPKEY",
+                priority=90,
+                metadata={
+                    "layer": "context",
+                    "required_reason": "refresh_token=REALTOKEN",
+                    "selected_by_skill_dependencies": [
+                        "embedding_api_key: EMBEDKEY",
+                        "api_token=DEPKEY",
+                    ],
+                },
+            )
+        ],
+        token_budget=300,
+        token_estimate=120,
+        metadata={
+            "selector_errors": [
+                {
+                    "selector": "KnowledgeSelector",
+                    "error": "rag_service_api_key=REALKEY",
+                },
+                {
+                    "selector": "EmbeddingSelector",
+                    "error": "embedding_api_key: EMBEDKEY",
+                },
+            ],
+            "context_dependency_diagnostics": [
+                {
+                    "block_key": "rag_knowledge",
+                    "dependencies": ["retrieve"],
+                    "status": "selected",
+                    "rag_service_api_key": "REALKEY",
+                    "refresh_token": "REALTOKEN",
+                    "embedding_api_key": "EMBEDKEY",
+                    "api_token": "DEPKEY",
+                }
+            ],
+            "policy": {
+                "intent": "query",
+                "selected_tool_names": ["search"],
+                "enabled_layers": ["context"],
+                "context_dependency_map": {},
+                "rag_service_api_key": "REALKEY",
+            },
+            "selector_metadata": {
+                "knowledge": {
+                    "collection": "agri",
+                    "actual_mode": "hybrid",
+                    "warning": "api_token=DEPKEY",
+                    "source_count": 1,
+                    "sources": [
+                        {
+                            "doc_id": "doc-1",
+                            "score": 0.8,
+                            "metadata": {"embedding_api_key": "EMBEDKEY"},
+                        }
+                    ],
+                }
+            },
+        },
+    )
+
+    payload_text = str(build_context_trace_payload(bundle))
+
+    assert "REALKEY" not in payload_text
+    assert "REALTOKEN" not in payload_text
+    assert "EMBEDKEY" not in payload_text
+    assert "DEPKEY" not in payload_text
+
+
 def test_context_builder_record_trace_uses_safe_payload(db_session) -> None:
     collector = RecordingCollector()
     secret_content = "完整 prompt 正文不应进入 trace，token=raw-token。" * 30

@@ -22,6 +22,14 @@ SENSITIVE_KEYS = {
     "passwd",
     "pwd",
 }
+SENSITIVE_KEY_PARTS = {
+    "authorization",
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "pwd",
+}
 SAFE_RAG_SOURCE_METADATA_KEYS = {
     "source",
     "title",
@@ -36,7 +44,8 @@ _MONGO_URI_PASSWORD_RE = re.compile(
     re.IGNORECASE,
 )
 _INLINE_SECRET_RE = re.compile(
-    r"(?i)\b(api[_-]?key|x-api-key|authorization|token|secret|password)"
+    r"(?i)\b([a-z0-9_.-]*(?:x-api-key|api[_-]?key|apikey|authorization|token|"
+    r"secret|password|passwd|pwd)[a-z0-9_.-]*)"
     r"(\s*[:=]\s*)(bearer\s+)?[^\s,;，；。]+"
 )
 
@@ -228,7 +237,11 @@ def _sanitize_text(text: str) -> str:
 
 def _is_sensitive_key(key: str) -> bool:
     normalized = key.strip().lower().replace("_", "-")
-    return normalized in SENSITIVE_KEYS
+    compact = normalized.replace("-", "")
+    if normalized in SENSITIVE_KEYS or "apikey" in compact or "xapikey" in compact:
+        return True
+    parts = [part for part in re.split(r"[^a-z0-9]+", normalized) if part]
+    return any(part in SENSITIVE_KEY_PARTS for part in parts)
 
 
 def _string_list(value: Any) -> list[str]:
