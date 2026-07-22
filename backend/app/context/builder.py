@@ -14,6 +14,7 @@ from app.context.allowlist import is_allowed_key
 from app.context.budget import TokenBudget
 from app.context.models import ContextBlock, ContextBundle
 from app.context.rag_provider import RAGUnavailableError
+from app.context.trace import build_context_trace_payload
 from app.context.selectors import (
     ConversationSelector,
     CostCategorySelector,
@@ -97,6 +98,9 @@ class ContextBuilder:
         bundle.metadata["selector_errors"] = selector_errors
         bundle.metadata["selector_metadata"] = selector_metadata
         bundle.metadata["allowlist_filtered_keys"] = sorted(filtered_keys)
+        policy_trace = kwargs.get("policy_trace")
+        if isinstance(policy_trace, dict):
+            bundle.metadata["policy"] = policy_trace
         self._attach_dependency_summary(
             bundle,
             kwargs.get("context_dependency_map") or {},
@@ -167,6 +171,14 @@ class ContextBuilder:
                 session_id=request.session_id,
                 memory_context=memory_context,
                 context_dependency_map=policy_result.dependency_map,
+                policy_trace={
+                    "intent": request.intent,
+                    "selected_tool_names": list(request.selected_tool_names),
+                    "enabled_layers": sorted(
+                        layer.value for layer in policy_result.enabled_layers
+                    ),
+                    "context_dependency_map": policy_result.dependency_map,
+                },
                 query=request.query,
             )
         finally:
@@ -313,14 +325,25 @@ class ContextBuilder:
             collector.record(
                 node_type="context_build",
                 node_name="context_bundle",
-                input_data={"block_count": len(bundle.blocks)},
-                output_data=bundle.summary(),
+                input_data=self._trace_input_data(bundle),
+                output_data=build_context_trace_payload(bundle),
                 start_time=start,
                 duration_ms=int((time.time() - start) * 1000),
                 token_usage={"context_tokens": bundle.token_estimate},
             )
         except Exception:
             return
+
+    @staticmethod
+    def _trace_input_data(bundle: ContextBundle) -> dict[str, Any]:
+        policy = bundle.metadata.get("policy")
+        input_data: dict[str, Any] = {
+            "block_count": len(bundle.blocks),
+            "selected_keys": [block.key for block in bundle.blocks],
+        }
+        if isinstance(policy, dict) and policy.get("intent"):
+            input_data["policy_intent"] = policy["intent"]
+        return input_data
 
 
 __all__ = ["ContextBuilder"]

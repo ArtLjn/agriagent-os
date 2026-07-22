@@ -9,6 +9,8 @@ from app.context.models import ContextBlock
 from app.infra.quillrag_client import QuillRAGClient, QuillRAGRetrieveResult
 from app.shared.config import RAGServiceConfig, settings
 
+SAFE_RAG_METADATA_KEYS = frozenset({"source", "title", "url", "collection"})
+
 
 class RAGRetrieveClient(Protocol):
     """RAG retrieve client 协议，便于单测注入。"""
@@ -117,8 +119,12 @@ class RAGKnowledgeProvider:
             "actual_mode": result.actual_mode or "",
             "warning": result.warning or "",
             "result_count": len(result.results),
+            "source_count": len(result.results),
             "attempts": result.attempts,
         }
+        if result.results:
+            metadata["top_score"] = max(item.score for item in result.results)
+            metadata["sources"] = self._source_summaries(result)
         if not result.ok:
             metadata.update(
                 {
@@ -128,6 +134,25 @@ class RAGKnowledgeProvider:
                 }
             )
         return metadata
+
+    @staticmethod
+    def _source_summaries(result: QuillRAGRetrieveResult) -> list[dict[str, Any]]:
+        summaries = []
+        for item in result.results[:5]:
+            source: dict[str, Any] = {
+                "doc_id": item.doc_id or "unknown",
+                "chunk_index": item.chunk_index,
+                "score": item.score,
+            }
+            safe_metadata = {
+                key: item.metadata[key]
+                for key in SAFE_RAG_METADATA_KEYS
+                if key in item.metadata
+            }
+            if safe_metadata:
+                source["metadata"] = safe_metadata
+            summaries.append(source)
+        return summaries
 
     @staticmethod
     def _format_prompt_content(result: QuillRAGRetrieveResult) -> str:
