@@ -193,7 +193,9 @@ def _schedule_and_log_background_tail(
 ) -> None:
     """调度非关键后台收尾，并记录本次 SSE 可见链路完成。"""
     _schedule_stream_background_finalization(
-        _build_stream_persistence_payload(chat_request, user, farm, reply_state, metadata),
+        _build_stream_persistence_payload(
+            chat_request, user, farm, reply_state, metadata
+        ),
         request_id=request_id,
         turn_payload=_build_stream_turn_finalization_payload(
             chat_request=chat_request,
@@ -228,6 +230,8 @@ def _build_stream_persistence_payload(
         full_reply=reply_state.full_reply,
         skill_names=metadata.skill_names,
         pending_action=metadata.pending_action,
+        pending_plan=metadata.pending_plan,
+        pending_decision_handled=bool(getattr(reply_state.decision, "handled", False)),
     )
 
 
@@ -449,6 +453,7 @@ async def _collect_stream_metadata(
         pending_action=pending_action,
         pending_plan=pending_plan,
     )
+
 
 __all__ = [
     "ResponseEvent",

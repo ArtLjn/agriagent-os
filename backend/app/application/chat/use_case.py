@@ -23,6 +23,10 @@ from app.application.chat.stream_chat import (
     resolve_stream_user_and_farm,
     stream_chat_events,
 )
+from app.application.chat.task_state_updater import (
+    TaskStateTurn,
+    update_task_state_after_turn,
+)
 from app.agent.executor.pending_actions import handle_pending_action
 from app.shared.logging import request_id_var
 from app.infra.repository_runtime import (
@@ -164,6 +168,15 @@ async def chat(
         result.pending_action = pending_action
     if pending_plan:
         result.pending_plan = pending_plan
+    await _update_task_state_after_chat_turn(
+        db,
+        chat_request=chat_request,
+        farm=farm,
+        reply=reply,
+        pending_action=pending_action,
+        pending_plan=pending_plan,
+        pending_decision_handled=decision.handled,
+    )
     if conversation and started_turn:
         recorder.finish_turn(
             db,
@@ -204,6 +217,32 @@ async def chat(
         bool(pending_action),
     )
     return result
+
+
+async def _update_task_state_after_chat_turn(
+    db: Session,
+    *,
+    chat_request: ChatRequest,
+    farm: Farm,
+    reply: str,
+    pending_action,
+    pending_plan,
+    pending_decision_handled: bool,
+) -> None:
+    """在非流式聊天收尾阶段保守更新 TaskState。"""
+    await update_task_state_after_turn(
+        db,
+        TaskStateTurn(
+            farm_id=farm.id,
+            user_id=farm.user_id,
+            session_id=chat_request.session_id,
+            user_input=chat_request.message,
+            assistant_reply=reply,
+            pending_action=pending_action,
+            pending_plan=pending_plan,
+            pending_decision_handled=pending_decision_handled,
+        ),
+    )
 
 
 __all__ = [
