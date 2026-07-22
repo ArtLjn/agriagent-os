@@ -12,7 +12,11 @@ from app.infra.repository_runtime import (
 )
 from app.domains.farm.models import Farm
 from app.domains.users.models import User
-from app.domains.conversation.agent_schemas import ChatRequest, PendingActionResponse
+from app.domains.conversation.agent_schemas import (
+    ChatRequest,
+    PendingActionResponse,
+    PendingPlanResponse,
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,8 @@ class StreamReplyPersistencePayload:
     full_reply: str
     skill_names: list[str]
     pending_action: PendingActionResponse | None = None
+    pending_plan: PendingPlanResponse | None = None
+    pending_decision_handled: bool = False
 
 
 async def get_skill_names(db: Session, farm_id: int, request_id: str) -> list[str]:
