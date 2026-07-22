@@ -4,6 +4,7 @@ from app.agent.guardrails.models import GuardrailsLog
 from app.agent.models import AgentRecord
 from app.agent.pending_plan_models import AgentPendingPlan, AgentPendingPlanStep
 from app.agent.turn_models import AgentTurn
+from app.context.task_state_models import AgentTaskState
 from app.domains.conversation.feedback_models import FeedbackRecord
 from app.domains.conversation.models import Conversation, ConversationMessage
 from app.domains.farm.models import Farm
@@ -42,6 +43,7 @@ __all__ = [
     "AgentPendingPlanStep",
     "AgentRecord",
     "AgentRepairPack",
+    "AgentTaskState",
     "AgentReviewIssueChain",
     "AgentTurn",
     "Conversation",

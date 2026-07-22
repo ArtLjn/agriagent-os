@@ -18,6 +18,8 @@ ALLOWED_CONTEXT_KEYS: frozenset[str] = frozenset(
         "ledger",
         "rag_knowledge",
         # 状态
+        "active_task_state",
+        "temporary_task_state",
         "pending_action_pointer",
         "pending_plan_pointer",
         "last_confirmed_at",

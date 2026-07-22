@@ -1,5 +1,6 @@
 # backend/tests/context/test_allowlist.py
 """ContextBundle 白名单契约测试。"""
+
 from app.context.allowlist import (
     ALLOWED_CONTEXT_KEYS,
     FORBIDDEN_CONTEXT_KEYS,
@@ -25,6 +26,7 @@ class TestAllowlistContract:
 
     def test_is_allowed_key_returns_true_for_whitelisted(self):
         assert is_allowed_key("farm_profile") is True
+        assert is_allowed_key("active_task_state") is True
 
     def test_is_allowed_key_returns_false_for_unknown(self):
         assert is_allowed_key("totally_unknown_key") is False

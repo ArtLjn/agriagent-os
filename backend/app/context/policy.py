@@ -16,6 +16,7 @@ from app.context.selectors import (
     OperationWorkOrderSelector,
     PlantingUnitSelector,
     RetrievalSelector,
+    TaskStateSelector,
     UnpaidLaborSummarySelector,
     UserSettingsSelector,
     WeatherSelector,
@@ -216,6 +217,7 @@ class ContextPolicy:
             FarmSelector(),
             UserSettingsSelector(),
             CycleSelector(),
+            TaskStateSelector(),
             MemorySelector(),
             ConversationSelector(),
         ]
