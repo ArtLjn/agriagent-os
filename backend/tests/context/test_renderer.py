@@ -61,6 +61,7 @@ def test_renderer_renders_sections_in_stable_order() -> None:
 def test_renderer_maps_common_keys_to_expected_sections() -> None:
     renderer = ContextRenderer()
     expected = {
+        "active_task_state": "Task",
         "pending_action": "Task",
         "temporary_task_state": "Task",
         "retrieval": "Evidence",

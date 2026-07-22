@@ -19,6 +19,7 @@ def test_chat_intent_uses_hot_and_working_core_selectors() -> None:
         "CycleSelector",
         "MemorySelector",
         "ConversationSelector",
+        "TaskStateSelector",
     }.issubset(selector_names)
     assert "LedgerSelector" not in selector_names
     assert "WeatherSelector" not in selector_names

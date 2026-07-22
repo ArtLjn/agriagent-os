@@ -21,6 +21,7 @@ class ContextRenderer:
         "policy": "Role & Policies",
         "role_policy": "Role & Policies",
         "pending_action": "Task",
+        "active_task_state": "Task",
         "pending_action_pointer": "Task",
         "pending_plan_pointer": "Task",
         "temporary_task_state": "Task",

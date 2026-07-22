@@ -18,6 +18,7 @@ from app.context.selectors.planting import (
     UnpaidLaborSummarySelector,
     WorkerSelector,
 )
+from app.context.selectors.task_state import TaskStateSelector
 
 __all__ = [
     "ConversationSelector",
@@ -26,6 +27,7 @@ __all__ = [
     "LedgerSelector",
     "KnowledgeSelector",
     "MemorySelector",
+    "TaskStateSelector",
     "CostCategorySelector",
     "OperationWorkOrderSelector",
     "PlantingUnitSelector",
