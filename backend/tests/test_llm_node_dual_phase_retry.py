@@ -100,6 +100,45 @@ def test_detect_missed_tool_call_flags_worker_create_success_claim():
 
 
 @pytest.mark.asyncio
+async def test_no_tool_native_tool_call_leak_retries_as_natural_reply():
+    """没有绑定工具时，原生 tool_calls 泄漏不能进入工具节点。"""
+    from app.agent.runtime.llm_response_repair import _normalize_content_tool_calls
+
+    leaked_response = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "tc_plant_info",
+                "name": "get_plant_info",
+                "args": {},
+            }
+        ],
+    )
+    retry_response = AIMessage(
+        content="番茄补光计划可以先按每日补足 12-14 小时总光照来安排。",
+        tool_calls=[],
+    )
+    llm = AsyncMock()
+    llm.ainvoke = AsyncMock(return_value=retry_response)
+
+    result = await _normalize_content_tool_calls(
+        response=leaked_response,
+        llm=llm,
+        system_text="system_tool_result prompt",
+        messages=[
+            HumanMessage(content="帮我给番茄做一个补光计划"),
+            ToolMessage(content="【农场现状】没有番茄茬口", tool_call_id="tc_status"),
+        ],
+        model_name="test-model",
+        selected_tools=[],
+    )
+
+    assert result.content == retry_response.content
+    assert not result.tool_calls
+    llm.ainvoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 @pytest.mark.no_db
 @patch("app.agent.runtime.llm_invocation._record_llm_success")
 @patch("app.agent.runtime.llm_invocation._record_llm_failure")
@@ -1241,9 +1280,7 @@ class TestRetryLoop:
 
         from app.shared.llm import ErrorLevel
 
-        with patch(
-            "app.shared.llm.classify_error", return_value=ErrorLevel.MODEL
-        ):
+        with patch("app.shared.llm.classify_error", return_value=ErrorLevel.MODEL):
             from app.agent.runtime.nodes import _llm_node
 
             state = _make_state([HumanMessage(content="你好")])

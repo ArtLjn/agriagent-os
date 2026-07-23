@@ -11,6 +11,7 @@ import {
   Typography,
   Tag,
   Pagination,
+  Tooltip,
 } from 'antd';
 import { SearchOutlined, ClearOutlined, CopyOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
@@ -719,11 +720,24 @@ export default function TraceMonitor() {
                     transition: 'background 0.2s',
                   }}
                 >
-                  <span>
-                    <span style={{ color: TEXT_DIM }}>Request ID: </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ color: TEXT_DIM }}>Request ID:</span>
                     <span style={{ fontFamily: 'monospace', color: ACCENT }}>
-                      {item.request_id.slice(0, 16)}...
+                      {item.request_id}
                     </span>
+                    <Tooltip title="复制 Request ID">
+                      <CopyOutlined
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void navigator.clipboard.writeText(item.request_id).then(() => {
+                            message.success('已复制 Request ID');
+                          }).catch(() => {
+                            message.error('复制失败');
+                          });
+                        }}
+                        style={{ color: TEXT_DIM, fontSize: 12, cursor: 'pointer' }}
+                      />
+                    </Tooltip>
                   </span>
                   {item.session_id && (
                     <span>

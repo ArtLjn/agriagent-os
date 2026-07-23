@@ -28,7 +28,14 @@ async def _normalize_content_tool_calls(
 ) -> AIMessage:
     """兼容 content 内 JSON 工具调用。"""
     if response.tool_calls:
-        return response
+        return await _native_tool_calls_response(
+            response=response,
+            llm=llm,
+            system_text=system_text,
+            messages=messages,
+            model_name=model_name,
+            selected_tools=selected_tools,
+        )
 
     parsed_tool_calls = _extract_tool_calls_from_content(response.content or "")
     if parsed_tool_calls and not selected_tools:
@@ -45,6 +52,41 @@ async def _normalize_content_tool_calls(
         parsed_tool_calls=parsed_tool_calls,
         selected_tools=selected_tools,
         model_name=model_name,
+    )
+
+
+async def _native_tool_calls_response(
+    *,
+    response: AIMessage,
+    llm,
+    system_text: str,
+    messages: list,
+    model_name: str,
+    selected_tools: list,
+) -> AIMessage:
+    if not selected_tools:
+        return await retry_no_tool_json_leak(
+            llm=llm,
+            system_text=system_text,
+            messages=messages,
+            response=response,
+            model_name=model_name,
+        )
+
+    filtered_tool_calls = filter_tool_calls_by_selected(
+        response.tool_calls or [], selected_tools
+    )
+    if filtered_tool_calls:
+        return _tool_call_response(response, filtered_tool_calls)
+
+    logger.warning(
+        "过滤后无可执行工具调用，转为直接回复 | model=%s",
+        model_name,
+    )
+    return AIMessage(
+        content=response.content or "",
+        response_metadata=response.response_metadata,
+        id=response.id,
     )
 
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Input, Button, Space, Typography, Drawer, Tag, Tooltip, message, Select } from 'antd';
+import { Input, Button, Space, Drawer, Tag, Tooltip, message, Select } from 'antd';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
@@ -10,6 +10,7 @@ import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
 import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
 import { authStore } from '../../stores/authStore';
+import { palette } from '../../styles/theme';
 import { buildConversationRows } from './conversationRows';
 import { usersApi, type CurrentUser } from '../../api/users';
 import { chooseDefaultUserId } from './currentUser';
@@ -19,14 +20,17 @@ import { buildPlaygroundTraceMetrics, hasAutomaticCompression } from './traceMet
 import { copyAsyncText } from './clipboard';
 import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
 
-const BG = '#0d1117';
-const CARD = '#161b22';
-const BORDER = '#30363d';
-const TEXT = '#e6edf3';
-const TEXT_DIM = '#8b949e';
-const ACCENT = '#58a6ff';
-const USER_BG = '#1f6feb';
-const AI_BG = '#21262d';
+const CARD = palette.bgElevated;
+const BORDER = palette.border;
+const TEXT = palette.text;
+const TEXT_DIM = palette.textMuted;
+const ACCENT = palette.accent;
+const USER_BG = palette.accentStrong;
+const AI_BG = palette.bgPanel;
+const SIDEBAR_BG = palette.bgElevated;
+const SIDEBAR_BORDER = palette.borderSoft;
+const ROW_HOVER = 'rgba(139, 148, 158, 0.08)';
+const ROW_ACTIVE = 'rgba(88, 166, 255, 0.12)';
 
 interface Message {
   id: string;
@@ -115,7 +119,7 @@ function TraceMetricPill({ label, value, accent }: { label: string; value: strin
   return (
     <span style={{
       color: TEXT_DIM,
-      fontSize: 13,
+      fontSize: 12,
       display: 'inline-flex',
       alignItems: 'center',
       gap: 4,
@@ -143,7 +147,7 @@ function ChatBubble({ role, content, skills, pendingAction, pendingPlan, onActio
         color: TEXT,
         padding: '10px 16px',
         borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-        maxWidth: '70%',
+        maxWidth: '78%',
         wordBreak: 'break-word',
       }}>
         {isUser ? content : <MarkdownContent content={content} />}
@@ -514,13 +518,13 @@ export default function Playground() {
   const isThinking = loading && messages.length > 0 && messages[messages.length - 1].content === '';
 
   return (
-    <div style={{ height: '100%', display: 'flex' }}>
+    <div style={{ height: '100%', display: 'flex', background: palette.bg }}>
       {/* ── 会话列表侧边栏 ── */}
       <div
         style={{
-          width: sidebarCollapsed ? 48 : 240,
-          background: CARD,
-          borderRight: `1px solid ${BORDER}`,
+          width: sidebarCollapsed ? 56 : 260,
+          background: SIDEBAR_BG,
+          borderRight: `1px solid ${SIDEBAR_BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
@@ -528,46 +532,60 @@ export default function Playground() {
           overflow: 'hidden',
         }}
       >
-        {/* 侧边栏头部 */}
+        {/* 侧边栏头部 - 与 admin sider 高度对齐 */}
         <div
           style={{
-            height: 48,
+            height: 58,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 12px',
-            borderBottom: `1px solid ${BORDER}`,
+            padding: sidebarCollapsed ? '0 8px' : '0 16px',
+            borderBottom: `1px solid ${SIDEBAR_BORDER}`,
             flexShrink: 0,
           }}
         >
           {!sidebarCollapsed && (
-            <span style={{ color: TEXT, fontSize: 14, fontWeight: 600 }}>会话列表</span>
+            <span style={{ color: TEXT, fontSize: 13, fontWeight: 600, letterSpacing: 0.2 }}>
+              会话
+              <span style={{ color: TEXT_DIM, fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+                {conversationRows.length}
+              </span>
+            </span>
           )}
-          <Button
-            type="text"
-            icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            style={{ color: TEXT_DIM, padding: 0 }}
-          />
+          <Tooltip title={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'} placement="right">
+            <Button
+              type="text"
+              aria-label={sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'}
+              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              style={{ color: TEXT_DIM, width: 32, height: 32 }}
+            />
+          </Tooltip>
         </div>
 
         {/* 新建会话按钮 */}
         {!sidebarCollapsed && (
-          <div style={{ padding: '8px 12px', borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ padding: '12px 12px 8px', flexShrink: 0 }}>
             <Button
               block
               type="primary"
               icon={<PlusOutlined />}
               onClick={createNewSession}
-              style={{ background: ACCENT }}
+              style={{
+                background: ACCENT,
+                borderColor: ACCENT,
+                height: 36,
+                borderRadius: 8,
+                fontWeight: 500,
+              }}
             >
-              新会话
+              新建会话
             </Button>
           </div>
         )}
 
         {/* 会话列表 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: sidebarCollapsed ? '8px 0' : '8px' }}>
+        <div className="surface-scroll" style={{ flex: 1, overflow: 'auto', padding: sidebarCollapsed ? '8px 6px' : '6px 8px' }}>
           {conversationRows.map((conv) => {
             const isActive = conv.session_id === sessionId;
             const sessionState = sessions[conv.session_id];
@@ -577,72 +595,99 @@ export default function Playground() {
                 key={conv.session_id}
                 onClick={() => switchConversation(conv.session_id)}
                 style={{
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  marginBottom: 4,
+                  padding: sidebarCollapsed ? '8px 0' : '8px 10px',
+                  borderRadius: 8,
+                  marginBottom: 2,
                   cursor: 'pointer',
-                  background: isActive ? 'rgba(88,166,255,0.15)' : 'transparent',
+                  background: isActive ? ROW_ACTIVE : 'transparent',
                   borderLeft: isActive ? `3px solid ${ACCENT}` : '3px solid transparent',
-                  position: 'relative',
-                  display: sidebarCollapsed ? 'none' : 'block',
+                  transition: 'background 120ms ease',
+                  display: sidebarCollapsed ? 'flex' : 'block',
+                  justifyContent: sidebarCollapsed ? 'center' : undefined,
+                  alignItems: sidebarCollapsed ? 'center' : undefined,
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.background = ROW_HOVER;
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                      {isRunning && <LoadingOutlined style={{ color: ACCENT, fontSize: 11 }} />}
-                      <div style={{ color: TEXT, fontSize: 13, fontWeight: isActive ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {conv.session_id.slice(0, 10)}...
+                {sidebarCollapsed ? (
+                  <Tooltip title={conv.session_id} placement="right">
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 8,
+                      background: isActive ? ACCENT : 'rgba(139,148,158,0.12)',
+                      color: isActive ? '#fff' : TEXT_DIM,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 600,
+                    }}>
+                      {conv.session_id.slice(-2)}
+                    </div>
+                  </Tooltip>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+                    <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        {isRunning && <LoadingOutlined style={{ color: ACCENT, fontSize: 11 }} />}
+                        <div style={{
+                          color: isActive ? TEXT : TEXT,
+                          fontSize: 13,
+                          fontWeight: isActive ? 600 : 500,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          fontFamily: 'monospace',
+                        }}>
+                          {conv.session_id.slice(-8)}
+                        </div>
+                      </div>
+                      <div style={{ color: TEXT_DIM, fontSize: 11, marginTop: 3 }}>
+                        {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
-                    <div style={{ color: TEXT_DIM, fontSize: 11, marginTop: 2 }}>
-                      {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </div>
+                    <Space size={0} style={{ opacity: isActive ? 1 : 0.6, flexShrink: 0 }}>
+                      <Tooltip title="跳转链路追踪">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<LinkOutlined />}
+                          onClick={(e) => { e.stopPropagation(); openTraceMonitor(conv.session_id); }}
+                          style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                        />
+                      </Tooltip>
+                      <Tooltip title="复制调试 JSON">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
+                          style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                        />
+                      </Tooltip>
+                    </Space>
                   </div>
-                  <Space size={0}>
-                    <Tooltip title="跳转链路追踪">
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<LinkOutlined />}
-                        onClick={(e) => { e.stopPropagation(); openTraceMonitor(conv.session_id); }}
-                        style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24 }}
-                      />
-                    </Tooltip>
-                    <Tooltip title="复制调试 JSON">
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<CopyOutlined />}
-                        onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
-                        style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24 }}
-                      />
-                    </Tooltip>
-                  </Space>
-                </div>
+                )}
               </div>
             );
           })}
+          {conversationRows.length === 0 && !sidebarCollapsed && (
+            <div style={{ textAlign: 'center', color: TEXT_DIM, fontSize: 12, padding: '24px 12px' }}>
+              暂无历史会话
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── 主聊天区域 ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 24, overflow: 'hidden' }}>
-        {/* 页面标题 */}
-        <Typography.Title level={3} style={{ color: TEXT, margin: '0 0 16px 0' }}>
-          Chat Playground
-        </Typography.Title>
-
-        {/* 配置栏 */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', padding: '16px 20px 16px' }}>
+        {/* 配置栏 - 极简单行 */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8,
-          padding: '12px 16px', marginBottom: 16,
+          padding: '0 4px 12px',
+          flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ color: TEXT_DIM, fontSize: 13 }}>
-              Session ID: <span style={{ color: TEXT, fontFamily: 'monospace' }}>{sessionId}</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Select
               placeholder="选择用户"
               value={selectedUserId}
@@ -656,7 +701,7 @@ export default function Playground() {
                   message.error('加载会话列表失败');
                 });
               }}
-              style={{ width: 180 }}
+              style={{ width: 200 }}
               styles={{ popup: { root: { background: CARD } } }}
               options={[
                 ...users.map((u) => ({
@@ -667,27 +712,44 @@ export default function Playground() {
                 })),
               ]}
             />
+            <Tooltip title={sessionId}>
+              <span style={{ color: TEXT_DIM, fontSize: 12, fontFamily: 'monospace' }}>
+                {sessionId.slice(-12)}
+              </span>
+            </Tooltip>
           </div>
           <Button
             size="small"
+            type="text"
             icon={<DeleteOutlined />}
             onClick={handleClear}
-            style={{ background: CARD, borderColor: BORDER, color: TEXT_DIM }}
+            style={{ color: TEXT_DIM }}
           >
-            清空对话
+            清空
           </Button>
         </div>
 
         {/* 消息区域 */}
         <div ref={scrollRef} style={{
-          flex: 1, overflow: 'auto', background: BG, borderRadius: 12,
-          border: `1px solid ${BORDER}`, padding: 20, marginBottom: 16,
+          flex: 1, minHeight: 0, overflow: 'auto',
+          padding: '4px 8px 12px',
+          marginBottom: 10,
         }}>
           {messages.length === 0 && (
-            <div style={{ textAlign: 'center', color: TEXT_DIM, padding: '80px 0' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🧪</div>
-              <div style={{ fontSize: 16, marginBottom: 8 }}>Playground — 开发者调试</div>
-              <div style={{ fontSize: 13 }}>直接输入消息与 AI 对话，或从左侧切换历史会话</div>
+            <div style={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: TEXT_DIM,
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 56, marginBottom: 20, opacity: 0.6 }}>🧪</div>
+              <div style={{ fontSize: 18, marginBottom: 8, color: TEXT, fontWeight: 500 }}>Playground — 开发者调试</div>
+              <div style={{ fontSize: 13, maxWidth: 360, lineHeight: 1.6 }}>
+                直接输入消息与 AI 对话，或从左侧切换历史会话
+              </div>
             </div>
           )}
           {messages.map((m) => (
@@ -709,23 +771,21 @@ export default function Playground() {
           )}
         </div>
 
-        {/* 执行摘要 */}
+        {/* 执行摘要 - 紧凑单行 */}
         {(timeline !== null || traceLoading) && (
           <div style={{
-            marginBottom: 16,
-            background: CARD,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 8,
-            padding: '12px 16px',
+            marginBottom: 10,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 12,
+            padding: '6px 4px',
+            flexShrink: 0,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-              <span style={{ color: ACCENT, fontSize: 14, fontWeight: 500 }}>执行摘要</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ color: ACCENT, fontSize: 12, fontWeight: 500 }}>执行摘要</span>
               {traceLoading ? (
-                <span style={{ color: TEXT_DIM, fontSize: 13 }}>加载中...</span>
+                <span style={{ color: TEXT_DIM, fontSize: 12 }}>加载中...</span>
               ) : timeline && timeline.rounds ? (
                 <>
                   <TraceMetricPill
@@ -772,19 +832,18 @@ export default function Playground() {
                   </div>
                 </>
               ) : (
-                <span style={{ color: TEXT_DIM, fontSize: 13 }}>暂无数据</span>
+                <span style={{ color: TEXT_DIM, fontSize: 12 }}>暂无数据</span>
               )}
             </div>
             <Button
               size="small"
-              type="primary"
-              ghost
+              type="link"
               onClick={() => {
                 window.open(buildTraceMonitorUrl({ sessionId, requestId: timeline?.request_id }), '_blank');
               }}
-              style={{ borderColor: ACCENT, color: ACCENT }}
+              style={{ color: ACCENT, padding: 0, flexShrink: 0 }}
             >
-              在链路追踪页面查看详情 →
+              链路详情 →
             </Button>
           </div>
         )}
@@ -798,7 +857,7 @@ export default function Playground() {
             onPressEnter={() => handleSend()}
             placeholder={loading ? '当前会话生成中，可切换或新建会话并行聊天' : '输入你的问题...'}
             disabled={loading}
-            style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+            style={{ background: CARD, borderColor: BORDER, color: TEXT, height: 48, fontSize: 14 }}
           />
           <Button
             size="large"
@@ -806,7 +865,7 @@ export default function Playground() {
             icon={<SendOutlined />}
             onClick={() => handleSend()}
             loading={loading}
-            style={{ height: 40 }}
+            style={{ height: 48, paddingInline: 24, fontSize: 14 }}
           >
             发送
           </Button>

@@ -58,9 +58,12 @@ archive/**/android/android/
 
 # Generated
 model_list.json
+backend/var/
+data/
 
 # Personal
 bug.todo.md
+/bug.txt
 
 # Root temp (not part of any project)
 /package.json

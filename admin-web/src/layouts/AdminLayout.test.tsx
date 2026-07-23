@@ -74,10 +74,11 @@ describe('AdminLayout 侧边栏折叠', () => {
     fireEvent.click(screen.getByRole('button', { name: '折叠侧边栏' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('menuitem', { name: /数据飞轮/ })).toBeInTheDocument();
-      expect(screen.getByRole('menuitem', { name: /Prompt 检查器/ })).toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: /仪表盘/ })).not.toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: /Agent 平台/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '数据飞轮' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Prompt 检查器' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '仪表盘' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Agent 平台')).not.toBeInTheDocument();
+      expect(screen.queryByText('Playground')).not.toBeInTheDocument();
     });
   }, 10000);
 
@@ -93,10 +94,10 @@ describe('AdminLayout 侧边栏折叠', () => {
     fireEvent.click(screen.getByRole('button', { name: '折叠侧边栏' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('menuitem', { name: /业务调试中心/ })).toBeInTheDocument();
-      expect(screen.getByRole('menuitem', { name: /AI 助手/ })).toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: /数据飞轮/ })).not.toBeInTheDocument();
-      expect(screen.queryByRole('menuitem', { name: /仪表盘/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '业务调试中心' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'AI 助手' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '数据飞轮' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '仪表盘' })).not.toBeInTheDocument();
     });
   }, 10000);
 });
