@@ -76,3 +76,33 @@ def test_router_decision_adapter_creates_clarification_draft() -> None:
     assert draft.validation is not None
     assert draft.validation.status == "blocked"
     assert draft.validation.safe_route_type == "clarification"
+
+
+def test_retrieved_write_candidate_becomes_pending_action() -> None:
+    decision = RouterDecision(
+        frames=[
+            IntentFrame(
+                domain="finance",
+                intent="retrieved_write_candidate",
+                risk="write_confirm",
+                capability="manage_cost",
+                operation="create_record",
+                candidate_tools=["create_cost_record"],
+                params_hint={"operation": "create_record"},
+                requires_confirmation=True,
+            )
+        ],
+        selected_tools=["create_cost_record"],
+        selected_operations={"create_cost_record": ["create_record"]},
+    )
+
+    draft = plan_draft_from_router_decision(
+        raw_user_input="今天卖西瓜收入10w",
+        decision=decision,
+        farm_id=2,
+        session_id="playground-test",
+    )
+
+    assert draft.route_type == "write_pending_action"
+    assert draft.steps[0].skill_name == "create_cost_record"
+    assert draft.steps[0].params["operation"] == "create_record"

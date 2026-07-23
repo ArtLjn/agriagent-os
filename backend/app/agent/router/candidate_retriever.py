@@ -58,6 +58,7 @@ class CandidateRetrievalResult:
     """候选召回结果。"""
 
     selected_names: list[str]
+    selected_candidates: list[ToolCandidate] = field(default_factory=list)
     scores: dict[str, float] = field(default_factory=dict)
     evidence: dict[str, dict] = field(default_factory=dict)
 
@@ -86,6 +87,9 @@ class CandidateRetriever:
         return CandidateRetrievalResult(
             selected_names=[
                 candidate.name for candidate, _score, _evidence in selected
+            ],
+            selected_candidates=[
+                candidate for candidate, _score, _evidence in selected
             ],
             scores={candidate.name: score for candidate, score, _evidence in scored},
             evidence={

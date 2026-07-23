@@ -8,6 +8,7 @@ from langchain_core.tools import BaseTool
 from app.agent.router.catalog import SkillCatalog
 from app.agent.router.candidate_retriever import CandidateRetriever
 from app.agent.router.classifier import RuleIntentClassifier
+from app.agent.router.intent import IntentType, classify_intent
 from app.agent.router.models import (
     DisclosureBudget,
     IntentFrame,
@@ -15,10 +16,11 @@ from app.agent.router.models import (
     ToolCandidate,
 )
 from app.agent.router.policy import RouterPolicy
-from app.skills.registry import load_skill_registry
+from app.skills.registry import OperationDefinition, load_skill_registry
 
 
 _READ_OPERATION_RISKS = frozenset({"read", "external_network"})
+_WRITE_OPERATION_RISKS = frozenset({"write_confirm", "write_high"})
 _RETRIEVABLE_READ_HINTS = (
     "查询",
     "查看",
@@ -62,6 +64,11 @@ class SkillRouter:
         """根据用户输入和可用工具返回路由决策。"""
         catalog = SkillCatalog.from_tools(tools)
         frames = self._enrich_frames(self._classifier.classify(message), catalog)
+        intent = classify_intent(message)
+        if not frames and intent == IntentType.WRITE:
+            frames = self._retrieved_write_frames(message, catalog)
+            if not frames:
+                return self._unresolved_write_decision(message)
         if not frames and self._looks_like_retrievable_read(message):
             frames = self._retrieved_frames(message, catalog)
         return self._policy.apply(
@@ -105,6 +112,130 @@ class SkillRouter:
                 )
             )
         return frames
+
+    def _retrieved_write_frames(
+        self,
+        message: str,
+        catalog: SkillCatalog,
+    ) -> list[IntentFrame]:
+        write_candidates = self._write_operation_candidates(catalog)
+        retrieved = self._retriever.retrieve(
+            message,
+            write_candidates,
+            limit=1,
+        )
+        if not retrieved.selected_names:
+            return []
+        frames: list[IntentFrame] = []
+        for candidate in retrieved.selected_candidates:
+            name = candidate.name
+            frames.append(
+                IntentFrame(
+                    domain=candidate.domain,
+                    intent="retrieved_write_candidate",
+                    risk=candidate.risk,
+                    capability=candidate.capability,
+                    operation=candidate.operation,
+                    operation_hint=candidate.operation,
+                    candidate_tools=[name],
+                    confidence=0.62,
+                    score=max(candidate.score, 0.62),
+                    params_hint={"operation": candidate.operation}
+                    if candidate.operation
+                    else None,
+                    evidence={
+                        "source": "candidate_retriever",
+                        "coarse_intent": "write",
+                        "scores": retrieved.scores,
+                        "retrieval_evidence": {name: retrieved.evidence.get(name, {})},
+                    },
+                    requires_confirmation=True,
+                )
+            )
+        return frames
+
+    @staticmethod
+    def _write_operation_candidates(catalog: SkillCatalog) -> list[ToolCandidate]:
+        candidates = list(catalog.candidates())
+        write_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.risk in _WRITE_OPERATION_RISKS
+        ]
+        try:
+            registry = load_skill_registry()
+        except (OSError, ValueError):
+            return write_candidates
+
+        existing_keys = {
+            (candidate.name, candidate.capability, candidate.operation)
+            for candidate in write_candidates
+        }
+        for candidate in candidates:
+            if not candidate.capability or candidate.operation is not None:
+                continue
+            capability = registry.capabilities.get(candidate.capability)
+            if capability is None:
+                continue
+            for operation in capability.operations.values():
+                if operation.risk not in _WRITE_OPERATION_RISKS:
+                    continue
+                key = (candidate.name, candidate.capability, operation.name)
+                if key in existing_keys:
+                    continue
+                existing_keys.add(key)
+                write_candidates.append(
+                    SkillRouter._operation_candidate(candidate, operation)
+                )
+        return write_candidates
+
+    @staticmethod
+    def _operation_candidate(
+        candidate: ToolCandidate,
+        operation: OperationDefinition,
+    ) -> ToolCandidate:
+        return replace(
+            candidate,
+            risk=operation.risk,
+            operation=operation.name,
+            operation_risk=operation.risk,
+            legacy_alias=(
+                operation.legacy_aliases[0]
+                if operation.legacy_aliases
+                else candidate.legacy_alias
+            ),
+            intents=[
+                operation.name,
+                candidate.capability or "",
+                candidate.name,
+                *list(operation.legacy_aliases),
+            ],
+            trigger_examples=[
+                *candidate.trigger_examples,
+                operation.description,
+            ],
+            candidate_group=f"{candidate.domain}_{operation.risk}",
+            evidence={
+                **candidate.evidence,
+                "source": "skill_registry_operation",
+                "operation": operation.name,
+                "operation_risk": operation.risk,
+            },
+        )
+
+    @staticmethod
+    def _unresolved_write_decision(message: str) -> RouterDecision:
+        return RouterDecision(
+            selected_tools=[],
+            fallback="write_intent_unresolved",
+            fallback_reason="write_intent_without_candidate",
+            reason="已识别写入意图，但未匹配到可用能力",
+            clarification=(
+                "我理解这是要记录或修改业务数据，但当前没有生成可确认的写入动作。"
+                "请补充要处理的对象、动作、金额或时间等关键信息。"
+            ),
+            evidence={"coarse_intent": "write", "message": message[:200]},
+        )
 
     @staticmethod
     def _read_operation_for(candidate: ToolCandidate | None) -> str | None:
