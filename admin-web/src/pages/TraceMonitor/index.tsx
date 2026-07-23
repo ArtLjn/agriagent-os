@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import {
   Input,
   Button,
@@ -26,13 +27,14 @@ import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
-import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
+import { formatTracePayload, hasTracePayload, sanitizeTracePayload } from '../../utils/tracePayload';
 
 const CARD = '#161b22';
 const BORDER = '#30363d';
 const TEXT = '#e6edf3';
 const TEXT_DIM = '#8b949e';
 const ACCENT = '#58a6ff';
+const PANEL_BG = '#0d1117';
 
 interface TraceItem {
   request_id: string;
@@ -96,6 +98,328 @@ function formatTraceTime(value: string | null | undefined): string {
   if (Number.isNaN(date.getTime()) || date.getTime() <= 0) return '-';
   return date.toLocaleString('zh-CN');
 }
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function asRecordList(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item))
+    : [];
+}
+
+function payloadRecord(value: unknown): Record<string, unknown> | null {
+  const parsed = typeof value === 'string' ? parseJson(value) : value;
+  return asRecord(sanitizeTracePayload(parsed));
+}
+
+function parseJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function displayValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '-';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(3);
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
+}
+
+function isContextTraceNode(detail: TraceNodeDetail): boolean {
+  return detail.node_type === 'context_build' || detail.node_name === 'context_bundle';
+}
+
+function isContextTracePayload(value: unknown): boolean {
+  const record = payloadRecord(value);
+  if (!record) return false;
+  return Boolean(record.sections || record.blocks || record.selected_blocks || record.token_budget);
+}
+
+function ContextTraceSummary({ outputData }: { outputData: unknown }) {
+  const payload = payloadRecord(outputData);
+  if (!payload) {
+    return (
+      <RawTraceDetails label="查看原始输出" value={outputData} />
+    );
+  }
+
+  const policy = asRecord(payload.policy);
+  const explicitSections = asRecordList(payload.sections);
+  const fallbackBlocks = asRecordList(payload.blocks ?? payload.selected_blocks);
+  const sections = explicitSections.length > 0
+    ? explicitSections
+    : fallbackBlocks.length > 0
+      ? [{ name: 'Blocks', token_estimate: payload.token_estimate, blocks: fallbackBlocks }]
+      : [];
+  const ragSummaries = collectRagSummaries(payload, sections);
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <section style={summaryPanelStyle}>
+        <div style={sectionTitleStyle}>Context 摘要</div>
+        <div style={metricGridStyle}>
+          <Metric label="token_budget" value={payload.token_budget} />
+          <Metric label="token_estimate" value={payload.token_estimate} />
+          <Metric label="policy intent" value={policy?.intent} />
+        </div>
+      </section>
+
+      {sections.map((section, index) => (
+        <ContextSection key={`${displayValue(section.name)}-${index}`} section={section} />
+      ))}
+
+      {ragSummaries.length > 0 && (
+        <section style={summaryPanelStyle}>
+          <div style={sectionTitleStyle}>RAG 摘要</div>
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            {ragSummaries.map((rag, index) => (
+              <RagSummary key={`${displayValue(rag.collection)}-${index}`} rag={rag} />
+            ))}
+          </Space>
+        </section>
+      )}
+
+      <RawTraceDetails label="查看原始输出 JSON" value={payload} />
+    </Space>
+  );
+}
+
+function ContextSection({ section }: { section: Record<string, unknown> }) {
+  const blocks = asRecordList(section.blocks);
+
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
+        <span>{displayValue(section.name)}</span>
+        <span style={{ color: TEXT_DIM, fontSize: 12 }}>
+          token_estimate: {displayValue(section.token_estimate)}
+        </span>
+      </div>
+      <Space direction="vertical" style={{ width: '100%' }} size="small">
+        {blocks.length > 0 ? (
+          blocks.map((block, index) => (
+            <ContextBlock key={`${displayValue(block.key)}-${index}`} block={block} />
+          ))
+        ) : (
+          <span style={{ color: TEXT_DIM, fontSize: 12 }}>暂无 block</span>
+        )}
+      </Space>
+    </section>
+  );
+}
+
+function ContextBlock({ block }: { block: Record<string, unknown> }) {
+  return (
+    <div style={blockStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ color: ACCENT, fontFamily: 'monospace', fontWeight: 600 }}>
+          {displayValue(block.key)}
+        </span>
+        <Tag>{displayValue(block.source)}</Tag>
+        <Tag color={block.required ? 'processing' : 'default'}>
+          required: {displayValue(block.required)}
+        </Tag>
+        <Tag color={block.compressed ? 'warning' : 'default'}>
+          compressed: {displayValue(block.compressed)}
+        </Tag>
+      </div>
+      <div style={blockMetaGridStyle}>
+        <Metric label="purpose" value={block.purpose} />
+        <Metric label="priority" value={block.priority} />
+        <Metric label="token_estimate" value={block.token_estimate} />
+        <Metric label="reason" value={block.reason} />
+      </div>
+      {hasTracePayload(block.preview) && (
+        <div style={previewStyle}>{displayValue(block.preview)}</div>
+      )}
+    </div>
+  );
+}
+
+function RagSummary({ rag }: { rag: Record<string, unknown> }) {
+  const sources = asRecordList(rag.sources);
+
+  return (
+    <div style={blockStyle}>
+      <div style={metricGridStyle}>
+        <Metric label="collection" value={rag.collection} />
+        <Metric label="mode" value={rag.mode} />
+        <Metric label="actual_mode" value={rag.actual_mode} />
+        <Metric label="warning" value={rag.warning} />
+        <Metric label="source_count" value={rag.source_count} />
+        <Metric label="top_score" value={rag.top_score} />
+      </div>
+      {sources.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {sources.map((source, index) => {
+            const metadata = asRecord(source.metadata);
+            return (
+              <div key={`${displayValue(source.doc_id)}-${index}`} style={sourceStyle}>
+                <span style={{ color: ACCENT, fontFamily: 'monospace' }}>
+                  {displayValue(source.doc_id)}
+                </span>
+                <span>chunk: {displayValue(source.chunk_index)}</span>
+                <span>score: {displayValue(source.score)}</span>
+                {hasTracePayload(metadata?.title) && <span>{displayValue(metadata?.title)}</span>}
+                {hasTracePayload(metadata?.source) && <span>{displayValue(metadata?.source)}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ color: TEXT_DIM, fontSize: 11, marginBottom: 2 }}>{label}</div>
+      <div style={{ color: TEXT, fontSize: 13, wordBreak: 'break-word' }}>
+        {displayValue(value)}
+      </div>
+    </div>
+  );
+}
+
+function RawTraceDetails({ label, value }: { label: string; value: unknown }) {
+  return (
+    <details style={{ cursor: 'pointer' }}>
+      <summary style={{ color: TEXT_DIM, fontSize: 12, userSelect: 'none' }}>
+        {label}
+      </summary>
+      <pre style={{
+        backgroundColor: CARD,
+        padding: 12,
+        borderRadius: 6,
+        border: `1px solid ${BORDER}`,
+        fontSize: 12,
+        margin: '8px 0 0 0',
+        maxHeight: 320,
+        overflow: 'auto',
+        whiteSpace: 'pre-wrap',
+      }}>
+        {formatTracePayload(value)}
+      </pre>
+    </details>
+  );
+}
+
+function collectRagSummaries(
+  payload: Record<string, unknown>,
+  sections: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const summaries: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  const blocks = [
+    ...asRecordList(payload.blocks),
+    ...asRecordList(payload.selected_blocks),
+    ...sections.flatMap((section) => asRecordList(section.blocks)),
+  ];
+
+  blocks.forEach((block) => {
+    const rag = asRecord(block.rag);
+    addRagSummary(summaries, seen, rag);
+  });
+
+  const selectorMetadata = asRecord(payload.selector_metadata);
+  const knowledge = asRecord(selectorMetadata?.knowledge);
+  addRagSummary(summaries, seen, knowledge);
+
+  return summaries;
+}
+
+function addRagSummary(
+  summaries: Record<string, unknown>[],
+  seen: Set<string>,
+  rag: Record<string, unknown> | null,
+) {
+  if (!rag) return;
+  const key = ragSummaryKey(rag);
+  if (seen.has(key)) return;
+  seen.add(key);
+  summaries.push(rag);
+}
+
+function ragSummaryKey(rag: Record<string, unknown>): string {
+  return JSON.stringify({
+    collection: rag.collection ?? '',
+    mode: rag.mode ?? '',
+    actual_mode: rag.actual_mode ?? '',
+    source_count: rag.source_count ?? '',
+    top_score: rag.top_score ?? '',
+    sources: asRecordList(rag.sources).map((source) => ({
+      doc_id: source.doc_id ?? '',
+      chunk_index: source.chunk_index ?? '',
+      score: source.score ?? '',
+    })),
+  });
+}
+
+const summaryPanelStyle: CSSProperties = {
+  background: PANEL_BG,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 8,
+  padding: 12,
+};
+
+const sectionTitleStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  color: TEXT,
+  fontSize: 14,
+  fontWeight: 600,
+  marginBottom: 10,
+};
+
+const metricGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+  gap: 10,
+};
+
+const blockMetaGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+  gap: 8,
+};
+
+const blockStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+  background: CARD,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: 10,
+};
+
+const previewStyle: CSSProperties = {
+  color: TEXT,
+  background: '#111923',
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: 8,
+  fontSize: 12,
+  lineHeight: 1.6,
+  whiteSpace: 'pre-wrap',
+};
+
+const sourceStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 8,
+  color: TEXT_DIM,
+  fontSize: 12,
+};
 
 export default function TraceMonitor() {
   const location = useLocation();
@@ -607,7 +931,9 @@ export default function TraceMonitor() {
             {hasTracePayload(nodeDetail.output_data) && (
               <div>
                 <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
-                {nodeDetail.node_type === 'skill_call' ? (
+                {isContextTraceNode(nodeDetail) && isContextTracePayload(nodeDetail.output_data) ? (
+                  <ContextTraceSummary outputData={nodeDetail.output_data} />
+                ) : nodeDetail.node_type === 'skill_call' ? (
                   <SkillOutputFormatter outputData={nodeDetail.output_data} />
                 ) : (
                   <pre style={{
