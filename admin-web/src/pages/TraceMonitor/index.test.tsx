@@ -299,6 +299,87 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.queryByText('fake-sensitive-password-value')).not.toBeInTheDocument();
   });
 
+  it('兼容 context_builder 旧节点形状并折叠原始 JSON', async () => {
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'prompt_render',
+              node_name: 'context_builder',
+              duration_ms: 18,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: {
+                block_count: 5,
+                selected_keys: ['farm', 'cycle', 'user_settings'],
+                policy_intent: 'write',
+              },
+              output_data: {
+                token_budget: 900,
+                token_estimate: 72,
+                selected_blocks: [
+                  {
+                    key: 'farm',
+                    source: 'farm',
+                    purpose: '农场状态',
+                    priority: 90,
+                    token_estimate: 12,
+                    required: true,
+                    compressed: false,
+                    reason: '',
+                    preview: '农场：管理员农场；位置：苏州市',
+                  },
+                ],
+                blocks: [
+                  {
+                    key: 'farm',
+                    source: 'farm',
+                    purpose: '农场状态',
+                    priority: 90,
+                    token_estimate: 12,
+                    required: true,
+                    compressed: false,
+                    reason: '',
+                    preview: '农场：管理员农场；位置：苏州市',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 context_builder' }));
+
+    expect(await screen.findByText('Context 输入')).toBeInTheDocument();
+    expect(screen.getByText('block_count')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('write')).toBeInTheDocument();
+    expect(screen.getByText('farm, cycle, user_settings')).toBeInTheDocument();
+    expect(screen.getByText('Context 摘要')).toBeInTheDocument();
+    expect(screen.getByText('Blocks')).toBeInTheDocument();
+    expect(screen.getByText('农场：管理员农场；位置：苏州市')).toBeInTheDocument();
+
+    const inputRaw = screen.getByText('查看原始输入 JSON').closest('details');
+    const outputRaw = screen.getByText('查看原始输出 JSON').closest('details');
+    expect(inputRaw).not.toBeNull();
+    expect(outputRaw).not.toBeNull();
+    expect(inputRaw).not.toHaveAttribute('open');
+    expect(outputRaw).not.toHaveAttribute('open');
+  });
+
   it('普通非 context trace 仍按原始输出展示', async () => {
     mockedGetTimeline.mockResolvedValueOnce({
       request_id: 'req-1',

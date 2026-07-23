@@ -133,14 +133,27 @@ function displayValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function isContextTraceNode(detail: TraceNodeDetail): boolean {
-  return detail.node_type === 'context_build' || detail.node_name === 'context_bundle';
+function displayList(value: unknown): string {
+  if (!Array.isArray(value)) return displayValue(value);
+  return value.map(displayValue).join(', ');
 }
 
 function isContextTracePayload(value: unknown): boolean {
   const record = payloadRecord(value);
   if (!record) return false;
-  return Boolean(record.sections || record.blocks || record.selected_blocks || record.token_budget);
+  return Boolean(
+    record.sections ||
+    record.selected_blocks ||
+    record.token_budget ||
+    record.token_estimate ||
+    (record.blocks && record.policy_intent)
+  );
+}
+
+function isContextInputPayload(value: unknown): boolean {
+  const record = payloadRecord(value);
+  if (!record) return false;
+  return Boolean(record.block_count || record.selected_keys || record.policy_intent);
 }
 
 function ContextTraceSummary({ outputData }: { outputData: unknown }) {
@@ -152,6 +165,7 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
   }
 
   const policy = asRecord(payload.policy);
+  const policyIntent = policy?.intent ?? payload.policy_intent;
   const explicitSections = asRecordList(payload.sections);
   const fallbackBlocks = asRecordList(payload.blocks ?? payload.selected_blocks);
   const sections = explicitSections.length > 0
@@ -168,7 +182,7 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
         <div style={metricGridStyle}>
           <Metric label="token_budget" value={payload.token_budget} />
           <Metric label="token_estimate" value={payload.token_estimate} />
-          <Metric label="policy intent" value={policy?.intent} />
+          <Metric label="policy intent" value={policyIntent} />
         </div>
       </section>
 
@@ -188,6 +202,27 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
       )}
 
       <RawTraceDetails label="查看原始输出 JSON" value={payload} />
+    </Space>
+  );
+}
+
+function ContextInputSummary({ inputData }: { inputData: unknown }) {
+  const payload = payloadRecord(inputData);
+  if (!payload) {
+    return <RawTraceDetails label="查看原始输入 JSON" value={inputData} />;
+  }
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <section style={summaryPanelStyle}>
+        <div style={sectionTitleStyle}>Context 输入</div>
+        <div style={metricGridStyle}>
+          <Metric label="block_count" value={payload.block_count} />
+          <Metric label="selected_keys" value={displayList(payload.selected_keys)} />
+          <Metric label="policy intent" value={payload.policy_intent} />
+        </div>
+      </section>
+      <RawTraceDetails label="查看原始输入 JSON" value={payload} />
     </Space>
   );
 }
@@ -927,25 +962,29 @@ export default function TraceMonitor() {
             {hasTracePayload(nodeDetail.input_data) && (
               <div>
                 <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输入数据</div>
-                <pre style={{
-                  backgroundColor: '#161b22',
-                  padding: 12,
-                  borderRadius: 6,
-                  border: '1px solid #30363d',
-                  fontSize: 12,
-                  margin: 0,
-                  maxHeight: 300,
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                }}>
-                  {formatTracePayload(nodeDetail.input_data)}
-                </pre>
+                {isContextInputPayload(nodeDetail.input_data) ? (
+                  <ContextInputSummary inputData={nodeDetail.input_data} />
+                ) : (
+                  <pre style={{
+                    backgroundColor: '#161b22',
+                    padding: 12,
+                    borderRadius: 6,
+                    border: '1px solid #30363d',
+                    fontSize: 12,
+                    margin: 0,
+                    maxHeight: 300,
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {formatTracePayload(nodeDetail.input_data)}
+                  </pre>
+                )}
               </div>
             )}
             {hasTracePayload(nodeDetail.output_data) && (
               <div>
                 <div style={{ color: TEXT_DIM, marginBottom: 4, fontSize: 12 }}>输出数据</div>
-                {isContextTraceNode(nodeDetail) && isContextTracePayload(nodeDetail.output_data) ? (
+                {isContextTracePayload(nodeDetail.output_data) ? (
                   <ContextTraceSummary outputData={nodeDetail.output_data} />
                 ) : nodeDetail.node_type === 'skill_call' ? (
                   <SkillOutputFormatter outputData={nodeDetail.output_data} />
