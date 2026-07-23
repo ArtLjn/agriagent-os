@@ -91,6 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const location = useLocation();
 
   const currentTitle = pageTitles[location.pathname] || '田掌柜';
+  const isFullScreen = location.pathname === '/dev/playground';
   const collapseLabel = collapsed ? '展开侧边栏' : '折叠侧边栏';
   const toggleSidebar = () => setCollapsed((current) => !current);
   const selectedKey = useMemo(() => {
@@ -191,23 +192,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <div className="surface-scroll" style={{ height: `calc(100vh - ${layout.headerHeight + 48}px)`, overflow: 'auto', paddingTop: 6 }}>
-          <Menu
-            className="app-sidebar-menu"
-            theme="dark"
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            openKeys={collapsed ? undefined : displayedOpenKeys}
-            items={visibleMenuItems}
-            onOpenChange={collapsed ? undefined : (keys) => setOpenKeys(keys)}
-            onClick={({ key }: { key: string }) => {
-              if (key.startsWith('/')) navigate(key);
-            }}
-            style={{
-              background: 'transparent',
-              borderRight: 'none',
-              padding: '4px 0 10px',
-            }}
-          />
+          {collapsed ? (
+            <nav className="app-sidebar-collapsed-nav" aria-label={`${activeGroup.label}导航`}>
+              {collapsedMenuItems.map((item) => (
+                <Tooltip key={item.key} title={item.label} placement="right">
+                  <Button
+                    type="text"
+                    aria-label={item.label}
+                    aria-current={selectedKey === item.key ? 'page' : undefined}
+                    className="app-sidebar-collapsed-nav-item"
+                    data-active={selectedKey === item.key}
+                    icon={item.icon}
+                    onClick={() => navigate(item.key)}
+                  />
+                </Tooltip>
+              ))}
+            </nav>
+          ) : (
+            <Menu
+              className="app-sidebar-menu"
+              theme="dark"
+              mode="inline"
+              selectedKeys={[selectedKey]}
+              openKeys={displayedOpenKeys}
+              items={visibleMenuItems}
+              onOpenChange={(keys) => setOpenKeys(keys)}
+              onClick={({ key }: { key: string }) => {
+                if (key.startsWith('/')) navigate(key);
+              }}
+              style={{
+                background: 'transparent',
+                borderRight: 'none',
+                padding: '4px 0 10px',
+              }}
+            />
+          )}
         </div>
 
         <div
@@ -273,9 +292,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           style={{
             flex: 1,
             minHeight: 0,
-            padding: '20px 24px 56px',
+            padding: isFullScreen ? 0 : '20px 24px 56px',
             background: palette.bg,
-            overflow: 'auto',
+            overflow: isFullScreen ? 'hidden' : 'auto',
           }}
         >
           {children}
