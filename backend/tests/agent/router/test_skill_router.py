@@ -375,6 +375,37 @@ def test_unknown_mutating_intent_asks_clarification_without_write_tool(
     assert "请补充" in decision.clarification
 
 
+def test_income_write_intent_recovers_write_candidate_from_registry() -> None:
+    tools = [
+        _tool("create_cost_record"),
+        _tool("manage_cost"),
+        _tool("get_cost_summary"),
+    ]
+
+    decision = SkillRouter().route("今天卖西瓜收入10w", tools)
+
+    assert decision.fallback != "no_tools"
+    assert decision.selected_tools == ["create_cost_record"]
+    frame = decision.frames[0]
+    assert frame.intent == "retrieved_write_candidate"
+    assert frame.risk == "write_confirm"
+    assert frame.operation == "create_record"
+    assert frame.requires_confirmation is True
+
+
+def test_income_write_intent_uses_canonical_cost_tool_when_alias_is_absent() -> None:
+    tools = [_tool("manage_cost"), _tool("get_cost_summary")]
+
+    decision = SkillRouter().route("今天卖西瓜收入10w", tools)
+
+    assert decision.fallback != "no_tools"
+    assert decision.selected_tools == ["manage_cost"]
+    assert decision.selected_operations == {"manage_cost": ["create_record"]}
+    frame = decision.frames[0]
+    assert frame.operation == "create_record"
+    assert frame.params_hint == {"operation": "create_record"}
+
+
 def test_session4_create_worker_and_work_order_keeps_single_write_tool() -> None:
     tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
 
