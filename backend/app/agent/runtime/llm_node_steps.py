@@ -45,12 +45,31 @@ async def _invoke_and_repair_response(
     response = await _repair_llm_response(
         response=response,
         llm=llm,
+        required_retry_llm_factory=_required_retry_llm_factory(
+            llm_context=llm_context,
+            bind_llm_func=bind_llm_func,
+        ),
         prompt_context=prompt_context,
         user_msg=user_msg,
         selected_tools=llm_context["selected_tools"],
         model_name=invoke_meta["model_name"],
     )
     return response, invoke_meta
+
+
+def _required_retry_llm_factory(*, llm_context: dict, bind_llm_func):
+    selected_tools = llm_context["selected_tools"]
+    if not selected_tools or llm_context["tool_choice"] == "required":
+        return None
+
+    def _factory():
+        return bind_llm_func(
+            llm_context["raw_llm"],
+            selected_tools,
+            tool_choice="required",
+        )
+
+    return _factory
 
 
 async def _invoke_llm_for_node(
@@ -106,6 +125,7 @@ async def _repair_llm_response(
     *,
     response: AIMessage,
     llm,
+    required_retry_llm_factory,
     prompt_context: dict,
     user_msg: str,
     selected_tools: list,
@@ -126,6 +146,7 @@ async def _repair_llm_response(
         messages=prompt_context["messages"],
         user_msg=user_msg,
         selected_tools=selected_tools,
+        required_retry_llm_factory=required_retry_llm_factory,
     )
 
 

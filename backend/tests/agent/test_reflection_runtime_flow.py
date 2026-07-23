@@ -41,6 +41,42 @@ class _FakeLLM:
         return AIMessage(content=self.response_text, tool_calls=[])
 
 
+class _RequiredRetryLLM:
+    model_name = "fake-model"
+
+    def __init__(self) -> None:
+        self.bind_kwargs: list[dict] = []
+        self.invoked_modes: list[str] = []
+
+    def bind_tools(self, tools: list, **kwargs):
+        self.bind_kwargs.append(kwargs)
+        mode = kwargs.get("tool_choice", "auto")
+        return _BoundRetryLLM(self, mode)
+
+
+class _BoundRetryLLM:
+    model_name = "fake-model"
+
+    def __init__(self, owner: _RequiredRetryLLM, mode: str) -> None:
+        self.owner = owner
+        self.mode = mode
+
+    async def ainvoke(self, _messages):
+        self.owner.invoked_modes.append(self.mode)
+        if self.mode == "required":
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-status",
+                        "name": "get_farm_status",
+                        "args": {},
+                    }
+                ],
+            )
+        return AIMessage(content="你现在有两个茬口。", tool_calls=[])
+
+
 def _farm_context() -> dict:
     return {
         "display_name": "农友",
@@ -299,6 +335,39 @@ async def test_required_selected_tool_missing_returns_safe_fallback() -> None:
     assert call_kwargs["tool_calls"] == []
     assert call_kwargs["trace_metadata"]["tool_call_ids"] == []
     assert call_kwargs["trace_metadata"]["response_preview"] == "你现在有两个茬口。"
+
+
+@pytest.mark.asyncio
+async def test_read_fact_without_tool_call_retries_with_required_tool_choice() -> None:
+    fake_llm = _RequiredRetryLLM()
+    tools = [_FakeTool("get_farm_status")]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+        result = await _llm_node(
+            {
+                "messages": [HumanMessage(content="好的")],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-required-read-retry",
+                "router_decision": RouterDecision(selected_tools=["get_farm_status"]),
+            }
+        )
+
+    final_message = result["messages"][0]
+    assert final_message.content == ""
+    assert final_message.tool_calls == [
+        {
+            "name": "get_farm_status",
+            "args": {},
+            "id": "tc-status",
+            "type": "tool_call",
+        }
+    ]
+    assert fake_llm.invoked_modes == ["auto", "required"]
+    assert fake_llm.bind_kwargs[-1]["tool_choice"] == "required"
 
 
 @pytest.mark.asyncio

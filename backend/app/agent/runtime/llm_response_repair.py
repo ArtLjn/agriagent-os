@@ -1,9 +1,11 @@
 """Agent Runtime LLM 响应修正逻辑。"""
 
 import logging
+from collections.abc import Callable
 
 from langchain_core.messages import AIMessage, SystemMessage
 
+from app.agent.reflector import ReflectorService
 from app.agent.runtime.chat_fallbacks import retry_no_tool_json_leak
 from app.agent.runtime.direct_routing import filter_tool_calls_by_selected
 from app.agent.runtime.messages import (
@@ -81,25 +83,24 @@ async def _retry_missed_tool_call(
     messages: list,
     user_msg: str,
     selected_tools: list,
+    required_retry_llm_factory: Callable[[], object] | None = None,
 ) -> AIMessage:
     """检测并重试应该调用工具但未调用的响应。"""
     if response.tool_calls:
         return response
 
-    should_retry, missed_tools = _detect_missed_tool_call(
-        user_msg, response.content or "", selected_tools
+    should_retry, missed_tools = _detect_retry_target(
+        response=response,
+        user_msg=user_msg,
+        selected_tools=selected_tools,
     )
     if not (should_retry and selected_tools):
         return response
 
-    logger.warning(
-        "检测到 LLM 应调用工具但未调用 | user_msg=%r | selected=%s | 尝试重试",
-        user_msg[:80],
-        [t.name for t in selected_tools],
-    )
+    _log_missing_tool_retry(user_msg, selected_tools)
     try:
         retry_response = await _invoke_tool_retry(
-            llm=llm,
+            llm=_retry_llm(llm, required_retry_llm_factory),
             system_text=system_text,
             messages=messages,
         )
@@ -122,6 +123,51 @@ async def _retry_missed_tool_call(
         return _write_retry_fallback(retry_response)
     logger.warning("重试后 LLM 仍未输出工具调用，使用原回复")
     return response
+
+
+def _log_missing_tool_retry(user_msg: str, selected_tools: list) -> None:
+    logger.warning(
+        "检测到 LLM 应调用工具但未调用 | user_msg=%r | selected=%s | 尝试重试",
+        user_msg[:80],
+        [tool.name for tool in selected_tools],
+    )
+
+
+def _detect_retry_target(
+    *,
+    response: AIMessage,
+    user_msg: str,
+    selected_tools: list,
+) -> tuple[bool, list]:
+    should_retry, missed_tools = _detect_missed_tool_call(
+        user_msg, response.content or "", selected_tools
+    )
+    if should_retry:
+        return should_retry, missed_tools
+    return _detect_required_read_tool_missing(
+        response=response,
+        selected_tools=selected_tools,
+    )
+
+
+def _retry_llm(llm, required_retry_llm_factory: Callable[[], object] | None):
+    if required_retry_llm_factory is None:
+        return llm
+    return required_retry_llm_factory()
+
+
+def _detect_required_read_tool_missing(
+    *,
+    response: AIMessage,
+    selected_tools: list,
+) -> tuple[bool, list]:
+    selected_tool_names = [tool.name for tool in selected_tools]
+    if ReflectorService.requires_tool_for_final_text(
+        selected_tools=selected_tool_names,
+        final_text=str(response.content or ""),
+    ):
+        return True, selected_tools
+    return False, []
 
 
 async def _invoke_tool_retry(*, llm, system_text: str, messages: list):

@@ -118,6 +118,19 @@ class ReflectorService:
                 trace_metadata=trace_metadata,
             )
 
+    @staticmethod
+    def requires_tool_for_final_text(
+        *,
+        selected_tools: list[str],
+        final_text: str,
+    ) -> bool:
+        result = check_required_tool_missing(
+            selected_tools=selected_tools,
+            tool_calls=[],
+            final_text=final_text,
+        )
+        return result.decision == ReflectionDecision.REQUIRE_TOOL
+
     def check_tool_response(
         self,
         *,
