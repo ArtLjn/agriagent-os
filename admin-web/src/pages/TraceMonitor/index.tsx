@@ -28,7 +28,12 @@ import GanttTimeline from '../../components/GanttTimeline';
 import type { GanttNode } from '../../components/GanttTimeline/types';
 import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
-import { formatTracePayload, hasTracePayload, sanitizeTracePayload } from '../../utils/tracePayload';
+import {
+  formatTracePayload,
+  hasTracePayload,
+  normalizeTracePayload,
+  sanitizeTracePayload,
+} from '../../utils/tracePayload';
 
 const CARD = '#161b22';
 const BORDER = '#30363d';
@@ -113,16 +118,7 @@ function asRecordList(value: unknown): Record<string, unknown>[] {
 }
 
 function payloadRecord(value: unknown): Record<string, unknown> | null {
-  const parsed = typeof value === 'string' ? parseJson(value) : value;
-  return asRecord(sanitizeTracePayload(parsed));
-}
-
-function parseJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
+  return asRecord(sanitizeTracePayload(normalizeTracePayload(value)));
 }
 
 function displayValue(value: unknown): string {

@@ -14,24 +14,56 @@ export function sanitizeTracePayload(value: TracePayload): TracePayload {
   return sanitizeValue(value);
 }
 
+export function normalizeTracePayload(value: TracePayload): TracePayload {
+  if (!hasTracePayload(value)) return value;
+  return normalizeJsonString(value);
+}
+
 export function formatTracePayload(value: TracePayload): string {
   if (!hasTracePayload(value)) return '';
 
-  if (typeof value === 'string') {
+  const normalized = normalizeTracePayload(value);
+
+  if (typeof normalized === 'string') {
+    return sanitizeText(normalized);
+  }
+
+  if (typeof normalized === 'object') {
+    return JSON.stringify(sanitizeTracePayload(normalized), null, 2);
+  }
+
+  return String(normalized);
+}
+
+function normalizeJsonString(value: TracePayload): TracePayload {
+  let current = value;
+
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (typeof current !== 'string') return current;
+
+    const trimmed = current.trim();
+    if (!looksLikeJson(trimmed)) break;
+
     try {
-      return JSON.stringify(sanitizeTracePayload(JSON.parse(value)), null, 2);
+      current = JSON.parse(trimmed);
     } catch {
-      return sanitizeText(
-        value.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"')
-      );
+      break;
     }
   }
 
-  if (typeof value === 'object') {
-    return JSON.stringify(sanitizeTracePayload(value), null, 2);
+  if (typeof current === 'string') {
+    return current.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
   }
 
-  return String(value);
+  return current;
+}
+
+function looksLikeJson(value: string): boolean {
+  return (
+    (value.startsWith('{') && value.endsWith('}')) ||
+    (value.startsWith('[') && value.endsWith(']')) ||
+    (value.startsWith('"') && value.endsWith('"'))
+  );
 }
 
 function sanitizeValue(value: TracePayload, keyHint = ''): TracePayload {

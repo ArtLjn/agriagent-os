@@ -380,6 +380,83 @@ describe('TraceMonitor query 初始化', () => {
     expect(outputRaw).not.toHaveAttribute('open');
   });
 
+  it('双层编码的 context 输出会自动格式化为摘要', async () => {
+    const outputPayload = {
+      token_budget: 900,
+      token_estimate: 72,
+      selected_blocks: [
+        {
+          key: 'farm',
+          source: 'farm',
+          purpose: '农场状态',
+          priority: 90,
+          token_estimate: 12,
+          required: true,
+          compressed: false,
+          reason: '',
+          preview: '农场：管理员农场；位置：苏州市',
+        },
+      ],
+      blocks: [
+        {
+          key: 'farm',
+          source: 'farm',
+          purpose: '农场状态',
+          priority: 90,
+          token_estimate: 12,
+          required: true,
+          compressed: false,
+          reason: '',
+          preview: '农场：管理员农场；位置：苏州市',
+        },
+      ],
+    };
+
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'prompt_render',
+              node_name: 'context_builder',
+              duration_ms: 18,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: {
+                block_count: 5,
+                selected_keys: ['farm', 'cycle', 'user_settings'],
+                policy_intent: 'agent',
+              },
+              output_data: JSON.stringify(JSON.stringify(outputPayload)),
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 context_builder' }));
+
+    expect(await screen.findByText('Context 摘要')).toBeInTheDocument();
+    expect(screen.getByText('token_budget')).toBeInTheDocument();
+    expect(screen.getByText('900')).toBeInTheDocument();
+    expect(screen.getByText('Blocks')).toBeInTheDocument();
+    expect(screen.getByText('农场：管理员农场；位置：苏州市')).toBeInTheDocument();
+
+    const outputRaw = screen.getByText('查看原始输出 JSON').closest('details');
+    expect(outputRaw).not.toBeNull();
+    expect(outputRaw).not.toHaveAttribute('open');
+  });
+
   it('普通非 context trace 仍按原始输出展示', async () => {
     mockedGetTimeline.mockResolvedValueOnce({
       request_id: 'req-1',
