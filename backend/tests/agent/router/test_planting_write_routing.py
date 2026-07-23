@@ -44,6 +44,19 @@ def test_create_crop_template_intent_routes_to_write_tool() -> None:
     assert decision.frames[0].risk == "write_confirm"
 
 
+def test_create_crop_template_alias_routes_to_write_tool() -> None:
+    tools = [
+        _tool("manage_crop_templates"),
+        _tool("get_farm_status"),
+    ]
+
+    decision = SkillRouter().route("创建作物模版吧", tools)
+
+    assert decision.selected_tools == ["manage_crop_templates"]
+    assert decision.frames[0].intent == "create_crop_template"
+    assert decision.frames[0].risk == "write_confirm"
+
+
 @pytest.mark.parametrize("message", ["我想种黑布林的", "我想种个30亩", "准备种黑布林"])
 def test_planting_planning_intent_keeps_read_tools(message: str) -> None:
     tools = [
@@ -85,7 +98,7 @@ def test_planting_advice_keeps_read_tool(message: str) -> None:
     assert decision.frames[0].intent == "query_planting_advice"
 
 
-@pytest.mark.parametrize("message", ["有哪些作物模板", "模板列表"])
+@pytest.mark.parametrize("message", ["有哪些作物模板", "有哪些作物模版", "模板列表"])
 def test_planting_read_queries_do_not_expose_write_tools(message: str) -> None:
     tools = [
         _tool("manage_crop_templates"),
