@@ -88,7 +88,9 @@ def looks_like_manage_planting_unit(message: str) -> bool:
 
 
 def looks_like_create_crop_template(message: str) -> bool:
-    return "模板" in message and looks_like_create_action(message)
+    return ("模板" in message or "模版" in message) and looks_like_create_action(
+        message
+    )
 
 
 def looks_like_create_crop_cycle(message: str) -> bool:
