@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -135,6 +135,37 @@ describe('TraceMonitor query 初始化', () => {
   });
 
   it('context_build trace 渲染 Context、block 与 RAG 摘要', async () => {
+    const ragBlock = {
+      key: 'rag_knowledge',
+      source: 'external_rag',
+      purpose: 'answer evidence',
+      priority: 90,
+      token_estimate: 80,
+      required: true,
+      compressed: false,
+      reason: '命中知识库',
+      preview: '叶片黄化可能与缺氮或根系受损有关。',
+      rag: {
+        collection: 'agri_docs',
+        mode: 'hybrid',
+        actual_mode: 'bm25',
+        warning: 'hybrid fallback',
+        source_count: 2,
+        top_score: 0.87,
+        sources: [
+          {
+            doc_id: 'doc-1',
+            chunk_index: 3,
+            score: 0.87,
+            metadata: {
+              title: '水稻病害手册',
+              source: 'manual',
+            },
+          },
+        ],
+      },
+    };
+
     mockedGetTimeline.mockResolvedValueOnce({
       request_id: 'req-1',
       rounds: [
@@ -156,42 +187,13 @@ describe('TraceMonitor query 初始化', () => {
                 policy: {
                   intent: 'diagnose_crop',
                 },
+                blocks: [ragBlock],
+                selected_blocks: [ragBlock],
                 sections: [
                   {
                     name: 'Evidence',
                     token_estimate: 120,
-                    blocks: [
-                      {
-                        key: 'rag_knowledge',
-                        source: 'external_rag',
-                        purpose: 'answer evidence',
-                        priority: 90,
-                        token_estimate: 80,
-                        required: true,
-                        compressed: false,
-                        reason: '命中知识库',
-                        preview: '叶片黄化可能与缺氮或根系受损有关。',
-                        rag: {
-                          collection: 'agri_docs',
-                          mode: 'hybrid',
-                          actual_mode: 'bm25',
-                          warning: 'hybrid fallback',
-                          source_count: 2,
-                          top_score: 0.87,
-                          sources: [
-                            {
-                              doc_id: 'doc-1',
-                              chunk_index: 3,
-                              score: 0.87,
-                              metadata: {
-                                title: '水稻病害手册',
-                                source: 'manual',
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
+                    blocks: [ragBlock],
                   },
                 ],
               },
@@ -223,6 +225,12 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.getByText('source_count')).toBeInTheDocument();
     expect(screen.getByText('top_score')).toBeInTheDocument();
     expect(screen.getByText('水稻病害手册')).toBeInTheDocument();
+
+    const ragSummary = screen.getByText('RAG 摘要').closest('section');
+    expect(ragSummary).not.toBeNull();
+    expect(within(ragSummary!).getAllByText('doc-1')).toHaveLength(1);
+    expect(within(ragSummary!).getAllByText('bm25')).toHaveLength(1);
+    expect(within(ragSummary!).getAllByText('水稻病害手册')).toHaveLength(1);
   });
 
   it('隐藏 Context payload 里的敏感字段值', async () => {

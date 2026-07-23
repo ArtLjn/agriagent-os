@@ -317,6 +317,7 @@ function collectRagSummaries(
   sections: Record<string, unknown>[],
 ): Record<string, unknown>[] {
   const summaries: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
   const blocks = [
     ...asRecordList(payload.blocks),
     ...asRecordList(payload.selected_blocks),
@@ -325,14 +326,41 @@ function collectRagSummaries(
 
   blocks.forEach((block) => {
     const rag = asRecord(block.rag);
-    if (rag) summaries.push(rag);
+    addRagSummary(summaries, seen, rag);
   });
 
   const selectorMetadata = asRecord(payload.selector_metadata);
   const knowledge = asRecord(selectorMetadata?.knowledge);
-  if (knowledge) summaries.push(knowledge);
+  addRagSummary(summaries, seen, knowledge);
 
   return summaries;
+}
+
+function addRagSummary(
+  summaries: Record<string, unknown>[],
+  seen: Set<string>,
+  rag: Record<string, unknown> | null,
+) {
+  if (!rag) return;
+  const key = ragSummaryKey(rag);
+  if (seen.has(key)) return;
+  seen.add(key);
+  summaries.push(rag);
+}
+
+function ragSummaryKey(rag: Record<string, unknown>): string {
+  return JSON.stringify({
+    collection: rag.collection ?? '',
+    mode: rag.mode ?? '',
+    actual_mode: rag.actual_mode ?? '',
+    source_count: rag.source_count ?? '',
+    top_score: rag.top_score ?? '',
+    sources: asRecordList(rag.sources).map((source) => ({
+      doc_id: source.doc_id ?? '',
+      chunk_index: source.chunk_index ?? '',
+      score: source.score ?? '',
+    })),
+  });
 }
 
 const summaryPanelStyle: CSSProperties = {
