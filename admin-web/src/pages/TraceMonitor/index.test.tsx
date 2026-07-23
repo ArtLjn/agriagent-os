@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +13,49 @@ vi.mock('../../api/admin', () => ({
 }));
 
 vi.mock('../../components/GanttTimeline', () => ({
-  default: () => <div>timeline loaded</div>,
+  default: ({
+    rounds,
+    onNodeClick,
+  }: {
+    rounds: Array<{
+      round_index: number;
+      nodes: Array<{
+        node_type: string;
+        node_name: string;
+        output_data?: unknown;
+        input_data?: unknown;
+        duration_ms?: number | null;
+        status?: string;
+        start_time?: string | null;
+        error_message?: string | null;
+      }>;
+    }>;
+    onNodeClick: (roundIndex: number, nodeIndex: number, node: {
+      node_type: string;
+      node_name: string;
+      output_data?: unknown;
+      input_data?: unknown;
+      duration_ms?: number | null;
+      status?: string;
+      start_time?: string | null;
+      error_message?: string | null;
+    }) => void;
+  }) => (
+    <div>
+      timeline loaded
+      {rounds.flatMap((round) =>
+        round.nodes.map((node, nodeIndex) => (
+          <button
+            key={`${round.round_index}-${nodeIndex}`}
+            type="button"
+            onClick={() => onNodeClick(round.round_index, nodeIndex, node)}
+          >
+            打开节点 {node.node_name}
+          </button>
+        )),
+      )}
+    </div>
+  ),
 }));
 
 const mockedListTraces = vi.mocked(listTraces);
@@ -90,5 +132,199 @@ describe('TraceMonitor query 初始化', () => {
     });
     expect(screen.queryByText(/1970/)).not.toBeInTheDocument();
     expect(mockedListTraces).not.toHaveBeenCalled();
+  });
+
+  it('context_build trace 渲染 Context、block 与 RAG 摘要', async () => {
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'context_build',
+              node_name: 'context_bundle',
+              duration_ms: 18,
+              status: 'success',
+              token_usage: null,
+              start_time: '2026-06-11T10:00:00+08:00',
+              error_message: null,
+              input_data: null,
+              output_data: {
+                token_budget: 512,
+                token_estimate: 241,
+                policy: {
+                  intent: 'diagnose_crop',
+                },
+                sections: [
+                  {
+                    name: 'Evidence',
+                    token_estimate: 120,
+                    blocks: [
+                      {
+                        key: 'rag_knowledge',
+                        source: 'external_rag',
+                        purpose: 'answer evidence',
+                        priority: 90,
+                        token_estimate: 80,
+                        required: true,
+                        compressed: false,
+                        reason: '命中知识库',
+                        preview: '叶片黄化可能与缺氮或根系受损有关。',
+                        rag: {
+                          collection: 'agri_docs',
+                          mode: 'hybrid',
+                          actual_mode: 'bm25',
+                          warning: 'hybrid fallback',
+                          source_count: 2,
+                          top_score: 0.87,
+                          sources: [
+                            {
+                              doc_id: 'doc-1',
+                              chunk_index: 3,
+                              score: 0.87,
+                              metadata: {
+                                title: '水稻病害手册',
+                                source: 'manual',
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 context_bundle' }));
+
+    expect(await screen.findByText('Context 摘要')).toBeInTheDocument();
+    expect(screen.getByText('token_budget')).toBeInTheDocument();
+    expect(screen.getByText('512')).toBeInTheDocument();
+    expect(screen.getByText('diagnose_crop')).toBeInTheDocument();
+    expect(screen.getByText('Evidence')).toBeInTheDocument();
+    expect(screen.getByText('rag_knowledge')).toBeInTheDocument();
+    expect(screen.getByText('external_rag')).toBeInTheDocument();
+    expect(screen.getByText('叶片黄化可能与缺氮或根系受损有关。')).toBeInTheDocument();
+    expect(screen.getByText('RAG 摘要')).toBeInTheDocument();
+    expect(screen.getByText('bm25')).toBeInTheDocument();
+    expect(screen.getByText('hybrid fallback')).toBeInTheDocument();
+    expect(screen.getByText('source_count')).toBeInTheDocument();
+    expect(screen.getByText('top_score')).toBeInTheDocument();
+    expect(screen.getByText('水稻病害手册')).toBeInTheDocument();
+  });
+
+  it('隐藏 Context payload 里的敏感字段值', async () => {
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'context_build',
+              node_name: 'context_bundle',
+              duration_ms: 18,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: null,
+              output_data: {
+                token_budget: 128,
+                token_estimate: 32,
+                policy: {
+                  intent: 'debug',
+                  api_key: 'fake-sensitive-api-key-value',
+                },
+                sections: [
+                  {
+                    name: 'Context',
+                    token_estimate: 32,
+                    blocks: [
+                      {
+                        key: 'farm',
+                        source: 'runtime',
+                        purpose: 'farm state',
+                        priority: 10,
+                        token_estimate: 32,
+                        required: false,
+                        compressed: false,
+                        reason: 'token=should-hide',
+                        preview: 'authorization: should-hide-too',
+                        password: 'fake-sensitive-password-value',
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 context_bundle' }));
+
+    expect(await screen.findByText('Context 摘要')).toBeInTheDocument();
+    expect(screen.getAllByText(/\[REDACTED\]/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('fake-sensitive-api-key-value')).not.toBeInTheDocument();
+    expect(screen.queryByText('should-hide')).not.toBeInTheDocument();
+    expect(screen.queryByText('should-hide-too')).not.toBeInTheDocument();
+    expect(screen.queryByText('fake-sensitive-password-value')).not.toBeInTheDocument();
+  });
+
+  it('普通非 context trace 仍按原始输出展示', async () => {
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-1',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'routing',
+              node_name: 'router',
+              duration_ms: 5,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: null,
+              output_data: {
+                decision: 'chat',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-1']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '打开节点 router' }));
+
+    expect(await screen.findByText(/"decision": "chat"/)).toBeInTheDocument();
+    expect(screen.queryByText('Context 摘要')).not.toBeInTheDocument();
   });
 });
