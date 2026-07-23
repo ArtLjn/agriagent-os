@@ -52,6 +52,17 @@ _STOP_TERMS = {
     "to",
 }
 
+_LOW_SIGNAL_EXAMPLE_TERMS = {
+    "今天",
+    "昨天",
+    "前天",
+    "本周",
+    "这周",
+    "本月",
+    "这个月",
+    "最近",
+}
+
 
 @dataclass(frozen=True)
 class CandidateRetrievalResult:
@@ -104,7 +115,11 @@ class CandidateRetriever:
     ) -> tuple[ToolCandidate, float, dict]:
         tag_hits = _hits(terms, candidate.entities)
         intent_hits = _hits(terms, candidate.intents, min_hits=2)
-        example_hits = _hits(terms, candidate.trigger_examples, min_hits=2)
+        example_hits = _hits(
+            terms - _LOW_SIGNAL_EXAMPLE_TERMS,
+            candidate.trigger_examples,
+            min_hits=2,
+        )
         anti_hits = _hits(terms, candidate.anti_examples, min_hits=2)
         identity_hits = _hits(
             terms,

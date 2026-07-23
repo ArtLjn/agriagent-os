@@ -11,6 +11,7 @@ from app.agent.reflector.checks import (
     check_pending_plan_consistency,
     check_required_tool_missing,
     check_tool_failure_success_reply,
+    check_tool_failure_write_plan_reply,
     check_tool_result_final_contradiction,
     check_write_plan_consistency,
 )
@@ -141,66 +142,69 @@ class ReflectorService:
         trace_metadata: dict[str, Any] | None = None,
     ) -> ReflectionResult:
         try:
-            no_tool_result = check_no_tool_write_success_claim(
-                user_message=str((trace_metadata or {}).get("user_message") or ""),
-                final_text=final_text,
-                selected_tools=selected_tools or [],
-                tool_messages=tool_messages,
-                tool_calls=tool_calls or [],
-                plan_draft=(trace_metadata or {}).get("plan_draft"),
-                pending_created=(trace_metadata or {}).get("pending_created"),
-            )
-            if no_tool_result.decision != ReflectionDecision.PASS:
-                return self._record(no_tool_result, trace_metadata=trace_metadata)
-            if not self.policy.should_run(
-                trigger=ReflectionTrigger.POST_TOOL_RESULT,
-                selected_tools=selected_tools or [],
-                tool_messages=tool_messages,
-            ):
-                return ReflectionResult.passed(
-                    ReflectionTrigger.POST_TOOL_RESULT,
-                    reason="反思策略跳过。",
-                    checks=["tool_response_consistency"],
-                )
-            failure_result = check_tool_failure_success_reply(
+            result = self._run_tool_response_checks(
                 tool_messages=tool_messages,
                 final_text=final_text,
-            )
-            if failure_result.decision != ReflectionDecision.PASS:
-                return self._record(failure_result, trace_metadata=trace_metadata)
-            contradiction_result = check_tool_result_final_contradiction(
-                tool_messages=tool_messages,
-                final_text=final_text,
-            )
-            if contradiction_result.decision != ReflectionDecision.PASS:
-                return self._record(
-                    contradiction_result,
-                    trace_metadata=trace_metadata,
-                )
-            missing_tool_result = check_required_tool_missing(
                 selected_tools=selected_tools or [],
                 tool_calls=tool_calls or [],
-                final_text=final_text,
-            )
-            return self._record(missing_tool_result, trace_metadata=trace_metadata)
-        except Exception as exc:
-            result = ReflectionResult(
-                trigger=ReflectionTrigger.POST_TOOL_RESULT,
-                decision=ReflectionDecision.PASS,
-                reason="Reflection 检查异常，只读/回复路径已降级放行。",
-                checks=["tool_response_consistency"],
-                issues=[
-                    ReflectionIssue(
-                        code="reflection_check_failed",
-                        severity=ReflectionSeverity.WARNING,
-                        message="Reflection 检查异常，只读/回复路径已降级放行。",
-                        evidence={"error": str(exc)[:200]},
-                        suggested_decision=ReflectionDecision.PASS,
-                    )
-                ],
-                metadata={"reflection_error": str(exc)[:200]},
+                trace_metadata=trace_metadata or {},
             )
             return self._record(result, trace_metadata=trace_metadata)
+        except Exception as exc:
+            result = self._tool_response_exception_result(exc)
+            return self._record(result, trace_metadata=trace_metadata)
+
+    def _run_tool_response_checks(
+        self,
+        *,
+        tool_messages: list[ToolMessage],
+        final_text: str,
+        selected_tools: list[str],
+        tool_calls: list[dict[str, Any]],
+        trace_metadata: dict[str, Any],
+    ) -> ReflectionResult:
+        no_tool_result = check_no_tool_write_success_claim(
+            user_message=str(trace_metadata.get("user_message") or ""),
+            final_text=final_text,
+            selected_tools=selected_tools,
+            tool_messages=tool_messages,
+            tool_calls=tool_calls,
+            plan_draft=trace_metadata.get("plan_draft"),
+            pending_created=trace_metadata.get("pending_created"),
+        )
+        if no_tool_result.decision != ReflectionDecision.PASS:
+            return no_tool_result
+        if not self.policy.should_run(
+            trigger=ReflectionTrigger.POST_TOOL_RESULT,
+            selected_tools=selected_tools,
+            tool_messages=tool_messages,
+        ):
+            return ReflectionResult.passed(
+                ReflectionTrigger.POST_TOOL_RESULT,
+                reason="反思策略跳过。",
+                checks=["tool_response_consistency"],
+            )
+        return _first_non_pass(
+            check_tool_failure_success_reply(
+                tool_messages=tool_messages,
+                final_text=final_text,
+            ),
+            check_tool_failure_write_plan_reply(
+                tool_messages=tool_messages,
+                final_text=final_text,
+                plan_draft=trace_metadata.get("plan_draft"),
+                pending_created=trace_metadata.get("pending_created"),
+            ),
+            check_tool_result_final_contradiction(
+                tool_messages=tool_messages,
+                final_text=final_text,
+            ),
+            check_required_tool_missing(
+                selected_tools=selected_tools,
+                tool_calls=tool_calls,
+                final_text=final_text,
+            ),
+        )
 
     def _record(
         self,
@@ -247,3 +251,30 @@ class ReflectorService:
                 )
             ],
         )
+
+    @staticmethod
+    def _tool_response_exception_result(exc: Exception) -> ReflectionResult:
+        message = "Reflection 检查异常，只读/回复路径已降级放行。"
+        return ReflectionResult(
+            trigger=ReflectionTrigger.POST_TOOL_RESULT,
+            decision=ReflectionDecision.PASS,
+            reason=message,
+            checks=["tool_response_consistency"],
+            issues=[
+                ReflectionIssue(
+                    code="reflection_check_failed",
+                    severity=ReflectionSeverity.WARNING,
+                    message=message,
+                    evidence={"error": str(exc)[:200]},
+                    suggested_decision=ReflectionDecision.PASS,
+                )
+            ],
+            metadata={"reflection_error": str(exc)[:200]},
+        )
+
+
+def _first_non_pass(*results: ReflectionResult) -> ReflectionResult:
+    for result in results:
+        if result.decision != ReflectionDecision.PASS:
+            return result
+    return results[-1]

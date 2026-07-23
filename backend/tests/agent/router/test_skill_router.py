@@ -406,6 +406,26 @@ def test_income_write_intent_uses_canonical_cost_tool_when_alias_is_absent() -> 
     assert frame.params_hint == {"operation": "create_record"}
 
 
+def test_income_write_intent_prefers_cost_record_over_farm_log() -> None:
+    tools = [
+        _tool("manage_cost_categories"),
+        _tool("manage_farm_logs"),
+        _tool("manage_cost"),
+        _tool("manage_crop_cycle"),
+        _tool("manage_labor_payment"),
+        _tool("manage_work_orders"),
+    ]
+
+    decision = SkillRouter().route("今天卖西瓜收入10w", tools)
+
+    assert decision.fallback != "no_tools"
+    assert decision.selected_tools == ["manage_cost"]
+    assert decision.selected_operations == {"manage_cost": ["create_record"]}
+    frame = decision.frames[0]
+    assert frame.domain == "finance"
+    assert frame.operation == "create_record"
+
+
 def test_session4_create_worker_and_work_order_keeps_single_write_tool() -> None:
     tools = [_tool("manage_workers"), _tool("create_operation_work_order")]
 
