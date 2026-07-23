@@ -50,9 +50,11 @@ _BUSINESS_QUANTITY_HINTS = ("共", "总", "当前共有", "现在有")
 _WRITE_PLAN_CHECK = "write_plan_consistency"
 _PENDING_PLAN_CHECK = "pending_plan_consistency"
 _TOOL_RESPONSE_CHECK = "tool_failure_success_reply"
+_WRITE_PLAN_TOOL_FAILURE_CHECK = "write_plan_tool_failure_reply"
 _TOOL_CONCLUSION_CHECK = "tool_result_final_contradiction"
 _REQUIRED_TOOL_CHECK = "required_tool_missing"
 _NO_TOOL_WRITE_SUCCESS_CHECK = "no_tool_write_success_claim"
+_NO_TOOL_NEEDED_HINTS = ("不需要调用工具", "无需调用工具", "可以直接聊", "直接聊")
 _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9.])\d+(?:\.\d+)?(?![A-Za-z0-9.])")
 _WRITE_SUCCESS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("已为您记录", re.compile(r"已为(?:你|您)?记录")),
@@ -179,6 +181,48 @@ def check_tool_failure_success_reply(
     )
 
 
+def check_tool_failure_write_plan_reply(
+    *,
+    tool_messages: list[ToolMessage],
+    final_text: str,
+    plan_draft: dict[str, Any] | None = None,
+    pending_created: bool | None = None,
+) -> ReflectionResult:
+    failed = [
+        str(message.content or "")
+        for message in tool_messages
+        if _contains_any(str(message.content or ""), _FAILURE_HINTS)
+    ]
+    if not failed:
+        return ReflectionResult.passed(
+            ReflectionTrigger.POST_TOOL_RESULT,
+            checks=[_WRITE_PLAN_TOOL_FAILURE_CHECK],
+        )
+    if not _is_write_plan(plan_draft) or pending_created:
+        return ReflectionResult.passed(
+            ReflectionTrigger.POST_TOOL_RESULT,
+            checks=[_WRITE_PLAN_TOOL_FAILURE_CHECK],
+        )
+    if not _contains_any(final_text, _NO_TOOL_NEEDED_HINTS):
+        return ReflectionResult.passed(
+            ReflectionTrigger.POST_TOOL_RESULT,
+            checks=[_WRITE_PLAN_TOOL_FAILURE_CHECK],
+        )
+    return _single_issue(
+        trigger=ReflectionTrigger.POST_TOOL_RESULT,
+        decision=ReflectionDecision.FALLBACK_RESPONSE,
+        checks=[_WRITE_PLAN_TOOL_FAILURE_CHECK],
+        code="failed_write_plan_no_tool_reply",
+        message="写入计划的工具调用失败，但最终回复淡化了工具和待确认动作需求。",
+        evidence={
+            "failed_tool_message": failed[0][:160],
+            "final_text": final_text[:160],
+            "plan_draft": _summarize_plan_draft(plan_draft),
+            "pending_created": pending_created,
+        },
+    )
+
+
 def check_required_tool_missing(
     *,
     selected_tools: list[str],
@@ -270,6 +314,13 @@ def _summarize_plan_draft(plan_draft: dict[str, Any] | None) -> dict[str, Any]:
         "steps": _plan_step_names(plan_draft.get("steps")),
         "evidence": plan_draft.get("evidence") or {},
     }
+
+
+def _is_write_plan(plan_draft: dict[str, Any] | None) -> bool:
+    if not isinstance(plan_draft, dict):
+        return False
+    route_type = str(plan_draft.get("route_type") or "")
+    return route_type.startswith("write_")
 
 
 def _plan_step_names(steps: Any) -> list[str]:

@@ -13,6 +13,7 @@ from app.agent.reflector import (
 from app.agent.reflector.checks import (
     check_required_tool_missing,
     check_tool_failure_success_reply,
+    check_tool_failure_write_plan_reply,
     check_tool_result_final_contradiction,
     check_write_plan_consistency,
 )
@@ -136,6 +137,69 @@ def test_check_tool_failure_success_reply_rewrites_success_claim() -> None:
 
     assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
     assert result.issues[0].code == "failed_tool_success_reply"
+
+
+def test_check_tool_failure_blocks_write_plan_no_tool_reply() -> None:
+    tool_message = ToolMessage(
+        content="工具调用失败：写操作缺少明确目标，请补充要操作的对象。",
+        tool_call_id="tc-cost",
+    )
+
+    result = check_tool_failure_write_plan_reply(
+        tool_messages=[tool_message],
+        final_text="这个问题可以直接聊，不需要调用工具。",
+        plan_draft={
+            "route_type": "write_pending_action",
+            "steps": [{"skill_name": "manage_farm_logs"}],
+        },
+        pending_created=False,
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    assert result.issues[0].code == "failed_write_plan_no_tool_reply"
+
+
+def test_service_blocks_failed_write_plan_no_tool_reply(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeCollector:
+        def __init__(self) -> None:
+            self.records = []
+
+        def record(self, **kwargs) -> None:
+            self.records.append(kwargs)
+
+    collector = FakeCollector()
+    monkeypatch.setattr(
+        "app.agent.reflector.service.get_collector",
+        lambda: collector,
+    )
+    service = ReflectorService(policy=ReflectionPolicy(enabled=True))
+
+    result = service.check_tool_response(
+        tool_messages=[
+            ToolMessage(
+                content="工具调用失败：写操作缺少明确目标，请补充要操作的对象。",
+                tool_call_id="tc-cost",
+            )
+        ],
+        final_text="这个问题可以直接聊，不需要调用工具。",
+        selected_tools=[],
+        tool_calls=[{"name": "manage_farm_logs"}],
+        trace_metadata={
+            "plan_draft": {
+                "route_type": "write_pending_action",
+                "steps": [{"skill_name": "manage_farm_logs"}],
+            },
+            "pending_created": False,
+        },
+    )
+
+    assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
+    assert result.issues[0].code == "failed_write_plan_no_tool_reply"
+    assert collector.records[0]["output_data"]["issues"][0]["code"] == (
+        "failed_write_plan_no_tool_reply"
+    )
 
 
 def test_check_required_tool_missing_requests_retry() -> None:
