@@ -74,6 +74,8 @@ def _build_pending_execution_args(
     """构建待执行参数，只补齐确定性的目标标识。"""
     execution_args = dict(args or {})
     _fill_inferred_write_operation(name, execution_args)
+    if _is_create_cost_record_call(name, execution_args):
+        _fill_create_cost_record_args(execution_args, original_input)
     if _operation_name_from_args(name, execution_args) == "create_work_order":
         _normalize_operation_work_order_args(execution_args)
         _fill_operation_default_wage(execution_args, farm_id)
@@ -94,6 +96,75 @@ def _fill_inferred_write_operation(name: str, args: dict) -> None:
     metadata = resolve_skill_capability_metadata(name, operation) or {}
     if metadata.get("operation_risk") in {"write_confirm", "write_high"}:
         args["operation"] = operation
+
+
+def _is_create_cost_record_call(name: str, args: dict) -> bool:
+    if name == "create_cost_record":
+        return True
+    return name == "manage_cost" and args.get("operation") == "create_record"
+
+
+def _fill_create_cost_record_args(args: dict, original_input: str) -> None:
+    text = original_input.strip()
+    if not text:
+        return
+    amount = _extract_money_amount(text)
+    if args.get("amount") in (None, "") and amount is not None:
+        args["amount"] = amount
+    record_type = _infer_cost_record_type(text)
+    if args.get("record_type") in (None, "") and record_type:
+        args["record_type"] = record_type
+    if args.get("category") in (None, ""):
+        category = _infer_cost_record_category(text, record_type)
+        if category:
+            args["category"] = category
+    if args.get("record_subtype") in (None, "") and _looks_like_debt_record(text):
+        args["record_subtype"] = "赊账"
+    if args.get("note") in (None, ""):
+        args["note"] = text[:120]
+
+
+def _extract_money_amount(text: str):
+    matches = re.findall(
+        r"(?P<amount>\d+(?:\.\d+)?)\s*(?P<unit>万|w|W|千|百|元|块)",
+        text,
+    )
+    if not matches:
+        return None
+    raw_amount, unit = matches[-1]
+    amount = float(raw_amount)
+    if unit in {"万", "w", "W"}:
+        amount *= 10000
+    elif unit == "千":
+        amount *= 1000
+    elif unit == "百":
+        amount *= 100
+    return int(amount) if amount.is_integer() else amount
+
+
+def _infer_cost_record_type(text: str) -> str | None:
+    if any(hint in text for hint in ("卖", "销售", "收入", "赚", "收款", "未收")):
+        return "income"
+    if any(hint in text for hint in ("买", "采购", "购入", "花", "支出", "付")):
+        return "cost"
+    return None
+
+
+def _infer_cost_record_category(text: str, record_type: str | None) -> str | None:
+    if record_type == "income":
+        if any(hint in text for hint in ("卖", "销售", "收入")):
+            return "销售"
+        return "其他"
+    for category in ("化肥", "肥料", "种子", "农药", "人工", "水电", "地租"):
+        if category in text:
+            return "化肥" if category == "肥料" else category
+    return None
+
+
+def _looks_like_debt_record(text: str) -> bool:
+    return any(
+        hint in text for hint in ("赊账", "赊了", "欠账", "未付", "未收", "先欠着")
+    )
 
 
 def _normalize_operation_work_order_args(args: dict) -> None:

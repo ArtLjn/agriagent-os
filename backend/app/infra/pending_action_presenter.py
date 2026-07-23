@@ -555,7 +555,7 @@ def _build_generic_business_confirm_message(
     for key in detail_keys:
         value = params.get(key)
         if value is not None:
-            details.append(str(value))
+            details.append(_format_detail_value(key, value))
     lines = [f"{emoji} 确认{label}：{' '.join(details)}".rstrip()]
     for note in context.get("risk_notes") or []:
         lines.append(f"说明：{note}")
@@ -563,6 +563,14 @@ def _build_generic_business_confirm_message(
         lines.append(f"理解：您说的是「{original_input}」")
     lines.append("确认吗？")
     return "\n".join(lines)
+
+
+def _format_detail_value(key: str, value) -> str:
+    if key == "amount":
+        return f"{value}元"
+    if key == "record_type":
+        return {"income": "收入", "cost": "支出"}.get(value, str(value))
+    return str(value)
 
 
 def _crop_template_action_value(params: dict) -> str | None:
