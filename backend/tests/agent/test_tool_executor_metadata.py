@@ -534,6 +534,78 @@ async def test_manage_cost_create_record_infers_income_params_from_original_inpu
     _clear_pending_memory(session_id)
 
 
+@pytest.mark.no_db
+@pytest.mark.asyncio
+async def test_manage_cost_create_record_infers_income_params_from_plan_draft():
+    session_id = "sess-income-create-record-plan-draft"
+    _clear_pending_memory(session_id)
+    tool = SimpleNamespace(
+        name="manage_cost",
+        args_schema=None,
+        ainvoke=AsyncMock(return_value="不应直接执行"),
+        skill_metadata=SkillMetadata(
+            permission_level=SkillPermissionLevel.READ,
+            capability="manage_cost",
+        ),
+    )
+    collector = MagicMock()
+    state = {
+        "messages": [
+            HumanMessage(content="今天卖西瓜收入10w"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_cost",
+                        "args": {"operation": "create_record"},
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": session_id,
+        "plan_draft": {
+            "route_type": "write_pending_action",
+            "validation": {"status": "valid"},
+            "steps": [
+                {
+                    "step_id": "retrieved_write_candidate",
+                    "skill_name": "manage_cost",
+                    "params": {"operation": "create_record"},
+                    "depends_on": [],
+                }
+            ],
+        },
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools",
+            return_value=[tool],
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector",
+            return_value=collector,
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    pending = get_pending(1, session_id=session_id)
+    assert pending is not None
+    assert pending.params == {
+        "operation": "create_record",
+        "amount": 100000,
+        "category": "销售",
+        "record_type": "income",
+        "note": "今天卖西瓜收入10w",
+    }
+    content = result["messages"][0].content
+    assert "100000元" in content
+    assert "收入" in content
+    _clear_pending_memory(session_id)
+
+
 def test_write_like_arg_samples_cover_all_registry_write_runtime_tools():
     assert set(_WRITE_LIKE_ARGS_BY_TOOL) == _runtime_write_tool_names_from_registry()
 
