@@ -9,6 +9,7 @@ import {
   Modal,
   Descriptions,
   App,
+  Form,
   Statistic,
   Progress,
   Row,
@@ -21,6 +22,7 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   SettingOutlined,
+  PlusOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { MetricCard, PageShell, Toolbar } from "../../components/PageShell";
@@ -32,6 +34,7 @@ import {
   type ListUsersParams,
   type UserQuotaStatus,
   type UserQuotaOverviewItem,
+  type CreateUserRequest,
 } from "../../api/users";
 
 const BG_CARD = "#21262d";
@@ -71,8 +74,13 @@ const statusFilters = [
   { label: "已禁用", value: "disabled" },
 ];
 
+interface CreateUserFormValues extends CreateUserRequest {
+  confirm_password: string;
+}
+
 export default function Users() {
   const { modal: modalApi, message } = App.useApp();
+  const [createForm] = Form.useForm<CreateUserFormValues>();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -91,14 +99,18 @@ export default function Users() {
   const [monthlyLimit, setMonthlyLimit] = useState<number | null>(DEFAULT_MONTHLY_LIMIT);
   const [weeklyLimit, setWeeklyLimit] = useState<number | null>(DEFAULT_WEEKLY_LIMIT);
   const [quotaSaving, setQuotaSaving] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (targetPage = page) => {
     setLoading(true);
     try {
-      const params: ListUsersParams = { page, size };
+      const params: ListUsersParams = { page: targetPage, size };
       if (statusFilter) params.status = statusFilter;
       if (phoneKeyword.trim()) params.phone_keyword = phoneKeyword.trim();
-      const quotaParams = statusFilter ? { page, size, status: statusFilter } : { page, size };
+      const quotaParams = statusFilter
+        ? { page: targetPage, size, status: statusFilter }
+        : { page: targetPage, size };
       const [usersRes, quotaRes] = await Promise.all([
         usersApi.list(params),
         usersApi.getQuotaOverview(quotaParams),
@@ -121,7 +133,7 @@ export default function Users() {
   }, [page, size, statusFilter, phoneKeyword, message]);
 
   useEffect(() => {
-    void Promise.resolve().then(fetchUsers);
+    void fetchUsers();
   }, [fetchUsers]);
 
   const handleViewDetail = async (userId: string) => {
@@ -166,6 +178,36 @@ export default function Users() {
         }
       },
     });
+  };
+
+  const openCreateModal = () => {
+    createForm.resetFields();
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateUser = async () => {
+    let values: CreateUserFormValues;
+    try {
+      values = await createForm.validateFields();
+    } catch {
+      return;
+    }
+    setCreateSaving(true);
+    try {
+      await usersApi.create({
+        phone: values.phone.trim(),
+        password: values.password,
+        nickname: values.nickname?.trim() || "农友",
+      });
+      message.success("用户已创建");
+      setCreateModalOpen(false);
+      setPage(1);
+      await fetchUsers(1);
+    } catch {
+      message.error("创建用户失败");
+    } finally {
+      setCreateSaving(false);
+    }
   };
 
   const openSingleQuotaModal = (record: UserListItem) => {
@@ -428,13 +470,18 @@ export default function Users() {
           </>
         )}
         right={(
-          <Button
-            icon={<SettingOutlined />}
-            disabled={selectedRowKeys.length === 0}
-            onClick={openBatchQuotaModal}
-          >
-            批量设置额度{selectedRowKeys.length ? `（${selectedRowKeys.length}）` : ""}
-          </Button>
+          <Space>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+              新建用户
+            </Button>
+            <Button
+              icon={<SettingOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              onClick={openBatchQuotaModal}
+            >
+              批量设置额度{selectedRowKeys.length ? `（${selectedRowKeys.length}）` : ""}
+            </Button>
+          </Space>
         )}
       />
 
@@ -458,6 +505,73 @@ export default function Users() {
         scroll={{ x: 1180 }}
         style={{ background: BG_CARD, borderRadius: 8 }}
       />
+
+      <Modal
+        title="新建用户"
+        open={createModalOpen}
+        onCancel={() => setCreateModalOpen(false)}
+        onOk={handleCreateUser}
+        confirmLoading={createSaving}
+        okText="创建"
+        cancelText="取消"
+        width={520}
+        destroyOnHidden
+      >
+        <Form<CreateUserFormValues>
+          form={createForm}
+          layout="vertical"
+        >
+          <Form.Item
+            label="手机号"
+            name="phone"
+            rules={[
+              { required: true, message: "请输入手机号" },
+              { pattern: /^1[3-9]\d{9}$/, message: "请输入有效手机号" },
+            ]}
+          >
+            <Input placeholder="用于登录的 11 位手机号" maxLength={11} />
+          </Form.Item>
+          <Form.Item
+            label="昵称"
+            name="nickname"
+            rules={[{ max: 50, message: "昵称不能超过 50 个字符" }]}
+          >
+            <Input placeholder="默认农友" maxLength={50} />
+          </Form.Item>
+          <Form.Item
+            label="初始密码"
+            name="password"
+            rules={[
+              { required: true, message: "请输入初始密码" },
+              { min: 8, message: "密码至少 8 位" },
+              { max: 64, message: "密码不能超过 64 位" },
+            ]}
+          >
+            <Input.Password placeholder="8 到 64 位初始密码" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            label="确认密码"
+            name="confirm_password"
+            dependencies={["password"]}
+            rules={[
+              { required: true, message: "请再次输入初始密码" },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue("password") === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error("两次输入的密码不一致"));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="再次输入初始密码" autoComplete="new-password" />
+          </Form.Item>
+          <div style={{ color: TEXT_SECONDARY, fontSize: 12 }}>
+            创建后会自动生成默认农场；Token 额度沿用系统默认值，可在列表中继续调整。
+          </div>
+        </Form>
+      </Modal>
 
       <Modal
         title={quotaMode === "single" ? "设置用户额度" : "批量设置额度"}

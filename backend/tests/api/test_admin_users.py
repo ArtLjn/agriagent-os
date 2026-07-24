@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.shared.database import get_db
+from app.domains.farm.models import Farm
 from app.domains.users.dependencies import get_current_user
 from app.domains.users.tokens import create_access_token
 from app.main import app
@@ -179,6 +180,148 @@ def test_list_users_pagination(client, admin_user, admin_headers):
     assert resp.status_code == 200
     data = resp.json()
     assert len(data["items"]) <= 1
+
+
+def test_admin_create_user_creates_default_farm(client, admin_user, admin_headers):
+    """管理员创建普通用户时同步创建默认农场，不返回登录 token。"""
+    resp = client.post(
+        "/admin/users",
+        json={
+            "phone": "18812345678",
+            "password": "password123",
+            "nickname": "新农友",
+        },
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["phone"] == "18812345678"
+    assert data["nickname"] == "新农友"
+    assert data["role"] == "user"
+    assert data["status"] == "active"
+    assert data["farm_name"] == "新农友的农场"
+    assert "access_token" not in data
+
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        created = db.query(User).filter(User.phone == "18812345678").one()
+        farm = db.query(Farm).filter(Farm.user_id == created.id).one()
+        assert farm.name == "新农友的农场"
+    finally:
+        db_iter.close()
+
+
+def test_admin_create_user_rejects_duplicate_phone(client, admin_user, admin_headers):
+    """管理员创建用户时手机号不能重复。"""
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        db.add(
+            User(
+                id="test-duplicate-valid-phone",
+                phone="18812345679",
+                password_hash="h",
+                nickname="已有用户",
+                role="user",
+                status="active",
+            )
+        )
+        db.commit()
+    finally:
+        db_iter.close()
+
+    resp = client.post(
+        "/admin/users",
+        json={
+            "phone": "18812345679",
+            "password": "password123",
+            "nickname": "重复手机号",
+        },
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert detail["code"] == "ADMIN_USER_PHONE_EXISTS"
+    assert detail["detail"] == "该手机号已注册"
+    assert detail["phone"] == "18812345679"
+
+
+def test_admin_create_user_rejects_non_admin(client, auth_headers):
+    """普通用户不能通过 admin 接口创建用户。"""
+    resp = client.post(
+        "/admin/users",
+        json={
+            "phone": "18812345680",
+            "password": "password123",
+            "nickname": "普通用户创建",
+        },
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == 403
+
+
+def test_admin_create_user_no_auth_returns_401(client):
+    """未认证不能通过 admin 接口创建用户。"""
+    original = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        resp = client.post(
+            "/admin/users",
+            json={
+                "phone": "18812345681",
+                "password": "password123",
+                "nickname": "未认证创建",
+            },
+        )
+        assert resp.status_code == 401
+    finally:
+        if original:
+            app.dependency_overrides[get_current_user] = original
+
+
+def test_admin_create_user_duplicate_phone_does_not_create_farm(
+    client, admin_user, admin_headers
+):
+    """重复手机号失败时不新增默认农场。"""
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        db.add(
+            User(
+                id="test-duplicate-no-farm",
+                phone="18812345682",
+                password_hash="h",
+                nickname="已有用户",
+                role="user",
+                status="active",
+            )
+        )
+        db.commit()
+        before_count = db.query(Farm).count()
+    finally:
+        db_iter.close()
+
+    resp = client.post(
+        "/admin/users",
+        json={
+            "phone": "18812345682",
+            "password": "password123",
+            "nickname": "重复手机号",
+        },
+        headers=admin_headers,
+    )
+
+    assert resp.status_code == 400
+    db_iter = _get_test_db()
+    db = next(db_iter)
+    try:
+        assert db.query(Farm).count() == before_count
+    finally:
+        db_iter.close()
 
 
 def test_get_user_detail(client, admin_user, admin_headers):

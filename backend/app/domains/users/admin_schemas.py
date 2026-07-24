@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.shared.schemas import PaginatedResponse
+from app.domains.users.schemas import RegisterRequest
 
 
 class AdminUserListItem(BaseModel):
@@ -26,6 +27,10 @@ class AdminUserListResponse(PaginatedResponse[AdminUserListItem]):
     """用户列表分页响应。"""
 
     pass
+
+
+class AdminCreateUserRequest(RegisterRequest):
+    """管理员创建普通用户请求。"""
 
 
 class AdminUserDetailResponse(BaseModel):
