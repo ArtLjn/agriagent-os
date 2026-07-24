@@ -3,6 +3,10 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
+import app.context.selectors.core as selector_core
+import app.infra.repository_runtime as repository_runtime
 from app.context.selectors import (
     ConversationSelector,
     FarmSelector,
@@ -39,6 +43,16 @@ from app.domains.planting.models import (
     Worker,
 )
 from app.domains.users.settings_models import UserSetting
+
+
+@pytest.fixture(autouse=True)
+def _use_mysql_conversation_message_repository(monkeypatch) -> None:
+    monkeypatch.setattr(
+        repository_runtime.settings.storage,
+        "conversation_messages",
+        "mysql",
+    )
+    repository_runtime.clear_missing_table_cache()
 
 
 def test_farm_selector_returns_display_name_and_location(db_session) -> None:
@@ -193,6 +207,51 @@ def test_conversation_selector_omits_null_summary_block(db_session) -> None:
     )
 
     assert [block.key for block in blocks] == ["conversation"]
+
+
+def test_conversation_selector_reads_messages_through_repository(
+    db_session, monkeypatch
+) -> None:
+    conversation = Conversation(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="repository-session",
+    )
+    db_session.add(conversation)
+    db_session.commit()
+    db_session.refresh(conversation)
+
+    class FakeRepository:
+        def __init__(self) -> None:
+            self.kwargs = None
+
+        def get_recent(self, **kwargs):
+            self.kwargs = kwargs
+            return [
+                ConversationMessage(role="user", content="今晚要浇水吗？"),
+                ConversationMessage(role="assistant", content="建议先看土壤湿度。"),
+            ]
+
+    repo = FakeRepository()
+    monkeypatch.setattr(
+        selector_core,
+        "get_conversation_message_repository",
+        lambda db: repo,
+    )
+
+    blocks = ConversationSelector().select(
+        db_session,
+        farm_id=1,
+        session_id="repository-session",
+    )
+
+    assert repo.kwargs == {
+        "farm_id": 1,
+        "conversation_id": conversation.id,
+        "limit": 6,
+    }
+    assert [block.key for block in blocks] == ["conversation"]
+    assert blocks[0].content == "user：今晚要浇水吗？\nassistant：建议先看土壤湿度。"
 
 
 def test_memory_selector_returns_short_term_memory_blocks() -> None:
