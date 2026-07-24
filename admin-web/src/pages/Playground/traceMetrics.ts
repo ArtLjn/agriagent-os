@@ -13,6 +13,29 @@ export interface PlaygroundTraceMetrics {
   llmTotalTokens: number;
 }
 
+export interface PlaygroundLlmContextMessage {
+  index: number;
+  role: string;
+  type: string;
+  content: unknown;
+  tool_calls?: unknown[];
+  invalid_tool_calls?: unknown[];
+  tool_call_id?: string;
+  name?: string;
+}
+
+export interface PlaygroundLlmContextSnapshot {
+  systemPrompt: string;
+  messages: PlaygroundLlmContextMessage[];
+  contextBlocks: string[];
+  budget: Record<string, unknown>;
+  promptTokens: number | null;
+  maxTokens: number | null;
+  actions: string[];
+  truncated: boolean;
+  raw: Record<string, unknown>;
+}
+
 const EMPTY_METRICS: PlaygroundTraceMetrics = {
   contextTokens: null,
   contextBudget: null,
@@ -87,6 +110,53 @@ export function buildPlaygroundTraceMetrics(timeline: TraceTimeline | null): Pla
   }
 
   return metrics;
+}
+
+export function extractLatestLlmContextSnapshot(
+  timeline: TraceTimeline | null,
+): PlaygroundLlmContextSnapshot | null {
+  if (!timeline?.rounds) return null;
+
+  const nodes = timeline.rounds.flatMap((round) => round.nodes);
+  const contextNode = [...nodes].reverse().find(
+    (node) => node.node_type === 'prompt_budget' && node.node_name === 'final_llm_context',
+  );
+  const output = asRecord(contextNode?.output_data);
+  if (!output) return null;
+
+  const budget = asRecord(output.budget) ?? {};
+  const usage = contextNode ? readTokenUsage(contextNode) : null;
+  const messages = asArray(output.messages)
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .map((item, fallbackIndex) => {
+      const message: PlaygroundLlmContextMessage = {
+        index: toNumber(item.index) ?? fallbackIndex,
+        role: typeof item.role === 'string' ? item.role : 'unknown',
+        type: typeof item.type === 'string' ? item.type : 'unknown',
+        content: item.content,
+      };
+      const toolCalls = asArray(item.tool_calls);
+      const invalidToolCalls = asArray(item.invalid_tool_calls);
+      if (toolCalls.length > 0) message.tool_calls = toolCalls;
+      if (invalidToolCalls.length > 0) message.invalid_tool_calls = invalidToolCalls;
+      if (typeof item.tool_call_id === 'string') message.tool_call_id = item.tool_call_id;
+      if (typeof item.name === 'string') message.name = item.name;
+      return message;
+    });
+  return {
+    systemPrompt: typeof output.system_prompt === 'string' ? output.system_prompt : '',
+    messages,
+    contextBlocks: asArray(output.context_blocks).filter(
+      (item): item is string => typeof item === 'string',
+    ),
+    budget,
+    promptTokens: toNumber(budget.total_tokens) ?? toNumber(usage?.prompt_tokens),
+    maxTokens: toNumber(budget.max_tokens),
+    actions: asArray(budget.actions).filter((item): item is string => typeof item === 'string'),
+    truncated: output.__trace_truncated === true,
+    raw: output,
+  };
 }
 
 export function hasAutomaticCompression(metrics: PlaygroundTraceMetrics): boolean {
