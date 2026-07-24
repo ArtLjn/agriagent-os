@@ -37,7 +37,9 @@ def _write_tool(name: str):
 
 
 @pytest.mark.asyncio
-async def test_single_write_pending_action_prefers_validated_plan_draft_params() -> None:
+async def test_single_write_pending_action_prefers_validated_plan_draft_params() -> (
+    None
+):
     tool = _write_tool("create_operation_work_order")
     state = {
         "messages": [
@@ -75,8 +77,12 @@ async def test_single_write_pending_action_prefers_validated_plan_draft_params()
     }
 
     with (
-        patch("app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]),
-        patch("app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()),
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
     ):
         result = await _parallel_tool_node(state)
 
@@ -89,7 +95,9 @@ async def test_single_write_pending_action_prefers_validated_plan_draft_params()
 
 
 @pytest.mark.asyncio
-async def test_multi_write_pending_plan_is_derived_from_validated_plan_draft_steps() -> None:
+async def test_multi_write_pending_plan_is_derived_from_validated_plan_draft_steps() -> (
+    None
+):
     tools = [
         _write_tool("manage_workers"),
         _write_tool("create_operation_work_order"),
@@ -137,8 +145,12 @@ async def test_multi_write_pending_plan_is_derived_from_validated_plan_draft_ste
     }
 
     with (
-        patch("app.agent.runtime.tool_executor.get_langchain_tools", return_value=tools),
-        patch("app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()),
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=tools
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
         patch(
             "app.infra.pending_actions.pending_plan_service.create_pending_plan",
             return_value=SimpleNamespace(plan_id="plan-1"),
@@ -155,3 +167,92 @@ async def test_multi_write_pending_plan_is_derived_from_validated_plan_draft_ste
     assert plan.steps[0].params["name"] == "李丽"
     assert plan.steps[1].depends_on == ["create_worker"]
     assert "错名" not in result["messages"][0].content
+
+
+@pytest.mark.asyncio
+async def test_multi_tool_calls_do_not_use_mismatched_plan_draft_steps() -> None:
+    tool = _write_tool("manage_workers")
+    state = {
+        "messages": [
+            HumanMessage(content="我招了一些工人，主自豪，李是四 工资 100一天擅长压瓜"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "manage_workers",
+                        "args": {
+                            "action": "create",
+                            "name": "主自豪",
+                            "default_pay_type": "daily",
+                            "default_unit_price": "100",
+                            "note": "擅长压瓜",
+                        },
+                    },
+                    {
+                        "id": "tc2",
+                        "name": "manage_workers",
+                        "args": {
+                            "action": "create",
+                            "name": "李是四",
+                            "default_pay_type": "daily",
+                            "default_unit_price": "100",
+                            "note": "擅长压瓜",
+                        },
+                    },
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-plan-mismatch",
+        "plan_draft": {
+            "route_type": "write_pending_plan",
+            "validation": {"status": "valid"},
+            "steps": [
+                {
+                    "step_id": "create_worker",
+                    "skill_name": "manage_workers",
+                    "params": {
+                        "action": "create",
+                        "name": "主自豪",
+                        "default_pay_type": "daily",
+                        "default_unit_price": "100",
+                    },
+                    "depends_on": [],
+                },
+                {
+                    "step_id": "create_work_order",
+                    "skill_name": "create_operation_work_order",
+                    "params": {
+                        "workers": "主自豪",
+                        "operation_type": "压瓜",
+                        "unit_price": "100",
+                    },
+                    "depends_on": ["create_worker"],
+                },
+            ],
+        },
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
+        patch(
+            "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+            return_value=SimpleNamespace(plan_id="plan-mismatch"),
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    plan = get_pending_plan(1, session_id="sess-plan-mismatch")
+    assert plan is not None
+    assert [step.tool_name for step in plan.steps] == [
+        "manage_workers",
+        "manage_workers",
+    ]
+    assert [step.params["name"] for step in plan.steps] == ["主自豪", "李是四"]
+    assert "创建压瓜作业单" not in result["messages"][0].content

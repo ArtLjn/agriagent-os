@@ -20,6 +20,7 @@ from app.infra.pending_actions import (
     PENDING_MARKER,
     CONTRACT_BLOCKED_MARKER,
     PendingPlanStep,
+    WRITE_SKILLS,
     build_confirm_message,
     build_confirmation_context,
     build_plan_confirm_message,
@@ -43,9 +44,7 @@ def _pending_plan_tool_message(
         expected_route_type="write_pending_plan",
     )
     if draft_steps:
-        step_tool_names = {str(step["tool_name"]) for step in draft_steps}
-        tool_call_names = {str(tool_call["name"]) for tool_call in tool_calls}
-        if tool_call_names.issubset(step_tool_names):
+        if _tool_calls_match_plan_steps(tool_calls, draft_steps):
             return _store_pending_plan_from_steps(
                 state=state,
                 farm_id=farm_id,
@@ -56,6 +55,18 @@ def _pending_plan_tool_message(
                 source="plan_draft",
             )
 
+    tool_call_steps = _pending_plan_steps_from_tool_calls(tool_calls)
+    if tool_call_steps:
+        return _store_pending_plan_from_steps(
+            state=state,
+            farm_id=farm_id,
+            original_input=original_input,
+            tool_calls=tool_calls,
+            steps=tool_call_steps,
+            router_decision=plan_draft if isinstance(plan_draft, dict) else {},
+            source="tool_calls",
+        )
+
     router_decision = state.get("router_decision")
     if router_decision is None:
         return None
@@ -65,6 +76,8 @@ def _pending_plan_tool_message(
         return None
     step_tool_names = {str(step["tool_name"]) for step in steps}
     tool_call_names = {str(tool_call["name"]) for tool_call in tool_calls}
+    if len(tool_calls) > 1 and not _same_tool_name_sequence(tool_calls, steps):
+        return None
     if not tool_call_names.issubset(step_tool_names):
         return None
 
@@ -77,6 +90,38 @@ def _pending_plan_tool_message(
         router_decision=router_decision.to_trace_payload(),
         source="router_decision",
     )
+
+
+def _tool_calls_match_plan_steps(tool_calls: list[dict], steps: list[dict]) -> bool:
+    step_tool_names = {str(step["tool_name"]) for step in steps}
+    tool_call_names = {str(tool_call["name"]) for tool_call in tool_calls}
+    if len(tool_calls) <= 1:
+        return tool_call_names.issubset(step_tool_names)
+    return _same_tool_name_sequence(tool_calls, steps)
+
+
+def _same_tool_name_sequence(tool_calls: list[dict], steps: list[dict]) -> bool:
+    return [str(tool_call.get("name") or "") for tool_call in tool_calls] == [
+        str(step.get("tool_name") or step.get("skill_name") or "") for step in steps
+    ]
+
+
+def _pending_plan_steps_from_tool_calls(tool_calls: list[dict]) -> list[dict]:
+    if len(tool_calls) < 2:
+        return []
+    if any(
+        str(tool_call.get("name") or "") not in WRITE_SKILLS for tool_call in tool_calls
+    ):
+        return []
+    return [
+        {
+            "step_id": f"{tool_call['name']}-{index + 1}",
+            "tool_name": str(tool_call["name"]),
+            "params": dict(tool_call.get("args") or {}),
+            "depends_on": [],
+        }
+        for index, tool_call in enumerate(tool_calls)
+    ]
 
 
 def _store_pending_plan_from_steps(
