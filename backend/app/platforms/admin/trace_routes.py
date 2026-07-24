@@ -21,10 +21,12 @@ from app.infra.repository_runtime import (
     get_trace_repository,
     resolve_maybe_awaitable,
 )
+from app.infra.trace_summary import build_trace_request_summary
 from app.infra.trace_repository import TracePage
 from app.platforms.evaluation.trace_models import TraceRecord
 from app.platforms.admin.trace_requests import (
     TraceRequestPageResponse,
+    TraceRequestSummary,
     list_trace_requests_from_mongo,
     trace_request_page_from_records,
 )
@@ -39,13 +41,17 @@ router = APIRouter(
 
 
 class TimelineNode(BaseModel):
+    id: int | None = None
     node_type: str
     node_name: str
     duration_ms: int | None
     status: str
     token_usage: dict | None = None
     start_time: str | None = None
+    end_time: str | None = None
     error_message: str | None = None
+    error_code: str | None = None
+    recover: str | None = None
     input_data: Any = None
     output_data: Any = None
 
@@ -57,6 +63,7 @@ class TimelineRound(BaseModel):
 
 class TimelineResponse(BaseModel):
     request_id: str
+    summary: TraceRequestSummary | None = None
     rounds: list[TimelineRound]
 
 
@@ -133,13 +140,11 @@ async def list_trace_requests(
         query = query.filter(TraceRecord.session_id == session_id)
     if farm_id is not None:
         query = query.filter(TraceRecord.farm_id == farm_id)
-    records = (
-        query.order_by(
-            TraceRecord.start_time.desc(),
-            TraceRecord.created_at.desc(),
-            TraceRecord.id.desc(),
-        ).all()
-    )
+    records = query.order_by(
+        TraceRecord.start_time.desc(),
+        TraceRecord.created_at.desc(),
+        TraceRecord.id.desc(),
+    ).all()
     return trace_request_page_from_records(records, limit=limit, offset=offset)
 
 
@@ -152,17 +157,23 @@ async def get_timeline(
     if not records:
         return TimelineResponse(request_id=request_id, rounds=[])
 
+    summary_payload = build_trace_request_summary(records)
     rounds_map: dict[int, list[TimelineNode]] = defaultdict(list)
     for r in sorted(records, key=_trace_record_sort_key):
+        extracted_error = _extract_node_error(r)
         rounds_map[r.round_index].append(
             TimelineNode(
+                id=r.id,
                 node_type=r.node_type,
                 node_name=r.node_name,
                 duration_ms=r.duration_ms,
                 status=r.status,
                 token_usage=_coerce_token_usage(r.token_usage),
                 start_time=_format_datetime(r.start_time),
+                end_time=_format_datetime(r.end_time),
                 error_message=r.error_message,
+                error_code=extracted_error.get("code"),
+                recover=extracted_error.get("recover"),
                 input_data=r.input_data,
                 output_data=r.output_data,
             )
@@ -174,7 +185,10 @@ async def get_timeline(
             rounds_map.items(), key=lambda item: _round_first_node_sort_key(item[1])
         )
     ]
-    return TimelineResponse(request_id=request_id, rounds=rounds)
+    summary = (
+        TraceRequestSummary(**summary_payload) if summary_payload is not None else None
+    )
+    return TimelineResponse(request_id=request_id, summary=summary, rounds=rounds)
 
 
 @router.get("/traces/{request_id}/diagnostics")
@@ -221,6 +235,21 @@ def _coerce_token_usage(value: Any) -> dict | None:
             return None
         return parsed if isinstance(parsed, dict) else None
     return None
+
+
+def _extract_node_error(record: TraceRecord) -> dict[str, Any]:
+    output_data = record.output_data
+    if isinstance(output_data, str):
+        try:
+            output_data = json.loads(output_data)
+        except json.JSONDecodeError:
+            output_data = None
+    output = output_data if isinstance(output_data, dict) else {}
+    error = output.get("error")
+    error_record = error if isinstance(error, dict) else {}
+    code = error_record.get("code") or output.get("code") or error_record.get("type")
+    recover = error_record.get("recover") or output.get("recover")
+    return {"code": code, "recover": recover}
 
 
 def _trace_record_sort_key(record: TraceRecord) -> tuple[datetime, int, str]:

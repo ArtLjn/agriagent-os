@@ -154,6 +154,50 @@ async def test_trace_mongo_repository_assigns_id_without_mysql_row():
 
 
 @pytest.mark.asyncio
+async def test_trace_mongo_repository_writes_request_summary_with_root_error():
+    from app.infra.trace_repository import TraceMongoRepository
+
+    records = FakeCollection()
+    requests = FakeCollection()
+    repo = TraceMongoRepository(records, request_collection=requests)
+
+    await repo.insert(
+        _trace(
+            id=101,
+            node_type="approval",
+            node_name="pending_plan.contract_validation",
+            status="blocked",
+            duration_ms=349,
+            output_data={
+                "error": {
+                    "code": "pending_plan_contract_blocked",
+                    "message": "manage_worker 缺少必填字段：name",
+                    "recover": "ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls",
+                },
+                "missing_fields": ["name"],
+            },
+        )
+    )
+
+    assert requests.filters == [{"farmId": 1, "requestId": "req-1"}]
+    summary = requests.replacements[0]
+    assert summary["schemaVersion"] == 1
+    assert summary["requestId"] == "req-1"
+    assert summary["status"] == "blocked"
+    assert summary["statusReason"] == "pending_plan_contract_blocked"
+    assert summary["nodeCount"] == 1
+    assert summary["errorCount"] == 1
+    assert summary["rootError"] == {
+        "node_id": 101,
+        "node_type": "approval",
+        "node_name": "pending_plan.contract_validation",
+        "code": "pending_plan_contract_blocked",
+        "message": "manage_worker 缺少必填字段：name",
+        "recover": "ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls",
+    }
+
+
+@pytest.mark.asyncio
 async def test_trace_dual_write_keeps_mysql_success_when_mongo_fails(db_session):
     from app.infra.trace_repository import (
         TraceDualWriteRepository,

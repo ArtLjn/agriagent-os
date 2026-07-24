@@ -493,4 +493,105 @@ describe('TraceMonitor query 初始化', () => {
     expect(await screen.findByText(/"decision": "chat"/)).toBeInTheDocument();
     expect(screen.queryByText('Context 摘要')).not.toBeInTheDocument();
   });
+
+  it('展开 trace 时展示请求级根因、指标和恢复建议', async () => {
+    mockedListTraceRequests.mockResolvedValueOnce({
+      total: 1,
+      items: [
+        {
+          request_id: 'req-blocked',
+          session_id: 'sess-1',
+          farm_id: 2,
+          node_count: 4,
+          total_duration_ms: 1234,
+          created_at: '2026-07-24T15:00:00+08:00',
+          status: 'blocked',
+          status_reason: 'pending_plan_contract_blocked',
+          error_count: 1,
+          root_error: {
+            node_id: 101,
+            node_type: 'approval',
+            node_name: 'pending_plan.contract_validation',
+            code: 'pending_plan_contract_blocked',
+            message: 'manage_worker 缺少必填字段：name',
+            recover: 'ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls',
+          },
+          metrics: {
+            llm_calls: 2,
+            tool_calls: 0,
+            total_tokens: 4487,
+          },
+          started_at: '2026-07-24T14:59:58+08:00',
+          ended_at: '2026-07-24T15:00:00+08:00',
+        },
+      ],
+    });
+    mockedGetTimeline.mockResolvedValueOnce({
+      request_id: 'req-blocked',
+      summary: {
+        request_id: 'req-blocked',
+        session_id: 'sess-1',
+        farm_id: 2,
+        node_count: 4,
+        total_duration_ms: 1234,
+        created_at: '2026-07-24T15:00:00+08:00',
+        status: 'blocked',
+        status_reason: 'pending_plan_contract_blocked',
+        error_count: 1,
+        root_error: {
+          node_id: 101,
+          node_type: 'approval',
+          node_name: 'pending_plan.contract_validation',
+          code: 'pending_plan_contract_blocked',
+          message: 'manage_worker 缺少必填字段：name',
+          recover: 'ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls',
+        },
+        metrics: {
+          llm_calls: 2,
+          tool_calls: 0,
+          total_tokens: 4487,
+        },
+        started_at: '2026-07-24T14:59:58+08:00',
+        ended_at: '2026-07-24T15:00:00+08:00',
+      },
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              id: 101,
+              node_type: 'approval',
+              node_name: 'pending_plan.contract_validation',
+              duration_ms: 349,
+              status: 'blocked',
+              token_usage: null,
+              start_time: '2026-07-24T15:00:00+08:00',
+              end_time: '2026-07-24T15:00:01+08:00',
+              error_message: 'manage_worker 缺少必填字段：name',
+              error_code: 'pending_plan_contract_blocked',
+              recover: 'ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls',
+              input_data: null,
+              output_data: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dev/traces?request_id=req-blocked']}>
+        <TraceMonitor />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Trace 摘要')).toBeInTheDocument();
+    expect(screen.getAllByText('blocked').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('pending_plan_contract_blocked').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('manage_worker 缺少必填字段：name')).toBeInTheDocument();
+    expect(
+      screen.getByText('ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('total_tokens')).toBeInTheDocument();
+    expect(screen.getByText('4,487')).toBeInTheDocument();
+  });
 });

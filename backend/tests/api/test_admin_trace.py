@@ -157,6 +157,13 @@ class TestGetTraceRequests:
         first_node.start_time = datetime(2026, 7, 10, 16, 0, 1)
         first_node.created_at = None
         first_node.end_time = None
+        first_node.id = 1
+        first_node.node_type = "routing"
+        first_node.node_name = "skill_router"
+        first_node.status = "success"
+        first_node.error_message = None
+        first_node.output_data = None
+        first_node.token_usage = None
 
         second_node = MagicMock()
         second_node.request_id = "req-new"
@@ -166,6 +173,13 @@ class TestGetTraceRequests:
         second_node.start_time = datetime(2026, 7, 10, 16, 0, 2)
         second_node.created_at = None
         second_node.end_time = None
+        second_node.id = 2
+        second_node.node_type = "llm_call"
+        second_node.node_name = "qwen"
+        second_node.status = "success"
+        second_node.error_message = None
+        second_node.output_data = None
+        second_node.token_usage = None
 
         old_node = MagicMock()
         old_node.request_id = "req-old"
@@ -175,6 +189,13 @@ class TestGetTraceRequests:
         old_node.start_time = datetime(2026, 7, 10, 15, 0, 0)
         old_node.created_at = None
         old_node.end_time = None
+        old_node.id = 3
+        old_node.node_type = "routing"
+        old_node.node_name = "skill_router"
+        old_node.status = "success"
+        old_node.error_message = None
+        old_node.output_data = None
+        old_node.token_usage = None
 
         mock_db = _mock_db(admin_user)
         mock_db.trace_query.all.return_value = [first_node, second_node, old_node]
@@ -200,6 +221,103 @@ class TestGetTraceRequests:
             "node_count": 2,
             "total_duration_ms": 30,
             "created_at": "2026-07-10T16:00:02",
+            "status": "success",
+            "status_reason": None,
+            "error_count": 0,
+            "root_error": None,
+            "metrics": {
+                "total_duration_ms": 30,
+                "llm_duration_ms": 20,
+                "tool_duration_ms": 0,
+                "rag_duration_ms": 0,
+                "memory_duration_ms": 0,
+                "planner_duration_ms": 10,
+                "reflection_duration_ms": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "llm_calls": 1,
+                "tool_calls": 0,
+                "skill_calls": 0,
+            },
+            "started_at": "2026-07-10T16:00:01",
+            "ended_at": "2026-07-10T16:00:02",
+        }
+
+    def test_list_trace_requests_reads_mongo_request_summary(
+        self, db_session, monkeypatch
+    ) -> None:
+        import app.platforms.admin.trace_requests as trace_requests
+
+        class FakeCursor:
+            async def to_list(self, _length):
+                return [
+                    {
+                        "_id": "2:req-blocked",
+                        "requestId": "req-blocked",
+                        "sessionId": "sess-1",
+                        "farmId": 2,
+                        "nodeCount": 4,
+                        "totalDurationMs": 1234,
+                        "createdAt": datetime(2026, 7, 24, 15, 0, 0),
+                        "status": "blocked",
+                        "statusReason": "pending_plan_contract_blocked",
+                        "errorCount": 1,
+                        "rootError": {
+                            "code": "pending_plan_contract_blocked",
+                            "message": "缺少 name",
+                        },
+                        "metrics": {"tool_calls": 0},
+                    }
+                ]
+
+        class FakeCollection:
+            async def count_documents(self, filter_doc):
+                assert filter_doc == {"requestId": "req-blocked"}
+                return 1
+
+            def find(self, filter_doc):
+                assert filter_doc == {"requestId": "req-blocked"}
+                return self
+
+            def sort(self, keys):
+                assert keys == [("createdAt", -1), ("requestId", -1)]
+                return self
+
+            def skip(self, offset):
+                assert offset == 0
+                return self
+
+            def limit(self, limit):
+                assert limit == 20
+                return FakeCursor()
+
+        class FakeDatabase:
+            def __getitem__(self, name):
+                assert name == "traceRequests"
+                return FakeCollection()
+
+        monkeypatch.setattr(
+            trace_requests, "get_mongo_database", lambda: FakeDatabase()
+        )
+
+        page = trace_requests.list_trace_requests_from_mongo(
+            request_id="req-blocked",
+            session_id=None,
+            farm_id=None,
+            limit=20,
+            offset=0,
+        )
+
+        import asyncio
+
+        data = asyncio.run(page)
+        assert data.total == 1
+        assert data.items[0].status == "blocked"
+        assert data.items[0].status_reason == "pending_plan_contract_blocked"
+        assert data.items[0].root_error == {
+            "code": "pending_plan_contract_blocked",
+            "message": "缺少 name",
         }
 
 

@@ -1,14 +1,18 @@
 import type { TracePayload } from '../../utils/tracePayload';
 
 export interface GanttNode {
+  id?: number | null;
   node_type: string;
   node_name: string;
   duration_ms: number | null;
   status: string;
   start_time: string | null;
+  end_time?: string | null;
   input_data?: TracePayload;
   output_data?: TracePayload;
   error_message?: string | null;
+  error_code?: string | null;
+  recover?: string | null;
 }
 
 export interface GanttRound {

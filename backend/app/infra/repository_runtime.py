@@ -27,6 +27,7 @@ from app.platforms.shared.repository_selector import (
 
 COLLECTION_NAMES = {
     "trace": "traceRecords",
+    "trace_requests": "traceRequests",
     "case_drafts": "caseDrafts",
     "repair_packs": "repairPacks",
     "review_issue_chains": "reviewIssueChains",
@@ -103,10 +104,12 @@ def get_trace_repository(db: Session) -> Any:
     """按配置创建 Trace Repository，默认 mysql 不依赖 Mongo。"""
     backend = _effective_backend(settings.storage.trace, db, "trace")
     collection = _collection_for_backend(backend, "trace")
+    request_collection = _collection_for_backend(backend, "trace_requests")
     return build_trace_repository(
         backend,
         db,
         collection=collection,
+        request_collection=request_collection,
         on_secondary_failure=MongoCompensationRecorder(db).record_failure,
     )
 

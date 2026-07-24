@@ -13,7 +13,9 @@ from app.platforms.evaluation.trace_models import TraceRecord
 
 logger = logging.getLogger(__name__)
 
-MAX_OUTPUT_LEN = 4000
+MAX_TRACE_JSON_LEN = 128_000
+MAX_TRACE_STRING_LEN = 16_000
+MAX_TRACE_LIST_ITEMS = 100
 
 
 class TraceDAO:
@@ -117,11 +119,40 @@ def _coerce_date(value: str | date) -> date:
 
 
 def _truncate_json_value(value: Any) -> Any:
-    """限制 trace 输出体积，同时保持 JSON 列可写入。"""
+    """限制 trace 输出体积，同时保持 JSON 结构可展示。"""
     serialized = json.dumps(value, ensure_ascii=False, default=str)
-    if len(serialized) <= MAX_OUTPUT_LEN:
+    if len(serialized) <= MAX_TRACE_JSON_LEN:
         return value
-    return serialized[:MAX_OUTPUT_LEN]
+    clipped = _clip_json_value(value)
+    if isinstance(clipped, dict):
+        clipped["__trace_truncated"] = True
+        clipped["__trace_original_json_len"] = len(serialized)
+        return clipped
+    return {
+        "__trace_truncated": True,
+        "__trace_original_json_len": len(serialized),
+        "value": clipped,
+    }
+
+
+def _clip_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _clip_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        clipped_items = [
+            _clip_json_value(item) for item in value[:MAX_TRACE_LIST_ITEMS]
+        ]
+        if len(value) > MAX_TRACE_LIST_ITEMS:
+            clipped_items.append(
+                {
+                    "__trace_truncated": True,
+                    "dropped_items": len(value) - MAX_TRACE_LIST_ITEMS,
+                }
+            )
+        return clipped_items
+    if isinstance(value, str) and len(value) > MAX_TRACE_STRING_LEN:
+        return f"{value[:MAX_TRACE_STRING_LEN]}...[TRUNCATED]"
+    return value
 
 
 __all__ = ["TraceDAO"]
