@@ -24,7 +24,10 @@ from app.agent.state import AgentState
 from app.agent.router.tool_selector import expand_by_chain as _expand_by_chain
 from app.agent.router.tool_selector import select_tools as _select_tools
 from app.shared.config import settings
-from app.infra.pending_actions import is_pending_tool_message
+from app.infra.pending_actions import (
+    is_contract_blocked_tool_message,
+    is_pending_tool_message,
+)
 from app.infra.trace_collector import get_collector
 from app.infra.trace_context import increment_round
 
@@ -239,7 +242,15 @@ async def _prepare_node_contexts(
 def _split_tool_messages(messages: list) -> tuple[list, list, list]:
     tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
     pending_msgs = [m for m in tool_msgs if is_pending_tool_message(m)]
-    normal_msgs = [m for m in tool_msgs if not is_pending_tool_message(m)]
+    contract_blocked_msgs = [
+        m for m in tool_msgs if is_contract_blocked_tool_message(m)
+    ]
+    normal_msgs = [
+        m
+        for m in tool_msgs
+        if not is_pending_tool_message(m) and not is_contract_blocked_tool_message(m)
+    ]
+    pending_msgs = [*pending_msgs, *contract_blocked_msgs]
     return tool_msgs, pending_msgs, normal_msgs
 
 
