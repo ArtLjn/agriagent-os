@@ -95,6 +95,68 @@ async def test_single_write_pending_action_prefers_validated_plan_draft_params()
 
 
 @pytest.mark.asyncio
+async def test_create_crop_cycle_builds_template_preflight_pending_plan() -> None:
+    tool = _write_tool("manage_crop_cycle")
+    state = {
+        "messages": [
+            HumanMessage(content="帮我创建一个西瓜茬口8424，大概种植20亩地"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-cycle",
+                        "name": "manage_crop_cycle",
+                        "args": {
+                            "operation": "create_cycle",
+                            "crop_name": "西瓜",
+                            "cycle_name": "8424西瓜茬口",
+                            "area": "20",
+                            "status": "planned",
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-crop-template-preflight",
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
+        patch(
+            "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+            return_value=SimpleNamespace(plan_id="plan-crop-template-preflight"),
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    plan = get_pending_plan(1, session_id="sess-crop-template-preflight")
+    assert get_pending(1, session_id="sess-crop-template-preflight") is None
+    assert plan is not None
+    assert [step.tool_name for step in plan.steps] == [
+        "manage_crop_templates",
+        "manage_crop_cycle",
+    ]
+    assert plan.steps[0].params == {
+        "operation": "create_template",
+        "crop_name": "西瓜",
+        "variety": "8424",
+    }
+    assert plan.steps[1].params["operation"] == "create_cycle"
+    assert plan.steps[1].params["crop_name"] == "西瓜"
+    assert plan.steps[1].depends_on == ["ensure_crop_template"]
+    assert "请确认将执行 2 步" in result["messages"][0].content
+    assert "确认作物模板" in result["messages"][0].content
+    assert "确认管理茬口" not in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_multi_write_pending_plan_is_derived_from_validated_plan_draft_steps() -> (
     None
 ):

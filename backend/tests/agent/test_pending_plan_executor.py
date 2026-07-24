@@ -149,12 +149,14 @@ async def test_runtime_tool_flow_stores_pending_plan_without_invoking_write_tool
         "name": "王大妈",
         "default_pay_type": "daily",
         "default_unit_price": 100,
+        "operation": "manage_worker",
     }
     assert pending_plan.steps[1].params == {
         "workers": "王大妈",
         "unit_names": "5号棚",
         "operation_type": "采收",
         "unit_price": 100,
+        "operation": "create_work_order",
     }
     assert "请确认将执行 2 步" in result["messages"][0].content
     assert PENDING_MARKER in result["messages"][0].content
@@ -375,7 +377,11 @@ async def test_handle_pending_plan_confirm_recovers_plan_from_database(
             {
                 "step_id": "create_work_order",
                 "tool_name": "create_operation_work_order",
-                "params": {"workers": ["王大妈"], "unit_names": ["5号棚"]},
+                "params": {
+                    "workers": ["王大妈"],
+                    "unit_names": ["5号棚"],
+                    "operation_type": "采收",
+                },
             },
         ],
     )
@@ -412,7 +418,11 @@ async def test_handle_pending_plan_confirm_recovers_plan_from_database(
         call(
             farm_id=2,
             skill_name="create_operation_work_order",
-            params={"workers": "王大妈", "unit_names": "5号棚"},
+            params={
+                "workers": "王大妈",
+                "unit_names": "5号棚",
+                "operation_type": "采收",
+            },
             farm_uid="farm-uid-2",
         ),
     ]
