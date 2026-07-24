@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import get_db
+from app.infra.repository_runtime import clear_missing_table_cache
 from app.domains.users.dependencies import get_current_user
 from app.domains.farm.dependencies import get_current_farm
 from app.shared.database import Base
@@ -42,6 +43,7 @@ def clean_db(request):
 
     Base.metadata.drop_all(bind=_test_engine)
     Base.metadata.create_all(bind=_test_engine)
+    clear_missing_table_cache()
 
     db = _TestSession()
     user = User(

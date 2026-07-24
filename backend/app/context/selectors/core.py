@@ -7,8 +7,12 @@ from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
 from app.context.models import ContextBlock
+from app.infra.repository_runtime import (
+    get_conversation_message_repository,
+    run_maybe_awaitable,
+)
 from app.shared.config import assistant_role_label, normalize_assistant_role
-from app.domains.conversation.models import Conversation, ConversationMessage
+from app.domains.conversation.models import Conversation
 from app.domains.finance.cost_models import CostRecord
 from app.domains.planting.cycle_models import CropCycle
 from app.domains.farm.models import Farm
@@ -36,23 +40,9 @@ class ConversationSelector:
         lines = messages or []
         summary = None
         if not lines and db is not None and farm_id is not None:
-            query = db.query(Conversation).filter(Conversation.farm_id == farm_id)
-            if session_id:
-                query = query.filter(Conversation.session_id == session_id)
-            conversation = query.order_by(Conversation.last_active_at.desc()).first()
+            conversation = self._find_conversation(db, farm_id, session_id)
             if conversation:
-                rows = (
-                    db.query(ConversationMessage)
-                    .filter(ConversationMessage.conversation_id == conversation.id)
-                    .order_by(ConversationMessage.id.desc())
-                    .limit(6)
-                    .all()
-                )
-                lines = [
-                    f"{row.role}：{row.content}"
-                    for row in reversed(rows)
-                    if row.content
-                ]
+                lines = self._recent_message_lines(db, conversation)
                 summary = conversation.summary
 
         if not lines:
@@ -82,6 +72,27 @@ class ConversationSelector:
                 )
             )
         return blocks
+
+    def _find_conversation(
+        self, db: Session, farm_id: int, session_id: str | None
+    ) -> Conversation | None:
+        query = db.query(Conversation).filter(Conversation.farm_id == farm_id)
+        if session_id:
+            query = query.filter(Conversation.session_id == session_id)
+        return query.order_by(Conversation.last_active_at.desc()).first()
+
+    def _recent_message_lines(
+        self, db: Session, conversation: Conversation
+    ) -> list[str]:
+        repo = get_conversation_message_repository(db)
+        rows = run_maybe_awaitable(
+            repo.get_recent(
+                farm_id=conversation.farm_id,
+                conversation_id=conversation.id,
+                limit=6,
+            )
+        )
+        return [f"{row.role}：{row.content}" for row in rows if row.content]
 
 
 class CycleSelector:
