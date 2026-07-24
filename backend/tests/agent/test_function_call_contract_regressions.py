@@ -251,7 +251,6 @@ async def test_pending_plan_failed_skill_result_does_not_confirm(monkeypatch):
             "operation": "create_record",
             "amount": 5000,
             "record_type": "cost",
-            "category": "化肥",
         },
         depends_on=[],
     )
@@ -273,6 +272,10 @@ async def test_pending_plan_failed_skill_result_does_not_confirm(monkeypatch):
             params=dict(kwargs["params"]),
             trace_payload=lambda: {},
         ),
+    )
+    monkeypatch.setattr(
+        "app.agent.executor.tool_failure_reflection.load_skill_candidates",
+        lambda _farm_id: SimpleNamespace(values={"category": ["化肥", "其他"]}),
     )
     monkeypatch.setattr(
         "app.agent.executor.pending_actions._execute_write_skill",
@@ -309,7 +312,7 @@ async def test_pending_plan_failed_skill_result_does_not_confirm(monkeypatch):
     assert "请重新确认" in decision.reply
     repaired = get_pending(1, session_id="contract-plan-failure")
     assert repaired is not None
-    assert repaired.params["category"] == "其他"
+    assert repaired.params["category"] == "化肥"
     mark_failed.assert_called_once_with(
         "plan-contract-failure",
         0,

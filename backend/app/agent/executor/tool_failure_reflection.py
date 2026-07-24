@@ -6,11 +6,11 @@ from typing import Any, Literal
 from app.agent.executor.pending_aliases import pending_alias_metadata
 from app.infra.pending_action_presenter import build_confirm_message
 from app.infra.trace_collector import get_collector
+from app.skills.candidates import load_skill_candidates
 
 ToolFailureRepairAction = Literal["no_repair", "ask_repaired_confirmation"]
 
 _MAX_REPAIR_ATTEMPTS = 1
-_CATEGORY_OTHER_HINTS = ("膜", "大棚膜", "农资")
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,11 @@ def reflect_tool_failure(
 
     if _is_manage_cost_missing_category(skill_name, params, reply, alias_metadata):
         repaired_params = dict(params)
-        repaired_params["category"] = _infer_category(repaired_params)
+        repaired_params["category"] = _infer_category(
+            farm_id=farm_id,
+            params=repaired_params,
+            original_input=original_input,
+        )
         next_attempts = repair_attempts + 1
         confirmation_text = build_confirm_message(
             skill_name,
@@ -112,11 +116,42 @@ def _is_manage_cost_missing_category(
     )
 
 
-def _infer_category(params: dict[str, Any]) -> str:
-    note = str(params.get("note") or "")
-    if any(hint in note for hint in _CATEGORY_OTHER_HINTS):
-        return "其他"
+def _infer_category(
+    *,
+    farm_id: int,
+    params: dict[str, Any],
+    original_input: str,
+) -> str:
+    text = " ".join(
+        str(value)
+        for value in (
+            params.get("note"),
+            params.get("description"),
+            original_input,
+        )
+        if value not in (None, "")
+    )
+    for category in _matched_categories(farm_id, text):
+        return category
     return "其他"
+
+
+def _matched_categories(farm_id: int, text: str) -> list[str]:
+    if not text:
+        return []
+    try:
+        categories = load_skill_candidates(farm_id).values.get("category") or []
+    except Exception:
+        return []
+    normalized = [str(category).strip() for category in categories if category]
+    candidates = [
+        category for category in normalized if category and category != "其他"
+    ]
+    return sorted(
+        (category for category in candidates if category in text),
+        key=len,
+        reverse=True,
+    )
 
 
 def _safe_alias_metadata(skill_name: str, params: dict[str, Any]) -> dict[str, Any]:
