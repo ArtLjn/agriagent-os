@@ -60,16 +60,19 @@ async def update_task_state_after_turn(
         return _skipped("no_task_state_signal")
 
     task_type = _classify_task_type(turn.user_input, turn.assistant_reply)
+    entities = _extract_entities(turn.user_input)
+    if task_type == "planting_plan":
+        missing = _planting_plan_missing_from_entities(missing, entities)
     task = store.upsert_active_task(
         farm_id=turn.farm_id,
         user_id=turn.user_id or "",
         session_id=turn.session_id or "",
         task_type=task_type,
         goal=_compact_text(turn.user_input),
-        entities=_extract_entities(turn.user_input),
+        entities=entities,
         observations=_initial_observations(turn),
         missing_information=missing,
-        next_action=_next_action_for_missing(missing),
+        next_action=_next_action_for_task(task_type, missing, entities),
         status=TaskStateStatus.WAITING_USER if missing else TaskStateStatus.ACTIVE,
     )
     return TaskStateUpdateResult(
@@ -149,9 +152,15 @@ def _update_existing_task(
         list(active.observations_json or []),
         _observations_from_user_update(turn.user_input),
     )
-    next_missing = missing or _remaining_missing_after_user_reply(
+    merged_entities = _merge_entities(
+        dict(active.entities_json or {}),
+        _extract_entities_for_task(turn.user_input, active.task_type),
+    )
+    next_missing = missing or _remaining_missing_after_user_reply_for_task(
         list(active.missing_information_json or []),
         turn.user_input,
+        active.task_type,
+        merged_entities,
     )
     status = TaskStateStatus.WAITING_USER if next_missing else TaskStateStatus.ACTIVE
     task = store.upsert_active_task(
@@ -160,13 +169,15 @@ def _update_existing_task(
         session_id=turn.session_id or "",
         task_type=active.task_type,
         goal=active.goal,
-        entities=_merge_entities(
-            dict(active.entities_json or {}),
-            _extract_entities_for_task(turn.user_input, active.task_type),
-        ),
+        entities=merged_entities,
         observations=observations,
         missing_information=next_missing,
-        next_action=_next_action_for_missing(next_missing) or "继续处理当前任务",
+        next_action=_next_action_for_task(
+            active.task_type,
+            next_missing,
+            merged_entities,
+        )
+        or "继续处理当前任务",
         status=status,
         expires_at=active.expires_at,
     )
@@ -201,9 +212,6 @@ def _extract_missing_information(reply: str) -> list[str]:
         r"(?:请告诉我|需要提供)[:：]?\s*([^。\n；;？?]+)",
     ):
         candidates.extend(re.findall(pattern, reply))
-    if not candidates and ("？" in reply or "?" in reply):
-        question = re.split(r"[。！？!?]\s*", reply.strip())[-2:]
-        candidates.extend(item for item in question if "？" in item or "?" in item)
 
     items: list[str] = []
     for candidate in candidates:
@@ -215,7 +223,10 @@ def _infer_missing_information_from_task_intent(user_input: str) -> list[str]:
     if _is_crop_cycle_setup_intent(user_input):
         return []
     if _has_planting_intent(user_input):
-        return ["种植面积", "地块", "计划播种时间", "品种"]
+        return _planting_plan_missing_from_entities(
+            ["种植面积", "地块", "计划播种时间", "品种"],
+            _extract_planting_plan_entities(user_input),
+        )
     if _has_diagnosis_intent(user_input):
         return ["症状描述", "发生位置", "发生时间"]
     return []
@@ -250,11 +261,31 @@ def _remaining_missing_after_user_reply(
     ]
 
 
+def _remaining_missing_after_user_reply_for_task(
+    missing: list[str],
+    user_input: str,
+    task_type: str,
+    entities: dict[str, object],
+) -> list[str]:
+    remaining = _remaining_missing_after_user_reply(missing, user_input)
+    if task_type == "planting_plan":
+        return _planting_plan_missing_from_entities(remaining, entities)
+    return remaining
+
+
 def _user_reply_resolves_missing_item(missing_item: str, user_input: str) -> bool:
     text = user_input.strip()
     if missing_item in text:
         return True
     if "名称" in missing_item and _extract_planting_unit_name(text):
+        return True
+    if missing_item == "种植面积" and _extract_area_mu(text) is not None:
+        return True
+    if missing_item == "地块" and _extract_area_target(text):
+        return True
+    if missing_item == "计划播种时间" and _extract_start_date(text):
+        return True
+    if missing_item == "品种" and _extract_crop_variety_for_plan(text):
         return True
     core_word = _missing_core_word(missing_item)
     if core_word and core_word in text:
@@ -314,12 +345,16 @@ def _initial_observations(turn: TaskStateTurn) -> list[str]:
 def _extract_entities(text: str) -> dict[str, object]:
     if _is_crop_cycle_setup_intent(text):
         return _extract_crop_cycle_setup_entities(text)
+    if _has_planting_intent(text):
+        return _extract_planting_plan_entities(text)
     return _extract_general_entities(text)
 
 
 def _extract_entities_for_task(text: str, task_type: str) -> dict[str, object]:
     if task_type == "crop_cycle_setup":
         return _extract_crop_cycle_setup_entities(text)
+    if task_type == "planting_plan":
+        return _extract_planting_plan_entities(text)
     return _extract_entities(text)
 
 
@@ -357,6 +392,42 @@ def _extract_crop_cycle_setup_entities(text: str) -> dict[str, object]:
     if planting_unit:
         entities["planting_unit"] = planting_unit
     return entities
+
+
+def _extract_planting_plan_entities(text: str) -> dict[str, object]:
+    entities = _extract_general_entities(text)
+    area_mu = _extract_area_mu(text)
+    if area_mu is not None:
+        entities["area_mu"] = area_mu
+    variety = _extract_crop_variety_for_plan(text)
+    if variety:
+        entities["variety"] = variety
+    start_date = _extract_start_date(text)
+    if start_date:
+        entities["start_date"] = start_date
+    area_target = _extract_area_target(text)
+    if area_target:
+        entities["area_target"] = area_target
+    return entities
+
+
+def _planting_plan_missing_from_entities(
+    current_missing: list[str],
+    entities: dict[str, object],
+) -> list[str]:
+    required = []
+    if entities.get("area_mu") in (None, ""):
+        required.append("种植面积")
+    if not any(
+        entities.get(key) not in (None, "", {}, [])
+        for key in ("area_target", "greenhouse", "planting_unit")
+    ):
+        required.append("地块")
+    if entities.get("start_date") in (None, ""):
+        required.append("计划播种时间")
+    if entities.get("variety") in (None, ""):
+        required.append("品种")
+    return [item for item in current_missing if item in required]
 
 
 def _entity_observation_values(entities: dict[str, object]) -> list[str]:
@@ -406,12 +477,77 @@ def _extract_crop_variety(text: str) -> str:
     return matches[0] if matches else ""
 
 
+def _extract_crop_variety_for_plan(text: str) -> str:
+    for variety in ("甜玉米", "糯玉米", "水果玉米", "鲜食玉米", "饲料玉米"):
+        if variety in text:
+            return variety
+    return _extract_crop_variety(text)
+
+
 def _extract_area_mu(text: str) -> int | float | None:
-    match = re.search(r"(\d+(?:\.\d+)?)\s*亩", text)
+    match = re.search(r"(\d+(?:\.\d+)?|[一二两三四五六七八九十百]+)\s*亩", text)
     if not match:
         return None
-    value = float(match.group(1))
+    value = _number_value(match.group(1))
+    if value is None:
+        return None
     return int(value) if value.is_integer() else value
+
+
+def _number_value(raw_value: str) -> float | None:
+    if re.fullmatch(r"\d+(?:\.\d+)?", raw_value):
+        return float(raw_value)
+    chinese_value = _chinese_number_value(raw_value)
+    return float(chinese_value) if chinese_value is not None else None
+
+
+def _chinese_number_value(raw_value: str) -> int | None:
+    digits = {
+        "一": 1,
+        "二": 2,
+        "两": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+    }
+    if raw_value == "十":
+        return 10
+    if "百" in raw_value:
+        left, _, right = raw_value.partition("百")
+        hundred = digits.get(left, 1 if left == "" else 0)
+        tail = _chinese_number_value(right) if right else 0
+        return hundred * 100 + (tail or 0)
+    if "十" in raw_value:
+        left, _, right = raw_value.partition("十")
+        ten = digits.get(left, 1 if left == "" else 0)
+        tail = digits.get(right, 0) if right else 0
+        return ten * 10 + tail
+    return digits.get(raw_value)
+
+
+def _extract_start_date(text: str) -> str:
+    for value in ("明年开春", "明年春天", "明年春季", "开春", "春季", "春天"):
+        if value in text:
+            return value
+    match = re.search(r"(\d{1,2}\s*月(?:上旬|中旬|下旬|初|底)?)", text)
+    return re.sub(r"\s+", "", match.group(1)) if match else ""
+
+
+def _extract_area_target(text: str) -> str:
+    if "连在一起" in text or "连片" in text:
+        if "新租" in text:
+            return "连片新租地"
+        return "连片地"
+    if "新租" in text and "地" in text:
+        return "新租地"
+    greenhouse = re.search(r"([\w一二三四五六七八九十\d号#-]+棚)", text)
+    if greenhouse:
+        return greenhouse.group(1)
+    return ""
 
 
 def _extract_planting_unit_name(text: str) -> str:
@@ -459,6 +595,28 @@ def _next_action_for_missing(missing: list[str]) -> str | None:
     if not missing:
         return None
     return f"等待用户补充：{missing[0]}"
+
+
+def _next_action_for_task(
+    task_type: str,
+    missing: list[str],
+    entities: dict[str, object],
+) -> str | None:
+    if missing:
+        return _next_action_for_missing(missing)
+    if task_type == "planting_plan" and _planting_plan_ready_for_setup(entities):
+        return "询问是否创建作物模板、茬口和种植单元；缺少地块名称时先追问名称"
+    return None
+
+
+def _planting_plan_ready_for_setup(entities: dict[str, object]) -> bool:
+    return all(
+        entities.get(key) not in (None, "")
+        for key in ("crop", "area_mu", "start_date", "variety")
+    ) and any(
+        entities.get(key) not in (None, "", {}, [])
+        for key in ("area_target", "greenhouse", "planting_unit")
+    )
 
 
 def _has_task_signal(text: str) -> bool:

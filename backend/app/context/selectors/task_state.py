@@ -61,6 +61,9 @@ class TaskStateSelector:
             lines.append(f"缺失信息：{missing}")
         if task.next_action:
             lines.append(f"下一步动作：{task.next_action}")
+        instruction = _task_instruction(task)
+        if instruction:
+            lines.append(f"处理要求：{instruction}")
         return "\n".join(lines)
 
     @staticmethod
@@ -95,6 +98,25 @@ def _format_list(value: Any) -> str:
     if not isinstance(value, list):
         return ""
     return "；".join(str(item) for item in value[:6] if item not in (None, ""))
+
+
+def _task_instruction(task: AgentTaskState) -> str:
+    missing = _metadata_list(task.missing_information_json)
+    if missing:
+        return f"优先追问缺失信息：{missing}；不要展开长篇方案或跳到无关建议。"
+    if task.task_type == "planting_plan":
+        return (
+            "如果用户表达“可以、可以了、按这个来、确认”，"
+            "优先询问是否把方案落地为作物模板、茬口和种植单元；"
+            "缺少地块或种植单元名称时先追问名称；"
+            "不要只用“随时叫我”结束。"
+        )
+    if task.task_type == "crop_cycle_setup":
+        return (
+            "如果信息已补齐，优先生成待确认写入计划；"
+            "缺少种植单元名称时只追问名称，不要重新讲完整种植方案。"
+        )
+    return ""
 
 
 def _metadata_entities(value: Any) -> dict[str, Any]:

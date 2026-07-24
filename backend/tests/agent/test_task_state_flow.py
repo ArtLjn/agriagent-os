@@ -105,6 +105,50 @@ async def test_task_state_updater_writes_from_natural_planting_intent(
     assert result.reason == "natural_task_intent"
 
 
+async def test_task_state_planting_plan_collects_entities_and_guides_setup(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="我想种个三十亩玉米地",
+            assistant_reply=("咱们先理清几个关键细节：地块情况、种植时间、品种选择。"),
+        ),
+    )
+
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="连在一起的我计划明年开春开始种甜玉米 我新租的地",
+            assistant_reply=(
+                "收到，三十亩连片的新地，明年开春种甜玉米。"
+                "我可以帮你列时间表，也可以估算初期投入预算。"
+            ),
+        ),
+    )
+
+    task = store.get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert task is not None
+    assert task.task_type == "planting_plan"
+    assert task.status == TaskStateStatus.ACTIVE.value
+    assert task.entities_json["crop"] == "玉米"
+    assert task.entities_json["variety"] == "甜玉米"
+    assert task.entities_json["area_mu"] == 30
+    assert task.entities_json["area_target"] == "连片新租地"
+    assert task.entities_json["start_date"] == "明年开春"
+    assert task.missing_information_json == []
+    assert (
+        task.next_action
+        == "询问是否创建作物模板、茬口和种植单元；缺少地块名称时先追问名称"
+    )
+
+
 async def test_task_state_writes_crop_cycle_setup_when_unit_name_missing(
     db_session,
 ) -> None:

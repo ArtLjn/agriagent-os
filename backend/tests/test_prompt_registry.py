@@ -29,6 +29,9 @@ def test_system_base_prompt_guides_planting_planning_dialogue():
     assert "不要直接创建茬口或模板" in content
     assert "没有调用作物模板工具" in content
     assert "不要说已找到或未找到模板" in content
+    assert "如果已有 active_task_state" in content
+    assert "不要只回复“随时叫我”" in content
+    assert "追问种植单元名称" in content
 
 
 class TestUserContextInPrompt:

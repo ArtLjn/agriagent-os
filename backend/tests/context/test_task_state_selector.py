@@ -44,6 +44,41 @@ def test_task_state_selector_generates_task_block(db_session) -> None:
     assert "expires_at" in block.metadata
 
 
+def test_task_state_selector_guides_ready_planting_plan_to_setup(db_session) -> None:
+    store = AgentTaskStateStore(db_session)
+    store.upsert_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="session-1",
+        task_type="planting_plan",
+        goal="我想种个三十亩玉米地",
+        entities={
+            "crop": "玉米",
+            "variety": "甜玉米",
+            "area_mu": 30,
+            "area_target": "连片新租地",
+            "start_date": "明年开春",
+        },
+        observations=["用户认可了时间表和预算"],
+        missing_information=[],
+        next_action="询问是否创建作物模板、茬口和种植单元；缺少地块名称时先追问名称",
+    )
+
+    block = TaskStateSelector().select(
+        db=db_session,
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="session-1",
+    )[0]
+
+    assert "处理要求：" in block.content
+    assert "如果用户表达“可以、可以了、按这个来、确认”" in block.content
+    assert "不要只用“随时叫我”结束" in block.content
+    assert "缺少地块或种植单元名称时先追问名称" in block.content
+    assert block.metadata["entities"]["area_mu"] == 30
+    assert block.metadata["entities"]["variety"] == "甜玉米"
+
+
 def test_task_state_selector_returns_empty_without_active_task(db_session) -> None:
     blocks = TaskStateSelector().select(
         db=db_session,
