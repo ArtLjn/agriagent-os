@@ -5,8 +5,18 @@ from collections.abc import Iterable
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-from app.domains.users.dependencies import get_current_user, require_admin
-from app.domains.farm.dependencies import get_current_farm
+from app.domains.users.dependencies import (
+    get_current_user,
+    require_admin,
+    require_admin_context,
+    require_auth_context,
+    require_effective_user_context,
+)
+from app.domains.farm.dependencies import (
+    get_auth_context_farm,
+    get_current_farm,
+    get_effective_auth_context_farm,
+)
 from app.main import app
 
 
@@ -32,7 +42,12 @@ IGNORED_ROUTES: set[str] = {
 PROTECTION_DEPENDENCIES = {
     get_current_user,
     get_current_farm,
+    get_auth_context_farm,
+    get_effective_auth_context_farm,
     require_admin,
+    require_admin_context,
+    require_auth_context,
+    require_effective_user_context,
 }
 
 PUBLIC_ROUTE_SMOKE_REQUESTS: list[tuple[str, str, dict, set[int]]] = [

@@ -8,8 +8,18 @@ from sqlalchemy.orm import sessionmaker
 
 from app.shared.database import get_db
 from app.infra.repository_runtime import clear_missing_table_cache
-from app.domains.users.dependencies import get_current_user
-from app.domains.farm.dependencies import get_current_farm
+from app.domains.users.context import AuthContext
+from app.domains.users.dependencies import (
+    get_current_user,
+    optional_auth_context,
+    require_auth_context,
+    require_effective_user_context,
+)
+from app.domains.farm.dependencies import (
+    get_auth_context_farm,
+    get_current_farm,
+    get_effective_auth_context_farm,
+)
 from app.shared.database import Base
 import app.shared.model_registry  # noqa: F401
 from app.domains.users.tokens import create_access_token
@@ -76,12 +86,21 @@ def clean_db(request):
             status="active",
         )
 
+    def override_auth_context():
+        user = override_get_current_user()
+        return AuthContext(current_user=user, effective_user=user)
+
     def override_get_current_farm(db=Depends(_override_get_db)):
         return db.query(Farm).filter(Farm.id == 1).first()
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[require_auth_context] = override_auth_context
+    app.dependency_overrides[require_effective_user_context] = override_auth_context
+    app.dependency_overrides[optional_auth_context] = override_auth_context
     app.dependency_overrides[get_current_farm] = override_get_current_farm
+    app.dependency_overrides[get_auth_context_farm] = override_get_current_farm
+    app.dependency_overrides[get_effective_auth_context_farm] = override_get_current_farm
 
     yield
 

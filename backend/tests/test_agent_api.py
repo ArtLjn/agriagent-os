@@ -61,7 +61,7 @@ class TestAgentChat:
         from app.domains.conversation.agent_schemas import ChatRequest
 
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
-        memory_service = AsyncMock()
+        observe_chat_completion = AsyncMock()
 
         with (
             patch(
@@ -74,9 +74,14 @@ class TestAgentChat:
                 new_callable=AsyncMock,
                 return_value="建议：今天浇水。",
             ),
+            patch("app.application.chat.use_case.get_memory_service"),
             patch(
-                "app.application.chat.use_case.get_memory_service",
-                return_value=memory_service,
+                "app.application.chat.use_case._observe_chat_completion",
+                observe_chat_completion,
+            ),
+            patch(
+                "app.application.chat.use_case.build_pending_plan_response",
+                return_value=None,
             ),
             patch("app.application.chat.use_case.schedule_session_summary"),
         ):
@@ -88,14 +93,14 @@ class TestAgentChat:
             )
 
         assert response.reply == "建议：今天浇水。"
-        memory_service.observe_chat_completion.assert_awaited_once_with(
+        observe_chat_completion.assert_awaited_once_with(
             user_id=farm.user_id,
             farm_id=farm.id,
             session_id="sess-1",
             user_input="今天做什么？",
             assistant_reply="建议：今天浇水。",
             skills_called=[],
-            metadata={"request_id": "req-1"},
+            request_id="req-1",
         )
 
 
@@ -105,10 +110,12 @@ class TestAgentChatStream:
     @patch("app.application.chat.stream_chat._schedule_stream_background_finalization")
     @patch("app.application.chat.stream_chat.SessionFlywheelRecorder")
     @patch("app.application.chat.stream_chat.handle_pending_action")
+    @patch("app.application.chat.stream_chat.build_pending_plan_response")
     @patch("app.application.chat.stream_chat.stream_advisor")
     def test_stream_endpoint_passes_session_id(
         self,
         mock_stream,
+        mock_pending_plan_response,
         mock_pending,
         mock_recorder_cls,
         mock_schedule_finalization,
@@ -120,6 +127,7 @@ class TestAgentChatStream:
             yield "chunk1"
 
         mock_pending.return_value = PendingActionDecision.unhandled()
+        mock_pending_plan_response.return_value = None
         mock_stream.side_effect = _fake_stream
         recorder = mock_recorder_cls.return_value
         recorder.start_turn.return_value = object()
@@ -214,15 +222,16 @@ class TestAgentHistory:
 
         farm = db_session.query(Farm).filter(Farm.id == 1).first()
         session_id = "sess-pending-history"
-        remove_pending(farm.id, session_id=session_id)
-        store_pending(
-            farm.id,
-            "create_crop_cycle",
-            {"crop_name": "橘子"},
-            original_input="我想种橘子",
-            session_id=session_id,
-        )
-        pending = build_pending_action_response(farm.id, session_id=session_id)
+        with patch("app.infra.pending_actions._cancel_pending_plan_in_db"):
+            remove_pending(farm.id, session_id=session_id)
+            store_pending(
+                farm.id,
+                "create_crop_cycle",
+                {"crop_name": "橘子"},
+                original_input="我想种橘子",
+                session_id=session_id,
+            )
+            pending = build_pending_action_response(farm.id, session_id=session_id)
         conversation = Conversation(
             farm_id=farm.id,
             user_id=farm.user_id,
@@ -249,7 +258,8 @@ class TestAgentHistory:
         assert items[0].pending_action is not None
         assert items[0].pending_action.skill_name == "create_crop_cycle"
 
-        remove_pending(farm.id, session_id=session_id)
+        with patch("app.infra.pending_actions._cancel_pending_plan_in_db"):
+            remove_pending(farm.id, session_id=session_id)
 
     def test_conversation_messages_include_pending_plan(self, db_session) -> None:
         """历史会话消息应保留 pending_plan，前端不再只靠文案正则判断。"""

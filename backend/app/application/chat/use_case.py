@@ -19,10 +19,7 @@ from app.application.pending_responses import (
 )
 from app.application.query_capability_menu import resolve_query_menu_or_message
 from app.application.session.summary import schedule_session_summary
-from app.application.chat.stream_chat import (
-    resolve_stream_user_and_farm,
-    stream_chat_events,
-)
+from app.application.chat.stream_chat import stream_chat_events
 from app.application.chat.task_state_updater import (
     TaskStateTurn,
     update_task_state_after_turn,
@@ -287,6 +284,5 @@ async def _record_explicit_memory_after_chat_turn(
 __all__ = [
     "chat",
     "new_request_id",
-    "resolve_stream_user_and_farm",
     "stream_chat_events",
 ]
