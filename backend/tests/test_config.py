@@ -62,6 +62,59 @@ class TestYamlConfig:
         finally:
             del os.environ["AI__API_KEY"]
 
+    def test_farm_manager_env_loads_dev_config(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.dev.yaml"
+        config_file.write_text(yaml.dump({"server": {"port": 8101}}))
+
+        from app.shared import config as config_module
+
+        monkeypatch.setattr(config_module, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setenv("FARM_MANAGER_ENV", "dev")
+
+        settings = config_module.Settings()
+
+        assert settings.server.port == 8101
+
+    def test_farm_manager_env_loads_prod_config(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "config.prod.yaml"
+        config_file.write_text(yaml.dump({"server": {"port": 8102}}))
+
+        from app.shared import config as config_module
+
+        monkeypatch.setattr(config_module, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setenv("FARM_MANAGER_ENV", "prod")
+
+        settings = config_module.Settings()
+
+        assert settings.server.port == 8102
+
+    def test_explicit_config_path_overrides_farm_manager_env(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        (tmp_path / "config.dev.yaml").write_text(yaml.dump({"server": {"port": 8101}}))
+        explicit_config = tmp_path / "custom.yaml"
+        explicit_config.write_text(yaml.dump({"server": {"port": 8103}}))
+
+        from app.shared import config as config_module
+
+        monkeypatch.setattr(config_module, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setenv("FARM_MANAGER_ENV", "dev")
+
+        settings = config_module.Settings(_config_path=str(explicit_config))
+
+        assert settings.server.port == 8103
+
+    def test_env_config_must_exist_when_selected(self, tmp_path, monkeypatch):
+        from app.shared import config as config_module
+
+        monkeypatch.setattr(config_module, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setenv("FARM_MANAGER_ENV", "prod")
+
+        with pytest.raises(FileNotFoundError, match="CONFIG_FILE_NOT_FOUND"):
+            config_module.Settings()
+
     def test_backward_compatible_attributes(self):
         from app.shared.config import Settings
 

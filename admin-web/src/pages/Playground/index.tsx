@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Input, Button, Space, Drawer, Tag, Tooltip, message, Select } from 'antd';
-import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined } from '@ant-design/icons';
+import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
 import { getSessionDebugExport, listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
@@ -403,6 +403,21 @@ export default function Playground() {
     }
   }, [buildFallbackSessionDebugJson, selectedUserId]);
 
+  const copySessionId = useCallback(async (sid: string) => {
+    try {
+      if (!navigator.clipboard) {
+        message.error('剪贴板不可用');
+        return false;
+      }
+      await navigator.clipboard.writeText(sid);
+      message.success('已复制 Session ID');
+      return true;
+    } catch {
+      message.error('复制失败');
+      return false;
+    }
+  }, []);
+
   const openTraceMonitor = useCallback(async (sid: string) => {
     const state = sessions[sid];
     const requestIdFromTimeline = state?.timeline?.request_id;
@@ -626,46 +641,62 @@ export default function Playground() {
                     </div>
                   </Tooltip>
                 ) : (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-                    <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                        {isRunning && <LoadingOutlined style={{ color: ACCENT, fontSize: 11 }} />}
-                        <div style={{
-                          color: isActive ? TEXT : TEXT,
-                          fontSize: 13,
-                          fontWeight: isActive ? 600 : 500,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          fontFamily: 'monospace',
-                        }}>
-                          {conv.session_id.slice(-8)}
-                        </div>
-                      </div>
-                      <div style={{ color: TEXT_DIM, fontSize: 11, marginTop: 3 }}>
-                        {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      {isRunning && <LoadingOutlined style={{ color: ACCENT, fontSize: 11, flexShrink: 0 }} />}
+                      <div style={{
+                        color: TEXT,
+                        fontSize: 12,
+                        fontWeight: isActive ? 600 : 500,
+                        fontFamily: 'monospace',
+                        lineHeight: 1.4,
+                        wordBreak: 'break-all',
+                        flex: 1,
+                        minWidth: 0,
+                      }}>
+                        {conv.session_id}
                       </div>
                     </div>
-                    <Space size={0} style={{ opacity: isActive ? 1 : 0.6, flexShrink: 0 }}>
-                      <Tooltip title="跳转链路追踪">
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<LinkOutlined />}
-                          onClick={(e) => { e.stopPropagation(); openTraceMonitor(conv.session_id); }}
-                          style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                        />
-                      </Tooltip>
-                      <Tooltip title="复制调试 JSON">
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<CopyOutlined />}
-                          onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
-                          style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
-                        />
-                      </Tooltip>
-                    </Space>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 4,
+                      marginTop: 4,
+                    }}>
+                      <div style={{ color: TEXT_DIM, fontSize: 11, flexShrink: 0 }}>
+                        {new Date(conv.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                      <Space size={0} style={{ opacity: isActive ? 1 : 0.6, flexShrink: 0 }}>
+                        <Tooltip title="复制 Session ID">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<CopyOutlined />}
+                            onClick={(e) => { e.stopPropagation(); void copySessionId(conv.session_id); }}
+                            style={{ color: isActive ? ACCENT : TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                          />
+                        </Tooltip>
+                        <Tooltip title="跳转链路追踪">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<LinkOutlined />}
+                            onClick={(e) => { e.stopPropagation(); openTraceMonitor(conv.session_id); }}
+                            style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                          />
+                        </Tooltip>
+                        <Tooltip title="复制调试 JSON">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<ProfileOutlined />}
+                            onClick={(e) => { e.stopPropagation(); copySessionJson(conv.session_id); }}
+                            style={{ color: TEXT_DIM, padding: '0 4px', minWidth: 24, height: 24 }}
+                          />
+                        </Tooltip>
+                      </Space>
+                    </div>
                   </div>
                 )}
               </div>
@@ -712,10 +743,42 @@ export default function Playground() {
                 })),
               ]}
             />
-            <Tooltip title={sessionId}>
-              <span style={{ color: TEXT_DIM, fontSize: 12, fontFamily: 'monospace' }}>
-                {sessionId.slice(-12)}
+            <Tooltip title={`${sessionId}（点击复制）`}>
+              <span
+                onClick={() => void copySessionId(sessionId)}
+                style={{
+                  color: TEXT_DIM,
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  maxWidth: 360,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  cursor: 'pointer',
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  transition: 'background 120ms ease, color 120ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = ROW_HOVER;
+                  e.currentTarget.style.color = TEXT;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = TEXT_DIM;
+                }}
+              >
+                {sessionId}
               </span>
+            </Tooltip>
+            <Tooltip title="复制 Session ID">
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => void copySessionId(sessionId)}
+                style={{ color: TEXT_DIM, padding: '0 6px', minWidth: 24, height: 24 }}
+              />
             </Tooltip>
           </div>
           <Button

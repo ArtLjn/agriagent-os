@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -10,6 +11,12 @@ from pydantic_settings import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+CONFIG_ENV_VAR = "FARM_MANAGER_ENV"
+APP_ENV_VAR = "APP_ENV"
+CONFIG_ENV_FILES = {
+    "dev": "config.dev.yaml",
+    "prod": "config.prod.yaml",
+}
 
 DEFAULT_DATABASE_URL = (
     "mysql+pymysql://farm_manager:password@localhost:3306/farm_manager?charset=utf8mb4"
@@ -178,8 +185,49 @@ class YamlSettingsSource(PydanticBaseSettingsSource):
 
 
 def load_yaml(path: str | Path) -> dict:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
+
+
+def _normalize_config_env(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+
+    normalized = value.strip().lower()
+    if normalized not in CONFIG_ENV_FILES:
+        allowed = ", ".join(sorted(CONFIG_ENV_FILES))
+        raise ValueError(
+            f"CONFIG_ENV_INVALID: {CONFIG_ENV_VAR} 或 {APP_ENV_VAR} 只支持 {allowed}"
+        )
+    return normalized
+
+
+def _selected_config_env(config_env: str | None = None) -> str | None:
+    return _normalize_config_env(
+        config_env or os.getenv(CONFIG_ENV_VAR) or os.getenv(APP_ENV_VAR)
+    )
+
+
+def resolve_config_path(
+    config_path: str | Path | None = None,
+    config_env: str | None = None,
+) -> Path | None:
+    if config_path:
+        explicit_config = Path(config_path)
+        if explicit_config.exists():
+            return explicit_config
+
+    selected_env = _selected_config_env(config_env)
+    if selected_env:
+        env_config = PROJECT_ROOT / CONFIG_ENV_FILES[selected_env]
+        if not env_config.exists():
+            raise FileNotFoundError(f"CONFIG_FILE_NOT_FOUND: {env_config}")
+        return env_config
+
+    default_config = PROJECT_ROOT / "config.yaml"
+    if default_config.exists():
+        return default_config
+    return None
 
 
 def _load_role_config() -> dict:
@@ -252,14 +300,16 @@ class Settings(BaseSettings):
     data_flywheel: DataFlywheelConfig = DataFlywheelConfig()
     project_name: str = "Farm Manager API"
 
-    def __init__(self, _config_path: Optional[str] = None, **kwargs):
+    def __init__(
+        self,
+        _config_path: Optional[str] = None,
+        _config_env: Optional[str] = None,
+        **kwargs,
+    ):
         yaml_data: dict = {}
-        if _config_path and Path(_config_path).exists():
-            yaml_data = load_yaml(_config_path)
-        else:
-            default_config = PROJECT_ROOT / "config.yaml"
-            if default_config.exists():
-                yaml_data = load_yaml(default_config)
+        config_path = resolve_config_path(_config_path, _config_env)
+        if config_path:
+            yaml_data = load_yaml(config_path)
 
         self.__class__._yaml_data_store = yaml_data
         super().__init__(**kwargs)
@@ -324,12 +374,15 @@ settings = Settings()
 
 __all__ = [
     "AIConfig",
+    "APP_ENV_VAR",
     "ASSISTANT_ROLE_LABELS",
     "ASSISTANT_ROLE_PROMPTS",
     "ASSISTANT_ROLE_TEMPERATURES",
     "AppConfig",
     "AssistantRole",
     "AuthConfig",
+    "CONFIG_ENV_FILES",
+    "CONFIG_ENV_VAR",
     "CircuitBreakerConfig",
     "DEFAULT_ASSISTANT_ROLE",
     "DataFlywheelConfig",
@@ -354,5 +407,6 @@ __all__ = [
     "assistant_role_prompt",
     "load_yaml",
     "normalize_assistant_role",
+    "resolve_config_path",
     "settings",
 ]
