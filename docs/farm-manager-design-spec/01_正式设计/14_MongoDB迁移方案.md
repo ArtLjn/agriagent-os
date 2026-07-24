@@ -353,7 +353,7 @@ flowchart TD
 为每个迁移目标表定义接口，MySQL 与 MongoDB 各自实现：
 
 ```python
-# backend/app/modules/data_flywheel/repositories/trace_repo.py
+# backend/app/infra/trace_repository.py
 from typing import Protocol
 
 class TraceRepository(Protocol):
@@ -422,7 +422,7 @@ class DualWriteTraceRepository:
 ### 6.4 依赖注入切换
 
 ```python
-# backend/app/modules/data_flywheel/dependencies.py
+# backend/app/infra/repository_runtime.py
 def get_trace_repository(
     mysql_db: Session = Depends(get_mysql_session),
     mongo_db: AsyncMongoDatabase = Depends(get_mongo_db),
@@ -468,7 +468,7 @@ mysql → dual（双写）→ dual（双写+切读 Mongo）→ mongo（关 MySQL
 """MySQL → MongoDB 一次性数据迁移脚本。
 
 使用：
-  poetry run python -m scripts.migrate_mysql_to_mongo \
+  python -m scripts.migrate_mysql_to_mongo \
       --table trace_records \
       --batch-size 1000 \
       --since 2026-01-01
@@ -476,7 +476,7 @@ mysql → dual（双写）→ dual（双写+切读 Mongo）→ mongo（关 MySQL
 特性：
   - 分批读取，避免内存爆炸
   - 幂等：以 mysqlId 为唯一键，重复执行自动跳过
-  - 进度持久化：记录最后处理的 ID 到 Redis
+  - 进度持久化：记录最后处理的 ID 到迁移状态表或补偿任务表
   - 失败重试：单批失败 3 次后跳过并记录
 """
 import argparse
@@ -484,10 +484,9 @@ import logging
 from datetime import datetime
 from typing import Iterator
 
-from app.core.config import settings
-from app.repositories.mysql.trace import MySqlTraceRepository
-from app.repositories.mongo.trace import MongoTraceRepository
-from app.models.trace import TraceRecord
+from app.shared.config import settings
+from app.infra.repository_runtime import get_trace_repository
+from app.platforms.evaluation.trace_models import TraceRecord
 
 logger = logging.getLogger(__name__)
 

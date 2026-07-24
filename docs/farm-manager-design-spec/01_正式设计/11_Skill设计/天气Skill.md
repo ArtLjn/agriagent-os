@@ -282,7 +282,7 @@ Authorization: Bearer <token>
 后续不再分别维护：
 
 ```text
-backend/app/modules/farm/city_coords.py
+backend/app/domains/farm/city_coords.py
 mobile-app/lib/data/location/cities.dart
 ```
 

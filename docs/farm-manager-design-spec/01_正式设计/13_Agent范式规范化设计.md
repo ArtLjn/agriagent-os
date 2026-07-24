@@ -126,7 +126,7 @@ Semantic Gate 不能长期演变成“正则集合”。正则只能承担安全
 ```mermaid
 flowchart TD
     U["用户输入"] --> G["Rule Gate<br/>安全门 / 高频短语兜底"]
-    G --> P["Structured Planner<br/>LLM 输出业务帧 JSON"]
+    G --> P["Structured Router Plan<br/>LLM 输出业务帧 JSON"]
     P --> V["Domain Validator<br/>业务字段校验 / 缺参判断"]
     V --> C{"能否安全形成写计划?"}
     C -->|是| PA["Pending Action / Pending Plan"]
@@ -141,18 +141,18 @@ flowchart TD
 | 层 | 可以做 | 不可以做 |
 | --- | --- | --- |
 | Rule Gate | 问候/查询/明显写操作分流；识别高风险成功话术；覆盖少量稳定短语 | 为每种业务说法不断追加正则 |
-| Structured Planner | 输出 `intent_frames`、`entities`、`missing_fields`、`confidence`、`risk` | 直接执行写入或绕过 pending |
-| Domain Validator | 校验工人、地块、茬口、默认工资、金额、时间范围是否可唯一确定 | 盲信 Planner 抽取结果 |
+| Structured Router Plan | 输出 `intent_frames`、`entities`、`missing_fields`、`confidence`、`risk`，落点为 `agent/router` 与 `agent/runtime/planning` | 直接执行写入或绕过 pending |
+| Domain Validator | 校验工人、地块、茬口、默认工资、金额、时间范围是否可唯一确定 | 盲信 Router/PlanDraft 抽取结果 |
 | Pending | 把可执行写计划转为用户确认 | 未确认直接落库 |
 | Reflection | 没有工具或 pending 证据时禁止“已记录/已创建” | 替代业务规划 |
 | Data Flywheel | 把失败样本沉淀为回归用例和评测项 | 只把 bad reply 当训练语料 |
 
 演进约束：
 
-1. 新增正则前必须先判断它属于安全门、负例门，还是高频稳定表达；若不是，应优先进入 Planner/Validator 设计。
+1. 新增正则前必须先判断它属于安全门、负例门，还是高频稳定表达；若不是，应优先进入 Router/Validator 设计。
 2. 任何新增正则必须配套正例和负例测试，避免扩大误触发面。
-3. 当同一业务域出现 3 个以上相似正则补丁时，应升级为结构化 Planner schema，而不是继续追加正则。
-4. Planner 输出必须是结构化 JSON，不允许只靠自然语言解释驱动写操作。
+3. 当同一业务域出现 3 个以上相似正则补丁时，应升级为结构化 Router/PlanDraft schema，而不是继续追加正则。
+4. Router/PlanDraft 输出必须是结构化 JSON，不允许只靠自然语言解释驱动写操作。
 5. Validator 是最终业务安全边界：工资、欠款、地块、日期、工人身份不确定时必须澄清。
 
 ## 5. Agent 输入后的完整生命周期
@@ -174,7 +174,7 @@ flowchart TD
     G --> PD["PlanDraft Builder<br/>统一计划草稿"]
     PD --> SP{"是否复杂或多意图?"}
     SP -->|否| A1["Adapter<br/>RouterDecision -> PlanDraft"]
-    SP -->|是| LP["Structured Planner<br/>结构化 JSON 规划"]
+    SP -->|是| LP["Structured Router Plan<br/>结构化 JSON 规划"]
     A1 --> DV["Domain Validator<br/>业务字段与上下文校验"]
     LP --> DV
 
@@ -280,7 +280,7 @@ flowchart LR
     U["用户输入"] --> G["Rule Gate"]
     G --> C{"复杂度判断"}
     C -->|简单/确定| A["RouterDecision Adapter"]
-    C -->|复杂/多意图/规则不足| L["Structured Planner"]
+    C -->|复杂/多意图/规则不足| L["Structured Router Plan"]
     A --> D["PlanDraft"]
     L --> D
     D --> V["Domain Validator"]
@@ -292,7 +292,7 @@ flowchart LR
         G4["少量高频稳定短语"]
     end
 
-    subgraph Planner职责
+    subgraph RouterPlan职责
         L1["多意图拆解"]
         L2["实体和字段抽取"]
         L3["missing_fields"]
@@ -306,9 +306,9 @@ flowchart LR
 | --- | --- | --- |
 | “你好” | Rule Gate | 无需 LLM 规划 |
 | “我的工人有哪些” | RouterDecision Adapter | 明确只读 |
-| “昨天买了200块化肥” | RouterDecision Adapter 或轻量 planner | 明确单写入 |
+| “昨天买了200块化肥” | RouterDecision Adapter 或轻量 PlanDraft | 明确单写入 |
 | “李海这个月干了15天压瓜” | Hybrid | 规则可给证据，Validator 决定工资策略 |
-| “新来一个工人李丽工资100一天，今天去6号棚收水稻” | Structured Planner / Hybrid | 多意图和步骤依赖 |
+| “新来一个工人李丽工资100一天，今天去6号棚收水稻” | Structured Router Plan / Hybrid | 多意图和步骤依赖 |
 
 ### 5.4 Domain Validator 规则
 
@@ -480,7 +480,7 @@ flowchart LR
 
 | 阶段 | 典型问题 | 修复方向 |
 | --- | --- | --- |
-| planning | 未识别多意图、实体拆错 | Planner schema / 语义样本 |
+| planning | 未识别多意图、实体拆错 | Router/PlanDraft schema / 语义样本 |
 | validation | 缺字段却继续 pending | Domain Validator |
 | selection | 选错 Skill 或漏选 | Router/Skill metadata |
 | pending_creation | 空参数、确认文案不一致 | Pending/Reflection |
@@ -915,4 +915,4 @@ Skill 是原子能力，不是 Agent。
 - `backend/app/agent/runtime/tool_executor.py`
 - `backend/app/agent/reflector/checks.py`
 - `backend/app/infra/pending_actions.py`
-- `backend/app/agent/skills/*/skill.md`
+- `backend/app/skills/*/skill.md`

@@ -11,8 +11,7 @@
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite">
-  <img src="https://img.shields.io/badge/React_Native-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React Native">
-  <img src="https://img.shields.io/badge/LangGraph-1C3C3C?style=flat-square" alt="LangGraph">
+  <img src="https://img.shields.io/badge/Flutter-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter">
   <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square" alt="LangChain">
   <img src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy">
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
@@ -22,8 +21,8 @@
 
 # AgriAgent OS Design Spec
 
-> Version: v0.9 (draft, 33 chapters scaffolded + Context/Memory compression revised + Discovery Layer design added + Knowledge & Memory architecture梳理 + fully redacted + region-tag delta proposal synced + database schema design backfilled)
-> Last updated: 2026-06-20
+> Version: v1.4 (draft, calibrated against the 2026-07-24 codebase: backend layering, Flutter mobile app, HTTP routes, database models, Simulation/Evaluation entry points)
+> Last calibrated: 2026-07-24
 > Maintainer: BlockShip
 > Status: draft, continuously aligned with `docs/architecture/` and the codebase
 
@@ -46,7 +45,7 @@ Reference layout: the six-bucket pattern (pre-design / formal design / interface
 | `.claude/rules/*.md` | Cited as authoritative; this spec does not restate the clauses, only points to them |
 | `.claude/rules/skill-writing.md` | Aligned with [01_formal_design/02_skill_engine_and_contract.md](./01_正式设计/02_Skill引擎与契约.md); on conflict, `skill-writing.md` wins |
 
-Conflict resolution priority: code > `docs/architecture/` > this spec > historical commits. Any inconsistency should be **fixed in this spec first, then in the code**.
+Conflict resolution priority: code and `AGENTS.md` hard rules > `docs/architecture/` > this spec > historical commits. If this spec diverges from the real code, update this spec first; changing the implementation requires a separate design/code change.
 
 ## Directory overview
 
@@ -124,11 +123,11 @@ Conflict resolution priority: code > `docs/architecture/` > this spec > historic
 
 ## Hard constraints (PR-blocking)
 
-1. **Dependency direction**: `schemas/ → agent/application → agent/runtime → modules → services → core/infra → models`; frontend `api/ → components → layouts → pages`. See [01.01 agent_platform_architecture](./01_正式设计/01_Agent平台架构.md).
+1. **Dependency direction**: backend targets `bootstrap/routes → application/domains/platforms/agent → shared/infra`; do not add legacy `app.core`, `app.api`, `app.models`, `app.schemas`, `app.services`, `app.modules`, or `app.simulation` entries. Frontend remains `api → components → layouts → pages`. See [01.01 agent_platform_architecture](./01_正式设计/01_Agent平台架构.md).
 2. **Cross-cutting concerns**: auth / log / telemetry / trace only via dependency injection. Business layers must not import them directly.
 3. **File & method size limits**: production Python files ≤ 1000 lines; 500-1000 lines is an observation/review range; methods should stay ≤ 50 lines and require justification or step extraction above 80 lines; classes ≤ 200 lines; method parameters ≤ 5.
 4. **New code must have tests**: target ≥ 80% coverage, critical paths must be covered.
-5. **Skill contract**: every Skill must ship a `skill.md` + `scripts/main.py` and conform to [01.02 skill_engine_and_contract](./01_正式设计/02_Skill引擎与契约.md).
+5. **Skill contract**: real Skill code lives under `backend/app/skills/*/`; every Skill must ship a `skill.md`, write-operation scripts live under `scripts/` when needed, and the contract follows [01.02 skill_engine_and_contract](./01_正式设计/02_Skill引擎与契约.md).
 6. **Structured logging**: no `print` / `console.log` for debugging; logs must carry `trace_id`.
 7. **Database changes**: Alembic only; no manual SQL DDL; MySQL 8.x with `utf8mb4` charset.
 8. **Write Skills cannot be cached**, and must not guess business-critical fields when parameters are missing.
@@ -143,8 +142,8 @@ Conflict resolution priority: code > `docs/architecture/` > this spec > historic
 
 | Term | Definition |
 | --- | --- |
-| Agent | The farm-assistant intelligent agent, composed of Application + Runtime + Planner + Executor + Reflector |
-| Advisor | Backward-compatible entry of the Agent; handles Guardrails, greetings, Pending Actions, streaming orchestration |
+| Agent | The farm-assistant intelligent agent, composed of Application Chat + Router + Runtime Loop + Executor + Reflector |
+| Advisor | Historical compatibility term now split into `application/chat`, `agent/runtime`, `agent/guardrails`, and `agent/executor` |
 | Skill | Single-capability module, implemented per the `.claude/rules/skill-writing.md` contract; either read-only or write |
 | ContextBundle | The dynamic context bundle consumed by Runtime; built by Selector + Budget + Compressor |
 | MemoryService | Unified port for short-term memory + long-term memory + Retrieval + Observation |
@@ -153,7 +152,7 @@ Conflict resolution priority: code > `docs/architecture/` > this spec > historic
 | Simulation | Regression executor: runs DB-backed regression cases |
 | Evaluation | Trend scorer: pass rate / tool-selection accuracy / pending-miss rate across versions |
 | Pending Action | A write-op action that requires user confirmation; supports confirm / cancel / expire |
-| Smart Fill | Mobile-side unified entry for smart form filling: `/api/v1/scenarios` lists scenarios + `/parse` parses |
+| Smart Fill | Mobile-side unified entry for smart form filling: `/smart-fill/scenarios` lists scenarios + `/smart-fill/parse` parses |
 | Farm Cockpit | Mobile home dashboard; carries daily advice, key metrics, quick entries |
 | Yaya | Mobile AI assistant chat page (the "Yaya" IP) |
 
@@ -166,10 +165,11 @@ Conflict resolution priority: code > `docs/architecture/` > this spec > historic
 | v0.3 | 2026-06-19 | [03_context_engineering] § 6 compression strategy rewritten to match the actual code (5 stages + multi-turn amnesia root causes + comparison of mainstream approaches + recommended approach); [04_memory_engineering] § 6 short-term memory adds "current implementation / identified issues / fix directions"; adds § 12 multi-turn amnesia remediation roadmap and § 13 storage evolution roadmap (Redis decision: not yet) | BlockShip |
 | v0.4 | 2026-06-19 | [01_formal_design/06_data_flywheel_and_evaluation] adds § 9 Discovery Layer and risk discovery (2-level filter + max-score + rule engine + LLM Judge + 3 workbench tweaks + 4.5 person-day MVP); the original § 9–§ 12 shift to § 10–§ 13; [00_pre-design/02_system_function_and_tech_architecture] architecture diagram + five-subsystem table + § 5.7 decision + § 7 landing status adds Discovery Layer | BlockShip |
 | v0.5 | 2026-06-19 | Knowledge & Memory architecture brainstorming output: [04_memory_engineering] § 7 long-term memory adds § 7.2 implementation (candidate→confirmed transitions + new `memory_records` table + shared trigger with summary); § 8 retrieval adds § 8.2 four conditions for adopting Qdrant + § 8.3 implementation boundaries; § 14 current status / § 16 related docs synced; [02_skill_engine_and_contract] `create_crop_template` gets a region note | BlockShip |
-| v0.6 | 2026-06-19 | Redaction: dropped concrete external project names and paths from comparison chapters ([Readme], [01_agent_platform_architecture] § 9, [02_system_function_and_tech_architecture] § 6, [04_memory_engineering] § 15), rewritten as "typical multi-agent systems / typical agent architectures"; removed the production server IP ([07_observability_and_ops] § 11, [03_tech_selection_and_dependencies] § 5.1) | BlockShip |
+| v0.6 | 2026-06-19 | Redaction: dropped concrete external project names and paths from comparison chapters ([Readme], [01_agent_platform_architecture] § 9, [02_system_function_and_tech_architecture] § 6, [04_memory_engineering] § 15); removed the production server IP ([07_observability_and_ops] § 11, [03_tech_selection_and_dependencies] § 5.1) | BlockShip |
 | v0.7 | 2026-06-19 | Deeper redaction pass: [07_observability_and_ops] § 5 drops the "align with smart-home LOGBUS style" line, § 11 deployment paths / service names / ops scripts all turned into placeholders (`<repo_dir>` / `<service_name>`); [03_tech_selection_and_dependencies] § 5 synced; [03_interface_protocols/03_external_service_interfaces] § 5/§ 6 log paths + every `/root/workspace/...` in the systemd unit turned into placeholders, User field turned into `<deploy_user>` | BlockShip |
 | v0.8 | 2026-06-19 | Region-tag sync: created [openspec/changes/extend-crop-template-with-region-tag](../../openspec/changes/extend-crop-template-with-region-tag/proposal.md) delta proposal (full proposal/design/specs/tasks); synced [04_related_rules/03_database_and_migration_rules] table list `crops → crop_templates` + region_tag note; [01_formal_design/08_business_modularization] CropPort signature adds region + new `list_system_templates` / `import_system_template`; [02_product_requirements/01_core_capability_list] crop management gets region variants; [03_interface_protocols/01_http_api_protocol] adds `GET /crops/templates/system?region=` and `POST /import` endpoints | BlockShip |
 | v0.9 | 2026-06-20 | Added [01_formal_design/10_database_schema_design]: using `backend/sql/farm_manager.sql` production dump as the baseline, derives the fields, constraints, indexes, and foreign keys of 33 tables (including `alembic_version`); adds an interface→table mapping matrix, a production-vs-code delta reconciliation, and a reserved-tables list (`memory_records` / `audit_logs` / `evaluation_reports`, etc.) | BlockShip |
+| v1.4 | 2026-07-24 | Calibrated entry docs against real code: React Native changed to Flutter; legacy `app.core/api/models/schemas/services/modules/simulation` entries replaced by `bootstrap/application/domains/agent/context/memory/platforms/shared/infra/skills`; HTTP API, database source, Simulation/Evaluation status, and roadmap synced to current implementation | Codex |
 
 ## License
 

@@ -131,18 +131,14 @@ async def load_skill(skill_name: str) -> str:
 
 第二层是按需加载，避免一开始就塞全量 Skill。
 
-## 8. Prompt Caching
+## 8. Prompt Cache 与稳定段复用
 
-Anthropic Prompt Caching 把 system prompt 缓存，命中可节省 90% 的处理成本。
+当前生产 LLM 通过 OpenAI-compatible `ChatOpenAI` 接入，不再把 Anthropic Prompt Caching 作为默认实现。Prompt 优化重点是稳定段复用、snippet 版本治理、ContextBundle 分层和 Provider 能力探测；如果某个 Provider 支持显式 prompt cache，应由 `shared/llm.py` 的 provider 配置适配，而不是在 snippet 内硬编码厂商字段。
 
 ```python
 class CachedPrompt:
-    def to_anthropic(self) -> list[dict]:
-        return [{
-            "type": "text",
-            "text": self.content,
-            "cache_control": {"type": "ephemeral"},
-        }]
+    def render(self) -> str:
+        return self.content
 ```
 
 **缓存策略**：
@@ -195,7 +191,7 @@ class PromptReplay:
 ## 12. 当前状态
 
 - ✅ Registry / Composer / Renderer 骨架
-- ✅ Cache 适配 Anthropic SDK
+- 🚧 Provider prompt cache 能力探测与适配
 - ✅ Snippets 模板文件（system / persona / skills）
 - ✅ Replay 接口
 - 🚧 版本治理细化（changelog、A/B）

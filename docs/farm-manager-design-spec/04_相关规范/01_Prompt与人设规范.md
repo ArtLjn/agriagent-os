@@ -290,7 +290,7 @@ changelog:
 
 ## 8. Prompt Cache 优化
 
-Anthropic Prompt Caching 命中可节省 90% system prompt 处理成本。
+当前默认 LLM 走 OpenAI-compatible Provider，不把某一厂商的 Prompt Caching 作为硬依赖。若 Provider 支持显式 cache，需要在 LLM 适配层声明能力并由 Prompt Composer 生成对应结构；否则按稳定段复用、短 prompt 和 ContextBudget 控制成本。
 
 **优化原则**：
 - 静态段（身份、人设、行为准则）→ cache TTL 长
@@ -299,7 +299,7 @@ Anthropic Prompt Caching 命中可节省 90% system prompt 处理成本。
 
 **禁止**：
 - 把高频变化的数据塞进 cache 段
-- 修改 cache 段而不更新 cache_control
+- 修改 cache 段而不更新版本或能力声明
 
 ## 9. Prompt 调试
 

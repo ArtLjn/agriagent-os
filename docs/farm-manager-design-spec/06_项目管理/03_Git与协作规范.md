@@ -71,7 +71,7 @@ main (保护分支，永远可发布)
 
 | scope | 范围 |
 | --- | --- |
-| `agent` | Agent runtime / planner / executor / reflector |
+| `agent` | Agent runtime / router / executor / reflector |
 | `skill` | Skill 实现 / 契约 |
 | `cost` | 成本 / 收入 / 账单 |
 | `cycle` | 茬口 |
@@ -217,7 +217,8 @@ git push origin v1.3.0
 *                           @BlockShip
 /backend/app/agent/         @BlockShip
 /backend/app/skills/        @BlockShip
-/backend/app/modules/auth/  @BlockShip
+/backend/app/domains/users/ @BlockShip
+/backend/app/domains/planting/ @BlockShip
 /admin-web/                 @BlockShip
 /mobile-app/                @BlockShip
 /docs/farm-manager-design-spec/  @BlockShip
@@ -256,7 +257,7 @@ git push origin v1.3.0
 | Layer Deps | 所有 PR | check-layer-deps.sh |
 | Skill Contract | 所有 PR | test_skill_docs.py |
 | Integration | PR to main | pytest tests/api tests/agent |
-| Simulation Smoke | PR to main | app.simulation.run --suite smoke |
+| Simulation Smoke | PR to main | pytest tests/simulation -q 或后端启动后调用 `/simulation/run` |
 | Build | merge to main | 构建镜像 + 推 registry |
 | Deploy Staging | merge to main | 自动部署 staging |
 | Deploy Prod | tag v* | 人工 approve 后部署 |

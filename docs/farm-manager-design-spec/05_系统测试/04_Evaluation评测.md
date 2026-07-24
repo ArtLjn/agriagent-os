@@ -63,13 +63,12 @@
 ### 3.2 评测集版本
 
 ```text
-backend/evaluation/datasets/
-├── eval_core/v1.jsonl
-├── eval_recent/2026-W25.jsonl
-└── eval_adversarial/v1.jsonl
+backend/app/platforms/evaluation/cases/
+├── loader.py
+└── schemas.py
 ```
 
-每次发布前记录使用的 dataset 版本到 EvaluationReport。
+当前仓库已有评测 case loader / schema / metrics / reports / replay / runners 等平台代码，真实测试覆盖位于 `backend/tests/evaluation/`。若后续引入 JSONL 数据集，应在 `platforms/evaluation/cases/` 下明确版本加载规则，并在 EvaluationReport 中记录 dataset 版本。
 
 ## 4. 评测流程
 
@@ -88,32 +87,25 @@ backend/evaluation/datasets/
 
 ## 5. LLM Judge
 
-- 评判模型：Claude Sonnet 4.6（与生产同）或更强。
+- 评判模型：默认复用 OpenAI-compatible Provider 路由，可按角色选择更强模型；当前配置兜底来自 `AIConfig` / `providers.json`。
 - 评分维度：`fact_consistency` / `persona_consistency` / `response_relevance`。
-- Prompt 模板：`backend/evaluation/prompts/judge_v1.md`。
+- Prompt 模板：由 `backend/app/platforms/shared/judge_service.py` 及调用方提供，若沉淀文件模板，应放入平台目录或 `backend/prompts/` 并登记版本。
 - 输出：JSON `{score: 0-1, reason: "..."}`。
 
-**禁止**用 GPT-4 / 国内非授权模型做 judge（合规 + 一致性）。
+**禁止**使用未授权模型或把模型输出直接当最终真值；Judge 结果必须与规则校验、人工标注链路一起使用。
 
 ## 6. 启动命令
 
 ```bash
-# 标准评测
-poetry run python -m app.evaluation.run \
-  --dataset eval_core \
-  --report-dir backend/evaluation/reports/$(date +%Y-%m-%d)
+# 当前自动化入口：运行 Evaluation 单元/回归测试
+pytest tests/evaluation -q
 
-# 多版本对比
-poetry run python -m app.evaluation.run \
-  --dataset eval_core \
-  --baseline backend/evaluation/reports/2026-06-12 \
-  --compare prompt-v3
-
-# 仅对抗集
-poetry run python -m app.evaluation.run \
-  --dataset eval_adversarial \
-  --focus security
+# 与仿真组合验证
+pytest tests/simulation -q
+pytest tests/evaluation -q
 ```
+
+当前仓库没有 `app.evaluation.run` 命令行入口。评测能力主要由 `backend/app/platforms/evaluation/{cases,metrics,replay,reports,runners,discovery}` 中的 Python 模块和 `backend/tests/evaluation/` 测试驱动。
 
 ## 7. 报告格式
 
@@ -121,7 +113,7 @@ poetry run python -m app.evaluation.run \
 {
   "report_id": "2026-06-19_eval_core_v1",
   "dataset": "eval_core/v1",
-  "model": "claude-sonnet-4-6",
+  "model": "qwen3.6-35b-a3b",
   "timestamp": "2026-06-19T15:30:00Z",
   "metrics": {
     "skill_precision": 0.94,
