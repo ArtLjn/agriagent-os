@@ -20,7 +20,7 @@ from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.agent.state import AgentState
 from app.context.models import ContextBundle
 from app.context.renderer import ContextRenderer
-from app.infra.pending_actions import PENDING_MARKER
+from app.infra.pending_actions import CONTRACT_BLOCKED_MARKER, PENDING_MARKER
 from app.infra.trace_context import set_round_index
 
 logger = logging.getLogger(__name__)
@@ -148,9 +148,7 @@ def _direct_tool_message_response(
     set_round_index(trace_round_index)
     if pending_msgs and normal_msgs:
         summaries = [str(m.content or "")[:200] for m in normal_msgs if m.content]
-        confirm_parts = [
-            m.content.replace(PENDING_MARKER, "").strip() for m in pending_msgs
-        ]
+        confirm_parts = [_strip_direct_tool_marker(m.content) for m in pending_msgs]
         combined = "\n\n".join(summaries) + "\n\n" + "\n\n".join(confirm_parts)
         logger.info(
             "混合 ToolMessage | pending=%d normal=%d | 跳过 LLM 合并回复",
@@ -162,7 +160,7 @@ def _direct_tool_message_response(
             "trace_round_index": trace_round_index,
         }
     if pending_msgs:
-        confirm = pending_msgs[-1].content.replace(PENDING_MARKER, "").strip()
+        confirm = _strip_direct_tool_marker(pending_msgs[-1].content)
         logger.info("检测到 pending ToolMessage，跳过 LLM 直接确认 | text=%s", confirm)
         return {
             "messages": [AIMessage(content=confirm)],
@@ -179,6 +177,15 @@ def _direct_tool_message_response(
             "trace_round_index": trace_round_index,
         }
     return None
+
+
+def _strip_direct_tool_marker(content: str) -> str:
+    return (
+        str(content or "")
+        .replace(PENDING_MARKER, "")
+        .replace(CONTRACT_BLOCKED_MARKER, "")
+        .strip()
+    )
 
 
 def _resolve_router_decision(

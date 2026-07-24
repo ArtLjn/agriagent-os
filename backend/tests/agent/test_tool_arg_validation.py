@@ -55,6 +55,31 @@ def test_validate_before_pending_infers_canonical_write_operation(monkeypatch):
     assert result.missing_fields == ["category"]
 
 
+def test_validate_before_pending_repairs_invalid_other_category_to_broad_candidate(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_arg_validation.load_skill_candidates",
+        lambda _farm_id: SimpleNamespace(values={"category": ["农资", "化肥"]}),
+    )
+
+    result = validate_before_pending(
+        "manage_cost",
+        {
+            "operation": "create_record",
+            "amount": 5000,
+            "category": "其他",
+            "record_type": "cost",
+            "note": "大棚膜采购",
+        },
+        farm_id=1,
+    )
+
+    assert result.valid is True
+    assert result.params["category"] == "农资"
+    assert result.params["_category_repair_strategy"] == "dynamic_consolidation"
+
+
 def test_pending_action_precheck_blocks_missing_category_before_confirmation(
     monkeypatch,
 ):

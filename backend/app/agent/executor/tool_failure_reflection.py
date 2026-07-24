@@ -6,29 +6,12 @@ from typing import Any, Literal
 from app.agent.executor.pending_aliases import pending_alias_metadata
 from app.infra.pending_action_presenter import build_confirm_message
 from app.infra.trace_collector import get_collector
+from app.skills.category_inference import infer_cost_category_from_text
 from app.skills.candidates import load_skill_candidates
 
 ToolFailureRepairAction = Literal["no_repair", "ask_repaired_confirmation"]
 
 _MAX_REPAIR_ATTEMPTS = 1
-_CATEGORY_CONSOLIDATION_RULES = (
-    (
-        ("大棚膜", "地膜", "棚膜", "薄膜", "防虫网", "遮阳网", "滴灌带", "水管"),
-        ("农资", "设施耗材", "农用耗材", "耗材", "其他农资", "材料"),
-    ),
-    (
-        ("化肥", "肥料", "复合肥", "有机肥", "尿素"),
-        ("化肥", "肥料"),
-    ),
-    (
-        ("种子", "种苗", "瓜苗", "苗盘"),
-        ("种子", "种苗"),
-    ),
-    (
-        ("农药", "杀虫剂", "杀菌剂", "除草剂"),
-        ("农药",),
-    ),
-)
 
 
 @dataclass(frozen=True)
@@ -152,11 +135,12 @@ def _infer_category(
         if value not in (None, "")
     )
     categories = _load_category_candidates(farm_id)
-    for category in _matched_categories(categories, text):
-        return category, "dynamic_exact_match"
-    for category in _consolidated_categories(categories, text):
-        return category, "dynamic_consolidation"
-    return "其他", "fallback_other"
+    inferred = infer_cost_category_from_text(
+        categories,
+        text,
+        allow_fallback_other=True,
+    )
+    return inferred or ("其他", "fallback_other")
 
 
 def _load_category_candidates(farm_id: int) -> list[str]:
@@ -165,33 +149,6 @@ def _load_category_candidates(farm_id: int) -> list[str]:
     except Exception:
         return []
     return [str(category).strip() for category in categories if category]
-
-
-def _matched_categories(categories: list[str], text: str) -> list[str]:
-    if not text:
-        return []
-    candidates = [
-        category for category in categories if category and category != "其他"
-    ]
-    return sorted(
-        (category for category in candidates if category in text),
-        key=len,
-        reverse=True,
-    )
-
-
-def _consolidated_categories(categories: list[str], text: str) -> list[str]:
-    if not text:
-        return []
-    available = {category for category in categories if category and category != "其他"}
-    matches: list[str] = []
-    for item_terms, category_terms in _CATEGORY_CONSOLIDATION_RULES:
-        if not any(term in text for term in item_terms):
-            continue
-        for category in category_terms:
-            if category in available and category not in matches:
-                matches.append(category)
-    return matches
 
 
 def _safe_alias_metadata(skill_name: str, params: dict[str, Any]) -> dict[str, Any]:

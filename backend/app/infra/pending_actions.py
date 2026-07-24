@@ -513,10 +513,17 @@ def _operation_name_from_call(alias, params: dict | None = None) -> str | None:
 
 
 PENDING_MARKER = "[PENDING_ACTION]"
+CONTRACT_BLOCKED_MARKER = "[CONTRACT_BLOCKED]"
 
 
 def is_pending_tool_message(message) -> bool:
     return isinstance(message, ToolMessage) and PENDING_MARKER in (
+        message.content or ""
+    )
+
+
+def is_contract_blocked_tool_message(message) -> bool:
+    return isinstance(message, ToolMessage) and CONTRACT_BLOCKED_MARKER in (
         message.content or ""
     )
 
@@ -576,7 +583,9 @@ __all__ = [
     "build_confirmation_context",
     "build_plan_confirm_message",
     "is_pending_tool_message",
+    "is_contract_blocked_tool_message",
     "PENDING_MARKER",
+    "CONTRACT_BLOCKED_MARKER",
     "_pending",
     "_pending_plans",
     "WRITE_SKILLS",

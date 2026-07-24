@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
+from app.skills.category_inference import infer_cost_category_from_text
 from app.skills.candidates import load_skill_candidates
 from app.skills.contracts import ContractValidationResult, validate_skill_args
 from app.skills.metadata import (
@@ -51,6 +52,7 @@ def validate_pending_tool_args(
     skill_name: str,
     params: dict[str, Any],
     farm_id: int,
+    original_input: str = "",
 ) -> PendingToolArgValidation:
     """按 capability operation 契约校验 pending 写工具参数。"""
     normalized_params = dict(params or {})
@@ -63,6 +65,12 @@ def validate_pending_tool_args(
         normalized_params["operation"] = operation
 
     candidate_set = load_skill_candidates(farm_id)
+    _repair_invalid_cost_category(
+        contract_skill_name=contract_skill_name,
+        params=normalized_params,
+        candidates=candidate_set.values,
+        original_input=original_input,
+    )
     validation = validate_skill_args(
         contract_skill_name,
         normalized_params,
@@ -106,6 +114,53 @@ def _infer_write_operation(skill_name: str, params: dict[str, Any]) -> str | Non
     if metadata.get("operation_risk") not in {"write_confirm", "write_high"}:
         return None
     return operation
+
+
+def _repair_invalid_cost_category(
+    *,
+    contract_skill_name: str,
+    params: dict[str, Any],
+    candidates: dict[str, list[str]],
+    original_input: str,
+) -> None:
+    if contract_skill_name != "manage_cost":
+        return
+    if params.get("operation") != "create_record":
+        return
+    category = str(params.get("category") or "").strip()
+    if not category:
+        return
+    allowed = [str(item).strip() for item in candidates.get("category") or [] if item]
+    if _candidate_allowed(category, allowed):
+        return
+    text = " ".join(
+        str(value)
+        for value in (
+            category,
+            params.get("note"),
+            params.get("description"),
+            original_input,
+        )
+        if value not in (None, "")
+    )
+    inferred = infer_cost_category_from_text(
+        allowed,
+        text,
+        allow_fallback_other=False,
+    )
+    if inferred is None:
+        return
+    params["category"] = inferred[0]
+    params["_category_repair_strategy"] = inferred[1]
+
+
+def _candidate_allowed(value: str, allowed_values: list[str]) -> bool:
+    for allowed in allowed_values:
+        if value == allowed:
+            return True
+        if ":" in allowed and value in allowed.split(":", maxsplit=1):
+            return True
+    return False
 
 
 def _contract_message(validation: ContractValidationResult) -> str:

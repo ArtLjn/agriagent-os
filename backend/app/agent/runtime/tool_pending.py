@@ -17,6 +17,7 @@ from app.agent.runtime.tool_pending_args import (
 from app.agent.state import AgentState
 from app.infra.pending_actions import (
     PENDING_MARKER,
+    CONTRACT_BLOCKED_MARKER,
     PendingPlanStep,
     build_confirm_message,
     build_confirmation_context,
@@ -252,7 +253,7 @@ def _pending_plan_contract_messages(
     )
     return [
         ToolMessage(
-            content=content,
+            content=f"{CONTRACT_BLOCKED_MARKER} {content}",
             tool_call_id=tool_call["id"],
         )
         for tool_call in tool_calls
@@ -547,6 +548,7 @@ def _pending_action_precheck(
         skill_name=name,
         params=execution_args,
         farm_id=farm_id,
+        original_input=original_input,
     )
     execution_args.clear()
     execution_args.update(contract_validation.params)
@@ -565,7 +567,7 @@ def _pending_action_precheck(
         )
         return (
             ToolMessage(
-                content=contract_validation.message,
+                content=f"{CONTRACT_BLOCKED_MARKER} {contract_validation.message}",
                 tool_call_id=tool_call_id,
             ),
             None,

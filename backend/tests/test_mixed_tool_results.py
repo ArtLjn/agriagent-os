@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.agent.runtime.nodes import _llm_node
-from app.infra.pending_actions import PENDING_MARKER
+from app.infra.pending_actions import CONTRACT_BLOCKED_MARKER, PENDING_MARKER
 
 
 class TestMixedToolMessages:
@@ -107,6 +107,31 @@ class TestPurePendingPath:
 
         # 纯 pending 路径取最后一个
         assert "确认记账" in ai_msg.content
+
+    @pytest.mark.asyncio
+    async def test_contract_blocked_returns_directly_without_llm(self):
+        """参数契约阻断应直接返回给用户，不进入 no-tools fallback。"""
+        blocked_msg = ToolMessage(
+            content=(
+                f"{CONTRACT_BLOCKED_MARKER} "
+                "category 无效：其他 不在候选值中，请补充后我再为你确认。"
+            ),
+            tool_call_id="tc_cost",
+        )
+        state = {
+            "messages": [blocked_msg],
+            "farm_id": 1,
+        }
+
+        with patch("app.agent.runtime.nodes.get_llm") as mock_get_llm:
+            result = await _llm_node(state)
+
+        ai_msg = result["messages"][0]
+        assert isinstance(ai_msg, AIMessage)
+        assert "category 无效" in ai_msg.content
+        assert "我刚才没组织好" not in ai_msg.content
+        assert CONTRACT_BLOCKED_MARKER not in ai_msg.content
+        mock_get_llm.assert_not_called()
 
 
 class TestPureNormalPath:
