@@ -20,6 +20,7 @@ from app.agent.runtime import tool_pending_args as _tool_pending_args
 from app.skills import get_langchain_tools
 from app.infra.trace_collector import get_collector
 from app.infra.trace_context import set_round_index
+from app.shared.logging import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +63,18 @@ def _disabled_tool_message(
     if permission_decision.disabled_reason:
         output_data["disabled_reason"] = permission_decision.disabled_reason
         content = f"{content} 原因：{permission_decision.disabled_reason}"
-    logger.warning(
-        "Skill 已禁用 | name=%s | permission_level=%s",
-        name,
-        permission_decision.permission_level,
+    log_event(
+        logger,
+        logging.WARNING,
+        "tool_disabled",
+        code="tool_disabled",
+        step_id=f"tool-call-{tool_call_id}",
+        status="blocked",
+        data={
+            "tool": name,
+            "permission_level": permission_decision.permission_level,
+            "disabled_reason": permission_decision.disabled_reason,
+        },
     )
     collector.record(
         node_type="skill_call",
@@ -96,7 +105,23 @@ def _validation_error_message(
         tool.args_schema.model_validate(args)
     except Exception as e:
         error_msg = f"参数校验失败: {e}"
-        logger.warning("Tool 参数校验失败 | name=%s | error=%s", name, e)
+        log_event(
+            logger,
+            logging.WARNING,
+            "tool_args_validation_error",
+            code="tool_args_validation_error",
+            step_id=f"tool-call-{tool_call_id}",
+            status="failed",
+            data={
+                "tool": name,
+                "error": str(e),
+            },
+            error={
+                "type": "tool_args_validation_error",
+                "message": str(e),
+                "recover": "ask_llm_to_repair_tool_args",
+            },
+        )
         collector.record(
             node_type="skill_call",
             node_name=name,
@@ -127,10 +152,17 @@ def _permission_reject_message(
     if permission_decision.reject_message is None:
         return None
 
-    logger.warning(
-        "Skill 权限拒绝 | name=%s | permission_level=%s",
-        name,
-        permission_decision.permission_level,
+    log_event(
+        logger,
+        logging.WARNING,
+        "tool_permission_rejected",
+        code="tool_permission_rejected",
+        step_id=f"tool-call-{tool_call_id}",
+        status="blocked",
+        data={
+            "tool": name,
+            "permission_level": permission_decision.permission_level,
+        },
     )
     collector.record(
         node_type="skill_call",
@@ -165,7 +197,17 @@ async def _call_one(
         name, raw_args, farm_id, original_input
     )
     tool_call_id = tc["id"]
-    logger.info("Skill 调用 %s(%s)", name, args)
+    log_event(
+        logger,
+        logging.INFO,
+        "tool_call_started",
+        step_id=f"tool-call-{tool_call_id}",
+        status="started",
+        data={
+            "tool": name,
+            "arg_keys": sorted(str(key) for key in args),
+        },
+    )
     start = _time.perf_counter()
 
     tool = _runtime_tool_for_call(name, args, tool_map)
@@ -279,7 +321,17 @@ async def _parallel_tool_node(state: AgentState) -> dict:
             )
         ]
     else:
-        logger.info("并行执行 %d 个 Skill", len(tool_calls))
+        log_event(
+            logger,
+            logging.INFO,
+            "parallel_tool_batch_started",
+            step_id=f"parallel-tool-batch-{len(tool_calls)}",
+            status="started",
+            data={
+                "tool_calls": len(tool_calls),
+                "tools": [str(tc["name"]) for tc in tool_calls],
+            },
+        )
         batch_start = _time.perf_counter()
         results = await asyncio.gather(
             *[

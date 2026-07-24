@@ -1,3 +1,5 @@
+import logging
+
 from langchain_core.messages import ToolMessage
 from typing import Any
 
@@ -28,6 +30,9 @@ from app.infra.pending_actions import (
     store_pending_plan,
 )
 from app.infra.trace_collector import get_collector
+from app.shared.logging import log_event
+
+logger = logging.getLogger(__name__)
 
 
 def _pending_plan_tool_message(
@@ -351,6 +356,25 @@ def _pending_plan_contract_messages(
     content = "待确认计划参数不完整：\n" + "\n".join(
         f"{item['step_id']} {item['tool_name']}：{item['message']}" for item in blocked
     )
+    log_event(
+        logger,
+        logging.WARNING,
+        "pending_plan_contract_blocked",
+        code="pending_plan_contract_blocked",
+        step_id=f"pending-plan-contract-{blocked[0]['step_id']}",
+        status="blocked",
+        data={
+            "source": source,
+            "tool": blocked[0]["tool_name"],
+            "missing_fields": _blocked_missing_fields(blocked),
+            "diagnosis": _first_param_source_diagnosis(diagnostics),
+        },
+        error={
+            "type": "contract_validation_error",
+            "message": _pending_plan_contract_error_message(blocked),
+            "recover": "ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls",
+        },
+    )
     collector.record(
         node_type="skill_call",
         node_name="pending_plan",
@@ -459,6 +483,33 @@ def _pending_plan_contract_diagnostics(
             )
         ]
     }
+
+
+def _blocked_missing_fields(blocked_steps: list[dict[str, Any]]) -> list[str]:
+    fields: list[str] = []
+    seen: set[str] = set()
+    for step in blocked_steps:
+        validation = step.get("contract_validation")
+        if not isinstance(validation, dict):
+            continue
+        for field in validation.get("missing_fields") or []:
+            field_name = str(field)
+            if field_name in seen:
+                continue
+            fields.append(field_name)
+            seen.add(field_name)
+    return fields
+
+
+def _first_param_source_diagnosis(diagnostics: dict[str, Any]) -> str | None:
+    diffs = diagnostics.get("param_source_diffs")
+    if not isinstance(diffs, list) or not diffs:
+        return None
+    first = diffs[0]
+    if not isinstance(first, dict):
+        return None
+    diagnosis = first.get("diagnosis")
+    return str(diagnosis) if diagnosis else None
 
 
 def _pending_step_tool_call_diff(
