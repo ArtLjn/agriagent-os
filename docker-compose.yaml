@@ -1,0 +1,117 @@
+name: farm-manager
+
+services:
+  mysql:
+    image: mysql:8.0.40
+    container_name: farm-manager-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在服务器环境变量中设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-farm_manager}
+      MYSQL_USER: ${MYSQL_USER:-farm_manager}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在服务器环境变量中设置 MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u\"$${MYSQL_USER}\" -p\"$${MYSQL_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - farm-manager
+
+  mongo:
+    image: mongo:7
+    container_name: farm-manager-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-farm_manager}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?请在服务器环境变量中设置 MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-farm_manager}
+      TZ: Asia/Shanghai
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand({ ping: 1 })\" | grep -q \"ok\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - farm-manager
+
+  backend:
+    container_name: farm-manager-backend
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE__URL: mysql+pymysql://${MYSQL_USER:-farm_manager}:${MYSQL_PASSWORD:?请在服务器环境变量中设置 MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-farm_manager}?charset=utf8mb4
+      MONGODB__ENABLED: ${MONGODB_ENABLED:-true}
+      MONGODB__URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-farm_manager}:${MONGO_INITDB_ROOT_PASSWORD:?请在服务器环境变量中设置 MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/${MONGO_DATABASE:-farm_manager}?authSource=admin
+      MONGODB__DATABASE: ${MONGO_DATABASE:-farm_manager}
+      MONGODB__TLS: "false"
+      STORAGE__TRACE: ${STORAGE_TRACE:-mongo}
+      STORAGE__CASE_DRAFTS: ${STORAGE_CASE_DRAFTS:-mongo}
+      STORAGE__REPAIR_PACKS: ${STORAGE_REPAIR_PACKS:-mongo}
+      STORAGE__REVIEW_ISSUE_CHAINS: ${STORAGE_REVIEW_ISSUE_CHAINS:-mongo}
+      STORAGE__PRELABELS: ${STORAGE_PRELABELS:-mongo}
+      STORAGE__CONVERSATION_MESSAGES: ${STORAGE_CONVERSATION_MESSAGES:-mongo}
+      STORAGE__AGENT_RECORDS: ${STORAGE_AGENT_RECORDS:-mongo}
+      STORAGE__GUARDRAILS_LOGS: ${STORAGE_GUARDRAILS_LOGS:-mongo}
+      AUTH__JWT_SECRET: ${AUTH_JWT_SECRET:?请在服务器环境变量中设置 AUTH_JWT_SECRET}
+      TZ: Asia/Shanghai
+    volumes:
+      - ./backend/config.yaml:/app/config.yaml:ro
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-18000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - farm-manager
+
+  admin-web:
+    container_name: farm-manager-admin-web
+    restart: unless-stopped
+    build:
+      context: ./admin-web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    ports:
+      - "127.0.0.1:${ADMIN_WEB_PORT:-18080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - farm-manager
+
+networks:
+  farm-manager:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  mongo-data:
