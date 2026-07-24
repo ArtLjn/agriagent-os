@@ -22,6 +22,8 @@ import {
   type TraceRequestSummary,
   type TraceTimeline,
   type TraceNodeDetail,
+  type TraceRootError,
+  type TraceMetrics,
 } from '../../api/admin';
 import { useLocation } from 'react-router-dom';
 import GanttTimeline from '../../components/GanttTimeline';
@@ -49,6 +51,7 @@ interface TraceItem {
   node_count: number;
   total_duration_ms: number;
   created_at: string | null;
+  summary: TraceRequestSummary;
   timeline: TraceTimeline | null;
   timelineLoading: boolean;
 }
@@ -71,6 +74,7 @@ const toTraceItems = (records: TraceRequestSummary[]): TraceItem[] =>
     node_count: record.node_count,
     total_duration_ms: record.total_duration_ms,
     created_at: record.created_at,
+    summary: record,
     timeline: null,
     timelineLoading: true,
   }));
@@ -132,6 +136,118 @@ function displayValue(value: unknown): string {
 function displayList(value: unknown): string {
   if (!Array.isArray(value)) return displayValue(value);
   return value.map(displayValue).join(', ');
+}
+
+function statusTagColor(status: string | null | undefined): string {
+  if (status === 'success') return 'success';
+  if (status === 'blocked') return 'warning';
+  if (status === 'failed' || status === 'error') return 'error';
+  if (status === 'timeout') return 'orange';
+  return 'default';
+}
+
+function metricNumber(value: unknown): string {
+  return typeof value === 'number' ? value.toLocaleString() : displayValue(value);
+}
+
+function summaryFromTimeline(
+  item: TraceItem,
+  timeline: TraceTimeline | null,
+): TraceRequestSummary {
+  if (timeline?.summary) return timeline.summary;
+  if (!timeline) return item.summary;
+  const nodes = timeline.rounds.flatMap((round) => round.nodes);
+  const rootNode = nodes.find((node) => node.status && node.status !== 'success');
+  const totalDuration = nodes.reduce((sum, node) => sum + (node.duration_ms || 0), 0);
+  return {
+    ...item.summary,
+    node_count: nodes.length || item.node_count,
+    total_duration_ms: totalDuration || item.total_duration_ms,
+    status: rootNode ? rootNode.status : item.summary.status ?? 'success',
+    status_reason: rootNode?.error_code ?? item.summary.status_reason ?? null,
+    error_count: nodes.filter((node) => node.status && node.status !== 'success').length,
+    root_error: rootNode
+      ? {
+          node_id: rootNode.id,
+          node_type: rootNode.node_type,
+          node_name: rootNode.node_name,
+          code: rootNode.error_code,
+          message: rootNode.error_message,
+          recover: rootNode.recover,
+        }
+      : item.summary.root_error ?? null,
+  };
+}
+
+function TraceRequestOverview({ item }: { item: TraceItem }) {
+  const summary = summaryFromTimeline(item, item.timeline);
+  const rootError = summary.root_error;
+  const metrics = summary.metrics ?? {};
+  return (
+    <Space direction="vertical" style={{ width: '100%', marginBottom: 14 }} size="middle">
+      <section style={summaryPanelStyle}>
+        <div style={{ ...sectionTitleStyle, justifyContent: 'space-between' }}>
+          <span>Trace 摘要</span>
+          <Tag color={statusTagColor(summary.status)}>{summary.status ?? 'success'}</Tag>
+        </div>
+        <div style={metricGridStyle}>
+          <Metric label="status_reason" value={summary.status_reason} />
+          <Metric label="node_count" value={summary.node_count} />
+          <Metric label="error_count" value={summary.error_count ?? 0} />
+          <Metric label="duration_ms" value={metricNumber(summary.total_duration_ms)} />
+          <Metric label="started_at" value={formatTraceTime(summary.started_at)} />
+          <Metric label="ended_at" value={formatTraceTime(summary.ended_at)} />
+        </div>
+      </section>
+      {rootError && <TraceRootErrorPanel rootError={rootError} />}
+      <TraceMetricsPanel metrics={metrics} />
+    </Space>
+  );
+}
+
+function TraceRootErrorPanel({ rootError }: { rootError: TraceRootError }) {
+  return (
+    <section style={{ ...summaryPanelStyle, borderColor: '#7c2d12', background: '#1f130c' }}>
+      <div style={{ ...sectionTitleStyle, color: '#ffb86c' }}>根因</div>
+      <div style={metricGridStyle}>
+        <Metric label="code" value={rootError.code} />
+        <Metric label="node" value={rootError.node_name} />
+        <Metric label="type" value={rootError.node_type} />
+        <Metric label="node_id" value={rootError.node_id} />
+      </div>
+      {rootError.message && (
+        <div style={{ ...previewStyle, marginTop: 10, borderColor: '#7c2d12' }}>
+          {rootError.message}
+        </div>
+      )}
+      {rootError.recover && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ color: TEXT_DIM, fontSize: 11, marginBottom: 4 }}>recover</div>
+          <div style={{ color: TEXT, fontSize: 13, wordBreak: 'break-word' }}>
+            {rootError.recover}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TraceMetricsPanel({ metrics }: { metrics: TraceMetrics }) {
+  const hasMetrics = Object.keys(metrics).length > 0;
+  if (!hasMetrics) return null;
+  return (
+    <section style={summaryPanelStyle}>
+      <div style={sectionTitleStyle}>执行指标</div>
+      <div style={metricGridStyle}>
+        <Metric label="llm_calls" value={metrics.llm_calls} />
+        <Metric label="tool_calls" value={metrics.tool_calls} />
+        <Metric label="skill_calls" value={metrics.skill_calls} />
+        <Metric label="total_tokens" value={metricNumber(metrics.total_tokens)} />
+        <Metric label="llm_duration_ms" value={metricNumber(metrics.llm_duration_ms)} />
+        <Metric label="tool_duration_ms" value={metricNumber(metrics.tool_duration_ms)} />
+      </div>
+    </section>
+  );
 }
 
 function isContextTracePayload(value: unknown): boolean {
@@ -483,7 +599,12 @@ export default function TraceMonitor() {
       setItems((prev) =>
         prev.map((item) =>
           item.request_id === requestId
-            ? { ...item, timeline: res, timelineLoading: false }
+            ? {
+                ...item,
+                summary: res.summary ?? item.summary,
+                timeline: res,
+                timelineLoading: false,
+              }
             : item
         )
       );
@@ -544,7 +665,7 @@ export default function TraceMonitor() {
     nodeData: GanttNode
   ) => {
     const detail: TraceNodeDetail = {
-      id: 0,
+      id: nodeData.id ?? 0,
       request_id: requestId,
       round_index: _roundIndex,
       node_type: nodeData.node_type,
@@ -555,8 +676,10 @@ export default function TraceMonitor() {
       token_usage: null,
       status: nodeData.status,
       error_message: nodeData.error_message ?? null,
+      error_code: nodeData.error_code ?? null,
+      recover: nodeData.recover ?? null,
       start_time: nodeData.start_time,
-      end_time: null,
+      end_time: nodeData.end_time ?? null,
     };
     setNodeDetail(detail);
     setDrawerOpen(true);
@@ -790,6 +913,14 @@ export default function TraceMonitor() {
                     <span style={{ color: TEXT_DIM }}>耗时: </span>
                     <span style={{ color: TEXT }}>{item.total_duration_ms}ms</span>
                   </span>
+                  <Tag color={statusTagColor(item.summary.status)} style={{ marginInlineEnd: 0 }}>
+                    {item.summary.status ?? 'success'}
+                  </Tag>
+                  {item.summary.status_reason && (
+                    <span style={{ color: TEXT_DIM, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.summary.status_reason}
+                    </span>
+                  )}
                   <span style={{ marginLeft: 'auto', color: TEXT_DIM, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                     {expandedCards.has(item.request_id) && item.timeline && (
                       <Button
@@ -813,6 +944,7 @@ export default function TraceMonitor() {
                 {/* Gantt 图 - 展开时显示 */}
                 {expandedCards.has(item.request_id) && (
                 <div style={{ padding: 16 }}>
+                  <TraceRequestOverview item={item} />
                   {item.timelineLoading ? (
                     <div style={{ color: TEXT_DIM, textAlign: 'center', padding: 24 }}>
                       加载 Timeline...
@@ -824,12 +956,16 @@ export default function TraceMonitor() {
                         nodes: r.nodes.map((n) => ({
                           node_type: n.node_type,
                           node_name: n.node_name,
+                          id: n.id,
                           duration_ms: n.duration_ms,
                           status: n.status,
                           start_time: n.start_time,
+                          end_time: n.end_time,
                           input_data: n.input_data,
                           output_data: n.output_data,
                           error_message: n.error_message,
+                          error_code: n.error_code,
+                          recover: n.recover,
                         })),
                       }))}
                       onNodeClick={(roundIdx, nodeIdx, node) =>
@@ -954,6 +1090,15 @@ export default function TraceMonitor() {
                   {nodeDetail.error_message}
                 </pre>
               </div>
+            )}
+            {(nodeDetail.error_code || nodeDetail.recover) && (
+              <section style={summaryPanelStyle}>
+                <div style={sectionTitleStyle}>错误诊断</div>
+                <div style={metricGridStyle}>
+                  <Metric label="error_code" value={nodeDetail.error_code} />
+                  <Metric label="recover" value={nodeDetail.recover} />
+                </div>
+              </section>
             )}
             {hasTracePayload(nodeDetail.input_data) && (
               <div>

@@ -75,4 +75,17 @@ describe('pending plan confirmation controls', () => {
       }),
     ).toBe(true);
   });
+
+  it('已处理的 pending plan 文本不再允许再次确认', () => {
+    const content = '请确认将执行 1 步（共 1 个步骤）：\n1. 创建茬口：西瓜 8424\n确认执行吗？';
+
+    expect(
+      canConfirmAssistantMessage({
+        role: 'assistant',
+        content,
+        pendingAction: null,
+        pendingResolution: 'confirmed',
+      }),
+    ).toBe(false);
+  });
 });

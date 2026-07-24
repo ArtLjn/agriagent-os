@@ -16,6 +16,10 @@ from app.infra.mongo_mappers import (
     trace_record_to_mongo_doc,
 )
 from app.infra.mongo_identity import ensure_row_mysql_id
+from app.infra.trace_summary import (
+    build_trace_request_summary,
+    trace_request_summary_to_mongo_doc,
+)
 from app.platforms.evaluation.trace_models import TraceRecord
 
 logger = logging.getLogger(__name__)
@@ -141,8 +145,9 @@ class TraceMySQLRepository:
 class TraceMongoRepository:
     """基于 motor collection 风格接口的 Trace Repository。"""
 
-    def __init__(self, collection: Any) -> None:
+    def __init__(self, collection: Any, request_collection: Any | None = None) -> None:
         self._collection = collection
+        self._request_collection = request_collection
 
     async def insert(self, record: TraceRecord) -> TraceRecord:
         ensure_row_mysql_id(record)
@@ -152,7 +157,35 @@ class TraceMongoRepository:
             doc,
             upsert=True,
         )
+        await self.refresh_request_summary(
+            farm_id=record.farm_id,
+            request_id=record.request_id,
+            fallback_record=record,
+        )
         return record
+
+    async def refresh_request_summary(
+        self,
+        *,
+        farm_id: int,
+        request_id: str,
+        fallback_record: TraceRecord | None = None,
+    ) -> None:
+        """刷新 request 级摘要，供 TraceMonitor 列表快速读取。"""
+        if self._request_collection is None:
+            return
+        records = await self.get_by_request_id(farm_id=farm_id, request_id=request_id)
+        if not records and fallback_record is not None:
+            records = [fallback_record]
+        summary = build_trace_request_summary(records)
+        if summary is None:
+            return
+        doc = trace_request_summary_to_mongo_doc(summary)
+        await self._request_collection.replace_one(
+            {"farmId": farm_id, "requestId": request_id},
+            doc,
+            upsert=True,
+        )
 
     async def get_by_request_id(
         self, *, farm_id: int, request_id: str
@@ -341,6 +374,7 @@ def build_trace_repository(
     backend: str,
     db: Session,
     collection: Any | None = None,
+    request_collection: Any | None = None,
     on_secondary_failure: FailureHook | None = None,
 ) -> Any:
     """按 storage backend 创建 Trace Repository。"""
@@ -349,7 +383,7 @@ def build_trace_repository(
         return mysql_repo
     if collection is None:
         raise ValueError("MONGO_COLLECTION_REQUIRED")
-    mongo_repo = TraceMongoRepository(collection)
+    mongo_repo = TraceMongoRepository(collection, request_collection=request_collection)
     if backend == "dual":
         return TraceDualWriteRepository(mysql_repo, mongo_repo, on_secondary_failure)
     if backend == "mongo-read":

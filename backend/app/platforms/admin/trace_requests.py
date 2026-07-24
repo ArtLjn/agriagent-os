@@ -3,9 +3,13 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.infra.mongo import get_mongo_database
+from app.infra.trace_summary import (
+    build_trace_request_summary,
+    trace_request_summary_from_mongo_doc,
+)
 from app.platforms.evaluation.trace_models import TraceRecord
 
 
@@ -16,6 +20,13 @@ class TraceRequestSummary(BaseModel):
     node_count: int
     total_duration_ms: int
     created_at: str | None = None
+    status: str = "success"
+    status_reason: str | None = None
+    error_count: int = 0
+    root_error: dict[str, Any] | None = None
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    started_at: str | None = None
+    ended_at: str | None = None
 
 
 class TraceRequestPageResponse(BaseModel):
@@ -34,17 +45,33 @@ async def list_trace_requests_from_mongo(
     database = get_mongo_database()
     if database is None:
         return TraceRequestPageResponse(items=[], total=0)
-    docs = await database["traceRecords"].aggregate(
-        _mongo_request_summary_pipeline(
-            _mongo_trace_filter(
-                request_id=request_id,
-                session_id=session_id,
-                farm_id=farm_id,
-            ),
-            limit=limit,
-            offset=offset,
+    summary_page = await _list_trace_request_summaries_from_mongo(
+        database,
+        _mongo_trace_filter(
+            request_id=request_id,
+            session_id=session_id,
+            farm_id=farm_id,
+        ),
+        limit=limit,
+        offset=offset,
+    )
+    if summary_page.total:
+        return summary_page
+    docs = (
+        await database["traceRecords"]
+        .aggregate(
+            _mongo_request_summary_pipeline(
+                _mongo_trace_filter(
+                    request_id=request_id,
+                    session_id=session_id,
+                    farm_id=farm_id,
+                ),
+                limit=limit,
+                offset=offset,
+            )
         )
-    ).to_list(1)
+        .to_list(1)
+    )
     result = docs[0] if docs else {"items": [], "total": []}
     return TraceRequestPageResponse(
         items=[_summary_from_mongo_doc(doc) for doc in result.get("items", [])],
@@ -55,13 +82,27 @@ async def list_trace_requests_from_mongo(
 def trace_request_page_from_records(
     records: list[TraceRecord], *, limit: int, offset: int
 ) -> TraceRequestPageResponse:
-    grouped: dict[str, TraceRequestSummary] = {}
+    grouped_records: dict[str, list[TraceRecord]] = {}
     sort_times: dict[str, datetime] = {}
     for record in records:
-        _merge_trace_record(grouped, sort_times, record)
+        request_id = str(record.request_id)
+        grouped_records.setdefault(request_id, []).append(record)
+        occurred_at = trace_record_display_time(record)
+        if occurred_at is not None and occurred_at >= sort_times.get(
+            request_id, datetime.min
+        ):
+            sort_times[request_id] = occurred_at
+    grouped = [
+        TraceRequestSummary(**summary)
+        for rows in grouped_records.values()
+        if (summary := build_trace_request_summary(rows)) is not None
+    ]
     ordered = sorted(
-        grouped.values(),
-        key=lambda item: (sort_times.get(item.request_id, datetime.min), item.request_id),
+        grouped,
+        key=lambda item: (
+            sort_times.get(item.request_id, datetime.min),
+            item.request_id,
+        ),
         reverse=True,
     )
     start = max(offset, 0)
@@ -71,30 +112,30 @@ def trace_request_page_from_records(
     )
 
 
-def _merge_trace_record(
-    grouped: dict[str, TraceRequestSummary],
-    sort_times: dict[str, datetime],
-    record: TraceRecord,
-) -> None:
-    request_id = str(record.request_id)
-    item = grouped.setdefault(
-        request_id,
-        TraceRequestSummary(
-            request_id=request_id,
-            session_id=record.session_id,
-            farm_id=record.farm_id,
-            node_count=0,
-            total_duration_ms=0,
-            created_at=None,
-        ),
+async def _list_trace_request_summaries_from_mongo(
+    database: Any,
+    filter_doc: dict[str, Any],
+    *,
+    limit: int,
+    offset: int,
+) -> TraceRequestPageResponse:
+    collection = database["traceRequests"]
+    total = await collection.count_documents(filter_doc)
+    if not total:
+        return TraceRequestPageResponse(items=[], total=0)
+    docs = await (
+        collection.find(filter_doc)
+        .sort([("createdAt", -1), ("requestId", -1)])
+        .skip(max(offset, 0))
+        .limit(max(limit, 0))
+    ).to_list(None)
+    return TraceRequestPageResponse(
+        items=[
+            TraceRequestSummary(**trace_request_summary_from_mongo_doc(doc))
+            for doc in docs
+        ],
+        total=total,
     )
-    sort_times.setdefault(request_id, datetime.min)
-    item.node_count += 1
-    item.total_duration_ms += record.duration_ms or 0
-    occurred_at = trace_record_display_time(record)
-    if occurred_at is not None and occurred_at >= sort_times[request_id]:
-        sort_times[request_id] = occurred_at
-        item.created_at = occurred_at.isoformat()
 
 
 def trace_record_display_time(record: TraceRecord) -> datetime | None:

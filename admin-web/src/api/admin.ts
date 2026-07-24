@@ -25,16 +25,53 @@ export interface TraceRequestSummary {
   node_count: number;
   total_duration_ms: number;
   created_at: string | null;
+  status?: string;
+  status_reason?: string | null;
+  error_count?: number;
+  root_error?: TraceRootError | null;
+  metrics?: TraceMetrics;
+  started_at?: string | null;
+  ended_at?: string | null;
+}
+
+export interface TraceRootError {
+  node_id?: number | null;
+  node_type?: string | null;
+  node_name?: string | null;
+  code?: string | null;
+  message?: string | null;
+  recover?: string | null;
+}
+
+export interface TraceMetrics {
+  total_duration_ms?: number;
+  llm_duration_ms?: number;
+  tool_duration_ms?: number;
+  rag_duration_ms?: number;
+  memory_duration_ms?: number;
+  planner_duration_ms?: number;
+  reflection_duration_ms?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  llm_calls?: number;
+  tool_calls?: number;
+  skill_calls?: number;
+  [key: string]: unknown;
 }
 
 export interface TraceNode {
+  id?: number | null;
   node_type: string;
   node_name: string;
   duration_ms: number | null;
   status: string;
   token_usage: Record<string, unknown> | null;
   start_time: string | null;
+  end_time?: string | null;
   error_message: string | null;
+  error_code?: string | null;
+  recover?: string | null;
   input_data: TracePayload;
   output_data: TracePayload;
 }
@@ -46,6 +83,7 @@ export interface TraceRound {
 
 export interface TraceTimeline {
   request_id: string;
+  summary?: TraceRequestSummary | null;
   rounds: TraceRound[];
 }
 
@@ -61,6 +99,8 @@ export interface TraceNodeDetail {
   token_usage: string | null;
   status: string;
   error_message: string | null;
+  error_code?: string | null;
+  recover?: string | null;
   start_time: string | null;
   end_time: string | null;
 }

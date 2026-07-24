@@ -2,13 +2,13 @@
 
 import json
 
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.infra.repository_runtime import (
     get_agent_record_repository,
     run_maybe_awaitable,
 )
+from app.domains.conversation.models import Conversation
 from app.domains.farm.models import Farm
 from app.domains.conversation.agent_schemas import (
     ConversationListItem,
@@ -27,7 +27,6 @@ from app.domains.conversation.service import (
 
 _DEFAULT_CONVERSATION_TITLE = "历史对话"
 _DEFAULT_CONVERSATION_PREVIEW = "点击查看这轮农事对话"
-_EMPTY_CONVERSATION_SUMMARY: tuple[str, str, str] | None = None
 
 
 def _truncate_text(text: str, limit: int) -> str:
@@ -38,36 +37,10 @@ def _truncate_text(text: str, limit: int) -> str:
     return f"{clean_text[:limit]}..."
 
 
-def _infer_category(text: str) -> str:
-    """根据首条用户消息推断会话分类。"""
-    if any(
-        keyword in text
-        for keyword in ("天气", "降雨", "下雨", "温度", "打药", "施药", "风", "雨")
-    ):
-        return "天气"
-    if any(
-        keyword in text for keyword in ("病虫害", "虫", "病", "叶片", "发黄", "防治")
-    ):
-        return "病虫害"
-    if any(keyword in text for keyword in ("报告", "周报", "月报", "总结")):
-        return "报告"
-    if any(
-        keyword in text
-        for keyword in ("记一笔", "记账", "成本", "收入", "支出", "人工", "费用")
-    ):
-        return "记账"
-    if any(
-        keyword in text for keyword in ("种植", "浇水", "施肥", "采摘", "播种", "定植")
-    ):
-        return "种植"
-    return "对话"
-
-
 def _build_conversation_summary(
-    db: Session, session_id: str, farm_id: int
-) -> tuple[str, str, str] | None:
-    """从会话消息生成列表标题、预览和分类。"""
-    conversation = get_conversation_by_session(db, session_id, farm_id=farm_id)
+    conversation: Conversation,
+) -> tuple[str, str, str]:
+    """从会话元数据生成列表标题、预览和分类。"""
     meta = conversation.meta_json if conversation else None
     if isinstance(meta, dict):
         title = meta.get("title")
@@ -81,25 +54,10 @@ def _build_conversation_summary(
             _truncate_text(conversation.summary, 24),
             "对话",
         )
-    try:
-        messages = get_conversation_messages(db, session_id, farm_id=farm_id)
-    except SQLAlchemyError:
-        return (
-            _DEFAULT_CONVERSATION_TITLE,
-            _DEFAULT_CONVERSATION_PREVIEW,
-            "对话",
-        )
-    except RuntimeError:
-        messages = []
-    if not messages:
-        return _EMPTY_CONVERSATION_SUMMARY
-    first_user = next((message for message in messages if message.role == "user"), None)
-    title_source = first_user.content if first_user else messages[0].content
-    preview_source = messages[-1].content
     return (
-        _truncate_text(title_source, 18),
-        _truncate_text(preview_source, 24),
-        _infer_category(title_source),
+        _DEFAULT_CONVERSATION_TITLE,
+        _DEFAULT_CONVERSATION_PREVIEW,
+        "对话",
     )
 
 
@@ -110,9 +68,7 @@ def list_conversation_items(
     conversations = list_conversations(db, farm_id=farm.id, limit=limit)
     items: list[ConversationListItem] = []
     for c in conversations:
-        summary = _build_conversation_summary(db, c.session_id, farm.id)
-        if summary is None:
-            continue
+        summary = _build_conversation_summary(c)
         title, preview, category = summary
         items.append(
             ConversationListItem(
