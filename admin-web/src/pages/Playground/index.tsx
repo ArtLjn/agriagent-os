@@ -786,7 +786,7 @@ export default function Playground() {
       </div>
 
       {/* ── 主聊天区域 ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', padding: '16px 20px 16px' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', padding: '16px 20px 16px', position: 'relative' }}>
         {/* 配置栏 - 极简单行 */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -910,13 +910,13 @@ export default function Playground() {
           )}
         </div>
 
-        {llmContextSnapshot && (
-          <LlmContextInspector
-            snapshot={llmContextSnapshot}
-            open={llmContextOpen}
-            onToggle={() => setLlmContextOpen((value) => !value)}
-          />
-        )}
+        <LlmContextInspector
+          snapshot={llmContextSnapshot}
+          open={llmContextOpen}
+          onOpenChange={setLlmContextOpen}
+          loading={loading || traceLoading}
+          hasTimeline={timeline !== null}
+        />
 
         {/* 执行摘要 - 紧凑单行 */}
         {(timeline !== null || traceLoading) && (
