@@ -478,10 +478,31 @@ def _extract_crop_variety(text: str) -> str:
 
 
 def _extract_crop_variety_for_plan(text: str) -> str:
-    for variety in ("甜玉米", "糯玉米", "水果玉米", "鲜食玉米", "饲料玉米"):
-        if variety in text:
-            return variety
-    return _extract_crop_variety(text)
+    numeric_variety = _extract_crop_variety(text)
+    if numeric_variety:
+        return numeric_variety
+
+    crop = _extract_crop(text)
+    if not crop:
+        return ""
+    phrase = _extract_crop_phrase_after_planting_action(text, crop)
+    if not phrase or phrase == crop:
+        return ""
+    return phrase
+
+
+def _extract_crop_phrase_after_planting_action(text: str, crop: str) -> str:
+    match = re.search(
+        rf"(?:种|种植|播种|定植)\s*"
+        rf"(?:个|一个|一些|点|点儿)?\s*"
+        rf"(?:\d+(?:\.\d+)?|[一二两三四五六七八九十百]+)?\s*"
+        rf"(?:亩|平米|平方米|㎡)?\s*"
+        rf"([\u4e00-\u9fffA-Za-z0-9-]{{0,12}}{re.escape(crop)})",
+        text,
+    )
+    if not match:
+        return ""
+    return match.group(1).strip(" ，,。；;的地田")
 
 
 def _extract_area_mu(text: str) -> int | float | None:

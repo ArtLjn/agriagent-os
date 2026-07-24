@@ -149,6 +149,37 @@ async def test_task_state_planting_plan_collects_entities_and_guides_setup(
     )
 
 
+async def test_task_state_planting_plan_extracts_variety_without_fixed_dictionary(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="我想种个30亩玉米地",
+            assistant_reply="咱们先确认地块、时间和品种。",
+        ),
+    )
+
+    await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="连片新租地，明年开春种紫玉米",
+            assistant_reply="收到，按连片新租地和明年开春继续。",
+        ),
+    )
+
+    task = store.get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert task is not None
+    assert task.entities_json["variety"] == "紫玉米"
+    assert task.missing_information_json == []
+
+
 async def test_task_state_writes_crop_cycle_setup_when_unit_name_missing(
     db_session,
 ) -> None:
