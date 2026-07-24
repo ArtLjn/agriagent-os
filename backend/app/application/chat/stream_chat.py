@@ -51,6 +51,7 @@ from app.infra.trace_context import clear_trace, init_trace
 from app.memory.service import get_memory_service
 from app.domains.conversation.models import Conversation
 from app.domains.farm.models import Farm
+from app.domains.users.errors import user_disabled_error
 from app.domains.users.models import User
 from app.domains.conversation.agent_schemas import ChatRequest
 from app.domains.conversation.service import (
@@ -75,6 +76,10 @@ def resolve_stream_user_and_farm(
         if not simulated:
             raise HTTPException(status_code=404, detail="模拟用户不存在")
         user = simulated
+
+    # 模拟目标就是本次业务身份，禁用用户不能借管理员模拟继续访问 AI 或会话数据。
+    if user.status != "active":
+        raise user_disabled_error()
 
     farm = db.query(Farm).filter(Farm.user_id == user.id).first()
     if farm is None:
