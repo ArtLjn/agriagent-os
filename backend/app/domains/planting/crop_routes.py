@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage
 from app.shared.database import get_db
 from app.domains.farm.dependencies import get_current_farm
+from app.domains.users.dependencies import require_admin
 from app.shared.json_repair import safe_parse_json
 from app.domains.farm.models import Farm
+from app.domains.users.models import User
 from app.shared.schemas import PaginatedResponse
 from app.domains.planting.crop_schemas import (
     CropTemplateCreate,
@@ -110,6 +112,7 @@ def import_system_template(
 )
 def create_system_template_endpoint(
     template: CropTemplateCreate,
+    _admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """创建系统作物模板（farm_id 为空）。"""
@@ -125,6 +128,7 @@ def create_system_template_endpoint(
 def update_system_template_endpoint(
     template_id: int,
     template: CropTemplateCreate,
+    _admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """更新系统作物模板（含 stages 全量替换）。"""
@@ -137,6 +141,7 @@ def update_system_template_endpoint(
 @router.delete("/templates/system/{template_id}")
 def delete_system_template_endpoint(
     template_id: int,
+    _admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """删除系统作物模板；已被农场导入时返回 409。"""

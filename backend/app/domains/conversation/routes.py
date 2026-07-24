@@ -6,9 +6,14 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.shared.database import get_db
-from app.domains.users.dependencies import get_current_user
-from app.domains.farm.dependencies import get_current_farm
-from app.domains.users.models import User
+from app.domains.users.auth_resolver import resolve_simulated_auth_context
+from app.domains.users.context import AuthContext
+from app.domains.users.dependencies import require_auth_context
+from app.domains.farm.dependencies import (
+    get_auth_context_farm,
+    get_effective_auth_context_farm,
+    resolve_farm_for_user_id,
+)
 from app.infra.limiter import limiter
 from app.shared.llm import LlmNotConfiguredError
 from app.domains.farm.models import Farm
@@ -26,10 +31,7 @@ from app.application.session.history import (
     list_report_page,
 )
 from app.application.skill_catalog import list_app_skills
-from app.application.chat.stream_chat import (
-    resolve_stream_user_and_farm,
-    stream_chat_events,
-)
+from app.application.chat.stream_chat import stream_chat_events
 from app.domains.conversation.agent_schemas import (
     ChatRequest,
     ChatResponse,
@@ -55,7 +57,7 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 @router.get("/skills", response_model=AppSkillListResponse)
 def list_agent_skills(
-    _current_user: User = Depends(get_current_user),
+    _auth_context: AuthContext = Depends(require_auth_context),
 ) -> AppSkillListResponse:
     """列出 App 端可展示的技能能力。"""
     items = list_app_skills()
@@ -69,9 +71,15 @@ async def agent_chat(
     response: Response,
     chat_request: ChatRequest,
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    auth_context: AuthContext = Depends(require_auth_context),
 ) -> ChatResponse:
     """与农事顾问 Agent 对话。"""
+    auth_context = _resolve_body_simulation_context(
+        db,
+        auth_context,
+        simulate_user_id=chat_request.simulate_user_id,
+    )
+    farm = resolve_farm_for_user_id(db, auth_context.effective_user_id)
     rid = new_request_id()
     try:
         return await chat(db, chat_request, farm, request_id=rid)
@@ -88,12 +96,16 @@ async def agent_chat_stream(
     response: Response,
     chat_request: ChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    auth_context: AuthContext = Depends(require_auth_context),
 ) -> StreamingResponse:
     """流式与农事顾问 Agent 对话（SSE）。支持管理员模拟其他用户身份。"""
-    user, farm = resolve_stream_user_and_farm(
-        db, current_user, chat_request.simulate_user_id
+    auth_context = _resolve_body_simulation_context(
+        db,
+        auth_context,
+        simulate_user_id=chat_request.simulate_user_id,
     )
+    user = auth_context.effective_user
+    farm = resolve_farm_for_user_id(db, auth_context.effective_user_id)
     rid = new_request_id()
 
     return StreamingResponse(
@@ -109,14 +121,11 @@ def get_conversations(
     request: Request,
     response: Response,
     limit: int = Query(20, ge=1, le=100),
-    simulate_user_id: str | None = Query(None),
+    _simulate_user_id: str | None = Query(None, alias="simulate_user_id"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_effective_auth_context_farm),
 ) -> list[ConversationListItem]:
     """获取当前 farm 的会话列表。"""
-    if simulate_user_id:
-        _, farm = resolve_stream_user_and_farm(db, current_user, simulate_user_id)
     return list_conversation_items(db, farm=farm, limit=limit)
 
 
@@ -129,15 +138,12 @@ def get_messages_by_session(
     request: Request,
     response: Response,
     session_id: str,
-    simulate_user_id: str | None = Query(None),
+    _simulate_user_id: str | None = Query(None, alias="simulate_user_id"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_effective_auth_context_farm),
 ) -> list[ConversationMessageItem]:
     """获取指定会话的消息列表。"""
     try:
-        if simulate_user_id:
-            _, farm = resolve_stream_user_and_farm(db, current_user, simulate_user_id)
         return list_message_items(db, farm=farm, session_id=session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -149,14 +155,11 @@ def get_session_debug_export(
     request: Request,
     response: Response,
     session_id: str,
-    simulate_user_id: str | None = Query(None),
+    _simulate_user_id: str | None = Query(None, alias="simulate_user_id"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_effective_auth_context_farm),
 ) -> dict:
     """导出会话调试 JSON v2。"""
-    if simulate_user_id:
-        _, farm = resolve_stream_user_and_farm(db, current_user, simulate_user_id)
     return build_session_debug_export(db, farm_id=farm.id, session_id=session_id)
 
 
@@ -167,7 +170,7 @@ async def daily_advice(
     response: Response,
     cycle_id: int | None = Query(None, description="关联种植周期 ID"),
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_auth_context_farm),
 ) -> DailyAdviceResponse:
     """获取每日农事建议。"""
     try:
@@ -180,7 +183,7 @@ async def daily_advice(
 async def refresh_daily_advice_endpoint(
     cycle_id: int | None = Query(None, description="关联种植周期 ID"),
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_auth_context_farm),
 ) -> DailyAdviceResponse:
     """强制刷新每日农事建议。"""
     try:
@@ -196,7 +199,7 @@ async def agent_report(
     response: Response,
     report_request: ReportRequest,
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_auth_context_farm),
 ) -> ReportResponse:
     """生成种植周期报告。"""
     try:
@@ -213,7 +216,7 @@ def advice_history(
     cycle_id: int | None = Query(None, description="按周期筛选"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_auth_context_farm),
 ) -> list[AdviceHistoryItem]:
     """查询建议历史记录。"""
     return get_advice_history(db, farm_id=farm.id, cycle_id=cycle_id, limit=limit)
@@ -227,7 +230,7 @@ def report_history(
     cycle_id: int | None = Query(None, description="按周期筛选"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_auth_context_farm),
 ) -> list[ReportHistoryItem]:
     """查询报告历史记录。"""
     return list_report_history_items(db, farm=farm, cycle_id=cycle_id, limit=limit)
@@ -238,7 +241,7 @@ def list_reports(
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_auth_context_farm),
 ) -> ReportListResponse:
     """获取报告历史列表（支持分页）。"""
     return list_report_page(db, farm=farm, page=page, size=size)
@@ -248,7 +251,7 @@ def list_reports(
 def delete_report(
     report_id: int,
     db: Session = Depends(get_db),
-    farm: Farm = Depends(get_current_farm),
+    farm: Farm = Depends(get_auth_context_farm),
 ):
     """删除报告历史。"""
     try:
@@ -256,6 +259,16 @@ def delete_report(
         return {"message": "删除成功"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+def _resolve_body_simulation_context(
+    db: Session,
+    auth_context: AuthContext,
+    *,
+    simulate_user_id: str | None,
+) -> AuthContext:
+    """解析 body 中的管理员模拟用户，并复用 Users 域禁用校验。"""
+    return resolve_simulated_auth_context(db, auth_context, simulate_user_id)
 
 
 __all__ = ["router"]

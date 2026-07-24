@@ -4,42 +4,17 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.shared.database import get_db
+from app.domains.users.auth_resolver import resolve_auth_context, resolve_current_user
+from app.domains.users.context import AuthContext
 from app.domains.users.models import User
-from app.domains.users.errors import (
-    admin_required_error,
-    expired_token_error,
-    invalid_token_error,
-    missing_token_error,
-    user_disabled_error,
-    user_not_found_error,
-)
-from app.domains.users.tokens import (
-    TokenExpiredError,
-    TokenInvalidError,
-    decode_access_token,
-)
+from app.domains.users.errors import admin_required_error, missing_token_error
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """从 JWT 解析当前用户。"""
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise missing_token_error()
-
-    token = auth_header[7:]
-    try:
-        payload = decode_access_token(token)
-    except TokenExpiredError:
-        raise expired_token_error()
-    except TokenInvalidError:
-        raise invalid_token_error()
-
-    user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == user_id).first()
+    user = resolve_current_user(request, db)
     if user is None:
-        raise user_not_found_error()
-    if user.status != "active":
-        raise user_disabled_error()
+        raise missing_token_error()
     return user
 
 
@@ -48,3 +23,42 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != "admin":
         raise admin_required_error()
     return user
+
+
+def require_auth_context(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> AuthContext:
+    """要求有效登录，并返回统一鉴权上下文。"""
+    context = resolve_auth_context(request, db)
+    if context is None:
+        raise missing_token_error()
+    return context
+
+
+def require_admin_context(
+    context: AuthContext = Depends(require_auth_context),
+) -> AuthContext:
+    """要求当前登录用户为管理员。"""
+    if not context.is_admin:
+        raise admin_required_error()
+    return context
+
+
+def require_effective_user_context(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> AuthContext:
+    """要求有效登录，并允许管理员切换生效用户。"""
+    context = resolve_auth_context(request, db, allow_simulation=True)
+    if context is None:
+        raise missing_token_error()
+    return context
+
+
+def optional_auth_context(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> AuthContext | None:
+    """没有 token 时返回 None；有 token 时返回统一鉴权上下文。"""
+    return resolve_auth_context(request, db, required=False)

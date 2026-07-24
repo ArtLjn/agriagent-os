@@ -7,6 +7,8 @@ AUTH_INVALID_TOKEN = "AUTH_INVALID_TOKEN"
 AUTH_EXPIRED_TOKEN = "AUTH_EXPIRED_TOKEN"
 AUTH_USER_NOT_FOUND = "AUTH_USER_NOT_FOUND"
 AUTH_USER_DISABLED = "AUTH_USER_DISABLED"
+AUTH_SIMULATED_USER_NOT_FOUND = "AUTH_SIMULATED_USER_NOT_FOUND"
+AUTH_SIMULATED_USER_DISABLED = "AUTH_SIMULATED_USER_DISABLED"
 AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS"
 AUTH_ADMIN_REQUIRED = "AUTH_ADMIN_REQUIRED"
 AUTH_REGISTER_FAILED = "AUTH_REGISTER_FAILED"
@@ -43,6 +45,16 @@ def user_not_found_error() -> HTTPException:
 def user_disabled_error() -> HTTPException:
     """用户已被禁用。"""
     return auth_error(401, AUTH_USER_DISABLED, "用户已被禁用")
+
+
+def simulated_user_not_found_error() -> HTTPException:
+    """模拟目标用户不存在。"""
+    return auth_error(404, AUTH_SIMULATED_USER_NOT_FOUND, "模拟目标用户不存在")
+
+
+def simulated_user_disabled_error() -> HTTPException:
+    """模拟目标用户已被禁用。"""
+    return auth_error(403, AUTH_SIMULATED_USER_DISABLED, "模拟目标用户已被禁用")
 
 
 def invalid_credentials_error() -> HTTPException:

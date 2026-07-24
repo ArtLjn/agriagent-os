@@ -1,4 +1,10 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from app.domains.planting.crop_models import CropTemplate, GrowthStage
+from app.domains.users.dependencies import get_current_user
+from app.domains.users.models import User
+from app.main import app
 
 
 def _stage(name: str, duration_days: int, order_index: int, key_tasks: str | None):
@@ -161,7 +167,8 @@ def test_system_templates_are_write_protected_at_api(client, db_session):
 
 
 def test_create_system_template_endpoint_creates_with_null_farm_id(client):
-    response = client.post("/crops/templates/system", json=_payload())
+    with _admin_user_override():
+        response = client.post("/crops/templates/system", json=_payload())
 
     assert response.status_code == 201
     body = response.json()
@@ -176,16 +183,17 @@ def test_create_system_template_endpoint_creates_with_null_farm_id(client):
 def test_update_system_template_endpoint_replaces_stages(client, db_session):
     system_template = _create_system_template(db_session)
 
-    response = client.put(
-        f"/crops/templates/system/{system_template.id}",
-        json={
-            "name": "改名西瓜",
-            "variety": "8424",
-            "stages": [
-                _stage("新育苗期", 20, 0, "新任务"),
-            ],
-        },
-    )
+    with _admin_user_override():
+        response = client.put(
+            f"/crops/templates/system/{system_template.id}",
+            json={
+                "name": "改名西瓜",
+                "variety": "8424",
+                "stages": [
+                    _stage("新育苗期", 20, 0, "新任务"),
+                ],
+            },
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -194,17 +202,19 @@ def test_update_system_template_endpoint_replaces_stages(client, db_session):
 
 
 def test_update_system_template_not_found_returns_404(client):
-    response = client.put(
-        "/crops/templates/system/99999",
-        json=_payload(),
-    )
+    with _admin_user_override():
+        response = client.put(
+            "/crops/templates/system/99999",
+            json=_payload(),
+        )
     assert response.status_code == 404
 
 
 def test_delete_system_template_endpoint_removes_template(client, db_session):
     system_template = _create_system_template(db_session)
 
-    response = client.delete(f"/crops/templates/system/{system_template.id}")
+    with _admin_user_override():
+        response = client.delete(f"/crops/templates/system/{system_template.id}")
 
     assert response.status_code == 200
     list_response = client.get("/crops/templates/system")
@@ -216,7 +226,28 @@ def test_delete_system_template_returns_409_when_imported_by_farm(client, db_ses
     db_session.add(CropTemplate(farm_id=1, name="西瓜", variety="8424", category="水果"))
     db_session.commit()
 
-    response = client.delete(f"/crops/templates/system/{system_template.id}")
+    with _admin_user_override():
+        response = client.delete(f"/crops/templates/system/{system_template.id}")
 
     assert response.status_code == 409
     assert "已被 1 个农场导入" in response.json()["detail"]
+
+
+@contextmanager
+def _admin_user_override() -> Iterator[None]:
+    original = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="system-template-admin",
+        phone="18800009999",
+        password_hash="h",
+        nickname="系统模板管理员",
+        role="admin",
+        status="active",
+    )
+    try:
+        yield
+    finally:
+        if original is None:
+            app.dependency_overrides.pop(get_current_user, None)
+        else:
+            app.dependency_overrides[get_current_user] = original

@@ -6,8 +6,18 @@ from contextlib import contextmanager
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from app.domains.users.dependencies import get_current_user
-from app.domains.farm.dependencies import get_current_farm
+from app.domains.users.dependencies import (
+    get_current_user,
+    optional_auth_context,
+    require_admin_context,
+    require_auth_context,
+    require_effective_user_context,
+)
+from app.domains.farm.dependencies import (
+    get_auth_context_farm,
+    get_current_farm,
+    get_effective_auth_context_farm,
+)
 from app.domains.users.tokens import create_access_token
 from app.domains.farm.models import Farm
 from app.domains.users.models import User
@@ -21,8 +31,17 @@ ADMIN_USER_ID = "auth-admin-001"
 def auth_override_scope(app: FastAPI) -> Iterator[None]:
     """只移除用户/farm override，保留测试数据库 override。"""
     original_overrides = dict(app.dependency_overrides)
-    app.dependency_overrides.pop(get_current_user, None)
-    app.dependency_overrides.pop(get_current_farm, None)
+    for dependency in (
+        get_current_user,
+        require_auth_context,
+        require_admin_context,
+        require_effective_user_context,
+        optional_auth_context,
+        get_current_farm,
+        get_auth_context_farm,
+        get_effective_auth_context_farm,
+    ):
+        app.dependency_overrides.pop(dependency, None)
     try:
         yield
     finally:

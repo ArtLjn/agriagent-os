@@ -4,7 +4,6 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.application.advice.advisor import stream_advisor
@@ -59,27 +58,6 @@ from app.domains.conversation.service import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def resolve_stream_user_and_farm(
-    db: Session,
-    current_user: User,
-    simulate_user_id: str | None,
-) -> tuple[User, Farm]:
-    """解析流式对话的实际用户和农场。"""
-    user = current_user
-    if simulate_user_id:
-        if current_user.role != "admin":
-            raise HTTPException(status_code=403, detail="需要管理员权限才能模拟用户")
-        simulated = db.query(User).filter(User.id == simulate_user_id).first()
-        if not simulated:
-            raise HTTPException(status_code=404, detail="模拟用户不存在")
-        user = simulated
-
-    farm = db.query(Farm).filter(Farm.user_id == user.id).first()
-    if farm is None:
-        raise HTTPException(status_code=404, detail="未找到关联农场")
-    return user, farm
 
 
 async def stream_chat_events(
@@ -460,6 +438,5 @@ __all__ = [
     "_save_stream_reply",
     "format_sse_event",
     "format_text_response",
-    "resolve_stream_user_and_farm",
     "stream_chat_events",
 ]
