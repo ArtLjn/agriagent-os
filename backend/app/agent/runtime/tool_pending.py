@@ -91,6 +91,7 @@ def _store_pending_plan_from_steps(
 ) -> list[ToolMessage]:
     """根据已验证步骤创建 pending plan。"""
     step_tool_names = {str(step["tool_name"]) for step in steps}
+    steps = _steps_with_tool_call_args(steps, tool_calls)
     pending_steps = _pending_steps_from_dicts(steps)
     contract_messages = _pending_plan_contract_messages(
         state=state,
@@ -138,6 +139,57 @@ def _pending_steps_from_dicts(steps: list[dict]) -> list[PendingPlanStep]:
         )
         for index, step in enumerate(steps)
     ]
+
+
+def _steps_with_tool_call_args(steps: list[dict], tool_calls: list[dict]) -> list[dict]:
+    tool_call_args_by_name = _tool_call_args_by_name(tool_calls)
+    tool_call_indexes: dict[str, int] = {}
+    merged_steps: list[dict] = []
+    for step in steps:
+        tool_name = str(step.get("tool_name") or step.get("skill_name") or "")
+        call_index = tool_call_indexes.get(tool_name, 0)
+        tool_call_indexes[tool_name] = call_index + 1
+        related_args = _tool_call_args_at(tool_call_args_by_name, tool_name, call_index)
+        merged_steps.append(_step_with_missing_params(step, related_args))
+    return merged_steps
+
+
+def _tool_call_args_by_name(tool_calls: list[dict]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for tool_call in tool_calls:
+        tool_name = str(tool_call.get("name") or "")
+        if not tool_name:
+            continue
+        args = tool_call.get("args")
+        grouped.setdefault(tool_name, []).append(
+            dict(args) if isinstance(args, dict) else {}
+        )
+    return grouped
+
+
+def _tool_call_args_at(
+    grouped_args: dict[str, list[dict[str, Any]]],
+    tool_name: str,
+    index: int,
+) -> dict[str, Any]:
+    args_list = grouped_args.get(tool_name) or []
+    if index >= len(args_list):
+        return {}
+    return args_list[index]
+
+
+def _step_with_missing_params(step: dict, tool_call_args: dict[str, Any]) -> dict:
+    if not tool_call_args:
+        return step
+    params = dict(step.get("params") or {})
+    for key, value in tool_call_args.items():
+        if _is_missing_param(params.get(key)):
+            params[key] = value
+    return {**step, "params": params}
+
+
+def _is_missing_param(value: Any) -> bool:
+    return value is None or value == "" or value == []
 
 
 def _reflect_pending_plan(

@@ -11,6 +11,7 @@ from app.agent.executor.pending_actions import (
 from app.agent.reflector import ReflectionDecision
 from app.agent.runtime.tool_pending import _pending_plan_tool_message
 from app.infra.pending_actions import (
+    PENDING_MARKER,
     PendingPlan,
     PendingPlanStep,
     _pending,
@@ -33,6 +34,7 @@ def _clear_test_pending() -> None:
         "contract-repair",
         "contract-plan-create",
         "contract-plan-failure",
+        "contract-plan-tool-call-args",
     ):
         _pending.pop((1, session_id), None)
         _pending_plans.pop((1, session_id), None)
@@ -239,6 +241,84 @@ def test_pending_plan_creation_infers_operation_before_contract_validation(monke
     assert messages is not None
     assert "category" in messages[0].content
     assert (1, "contract-plan-create") not in _pending_plans
+
+
+def test_pending_plan_merges_tool_call_args_before_contract_validation(monkeypatch):
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_arg_validation.load_skill_candidates",
+        lambda _farm_id: SimpleNamespace(values={}),
+    )
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_pending.ReflectorService",
+        lambda: SimpleNamespace(check_pending_plan=lambda **_kwargs: _PassReflection()),
+    )
+    monkeypatch.setattr(
+        "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+        lambda *_args, **_kwargs: SimpleNamespace(plan_id="plan-tool-call-args"),
+    )
+    state = {
+        "session_id": "contract-plan-tool-call-args",
+        "plan_draft": {
+            "route_type": "write_pending_plan",
+            "validation": {"status": "valid"},
+            "steps": [
+                {
+                    "step_id": "create_worker",
+                    "skill_name": "manage_workers",
+                    "params": {
+                        "action": "create",
+                        "default_pay_type": "daily",
+                        "default_unit_price": "100",
+                    },
+                    "depends_on": [],
+                },
+                {
+                    "step_id": "create_worker",
+                    "skill_name": "manage_workers",
+                    "params": {
+                        "action": "create",
+                        "default_pay_type": "daily",
+                        "default_unit_price": "100",
+                    },
+                    "depends_on": [],
+                },
+            ],
+        },
+    }
+
+    messages = _pending_plan_tool_message(
+        state=state,
+        farm_id=1,
+        original_input="我招了一些工人，主自豪，李是四 工资 100一天擅长压瓜",
+        tool_calls=[
+            {
+                "id": "tc1",
+                "name": "manage_workers",
+                "args": {
+                    "action": "create",
+                    "default_pay_type": "daily",
+                    "default_unit_price": "100",
+                    "name": "主自豪",
+                },
+            },
+            {
+                "id": "tc2",
+                "name": "manage_workers",
+                "args": {
+                    "action": "create",
+                    "default_pay_type": "daily",
+                    "default_unit_price": "100",
+                    "name": "李是四",
+                },
+            },
+        ],
+    )
+
+    assert messages is not None
+    assert messages[0].content.startswith(PENDING_MARKER)
+    assert "缺少必填字段：name" not in messages[0].content
+    plan = _pending_plans[(1, "contract-plan-tool-call-args")]
+    assert [step.params["name"] for step in plan.steps] == ["主自豪", "李是四"]
 
 
 @pytest.mark.asyncio
