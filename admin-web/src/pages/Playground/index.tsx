@@ -1,13 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Input, Button, Space, Drawer, Tag, Tooltip, message, Select } from 'antd';
 import { SendOutlined, DeleteOutlined, CopyOutlined, PlusOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LoadingOutlined, LinkOutlined, ProfileOutlined } from '@ant-design/icons';
-import ReactMarkdown from 'react-markdown';
 import { listTraces, getTimeline, type TraceNodeDetail, type TraceTimeline, listUsers, type AdminUserListItem } from '../../api/admin';
 import { getSessionDebugExport, listConversations, getConversationMessages, type ConversationItem, type ConversationMessage } from '../../api/agent';
 import type { PendingAction } from '../../api/agent';
 import type { PendingPlan } from '../../api/agent';
 import { getNodeLabel } from '../../constants/trace';
 import SkillOutputFormatter from '../../components/SkillOutputFormatter';
+import { MarkdownContent } from '../../components/MarkdownContent';
 import { formatTracePayload, hasTracePayload } from '../../utils/tracePayload';
 import { authStore } from '../../stores/authStore';
 import { palette } from '../../styles/theme';
@@ -67,15 +67,6 @@ function emptySessionState(): ChatSessionState {
     traceLoading: false,
     timeline: null,
   };
-}
-
-/* ── Markdown 渲染容器 ── */
-function MarkdownContent({ content }: { content: string }) {
-  return (
-    <div style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }}>
-      <ReactMarkdown>{content}</ReactMarkdown>
-    </div>
-  );
 }
 
 /* ── 执行状态标签 ── */
@@ -150,7 +141,7 @@ function ChatBubble({ role, content, skills, pendingAction, pendingPlan, onActio
         maxWidth: '78%',
         wordBreak: 'break-word',
       }}>
-        {isUser ? content : <MarkdownContent content={content} />}
+        {isUser ? content : <MarkdownContent content={content} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />}
         {!isUser && (
           <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <ExecutionStatus

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Tabs, Input, Button, Select, Space, message, Typography } from 'antd';
 import { SendOutlined, BulbOutlined, FileTextOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
-import ReactMarkdown from 'react-markdown';
 import {
   streamChat,
   getDailyAdvice,
@@ -14,6 +13,7 @@ import {
   type ReportHistoryItem,
 } from '../../api/agent';
 import { listCycles, type CropCycleListItem } from '../../api/cycles';
+import { MarkdownContent } from '../../components/MarkdownContent';
 
 const BG = '#0d1117';
 const CARD = '#161b22';
@@ -51,17 +51,6 @@ export default function Agent() {
   );
 }
 
-/* ── Markdown 渲染容器 ── */
-function MarkdownContent({ content }: { content: string }) {
-  return (
-    <div style={{
-      color: TEXT, lineHeight: 1.7, fontSize: 14,
-    }}>
-      <ReactMarkdown>{content}</ReactMarkdown>
-    </div>
-  );
-}
-
 /* ── 聊天气泡组件 ── */
 function ChatBubble({ role, content, pendingAction, onAction }: { role: string; content: string; pendingAction?: PendingAction | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
@@ -82,7 +71,7 @@ function ChatBubble({ role, content, pendingAction, onAction }: { role: string; 
         maxWidth: '70%',
         wordBreak: 'break-word',
       }}>
-        {isUser ? content : <MarkdownContent content={content} />}
+        {isUser ? content : <MarkdownContent content={content} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />}
         {!isUser && pendingAction?.context && (
           <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(139,148,158,0.08)', borderRadius: 8, fontSize: 13, color: '#8b949e' }}>
             {pendingAction.context.original_input && (
@@ -261,7 +250,7 @@ export function AdviceTab({ cycleId }: { cycleId?: number }) {
             <div style={{ fontSize: 13 }}>AI 将结合天气预报和种植周期给出具体建议</div>
           </div>
         ) : advice ? (
-          <MarkdownContent content={advice} />
+          <MarkdownContent content={advice} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />
         ) : null}
       </div>
     </div>
@@ -301,7 +290,7 @@ function ReportTab({ cycles, selectedCycle, setSelectedCycle }: { cycles: CropCy
         flex: 1, overflow: 'auto', background: CARD, borderRadius: 12,
         border: `1px solid ${BORDER}`, padding: 24,
       }}>
-        {report ? <MarkdownContent content={report} /> : (
+        {report ? <MarkdownContent content={report} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} /> : (
           <div style={{ textAlign: 'center', color: TEXT_DIM, padding: '80px 0' }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
             <div style={{ fontSize: 16, marginBottom: 8 }}>选择茬口后点击生成周报</div>
@@ -357,7 +346,7 @@ function HistoryItem({
           padding: '0 16px 16px', borderTop: `1px solid ${BORDER}`,
           maxHeight: 400, overflow: 'auto',
         }}>
-          <MarkdownContent content={item.content} />
+          <MarkdownContent content={item.content} style={{ color: TEXT, lineHeight: 1.7, fontSize: 14 }} />
         </div>
       )}
     </div>
