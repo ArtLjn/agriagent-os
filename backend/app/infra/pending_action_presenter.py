@@ -400,6 +400,21 @@ def build_plan_confirm_message(steps) -> str:
 
 
 def _format_plan_step(tool_name: str, params: dict) -> str:
+    if (
+        tool_name == "manage_crop_templates"
+        and params.get("operation") == "create_template"
+    ):
+        crop = params.get("crop_name") or params.get("name") or "作物"
+        variety = params.get("variety")
+        label = f"{crop} {variety}" if variety else str(crop)
+        return f"确认作物模板：{label}（不存在则创建）"
+
+    if tool_name == "manage_crop_cycle" and params.get("operation") == "create_cycle":
+        crop = params.get("crop_name") or "作物"
+        cycle = params.get("cycle_name")
+        suffix = f" {cycle}" if cycle else ""
+        return f"创建茬口：{crop}{suffix}"
+
     if tool_name == "manage_workers":
         action = params.get("action") or "create"
         name = params.get("name") or "工人"

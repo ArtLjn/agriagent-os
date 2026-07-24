@@ -1,5 +1,7 @@
-from langchain_core.messages import ToolMessage
+import re
 from typing import Any
+
+from langchain_core.messages import ToolMessage
 
 from app.agent.reflector import ReflectorService
 from app.agent.reflector.models import ReflectionDecision, ReflectionTrigger
@@ -29,6 +31,10 @@ from app.infra.pending_actions import (
 )
 from app.infra.trace_collector import get_collector
 
+_CROP_VARIETY_RE = re.compile(
+    r"(?<!\d)([A-Za-z]*\d+[A-Za-z0-9-]*)(?!\s*(?:亩|元|块|天|号|年|月|日))"
+)
+
 
 def _pending_plan_tool_message(
     *,
@@ -54,6 +60,18 @@ def _pending_plan_tool_message(
                 router_decision=plan_draft,
                 source="plan_draft",
             )
+
+    crop_cycle_steps = _crop_cycle_template_preflight_steps(tool_calls, original_input)
+    if crop_cycle_steps:
+        return _store_pending_plan_from_steps(
+            state=state,
+            farm_id=farm_id,
+            original_input=original_input,
+            tool_calls=tool_calls,
+            steps=crop_cycle_steps,
+            router_decision=plan_draft if isinstance(plan_draft, dict) else {},
+            source="crop_cycle_template_preflight",
+        )
 
     tool_call_steps = _pending_plan_steps_from_tool_calls(tool_calls)
     if tool_call_steps:
@@ -104,6 +122,87 @@ def _same_tool_name_sequence(tool_calls: list[dict], steps: list[dict]) -> bool:
     return [str(tool_call.get("name") or "") for tool_call in tool_calls] == [
         str(step.get("tool_name") or step.get("skill_name") or "") for step in steps
     ]
+
+
+def _crop_cycle_template_preflight_steps(
+    tool_calls: list[dict],
+    original_input: str,
+) -> list[dict]:
+    if len(tool_calls) != 1:
+        return []
+    tool_call = tool_calls[0]
+    if str(tool_call.get("name") or "") != "manage_crop_cycle":
+        return []
+    args = tool_call.get("args")
+    if not isinstance(args, dict):
+        return []
+    if str(args.get("operation") or "") != "create_cycle":
+        return []
+    crop_name = str(args.get("crop_name") or "").strip()
+    if not crop_name:
+        return []
+
+    cycle_params = dict(args)
+    cycle_params["operation"] = "create_cycle"
+    template_params: dict[str, Any] = {
+        "operation": "create_template",
+        "crop_name": crop_name,
+    }
+    variety = _crop_variety_for_template(cycle_params, original_input, crop_name)
+    if variety:
+        template_params["variety"] = variety
+
+    return [
+        {
+            "step_id": "ensure_crop_template",
+            "tool_name": "manage_crop_templates",
+            "params": template_params,
+            "depends_on": [],
+        },
+        {
+            "step_id": "create_crop_cycle",
+            "tool_name": "manage_crop_cycle",
+            "params": cycle_params,
+            "depends_on": ["ensure_crop_template"],
+        },
+    ]
+
+
+def _crop_variety_for_template(
+    cycle_params: dict[str, Any],
+    original_input: str,
+    crop_name: str,
+) -> str | None:
+    variety = _clean_crop_variety(cycle_params.get("variety"))
+    if variety:
+        return variety
+    for text in (cycle_params.get("cycle_name"), original_input):
+        variety = _extract_crop_variety(str(text or ""), crop_name)
+        if variety:
+            return variety
+    return None
+
+
+def _extract_crop_variety(text: str, crop_name: str) -> str | None:
+    if not text:
+        return None
+    normalized = (
+        text.replace(crop_name, " ")
+        .replace("茬口", " ")
+        .replace("种植", " ")
+        .replace("周期", " ")
+    )
+    match = _CROP_VARIETY_RE.search(normalized)
+    if not match:
+        return None
+    return _clean_crop_variety(match.group(1))
+
+
+def _clean_crop_variety(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return text
 
 
 def _pending_plan_steps_from_tool_calls(tool_calls: list[dict]) -> list[dict]:
