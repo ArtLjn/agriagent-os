@@ -41,6 +41,63 @@ class TestTraceDAORecord:
             )
         assert dao.queue_size == 5
 
+    def test_record_preserves_large_context_bundle_shape(self, dao) -> None:
+        large_context = {
+            "token_budget": 4096,
+            "sections": [
+                {
+                    "name": "Context",
+                    "blocks": [
+                        {
+                            "key": f"block_{index}",
+                            "preview": "农业上下文" * 200,
+                        }
+                        for index in range(8)
+                    ],
+                }
+            ],
+        }
+
+        dao.record(
+            {
+                "request_id": "ctx00001",
+                "farm_id": 1,
+                "node_type": "context_build",
+                "node_name": "context_bundle",
+                "output_data": large_context,
+            }
+        )
+
+        queued = dao._queue[0]["output_data"]
+        assert isinstance(queued, dict)
+        assert queued["token_budget"] == 4096
+        assert queued["sections"][0]["blocks"][0]["key"] == "block_0"
+        assert "__trace_truncated" not in queued
+
+    def test_record_clips_extreme_trace_leaf_without_breaking_json(self, dao) -> None:
+        dao.record(
+            {
+                "request_id": "ctx00002",
+                "farm_id": 1,
+                "node_type": "context_build",
+                "node_name": "context_bundle",
+                "output_data": {
+                    "blocks": [
+                        {
+                            "key": "huge",
+                            "preview": "x" * 180_000,
+                        }
+                    ]
+                },
+            }
+        )
+
+        queued = dao._queue[0]["output_data"]
+        assert isinstance(queued, dict)
+        assert queued["__trace_truncated"] is True
+        assert queued["blocks"][0]["key"] == "huge"
+        assert queued["blocks"][0]["preview"].endswith("...[TRUNCATED]")
+
 
 class TestTraceDAOFlushBatch:
     @patch("app.infra.trace_dao.SessionLocal")

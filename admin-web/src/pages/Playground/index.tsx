@@ -16,9 +16,14 @@ import { usersApi, type CurrentUser } from '../../api/users';
 import { chooseDefaultUserId } from './currentUser';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
 import { canConfirmAssistantMessage, hasPendingConfirmationControls, type PendingResolution } from './pendingPlanControls';
-import { buildPlaygroundTraceMetrics, hasAutomaticCompression } from './traceMetrics';
+import {
+  buildPlaygroundTraceMetrics,
+  extractLatestLlmContextSnapshot,
+  hasAutomaticCompression,
+} from './traceMetrics';
 import { copyAsyncText } from './clipboard';
 import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
+import { LlmContextInspector } from './LlmContextInspector';
 
 const CARD = palette.bgElevated;
 const BORDER = palette.border;
@@ -310,6 +315,7 @@ export default function Playground() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [llmContextOpen, setLlmContextOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeSession = sessions[sessionId] ?? emptySessionState();
   const messages = activeSession.messages;
@@ -317,6 +323,7 @@ export default function Playground() {
   const traceLoading = activeSession.traceLoading;
   const timeline = activeSession.timeline;
   const traceMetrics = buildPlaygroundTraceMetrics(timeline);
+  const llmContextSnapshot = extractLatestLlmContextSnapshot(timeline);
   const compressed = hasAutomaticCompression(traceMetrics);
   const conversationRows = buildConversationRows(sessions, conversations);
 
@@ -379,6 +386,10 @@ export default function Playground() {
       loadUsers();
     });
   }, [loadUsers]);
+
+  useEffect(() => {
+    setLlmContextOpen(false);
+  }, [sessionId]);
 
   /* ── 切换会话 ── */
   const switchConversation = useCallback(async (sid: string) => {
@@ -907,6 +918,14 @@ export default function Playground() {
             </div>
           )}
         </div>
+
+        {llmContextSnapshot && (
+          <LlmContextInspector
+            snapshot={llmContextSnapshot}
+            open={llmContextOpen}
+            onToggle={() => setLlmContextOpen((value) => !value)}
+          />
+        )}
 
         {/* 执行摘要 - 紧凑单行 */}
         {(timeline !== null || traceLoading) && (

@@ -3,8 +3,9 @@
 import logging
 import time as _time
 from dataclasses import replace
+from typing import Any
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 
 from app.agent.router import RouterDecision, SkillRouter
 from app.agent.router.tool_selector import ToolSelectionResult
@@ -300,6 +301,134 @@ def _append_runtime_context(system_text: str, context_bundle: ContextBundle) -> 
     )
 
 
+def _trace_safe_value(value: Any) -> Any:
+    """把 LangChain 消息字段转换成可稳定写入 trace 的基础 JSON 值。"""
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list):
+        return [_trace_safe_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_trace_safe_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _trace_safe_value(item) for key, item in value.items()}
+    return str(value)
+
+
+def _message_role_for_trace(message: BaseMessage) -> str:
+    message_type = str(getattr(message, "type", "") or "").lower()
+    return {
+        "human": "user",
+        "ai": "assistant",
+        "system": "system",
+        "tool": "tool",
+    }.get(message_type, message_type or message.__class__.__name__)
+
+
+def _message_trace_payload(message: BaseMessage, index: int) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "index": index,
+        "role": _message_role_for_trace(message),
+        "type": str(getattr(message, "type", "") or message.__class__.__name__),
+        "content": _trace_safe_value(getattr(message, "content", "")),
+    }
+    name = getattr(message, "name", None)
+    if name:
+        payload["name"] = str(name)
+    additional_kwargs = getattr(message, "additional_kwargs", None)
+    if additional_kwargs:
+        payload["additional_kwargs"] = _trace_safe_value(additional_kwargs)
+    if isinstance(message, AIMessage):
+        tool_calls = getattr(message, "tool_calls", None)
+        invalid_tool_calls = getattr(message, "invalid_tool_calls", None)
+        if tool_calls:
+            payload["tool_calls"] = _trace_safe_value(tool_calls)
+        if invalid_tool_calls:
+            payload["invalid_tool_calls"] = _trace_safe_value(invalid_tool_calls)
+    if isinstance(message, ToolMessage):
+        payload["tool_call_id"] = str(message.tool_call_id or "")
+        status = getattr(message, "status", None)
+        if status:
+            payload["status"] = str(status)
+    return payload
+
+
+def _record_final_llm_context_trace(
+    *,
+    collector,
+    system_text: str,
+    messages: list[BaseMessage],
+    context_bundle: ContextBundle,
+    final_budget,
+) -> None:
+    """记录预算压缩后真正送入 LLM 的上下文快照。失败静默。"""
+    try:
+        context_blocks = _context_block_keys(context_bundle)
+        collector.record(
+            node_type="prompt_budget",
+            node_name="final_llm_context",
+            input_data={
+                "system_prompt": True,
+                "context_blocks": context_blocks,
+                "message_count": len(messages),
+            },
+            output_data={
+                "system_prompt": system_text,
+                "messages": [
+                    _message_trace_payload(message, index)
+                    for index, message in enumerate(messages)
+                ],
+                "context_blocks": context_blocks,
+                "budget": final_budget.summary(),
+            },
+            token_usage={"prompt_tokens": final_budget.total_tokens},
+        )
+    except Exception:
+        return
+
+
+def _context_block_keys(context_bundle: ContextBundle) -> list[str]:
+    return [block.key for block in context_bundle.blocks]
+
+
+def _record_system_prompt_trace(
+    *,
+    collector,
+    system_text: str,
+    prompt_scene: str,
+    context_blocks: list[str],
+) -> None:
+    collector.record(
+        node_type="prompt_render",
+        node_name="system_prompt",
+        input_data={
+            "template": prompt_scene,
+            "variables_count": 5,
+            "context_blocks": context_blocks,
+        },
+        output_data=system_text[:2000],
+    )
+
+
+def _record_final_prompt_budget_trace(
+    *,
+    collector,
+    context_blocks: list[str],
+    message_count: int,
+    final_budget,
+) -> None:
+    collector.record(
+        node_type="prompt_budget",
+        node_name="final_prompt",
+        input_data={
+            "system_prompt": True,
+            "context_blocks": context_blocks,
+            "messages": message_count,
+        },
+        output_data=final_budget.summary(),
+        token_usage={"prompt_tokens": final_budget.total_tokens},
+    )
+
+
 def _record_prompt_budget(
     *,
     collector,
@@ -311,30 +440,29 @@ def _record_prompt_budget(
     find_last_human_message_func,
 ) -> tuple[SystemMessage, list, str]:
     """记录 prompt 渲染与预算 trace，返回 LLM 输入。"""
-    collector.record(
-        node_type="prompt_render",
-        node_name="system_prompt",
-        input_data={
-            "template": prompt_scene,
-            "variables_count": 5,
-            "context_blocks": [block.key for block in context_bundle.blocks],
-        },
-        output_data=system_text[:2000],
+    context_blocks = _context_block_keys(context_bundle)
+    _record_system_prompt_trace(
+        collector=collector,
+        system_text=system_text,
+        prompt_scene=prompt_scene,
+        context_blocks=context_blocks,
     )
     system = SystemMessage(content=system_text)
     messages = compact_messages_func(state["messages"])
     messages, final_budget = FinalPromptBudget().apply(system_text, messages)
     input_summary = find_last_human_message_func(state["messages"])[:200]
-    collector.record(
-        node_type="prompt_budget",
-        node_name="final_prompt",
-        input_data={
-            "system_prompt": True,
-            "context_blocks": [block.key for block in context_bundle.blocks],
-            "messages": len(messages),
-        },
-        output_data=final_budget.summary(),
-        token_usage={"prompt_tokens": final_budget.total_tokens},
+    _record_final_prompt_budget_trace(
+        collector=collector,
+        context_blocks=context_blocks,
+        message_count=len(messages),
+        final_budget=final_budget,
+    )
+    _record_final_llm_context_trace(
+        collector=collector,
+        system_text=system_text,
+        messages=messages,
+        context_bundle=context_bundle,
+        final_budget=final_budget,
     )
     if final_budget.over_budget:
         logger.warning(
@@ -481,6 +609,7 @@ __all__ = [
     "_direct_tool_message_response",
     "_enabled_selected_tool_names",
     "_existing_plan_draft_payload",
+    "_record_final_llm_context_trace",
     "_record_final_reply_data_source_trace",
     "_record_llm_response",
     "_record_prompt_budget",
