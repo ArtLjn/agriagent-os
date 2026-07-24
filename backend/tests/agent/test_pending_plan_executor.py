@@ -348,6 +348,193 @@ async def test_handle_pending_plan_confirm_normalizes_legacy_list_args():
 
 
 @pytest.mark.asyncio
+async def test_pending_plan_resolves_from_step_cycle_id():
+    store_pending_plan(
+        farm_id=1,
+        session_id="cycle-bind-session",
+        raw_user_input="创建西瓜8424茬口，再创建东棚20亩",
+        router_decision={"selected_tools": ["create_crop_cycle"]},
+        steps=[
+            {
+                "step_id": "create_crop_cycle",
+                "tool_name": "create_crop_cycle",
+                "params": {
+                    "crop_name": "西瓜",
+                    "cycle_name": "8424西瓜茬口",
+                    "area_mu": 20,
+                },
+            },
+            {
+                "step_id": "create_planting_unit",
+                "tool_name": "manage_planting_units",
+                "params": {
+                    "operation": "manage_units",
+                    "action": "create",
+                    "cycle_id": {"$from_step": "create_crop_cycle", "path": "id"},
+                    "name": "东棚",
+                    "area_mu": 20,
+                },
+                "depends_on": ["create_crop_cycle"],
+            },
+        ],
+    )
+
+    with patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        mock_execute.side_effect = [
+            SimpleNamespace(status="success", reply="已创建茬口", id=123),
+            SimpleNamespace(status="success", reply="已创建种植单元"),
+        ]
+        decision = await handle_pending_action(
+            farm_id=1,
+            session_id="cycle-bind-session",
+            message="确认",
+            farm_uid="farm-uid-1",
+        )
+
+    assert decision.status == "confirmed"
+    assert mock_execute.await_args_list[1] == call(
+        farm_id=1,
+        skill_name="manage_planting_units",
+        params={
+            "operation": "manage_units",
+            "action": "create",
+            "cycle_id": 123,
+            "name": "东棚",
+            "area_mu": 20,
+        },
+        farm_uid="farm-uid-1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_pending_plan_resolves_cycle_id_for_crop_setup_plan():
+    store_pending_plan(
+        farm_id=1,
+        session_id="crop-setup-bind-session",
+        raw_user_input="创建西瓜8424茬口，再创建东棚20亩",
+        router_decision={"selected_tools": ["manage_crop_cycle"]},
+        steps=[
+            {
+                "step_id": "ensure_crop_template",
+                "tool_name": "manage_crop_templates",
+                "params": {
+                    "operation": "create_template",
+                    "crop_name": "西瓜",
+                    "variety": "8424",
+                },
+            },
+            {
+                "step_id": "create_crop_cycle",
+                "tool_name": "manage_crop_cycle",
+                "params": {
+                    "operation": "create_cycle",
+                    "crop_name": "西瓜",
+                    "cycle_name": "8424西瓜茬口",
+                    "area": 20,
+                },
+                "depends_on": ["ensure_crop_template"],
+            },
+            {
+                "step_id": "create_planting_unit",
+                "tool_name": "manage_planting_units",
+                "params": {
+                    "operation": "manage_units",
+                    "action": "create",
+                    "cycle_id": {"$from_step": "create_crop_cycle", "path": "id"},
+                    "name": "东棚",
+                    "area_mu": 20,
+                },
+                "depends_on": ["create_crop_cycle"],
+            },
+        ],
+    )
+
+    with patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        mock_execute.side_effect = [
+            SimpleNamespace(status="success", reply="已确认作物模板"),
+            SimpleNamespace(status="success", reply="已创建茬口", id=123),
+            SimpleNamespace(status="success", reply="已创建种植单元"),
+        ]
+        decision = await handle_pending_action(
+            farm_id=1,
+            session_id="crop-setup-bind-session",
+            message="确认",
+            farm_uid="farm-uid-1",
+        )
+
+    assert decision.status == "confirmed"
+    assert mock_execute.await_args_list[2] == call(
+        farm_id=1,
+        skill_name="manage_planting_units",
+        params={
+            "operation": "manage_units",
+            "action": "create",
+            "cycle_id": 123,
+            "name": "东棚",
+            "area_mu": 20,
+        },
+        farm_uid="farm-uid-1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_pending_plan_stops_when_from_step_binding_missing():
+    store_pending_plan(
+        farm_id=1,
+        session_id="cycle-bind-missing-session",
+        raw_user_input="创建西瓜8424茬口，再创建东棚20亩",
+        router_decision={"selected_tools": ["create_crop_cycle"]},
+        steps=[
+            {
+                "step_id": "create_crop_cycle",
+                "tool_name": "create_crop_cycle",
+                "params": {
+                    "crop_name": "西瓜",
+                    "cycle_name": "8424西瓜茬口",
+                    "area_mu": 20,
+                },
+            },
+            {
+                "step_id": "create_planting_unit",
+                "tool_name": "manage_planting_units",
+                "params": {
+                    "operation": "manage_units",
+                    "action": "create",
+                    "cycle_id": {"$from_step": "create_crop_cycle", "path": "id"},
+                    "name": "东棚",
+                    "area_mu": 20,
+                },
+                "depends_on": ["create_crop_cycle"],
+            },
+        ],
+    )
+
+    with patch(
+        "app.agent.executor.pending_actions._execute_write_skill",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        mock_execute.return_value = SimpleNamespace(
+            status="success", reply="已创建茬口"
+        )
+        decision = await handle_pending_action(
+            farm_id=1,
+            session_id="cycle-bind-missing-session",
+            message="确认",
+            farm_uid="farm-uid-1",
+        )
+
+    assert decision.status == "failed"
+    assert "绑定" in decision.reply or "引用" in decision.reply
+    assert mock_execute.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_handle_pending_plan_confirm_recovers_plan_from_database(
     db_session, monkeypatch
 ):

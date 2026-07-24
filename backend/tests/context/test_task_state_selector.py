@@ -39,6 +39,8 @@ def test_task_state_selector_generates_task_block(db_session) -> None:
     assert block.metadata["task_id"] == task.task_id
     assert block.metadata["task_type"] == "plan_draft"
     assert block.metadata["status"] == "active"
+    assert block.metadata["entities"] == {"crop": "番茄", "greenhouse": "一号棚"}
+    assert block.metadata["missing_information"] == ["补光灯功率"]
     assert "expires_at" in block.metadata
 
 
@@ -78,3 +80,4 @@ def test_task_state_selector_metadata_does_not_leak_large_json(db_session) -> No
     assert "very_large" not in block.metadata
     assert "raw_payload" not in block.metadata
     assert large_observation not in str(block.metadata)
+    assert block.metadata["entities"] == {"crop": "黄瓜"}

@@ -2,6 +2,7 @@
 
 import logging
 import re
+from typing import Any
 
 from app.agent.executor.models import PendingActionDecision
 from app.agent.executor.pending_aliases import (
@@ -154,6 +155,76 @@ def _skill_result_status(result) -> str:
 
 def _skill_result_failed_or_needs_clarify(result) -> bool:
     return _skill_result_status(result) in {"failed", "need_clarify"}
+
+
+def _resolve_step_param_bindings(
+    params: dict,
+    results_by_step: dict[str, object],
+) -> dict:
+    """解析 pending plan 参数中的前序步骤输出绑定。"""
+    return {
+        key: _resolve_binding_value(value, results_by_step)
+        for key, value in (params or {}).items()
+    }
+
+
+def _resolve_binding_value(value, results_by_step: dict[str, object]):
+    if isinstance(value, dict) and "$from_step" in value:
+        source_step = str(value.get("$from_step") or "").strip()
+        if not source_step:
+            raise ValueError("参数绑定缺少来源步骤。")
+        if source_step not in results_by_step:
+            raise ValueError(f"参数绑定引用的步骤“{source_step}”尚未成功执行。")
+
+        path = str(value.get("path") or "id").strip()
+        try:
+            return _read_result_path(results_by_step[source_step], path)
+        except ValueError as exc:
+            raise ValueError(f"参数绑定引用失败：步骤“{source_step}”的{exc}") from exc
+
+    if isinstance(value, dict):
+        return {
+            key: _resolve_binding_value(item, results_by_step)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_resolve_binding_value(item, results_by_step) for item in value]
+    return value
+
+
+def _read_result_path(result, path: str):
+    segments = [segment for segment in str(path or "").split(".") if segment]
+    if not segments:
+        raise ValueError("结果路径不能为空。")
+
+    current = result
+    for segment in segments:
+        current = _read_result_segment(current, segment)
+        if current is None:
+            raise ValueError(f"结果中缺少路径“{path}”。")
+    return current
+
+
+def _read_result_segment(current, segment: str) -> Any:
+    if isinstance(current, dict):
+        if segment in current:
+            return current[segment]
+        raise ValueError(f"结果中缺少字段“{segment}”。")
+
+    if isinstance(current, list) and segment.isdigit():
+        index = int(segment)
+        if 0 <= index < len(current):
+            return current[index]
+        raise ValueError(f"结果中缺少字段“{segment}”。")
+
+    if hasattr(current, segment):
+        return getattr(current, segment)
+
+    data = getattr(current, "data", None)
+    if isinstance(data, dict) and segment in data:
+        return data[segment]
+
+    raise ValueError(f"结果中缺少字段“{segment}”。")
 
 
 def _contract_blocked_confirmation(
@@ -453,17 +524,26 @@ async def _confirm_pending_plan(
         return reflection_block
 
     results: list[str] = []
+    results_by_step: dict[str, object] = {}
     cleared_groups_by_step: list[dict] = []
     for step in sorted(plan.steps, key=lambda item: item.step_index):
-        step_decision, result_reply, metadata = await _execute_pending_plan_step(
+        (
+            step_decision,
+            result_reply,
+            metadata,
+            raw_result,
+        ) = await _execute_pending_plan_step(
             farm_id=farm_id,
             plan=plan,
             step=step,
+            results_by_step=results_by_step,
             farm_uid=farm_uid,
             session_id=session_id,
         )
         if step_decision is not None:
             return step_decision
+        if step.step_id:
+            results_by_step[step.step_id] = raw_result
         results.append(result_reply or "")
         cleared_groups_by_step.append(metadata or {})
 
@@ -473,6 +553,21 @@ async def _confirm_pending_plan(
     return PendingActionDecision.confirmed(
         "\n".join(reply_lines),
         metadata={"steps": cleared_groups_by_step},
+    )
+
+
+def _binding_failed_pending_plan_step_decision(
+    *,
+    farm_id: int,
+    plan: PendingPlan,
+    step: PendingPlanStep,
+    error_message: str,
+    session_id: str | None,
+) -> PendingActionDecision:
+    _mark_pending_plan_step_failed(plan.plan_id, step.step_index, error_message)
+    _clear_runtime_pending_plan_cache(farm_id, session_id)
+    return PendingActionDecision.failed(
+        f"执行计划第 {step.step_index + 1} 步绑定失败：{error_message}"
     )
 
 
@@ -509,11 +604,24 @@ async def _execute_pending_plan_step(
     farm_id: int,
     plan: PendingPlan,
     step: PendingPlanStep,
+    results_by_step: dict[str, object],
     farm_uid: str | None,
     session_id: str | None,
-) -> tuple[PendingActionDecision | None, str | None, dict | None]:
+) -> tuple[PendingActionDecision | None, str | None, dict | None, object | None]:
     alias_metadata = pending_alias_metadata_or_trace(step.tool_name, step.params)
     params = _normalize_pending_plan_step_params(step.tool_name, step.params)
+    try:
+        params = _resolve_step_param_bindings(params, results_by_step)
+    except ValueError as exc:
+        decision = _binding_failed_pending_plan_step_decision(
+            farm_id=farm_id,
+            plan=plan,
+            step=step,
+            error_message=str(exc),
+            session_id=session_id,
+        )
+        return decision, None, None, None
+
     contract_block = _contract_blocked_pending_plan_step(
         farm_id=farm_id,
         plan=plan,
@@ -522,7 +630,7 @@ async def _execute_pending_plan_step(
         session_id=session_id,
     )
     if contract_block is not None:
-        return contract_block, None, None
+        return contract_block, None, None, None
 
     result = await _execute_pending_plan_step_raw(
         farm_id=farm_id,
@@ -540,7 +648,7 @@ async def _execute_pending_plan_step(
             result=result,
             session_id=session_id,
         )
-        return decision, None, None
+        return decision, None, None, None
 
     result_reply = _skill_result_reply(result)
     _mark_pending_plan_step_executed(plan.plan_id, step.step_index, result_reply)
@@ -553,6 +661,7 @@ async def _execute_pending_plan_step(
             farm_id=farm_id,
             farm_uid=farm_uid,
         ),
+        result,
     )
 
 

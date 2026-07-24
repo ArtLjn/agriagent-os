@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
@@ -24,10 +24,24 @@ class TaskStateTurn:
     pending_decision_handled: bool = False
 
 
-async def update_task_state_after_turn(db: Session, turn: TaskStateTurn) -> None:
+@dataclass(frozen=True)
+class TaskStateUpdateResult:
+    """TaskState 收尾决策结果，用于后续 trace 观测。"""
+
+    action: str
+    reason: str = ""
+    task_id: str | None = None
+    task_type: str = ""
+    missing_information: list[str] = field(default_factory=list)
+
+
+async def update_task_state_after_turn(
+    db: Session, turn: TaskStateTurn
+) -> TaskStateUpdateResult:
     """根据本轮问答保守更新当前 session 最近一个 TaskState。"""
-    if not _can_consider_task_state(turn):
-        return
+    skipped_reason = _skip_reason_before_decision(turn)
+    if skipped_reason:
+        return _skipped(skipped_reason)
 
     store = AgentTaskStateStore(db)
     active = store.get_active_task(
@@ -35,25 +49,35 @@ async def update_task_state_after_turn(db: Session, turn: TaskStateTurn) -> None
         user_id=turn.user_id,
         session_id=turn.session_id,
     )
-    missing = _extract_missing_information(turn.assistant_reply)
+    missing = _extract_missing_information(turn.assistant_reply) or (
+        _infer_missing_information_from_task_intent(turn.user_input)
+    )
     if active is not None:
-        _handle_existing_task(store, turn, active, missing)
-        return
+        return _handle_existing_task(store, turn, active, missing)
 
-    if not _should_start_task(turn, missing):
-        return
+    start_reason = _start_task_reason(turn, missing)
+    if not start_reason:
+        return _skipped("no_task_state_signal")
 
-    store.upsert_active_task(
+    task_type = _classify_task_type(turn.user_input, turn.assistant_reply)
+    task = store.upsert_active_task(
         farm_id=turn.farm_id,
         user_id=turn.user_id or "",
         session_id=turn.session_id or "",
-        task_type=_classify_task_type(turn.user_input, turn.assistant_reply),
+        task_type=task_type,
         goal=_compact_text(turn.user_input),
         entities=_extract_entities(turn.user_input),
         observations=_initial_observations(turn),
         missing_information=missing,
         next_action=_next_action_for_missing(missing),
         status=TaskStateStatus.WAITING_USER if missing else TaskStateStatus.ACTIVE,
+    )
+    return TaskStateUpdateResult(
+        action="created",
+        reason=start_reason,
+        task_id=task.task_id,
+        task_type=task_type,
+        missing_information=missing,
     )
 
 
@@ -62,41 +86,57 @@ def _handle_existing_task(
     turn: TaskStateTurn,
     active,
     missing: list[str],
-) -> None:
+) -> TaskStateUpdateResult:
     if _is_cancel_turn(turn):
-        store.mark_cancelled(
+        task = store.mark_cancelled(
             farm_id=turn.farm_id,
             user_id=turn.user_id or "",
             session_id=turn.session_id or "",
             task_id=active.task_id,
         )
-        return
+        return TaskStateUpdateResult(
+            action="cancelled",
+            reason="user_cancel_intent",
+            task_id=task.task_id if task else active.task_id,
+            task_type=active.task_type,
+        )
 
     if _is_side_query(turn.user_input):
-        return
+        return _skipped(
+            "side_query", task_id=active.task_id, task_type=active.task_type
+        )
 
     if not missing and _is_completion_turn(turn):
-        store.mark_completed(
+        task = store.mark_completed(
             farm_id=turn.farm_id,
             user_id=turn.user_id or "",
             session_id=turn.session_id or "",
             task_id=active.task_id,
         )
-        return
+        return TaskStateUpdateResult(
+            action="completed",
+            reason="assistant_completion_signal",
+            task_id=task.task_id if task else active.task_id,
+            task_type=active.task_type,
+        )
 
-    _update_existing_task(store, turn, active, missing)
+    return _update_existing_task(store, turn, active, missing)
 
 
-def _can_consider_task_state(turn: TaskStateTurn) -> bool:
+def _skip_reason_before_decision(turn: TaskStateTurn) -> str:
     if not turn.user_id or not turn.session_id:
-        return False
-    if turn.pending_action is not None or turn.pending_plan is not None:
-        return False
+        return "missing_identity_or_session"
+    if turn.pending_action is not None:
+        return "pending_write_confirmation"
+    if turn.pending_plan is not None and not _is_crop_cycle_setup_turn(turn):
+        return "pending_write_confirmation"
     if turn.pending_decision_handled:
-        return False
+        return "pending_decision_handled"
     if not _compact_text(turn.user_input) or not _compact_text(turn.assistant_reply):
-        return False
-    return True
+        return "empty_turn"
+    if _is_side_query(turn.user_input):
+        return "side_query"
+    return ""
 
 
 def _update_existing_task(
@@ -104,7 +144,7 @@ def _update_existing_task(
     turn: TaskStateTurn,
     active,
     missing: list[str],
-) -> None:
+) -> TaskStateUpdateResult:
     observations = _merge_unique(
         list(active.observations_json or []),
         _observations_from_user_update(turn.user_input),
@@ -114,30 +154,43 @@ def _update_existing_task(
         turn.user_input,
     )
     status = TaskStateStatus.WAITING_USER if next_missing else TaskStateStatus.ACTIVE
-    store.upsert_active_task(
+    task = store.upsert_active_task(
         farm_id=turn.farm_id,
         user_id=turn.user_id or "",
         session_id=turn.session_id or "",
         task_type=active.task_type,
         goal=active.goal,
-        entities={
-            **dict(active.entities_json or {}),
-            **_extract_entities(turn.user_input),
-        },
+        entities=_merge_entities(
+            dict(active.entities_json or {}),
+            _extract_entities_for_task(turn.user_input, active.task_type),
+        ),
         observations=observations,
         missing_information=next_missing,
         next_action=_next_action_for_missing(next_missing) or "继续处理当前任务",
         status=status,
         expires_at=active.expires_at,
     )
+    return TaskStateUpdateResult(
+        action="updated",
+        reason="active_task_continuation",
+        task_id=task.task_id,
+        task_type=task.task_type,
+        missing_information=next_missing,
+    )
 
 
-def _should_start_task(turn: TaskStateTurn, missing: list[str]) -> bool:
+def _start_task_reason(turn: TaskStateTurn, missing: list[str]) -> str:
+    if turn.pending_plan is not None and _is_crop_cycle_setup_turn(turn):
+        return "crop_cycle_setup_pending_plan"
     if not missing:
-        return False
+        return ""
     if _is_side_query(turn.user_input):
-        return False
-    return _has_task_signal(turn.user_input)
+        return ""
+    if _has_task_signal(turn.user_input):
+        return "explicit_task_signal"
+    if _has_natural_task_intent(turn.user_input):
+        return "natural_task_intent"
+    return ""
 
 
 def _extract_missing_information(reply: str) -> list[str]:
@@ -156,6 +209,16 @@ def _extract_missing_information(reply: str) -> list[str]:
     for candidate in candidates:
         items.extend(_split_missing_items(candidate))
     return _merge_unique([], items)[:6]
+
+
+def _infer_missing_information_from_task_intent(user_input: str) -> list[str]:
+    if _is_crop_cycle_setup_intent(user_input):
+        return []
+    if _has_planting_intent(user_input):
+        return ["种植面积", "地块", "计划播种时间", "品种"]
+    if _has_diagnosis_intent(user_input):
+        return ["症状描述", "发生位置", "发生时间"]
+    return []
 
 
 def _split_missing_items(text: str) -> list[str]:
@@ -190,6 +253,8 @@ def _remaining_missing_after_user_reply(
 def _user_reply_resolves_missing_item(missing_item: str, user_input: str) -> bool:
     text = user_input.strip()
     if missing_item in text:
+        return True
+    if "名称" in missing_item and _extract_planting_unit_name(text):
         return True
     core_word = _missing_core_word(missing_item)
     if core_word and core_word in text:
@@ -240,11 +305,25 @@ def _initial_observations(turn: TaskStateTurn) -> list[str]:
     entities = _extract_entities(turn.user_input)
     observations = []
     if entities:
-        observations.append("用户已经提供：" + "、".join(entities.values()))
+        observations.append(
+            "用户已经提供：" + "、".join(_entity_observation_values(entities))
+        )
     return observations
 
 
-def _extract_entities(text: str) -> dict[str, str]:
+def _extract_entities(text: str) -> dict[str, object]:
+    if _is_crop_cycle_setup_intent(text):
+        return _extract_crop_cycle_setup_entities(text)
+    return _extract_general_entities(text)
+
+
+def _extract_entities_for_task(text: str, task_type: str) -> dict[str, object]:
+    if task_type == "crop_cycle_setup":
+        return _extract_crop_cycle_setup_entities(text)
+    return _extract_entities(text)
+
+
+def _extract_general_entities(text: str) -> dict[str, object]:
     crop = _extract_crop(text)
     entities = {}
     if crop:
@@ -253,6 +332,53 @@ def _extract_entities(text: str) -> dict[str, str]:
     if greenhouse:
         entities["greenhouse"] = greenhouse.group(1)
     return entities
+
+
+def _extract_crop_cycle_setup_entities(text: str) -> dict[str, object]:
+    entities: dict[str, object] = {}
+    crop = _extract_crop(text)
+    if crop:
+        entities["crop_name"] = crop
+    variety = _extract_crop_variety(text)
+    if variety:
+        entities["variety"] = variety
+    area_mu = _extract_area_mu(text)
+    if area_mu is not None:
+        entities["area_mu"] = area_mu
+
+    planting_unit: dict[str, object] = {}
+    unit_name = _extract_planting_unit_name(text)
+    if unit_name:
+        planting_unit["name"] = unit_name
+        planting_unit["should_create"] = True
+    if area_mu is not None and _has_planting_unit_create_intent(text):
+        planting_unit["area_mu"] = area_mu
+        planting_unit["should_create"] = True
+    if planting_unit:
+        entities["planting_unit"] = planting_unit
+    return entities
+
+
+def _entity_observation_values(entities: dict[str, object]) -> list[str]:
+    values = []
+    for value in entities.values():
+        if isinstance(value, dict):
+            values.extend(str(item) for item in value.values() if item)
+        elif value:
+            values.append(str(value))
+    return values
+
+
+def _merge_entities(
+    base: dict[str, object], additions: dict[str, object]
+) -> dict[str, object]:
+    merged = dict(base)
+    for key, value in additions.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return merged
 
 
 def _extract_crop(text: str) -> str:
@@ -275,10 +401,55 @@ def _extract_crop(text: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _extract_crop_variety(text: str) -> str:
+    matches = re.findall(r"(?<!\d)(\d{2,})(?!\d)\s*(?!亩)", text)
+    return matches[0] if matches else ""
+
+
+def _extract_area_mu(text: str) -> int | float | None:
+    match = re.search(r"(\d+(?:\.\d+)?)\s*亩", text)
+    if not match:
+        return None
+    value = float(match.group(1))
+    return int(value) if value.is_integer() else value
+
+
+def _extract_planting_unit_name(text: str) -> str:
+    match = re.search(r"(?:叫|命名为|名称是|名字叫)\s*([\w一-龥\d号#-]{1,20})", text)
+    if not match:
+        return ""
+    name = match.group(1).strip(" ，,。；;！!？?")
+    return name if any(keyword in name for keyword in ("棚", "地", "田", "区")) else ""
+
+
+def _is_crop_cycle_setup_intent(text: str) -> bool:
+    return "茬口" in text and any(
+        word in text for word in ("创建", "新建", "新增", "建")
+    )
+
+
+def _is_crop_cycle_setup_turn(turn: TaskStateTurn) -> bool:
+    return _is_crop_cycle_setup_intent(turn.user_input + turn.assistant_reply)
+
+
+def _has_planting_unit_create_intent(text: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:新增|新建|创建|再建|建)\s*\d+(?:\.\d+)?\s*亩\s*(?:地|田|棚|种植单元)",
+            text,
+        )
+        or re.search(r"(?:新增|新建|创建|再建|建).{0,8}(?:地块|大棚|种植单元)", text)
+    )
+
+
 def _classify_task_type(user_input: str, assistant_reply: str) -> str:
     text = user_input + assistant_reply
+    if _is_crop_cycle_setup_intent(text):
+        return "crop_cycle_setup"
     if any(keyword in text for keyword in ("诊断", "病害", "虫害", "症状", "叶斑")):
         return "diagnosis_followup"
+    if _has_planting_intent(text):
+        return "planting_plan"
     if any(keyword in text for keyword in ("计划", "方案", "安排", "建议", "测算")):
         return "plan_draft"
     return "followup_task"
@@ -305,6 +476,48 @@ def _has_task_signal(text: str) -> bool:
             "怎么办",
             "建议",
             "规划",
+        )
+    )
+
+
+def _has_natural_task_intent(text: str) -> bool:
+    return _has_planting_intent(text) or _has_diagnosis_intent(text)
+
+
+def _has_planting_intent(text: str) -> bool:
+    if not _extract_crop(text):
+        return False
+    return any(
+        keyword in text
+        for keyword in (
+            "想种",
+            "准备种",
+            "打算种",
+            "计划种",
+            "要种",
+            "能不能种",
+            "适合种",
+            "种植",
+            "播种",
+            "定植",
+        )
+    )
+
+
+def _has_diagnosis_intent(text: str) -> bool:
+    return any(
+        keyword in text
+        for keyword in (
+            "叶子发黄",
+            "叶片发黄",
+            "长斑",
+            "烂根",
+            "萎蔫",
+            "枯萎",
+            "虫",
+            "病",
+            "怎么处理",
+            "怎么办",
         )
     )
 
@@ -368,4 +581,18 @@ def _merge_unique(base: list[str], additions: list[str]) -> list[str]:
     return merged
 
 
-__all__ = ["TaskStateTurn", "update_task_state_after_turn"]
+def _skipped(
+    reason: str,
+    *,
+    task_id: str | None = None,
+    task_type: str = "",
+) -> TaskStateUpdateResult:
+    return TaskStateUpdateResult(
+        action="skipped",
+        reason=reason,
+        task_id=task_id,
+        task_type=task_type,
+    )
+
+
+__all__ = ["TaskStateTurn", "TaskStateUpdateResult", "update_task_state_after_turn"]
