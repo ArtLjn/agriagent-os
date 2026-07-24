@@ -191,6 +191,17 @@ async def _call_one(
     if message is not None:
         return message
 
+    message = _validation_error_message(
+        tool=tool,
+        name=name,
+        args=args,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+    if message is not None:
+        return message
+
     message = _tool_pending._pending_action_message(
         state=state,
         name=name,
@@ -201,17 +212,6 @@ async def _call_one(
         permission_decision=permission_decision,
         collector=collector,
         logger=logger,
-    )
-    if message is not None:
-        return message
-
-    message = _validation_error_message(
-        tool=tool,
-        name=name,
-        args=args,
-        tool_call_id=tool_call_id,
-        permission_decision=permission_decision,
-        collector=collector,
     )
     if message is not None:
         return message

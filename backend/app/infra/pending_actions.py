@@ -127,6 +127,8 @@ class PendingAction:
     follow_up_params: dict | None = None
     follow_up_original_input: str = ""
     session_id: str | None = None
+    repair_attempts: int = 0
+    metadata: dict | None = None
 
 
 @dataclass
@@ -179,6 +181,8 @@ def store_pending(
     follow_up_params: dict | None = None,
     follow_up_original_input: str = "",
     session_id: str | None = None,
+    repair_attempts: int = 0,
+    metadata: dict | None = None,
 ) -> str:
     """存储 pending action，返回 action_id。"""
     action_id = uuid.uuid4().hex
@@ -194,6 +198,8 @@ def store_pending(
         follow_up_params=follow_up_params,
         follow_up_original_input=follow_up_original_input,
         session_id=session_id,
+        repair_attempts=repair_attempts,
+        metadata=metadata,
     )
     logger.info(
         "Pending action 已存储 | farm_id=%d | action_id=%s | skill=%s",
