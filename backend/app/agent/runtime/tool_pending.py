@@ -260,7 +260,9 @@ def _resolve_pending_execution_args(
         tool_name=name,
     )
     if execution_args is not None:
-        return execution_args
+        return _build_pending_execution_args(
+            name, execution_args, farm_id, original_input
+        )
     return _build_pending_execution_args(name, args, farm_id, original_input)
 
 
