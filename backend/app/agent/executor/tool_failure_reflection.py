@@ -11,6 +11,24 @@ from app.skills.candidates import load_skill_candidates
 ToolFailureRepairAction = Literal["no_repair", "ask_repaired_confirmation"]
 
 _MAX_REPAIR_ATTEMPTS = 1
+_CATEGORY_CONSOLIDATION_RULES = (
+    (
+        ("大棚膜", "地膜", "棚膜", "薄膜", "防虫网", "遮阳网", "滴灌带", "水管"),
+        ("农资", "设施耗材", "农用耗材", "耗材", "其他农资", "材料"),
+    ),
+    (
+        ("化肥", "肥料", "复合肥", "有机肥", "尿素"),
+        ("化肥", "肥料"),
+    ),
+    (
+        ("种子", "种苗", "瓜苗", "苗盘"),
+        ("种子", "种苗"),
+    ),
+    (
+        ("农药", "杀虫剂", "杀菌剂", "除草剂"),
+        ("农药",),
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -60,11 +78,12 @@ def reflect_tool_failure(
 
     if _is_manage_cost_missing_category(skill_name, params, reply, alias_metadata):
         repaired_params = dict(params)
-        repaired_params["category"] = _infer_category(
+        category, category_strategy = _infer_category(
             farm_id=farm_id,
             params=repaired_params,
             original_input=original_input,
         )
+        repaired_params["category"] = category
         next_attempts = repair_attempts + 1
         confirmation_text = build_confirm_message(
             skill_name,
@@ -83,6 +102,7 @@ def reflect_tool_failure(
                 "tool_failure_repair": {
                     "field": "category",
                     "value": repaired_params["category"],
+                    "strategy": category_strategy,
                 },
             },
         )
@@ -121,7 +141,7 @@ def _infer_category(
     farm_id: int,
     params: dict[str, Any],
     original_input: str,
-) -> str:
+) -> tuple[str, str]:
     text = " ".join(
         str(value)
         for value in (
@@ -131,27 +151,47 @@ def _infer_category(
         )
         if value not in (None, "")
     )
-    for category in _matched_categories(farm_id, text):
-        return category
-    return "其他"
+    categories = _load_category_candidates(farm_id)
+    for category in _matched_categories(categories, text):
+        return category, "dynamic_exact_match"
+    for category in _consolidated_categories(categories, text):
+        return category, "dynamic_consolidation"
+    return "其他", "fallback_other"
 
 
-def _matched_categories(farm_id: int, text: str) -> list[str]:
-    if not text:
-        return []
+def _load_category_candidates(farm_id: int) -> list[str]:
     try:
         categories = load_skill_candidates(farm_id).values.get("category") or []
     except Exception:
         return []
-    normalized = [str(category).strip() for category in categories if category]
+    return [str(category).strip() for category in categories if category]
+
+
+def _matched_categories(categories: list[str], text: str) -> list[str]:
+    if not text:
+        return []
     candidates = [
-        category for category in normalized if category and category != "其他"
+        category for category in categories if category and category != "其他"
     ]
     return sorted(
         (category for category in candidates if category in text),
         key=len,
         reverse=True,
     )
+
+
+def _consolidated_categories(categories: list[str], text: str) -> list[str]:
+    if not text:
+        return []
+    available = {category for category in categories if category and category != "其他"}
+    matches: list[str] = []
+    for item_terms, category_terms in _CATEGORY_CONSOLIDATION_RULES:
+        if not any(term in text for term in item_terms):
+            continue
+        for category in category_terms:
+            if category in available and category not in matches:
+                matches.append(category)
+    return matches
 
 
 def _safe_alias_metadata(skill_name: str, params: dict[str, Any]) -> dict[str, Any]:
