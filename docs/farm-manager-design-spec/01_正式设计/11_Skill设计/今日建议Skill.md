@@ -25,7 +25,7 @@
 
 | 问题 | 说明 | 风险 |
 | --- | --- | --- |
-| 复用聊天 Agent | 结构化 JSON 生成曾通过 `invoke_advisor` 进入 LangGraph 聊天图 | 系统 prompt、上下文、历史消息叠加后超预算 |
+| 复用聊天 Agent | 结构化 JSON 生成曾复用聊天 runtime | 系统 prompt、上下文、历史消息叠加后超预算 |
 | JSON 输出不稳定 | 本地/轻量模型可能输出半截 JSON 或混入说明文字 | 首页刷新报 JSON 解析失败 |
 | 重试成本高 | 同一超预算 prompt 重试不会改变根因 | `/agent/daily/refresh` 耗时高且仍 fallback |
 | 候选与文案混合 | 让 LLM 同时决定“今天做什么”和“怎么写” | 容易把普通经营状态当成今日行动 |
@@ -157,7 +157,7 @@ DailyAdviceUseCase
 
 硬性约束：
 
-1. `call_type="daily_advice"` 不进入 LangGraph 聊天图。
+1. `call_type="daily_advice"` 不进入聊天 ReAct loop。
 2. 不读取会话历史、不绑定工具、不追加普通聊天 system prompt。
 3. 不执行 pending action。
 4. 输出必须由 `DailyAdviceResponse` 和每日建议 Reflection 双重校验。
@@ -294,7 +294,7 @@ LLM 合法且校验通过
 | 候选收集 | 天气、作业、茬口、资金、配置候选单元测试 |
 | 排序去重 | priority、due_date、类别上限、dedupe key |
 | 生成编排 | parse 失败重试、截断直接 fallback、校验失败 fallback |
-| 架构边界 | `call_type=daily_advice` 不进入聊天图 |
+| 架构边界 | `call_type=daily_advice` 不进入聊天 ReAct loop |
 | API | `GET /agent/daily`、`POST /agent/daily/refresh` 响应符合 v2 schema |
 | 缓存 | 当日缓存命中、候选指纹变化时失效 |
 
@@ -323,4 +323,3 @@ backend/.venv/bin/python -m pytest \
 | 刷新接口 | 删除今日缓存后重新生成，失败也返回可展示 fallback |
 | 普通聊天上下文很长 | 不影响今日建议 prompt 预算 |
 | 无到期日欠款/未结人工 | 不作为今日建议 item 出现 |
-

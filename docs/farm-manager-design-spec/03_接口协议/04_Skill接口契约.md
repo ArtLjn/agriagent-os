@@ -201,8 +201,11 @@ data: {"message_id": 123}
 ### 6.5 用户确认
 
 ```
-POST /api/v1/pending/{pending_id}/confirm
+POST /agent/chat
+{"message": "确认", "session_id": "..."}
 ```
+
+当前仓库未暴露独立 `/pending/*` HTTP 路由。用户确认/取消由下一轮 `/agent/chat` 或 `/agent/chat/stream` 消息进入 `handle_pending_action()`，再执行 pending action / pending plan。
 
 ### 6.6 Executor 真正执行
 
@@ -267,7 +270,7 @@ async def execute(self, params, context):
 ## 9. Skill 注册表查询
 
 ```
-GET /api/v1/admin/skills
+GET /admin/skills
 ```
 
 返回：
@@ -284,8 +287,8 @@ GET /api/v1/admin/skills
       "permission": "write_confirm",
       "direct_call": false,
       "cache": "none",
-      "skill_md_path": "backend/app/agent/skills/create-cost-record/skill.md",
-      "scripts_path": "backend/app/agent/skills/create-cost-record/scripts/"
+      "skill_md_path": "backend/app/skills/manage-cost/skill.md",
+      "scripts_path": "backend/app/skills/manage-cost/scripts/"
     }
   ]
 }
@@ -297,7 +300,7 @@ CI 强制检查（`backend/tests/skills/test_skill_docs.py`）：
 
 | 检查项 | 要求 |
 | --- | --- |
-| 目录存在 | `backend/app/agent/skills/<name>/` |
+| 目录存在 | `backend/app/skills/<name>/` |
 | `skill.md` 存在 | 必填 |
 | frontmatter `name` | 必填，kebab-case |
 | frontmatter `tool_name` | 必填（若 name 是 kebab-case），snake_case |
@@ -310,7 +313,7 @@ CI 强制检查（`backend/tests/skills/test_skill_docs.py`）：
 | 正文 `## Runtime 策略` | 必填，含 permission / direct_call / direct_return / cache |
 | 正文 `## 失败处理` | 必填 |
 | 正文 `## 示例` | 必填，至少 1 个 |
-| `scripts/main.py` 存在 | 必填 |
+| `scripts/main.py` 存在 | 复杂执行 Skill 必填；纯声明或聚合型 Skill 按实现需要 |
 | Skill 类继承 Skill 基类 | 必填 |
 | Skill 类实现 4 个方法 | 必填（name/description/parameters_schema/execute） |
 | 测试文件存在 | 必填 |

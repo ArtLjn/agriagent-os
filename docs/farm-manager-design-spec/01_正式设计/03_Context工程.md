@@ -237,7 +237,7 @@ Task Context 解决“多轮任务在同一 session 内可恢复”的问题。
 当前明确不做：
 
 - 不做多任务调度。
-- 不做复杂 planner。
+- 不做复杂多任务 planner；当前仅与 Router/PlanDraft 的轻量计划状态协作。
 - 不把普通账务查询或记账确认流程升级为 TaskState。
 - 不把 TaskState 自动写入长期记忆或 RAG。
 

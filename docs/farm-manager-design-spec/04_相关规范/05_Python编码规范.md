@@ -21,51 +21,57 @@ CI 用 `ruff` 检查。
 ### 2.1 分层架构
 
 ```
-models/        # SQLAlchemy 数据模型（被多模块共享）
+bootstrap/routes
     ↓
-repositories/ # 数据库访问（可选，简单场景 Service 直接用 db）
+domains/*/routes、platforms/*/routes、application/*
     ↓
-services/      # 业务逻辑
+domains/*/service、agent/*、context/*、memory/*、prompt/*、skills/*
     ↓
-api/           # FastAPI 路由 + Pydantic schemas
+shared/、infra/
 ```
 
-### 2.2 模块化（modules/）
+### 2.2 领域化与平台化
 
 ```
-backend/app/modules/
-├── auth/
-├── farm/
-├── crop/      # 待迁
-├── cycle/     # 待迁
-├── ledger/    # 待迁
-└── weather/   # 待迁
+backend/app/
+├── domains/
+│   ├── users/
+│   ├── farm/
+│   ├── planting/
+│   ├── finance/
+│   ├── weather/
+│   └── conversation/
+└── platforms/
+    ├── admin/
+    ├── data_flywheel/
+    ├── evaluation/
+    └── simulation/
 ```
 
-每个模块自包含 router / service / dependencies / ports / schemas / errors。
+每个业务领域自包含 routes / service / dependencies / schemas / models / errors 等真实职责。不得新增 `app.modules`、`app.services`、`app.models` 等旧入口。
 
 ### 2.3 Agent 平台
 
 ```
 backend/app/
-├── agent/        # Application / Runtime / Planner / Executor / Reflector
+├── application/  # chat/session/advice/report/smart_fill use case
+├── agent/        # Router / Runtime / Executor / Reflector / Guardrails
 ├── prompt/       # Prompt 工程
 ├── context/      # Context 工程
 ├── memory/       # Memory 工程
-├── evaluation/   # 评测
-├── simulation/   # 仿真
-└── observability/ # 观测
+├── platforms/    # admin / data_flywheel / evaluation / simulation
+└── observability.py # 观测事件
 ```
 
 详见 [01_正式设计/01_Agent平台架构](../01_正式设计/01_Agent平台架构.md)。
 
 ### 2.4 配置集中
 
-`backend/app/core/config.py` 统一管理 Pydantic Settings，业务代码只读不写。
+`backend/app/shared/config.py` 统一管理 Pydantic Settings，支持 YAML 与环境变量覆盖，业务代码只读不写。
 
 ### 2.5 公共工具
 
-`backend/app/core/` 放共享工具（logger、security、date context、LLM client manager），业务代码 import。
+`backend/app/shared/` 放配置、数据库、日志、安全、时间、schema、LLM client manager；`backend/app/infra/` 放 Mongo、trace、limiter、repository runtime、RAG client 等适配。
 
 ## 3. 设计模式
 
@@ -220,13 +226,13 @@ backend/tests/
 ├── api/
 │   ├── test_agent.py
 │   └── test_cost.py
-├── services/
+├── services/              # 历史测试目录仍有保留，新增优先按 domains/platforms 分类
 │   └── test_cost_service.py
 ├── skills/
 │   └── test_create_cost_record.py
 ├── agent/
 │   └── runtime/
-│       └── test_graph_factory.py
+│       └── test_runtime_loop.py
 └── conftest.py
 ```
 
@@ -260,8 +266,8 @@ class TestCreateCostRecord:
 ## 11. Lint
 
 ```bash
-poetry run ruff check .
-poetry run ruff format .
+ruff check .
+ruff format .
 ```
 
 CI 阻塞 lint 失败。
@@ -290,9 +296,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 # 本项目
-from app.core.config import settings
-from app.models.cost import Cost
-from app.services.cost_service import create_cost
+from app.shared.config import settings
+from app.domains.finance.cost_models import CostRecord
+from app.domains.finance.cost_service import create_cost
 ```
 
 **禁止**：

@@ -11,8 +11,7 @@
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite">
-  <img src="https://img.shields.io/badge/React_Native-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React Native">
-  <img src="https://img.shields.io/badge/LangGraph-1C3C3C?style=flat-square" alt="LangGraph">
+  <img src="https://img.shields.io/badge/Flutter-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter">
   <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square" alt="LangChain">
   <img src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white" alt="SQLAlchemy">
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
@@ -22,8 +21,8 @@
 
 # AgriAgent OS 设计规范（Design Spec）
 
-> 版本：v1.2（草稿，全部 34 篇骨架已成 + Context/Memory 压缩机制修订 + Discovery Layer 设计补充 + 知识与记忆架构梳理 + 完整脱敏 + 作物地域化 delta 提案同步 + 数据库结构设计补全 + Agent 范式规范化设计）  
-> 编写日期：2026-06-20  
+> 版本：v1.4（草稿，按 2026-07-24 代码现状校准关键章节：后端真实分层、Flutter 移动端、HTTP 路由、数据库模型、Simulation/Evaluation 入口）
+> 最近校准：2026-07-24
 > 维护人：BlockShip  
 > 文档状态：草稿，持续对齐 `docs/architecture/` 与代码现状
 
@@ -46,7 +45,7 @@
 | `.claude/rules/*.md` | 引用为权威，本 Spec 不复述条款，只索引位置 |
 | `.claude/rules/skill-writing.md` | 与 [01_正式设计/02_Skill引擎与契约.md](./01_正式设计/02_Skill引擎与契约.md) 一致，冲突时以 `skill-writing.md` 为准 |
 
-冲突原则：代码 > `docs/architecture/` > 本 Spec > 历史 commit。任何不一致**先改本 Spec 再改代码**。
+冲突原则：代码与 `AGENTS.md` 硬规则 > `docs/architecture/` > 本 Spec > 历史 commit。本文档若与真实代码不一致，先按代码事实更新本 Spec；若要改变实现，再另开设计/代码变更。
 
 ## 目录速览
 
@@ -125,11 +124,11 @@
 
 ## 硬约束（违反即 PR 不通过）
 
-1. **依赖方向**：`schemas/ → agent/application → agent/runtime → modules → services → core/infra → models`；前端 `api/ → components → layouts → pages`。详见 [01.01 Agent平台架构](./01_正式设计/01_Agent平台架构.md)。
+1. **依赖方向**：后端以 `bootstrap/routes → application/domains/platforms/agent → shared/infra` 为目标，禁止新增 `app.core`、`app.api`、`app.models`、`app.schemas`、`app.services`、`app.modules`、`app.simulation` 旧入口；前端 `api → components → layouts → pages`。详见 [01.01 Agent平台架构](./01_正式设计/01_Agent平台架构.md)。
 2. **横切关注点**：auth / log / telemetry / trace 只通过依赖注入，禁止业务层直接 import。
 3. **文件与方法限制**：生产 Python 文件 ≤ 1000 行，500-1000 行按职责观察评审；方法建议 ≤ 50 行，超过 80 行需说明或拆分；类 ≤ 200 行；方法参数 ≤ 5 个。
 4. **新代码必有测试**：覆盖率 ≥ 80% 为目标，关键路径必须覆盖。
-5. **Skill 契约**：每个 Skill 必须有 `skill.md` + `scripts/main.py`，且符合 [01.02 Skill引擎与契约](./01_正式设计/02_Skill引擎与契约.md)。
+5. **Skill 契约**：Skill 真实代码位于 `backend/app/skills/*/`，每个 Skill 必须有 `skill.md`；写操作脚本按需放在 `scripts/`，并符合 [01.02 Skill引擎与契约](./01_正式设计/02_Skill引擎与契约.md)。
 6. **结构化日志**：禁止 `print` / `console.log` 调试；日志带 `trace_id`。
 7. **数据库变更**：只用 Alembic；禁止手动 SQL 改表；统一 MySQL 8.x，charset `utf8mb4`。
 8. **写操作 Skill 不允许缓存**，不允许缺参猜测业务关键字段。
@@ -144,8 +143,8 @@
 
 | 术语 | 解释 |
 | --- | --- |
-| Agent | 农场助手智能体，由 Application + Runtime + Planner + Executor + Reflector 组成 |
-| Advisor | Agent 兼容入口，处理 Guardrails、问候、Pending Action、流式编排 |
+| Agent | 农场助手智能体，由 Application Chat + Router + Runtime Loop + Executor + Reflector 组成 |
+| Advisor | 历史概念已收敛到 `application/chat` + `agent/runtime` + `agent/guardrails` + `agent/executor`，文档中仅作兼容术语 |
 | Skill | 单一能力模块，按 `.claude/rules/skill-writing.md` 契约实现，分只读 / 写操作 |
 | ContextBundle | Runtime 消费的动态上下文包，由 Selector + Budget + Compressor 构造 |
 | MemoryService | 短时记忆 + 长时记忆 + Retrieval + Observation 的统一接口端口 |
@@ -154,7 +153,7 @@
 | Simulation | 回归执行台：跑 DB-backed regression cases |
 | Evaluation | 趋势评分台：版本对比通过率、工具选择准确率、pending 漏拦截率 |
 | Pending Action | 写操作需用户确认的暂存动作，支持确认/取消/过期 |
-| Smart Fill | 移动端智能填写统一入口：`/api/v1/scenarios` 列场景 + `/parse` 解析 |
+| Smart Fill | 移动端智能填写统一入口：`/smart-fill/scenarios` 列场景 + `/smart-fill/parse` 解析 |
 | Farm Cockpit | 移动端首页驾驶舱，承载每日建议、关键指标、快捷入口 |
 | Yaya | 移动端 AI 助理对话页（芽芽 IP） |
 
@@ -167,14 +166,15 @@
 | v0.3 | 2026-06-19 | [03_Context工程] § 6 压缩策略改为贴合实际代码（5 道关卡 + 多轮失忆根因 + 主流方案对比 + 推荐方案）；[04_Memory工程] § 6 短期记忆补"当前实现 / 已识别问题 / 修复方向"，新增 § 12 多轮失忆治理路线、§ 13 存储演进路线（Redis 决策：当前不上） | BlockShip |
 | v0.4 | 2026-06-19 | [01_正式设计/06_数据飞轮与评测] 新增 § 9 Discovery Layer 与风险发现（2 级过滤 + 取 max 评分 + 规则引擎 + LLM Judge + 工作台 3 处改动 + MVP 4.5 人日），原 § 9-§ 12 顺延为 § 10-§ 13；[00_预设计/02_系统功能及技术架构总设计] 架构图 + 五大子系统表 + § 5.7 决策 + § 7 落地状态补 Discovery Layer | BlockShip |
 | v0.5 | 2026-06-19 | 知识与记忆架构梳理（brainstorming 产出）：[04_Memory工程] § 7 长时记忆补 § 7.2 落地实施（candidate→confirmed 流转 + memory_records 新建表 + 与 summary 共触发）；§ 8 检索补 § 8.2 引入 Qdrant 触发条件（4 条同时满足）+ § 8.3 实施边界；§ 14 当前状态 / § 16 相关文档同步；[02_Skill引擎与契约] create_crop_template 加 region 注释。详见 [docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md](../superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md) | BlockShip |
-| v0.6 | 2026-06-19 | 脱敏：删除对比章节中的具体外部项目名与路径（[Readme]、[01_Agent平台架构] § 9、[02_系统功能及技术架构总设计] § 6、[04_Memory工程] § 15），改写为"典型多 Agent 系统 / 典型 Agent 架构"；删除生产服务器 IP（[07_可观测与运维] § 11、[03_技术选型与依赖] § 5.1） | BlockShip |
-| v0.7 | 2026-06-19 | 深度脱敏补漏：[07_可观测与运维] § 5 删除"对齐智能家居 LOGBUS 风格"，§ 11 部署路径 / 服务名 / 运维脚本全部改为占位（`<repo_dir>` / `<service_name>`）；[03_技术选型与依赖] § 5 同步；[03_接口协议/03_外部服务接口] § 5/§ 6 日志路径 + systemd unit 中所有 `/root/workspace/...` 改占位、User 字段改 `<deploy_user>` | BlockShip |
+| v0.6 | 2026-06-19 | 脱敏：删除对比章节中的具体外部项目名与路径（[Readme]、[01_Agent平台架构] § 9、[02_系统功能及技术架构总设计] § 6、[04_Memory工程] § 15）；删除生产服务器 IP（[07_可观测与运维] § 11、[03_技术选型与依赖] § 5.1） | BlockShip |
+| v0.7 | 2026-06-19 | 深度脱敏补漏：[07_可观测与运维] § 5 删除外部风格对齐说明，§ 11 部署路径 / 服务名 / 运维脚本全部改为占位（`<repo_dir>` / `<service_name>`）；[03_技术选型与依赖] § 5 同步；[03_接口协议/03_外部服务接口] § 5/§ 6 日志路径 + systemd unit 中所有 `/root/workspace/...` 改占位、User 字段改 `<deploy_user>` | BlockShip |
 | v0.8 | 2026-06-19 | 作物地域化同步：新建 [openspec/changes/extend-crop-template-with-region-tag](../../openspec/changes/extend-crop-template-with-region-tag/proposal.md) delta 提案（proposal/design/specs/tasks 完整）；同步 [04_相关规范/03_数据库与迁移规范] 表清单 `crops → crop_templates` + region_tag 说明；[01_正式设计/08_业务模块化] CropPort 签名加 region + 新增 list_system_templates / import_system_template；[02_产品需求/01_核心能力清单] 作物管理补地域化变体；[03_接口协议/01_HTTP_API协议] 补 `GET /crops/templates/system?region=` 与 `POST /import` 端点 | BlockShip |
 | v0.9 | 2026-06-20 | 新增 [01_正式设计/10_数据库结构设计]：以 `backend/sql/farm_manager.sql` 生产 dump 为基准，反推 33 张表（含 `alembic_version`）的字段、约束、索引、外键；附接口→表映射矩阵、生产 vs 代码层差异对账、预留待建表（`memory_records`/`audit_logs`/`evaluation_reports` 等） | BlockShip |
 | v1.0 | 2026-06-22 | Running summary Phase A 落地：`conversations.summary` 自动生成与持久化、`set_session_summary()` 同步缓存、ConversationSelector 注入 `conversation_summary` block；长期记忆提取仍保持拆分提案单独推进 | BlockShip |
 | v1.1 | 2026-06-22 | 新增 [01_正式设计/12_Skill路由选择架构]：定义 Skill Catalog、Rule Classifier、Router Policy、Direct Routing、Tool Chain、Trace 与批量回归门禁；明确 `get_farm_status` 只用于泛化农场状态，禁止所有读 Skill 隐式扩展到农场状态 | BlockShip |
 | v1.2 | 2026-06-23 | 新增 [01_正式设计/13_Agent范式规范化设计]：定性当前单主 Agent + Skill + 触发式反思范式，补当前/目标架构图、Reflection 触发规范、Skill 触发树、农事用工子树、不过度设计的三阶段落地与回归种子 | BlockShip |
 | v1.3 | 2026-07-06 | [01_正式设计/06_数据飞轮与评测] 补充问题仓与规则候选治理：明确人工坏会话入仓、IssueRepositoryEntry、RuleCandidatePackage、正例/反例验证、晋级门禁，以及“作物/茬口/农场状态”Skill 选错专项样板 | BlockShip |
+| v1.4 | 2026-07-24 | 按真实代码扫描校准入口文档：React Native 改 Flutter；旧 `app.core/api/models/schemas/services/modules/simulation` 入口改为 `bootstrap/application/domains/agent/context/memory/platforms/shared/infra/skills`；HTTP API、数据库来源、Simulation/Evaluation 状态和路线图同步当前实现 | Codex |
 
 ## 协议
 

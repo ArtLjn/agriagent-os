@@ -7,7 +7,7 @@
 ## 1. 目的
 
 回归测试只看"最终结果对不对"，但 Agent 是黑盒多步流程，需要更细粒度的仿真：
-- 验证 Planner 决策路径
+- 验证 Router 决策与 runtime loop 执行路径
 - 验证 Skill 调用顺序
 - 验证 Reflector 触发条件
 - 验证 PendingAction 流转
@@ -18,7 +18,7 @@
 | 维度 | 集成测试 | 仿真测试 |
 | --- | --- | --- |
 | LLM | mock | 真 LLM |
-| DB | 测试 SQLite | 测试 schema 或影子库 |
+| DB | MySQL 测试 schema / fixture | 测试 schema 或影子库 |
 | 关注 | API 契约 / 数据正确性 | Agent 行为 / 决策路径 |
 | 速度 | 秒级 | 分钟级 |
 | 成本 | 低 | 高（LLM token） |
@@ -83,8 +83,8 @@ Trace 落 `trace_records` 表 + JSONL 文件，供报告渲染。
     "max_latency_ms": 8000
   },
   "llm_config": {
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-6",
+    "provider": "dashscope-compatible",
+    "model": "qwen3.6-35b-a3b",
     "temperature": 0
   }
 }
@@ -103,29 +103,22 @@ Trace 落 `trace_records` 表 + JSONL 文件，供报告渲染。
 ## 7. 启动命令
 
 ```bash
-# 基础
-poetry run python -m app.simulation.run --suite smoke
+# 基础：运行当前 Simulation 测试
+pytest tests/simulation -q
 
-# 完整
-poetry run python -m app.simulation.run \
-  --suite regression \
-  --llm-config configs/sim-claude-sonnet.yaml \
-  --report-dir backend/simulation/reports/$(date +%Y-%m-%d) \
-  --parallel 4
+# 后端启动后通过 API 发起仿真
+curl -X POST http://localhost:8000/simulation/run
 
-# A/B（对比新旧 Prompt）
-poetry run python -m app.simulation.run \
-  --suite regression \
-  --ab-config configs/ab-prompt-v3.yaml
+# 查看运行列表
+curl http://localhost:8000/simulation/runs
 
-# 失败用例复跑
-poetry run python -m app.simulation.run \
-  --rerun-failed backend/simulation/reports/2026-06-19/failures.json
+# 查看报告
+curl http://localhost:8000/simulation/reports/{run_id}
 ```
 
 ## 8. 报告
 
-输出到 `backend/simulation/reports/<run_id>/`：
+当前报告由 `backend/app/platforms/simulation/reporter.py` 生成，并可通过 `/simulation/reports/{run_id}` 查询。若需要文件落盘目录，应在 Simulation 平台单独定义；下面的 `reports/` 结构是历史文件化报告示例，不代表当前仓库已有固定落盘目录。
 
 ```
 reports/2026-06-19_153020/
@@ -187,11 +180,11 @@ reports/2026-06-19_153020/
 仿真跑完后，可顺手触发 Evaluation：
 
 ```bash
-poetry run python -m app.simulation.run --suite regression \
-  && poetry run python -m app.evaluation.run \
-    --input backend/simulation/reports/latest \
-    --output backend/evaluation/reports/$(date +%Y-%m-%d)
+pytest tests/simulation -q
+pytest tests/evaluation -q
 ```
+
+如需跨平台聚合报告，调用或扩展 `backend/app/platforms/evaluation/reports/builder.py`；当前仓库没有 `app.evaluation.run` CLI。
 
 详见 [04_Evaluation评测.md](./04_Evaluation评测.md)。
 

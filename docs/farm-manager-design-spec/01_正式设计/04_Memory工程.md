@@ -175,12 +175,12 @@ LLM 抽取（qwen3.6 + 现有熔断器）
   中置信 / fact/event → 候选队列 importance=0.3
 ```
 
-**memory_records 表（新建，当前 long_term 是空实现）**：
+**memory_records 表（已落地，当前显式长期记忆使用 MySQL 存储）**：
 
 ```python
 class MemoryRecord(Base):
     __tablename__ = "memory_records"
-    id, farm_id, user_id
+    id, memory_id, farm_id, user_id
     type        # preference / habit / alias / event / fact
     content     # 自然语言
     importance  # 0.0-1.0
@@ -188,7 +188,7 @@ class MemoryRecord(Base):
     confidence  # LLM 抽取置信度
     source      # user_explicit / llm_extracted
     superseded_by_id  # 软覆盖指针
-    created_at, confirmed_at, last_referenced_at
+    created_at, updated_at, archived_at
 ```
 
 **importance 流转规则**：
@@ -204,7 +204,7 @@ class MemoryRecord(Base):
 - 显式：用户说"记一下" → `source=user_explicit`，直接 confirmed (0.8)
 - 隐式：LLM 抽取 → `source=llm_extracted`，走候选流程
 
-**注入**：[context/selectors/memory.py](../../../backend/app/context/selectors/memory.py) MemorySelector 扩展查询 `WHERE status IN ('confirmed','candidate') AND importance >= 0.3 ORDER BY importance DESC, last_referenced_at DESC LIMIT 5`，作为 `memory.long_term` block 注入（priority 介于 conversation_summary 与 retrieval 之间）。
+**注入**：[context/selectors/memory.py](../../../backend/app/context/selectors/memory.py) MemorySelector 通过 `MemoryService.build_context()` 获取短时、summary、pending、temporary task state 与长期记忆上下文，作为 memory block 注入。
 
 **不做**：
 - ❌ 不做 embedding 相似检索（事实型偏好不需要语义匹配，SQL where 够）
@@ -221,10 +221,10 @@ class RetrievalPort(Protocol):
     """预留 RAG 接口。"""
 
     async def search(self, query: str, types: list[str], top: int = 5) -> list[MemoryRecord]:
-        """当前返回 []，未来接 Qdrant。"""
+        """当前返回 []；未来可接外部 QuillRAG 或向量检索服务。"""
 ```
 
-### 8.2 引入 Qdrant 的触发条件（必须同时满足）
+### 8.2 引入向量检索服务的触发条件（必须同时满足）
 
 参考 [docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md § 5](../../../docs/superpowers/specs/2026-06-19-knowledge-and-memory-architecture-design.md)。
 
@@ -235,14 +235,14 @@ class RetrievalPort(Protocol):
 | 3 | 现有结构化表无法覆盖（不在作物模板/账单分类/物候期里） | 部分 | 由 1 推断 |
 | 4 | LLM 当前对这类问题满意度 < 60% | 未知 | trace 抽样评分 |
 
-**任一不满足 → 不引入 Qdrant**。Qdrant 资源不是约束（已调研 50 用户量内扛得住），约束是**业务驱动 + 内容来源**。
+**任一不满足 → 不引入内置向量库**。当前仓库已有 `rag_service` 外部只读检索配置和 `infra/quillrag_client.py`，但默认关闭；约束是**业务驱动 + 内容来源**。
 
-### 8.3 引入时的边界（预案，现在不做）
+### 8.3 引入时的边界（预案，现在不做内置向量库）
 
-- `docker-compose` 加 Qdrant 服务
-- 实现 `RetrievalPort` 的 Qdrant 适配器（独立模块 `backend/app/memory/retrieval/qdrant_adapter.py`）
+- 优先接外部 QuillRAG / RAG 服务，而不是在 2C4G 部署内新增向量库
+- 如确需内置向量库，再单独设计 adapter 与部署资源
 - 内容录入工具（admin web 单独页面）
-- [context/selectors/retrieval.py](../../../backend/app/context/selectors/retrieval.py) RetrievalSelector 已存在，自动消费
+- [context/selectors/knowledge.py](../../../backend/app/context/selectors/knowledge.py) 负责知识检索上下文接入
 - **ContextBuilder / MemoryService 边界不动**
 
 接入 RAG 时，只需实现此端口并替换 MemoryService 内部依赖。
@@ -399,29 +399,29 @@ Phase 6（多机部署）→ Redis cluster + 持久化策略
 ## 14. 当前状态
 
 - ✅ MemoryService 端口
-- ✅ short_term/ 短时记忆骨架（in-memory deque，`recent_message_limit=12`）
+- ✅ short_term/ 短时记忆骨架（in-memory，`recent_message_limit=12`）
 - ✅ ObservationEvent 提交（每次对话都记录）
 - ✅ Conversation 表 `summary` + `summary_updated_at` 字段已接通 running summary 自动生成与持久化（零迁移）
 - ✅ `set_session_summary()` 已由 MemoryService 同步更新，保持 in-memory cache 兼容
-- 🚧 long_term/ 当前是空实现（[memory/long_term/store.py](../../../backend/app/memory/long_term/store.py) 返回空 LongTermMemoryContext）—— 落地实施详见 § 7.2
-- 🚧 consolidation/ 整合任务（骨架，待落地）
-- 🚧 retrieval/ RAG 接入（预留空实现，触发条件详见 § 8.2）
+- ✅ long_term/ SQL 长期记忆存储已落地（[memory/long_term/store.py](../../../backend/app/memory/long_term/store.py) + `memory_records`）
+- ✅ consolidation/ observation 基础已落地（[memory/consolidation/observation.py](../../../backend/app/memory/consolidation/observation.py)）
+- 🚧 retrieval/ 语义检索仍为空实现；外部 QuillRAG 配置默认关闭（触发条件详见 § 8.2）
 - 🚧 extract.py LLM 自动提取（落地实施详见 § 7.2）
-- 🚧 short_term 从 in-memory 迁到 DB（详见 § 6.4、§ 13.4）
-- ❌ Qdrant 不上（详见 § 8.2 触发条件）
+- 🚧 short_term 仍保留 in-memory 加速层，同时会话消息和 summary 已持久化到 DB
+- ❌ 当前不内置 Qdrant（详见 § 8.2 触发条件）
 
-## 15. 与典型多 Agent 系统的对比
+## 15. 当前 Memory 边界
 
-| 维度 | 典型多 Agent 系统 | Farm Manager |
-| --- | --- | --- |
-| 记忆类型 | habit/alias/preference/event/profile | 同 |
-| 上限 | habit 50/alias 100/preference 30/event 20/profile 10 | 同（一致） |
-| 存储 | 外部 RAG 服务 | 自有 MySQL + 预留 RAG 端口 |
-| 检索 | 语义相似度 + confidence | 当前空，预留 |
-| 跨设备共享 | 同 home_id 共享 | 同 farm_id 共享 |
-| 整合 | 自动淘汰 + importance | 同 |
-| Session 摘要 | 自动 LLM 摘要 | **未接通**（§ 12 待落地） |
-| Redis | 平台基础设施 | **不上**（§ 13） |
+| 维度 | 当前设计 |
+| --- | --- |
+| 记忆类型 | preference / alias / fact / event / habit 等长期记忆类型 |
+| 上限策略 | 按 farm/user/类型维度控制数量，避免 2C4G 环境下无限增长 |
+| 存储 | 自有 MySQL + MemoryService 端口；外部 RAG 仅作为可选只读检索 |
+| 检索 | SQL 长期记忆已落地；语义检索仍为空实现，未配置 RAG 时返回空知识块 |
+| 共享边界 | 以 farm_id / user_id 为隔离边界 |
+| 整合 | observation / consolidation 基础已落地，自动提取仍需继续完善 |
+| Session 摘要 | 已接通 running summary，并同步 DB 与 in-memory cache |
+| Redis | 当前不上，短期使用 in-memory 加速层 + DB 持久化 |
 
 ## 16. 相关文档
 
