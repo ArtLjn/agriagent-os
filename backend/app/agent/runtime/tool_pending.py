@@ -1,4 +1,4 @@
-import re
+import logging
 from typing import Any
 
 from langchain_core.messages import ToolMessage
@@ -6,6 +6,7 @@ from langchain_core.messages import ToolMessage
 from app.agent.reflector import ReflectorService
 from app.agent.reflector.models import ReflectionDecision, ReflectionTrigger
 from app.agent.router import SkillRouter
+from app.agent.runtime.crop_cycle_setup_planner import build_crop_cycle_setup_steps
 from app.agent.runtime.tool_metadata import (
     _PermissionDecision,
     _permission_trace_output,
@@ -30,10 +31,9 @@ from app.infra.pending_actions import (
     store_pending_plan,
 )
 from app.infra.trace_collector import get_collector
+from app.shared.logging import log_event
 
-_CROP_VARIETY_RE = re.compile(
-    r"(?<!\d)([A-Za-z]*\d+[A-Za-z0-9-]*)(?!\s*(?:亩|元|块|天|号|年|月|日))"
-)
+logger = logging.getLogger(__name__)
 
 
 def _pending_plan_tool_message(
@@ -61,14 +61,18 @@ def _pending_plan_tool_message(
                 source="plan_draft",
             )
 
-    crop_cycle_steps = _crop_cycle_template_preflight_steps(tool_calls, original_input)
-    if crop_cycle_steps:
+    crop_setup_plan = build_crop_cycle_setup_steps(
+        tool_calls=tool_calls,
+        original_input=original_input,
+        context_bundle=state.get("context_bundle"),
+    )
+    if crop_setup_plan is not None:
         return _store_pending_plan_from_steps(
             state=state,
             farm_id=farm_id,
             original_input=original_input,
             tool_calls=tool_calls,
-            steps=crop_cycle_steps,
+            steps=crop_setup_plan.steps,
             router_decision=plan_draft if isinstance(plan_draft, dict) else {},
             source="crop_cycle_template_preflight",
         )
@@ -122,87 +126,6 @@ def _same_tool_name_sequence(tool_calls: list[dict], steps: list[dict]) -> bool:
     return [str(tool_call.get("name") or "") for tool_call in tool_calls] == [
         str(step.get("tool_name") or step.get("skill_name") or "") for step in steps
     ]
-
-
-def _crop_cycle_template_preflight_steps(
-    tool_calls: list[dict],
-    original_input: str,
-) -> list[dict]:
-    if len(tool_calls) != 1:
-        return []
-    tool_call = tool_calls[0]
-    if str(tool_call.get("name") or "") != "manage_crop_cycle":
-        return []
-    args = tool_call.get("args")
-    if not isinstance(args, dict):
-        return []
-    if str(args.get("operation") or "") != "create_cycle":
-        return []
-    crop_name = str(args.get("crop_name") or "").strip()
-    if not crop_name:
-        return []
-
-    cycle_params = dict(args)
-    cycle_params["operation"] = "create_cycle"
-    template_params: dict[str, Any] = {
-        "operation": "create_template",
-        "crop_name": crop_name,
-    }
-    variety = _crop_variety_for_template(cycle_params, original_input, crop_name)
-    if variety:
-        template_params["variety"] = variety
-
-    return [
-        {
-            "step_id": "ensure_crop_template",
-            "tool_name": "manage_crop_templates",
-            "params": template_params,
-            "depends_on": [],
-        },
-        {
-            "step_id": "create_crop_cycle",
-            "tool_name": "manage_crop_cycle",
-            "params": cycle_params,
-            "depends_on": ["ensure_crop_template"],
-        },
-    ]
-
-
-def _crop_variety_for_template(
-    cycle_params: dict[str, Any],
-    original_input: str,
-    crop_name: str,
-) -> str | None:
-    variety = _clean_crop_variety(cycle_params.get("variety"))
-    if variety:
-        return variety
-    for text in (cycle_params.get("cycle_name"), original_input):
-        variety = _extract_crop_variety(str(text or ""), crop_name)
-        if variety:
-            return variety
-    return None
-
-
-def _extract_crop_variety(text: str, crop_name: str) -> str | None:
-    if not text:
-        return None
-    normalized = (
-        text.replace(crop_name, " ")
-        .replace("茬口", " ")
-        .replace("种植", " ")
-        .replace("周期", " ")
-    )
-    match = _CROP_VARIETY_RE.search(normalized)
-    if not match:
-        return None
-    return _clean_crop_variety(match.group(1))
-
-
-def _clean_crop_variety(value: Any) -> str | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    return text
 
 
 def _pending_plan_steps_from_tool_calls(tool_calls: list[dict]) -> list[dict]:
@@ -450,6 +373,25 @@ def _pending_plan_contract_messages(
     content = "待确认计划参数不完整：\n" + "\n".join(
         f"{item['step_id']} {item['tool_name']}：{item['message']}" for item in blocked
     )
+    log_event(
+        logger,
+        logging.WARNING,
+        "pending_plan_contract_blocked",
+        code="pending_plan_contract_blocked",
+        step_id=f"pending-plan-contract-{blocked[0]['step_id']}",
+        status="blocked",
+        data={
+            "source": source,
+            "tool": blocked[0]["tool_name"],
+            "missing_fields": _blocked_missing_fields(blocked),
+            "diagnosis": _first_param_source_diagnosis(diagnostics),
+        },
+        error={
+            "type": "contract_validation_error",
+            "message": _pending_plan_contract_error_message(blocked),
+            "recover": "ask_user_to_supply_missing_fields_or_rebuild_plan_from_tool_calls",
+        },
+    )
     collector.record(
         node_type="skill_call",
         node_name="pending_plan",
@@ -558,6 +500,33 @@ def _pending_plan_contract_diagnostics(
             )
         ]
     }
+
+
+def _blocked_missing_fields(blocked_steps: list[dict[str, Any]]) -> list[str]:
+    fields: list[str] = []
+    seen: set[str] = set()
+    for step in blocked_steps:
+        validation = step.get("contract_validation")
+        if not isinstance(validation, dict):
+            continue
+        for field in validation.get("missing_fields") or []:
+            field_name = str(field)
+            if field_name in seen:
+                continue
+            fields.append(field_name)
+            seen.add(field_name)
+    return fields
+
+
+def _first_param_source_diagnosis(diagnostics: dict[str, Any]) -> str | None:
+    diffs = diagnostics.get("param_source_diffs")
+    if not isinstance(diffs, list) or not diffs:
+        return None
+    first = diffs[0]
+    if not isinstance(first, dict):
+        return None
+    diagnosis = first.get("diagnosis")
+    return str(diagnosis) if diagnosis else None
 
 
 def _pending_step_tool_call_diff(

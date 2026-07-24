@@ -58,7 +58,31 @@ def test_list_conversation_items_uses_summary_without_full_scan():
     db.close()
 
 
-def test_list_conversation_items_skips_empty_shell_conversations(monkeypatch):
+def test_list_conversation_items_does_not_load_messages_for_preview(monkeypatch):
+    db = Session()
+    farm = db.query(Farm).filter_by(id=1).one()
+    get_or_create_conversation(
+        db, farm_id=1, session_id="sess-no-message-scan", user_id="user-1"
+    )
+
+    def _fail_if_messages_are_loaded(*_args, **_kwargs):
+        raise AssertionError("列表接口不应加载完整消息")
+
+    monkeypatch.setattr(
+        history_use_case,
+        "get_conversation_messages",
+        _fail_if_messages_are_loaded,
+    )
+
+    items = list_conversation_items(db, farm=farm, limit=10)
+
+    assert items[0].session_id == "sess-no-message-scan"
+    assert items[0].title == "历史对话"
+    assert items[0].preview == "点击查看这轮农事对话"
+    db.close()
+
+
+def test_list_conversation_items_keeps_empty_shell_conversations(monkeypatch):
     db = Session()
     farm = db.query(Farm).filter_by(id=1).one()
     get_or_create_conversation(db, farm_id=1, session_id="sess-empty", user_id="user-1")
@@ -74,16 +98,18 @@ def test_list_conversation_items_skips_empty_shell_conversations(monkeypatch):
     )
     db.commit()
 
-    def _messages(_db, session_id, farm_id):
-        if session_id == "sess-message":
-            return [ConversationMessage(role="user", content="你好")]
-        return []
+    def _fail_if_messages_are_loaded(*_args, **_kwargs):
+        raise AssertionError("列表接口不应加载完整消息")
 
-    monkeypatch.setattr(history_use_case, "get_conversation_messages", _messages)
+    monkeypatch.setattr(
+        history_use_case,
+        "get_conversation_messages",
+        _fail_if_messages_are_loaded,
+    )
 
     items = list_conversation_items(db, farm=farm, limit=10)
 
-    assert [item.session_id for item in items] == ["sess-message"]
+    assert {item.session_id for item in items} == {"sess-empty", "sess-message"}
     db.close()
 
 

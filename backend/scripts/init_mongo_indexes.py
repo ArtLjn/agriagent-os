@@ -75,6 +75,30 @@ def get_index_plan() -> IndexPlan:
                 expire_after_seconds=TRACE_TTL_SECONDS,
             ),
         ),
+        "traceRequests": (
+            _index(
+                (("farmId", 1), ("requestId", 1)),
+                "uniq_trace_requests_farm_request_id",
+                unique=True,
+            ),
+            _index(
+                (("farmId", 1), ("sessionId", 1), ("createdAt", -1)),
+                "idx_trace_requests_farm_session_created_at",
+            ),
+            _index(
+                (("farmId", 1), ("status", 1), ("createdAt", -1)),
+                "idx_trace_requests_farm_status_created_at",
+            ),
+            _index(
+                (("requestId", 1),),
+                "idx_trace_requests_request_id",
+            ),
+            _index(
+                (("createdAt", 1),),
+                "ttl_trace_requests_created_at",
+                expire_after_seconds=TRACE_TTL_SECONDS,
+            ),
+        ),
         "caseDrafts": (
             _index((("mysqlId", 1),), "uniq_case_drafts_mysql_id", unique=True),
             _index((("draftId", 1),), "uniq_case_drafts_draft_id", unique=True),

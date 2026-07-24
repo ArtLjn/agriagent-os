@@ -1,11 +1,14 @@
 import type { PendingAction, PendingPlan } from '../../api/agent';
 
+export type PendingResolution = 'confirmed' | 'canceled';
+
 type AssistantMessage = {
   role: 'user' | 'assistant';
   content: string;
   pendingAction?: PendingAction | null;
   pendingPlan?: PendingPlan | null;
   pending_plan?: PendingPlan | null;
+  pendingResolution?: PendingResolution | null;
 };
 
 export function isPendingPlanContent(content: string): boolean {
@@ -17,6 +20,15 @@ function hasStructuredPendingPlan(message: AssistantMessage): boolean {
 }
 
 export function canConfirmAssistantMessage(message: AssistantMessage): boolean {
+  if (message.pendingResolution) return false;
+  return message.role === 'assistant' && (
+    Boolean(message.pendingAction) ||
+    hasStructuredPendingPlan(message) ||
+    isPendingPlanContent(message.content)
+  );
+}
+
+export function hasPendingConfirmationControls(message: AssistantMessage): boolean {
   return message.role === 'assistant' && (
     Boolean(message.pendingAction) ||
     hasStructuredPendingPlan(message) ||

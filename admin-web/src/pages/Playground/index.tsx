@@ -15,7 +15,7 @@ import { buildConversationRows } from './conversationRows';
 import { usersApi, type CurrentUser } from '../../api/users';
 import { chooseDefaultUserId } from './currentUser';
 import { buildSessionDebugExport, type DebugExportMessage } from './sessionDebugExport';
-import { canConfirmAssistantMessage } from './pendingPlanControls';
+import { canConfirmAssistantMessage, hasPendingConfirmationControls, type PendingResolution } from './pendingPlanControls';
 import { buildPlaygroundTraceMetrics, hasAutomaticCompression } from './traceMetrics';
 import { copyAsyncText } from './clipboard';
 import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
@@ -39,6 +39,7 @@ interface Message {
   skills?: string[];
   pendingAction?: PendingAction | null;
   pendingPlan?: PendingPlan | null;
+  pendingResolution?: PendingResolution | null;
 }
 
 interface ChatSessionState {
@@ -79,7 +80,18 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 /* ── 执行状态标签 ── */
-function ExecutionStatus({ skills, pendingAction, pendingPlan }: { skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: boolean }) {
+function ExecutionStatus({ skills, pendingAction, pendingPlan, pendingResolution }: { skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: boolean; pendingResolution?: PendingResolution | null }) {
+  if (pendingResolution) {
+    const canceled = pendingResolution === 'canceled';
+    return (
+      <span style={{
+        fontSize: 11, color: canceled ? '#8b949e' : '#52c41a', background: canceled ? 'rgba(139,148,158,0.12)' : 'rgba(82,196,26,0.12)',
+        padding: '2px 8px', borderRadius: 4, border: `1px solid ${canceled ? '#8b949e' : '#52c41a'}`,
+      }}>
+        {canceled ? '🚫 已取消执行' : '✅ 已确认执行'}
+      </span>
+    );
+  }
   if (pendingAction || pendingPlan) {
     return (
       <span style={{
@@ -130,9 +142,11 @@ function TraceMetricPill({ label, value, accent }: { label: string; value: strin
 }
 
 /* ── 聊天气泡组件 ── */
-function ChatBubble({ role, content, skills, pendingAction, pendingPlan, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: PendingPlan | null; onAction?: (action: string) => void }) {
+function ChatBubble({ role, content, skills, pendingAction, pendingPlan, pendingResolution, onAction }: { role: 'user' | 'assistant'; content: string; skills?: string[]; pendingAction?: PendingAction | null; pendingPlan?: PendingPlan | null; pendingResolution?: PendingResolution | null; onAction?: (action: string) => void }) {
   const isUser = role === 'user';
-  const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction, pendingPlan });
+  const hasConfirmationControls = hasPendingConfirmationControls({ role, content, pendingAction, pendingPlan });
+  const canConfirm = canConfirmAssistantMessage({ role, content, pendingAction, pendingPlan, pendingResolution });
+  const confirmationDisabled = !canConfirm || !onAction;
   return (
     <div style={{ marginBottom: 16, display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
       {!isUser && (
@@ -155,8 +169,9 @@ function ChatBubble({ role, content, skills, pendingAction, pendingPlan, onActio
           <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <ExecutionStatus
               skills={skills}
-              pendingAction={pendingAction}
+              pendingAction={canConfirm ? pendingAction : null}
               pendingPlan={canConfirm && !pendingAction}
+              pendingResolution={pendingResolution}
             />
             {skills && skills.length > 0 && skills.map((s) => (
               <span key={s} style={{
@@ -178,10 +193,44 @@ function ChatBubble({ role, content, skills, pendingAction, pendingPlan, onActio
             ))}
           </div>
         )}
-        {!isUser && canConfirm && onAction && (
+        {!isUser && hasConfirmationControls && (
           <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
-            <button onClick={() => onAction('确认')} style={{ background: '#238636', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13 }}>确认</button>
-            <button onClick={() => onAction('取消')} style={{ background: '#30363d', color: '#8b949e', border: 'none', borderRadius: 6, padding: '4px 16px', cursor: 'pointer', fontSize: 13 }}>取消</button>
+            <button
+              disabled={confirmationDisabled}
+              onClick={() => {
+                if (!confirmationDisabled) onAction?.('确认');
+              }}
+              style={{
+                background: confirmationDisabled ? '#2d333b' : '#238636',
+                color: confirmationDisabled ? '#8b949e' : '#fff',
+                border: 'none',
+                borderRadius: 6,
+                padding: '4px 16px',
+                cursor: confirmationDisabled ? 'not-allowed' : 'pointer',
+                fontSize: 13,
+                opacity: confirmationDisabled ? 0.72 : 1,
+              }}
+            >
+              确认
+            </button>
+            <button
+              disabled={confirmationDisabled}
+              onClick={() => {
+                if (!confirmationDisabled) onAction?.('取消');
+              }}
+              style={{
+                background: '#30363d',
+                color: '#8b949e',
+                border: 'none',
+                borderRadius: 6,
+                padding: '4px 16px',
+                cursor: confirmationDisabled ? 'not-allowed' : 'pointer',
+                fontSize: 13,
+                opacity: confirmationDisabled ? 0.72 : 1,
+              }}
+            >
+              取消
+            </button>
           </div>
         )}
       </div>
@@ -281,6 +330,19 @@ export default function Playground() {
   const ensureSession = useCallback((sid: string) => {
     setSessions((prev) => (prev[sid] ? prev : { ...prev, [sid]: emptySessionState() }));
   }, []);
+
+  const markPendingResolution = useCallback((
+    sid: string,
+    messageId: string,
+    resolution: PendingResolution | null,
+  ) => {
+    updateSession(sid, (state) => ({
+      ...state,
+      messages: state.messages.map((item) => (
+        item.id === messageId ? { ...item, pendingResolution: resolution } : item
+      )),
+    }));
+  }, [updateSession]);
 
   /* ── 加载会话列表 ── */
   const loadConversations = useCallback(async () => {
@@ -446,14 +508,14 @@ export default function Playground() {
     setSessions((prev) => ({ ...prev, [sid]: emptySessionState() }));
   }, []);
 
-  const handleSend = useCallback(async (overrideMsg?: string) => {
+  const handleSend = useCallback(async (overrideMsg?: string): Promise<boolean> => {
     const userMsg = overrideMsg ?? input.trim();
-    if (!userMsg) return;
+    if (!userMsg) return false;
     const targetSessionId = sessionId;
     const targetSession = sessions[targetSessionId] ?? emptySessionState();
     if (targetSession.loading) {
       message.warning('当前会话正在生成中，请先切换到其他会话并行发送');
-      return;
+      return false;
     }
     const userMessage = createMessage('user', userMsg);
     const assistantMessage = createMessage('assistant', '');
@@ -512,6 +574,7 @@ export default function Playground() {
       }));
 
       await loadConversations();
+      return true;
     } catch {
       updateSession(targetSessionId, (state) => {
         const next = state.messages.map((item) => (
@@ -521,6 +584,7 @@ export default function Playground() {
         ));
         return { ...state, messages: next };
       });
+      return false;
     } finally {
       updateSession(targetSessionId, (state) => ({
         ...state,
@@ -529,6 +593,15 @@ export default function Playground() {
       }));
     }
   }, [input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, selectedUserId]);
+
+  const handlePendingAction = useCallback((messageId: string, action: string) => {
+    const targetSessionId = sessionId;
+    const resolution: PendingResolution = action === '取消' ? 'canceled' : 'confirmed';
+    markPendingResolution(targetSessionId, messageId, resolution);
+    void handleSend(action).then((ok) => {
+      if (!ok) markPendingResolution(targetSessionId, messageId, null);
+    });
+  }, [handleSend, markPendingResolution, sessionId]);
 
   const isThinking = loading && messages.length > 0 && messages[messages.length - 1].content === '';
 
@@ -823,7 +896,8 @@ export default function Playground() {
               skills={m.skills}
               pendingAction={m.pendingAction}
               pendingPlan={m.pendingPlan}
-              onAction={loading ? undefined : (action) => handleSend(action)}
+              pendingResolution={m.pendingResolution}
+              onAction={loading ? undefined : (action) => handlePendingAction(m.id, action)}
             />
           ))}
           {isThinking && (
@@ -917,7 +991,9 @@ export default function Playground() {
             size="large"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onPressEnter={() => handleSend()}
+            onPressEnter={() => {
+              void handleSend();
+            }}
             placeholder={loading ? '当前会话生成中，可切换或新建会话并行聊天' : '输入你的问题...'}
             disabled={loading}
             style={{ background: CARD, borderColor: BORDER, color: TEXT, height: 48, fontSize: 14 }}
@@ -926,7 +1002,9 @@ export default function Playground() {
             size="large"
             type="primary"
             icon={<SendOutlined />}
-            onClick={() => handleSend()}
+            onClick={() => {
+              void handleSend();
+            }}
             loading={loading}
             style={{ height: 48, paddingInline: 24, fontSize: 14 }}
           >

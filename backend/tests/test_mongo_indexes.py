@@ -37,6 +37,7 @@ def test_mongo_index_plan_contains_document_collections_and_tenant_indexes():
 
     assert set(plan) == {
         "traceRecords",
+        "traceRequests",
         "caseDrafts",
         "repairPacks",
         "reviewIssueChains",
@@ -46,7 +47,9 @@ def test_mongo_index_plan_contains_document_collections_and_tenant_indexes():
         "guardrailsLogs",
     }
 
-    for indexes in plan.values():
+    for collection_name, indexes in plan.items():
+        if collection_name == "traceRequests":
+            continue
         assert any(
             index.keys == (("mysqlId", 1),) and index.options["unique"] is True
             for index in indexes
@@ -70,6 +73,26 @@ def test_mongo_index_plan_contains_document_collections_and_tenant_indexes():
         index.keys == (("createdAt", 1),)
         and index.options["expireAfterSeconds"] == 60 * 60 * 24 * 30 * 18
         for index in trace_indexes
+    )
+
+    trace_request_indexes = plan["traceRequests"]
+    assert any(
+        index.keys == (("farmId", 1), ("requestId", 1))
+        and index.options["unique"] is True
+        for index in trace_request_indexes
+    )
+    assert any(
+        index.keys == (("farmId", 1), ("sessionId", 1), ("createdAt", -1))
+        for index in trace_request_indexes
+    )
+    assert any(
+        index.keys == (("farmId", 1), ("status", 1), ("createdAt", -1))
+        for index in trace_request_indexes
+    )
+    assert any(
+        index.keys == (("createdAt", 1),)
+        and index.options["expireAfterSeconds"] == 60 * 60 * 24 * 30 * 18
+        for index in trace_request_indexes
     )
 
     assert any(

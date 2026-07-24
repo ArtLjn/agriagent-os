@@ -7,8 +7,9 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agent.runtime.tool_executor import _parallel_tool_node
-from app.skills.metadata import SkillMetadata, SkillPermissionLevel
+from app.context.models import ContextBlock, ContextBundle
 from app.infra.pending_actions import get_pending, get_pending_plan, remove_pending
+from app.skills.metadata import SkillMetadata, SkillPermissionLevel
 
 pytestmark = pytest.mark.no_db
 
@@ -149,10 +150,105 @@ async def test_create_crop_cycle_builds_template_preflight_pending_plan() -> Non
     }
     assert plan.steps[1].params["operation"] == "create_cycle"
     assert plan.steps[1].params["crop_name"] == "西瓜"
+    assert plan.steps[1].params["area"] == "20"
     assert plan.steps[1].depends_on == ["ensure_crop_template"]
     assert "请确认将执行 2 步" in result["messages"][0].content
     assert "确认作物模板" in result["messages"][0].content
     assert "确认管理茬口" not in result["messages"][0].content
+    tool.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_crop_cycle_setup_builds_planting_unit_step_from_task_state() -> None:
+    tool = _write_tool("manage_crop_cycle")
+    context_bundle = ContextBundle(
+        blocks=[
+            ContextBlock(
+                key="active_task_state",
+                source="task_state",
+                purpose="当前可恢复任务状态",
+                content=(
+                    "目标：帮我创建西瓜8424茬口，再新增20亩地\n"
+                    "状态：active\n"
+                    "已知实体：crop_name=西瓜；variety=8424；area_mu=20"
+                ),
+                priority=85,
+                metadata={
+                    "task_type": "crop_cycle_setup",
+                    "status": "active",
+                    "entities": {
+                        "crop_name": "西瓜",
+                        "variety": "8424",
+                        "area_mu": 20,
+                        "planting_unit": {
+                            "name": "东棚",
+                            "area_mu": 20,
+                            "should_create": True,
+                        },
+                    },
+                },
+            )
+        ],
+        token_budget=512,
+        token_estimate=64,
+    )
+    state = {
+        "messages": [
+            HumanMessage(content="叫东棚"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc-cycle-unit",
+                        "name": "manage_crop_cycle",
+                        "args": {
+                            "operation": "create_cycle",
+                            "crop_name": "西瓜",
+                            "cycle_name": "8424西瓜茬口",
+                            "area": 20,
+                            "status": "planned",
+                        },
+                    }
+                ],
+            ),
+        ],
+        "farm_id": 1,
+        "session_id": "sess-crop-setup-unit",
+        "context_bundle": context_bundle,
+    }
+
+    with (
+        patch(
+            "app.agent.runtime.tool_executor.get_langchain_tools", return_value=[tool]
+        ),
+        patch(
+            "app.agent.runtime.tool_executor.get_collector", return_value=MagicMock()
+        ),
+        patch(
+            "app.infra.pending_actions.pending_plan_service.create_pending_plan",
+            return_value=SimpleNamespace(plan_id="plan-crop-setup-unit"),
+        ),
+    ):
+        result = await _parallel_tool_node(state)
+
+    plan = get_pending_plan(1, session_id="sess-crop-setup-unit")
+    assert get_pending(1, session_id="sess-crop-setup-unit") is None
+    assert plan is not None
+    assert [step.tool_name for step in plan.steps] == [
+        "manage_crop_templates",
+        "manage_crop_cycle",
+        "manage_planting_units",
+    ]
+    assert plan.steps[2].params == {
+        "operation": "manage_units",
+        "action": "create",
+        "cycle_id": {"$from_step": "create_crop_cycle", "path": "id"},
+        "name": "东棚",
+        "area_mu": 20,
+    }
+    assert plan.steps[2].depends_on == ["create_crop_cycle"]
+    assert "请确认将执行 3 步" in result["messages"][0].content
+    assert "创建种植单元" in result["messages"][0].content
     tool.ainvoke.assert_not_awaited()
 
 

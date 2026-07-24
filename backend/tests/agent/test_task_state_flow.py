@@ -39,10 +39,15 @@ def _turn(
     )
 
 
+class _SyncAgentRecordRepo:
+    def create(self, row):
+        return row
+
+
 async def test_task_state_updater_writes_waiting_task_when_reply_requests_info(
     db_session,
 ) -> None:
-    await update_task_state_after_turn(
+    result = await update_task_state_after_turn(
         db_session,
         _turn(
             user_input="帮我给番茄做一个补光计划",
@@ -65,6 +70,106 @@ async def test_task_state_updater_writes_waiting_task_when_reply_requests_info(
     assert task.entities_json["crop"] == "番茄"
     assert task.missing_information_json == ["补光灯功率", "棚室面积"]
     assert task.next_action == "等待用户补充：补光灯功率"
+    assert result.action == "created"
+    assert result.task_id == task.task_id
+
+
+async def test_task_state_updater_writes_from_natural_planting_intent(
+    db_session,
+) -> None:
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="天气如何，我想种水稻",
+            assistant_reply=(
+                "现在苏州温度偏高，水稻种植要先做规划。建议先确认面积、地块、"
+                "计划播种时间和品种。"
+            ),
+        ),
+    )
+
+    task = AgentTaskStateStore(db_session).get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert task is not None
+    assert task.status == TaskStateStatus.WAITING_USER.value
+    assert task.task_type == "planting_plan"
+    assert task.goal == "天气如何，我想种水稻"
+    assert task.entities_json["crop"] == "水稻"
+    assert task.missing_information_json == ["种植面积", "地块", "计划播种时间", "品种"]
+    assert task.next_action == "等待用户补充：种植面积"
+    assert result.action == "created"
+    assert result.reason == "natural_task_intent"
+
+
+async def test_task_state_writes_crop_cycle_setup_when_unit_name_missing(
+    db_session,
+) -> None:
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="帮我创建西瓜8424茬口，再新增20亩地",
+            assistant_reply="还需要补充：种植单元名称。",
+        ),
+    )
+
+    task = AgentTaskStateStore(db_session).get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert result.action == "created"
+    assert task is not None
+    assert task.task_type == "crop_cycle_setup"
+    assert task.status == TaskStateStatus.WAITING_USER.value
+    assert task.entities_json["crop_name"] == "西瓜"
+    assert task.entities_json["variety"] == "8424"
+    assert task.entities_json["area_mu"] == 20
+    assert task.entities_json["planting_unit"]["should_create"] is True
+    assert task.entities_json["planting_unit"]["area_mu"] == 20
+    assert task.missing_information_json == ["种植单元名称"]
+
+
+async def test_task_state_crop_cycle_setup_accepts_unit_name_followup(
+    db_session,
+) -> None:
+    store = AgentTaskStateStore(db_session)
+    store.upsert_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+        task_type="crop_cycle_setup",
+        goal="帮我创建西瓜8424茬口，再新增20亩地",
+        entities={
+            "crop_name": "西瓜",
+            "variety": "8424",
+            "area_mu": 20,
+            "planting_unit": {"area_mu": 20, "should_create": True},
+        },
+        missing_information=["种植单元名称"],
+        next_action="等待用户补充：种植单元名称",
+        status=TaskStateStatus.WAITING_USER,
+    )
+
+    await update_task_state_after_turn(
+        db_session,
+        _turn(user_input="叫东棚", assistant_reply="收到，按东棚继续。"),
+    )
+
+    task = store.get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert task is not None
+    assert task.status == TaskStateStatus.ACTIVE.value
+    assert task.missing_information_json == []
+    assert task.entities_json["planting_unit"]["name"] == "东棚"
 
 
 async def test_task_state_updater_updates_same_task_after_user_supplies_missing_info(
@@ -196,6 +301,7 @@ async def test_task_state_updater_completion_and_cancel_stop_selector_injection(
 async def test_task_state_updater_skips_greeting_accounting_and_pending(
     db_session,
 ) -> None:
+    results = []
     for turn in [
         _turn(user_input="你好", assistant_reply="你好，有什么要帮忙的？"),
         _turn(user_input="查一下今天账单", assistant_reply="今天收入200元。"),
@@ -210,7 +316,7 @@ async def test_task_state_updater_skips_greeting_accounting_and_pending(
             pending_decision_handled=True,
         ),
     ]:
-        await update_task_state_after_turn(db_session, turn)
+        results.append(await update_task_state_after_turn(db_session, turn))
 
     assert (
         AgentTaskStateStore(db_session).get_active_task(
@@ -220,6 +326,13 @@ async def test_task_state_updater_skips_greeting_accounting_and_pending(
         )
         is None
     )
+    assert [result.action for result in results] == ["skipped"] * 4
+    assert [result.reason for result in results] == [
+        "side_query",
+        "side_query",
+        "pending_write_confirmation",
+        "pending_decision_handled",
+    ]
 
 
 async def test_task_state_updater_ignores_side_queries_when_task_exists(
@@ -300,6 +413,37 @@ async def test_task_state_updater_skips_pending_plan(db_session) -> None:
     )
 
 
+async def test_task_state_updater_records_crop_setup_pending_plan(db_session) -> None:
+    result = await update_task_state_after_turn(
+        db_session,
+        _turn(
+            user_input="帮我创建一个西瓜茬口8424，大概种植20亩地",
+            assistant_reply=(
+                "请确认将执行 2 步：\n"
+                "1. 确认作物模板：西瓜 8424（不存在则创建）\n"
+                "2. 创建茬口：西瓜 8424西瓜茬口，面积 20 亩"
+            ),
+            pending_plan=SimpleNamespace(plan_id="plan-crop-setup"),
+        ),
+    )
+
+    task = AgentTaskStateStore(db_session).get_active_task(
+        farm_id=1,
+        user_id="test-user-001",
+        session_id="sess-task",
+    )
+
+    assert result.action == "created"
+    assert result.reason == "crop_cycle_setup_pending_plan"
+    assert task is not None
+    assert task.task_type == "crop_cycle_setup"
+    assert task.status == TaskStateStatus.ACTIVE.value
+    assert task.entities_json["crop_name"] == "西瓜"
+    assert task.entities_json["variety"] == "8424"
+    assert task.entities_json["area_mu"] == 20
+    assert task.missing_information_json == []
+
+
 async def test_task_state_recovers_from_fresh_db_session(db_session) -> None:
     await update_task_state_after_turn(
         db_session,
@@ -348,6 +492,10 @@ async def test_chat_use_case_updates_task_state_after_advisor_reply() -> None:
         patch(
             "app.application.chat.use_case.get_or_create_conversation",
             return_value=MagicMock(id=42),
+        ),
+        patch(
+            "app.application.chat.use_case.get_agent_record_repository",
+            return_value=_SyncAgentRecordRepo(),
         ),
         patch("app.application.chat.use_case.SessionFlywheelRecorder"),
         patch("app.application.chat.use_case.schedule_session_summary"),

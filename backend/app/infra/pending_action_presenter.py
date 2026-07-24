@@ -413,7 +413,19 @@ def _format_plan_step(tool_name: str, params: dict) -> str:
         crop = params.get("crop_name") or "作物"
         cycle = params.get("cycle_name")
         suffix = f" {cycle}" if cycle else ""
-        return f"创建茬口：{crop}{suffix}"
+        area = params.get("area")
+        area_text = f"，面积 {area} 亩" if area not in (None, "") else ""
+        return f"创建茬口：{crop}{suffix}{area_text}"
+
+    if (
+        tool_name == "manage_planting_units"
+        and params.get("operation") == "manage_units"
+        and params.get("action") == "create"
+    ):
+        name = params.get("name") or "种植单元"
+        area = params.get("area_mu")
+        area_text = f"（{area}亩）" if area not in (None, "") else ""
+        return f"创建种植单元：{name}{area_text}"
 
     if tool_name == "manage_workers":
         action = params.get("action") or "create"

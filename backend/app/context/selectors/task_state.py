@@ -70,6 +70,8 @@ class TaskStateSelector:
             "task_id": task.task_id,
             "task_type": task.task_type,
             "status": task.status,
+            "entities": _metadata_entities(task.entities_json),
+            "missing_information": _metadata_list(task.missing_information_json),
             "expires_at": expires_at.isoformat()
             if isinstance(expires_at, datetime)
             else "",
@@ -93,6 +95,49 @@ def _format_list(value: Any) -> str:
     if not isinstance(value, list):
         return ""
     return "；".join(str(item) for item in value[:6] if item not in (None, ""))
+
+
+def _metadata_entities(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    allowed = {
+        "crop",
+        "crop_name",
+        "variety",
+        "cycle_name",
+        "season",
+        "start_date",
+        "area_mu",
+        "area_target",
+        "greenhouse",
+        "planting_unit",
+    }
+    return {
+        key: _metadata_value(item)
+        for key, item in value.items()
+        if key in allowed and _metadata_value(item) not in (None, "", {}, [])
+    }
+
+
+def _metadata_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _metadata_value(item)
+            for key, item in value.items()
+            if key in {"name", "area_mu", "should_create"}
+            and _metadata_value(item) not in (None, "", {}, [])
+        }
+    if isinstance(value, list):
+        return [str(item) for item in value[:6] if item not in (None, "")]
+    if isinstance(value, str | int | float | bool):
+        return value
+    return None
+
+
+def _metadata_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value[:6] if item not in (None, "")]
 
 
 __all__ = ["TaskStateSelector"]
