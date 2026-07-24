@@ -148,6 +148,41 @@ _LABOR_PAYMENT_WAGE_FIELDS = (
     "work_date",
     "client_request_id",
 )
+_COST_CREATE_FIELDS = (
+    "amount",
+    "category",
+    "record_type",
+    "record_date",
+    "note",
+)
+_CROP_CYCLE_CREATE_FIELDS = (
+    "crop_name",
+    "variety",
+    "area",
+    "start_date",
+    "expected_harvest_date",
+    "note",
+)
+_CROP_CYCLE_STAGE_FIELDS = (
+    "current_stage",
+    "stage",
+)
+_CROP_TEMPLATE_CREATE_FIELDS = (
+    "name",
+    "crop_name",
+    "variety",
+    "growth_days",
+    "stages",
+    "note",
+)
+_WORK_ORDER_CREATE_FIELDS = (
+    "operation_type",
+    "operation_date",
+    "operation_time",
+    "unit_names",
+    "workers",
+    "note",
+)
 _REGISTRY_RISK_TO_METADATA: dict[str, tuple[SkillPermissionLevel, SkillRiskLevel]] = {
     "read": (SkillPermissionLevel.READ, SkillRiskLevel.LOW),
     "write_confirm": (SkillPermissionLevel.WRITE_CONFIRM, SkillRiskLevel.MEDIUM),
@@ -265,6 +300,41 @@ def infer_skill_operation_name(
         if action == "query":
             return "query_categories"
         return None
+    if skill_name == "manage_cost":
+        if params.get("record_id") not in (None, ""):
+            return "delete_record"
+        if params.get("counterparty") not in (None, ""):
+            return "settle_debt"
+        return (
+            "create_record"
+            if any(params.get(key) not in (None, "") for key in _COST_CREATE_FIELDS)
+            else "query_records"
+        )
+    if skill_name == "manage_crop_cycle":
+        if params.get("cycle_id") not in (None, ""):
+            if any(
+                params.get(key) not in (None, "") for key in _CROP_CYCLE_STAGE_FIELDS
+            ):
+                return "update_stage"
+            return "update_cycle"
+        return (
+            "create_cycle"
+            if any(
+                params.get(key) not in (None, "") for key in _CROP_CYCLE_CREATE_FIELDS
+            )
+            else "query_cycles"
+        )
+    if skill_name == "manage_crop_templates":
+        if params.get("template_id") not in (None, ""):
+            return "manage_template"
+        return (
+            "create_template"
+            if any(
+                params.get(key) not in (None, "")
+                for key in _CROP_TEMPLATE_CREATE_FIELDS
+            )
+            else "query_templates"
+        )
     if skill_name == "manage_planting_units":
         action = params.get("action")
         if action in {"create", "update", "delete"}:
@@ -289,6 +359,25 @@ def infer_skill_operation_name(
             if any(params.get(key) not in (None, "") for key in _WORKER_WRITE_FIELDS)
             else "query_workers"
         )
+    if skill_name == "manage_farm_logs":
+        action = params.get("action")
+        if action in {"update", "delete"}:
+            return "manage_log"
+        if action == "query":
+            return "query_logs"
+        return (
+            "create_log"
+            if any(
+                params.get(key) not in (None, "")
+                for key in (
+                    "operation_type",
+                    "operation_date",
+                    "operation_time",
+                    "note",
+                )
+            )
+            else "query_logs"
+        )
     if skill_name == "manage_labor_payment":
         has_settle_fields = any(
             params.get(key) not in (None, "") for key in _LABOR_PAYMENT_SETTLE_FIELDS
@@ -305,6 +394,16 @@ def infer_skill_operation_name(
         if has_wage_fields:
             return "manage_wage"
         return "query_payables"
+    if skill_name == "manage_work_orders":
+        if params.get("work_order_id") not in (None, ""):
+            return "update_work_order"
+        return (
+            "create_work_order"
+            if any(
+                params.get(key) not in (None, "") for key in _WORK_ORDER_CREATE_FIELDS
+            )
+            else "query_work_orders"
+        )
     if skill_name != "manage_user_settings":
         return None
     return (

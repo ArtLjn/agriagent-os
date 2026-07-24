@@ -9,11 +9,22 @@ from pydantic import BaseModel, Field, create_model
 from skillify.core.context import SkillContext
 from skillify.manager import SkillManager
 
+from app.skills.candidates import (
+    clear_skill_candidate_cache,
+    get_category_enum,
+    load_skill_candidates,
+)
+from app.skills.contracts import describe_contract_for_schema
 from app.skills.metadata import get_skill_metadata
 from app.shared.database import SessionLocal
 from app.domains.finance import cost_category_service
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "SessionLocal",
+    "cost_category_service",
+]
 
 _manager: SkillManager | None = None
 
@@ -71,38 +82,9 @@ def _schema_to_pydantic(
     return create_model(f"{name}Schema", **fields)
 
 
-_DEFAULT_CATEGORY_ENUM = ["化肥", "种子", "农药", "人工", "其他"]
-_category_cache: dict[int, list[str]] = {}
-
-
-def get_category_enum(farm_id: int) -> list[str]:
-    """从数据库加载 farm 的分类标签列表，结果缓存。"""
-    if farm_id in _category_cache:
-        return _category_cache[farm_id]
-    try:
-        db = SessionLocal()
-        try:
-            categories = cost_category_service.get_categories(db, farm_id)
-            names = [c.name for c in categories]
-        finally:
-            db.close()
-        if not names:
-            names = list(_DEFAULT_CATEGORY_ENUM)
-        _category_cache[farm_id] = names
-        return names
-    except Exception:
-        logger.warning("分类加载失败，使用默认 enum | farm_id=%d", farm_id)
-        default = list(_DEFAULT_CATEGORY_ENUM)
-        _category_cache[farm_id] = default
-        return default
-
-
 def clear_category_cache(farm_id: int | None = None) -> None:
-    """清除分类缓存。farm_id=None 时清除全部。"""
-    if farm_id is None:
-        _category_cache.clear()
-    else:
-        _category_cache.pop(farm_id, None)
+    """兼容旧调用，实际清除 Skill 候选缓存。"""
+    clear_skill_candidate_cache(farm_id)
 
 
 def _make_sync_fn(skill, farm_id: int, farm_uid: str | None = None):
@@ -135,7 +117,8 @@ def skills_to_langchain_tools(
     manager: SkillManager, farm_id: int = 1, farm_uid: str | None = None
 ) -> list[StructuredTool]:
     """将 skillify Skills 转为 LangChain StructuredTool 列表。"""
-    category_enum = get_category_enum(farm_id)
+    candidate_set = load_skill_candidates(farm_id)
+    category_enum = candidate_set.values.get("category") or get_category_enum(farm_id)
     enums_map = {"category": category_enum} if category_enum else {}
 
     tools = []
@@ -148,7 +131,7 @@ def skills_to_langchain_tools(
         )
         tool = StructuredTool(
             name=skill.name(),
-            description=skill.description(),
+            description=_tool_description(skill),
             args_schema=args_schema,
             func=_make_sync_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
             coroutine=_make_async_fn(skill, farm_id=farm_id, farm_uid=farm_uid),
@@ -203,6 +186,14 @@ def _attach_skill_metadata(target: Any, skill: Any) -> None:
     object.__setattr__(target, "skill_legacy_alias", metadata.legacy_alias)
 
 
+def _tool_description(skill: Any) -> str:
+    description = skill.description()
+    contract_description = describe_contract_for_schema(skill.name())
+    if not contract_description:
+        return description
+    return f"{description}\n{contract_description}"
+
+
 def clear_skill_cache():
     """清除工具缓存（用于热重载）。"""
     global _SKILL_REGISTRY
@@ -252,4 +243,5 @@ __all__ = [
     "build_skill_context",
     "get_category_enum",
     "clear_category_cache",
+    "clear_skill_candidate_cache",
 ]

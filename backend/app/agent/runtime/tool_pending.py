@@ -7,6 +7,7 @@ from app.agent.runtime.tool_metadata import (
     _PermissionDecision,
     _permission_trace_output,
 )
+from app.agent.runtime.tool_arg_validation import validate_pending_tool_args
 from app.agent.runtime.tool_pending_args import (
     _ambiguous_debt_direction_message,
     _build_pending_confirmation_args,
@@ -23,6 +24,7 @@ from app.infra.pending_actions import (
     store_pending,
     store_pending_plan,
 )
+from app.infra.trace_collector import get_collector
 
 
 def _pending_plan_tool_message(
@@ -88,6 +90,14 @@ def _store_pending_plan_from_steps(
     """根据已验证步骤创建 pending plan。"""
     step_tool_names = {str(step["tool_name"]) for step in steps}
     pending_steps = _pending_steps_from_dicts(steps)
+    contract_messages = _pending_plan_contract_messages(
+        state=state,
+        farm_id=farm_id,
+        pending_steps=pending_steps,
+        tool_calls=tool_calls,
+    )
+    if contract_messages is not None:
+        return contract_messages
     confirm_text = build_plan_confirm_message(pending_steps)
     reflection_result = _reflect_pending_plan(
         state=state,
@@ -192,6 +202,61 @@ def _store_confirmed_pending_plan_messages(
     ]
     messages[0].content = f"{PENDING_MARKER} {confirm_text}"
     return messages
+
+
+def _pending_plan_contract_messages(
+    *,
+    state: AgentState,
+    farm_id: int,
+    pending_steps: list[PendingPlanStep],
+    tool_calls: list[dict],
+) -> list[ToolMessage] | None:
+    """pending plan 创建前逐步校验 operation contract。"""
+    blocked = []
+    for step in pending_steps:
+        validation = validate_pending_tool_args(
+            skill_name=step.tool_name,
+            params=step.params,
+            farm_id=farm_id,
+        )
+        step.params.clear()
+        step.params.update(validation.params)
+        if validation.valid:
+            continue
+        blocked.append(
+            {
+                "step_id": step.step_id,
+                "tool_name": step.tool_name,
+                "message": validation.message,
+                "contract_validation": validation.trace_payload(),
+            }
+        )
+    if not blocked:
+        return None
+
+    collector = get_collector()
+    collector.record(
+        node_type="skill_call",
+        node_name="pending_plan",
+        input_data={"steps": [step.__dict__ for step in pending_steps]},
+        output_data={
+            "status": "contract_blocked",
+            "phase": "create_pending_plan",
+            "session_id": state.get("session_id"),
+            "blocked_steps": blocked,
+        },
+        duration_ms=0,
+    )
+    content = "待确认计划参数不完整：\n" + "\n".join(
+        f"{item['step_id']} {item['tool_name']}：{item['message']}" for item in blocked
+    )
+    return [
+        ToolMessage(
+            content=content,
+            tool_call_id=tool_call["id"],
+        )
+        for tool_call in tool_calls
+    ]
 
 
 def _validated_plan_draft_steps(
@@ -478,6 +543,34 @@ def _pending_action_precheck(
     )
     if ambiguous_message is not None:
         return ambiguous_message, None, None
+    contract_validation = validate_pending_tool_args(
+        skill_name=name,
+        params=execution_args,
+        farm_id=farm_id,
+    )
+    execution_args.clear()
+    execution_args.update(contract_validation.params)
+    if not contract_validation.valid:
+        collector.record(
+            node_type="skill_call",
+            node_name=name,
+            input_data=execution_args,
+            output_data={
+                "status": "contract_blocked",
+                "contract_validation": contract_validation.trace_payload(),
+                "plan_draft": state.get("plan_draft") or {},
+                **_permission_trace_output(permission_decision),
+            },
+            duration_ms=0,
+        )
+        return (
+            ToolMessage(
+                content=contract_validation.message,
+                tool_call_id=tool_call_id,
+            ),
+            None,
+            None,
+        )
     confirmation_context, confirm_text = _build_pending_confirmation(
         name=name,
         execution_args=execution_args,

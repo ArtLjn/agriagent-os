@@ -75,6 +75,7 @@ _TARGET_FALLBACK_FIELDS = frozenset(
         "work_order_id",
         "labor_entry_id",
         "counterparty",
+        "operation_type",
     }
 )
 
@@ -272,13 +273,10 @@ def _capability_metadata_from_runtime(
     """读取 Tool metadata；缺失时用 Registry alias 做兼容解析。"""
     operation_name = _operation_name_from_args(skill_name, args)
     invalid_operation = _invalid_explicit_operation_name(skill_name, args)
-    ignore_default_operation = (
-        invalid_operation is not None
-        or (
-            operation_name is None
-            and _is_registry_capability_name(skill_name)
-            and _capability_has_write_operations(skill_name)
-        )
+    ignore_default_operation = invalid_operation is not None or (
+        operation_name is None
+        and _is_registry_capability_name(skill_name)
+        and _capability_has_write_operations(skill_name)
     )
     resolved = (
         {}

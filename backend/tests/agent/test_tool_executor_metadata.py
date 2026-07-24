@@ -27,25 +27,30 @@ from app.domains.planting.models import LaborEntry, OperationWorkOrder, Worker
 _WRITE_OPERATION_RISKS = {"write_confirm", "write_high"}
 
 _WRITE_LIKE_ARGS_BY_TOOL = {
-    "manage_cost": {"amount": 100, "category": "化肥"},
-    "manage_cost_categories": {"action": "create", "name": "肥料"},
+    "manage_cost": {"amount": 100, "category": "化肥", "record_type": "cost"},
+    "manage_cost_categories": {"action": "create", "name": "肥料", "type": "cost"},
     "manage_crop_cycle": {"crop_name": "西瓜", "area": 30},
     "manage_crop_templates": {"name": "西瓜模板", "crop_name": "西瓜"},
     "manage_farm_logs": {"operation_type": "浇水", "note": "西瓜浇水"},
-    "manage_labor_payment": {"amount": 100, "worker": "老王"},
-    "manage_planting_units": {"action": "create", "name": "一号棚"},
+    "manage_labor_payment": {"amount": 100, "worker": "老王", "scope": "worker"},
+    "manage_planting_units": {"action": "create", "cycle_id": 1, "name": "一号棚"},
     "manage_user_settings": {"display_name": "测试用户"},
     "manage_work_orders": {"operation_type": "浇水"},
     "manage_workers": {"action": "create", "name": "老王"},
 }
 
 _WRITE_ARGS_BY_OPERATION = {
-    ("manage_cost", "create_record"): {"amount": 100, "category": "化肥"},
+    ("manage_cost", "create_record"): {
+        "amount": 100,
+        "category": "化肥",
+        "record_type": "cost",
+    },
     ("manage_cost", "delete_record"): {"record_id": 1},
     ("manage_cost", "settle_debt"): {"counterparty": "张老板", "amount": 100},
     ("manage_cost_categories", "manage_category"): {
         "action": "create",
         "name": "肥料",
+        "type": "cost",
     },
     ("manage_crop_cycle", "create_cycle"): {"crop_name": "西瓜", "area": 30},
     ("manage_crop_cycle", "delete_cycle"): {"cycle_id": 1},
@@ -71,13 +76,17 @@ _WRITE_ARGS_BY_OPERATION = {
         "quantity": 1,
         "unit_price": 100,
         "work_date": "2026-06-04",
+        "cycle_id": 1,
+        "operation_type": "采收",
     },
     ("manage_labor_payment", "settle_payment"): {
         "worker_name": "老王",
         "amount": 100,
+        "scope": "worker",
     },
     ("manage_planting_units", "manage_units"): {
         "action": "create",
+        "cycle_id": 1,
         "name": "一号棚",
     },
     ("manage_settings", "update_settings"): {"display_name": "测试用户"},
