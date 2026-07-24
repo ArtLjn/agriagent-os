@@ -31,6 +31,19 @@ def test_system_base_prompt_guides_planting_planning_dialogue():
     assert "不要说已找到或未找到模板" in content
 
 
+def test_system_prompt_contains_markdown_output_contract():
+    """回复格式 snippet 约束 Markdown 表格和 HTML 换行。"""
+    from pathlib import Path
+
+    prompts_dir = Path(__file__).resolve().parent.parent / "prompts"
+    content = (prompts_dir / "snippets" / "p3-format.j2").read_text()
+
+    assert "标准 Markdown" in content
+    assert "禁止使用 HTML 标签" in content
+    assert "<br>" in content
+    assert "表格每一行必须单独换行" in content
+
+
 class TestUserContextInPrompt:
     """用户上下文（farm_location / display_name / current_season）注入测试。"""
 
