@@ -299,7 +299,7 @@ describe('TraceMonitor query 初始化', () => {
     expect(screen.queryByText('fake-sensitive-password-value')).not.toBeInTheDocument();
   });
 
-  it('兼容 context_builder 旧节点形状并折叠原始 JSON', async () => {
+  it('兼容 context_builder 旧节点形状并默认展开原始 JSON', async () => {
     mockedGetTimeline.mockResolvedValueOnce({
       request_id: 'req-1',
       rounds: [
@@ -376,8 +376,8 @@ describe('TraceMonitor query 初始化', () => {
     const outputRaw = screen.getByText('查看原始输出 JSON').closest('details');
     expect(inputRaw).not.toBeNull();
     expect(outputRaw).not.toBeNull();
-    expect(inputRaw).not.toHaveAttribute('open');
-    expect(outputRaw).not.toHaveAttribute('open');
+    expect(inputRaw).toHaveAttribute('open');
+    expect(outputRaw).toHaveAttribute('open');
   });
 
   it('双层编码的 context 输出会自动格式化为摘要', async () => {
@@ -454,7 +454,8 @@ describe('TraceMonitor query 初始化', () => {
 
     const outputRaw = screen.getByText('查看原始输出 JSON').closest('details');
     expect(outputRaw).not.toBeNull();
-    expect(outputRaw).not.toHaveAttribute('open');
+    expect(outputRaw).toHaveAttribute('open');
+    expect(within(outputRaw!).getByRole('button', { name: /复制 JSON/ })).toBeInTheDocument();
   });
 
   it('普通非 context trace 仍按原始输出展示', async () => {

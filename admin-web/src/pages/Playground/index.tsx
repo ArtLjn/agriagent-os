@@ -317,6 +317,7 @@ export default function Playground() {
   const llmContextSnapshot = extractLatestLlmContextSnapshot(timeline);
   const compressed = hasAutomaticCompression(traceMetrics);
   const conversationRows = buildConversationRows(sessions, conversations);
+  const timelineNodeCount = timeline?.rounds.reduce((sum, round) => sum + round.nodes.length, 0) ?? 0;
 
   const updateSession = useCallback((sid: string, updater: (state: ChatSessionState) => ChatSessionState) => {
     setSessions((prev) => {
@@ -498,6 +499,22 @@ export default function Playground() {
     }
   }, [sessions]);
 
+  const refreshSessionTimeline = useCallback(async (sid: string) => {
+    updateSession(sid, (state) => ({ ...state, traceLoading: true }));
+    const latestTimeline = await fetchSessionTimeline(sid);
+    updateSession(sid, (state) => ({
+      ...state,
+      timeline: latestTimeline,
+      traceLoading: false,
+    }));
+    return latestTimeline;
+  }, [updateSession]);
+
+  const openLlmContextInspector = useCallback(() => {
+    setLlmContextOpen(true);
+    void refreshSessionTimeline(sessionId);
+  }, [refreshSessionTimeline, sessionId]);
+
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -567,13 +584,7 @@ export default function Playground() {
         }
       }
 
-      updateSession(targetSessionId, (state) => ({ ...state, traceLoading: true }));
-      const latestTimeline = await fetchSessionTimeline(targetSessionId);
-      updateSession(targetSessionId, (state) => ({
-        ...state,
-        timeline: latestTimeline,
-        traceLoading: false,
-      }));
+      await refreshSessionTimeline(targetSessionId);
 
       await loadConversations();
       return true;
@@ -594,7 +605,7 @@ export default function Playground() {
         traceLoading: false,
       }));
     }
-  }, [input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, selectedUserId]);
+  }, [input, scrollToBottom, sessionId, sessions, updateSession, loadConversations, selectedUserId, refreshSessionTimeline]);
 
   const handlePendingAction = useCallback((messageId: string, action: string) => {
     const targetSessionId = sessionId;
@@ -913,9 +924,18 @@ export default function Playground() {
         <LlmContextInspector
           snapshot={llmContextSnapshot}
           open={llmContextOpen}
-          onOpenChange={setLlmContextOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              openLlmContextInspector();
+            } else {
+              setLlmContextOpen(false);
+            }
+          }}
           loading={loading || traceLoading}
           hasTimeline={timeline !== null}
+          requestId={timeline?.request_id}
+          nodeCount={timelineNodeCount}
+          onRefresh={() => refreshSessionTimeline(sessionId)}
         />
 
         {/* 执行摘要 - 紧凑单行 */}

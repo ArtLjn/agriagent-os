@@ -1,4 +1,4 @@
-import { FileSearchOutlined } from '@ant-design/icons';
+import { FileSearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Button, Drawer, Tag, Tooltip } from 'antd';
 
 import { palette } from '../../styles/theme';
@@ -112,12 +112,18 @@ export function LlmContextInspector({
   onOpenChange,
   loading,
   hasTimeline,
+  requestId,
+  nodeCount,
+  onRefresh,
 }: {
   snapshot: PlaygroundLlmContextSnapshot | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loading: boolean;
   hasTimeline: boolean;
+  requestId?: string;
+  nodeCount: number;
+  onRefresh: () => void | Promise<unknown>;
 }) {
   const statusText = snapshot
     ? `messages ${snapshot.messages.length} · blocks ${snapshot.contextBlocks.join(', ') || '-'}`
@@ -155,6 +161,18 @@ export function LlmContextInspector({
         width={720}
         onClose={() => onOpenChange(false)}
         open={open}
+        extra={(
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            loading={loading}
+            onClick={() => {
+              void onRefresh();
+            }}
+          >
+            刷新
+          </Button>
+        )}
         styles={{
           body: { background: PANEL_BG, padding: 16 },
           header: { background: '#161b22', borderBottom: '1px solid #30363d', color: TEXT },
@@ -174,6 +192,9 @@ export function LlmContextInspector({
                 {snapshot ? 'final_llm_context' : 'waiting'}
               </Tag>
               <span style={{ color: TEXT_DIM, fontSize: 12 }}>{statusText}</span>
+              <span style={{ color: TEXT_DIM, fontSize: 12, fontFamily: 'monospace' }}>
+                request: {requestId || '-'} · nodes: {nodeCount}
+              </span>
             </div>
           </div>
           {snapshot ? (
