@@ -17,6 +17,21 @@ def register(
     db: Session, phone: str, password: str, nickname: str = "农友"
 ) -> tuple[User, str]:
     """注册新用户并通过 Farm 模块创建默认农场。"""
+    user = create_user_with_default_farm(
+        db,
+        phone=phone,
+        password=password,
+        nickname=nickname,
+    )
+    token = create_access_token(user_id=user.id)
+    logger.info("用户注册 | phone=%s user_id=%s", phone, user.id)
+    return user, token
+
+
+def create_user_with_default_farm(
+    db: Session, *, phone: str, password: str, nickname: str = "农友"
+) -> User:
+    """创建普通用户和默认农场，不签发登录 token。"""
     user_id = str(uuid.uuid4())
     user = User(
         id=user_id,
@@ -30,9 +45,8 @@ def register(
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(user_id=user_id)
-    logger.info("用户注册 | phone=%s user_id=%s", phone, user_id)
-    return user, token
+    logger.info("创建用户 | phone=%s user_id=%s", phone, user_id)
+    return user
 
 
 def login(db: Session, phone: str, password: str) -> tuple[User, str] | None:

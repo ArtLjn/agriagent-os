@@ -1,6 +1,7 @@
 """Admin 用户管理 API — 列表、详情、状态管理。"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.shared.database import get_db
@@ -9,6 +10,7 @@ from app.shared.config import settings
 from app.domains.farm.models import Farm
 from app.domains.users.models import User
 from app.domains.users.admin_schemas import (
+    AdminCreateUserRequest,
     AdminUserDetailResponse,
     AdminUserListItem,
     AdminUserListResponse,
@@ -21,6 +23,7 @@ from app.domains.users.admin_schemas import (
     UserQuotaOverviewResponse,
     UserQuotaStatus,
 )
+from app.domains.users.service import create_user_with_default_farm
 from app.domains.users.quota_service import (
     get_month_range,
     get_period_usage,
@@ -29,6 +32,18 @@ from app.domains.users.quota_service import (
 )
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
+ADMIN_USER_PHONE_EXISTS = "ADMIN_USER_PHONE_EXISTS"
+
+
+def _phone_exists_error(phone: str) -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail={
+            "code": ADMIN_USER_PHONE_EXISTS,
+            "detail": "该手机号已注册",
+            "phone": phone,
+        },
+    )
 
 
 def _quota_status_from_percent(monthly_percent: float, weekly_percent: float) -> str:
@@ -127,6 +142,42 @@ def list_users(
     ]
 
     return AdminUserListResponse(items=items, total=total)
+
+
+@router.post("", response_model=AdminUserDetailResponse, status_code=201)
+def create_user(
+    req: AdminCreateUserRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> AdminUserDetailResponse:
+    """管理员创建普通用户，并同步创建默认农场。"""
+    if db.query(User).filter(User.phone == req.phone).first() is not None:
+        raise _phone_exists_error(req.phone)
+
+    try:
+        user = create_user_with_default_farm(
+            db,
+            phone=req.phone,
+            password=req.password,
+            nickname=req.nickname,
+        )
+    except IntegrityError:
+        db.rollback()
+        raise _phone_exists_error(req.phone) from None
+
+    farm = db.query(Farm).filter(Farm.user_id == user.id).first()
+    return AdminUserDetailResponse(
+        id=user.id,
+        phone=user.phone,
+        nickname=user.nickname,
+        avatar_url=user.avatar_url,
+        role=user.role,
+        status=user.status,
+        created_at=user.created_at,
+        farm_id=farm.id if farm else None,
+        farm_name=farm.name if farm else None,
+        farm_location=farm.location if farm else None,
+    )
 
 
 @router.get("/quota-overview", response_model=UserQuotaOverviewResponse)

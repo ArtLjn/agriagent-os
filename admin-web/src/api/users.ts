@@ -31,6 +31,12 @@ export interface UpdateUserQuotaRequest {
   token_weekly_limit?: number | null;
 }
 
+export interface CreateUserRequest {
+  phone: string;
+  password: string;
+  nickname?: string;
+}
+
 export interface BatchUpdateUserQuotaRequest extends UpdateUserQuotaRequest {
   user_ids: string[];
 }
@@ -96,6 +102,9 @@ export const usersApi = {
 
   list: (params?: ListUsersParams) =>
     apiClient.get<UserListResponse>("/admin/users", { params }),
+
+  create: (data: CreateUserRequest) =>
+    apiClient.post<UserDetail>("/admin/users", data),
 
   getDetail: (userId: string) =>
     apiClient.get<UserDetail>(`/admin/users/${userId}`),
