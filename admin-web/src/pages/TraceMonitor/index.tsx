@@ -271,9 +271,7 @@ function isContextInputPayload(value: unknown): boolean {
 function ContextTraceSummary({ outputData }: { outputData: unknown }) {
   const payload = payloadRecord(outputData);
   if (!payload) {
-    return (
-      <RawTraceDetails label="查看原始输出" value={outputData} />
-    );
+    return <RawTraceDetails label="查看原始输出" value={outputData} defaultOpen />;
   }
 
   const policy = asRecord(payload.policy);
@@ -313,7 +311,7 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
         </section>
       )}
 
-      <RawTraceDetails label="查看原始输出 JSON" value={payload} />
+      <RawTraceDetails label="查看原始输出 JSON" value={payload} defaultOpen />
     </Space>
   );
 }
@@ -321,7 +319,7 @@ function ContextTraceSummary({ outputData }: { outputData: unknown }) {
 function ContextInputSummary({ inputData }: { inputData: unknown }) {
   const payload = payloadRecord(inputData);
   if (!payload) {
-    return <RawTraceDetails label="查看原始输入 JSON" value={inputData} />;
+    return <RawTraceDetails label="查看原始输入 JSON" value={inputData} defaultOpen />;
   }
 
   return (
@@ -334,7 +332,7 @@ function ContextInputSummary({ inputData }: { inputData: unknown }) {
           <Metric label="policy intent" value={payload.policy_intent} />
         </div>
       </section>
-      <RawTraceDetails label="查看原始输入 JSON" value={payload} />
+      <RawTraceDetails label="查看原始输入 JSON" value={payload} defaultOpen />
     </Space>
   );
 }
@@ -437,11 +435,41 @@ function Metric({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function RawTraceDetails({ label, value }: { label: string; value: unknown }) {
+async function copyRawTracePayload(value: unknown) {
+  try {
+    await navigator.clipboard.writeText(formatTracePayload(value));
+    message.success('原始 JSON 已复制');
+  } catch {
+    message.error('复制失败');
+  }
+}
+
+function RawTraceDetails({
+  label,
+  value,
+  defaultOpen = false,
+}: {
+  label: string;
+  value: unknown;
+  defaultOpen?: boolean;
+}) {
   return (
-    <details style={{ cursor: 'pointer' }}>
+    <details open={defaultOpen} style={{ cursor: 'pointer' }}>
       <summary style={{ color: TEXT_DIM, fontSize: 12, userSelect: 'none' }}>
-        {label}
+        <span>{label}</span>
+        <Button
+          size="small"
+          type="link"
+          icon={<CopyOutlined />}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void copyRawTracePayload(value);
+          }}
+          style={{ color: ACCENT, padding: '0 4px', marginLeft: 8 }}
+        >
+          复制 JSON
+        </Button>
       </summary>
       <pre style={{
         backgroundColor: CARD,
@@ -450,7 +478,7 @@ function RawTraceDetails({ label, value }: { label: string; value: unknown }) {
         border: `1px solid ${BORDER}`,
         fontSize: 12,
         margin: '8px 0 0 0',
-        maxHeight: 320,
+        maxHeight: 640,
         overflow: 'auto',
         whiteSpace: 'pre-wrap',
       }}>
