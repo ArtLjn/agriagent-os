@@ -5,7 +5,16 @@ import { LlmContextInspector } from './LlmContextInspector';
 import type { PlaygroundLlmContextSnapshot } from './traceMetrics';
 
 const snapshot: PlaygroundLlmContextSnapshot = {
-  systemPrompt: '系统提示\n<runtime_context>农场状态</runtime_context>',
+  systemPrompt: [
+    '李大豆（播种期）',
+    '',
+    '### farm',
+    '农场：管理员农场；位置：苏州市虎丘区',
+    '',
+    '### ledger',
+    '本月花费：250元；近期账务：化肥100元',
+    '</runtime_context>',
+  ].join('\n'),
   messages: [
     { index: 0, role: 'user', type: 'human', content: '我的农场情况' },
     {
@@ -28,7 +37,16 @@ const snapshot: PlaygroundLlmContextSnapshot = {
   actions: ['summarize_old_messages'],
   truncated: false,
   raw: {
-    system_prompt: '系统提示\n<runtime_context>农场状态</runtime_context>',
+    system_prompt: [
+      '李大豆（播种期）',
+      '',
+      '### farm',
+      '农场：管理员农场；位置：苏州市虎丘区',
+      '',
+      '### ledger',
+      '本月花费：250元；近期账务：化肥100元',
+      '</runtime_context>',
+    ].join('\n'),
     messages: [
       { index: 0, role: 'user', type: 'human', content: '我的农场情况' },
       {
@@ -50,7 +68,7 @@ const snapshot: PlaygroundLlmContextSnapshot = {
 };
 
 describe('LlmContextInspector', () => {
-  it('默认只显示折叠的完整 context JSON，展开后展示原始快照', () => {
+  it('主体展示可视化 context 库，底部 JSON 默认折叠且可展开', () => {
     render(
       <LlmContextInspector
         snapshot={snapshot}
@@ -64,17 +82,20 @@ describe('LlmContextInspector', () => {
       />,
     );
 
-    expect(screen.getByRole('dialog', { name: 'LLM Context JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'LLM Context 可观测' })).toBeInTheDocument();
+    expect(screen.getAllByText('Context Blocks').length).toBeGreaterThan(0);
+    expect(screen.getByText('Runtime Context')).toBeInTheDocument();
+    expect(screen.getAllByText('Messages').length).toBeGreaterThan(0);
+    expect(document.body.textContent).toContain('农场：管理员农场；位置：苏州市虎丘区');
+    expect(document.body.textContent).toContain('农场状态：夏季大豆播种期');
+
     const jsonToggle = screen.getByRole('button', { name: /final_llm_context\.json/ });
     expect(jsonToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(document.body.textContent).not.toContain('System Prompt');
-    expect(document.body.textContent).not.toContain('Prompt Token');
-    expect(document.body.textContent).not.toContain('农场状态：夏季大豆播种期');
+    expect(document.body.textContent).not.toContain('"system_prompt"');
 
     fireEvent.click(jsonToggle);
 
     expect(jsonToggle).toHaveAttribute('aria-expanded', 'true');
     expect(document.body.textContent).toContain('"system_prompt"');
-    expect(document.body.textContent).toContain('农场状态：夏季大豆播种期');
   });
 });
