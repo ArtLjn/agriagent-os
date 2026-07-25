@@ -431,7 +431,10 @@ async def test_tool_result_final_number_contradiction_uses_safe_reply() -> None:
         )
 
     final_text = result["messages"][0].content
-    assert final_text == "工具结果与最终回复中的关键数量不一致。"
+    assert final_text == (
+        "我刚才查到的数据和准备回复里的数字对不上，先不乱说。"
+        "请你再问一次，我会重新查清楚后回答。"
+    )
     assert "3 个茬口" not in final_text
 
 

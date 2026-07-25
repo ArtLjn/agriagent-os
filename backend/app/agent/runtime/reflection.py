@@ -101,6 +101,11 @@ def _is_write_fail_closed_text(text: str) -> bool:
 def _fallback_guard_response(reflection_result: ReflectionResult) -> str:
     """把内部反思原因转换为用户可读的安全回复。"""
     if any(
+        issue.code == "tool_result_final_contradiction"
+        for issue in reflection_result.issues
+    ):
+        return "我刚才查到的数据和准备回复里的数字对不上，先不乱说。请你再问一次，我会重新查清楚后回答。"
+    if any(
         issue.code == "no_tool_write_success_claim"
         for issue in reflection_result.issues
     ):

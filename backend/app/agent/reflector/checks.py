@@ -347,6 +347,11 @@ def check_tool_result_final_contradiction(
     tool_messages: list[ToolMessage],
     final_text: str,
 ) -> ReflectionResult:
+    if not _looks_like_business_fact(final_text):
+        return ReflectionResult.passed(
+            ReflectionTrigger.POST_TOOL_RESULT,
+            checks=[_TOOL_CONCLUSION_CHECK],
+        )
     tool_numbers = _extract_numbers_from_messages(tool_messages)
     final_numbers = _extract_numbers(final_text)
     if not tool_numbers or not final_numbers:

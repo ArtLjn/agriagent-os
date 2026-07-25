@@ -439,6 +439,29 @@ def test_check_tool_result_final_contradiction_blocks_number_mismatch() -> None:
     assert result.issues[0].code == "tool_result_final_contradiction"
 
 
+def test_check_tool_result_final_contradiction_allows_plan_advice_numbers() -> None:
+    tool_message = ToolMessage(
+        content=(
+            "【农场现状】\n"
+            "茬口：夏季水稻(成熟期(阶段至2026-12-16))、"
+            "夏季大豆(播种期(阶段至2026-06-15))\n"
+            "本月花费：250元\n"
+            "天气：今天晴37°/明天晴37°/后天晴36°"
+        ),
+        tool_call_id="tc-status",
+    )
+
+    result = check_tool_result_final_contradiction(
+        tool_messages=[tool_message],
+        final_text=(
+            "秋季种豆角可以先规划起来。建议 8 月中下旬到 9 月初播种，"
+            "10 月到 11 月采收；面积和地块确认后再建档。"
+        ),
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
 def test_reflector_service_passes_valid_pending_plan() -> None:
     service = ReflectorService(policy=ReflectionPolicy(enabled=True))
     steps = [
