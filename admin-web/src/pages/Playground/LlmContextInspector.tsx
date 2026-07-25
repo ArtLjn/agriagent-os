@@ -1,5 +1,6 @@
 import { FileSearchOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Button, Drawer, Tag, Tooltip } from 'antd';
+import { Button, Drawer, Tooltip } from 'antd';
+import { useState } from 'react';
 
 import { palette } from '../../styles/theme';
 import { formatTracePayload } from '../../utils/tracePayload';
@@ -8,28 +9,9 @@ import type { PlaygroundLlmContextSnapshot } from './traceMetrics';
 const BORDER = palette.border;
 const TEXT = palette.text;
 const TEXT_DIM = palette.textMuted;
-const ACCENT = palette.accent;
 const PANEL_BG = '#0d1117';
 const PRE_BG = '#161b22';
-
-function formatMetricNumber(value: number | null): string {
-  if (value === null) return '-';
-  return value.toLocaleString('zh-CN');
-}
-
-function TraceMetricPill({ label, value }: { label: string; value: string }) {
-  return (
-    <span style={{
-      color: TEXT_DIM,
-      fontSize: 12,
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 4,
-    }}>
-      {label}: <span style={{ color: TEXT, fontFamily: 'monospace' }}>{value}</span>
-    </span>
-  );
-}
+const ACCENT = palette.accent;
 
 function TracePre({ children, maxHeight }: { children: string; maxHeight: number }) {
   return (
@@ -77,33 +59,56 @@ function EmptyContextState({
   );
 }
 
-function ContextSnapshotDetail({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot }) {
+function CollapsibleContextJson({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot }) {
+  const [expanded, setExpanded] = useState(false);
+  const json = formatTracePayload(snapshot.raw);
+
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
-        <TraceMetricPill label="Prompt Token" value={formatMetricNumber(snapshot.promptTokens)} />
-        <TraceMetricPill label="预算" value={formatMetricNumber(snapshot.maxTokens)} />
-        <TraceMetricPill label="压缩动作" value={snapshot.actions.length > 0 ? snapshot.actions.join(', ') : '-'} />
-        {snapshot.truncated && (
-          <Tag color="warning" style={{ fontSize: 11, margin: 0 }}>已结构化截断</Tag>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ minWidth: 0, flex: '1 1 300px' }}>
-          <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 6 }}>System Prompt</div>
-          <TracePre maxHeight={260}>{snapshot.systemPrompt || '-'}</TracePre>
+    <section
+      aria-label="LLM Context JSON"
+      style={{
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        background: PRE_BG,
+        overflow: 'hidden',
+      }}
+    >
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        style={{
+          alignItems: 'center',
+          background: 'transparent',
+          border: 0,
+          color: TEXT,
+          cursor: 'pointer',
+          display: 'flex',
+          fontFamily: 'monospace',
+          fontSize: 13,
+          gap: 10,
+          justifyContent: 'space-between',
+          padding: '12px 14px',
+          textAlign: 'left',
+          width: '100%',
+        }}
+      >
+        <span>final_llm_context.json</span>
+        <span style={{ color: TEXT_DIM, fontFamily: 'inherit' }}>
+          {expanded ? '收起' : '展开'}
+        </span>
+      </button>
+      {expanded && (
+        <div style={{ borderTop: `1px solid ${BORDER}` }}>
+          <TracePre maxHeight={680}>{json}</TracePre>
         </div>
-        <div style={{ minWidth: 0, flex: '1 1 340px' }}>
-          <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 6 }}>Messages（压缩后）</div>
-          <TracePre maxHeight={260}>{formatTracePayload(snapshot.messages)}</TracePre>
-        </div>
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <div style={{ color: TEXT_DIM, fontSize: 12, marginBottom: 6 }}>原始快照 JSON</div>
-        <TracePre maxHeight={360}>{formatTracePayload(snapshot.raw)}</TracePre>
-      </div>
-    </>
+      )}
+    </section>
   );
+}
+
+function ContextSnapshotDetail({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot }) {
+  return <CollapsibleContextJson snapshot={snapshot} />;
 }
 
 export function LlmContextInspector({
@@ -112,8 +117,6 @@ export function LlmContextInspector({
   onOpenChange,
   loading,
   hasTimeline,
-  requestId,
-  nodeCount,
   onRefresh,
 }: {
   snapshot: PlaygroundLlmContextSnapshot | null;
@@ -125,12 +128,6 @@ export function LlmContextInspector({
   nodeCount: number;
   onRefresh: () => void | Promise<unknown>;
 }) {
-  const statusText = snapshot
-    ? `messages ${snapshot.messages.length} · blocks ${snapshot.contextBlocks.join(', ') || '-'}`
-    : loading
-      ? '等待 trace'
-      : '暂无快照';
-
   return (
     <>
       <Tooltip title="查看最终送入模型的 LLM Context" placement="left">
@@ -156,7 +153,7 @@ export function LlmContextInspector({
         </Button>
       </Tooltip>
       <Drawer
-        title="LLM 上下文快照"
+        title="LLM Context JSON"
         placement="right"
         width={720}
         onClose={() => onOpenChange(false)}
@@ -180,23 +177,6 @@ export function LlmContextInspector({
         }}
       >
         <div style={{ color: TEXT }}>
-          <div style={{
-            border: `1px solid ${BORDER}`,
-            borderRadius: 8,
-            background: PRE_BG,
-            padding: 12,
-            marginBottom: 14,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Tag color={snapshot ? 'processing' : 'default'} style={{ margin: 0 }}>
-                {snapshot ? 'final_llm_context' : 'waiting'}
-              </Tag>
-              <span style={{ color: TEXT_DIM, fontSize: 12 }}>{statusText}</span>
-              <span style={{ color: TEXT_DIM, fontSize: 12, fontFamily: 'monospace' }}>
-                request: {requestId || '-'} · nodes: {nodeCount}
-              </span>
-            </div>
-          </div>
           {snapshot ? (
             <ContextSnapshotDetail snapshot={snapshot} />
           ) : (
