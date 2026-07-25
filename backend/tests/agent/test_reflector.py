@@ -14,6 +14,7 @@ from app.agent.reflector.checks import (
     check_required_tool_missing,
     check_tool_failure_success_reply,
     check_tool_failure_write_plan_reply,
+    check_tool_result_discarded_reply,
     check_tool_result_final_contradiction,
     check_write_plan_consistency,
 )
@@ -157,6 +158,21 @@ def test_check_tool_failure_blocks_write_plan_no_tool_reply() -> None:
 
     assert result.decision == ReflectionDecision.FALLBACK_RESPONSE
     assert result.issues[0].code == "failed_write_plan_no_tool_reply"
+
+
+def test_check_tool_result_discarded_reply_requests_regeneration() -> None:
+    result = check_tool_result_discarded_reply(
+        tool_messages=[
+            ToolMessage(
+                content="【农场现状】茬口：夏季水稻、夏季大豆",
+                tool_call_id="tc-status",
+            )
+        ],
+        final_text="这个问题可以直接聊，不需要调用工具。",
+    )
+
+    assert result.decision == ReflectionDecision.RETRY_GENERATION
+    assert result.issues[0].code == "tool_result_discarded_reply"
 
 
 def test_service_blocks_failed_write_plan_no_tool_reply(

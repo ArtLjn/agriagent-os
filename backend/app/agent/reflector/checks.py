@@ -51,6 +51,7 @@ _WRITE_PLAN_CHECK = "write_plan_consistency"
 _PENDING_PLAN_CHECK = "pending_plan_consistency"
 _TOOL_RESPONSE_CHECK = "tool_failure_success_reply"
 _WRITE_PLAN_TOOL_FAILURE_CHECK = "write_plan_tool_failure_reply"
+_TOOL_RESULT_DISCARDED_CHECK = "tool_result_discarded_reply"
 _TOOL_CONCLUSION_CHECK = "tool_result_final_contradiction"
 _REQUIRED_TOOL_CHECK = "required_tool_missing"
 _NO_TOOL_WRITE_SUCCESS_CHECK = "no_tool_write_success_claim"
@@ -219,6 +220,29 @@ def check_tool_failure_write_plan_reply(
             "final_text": final_text[:160],
             "plan_draft": _summarize_plan_draft(plan_draft),
             "pending_created": pending_created,
+        },
+    )
+
+
+def check_tool_result_discarded_reply(
+    *,
+    tool_messages: list[ToolMessage],
+    final_text: str,
+) -> ReflectionResult:
+    if not tool_messages or not _contains_any(final_text, _NO_TOOL_NEEDED_HINTS):
+        return ReflectionResult.passed(
+            ReflectionTrigger.POST_TOOL_RESULT,
+            checks=[_TOOL_RESULT_DISCARDED_CHECK],
+        )
+    return _single_issue(
+        trigger=ReflectionTrigger.POST_TOOL_RESULT,
+        decision=ReflectionDecision.RETRY_GENERATION,
+        checks=[_TOOL_RESULT_DISCARDED_CHECK],
+        code="tool_result_discarded_reply",
+        message="当前轮已有工具结果，但最终回复淡化或丢弃了工具结果。",
+        evidence={
+            "tool_message_count": len(tool_messages),
+            "final_text": final_text[:160],
         },
     )
 

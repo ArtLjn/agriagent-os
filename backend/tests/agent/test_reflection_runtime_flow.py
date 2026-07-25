@@ -41,6 +41,24 @@ class _FakeLLM:
         return AIMessage(content=self.response_text, tool_calls=[])
 
 
+class _SequentialFakeLLM:
+    model_name = "fake-model"
+
+    def __init__(self, response_texts: list[str]) -> None:
+        self.response_texts = response_texts
+        self.invoked_messages: list[list] = []
+        self.bound_tool_names: list[str] = []
+
+    def bind_tools(self, tools: list, **_kwargs):
+        self.bound_tool_names = [tool.name for tool in tools]
+        return self
+
+    async def ainvoke(self, messages):
+        self.invoked_messages.append(messages)
+        index = min(len(self.invoked_messages) - 1, len(self.response_texts) - 1)
+        return AIMessage(content=self.response_texts[index], tool_calls=[])
+
+
 class _RequiredRetryLLM:
     model_name = "fake-model"
 
@@ -436,6 +454,49 @@ async def test_tool_result_final_number_contradiction_uses_safe_reply() -> None:
         "请你再问一次，我会重新查清楚后回答。"
     )
     assert "3 个茬口" not in final_text
+
+
+@pytest.mark.asyncio
+async def test_tool_result_discarded_reply_retries_final_generation() -> None:
+    fake_llm = _SequentialFakeLLM(
+        [
+            "我刚才没组织好。这个问题可以直接聊，不需要调用工具。",
+            "秋季种豆角可以先规划起来。结合当前水稻成熟期和大豆播种期，建议先确认面积、地块和是否需要建茬口。",
+        ]
+    )
+    tools = [_FakeTool("get_farm_status")]
+
+    with ExitStack() as stack:
+        _enter_runtime_patches(stack, fake_llm, tools)
+
+        result = await _llm_node(
+            {
+                "messages": [
+                    HumanMessage(content="我打算今年秋天开始种豆角"),
+                    ToolMessage(
+                        content=(
+                            "【农场现状】\n"
+                            "茬口：夏季水稻(成熟期)、夏季大豆(播种期)\n"
+                            "天气：今天晴37°"
+                        ),
+                        tool_call_id="tc-status",
+                    ),
+                ],
+                "farm_id": 1,
+                "farm_uid": "farm-uid-1",
+                "intent": "agent",
+                "user_id": "user-1",
+                "session_id": "session-tool-result-retry",
+            }
+        )
+
+    final_text = result["messages"][0].content
+    assert "不需要调用工具" not in final_text
+    assert "秋季种豆角" in final_text
+    assert len(fake_llm.invoked_messages) == 2
+    retry_system = fake_llm.invoked_messages[1][0].content
+    assert "反思反馈" in retry_system
+    assert "已有工具结果" in retry_system
 
 
 @pytest.mark.asyncio

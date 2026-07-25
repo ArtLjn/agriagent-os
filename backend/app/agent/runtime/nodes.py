@@ -160,6 +160,7 @@ async def _llm_node(state: AgentState) -> dict:
         get_llm_func=get_llm,
         bind_llm_func=_bind_llm_for_tools,
         max_retries=settings.ai.failover_max_retries,
+        intent=intent,
     )
     return _record_response_and_result(
         response=response,
