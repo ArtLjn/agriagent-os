@@ -18,17 +18,53 @@ export interface PlaygroundLlmContextMessage {
   role: string;
   type: string;
   content: unknown;
+  contentPreview?: string;
+  compressed?: boolean;
+  status?: string;
   tool_calls?: unknown[];
   invalid_tool_calls?: unknown[];
   tool_call_id?: string;
   name?: string;
 }
 
+export interface PlaygroundLlmContextBlockDetail {
+  key: string;
+  category: string;
+  source: string;
+  decision: string;
+  compressed: boolean;
+  dropped: boolean;
+  priority: number | null;
+  required: boolean;
+  tokenEstimate: number | null;
+  contentPreview: string;
+  content: string;
+  reason: string;
+}
+
+export interface PlaygroundLlmContextRuntimeSection {
+  name: string;
+  tokenEstimate: number | null;
+  blocks: PlaygroundLlmContextBlockDetail[];
+}
+
+export interface PlaygroundLlmContextCompression {
+  contextCompressedCount: number;
+  contextDroppedCount: number;
+  messageCompressedCount: number;
+  toolResultCompressedCount: number;
+  events: unknown[];
+}
+
 export interface PlaygroundLlmContextSnapshot {
+  schemaVersion: number | null;
   systemPrompt: string;
   messages: PlaygroundLlmContextMessage[];
   contextBlocks: string[];
+  contextBlockDetails: PlaygroundLlmContextBlockDetail[];
+  runtimeSections: PlaygroundLlmContextRuntimeSection[];
   budget: Record<string, unknown>;
+  compression: PlaygroundLlmContextCompression | null;
   promptTokens: number | null;
   maxTokens: number | null;
   actions: string[];
@@ -68,8 +104,73 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function toBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function toStringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
 function readTokenUsage(node: TraceNode): Record<string, unknown> | null {
   return asRecord(node.token_usage);
+}
+
+function readLlmContextBlockDetail(
+  value: unknown,
+): PlaygroundLlmContextBlockDetail | null {
+  const item = asRecord(value);
+  if (!item) return null;
+  const key = toStringValue(item.key);
+  if (!key) return null;
+
+  return {
+    key,
+    category: toStringValue(item.category) || 'uncategorized',
+    source: toStringValue(item.source),
+    decision: toStringValue(item.decision),
+    compressed: toBoolean(item.compressed),
+    dropped: toBoolean(item.dropped),
+    priority: toNumber(item.priority),
+    required: toBoolean(item.required),
+    tokenEstimate: toNumber(item.token_estimate),
+    contentPreview: toStringValue(item.content_preview),
+    content: toStringValue(item.content),
+    reason: toStringValue(item.reason),
+  };
+}
+
+function readRuntimeSections(
+  value: unknown,
+): PlaygroundLlmContextRuntimeSection[] {
+  const runtimeContext = asRecord(value);
+  return asArray(runtimeContext?.sections)
+    .map((sectionValue) => {
+      const section = asRecord(sectionValue);
+      if (!section) return null;
+      const blocks = asArray(section.blocks)
+        .map(readLlmContextBlockDetail)
+        .filter((item): item is PlaygroundLlmContextBlockDetail => item !== null);
+      const name = toStringValue(section.name) || 'runtime_context';
+      return {
+        name,
+        tokenEstimate: toNumber(section.token_estimate),
+        blocks,
+      };
+    })
+    .filter((item): item is PlaygroundLlmContextRuntimeSection => item !== null);
+}
+
+function readCompression(value: unknown): PlaygroundLlmContextCompression | null {
+  const compression = asRecord(value);
+  if (!compression) return null;
+  return {
+    contextCompressedCount: toNumber(compression.context_compressed_count) ?? 0,
+    contextDroppedCount: toNumber(compression.context_dropped_count) ?? 0,
+    messageCompressedCount: toNumber(compression.message_compressed_count) ?? 0,
+    toolResultCompressedCount: toNumber(compression.tool_result_compressed_count) ?? 0,
+    events: asArray(compression.events),
+  };
 }
 
 export function buildPlaygroundTraceMetrics(timeline: TraceTimeline | null): PlaygroundTraceMetrics {
@@ -87,12 +188,20 @@ export function buildPlaygroundTraceMetrics(timeline: TraceTimeline | null): Pla
     metrics.contextDroppedCount = asArray(contextOutput.dropped_blocks).length;
   }
 
-  const promptNode = [...nodes].reverse().find((node) => node.node_type === 'prompt_budget');
+  const promptNode = [...nodes].reverse().find(
+    (node) => node.node_type === 'prompt_budget' && node.node_name === 'final_prompt',
+  );
+  const finalContextNode = [...nodes].reverse().find(
+    (node) => node.node_type === 'prompt_budget' && node.node_name === 'final_llm_context',
+  );
   const promptOutput = asRecord(promptNode?.output_data);
-  if (promptOutput) {
-    metrics.promptTokens = toNumber(promptOutput.total_tokens);
-    metrics.promptMaxTokens = toNumber(promptOutput.max_tokens);
-    metrics.promptActions = asArray(promptOutput.actions).filter(
+  const finalContextOutput = asRecord(finalContextNode?.output_data);
+  const finalContextBudget = asRecord(finalContextOutput?.budget);
+  const budgetOutput = promptOutput ?? finalContextBudget;
+  if (budgetOutput) {
+    metrics.promptTokens = toNumber(budgetOutput.total_tokens);
+    metrics.promptMaxTokens = toNumber(budgetOutput.max_tokens);
+    metrics.promptActions = asArray(budgetOutput.actions).filter(
       (item): item is string => typeof item === 'string',
     );
   }
@@ -126,6 +235,9 @@ export function extractLatestLlmContextSnapshot(
 
   const budget = asRecord(output.budget) ?? {};
   const usage = contextNode ? readTokenUsage(contextNode) : null;
+  const runtimeSections = readRuntimeSections(output.runtime_context);
+  const contextBlockDetails = runtimeSections.flatMap((section) => section.blocks);
+  const compression = readCompression(output.compression);
   const messages = asArray(output.messages)
     .map((item) => asRecord(item))
     .filter((item): item is Record<string, unknown> => item !== null)
@@ -136,6 +248,9 @@ export function extractLatestLlmContextSnapshot(
         type: typeof item.type === 'string' ? item.type : 'unknown',
         content: item.content,
       };
+      if (typeof item.content_preview === 'string') message.contentPreview = item.content_preview;
+      if (typeof item.compressed === 'boolean') message.compressed = item.compressed;
+      if (typeof item.status === 'string') message.status = item.status;
       const toolCalls = asArray(item.tool_calls);
       const invalidToolCalls = asArray(item.invalid_tool_calls);
       if (toolCalls.length > 0) message.tool_calls = toolCalls;
@@ -145,12 +260,16 @@ export function extractLatestLlmContextSnapshot(
       return message;
     });
   return {
+    schemaVersion: toNumber(output.schema_version),
     systemPrompt: typeof output.system_prompt === 'string' ? output.system_prompt : '',
     messages,
     contextBlocks: asArray(output.context_blocks).filter(
       (item): item is string => typeof item === 'string',
     ),
+    contextBlockDetails,
+    runtimeSections,
     budget,
+    compression,
     promptTokens: toNumber(budget.total_tokens) ?? toNumber(usage?.prompt_tokens),
     maxTokens: toNumber(budget.max_tokens),
     actions: asArray(budget.actions).filter((item): item is string => typeof item === 'string'),
