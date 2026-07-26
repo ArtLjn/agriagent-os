@@ -24,6 +24,11 @@ class TestAllowlistContract:
     def test_is_allowed_key_returns_false_for_forbidden(self):
         assert is_allowed_key("weather_snapshot") is False
 
+    def test_renderer_only_registered_keys_are_not_prompt_allowed(self):
+        assert is_allowed_key("weather") is False
+        assert is_allowed_key("conversation") is False
+        assert is_allowed_key("retrieval") is False
+
     def test_is_allowed_key_returns_true_for_whitelisted(self):
         assert is_allowed_key("farm_profile") is True
         assert is_allowed_key("active_task_state") is True

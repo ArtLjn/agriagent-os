@@ -42,7 +42,22 @@ class TestSlidingWindow:
         assert len(result) == len(msgs)
         old_tool_msgs = [m for m in result[:8] if isinstance(m, ToolMessage)]
         for m in old_tool_msgs:
-            assert len(m.content) < 50
+            assert "[工具结果已压缩]" in m.content
+            assert "tool: tool_" in m.content
+            assert "ref: tool_call_id=tc" in m.content
+
+    def test_old_tool_results_use_tool_call_names_from_ai_messages(self):
+        """旧工具结果压缩时应从 AIMessage.tool_calls 解析工具名。"""
+        msgs = _make_messages(8)
+        result = sliding_window_compact(msgs, keep_rounds=5)
+
+        assert "[工具结果已压缩]" in result[2].content
+        assert "tool: tool_0" in result[2].content
+        assert "status: " in result[2].content
+        assert "summary: " in result[2].content
+        assert "ref: tool_call_id=tc0" in result[2].content
+        assert result[2].name == "tool_0"
+        assert result[2].status == "success"
 
     def test_recent_rounds_preserved(self):
         """最近 keep_rounds 轮完整保留。"""
@@ -51,6 +66,7 @@ class TestSlidingWindow:
         recent_tool_msgs = [m for m in result[-20:] if isinstance(m, ToolMessage)]
         for m in recent_tool_msgs:
             assert "很长的数据内容" in m.content
+            assert "[工具结果已压缩]" not in m.content
 
     def test_empty_messages(self):
         result = sliding_window_compact([], keep_rounds=5)

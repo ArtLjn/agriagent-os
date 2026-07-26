@@ -6,30 +6,10 @@
 - 禁止承载可被询问的查询答案（天气、农场状态、茬口详情等）
 """
 
-ALLOWED_CONTEXT_KEYS: frozenset[str] = frozenset(
-    {
-        # 身份/指针
-        "farm_profile",
-        "farm",
-        "user_profile",
-        "session_meta",
-        "current_crop_cycle_pointer",  # 只放 ID，不放详情
-        "cycle",
-        "ledger",
-        "rag_knowledge",
-        # 状态
-        "active_task_state",
-        "temporary_task_state",
-        "pending_action_pointer",
-        "pending_plan_pointer",
-        "last_confirmed_at",
-        # 偏好
-        "user_settings",
-        "assistant_role",
-        "short_term_recent",
-        "long_term_memory",
-    }
-)
+from app.context.registry import prompt_allowed_keys
+
+
+ALLOWED_CONTEXT_KEYS: frozenset[str] = prompt_allowed_keys()
 
 FORBIDDEN_CONTEXT_KEYS: frozenset[str] = frozenset(
     {
@@ -49,6 +29,8 @@ FORBIDDEN_CONTEXT_KEYS: frozenset[str] = frozenset(
 
 def is_allowed_key(key: str) -> bool:
     """判断 block key 是否允许注入 ContextBundle。"""
+    if key in FORBIDDEN_CONTEXT_KEYS:
+        return False
     return key in ALLOWED_CONTEXT_KEYS
 
 
