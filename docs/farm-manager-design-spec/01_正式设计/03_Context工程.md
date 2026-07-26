@@ -329,15 +329,19 @@ Trace 写入失败不能影响主链路。Mongo trace 只能服务调试、质�
 
 实现入口：
 
+- [context/engine.py](../../../backend/app/context/engine.py)
+- [context/contracts.py](../../../backend/app/context/contracts.py)
+- [context/planner.py](../../../backend/app/context/planner.py)
+- [context/render.py](../../../backend/app/context/render.py)
+- [context/legacy.py](../../../backend/app/context/legacy.py)
+- [context/builder.py](../../../backend/app/context/builder.py)：旧 API 兼容门面，委托 `ContextEngine`
 - [context/models.py](../../../backend/app/context/models.py)
-- [context/builder.py](../../../backend/app/context/builder.py)
 - [context/policy.py](../../../backend/app/context/policy.py)
-- [context/document.py](../../../backend/app/context/document.py)
-- [context/renderer.py](../../../backend/app/context/renderer.py)
 - [context/registry.py](../../../backend/app/context/registry.py)
 - [context/compression.py](../../../backend/app/context/compression.py)
 - [context/trace.py](../../../backend/app/context/trace.py)
-- [context/rag_provider.py](../../../backend/app/context/rag_provider.py)
+- [context/providers/rag.py](../../../backend/app/context/providers/rag.py)
+- [context/sources/](../../../backend/app/context/sources/)
 - [context/selectors/knowledge.py](../../../backend/app/context/selectors/knowledge.py)
 - [context/selectors/task_state.py](../../../backend/app/context/selectors/task_state.py)
 - [context/selectors/memory.py](../../../backend/app/context/selectors/memory.py)
