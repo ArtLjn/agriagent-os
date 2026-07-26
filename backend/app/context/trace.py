@@ -6,7 +6,7 @@ import re
 from typing import Any, Mapping
 
 from app.context.models import ContextBlock, ContextBundle
-from app.context.renderer import ContextRenderer
+from app.context.render import ContextRenderer
 
 
 PREVIEW_LIMIT = 120
