@@ -127,9 +127,204 @@ describe('buildPlaygroundTraceMetrics', () => {
     expect(metrics.llmTotalTokens).toBe(0);
     expect(hasAutomaticCompression(metrics)).toBe(false);
   });
+
+  it('final_llm_context 排在后面时仍优先使用 final_prompt 指标', () => {
+    const timeline: TraceTimeline = {
+      request_id: 'req-prompt-order',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'prompt_budget',
+              node_name: 'final_prompt',
+              duration_ms: 0,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: {},
+              output_data: {
+                total_tokens: 1800,
+                max_tokens: 6000,
+                actions: ['compact_tool_results'],
+              },
+            },
+            {
+              node_type: 'prompt_budget',
+              node_name: 'final_llm_context',
+              duration_ms: 0,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: {},
+              output_data: {
+                budget: {
+                  total_tokens: 2200,
+                  max_tokens: 7000,
+                  actions: [],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const metrics = buildPlaygroundTraceMetrics(timeline);
+
+    expect(metrics.promptTokens).toBe(1800);
+    expect(metrics.promptMaxTokens).toBe(6000);
+    expect(metrics.promptActions).toEqual(['compact_tool_results']);
+    expect(hasAutomaticCompression(metrics)).toBe(true);
+  });
+
+  it('缺少 final_prompt 时可从 v2 final_llm_context budget 兜底读取指标', () => {
+    const timeline: TraceTimeline = {
+      request_id: 'req-prompt-v2-fallback',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'prompt_budget',
+              node_name: 'final_llm_context',
+              duration_ms: 0,
+              status: 'success',
+              token_usage: null,
+              start_time: null,
+              error_message: null,
+              input_data: {},
+              output_data: {
+                budget: {
+                  total_tokens: 2400,
+                  max_tokens: 6000,
+                  actions: ['summarize_old_messages'],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const metrics = buildPlaygroundTraceMetrics(timeline);
+
+    expect(metrics.promptTokens).toBe(2400);
+    expect(metrics.promptMaxTokens).toBe(6000);
+    expect(metrics.promptActions).toEqual(['summarize_old_messages']);
+  });
 });
 
 describe('extractLatestLlmContextSnapshot', () => {
+  it('优先解析 schema v2 的 runtime_context、block 明细和压缩统计', () => {
+    const timeline: TraceTimeline = {
+      request_id: 'req-context-v2',
+      rounds: [
+        {
+          round_index: 0,
+          nodes: [
+            {
+              node_type: 'prompt_budget',
+              node_name: 'final_llm_context',
+              duration_ms: 0,
+              status: 'success',
+              token_usage: { prompt_tokens: 3315 },
+              start_time: null,
+              error_message: null,
+              input_data: { message_count: 2 },
+              output_data: {
+                schema_version: 2,
+                system_prompt: '系统提示',
+                runtime_context: {
+                  sections: [
+                    {
+                      name: 'Task',
+                      token_estimate: 180,
+                      blocks: [
+                        {
+                          key: 'active_task_state',
+                          category: 'task',
+                          source: 'task_state',
+                          decision: 'selected',
+                          compressed: false,
+                          dropped: false,
+                          priority: 85,
+                          required: false,
+                          token_estimate: 120,
+                          content_preview: '目标：补齐巡田计划',
+                          content: '目标：补齐巡田计划\n状态：进行中',
+                          reason: '',
+                        },
+                      ],
+                    },
+                  ],
+                },
+                messages: [
+                  {
+                    index: 0,
+                    role: 'user',
+                    type: 'human',
+                    content: '继续任务',
+                    content_preview: '继续任务',
+                    compressed: true,
+                  },
+                  {
+                    index: 1,
+                    role: 'tool',
+                    type: 'tool',
+                    content: '查询完成',
+                    tool_call_id: 'call-1',
+                    name: 'get_task_state',
+                    status: 'success',
+                  },
+                ],
+                context_blocks: ['farm', 'active_task_state'],
+                budget: {
+                  total_tokens: 3315,
+                  max_tokens: 6000,
+                  actions: ['compact_tool_results'],
+                },
+                compression: {
+                  context_compressed_count: 1,
+                  context_dropped_count: 0,
+                  message_compressed_count: 2,
+                  tool_result_compressed_count: 1,
+                  events: [],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const snapshot = extractLatestLlmContextSnapshot(timeline);
+    if (!snapshot) throw new Error('expected v2 snapshot');
+
+    expect(snapshot.schemaVersion).toBe(2);
+    expect(snapshot.runtimeSections[0]?.name).toBe('Task');
+    expect(snapshot.runtimeSections[0]?.blocks[0]?.key).toBe('active_task_state');
+    expect(snapshot.contextBlockDetails[0]).toMatchObject({
+      key: 'active_task_state',
+      category: 'task',
+      source: 'task_state',
+      decision: 'selected',
+      tokenEstimate: 120,
+    });
+    expect(snapshot.compression?.toolResultCompressedCount).toBe(1);
+    expect(snapshot.messages[0]).toMatchObject({
+      compressed: true,
+      contentPreview: '继续任务',
+    });
+    expect(snapshot.messages[1]).toMatchObject({
+      tool_call_id: 'call-1',
+      name: 'get_task_state',
+      status: 'success',
+    });
+  });
+
   it('从 final_llm_context 节点提取最终送入模型的上下文快照', () => {
     const timeline: TraceTimeline = {
       request_id: 'req-context',

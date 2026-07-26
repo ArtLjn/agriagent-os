@@ -19,7 +19,13 @@ from app.agent.runtime.planning import (
 )
 from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.agent.state import AgentState
+from app.context.compression import (
+    is_tool_result_compressed,
+    safe_preview,
+    safe_trace_value,
+)
 from app.context.models import ContextBundle
+from app.context.registry import block_spec
 from app.context.renderer import ContextRenderer
 from app.infra.pending_actions import CONTRACT_BLOCKED_MARKER, PENDING_MARKER
 from app.infra.trace_context import set_round_index
@@ -303,15 +309,7 @@ def _append_runtime_context(system_text: str, context_bundle: ContextBundle) -> 
 
 def _trace_safe_value(value: Any) -> Any:
     """把 LangChain 消息字段转换成可稳定写入 trace 的基础 JSON 值。"""
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, list):
-        return [_trace_safe_value(item) for item in value]
-    if isinstance(value, tuple):
-        return [_trace_safe_value(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): _trace_safe_value(item) for key, item in value.items()}
-    return str(value)
+    return safe_trace_value(value)
 
 
 def _message_role_for_trace(message: BaseMessage) -> str:
@@ -325,15 +323,23 @@ def _message_role_for_trace(message: BaseMessage) -> str:
 
 
 def _message_trace_payload(message: BaseMessage, index: int) -> dict[str, Any]:
+    content = getattr(message, "content", "")
+    compressed = is_tool_result_compressed(content) or str(content or "").startswith(
+        "早期对话摘要"
+    )
     payload: dict[str, Any] = {
         "index": index,
         "role": _message_role_for_trace(message),
         "type": str(getattr(message, "type", "") or message.__class__.__name__),
-        "content": _trace_safe_value(getattr(message, "content", "")),
+        "content": safe_preview(str(content or ""), max_chars=1000),
+        "content_preview": safe_preview(str(content or ""), max_chars=240),
+        "tool_calls": [],
+        "tool_call_id": None,
+        "compressed": compressed,
     }
     name = getattr(message, "name", None)
     if name:
-        payload["name"] = str(name)
+        payload["name"] = safe_preview(str(name), max_chars=120)
     additional_kwargs = getattr(message, "additional_kwargs", None)
     if additional_kwargs:
         payload["additional_kwargs"] = _trace_safe_value(additional_kwargs)
@@ -348,8 +354,74 @@ def _message_trace_payload(message: BaseMessage, index: int) -> dict[str, Any]:
         payload["tool_call_id"] = str(message.tool_call_id or "")
         status = getattr(message, "status", None)
         if status:
-            payload["status"] = str(status)
+            payload["status"] = safe_preview(str(status), max_chars=80)
     return payload
+
+
+def _runtime_context_sections_payload(context_bundle: ContextBundle) -> list[dict]:
+    """构造最终入模 runtime context 的安全分区快照。"""
+    document = ContextRenderer().render_document(context_bundle)
+    sections: list[dict] = []
+    for section in document.sections:
+        if not section.blocks:
+            continue
+        sections.append(
+            {
+                "name": section.name,
+                "token_estimate": section.token_estimate,
+                "blocks": [
+                    _runtime_context_block_payload(block, dropped=False)
+                    for block in section.blocks
+                ],
+            }
+        )
+    return sections
+
+
+def _runtime_context_block_payload(block, *, dropped: bool) -> dict[str, Any]:
+    spec = block_spec(block.key)
+    compressed = bool(block.is_compressed)
+    decision = "dropped" if dropped else "compressed" if compressed else "selected"
+    original_tokens = block.metadata.get("original_tokens")
+    payload: dict[str, Any] = {
+        "key": safe_preview(block.key, max_chars=120),
+        "category": str(spec.category.value if spec else "unknown"),
+        "source": safe_preview(block.source, max_chars=120),
+        "decision": decision,
+        "compressed": compressed,
+        "dropped": dropped,
+        "priority": block.priority,
+        "required": block.required,
+        "token_estimate": block.token_estimate or 0,
+        "content_preview": safe_preview(block.content, max_chars=240),
+        "content": safe_preview(block.content, max_chars=1000),
+        "reason": safe_preview(block.reason, max_chars=160),
+    }
+    if original_tokens is not None:
+        payload["original_tokens"] = original_tokens
+    return payload
+
+
+def _compression_payload(
+    *, context_bundle: ContextBundle, message_payloads: list[dict], final_budget
+) -> dict[str, Any]:
+    tool_result_count = sum(
+        1
+        for message in message_payloads
+        if message.get("role") == "tool" and message.get("compressed") is True
+    )
+    return {
+        "context_compressed_count": len(context_bundle.compressed_blocks),
+        "context_dropped_count": len(context_bundle.dropped_blocks),
+        "message_compressed_count": sum(
+            1 for message in message_payloads if message.get("compressed") is True
+        ),
+        "tool_result_compressed_count": tool_result_count,
+        "events": safe_trace_value(
+            getattr(final_budget, "compression_events", []),
+            max_chars=500,
+        ),
+    }
 
 
 def _record_final_llm_context_trace(
@@ -363,6 +435,11 @@ def _record_final_llm_context_trace(
     """记录预算压缩后真正送入 LLM 的上下文快照。失败静默。"""
     try:
         context_blocks = _context_block_keys(context_bundle)
+        message_payloads = [
+            _message_trace_payload(message, index)
+            for index, message in enumerate(messages)
+        ]
+        budget_summary = safe_trace_value(final_budget.summary(), max_chars=1000)
         collector.record(
             node_type="prompt_budget",
             node_name="final_llm_context",
@@ -372,13 +449,19 @@ def _record_final_llm_context_trace(
                 "message_count": len(messages),
             },
             output_data={
-                "system_prompt": system_text,
-                "messages": [
-                    _message_trace_payload(message, index)
-                    for index, message in enumerate(messages)
-                ],
+                "schema_version": 2,
+                "system_prompt": safe_preview(system_text, max_chars=4000),
+                "runtime_context": {
+                    "sections": _runtime_context_sections_payload(context_bundle)
+                },
+                "messages": message_payloads,
                 "context_blocks": context_blocks,
-                "budget": final_budget.summary(),
+                "budget": budget_summary,
+                "compression": _compression_payload(
+                    context_bundle=context_bundle,
+                    message_payloads=message_payloads,
+                    final_budget=final_budget,
+                ),
             },
             token_usage={"prompt_tokens": final_budget.total_tokens},
         )
@@ -405,7 +488,7 @@ def _record_system_prompt_trace(
             "variables_count": 5,
             "context_blocks": context_blocks,
         },
-        output_data=system_text[:2000],
+        output_data=safe_preview(system_text, max_chars=2000),
     )
 
 

@@ -2,6 +2,7 @@
 
 from app.context.document import ContextDocument, ContextSection
 from app.context.models import ContextBundle
+from app.context.registry import section_for_key
 
 
 class ContextRenderer:
@@ -15,37 +16,9 @@ class ContextRenderer:
         "Output",
     )
 
-    KEY_TO_SECTION: dict[str, str] = {
-        "assistant_role": "Role & Policies",
-        "assistant_policy": "Role & Policies",
-        "policy": "Role & Policies",
-        "role_policy": "Role & Policies",
-        "pending_action": "Task",
-        "active_task_state": "Task",
-        "pending_action_pointer": "Task",
-        "pending_plan_pointer": "Task",
-        "temporary_task_state": "Task",
-        "retrieval": "Evidence",
-        "rag_knowledge": "Evidence",
-        "tool_result_summary": "Evidence",
-        "farm": "Context",
-        "farm_profile": "Context",
-        "cycle": "Context",
-        "weather": "Context",
-        "conversation": "Context",
-        "conversation_summary": "Context",
-        "short_term_recent": "Context",
-        "short_term_summary": "Context",
-        "long_term_memory": "Context",
-        "user_settings": "Context",
-        "output_contract": "Output",
-        "citation_rule": "Output",
-        "clarification_rule": "Output",
-    }
-
     def section_name_for_key(self, key: str) -> str:
         """按 block key 解析分区，未知 key 归入 Context。"""
-        return self.KEY_TO_SECTION.get(key, "Context")
+        return section_for_key(key)
 
     def render_document(self, bundle: ContextBundle) -> ContextDocument:
         """把 ContextBundle 转为稳定分区顺序的 ContextDocument。"""

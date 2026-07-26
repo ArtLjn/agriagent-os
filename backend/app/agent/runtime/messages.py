@@ -7,6 +7,8 @@ import time as _time
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from app.context.compression import compact_tool_result, tool_call_names_by_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +30,7 @@ def sliding_window_compact(messages: list, keep_rounds: int = 5) -> list:
 
     compress_up_to = round_starts[-keep_rounds]
 
+    tool_names = tool_call_names_by_id(messages)
     result = list(messages)
     for i, msg in enumerate(result):
         if i >= compress_up_to:
@@ -35,10 +38,19 @@ def sliding_window_compact(messages: list, keep_rounds: int = 5) -> list:
         if isinstance(msg, ToolMessage):
             content = msg.content or ""
             if len(content) > 50:
-                tool_name = getattr(msg, "name", "unknown")
+                tool_call_id = str(msg.tool_call_id or "")
+                tool_name = getattr(msg, "name", None) or tool_names.get(tool_call_id)
+                status = getattr(msg, "status", None)
                 result[i] = ToolMessage(
-                    content=f"[已执行 {tool_name}]",
+                    content=compact_tool_result(
+                        content=str(content),
+                        tool_name=tool_name,
+                        tool_call_id=tool_call_id,
+                        status=str(status) if status else None,
+                    ),
+                    name=tool_name,
                     tool_call_id=msg.tool_call_id,
+                    status=status or "success",
                 )
 
     return result

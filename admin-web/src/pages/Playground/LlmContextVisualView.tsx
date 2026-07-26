@@ -3,7 +3,10 @@ import type { ReactNode } from 'react';
 
 import { palette } from '../../styles/theme';
 import { formatTracePayload } from '../../utils/tracePayload';
-import type { PlaygroundLlmContextSnapshot } from './traceMetrics';
+import type {
+  PlaygroundLlmContextBlockDetail,
+  PlaygroundLlmContextSnapshot,
+} from './traceMetrics';
 
 const BORDER = palette.border;
 const TEXT = palette.text;
@@ -26,6 +29,21 @@ function stringifyContent(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   return formatTracePayload(value);
+}
+
+function formatDetailNumber(value: number | null): string {
+  return value === null ? '-' : value.toLocaleString('zh-CN');
+}
+
+function groupBlocksByCategory(
+  blocks: PlaygroundLlmContextBlockDetail[],
+): Array<[string, PlaygroundLlmContextBlockDetail[]]> {
+  const grouped = new Map<string, PlaygroundLlmContextBlockDetail[]>();
+  for (const block of blocks) {
+    const category = block.category || 'uncategorized';
+    grouped.set(category, [...(grouped.get(category) ?? []), block]);
+  }
+  return Array.from(grouped.entries());
 }
 
 function cleanRuntimeContextPrompt(systemPrompt: string): string {
@@ -180,10 +198,94 @@ function SectionPanel({ title, subtitle, children }: {
   );
 }
 
+function DetailChip({ label, value, accent }: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <span style={{
+      border: `1px solid ${accent ? 'rgba(88,166,255,0.45)' : PANEL_BORDER}`,
+      borderRadius: 999,
+      color: accent ? ACCENT : TEXT_DIM,
+      fontFamily: 'monospace',
+      fontSize: 12,
+      padding: '2px 7px',
+      whiteSpace: 'nowrap',
+    }}>
+      {label}: {value}
+    </span>
+  );
+}
+
 function ContextBlockList({ snapshot, sections }: {
   snapshot: PlaygroundLlmContextSnapshot;
   sections: RuntimeContextSection[];
 }) {
+  if (snapshot.contextBlockDetails.length > 0) {
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        {groupBlocksByCategory(snapshot.contextBlockDetails).map(([category, blocks]) => (
+          <div key={category} style={{ display: 'grid', gap: 8 }}>
+            <div style={{
+              color: ACCENT,
+              fontFamily: 'monospace',
+              fontSize: 12,
+              fontWeight: 700,
+            }}>
+              category: {category}
+            </div>
+            {blocks.map((block) => (
+              <article
+                key={`${category}-${block.key}`}
+                style={{
+                  border: `1px solid ${block.dropped ? 'rgba(248,81,73,0.45)' : PANEL_BORDER}`,
+                  borderRadius: 6,
+                  display: 'grid',
+                  gap: 8,
+                  padding: '8px 10px',
+                }}
+              >
+                <div style={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  gap: 8,
+                  justifyContent: 'space-between',
+                }}>
+                  <span style={{ color: TEXT, fontFamily: 'monospace', fontSize: 13 }}>
+                    {block.key}
+                  </span>
+                  <span style={{
+                    color: block.decision === 'selected' ? '#7ee787' : TEXT_DIM,
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  }}>
+                    {block.decision || '-'}
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                }}>
+                  <DetailChip label="source" value={block.source || '-'} />
+                  <DetailChip label="compressed" value={block.compressed ? 'true' : 'false'} />
+                  <DetailChip label="dropped" value={block.dropped ? 'true' : 'false'} />
+                  <DetailChip label="required" value={block.required ? 'true' : 'false'} />
+                  <DetailChip label="token" value={formatDetailNumber(block.tokenEstimate)} accent />
+                  <DetailChip label="priority" value={formatDetailNumber(block.priority)} />
+                </div>
+                <div style={{ color: TEXT_DIM, fontSize: 12, lineHeight: 1.6 }}>
+                  reason: {block.reason || '-'}
+                </div>
+              </article>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const sectionTitles = new Set(sections.map((section) => section.title));
   return (
     <div style={{ display: 'grid', gap: 8 }}>
@@ -215,7 +317,77 @@ function ContextBlockList({ snapshot, sections }: {
   );
 }
 
-function RuntimeContextSections({ sections }: { sections: RuntimeContextSection[] }) {
+function RuntimeContextSections({
+  snapshot,
+  sections,
+}: {
+  snapshot: PlaygroundLlmContextSnapshot;
+  sections: RuntimeContextSection[];
+}) {
+  if (snapshot.runtimeSections.length > 0) {
+    return (
+      <div style={{ display: 'grid', gap: 10 }}>
+        {snapshot.runtimeSections.map((section) => (
+          <article
+            key={section.name}
+            style={{
+              border: `1px solid ${PANEL_BORDER}`,
+              borderRadius: 6,
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{
+              alignItems: 'center',
+              background: '#0d1117',
+              borderBottom: `1px solid ${PANEL_BORDER}`,
+              display: 'flex',
+              gap: 8,
+              justifyContent: 'space-between',
+              padding: '8px 10px',
+            }}>
+              <span style={{
+                color: ACCENT,
+                fontFamily: 'monospace',
+                fontSize: 13,
+                fontWeight: 700,
+              }}>
+                {section.name}
+              </span>
+              <span style={{ color: TEXT_DIM, fontFamily: 'monospace', fontSize: 12 }}>
+                token: {formatDetailNumber(section.tokenEstimate)}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gap: 10, padding: 10 }}>
+              {section.blocks.length > 0 ? section.blocks.map((block) => {
+                const content = block.content || block.contentPreview;
+                return (
+                  <div key={block.key} style={{ display: 'grid', gap: 6 }}>
+                    <div style={{ color: TEXT_DIM, fontFamily: 'monospace', fontSize: 12 }}>
+                      {block.key}
+                    </div>
+                    <div style={{
+                      color: TEXT,
+                      fontSize: 13,
+                      lineHeight: 1.75,
+                      maxHeight: 180,
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}>
+                      {content || '-'}
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div style={{ color: TEXT_DIM, fontSize: 13 }}>该分区未记录上下文 block。</div>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    );
+  }
+
   if (sections.length === 0) {
     return <div style={{ color: TEXT_DIM, fontSize: 13 }}>本轮 trace 未记录 system_prompt 上下文。</div>;
   }
@@ -292,7 +464,30 @@ function MessageTimeline({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot 
               #{message.index} · {message.type}
               {message.name ? ` · ${message.name}` : ''}
             </span>
+            {message.compressed && (
+              <span style={{
+                border: '1px solid rgba(250,173,20,0.5)',
+                borderRadius: 999,
+                color: '#faad14',
+                fontSize: 12,
+                padding: '2px 8px',
+              }}>
+                已压缩
+              </span>
+            )}
           </div>
+          {message.role === 'tool' && (
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginBottom: 8,
+            }}>
+              <DetailChip label="tool_call_id" value={message.tool_call_id ?? '-'} />
+              <DetailChip label="name" value={message.name ?? '-'} />
+              <DetailChip label="status" value={message.status ?? '-'} />
+            </div>
+          )}
           <div style={{
             color: TEXT,
             fontSize: 13,
@@ -302,7 +497,7 @@ function MessageTimeline({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot 
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
           }}>
-            {stringifyContent(message.content) || '-'}
+            {stringifyContent(message.content) || message.contentPreview || '-'}
           </div>
         </article>
       ))}
@@ -311,7 +506,9 @@ function MessageTimeline({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot 
 }
 
 export function LlmContextVisualView({ snapshot }: { snapshot: PlaygroundLlmContextSnapshot }) {
-  const sections = parseRuntimeContextSections(snapshot.systemPrompt);
+  const sections = snapshot.runtimeSections.length > 0
+    ? []
+    : parseRuntimeContextSections(snapshot.systemPrompt);
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <div style={{
@@ -333,7 +530,7 @@ export function LlmContextVisualView({ snapshot }: { snapshot: PlaygroundLlmCont
           <ContextBlockList snapshot={snapshot} sections={sections} />
         </SectionPanel>
         <SectionPanel title="Runtime Context" subtitle="system prompt 中可读的上下文分区">
-          <RuntimeContextSections sections={sections} />
+          <RuntimeContextSections snapshot={snapshot} sections={sections} />
         </SectionPanel>
       </div>
       <SectionPanel title="Messages" subtitle="最终送入 LLM 的消息序列">
