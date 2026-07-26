@@ -133,7 +133,7 @@ class ContextBundle:
 
     def summary(self) -> dict[str, Any]:
         """输出 ContextBundle trace 摘要。"""
-        from app.context.renderer import ContextRenderer
+        from app.context.render import ContextRenderer
 
         section_summary = ContextRenderer().debug_summary(self)
         summary = {

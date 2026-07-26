@@ -5,7 +5,7 @@ from typing import Protocol
 
 from app.shared.compatibility import StrEnum
 from app.context.models import ContextBlock
-from app.context.selectors import (
+from app.context.sources import (
     ConversationSelector,
     CostCategorySelector,
     CycleSelector,
