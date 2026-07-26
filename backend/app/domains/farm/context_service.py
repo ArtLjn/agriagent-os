@@ -147,17 +147,28 @@ def _build_cycle_line(db: Session, farm_id: int) -> str:
     parts: list[str] = []
     for cycle in cycles[:_MAX_CYCLES]:
         current_stage = _get_current_stage(cycle)
-        stage_name = current_stage.name if current_stage else "未知阶段"
         area_text = _format_cycle_area(db, cycle, farm_id)
+        base = f"{cycle.name}{area_text}"
+
+        if current_stage is None:
+            start_str = (
+                f",计划{cycle.start_date.isoformat()}开始"
+                if getattr(cycle, "start_date", None)
+                else ""
+            )
+            parts.append(f"{base}(未开始{start_str})")
+            continue
+
+        stage_name = current_stage.name
         end_str = ""
-        if current_stage and current_stage.end_date:
+        if current_stage.end_date:
             end_label = (
                 "预计采收"
                 if "采收" in str(getattr(current_stage, "name", ""))
                 else "阶段至"
             )
             end_str = f"({end_label}{current_stage.end_date.isoformat()})"
-        parts.append(f"{cycle.name}{area_text}({stage_name}{end_str})")
+        parts.append(f"{base}({stage_name}{end_str})")
 
     return "、".join(parts)
 
@@ -187,14 +198,46 @@ def _format_cycle_area(db: Session, cycle: CropCycle, farm_id: int) -> str:
 
 
 def _get_current_stage(cycle: CropCycle) -> object | None:
-    """获取茬口的当前阶段。"""
+    """获取茬口的当前阶段。
+
+    推断优先级：
+    1. is_current=1 且今天落在该 stage 区间内（标记与日期一致，最强信号）。
+    2. 今天落在某 stage 区间内（覆盖 is_current 字段过期未更新的场景）。
+    3. 都不满足 → 返回 None（茬口未开始或已全部结束）。
+
+    旧的兜底逻辑是「找不到就返回 stages[-1]」，会把所有 stage 都还在未来的
+    茬口误报成最后一个阶段（通常是"采收期"），这里改为返回 None 让上层
+    显式处理"未开始"语义。
+    """
     if not cycle.stages:
         return None
-    for stage in cycle.stages:
-        if getattr(stage, "is_current", 0) == 1:
+
+    today = date.today()
+    sorted_stages = sorted(
+        cycle.stages, key=lambda s: getattr(s, "order_index", 0)
+    )
+
+    for stage in sorted_stages:
+        if getattr(stage, "is_current", 0) == 1 and _stage_contains(stage, today):
             return stage
-    # 无标记时返回最后一个阶段
-    return cycle.stages[-1]
+
+    for stage in sorted_stages:
+        if _stage_contains(stage, today):
+            return stage
+
+    return None
+
+
+def _stage_contains(stage, today: date) -> bool:
+    """判断 today 是否落在 stage 的 [start_date, end_date] 区间内。"""
+    start = getattr(stage, "start_date", None)
+    end = getattr(stage, "end_date", None)
+    if start is None or end is None:
+        return False
+    try:
+        return start <= today <= end
+    except TypeError:
+        return False
 
 
 def _build_log_line(db: Session, farm_id: int) -> str:

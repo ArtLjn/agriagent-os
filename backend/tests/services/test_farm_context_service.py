@@ -35,23 +35,39 @@ def _reset_cache():
 # ---------------------------------------------------------------------------
 
 
-def _make_cycle(name: str, stages: list | None = None) -> MagicMock:
+def _make_cycle(
+    name: str,
+    stages: list | None = None,
+    start_date: date | None = None,
+) -> MagicMock:
     """构造一个 mock CropCycle 对象。"""
     cycle = MagicMock()
     cycle.name = name
     cycle.status = "active"
     cycle.stages = stages or []
+    cycle.start_date = start_date or date.today()
+    cycle.total_area_mu = None
     return cycle
 
 
 def _make_stage(
-    name: str, is_current: int = 1, end_date: date | None = None
+    name: str,
+    is_current: int = 1,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    order_index: int = 0,
 ) -> MagicMock:
-    """构造一个 mock CycleStage 对象。"""
+    """构造一个 mock CycleStage 对象。
+
+    默认区间为 [today, today+30]，使"今天在区间内"成立。
+    """
+    today = date.today()
     stage = MagicMock()
     stage.name = name
     stage.is_current = is_current
-    stage.end_date = end_date or (date.today() + timedelta(days=30))
+    stage.start_date = start_date or today
+    stage.end_date = end_date or (today + timedelta(days=30))
+    stage.order_index = order_index
     return stage
 
 
@@ -211,6 +227,182 @@ class TestBuildSummaryWithActiveCycles:
         assert "施肥" in result
         assert "浇水" in result
         assert "打药" in result
+
+
+# ---------------------------------------------------------------------------
+# 测试：当前阶段推断（修复"未来茬口被报告成采收期"的 bug）
+# ---------------------------------------------------------------------------
+
+
+class TestCurrentStageInference:
+    """茬口当前阶段推断测试。
+
+    覆盖两类 bug：
+    1. 未来茬口（start_date 在未来）所有 stage 都 is_current=0，
+       旧代码兜底返回 stages[-1]（通常为采收期），应改为"未开始"。
+    2. is_current 字段过期未更新，今天实际已落入其他 stage 区间，
+       应按日期推断而非依赖过期标记。
+    """
+
+    @patch("app.domains.farm.context_service.weather_service")
+    async def test_future_cycle_reports_not_started(self, mock_weather_svc):
+        """茬口所有阶段都在未来时，应报告'未开始'，而不是最后一个阶段名。"""
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
+
+        future_start = date.today() + timedelta(days=6)
+        stages = [
+            _make_stage(
+                "播种期",
+                is_current=0,
+                start_date=future_start,
+                end_date=future_start + timedelta(days=9),
+                order_index=0,
+            ),
+            _make_stage(
+                "苗期",
+                is_current=0,
+                start_date=future_start + timedelta(days=10),
+                end_date=future_start + timedelta(days=29),
+                order_index=1,
+            ),
+            _make_stage(
+                "采收期",
+                is_current=0,
+                start_date=future_start + timedelta(days=30),
+                end_date=future_start + timedelta(days=89),
+                order_index=2,
+            ),
+        ]
+        cycle = _make_cycle("秋季豆角", stages=stages, start_date=future_start)
+        db = _make_db_session(cycles=[cycle], monthly_cost=Decimal("0"))
+
+        result = await build_summary(db, farm_id=1)
+
+        assert "秋季豆角" in result
+        assert "未开始" in result
+        assert "采收期" not in result
+
+    @patch("app.domains.farm.context_service.weather_service")
+    async def test_stale_is_current_falls_back_to_date_range(
+        self, mock_weather_svc
+    ):
+        """is_current 标记过期时，应按日期推断返回正确的当前阶段。
+
+        场景：夏季大豆已开始 47 天，is_current 还停在播种期，
+        但今天实际在分枝期区间内。
+        """
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
+
+        today = date.today()
+        cycle_start = today - timedelta(days=47)
+        stages = [
+            _make_stage(
+                "播种期",
+                is_current=1,  # ← 过期标记还停在这里
+                start_date=cycle_start,
+                end_date=cycle_start + timedelta(days=6),
+                order_index=0,
+            ),
+            _make_stage(
+                "出苗期",
+                is_current=0,
+                start_date=cycle_start + timedelta(days=7),
+                end_date=cycle_start + timedelta(days=16),
+                order_index=1,
+            ),
+            _make_stage(
+                "分枝期",
+                is_current=0,
+                start_date=today - timedelta(days=5),  # ← 今天实际在此区间
+                end_date=today + timedelta(days=9),
+                order_index=3,
+            ),
+            _make_stage(
+                "开花结荚期",
+                is_current=0,
+                start_date=today + timedelta(days=10),
+                end_date=today + timedelta(days=39),
+                order_index=4,
+            ),
+        ]
+        cycle = _make_cycle("夏季大豆", stages=stages, start_date=cycle_start)
+        db = _make_db_session(cycles=[cycle], monthly_cost=Decimal("0"))
+
+        result = await build_summary(db, farm_id=1)
+
+        assert "分枝期" in result
+        assert "播种期" not in result
+
+    @patch("app.domains.farm.context_service.weather_service")
+    async def test_no_mark_but_today_in_range_uses_date(self, mock_weather_svc):
+        """所有 stage 都 is_current=0，但今天在某 stage 区间内，
+        应按日期推断返回该 stage（而不是兜底返回最后一个）。"""
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
+
+        today = date.today()
+        stages = [
+            _make_stage(
+                "播种期",
+                is_current=0,
+                start_date=today - timedelta(days=50),
+                end_date=today - timedelta(days=44),
+                order_index=0,
+            ),
+            _make_stage(
+                "生长期",
+                is_current=0,
+                start_date=today - timedelta(days=5),  # ← 今天在此区间
+                end_date=today + timedelta(days=25),
+                order_index=1,
+            ),
+            _make_stage(
+                "采收期",
+                is_current=0,
+                start_date=today + timedelta(days=26),
+                end_date=today + timedelta(days=55),
+                order_index=2,
+            ),
+        ]
+        cycle = _make_cycle(
+            "夏季玉米", stages=stages, start_date=today - timedelta(days=50)
+        )
+        db = _make_db_session(cycles=[cycle], monthly_cost=Decimal("0"))
+
+        result = await build_summary(db, farm_id=1)
+
+        assert "生长期" in result
+        assert "采收期" not in result
+
+    @patch("app.domains.farm.context_service.weather_service")
+    async def test_marked_current_in_range_is_kept(self, mock_weather_svc):
+        """is_current=1 且今天在区间内，应正常返回该 stage（回归测试）。"""
+        mock_weather_svc.fetch_weather = AsyncMock(return_value=_make_weather_data())
+
+        today = date.today()
+        stages = [
+            _make_stage(
+                "播种期",
+                is_current=0,
+                start_date=today - timedelta(days=20),
+                end_date=today - timedelta(days=14),
+                order_index=0,
+            ),
+            _make_stage(
+                "苗期",
+                is_current=1,  # ← 标记且今天在区间内
+                start_date=today - timedelta(days=5),
+                end_date=today + timedelta(days=10),
+                order_index=1,
+            ),
+        ]
+        cycle = _make_cycle(
+            "春季番茄", stages=stages, start_date=today - timedelta(days=20)
+        )
+        db = _make_db_session(cycles=[cycle], monthly_cost=Decimal("0"))
+
+        result = await build_summary(db, farm_id=1)
+
+        assert "苗期" in result
 
 
 # ---------------------------------------------------------------------------
