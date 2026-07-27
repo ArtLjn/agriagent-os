@@ -3,8 +3,6 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.context.pipeline.compressors import compress_text
-
 
 def estimate_tokens(text: str) -> int:
     """粗略估算 token 数，中文场景按字符和空白词数取较大值。"""
@@ -39,6 +37,8 @@ class ContextBlock:
 
     def compressed_copy(self, target_tokens: int) -> "ContextBlock":
         """返回压缩后的 block 副本。"""
+        from app.context.pipeline import compress_text
+
         token_limit = max(self.min_tokens, target_tokens)
         char_limit = max(24, token_limit * 2)
         content = self.content
@@ -133,7 +133,7 @@ class ContextBundle:
 
     def summary(self) -> dict[str, Any]:
         """输出 ContextBundle trace 摘要。"""
-        from app.context.pipeline.renderer import ContextRenderer
+        from app.context.pipeline import ContextRenderer
 
         section_summary = ContextRenderer().debug_summary(self)
         summary = {

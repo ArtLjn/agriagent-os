@@ -8,8 +8,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.context.core.models import ContextBlock
-from app.context.task_state.models import AgentTaskState
-from app.context.task_state.store import AgentTaskStateStore
+from app.context.task_state import AgentTaskState
+from app.context.task_state import AgentTaskStateStore
 
 
 class TaskStateSelector:

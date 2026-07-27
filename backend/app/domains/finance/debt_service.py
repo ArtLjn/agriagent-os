@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.context.runtime.invalidation import invalidate_farm_context
+from app.context.runtime import invalidate_farm_context
 from app.shared.time import beijing_now  # harness-exempt: 迁移期 service 复用统一北京时间工具，后续下沉 shared 时间工具
 from app.domains.finance.cost_models import CostRecord
 from app.domains.finance.cost_schemas import CostRecordCreate, DebtSummary

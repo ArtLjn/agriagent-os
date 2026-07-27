@@ -7,7 +7,7 @@ import time as _time
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from app.context.pipeline.compression import compact_tool_result, tool_call_names_by_id
+from app.context.pipeline import compact_tool_result, tool_call_names_by_id
 
 logger = logging.getLogger(__name__)
 

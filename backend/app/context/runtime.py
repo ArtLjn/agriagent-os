@@ -1,12 +1,207 @@
-"""Context trace payload 安全摘要构造。"""
+"""Context 运行时辅助。
+
+集中维护缓存、预热、失效和 trace payload 构造。旧的
+``app.context.runtime.<name>`` 导入路径通过底部兼容模块保留。
+"""
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
-from typing import Any, Mapping
+import sys
+import time
+from types import ModuleType
+from typing import Any, Generic, Mapping, TypeVar
 
 from app.context.core.models import ContextBlock, ContextBundle
-from app.context.pipeline.renderer import ContextRenderer
+from app.context.pipeline import ContextRenderer
+
+logger = logging.getLogger(__name__)
+T = TypeVar("T")
+
+
+class TTLCache(Generic[T]):
+    """简单内存 TTL 缓存。"""
+
+    def __init__(self, ttl_seconds: int) -> None:
+        self._store: dict[object, tuple[T, float]] = {}
+        self._ttl = ttl_seconds
+
+    def get(self, key: object) -> T | None:
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        value, expire_at = entry
+        if time.time() >= expire_at:
+            del self._store[key]
+            return None
+        return value
+
+    def set(self, key: object, value: T) -> None:
+        self._store[key] = (value, time.time() + self._ttl)
+
+    def invalidate(self, predicate_key: object) -> int:
+        keys = [
+            key
+            for key in self._store
+            if key == predicate_key
+            or (isinstance(key, tuple) and key and key[0] == predicate_key)
+        ]
+        for key in keys:
+            del self._store[key]
+        return len(keys)
+
+    def clear(self) -> None:
+        self._store.clear()
+
+
+class PromptCache:
+    """按 (farm_id, date_str) 缓存渲染后的 system prompt。"""
+
+    def __init__(self, ttl_seconds: int = 3600) -> None:
+        self._cache: TTLCache[str] = TTLCache(ttl_seconds)
+
+    def get(self, farm_id: int, date_str: str) -> str | None:
+        value = self._cache.get((farm_id, date_str))
+        if value is not None:
+            logger.debug("PROMPT CACHE HIT | farm=%s date=%s", farm_id, date_str)
+        return value
+
+    def set(self, farm_id: int, date_str: str, value: str) -> None:
+        self._cache.set((farm_id, date_str), value)
+        logger.debug("PROMPT CACHE SET | farm=%s date=%s", farm_id, date_str)
+
+    def invalidate(self, farm_id: int) -> int:
+        return self._cache.invalidate(farm_id)
+
+
+class FarmContextCache:
+    """按 farm_id 缓存运行时农场上下文。"""
+
+    def __init__(self, ttl_seconds: int = 300) -> None:
+        self._cache: TTLCache[dict] = TTLCache(ttl_seconds)
+
+    def get(self, farm_id: int) -> dict | None:
+        value = self._cache.get(farm_id)
+        if value is not None:
+            logger.debug("FARM CTX CACHE HIT | farm=%s", farm_id)
+        return value
+
+    def set(self, farm_id: int, value: dict) -> None:
+        self._cache.set(farm_id, value)
+        logger.debug("FARM CTX CACHE SET | farm=%s", farm_id)
+
+    def invalidate(self, farm_id: int) -> bool:
+        return self._cache.invalidate(farm_id) > 0
+
+
+_prompt_cache = PromptCache(ttl_seconds=3600)
+_farm_ctx_cache = FarmContextCache(ttl_seconds=300)
+
+
+def get_prompt_cache() -> PromptCache:
+    return _prompt_cache
+
+
+def get_farm_ctx_cache() -> FarmContextCache:
+    return _farm_ctx_cache
+
+
+def clear_all_caches() -> None:
+    _prompt_cache._cache.clear()
+    _farm_ctx_cache._cache.clear()
+
+
+def invalidate_farm_context(farm_id: int) -> dict[str, int | bool]:
+    """清理指定农场的 prompt 和运行时上下文缓存。"""
+    prompt_invalidated = get_prompt_cache().invalidate(farm_id)
+    farm_context_invalidated = get_farm_ctx_cache().invalidate(farm_id)
+    return {
+        "prompt_invalidated": prompt_invalidated,
+        "farm_context_invalidated": farm_context_invalidated,
+    }
+
+
+PRELOAD_MAP: dict[str, list[str]] = {
+    "weather": ["weather"],
+    "manage_cost": ["cost_summary", "cost_analytics"],
+    "get_farm_status": ["farm_status"],
+    "get_crop_cycle_info": ["crop_cycle"],
+    "manage_farm_logs": ["farm_logs"],
+}
+
+DEPENDENCY_PRELOAD_MAP: dict[str, str] = {
+    "weather": "weather",
+    "crop_cycle": "crop_cycle",
+    "crop_cycles": "crop_cycle",
+    "active_cycles": "crop_cycle",
+    "workers": "workers",
+    "planting_units": "planting_units",
+    "ledger": "cost_summary",
+    "recent_operations": "farm_logs",
+}
+
+
+def dependencies_to_preload_types(dependencies: list[str]) -> list[str]:
+    """将 Router context_dependencies 转为预热数据类型。"""
+    data_types: list[str] = []
+    for dependency in dependencies:
+        data_type = DEPENDENCY_PRELOAD_MAP.get(dependency)
+        if data_type is None or data_type in data_types:
+            continue
+        data_types.append(data_type)
+    return data_types
+
+
+async def warm_tool_caches(
+    selected_names: list[str],
+    farm_id: int,
+    farm_ctx: dict,
+    context_dependencies: list[str] | None = None,
+) -> None:
+    """并行预热已选 tool 的底层缓存，失败不影响主流程。"""
+    tasks = []
+    preload_types = dependencies_to_preload_types(context_dependencies or [])
+    for name in selected_names:
+        for data_type in PRELOAD_MAP.get(name, []):
+            if data_type not in preload_types:
+                preload_types.append(data_type)
+
+    for data_type in preload_types:
+        if data_type == "weather" and farm_ctx.get("farm_location"):
+            try:
+                from app.domains.weather.service import fetch_weather
+
+                coords = farm_ctx.get("farm_coords", "")
+                lat = float(coords.split(",")[0]) if coords else None
+                lon = float(coords.split(",")[-1]) if coords else None
+                tasks.append(
+                    fetch_weather(
+                        location=farm_ctx["farm_location"],
+                        lat=lat,
+                        lon=lon,
+                    )
+                )
+            except ImportError:
+                pass
+
+    if not tasks:
+        return
+
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*tasks, return_exceptions=True),
+            timeout=2.0,
+        )
+        logger.info(
+            "缓存预热完成 | tools=%s dependencies=%s tasks=%d",
+            selected_names,
+            context_dependencies or [],
+            len(tasks),
+        )
+    except asyncio.TimeoutError:
+        logger.warning("缓存预热超时 2s | tools=%s", selected_names)
 
 
 PREVIEW_LIMIT = 120
@@ -250,4 +445,54 @@ def _string_list(value: Any) -> list[str]:
     return sorted(_sanitize_text(str(item)) for item in value)
 
 
-__all__ = ["build_context_trace_payload"]
+def _install_legacy_module(module_name: str, exported_names: tuple[str, ...]) -> None:
+    module = ModuleType(f"{__name__}.{module_name}")
+    module.__doc__ = "兼容入口；实际维护点是 app.context.runtime。"
+    for exported_name in exported_names:
+        setattr(module, exported_name, globals()[exported_name])
+    module.__all__ = list(exported_names)
+    sys.modules[module.__name__] = module
+    setattr(sys.modules[__name__], module_name, module)
+
+
+def _install_legacy_runtime_modules() -> None:
+    _install_legacy_module(
+        "cache",
+        (
+            "FarmContextCache",
+            "PromptCache",
+            "TTLCache",
+            "clear_all_caches",
+            "get_farm_ctx_cache",
+            "get_prompt_cache",
+        ),
+    )
+    _install_legacy_module(
+        "preload",
+        (
+            "DEPENDENCY_PRELOAD_MAP",
+            "PRELOAD_MAP",
+            "dependencies_to_preload_types",
+            "warm_tool_caches",
+        ),
+    )
+    _install_legacy_module("invalidation", ("invalidate_farm_context",))
+    _install_legacy_module("trace", ("build_context_trace_payload",))
+
+
+_install_legacy_runtime_modules()
+
+__all__ = [
+    "DEPENDENCY_PRELOAD_MAP",
+    "FarmContextCache",
+    "PRELOAD_MAP",
+    "PromptCache",
+    "TTLCache",
+    "build_context_trace_payload",
+    "clear_all_caches",
+    "dependencies_to_preload_types",
+    "get_farm_ctx_cache",
+    "get_prompt_cache",
+    "invalidate_farm_context",
+    "warm_tool_caches",
+]

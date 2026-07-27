@@ -4,7 +4,7 @@
 Prompt 工程边界并避免历史 import 断裂。
 """
 
-from app.context.runtime.cache import (
+from app.context.runtime import (
     FarmContextCache,
     PromptCache,
     clear_all_caches,

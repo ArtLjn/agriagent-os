@@ -4,9 +4,13 @@
 
 目录导航
 --------
-``app/context/`` 顶层只有本文件，其他按职责收到子包：
+``app/context/`` 以少数稳定入口组织，避免为单个小文件创建目录：
 
 - ``builder.py``         本文件，对外唯一入口（``ContextBuilder``）
+- ``pipeline.py``        预算 / 压缩 / 白名单 / 渲染 / trace 安全文本工具
+- ``knowledge.py``       ``RAGKnowledgeProvider`` / ``RAGUnavailableError``
+- ``task_state.py``      ``AgentTaskState`` / ``AgentTaskStateStore``
+- ``sources.py``         selector 分组、默认顺序与 dependency 映射 catalog
 
 - ``core/``              核心数据契约
   - ``models.py``        ``ContextBlock`` / ``ContextBundle`` / ``estimate_tokens``
@@ -14,31 +18,14 @@
   - ``document.py``      ``ContextDocument`` / ``ContextSection``（prompt 文档结构）
   - ``registry.py``      Block 注册表与 ``ContextBlockSpec`` / ``ContextCategory``
 
-- ``pipeline/``          构建流水线（预算 / 压缩 / 白名单 / 渲染）
-  - ``budget.py``        ``TokenBudget``，按优先级裁剪到预算内
-  - ``compression.py``   Block 压缩与 tool result 紧凑化（顶层入口）
-  - ``compressors/``     具体压缩策略实现
-  - ``allowlist.py``     Block key 白名单过滤（``is_allowed_key``）
-  - ``renderer.py``      ``ContextRenderer``（Bundle → prompt 文本）
-
 - ``runtime/``           运行时辅助（缓存 / 预热 / 失效 / trace）
   - ``cache.py``         ContextBundle 缓存
   - ``preload.py``       并行预热 selector / tool 缓存
   - ``invalidation.py``  ``invalidate_farm_context``，写操作后失效缓存
   - ``trace.py``         构建 trace payload，供可观测平台消费
 
-- ``knowledge/``         外部知识 provider 子包（RAG）
-  - ``rag.py``           ``RAGKnowledgeProvider`` / ``RAGUnavailableError``
-
-- ``task_state/``        Agent 任务态子包
-  - ``models.py``        ``AgentTaskState``
-  - ``store.py``         ``AgentTaskStateStore`` / ``TaskStateStatus``
-
 - ``selectors/``         各业务域 selector（Farm / Cycle / Weather / Memory ...）
-- ``sources/``           selector 共用的底层查询与策略实现
 """
-
-
 
 from __future__ import annotations
 
@@ -47,28 +34,16 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
-from app.context.pipeline.allowlist import is_allowed_key
-from app.context.pipeline.budget import TokenBudget
 from app.context.core.models import ContextBlock, ContextBundle
 from app.context.core.policy import ContextPolicy
 from app.context.knowledge import RAGUnavailableError
-from app.context.selectors import (
-    ConversationSelector,
-    CostCategorySelector,
+from app.context.pipeline import is_allowed_key
+from app.context.pipeline import TokenBudget
+from app.context.runtime import build_context_trace_payload
+from app.context.sources import (
     CycleSelector,
-    FarmSelector,
-    LedgerSelector,
-    MemorySelector,
-    OperationWorkOrderSelector,
-    PlantingUnitSelector,
-    RetrievalSelector,
-    TaskStateSelector,
-    UnpaidLaborSummarySelector,
-    UserSettingsSelector,
-    WeatherSelector,
-    WorkerSelector,
+    build_default_context_selectors,
 )
-from app.context.runtime.trace import build_context_trace_payload
 from app.domains.farm.models import Farm
 from app.domains.users.models import User
 from app.domains.users.settings_models import UserSetting
@@ -80,7 +55,7 @@ from app.shared.config import (
 )
 
 if TYPE_CHECKING:
-    from app.context.core.policy import ContextBuildRequest, ContextPolicyResult, ContextSelector
+    from app.context.core.policy import ContextBuildRequest, ContextSelector
     from app.memory.models import MemoryContext
 
 
@@ -346,22 +321,7 @@ class ContextBuilder:
 
 def default_context_selectors() -> list[ContextSelector]:
     """返回 ContextBuilder 的默认 selector 顺序。"""
-    return [
-        FarmSelector(),
-        CycleSelector(),
-        UserSettingsSelector(),
-        TaskStateSelector(),
-        LedgerSelector(),
-        WeatherSelector(),
-        ConversationSelector(),
-        MemorySelector(),
-        PlantingUnitSelector(),
-        OperationWorkOrderSelector(),
-        WorkerSelector(),
-        UnpaidLaborSummarySelector(),
-        CostCategorySelector(),
-        RetrievalSelector(),
-    ]
+    return build_default_context_selectors()
 
 
 def _build_farm_runtime_context_dict(db: Session, farm_id: int) -> dict:

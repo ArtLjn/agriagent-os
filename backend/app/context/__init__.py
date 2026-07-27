@@ -10,7 +10,7 @@
 """
 
 from app.context.builder import ContextBuilder, default_context_selectors
-from app.context.pipeline.budget import TokenBudget
+from app.context.pipeline import TokenBudget
 from app.context.core.document import ContextDocument, ContextSection
 from app.context.core.models import ContextBlock, ContextBundle, estimate_tokens
 from app.context.core.policy import (
@@ -19,7 +19,7 @@ from app.context.core.policy import (
     ContextPolicy,
     ContextPolicyResult,
 )
-from app.context.pipeline.renderer import ContextRenderer
+from app.context.pipeline import ContextRenderer
 
 __all__ = [
     "ContextBlock",

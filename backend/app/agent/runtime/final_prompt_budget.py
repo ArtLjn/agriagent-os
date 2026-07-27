@@ -5,7 +5,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
-from app.context.pipeline.compression import (
+from app.context.pipeline import (
     CompressionEvent,
     compact_tool_result,
     tool_call_names_by_id,

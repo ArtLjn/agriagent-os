@@ -19,14 +19,14 @@ from app.agent.runtime.planning import (
 )
 from app.agent.runtime.reflection import apply_post_tool_reflection
 from app.agent.state import AgentState
-from app.context.pipeline.compression import (
+from app.context.pipeline import (
     is_tool_result_compressed,
     safe_preview,
     safe_trace_value,
 )
 from app.context.core.models import ContextBundle
 from app.context.core.registry import block_spec
-from app.context.pipeline.renderer import ContextRenderer
+from app.context.pipeline import ContextRenderer
 from app.infra.pending_actions import CONTRACT_BLOCKED_MARKER, PENDING_MARKER
 from app.infra.trace_context import set_round_index
 

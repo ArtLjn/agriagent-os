@@ -12,7 +12,7 @@ from app.domains.planting.crop_models import CropTemplate
 from app.domains.planting.cycle_models import CropCycle, CycleStage
 from app.domains.planting.log_models import FarmLog
 from app.domains.planting.models import PlantingUnit
-from app.context.runtime.invalidation import invalidate_farm_context
+from app.context.runtime import invalidate_farm_context
 from app.domains.planting.cycle_schemas import CropCycleCreate
 
 
