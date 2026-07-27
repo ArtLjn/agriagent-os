@@ -49,7 +49,9 @@ archive/**/android/android/
 
 # Agent-local
 .agents/
-.codex/
+.codex/*
+!.codex/skills/
+!.codex/skills/**
 
 # Database
 *.db

@@ -1,0 +1,4 @@
+interface:
+  display_name: "链路追踪调试"
+  short_description: "分析 Agent 请求链路、Trace 与双库证据"
+  default_prompt: "Use $trace-chain-debugger to analyze a request_id or session_id across MySQL, Mongo, trace logs, and event files."
