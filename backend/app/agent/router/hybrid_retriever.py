@@ -19,51 +19,11 @@ EmbedFn = Callable[[str], list[float]]
 logger = logging.getLogger(__name__)
 
 
-_STOP_TERMS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "for",
-    "how",
-    "i",
-    "is",
-    "me",
-    "much",
-    "my",
-    "of",
-    "please",
-    "the",
-    "to",
-}
-
-_LOW_SIGNAL_TERMS = {
-    "今天",
-    "昨天",
-    "前天",
-    "现在",
-    "当前",
-    "最近",
-    "本周",
-    "这周",
-    "本月",
-    "这个月",
-    "查询",
-    "查看",
-    "看看",
-    "看一下",
-    "有哪些",
-    "有哪",
-    "哪些",
-    "多少",
-    "列表",
-    "明细",
-    "统计",
-    "show",
-    "list",
-    "what",
-    "which",
-}
+_STOP_TERMS = frozenset("a an and are for how i is me much my of please the to".split())
+_LOW_SIGNAL_TERMS = frozenset(
+    "今天 昨天 前天 现在 当前 最近 本周 这周 本月 这个月 查询 查看 看看 "
+    "看一下 有哪些 有哪 哪些 多少 列表 明细 统计 show list what which".split()
+)
 
 _TOKEN_ALIASES = {
     "debt": "欠款",
@@ -254,21 +214,16 @@ class HybridOperationRetriever:
         failed_docs = 0
         for candidate in candidates:
             try:
-                doc_text = _document_text(candidate)
-                doc_vector = self._embedding_cache.get(doc_text)
-                if doc_vector is None:
-                    doc_embedding_calls += 1
-                    doc_vector = self._embed(doc_text)
-                    self._embedding_cache[doc_text] = doc_vector
-                else:
-                    cache_hits += 1
+                route_key, score, cache_hit = self._score_embedding_candidate(
+                    query_vector,
+                    candidate,
+                )
             except (OSError, ValueError, RuntimeError):
                 failed_docs += 1
                 continue
-            scores[_route_key(candidate)] = max(
-                0.0,
-                _cosine(query_vector, doc_vector),
-            )
+            doc_embedding_calls += int(not cache_hit)
+            cache_hits += int(cache_hit)
+            scores[route_key] = score
         _log_embedding_recall(
             status="success" if scores else "empty",
             started_at=started_at,
@@ -279,6 +234,21 @@ class HybridOperationRetriever:
             scored_count=len(scores),
         )
         return scores
+
+    def _score_embedding_candidate(
+        self,
+        query_vector: list[float],
+        candidate: ToolCandidate,
+    ) -> tuple[str, float, bool]:
+        if self._embed is None:
+            raise RuntimeError("EMBEDDING_DISABLED")
+        doc_text = _document_text(candidate)
+        doc_vector = self._embedding_cache.get(doc_text)
+        cache_hit = doc_vector is not None
+        if doc_vector is None:
+            doc_vector = self._embed(doc_text)
+            self._embedding_cache[doc_text] = doc_vector
+        return _route_key(candidate), max(0.0, _cosine(query_vector, doc_vector)), cache_hit
 
 
 def _route_key(candidate: ToolCandidate) -> str:
