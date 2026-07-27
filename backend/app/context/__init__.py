@@ -1,11 +1,18 @@
-"""Context 工程模块。"""
+"""Context 工程模块。
 
-from app.context.builder import ContextBuilder
+入口
+----
+外部代码统一通过 ``ContextBuilder`` 构建 Context：
+
+    from app.context import ContextBuilder
+
+子模块分工见 ``app/context/builder.py`` 顶部文档。
+"""
+
+from app.context.builder import ContextBuilder, default_context_selectors
 from app.context.budget import TokenBudget
-from app.context.engine import ContextEngine
-from app.context.models import ContextBlock, ContextBundle
 from app.context.document import ContextDocument, ContextSection
-from app.context.planner import ContextPlanner
+from app.context.models import ContextBlock, ContextBundle, estimate_tokens
 from app.context.policy import (
     ContextBuildRequest,
     ContextLayer,
@@ -16,16 +23,16 @@ from app.context.renderer import ContextRenderer
 
 __all__ = [
     "ContextBlock",
-    "ContextBundle",
-    "ContextBuilder",
-    "ContextDocument",
-    "ContextEngine",
-    "ContextPlanner",
-    "ContextRenderer",
-    "ContextSection",
-    "TokenBudget",
     "ContextBuildRequest",
+    "ContextBuilder",
+    "ContextBundle",
+    "ContextDocument",
     "ContextLayer",
     "ContextPolicy",
     "ContextPolicyResult",
+    "ContextRenderer",
+    "ContextSection",
+    "TokenBudget",
+    "default_context_selectors",
+    "estimate_tokens",
 ]
