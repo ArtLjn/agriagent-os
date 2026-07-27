@@ -4,7 +4,7 @@ import pytest
 
 import app.context.builder as builder_module
 from app.context.builder import ContextBuilder
-from app.context.policy import ContextBuildRequest, ContextPolicy, ContextSelector
+from app.context.core.policy import ContextBuildRequest, ContextPolicy, ContextSelector
 
 pytestmark = pytest.mark.no_db
 
@@ -14,7 +14,7 @@ def test_context_builder_uses_policy_context_selector_protocol() -> None:
 
     assert "selectors" in builder_annotations
     assert "ContextSelector" in str(builder_annotations["selectors"])
-    assert ContextSelector.__module__ == "app.context.policy"
+    assert ContextSelector.__module__ == "app.context.core.policy"
     assert "ContextSelector" not in vars(builder_module)
 
 

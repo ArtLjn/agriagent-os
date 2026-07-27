@@ -1,8 +1,8 @@
 """ContextBundle 分区渲染器。"""
 
-from app.context.document import ContextDocument, ContextSection
-from app.context.models import ContextBundle
-from app.context.registry import section_for_key
+from app.context.core.document import ContextDocument, ContextSection
+from app.context.core.models import ContextBundle
+from app.context.core.registry import section_for_key
 
 
 class ContextRenderer:

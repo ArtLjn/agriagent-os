@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from app.context.task_state_store import AgentTaskStateStore, TaskStateStatus
+from app.context.task_state.store import AgentTaskStateStore, TaskStateStatus
 
 
 def test_task_state_store_upserts_and_gets_latest_active_task(db_session) -> None:

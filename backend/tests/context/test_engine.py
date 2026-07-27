@@ -1,11 +1,11 @@
-"""ContextEngine 主入口契约测试。"""
+"""ContextBuilder 对外契约测试（不需要数据库）。"""
 
 import pytest
 
-from app.context import ContextBuilder, ContextEngine, ContextPlanner
-from app.context.contracts import ContextBlock, ContextBuildRequest, ContextBundle
-from app.context.policy import ContextPolicy
-from app.context.render import ContextRenderer
+from app.context import ContextBuilder
+from app.context.core.models import ContextBlock, ContextBundle
+from app.context.core.policy import ContextBuildRequest, ContextPolicy
+from app.context.pipeline.renderer import ContextRenderer
 
 pytestmark = pytest.mark.no_db
 
@@ -18,8 +18,9 @@ class StaticSelector:
         return [self.block]
 
 
-def test_context_engine_is_primary_build_entry() -> None:
-    engine = ContextEngine(
+def test_context_builder_is_primary_build_entry() -> None:
+    """ContextBuilder 是 Context 构建唯一入口，build() 返回 ContextBundle。"""
+    builder = ContextBuilder(
         selectors=[
             StaticSelector(
                 ContextBlock(
@@ -36,28 +37,24 @@ def test_context_engine_is_primary_build_entry() -> None:
         trace_collector=None,
     )
 
-    bundle = engine.build(db=None, farm_id=1)
+    bundle = builder.build(db=None, farm_id=1)
 
     assert isinstance(bundle, ContextBundle)
     assert [block.key for block in bundle.blocks] == ["farm"]
 
 
-def test_context_builder_delegates_to_context_engine() -> None:
-    builder = ContextBuilder(selectors=[], trace_collector=None)
-
-    assert isinstance(builder._engine, ContextEngine)
-
-
-def test_context_planner_wraps_policy_resolution() -> None:
+def test_context_policy_resolve_returns_plan() -> None:
+    """ContextPolicy.resolve 直接产出可执行的 ContextPolicyResult。"""
     request = ContextBuildRequest(farm_id=1, selected_tool_names=["manage_cost"])
 
-    result = ContextPlanner(ContextPolicy()).plan(request)
+    result = ContextPolicy().resolve(request)
 
     assert result.max_tokens >= 900
     assert result.selectors
 
 
 def test_target_directory_entrypoints_are_importable() -> None:
+    """目标目录的核心类型与渲染器对外可导入。"""
     renderer = ContextRenderer()
 
     assert renderer.section_name_for_key("active_task_state") == "Task"

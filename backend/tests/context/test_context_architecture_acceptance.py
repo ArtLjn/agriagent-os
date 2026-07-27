@@ -8,16 +8,16 @@ from typing import Any
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-import app.context.policy as policy_module
+import app.context.core.policy as policy_module
 from app.application.chat.task_state_updater import (
     TaskStateTurn,
     update_task_state_after_turn,
 )
 from app.context.builder import ContextBuilder
-from app.context.models import ContextBlock, ContextBundle
-from app.context.policy import ContextBuildRequest, ContextPolicy
-from app.context.rag_provider import RAGKnowledgeProvider
-from app.context.renderer import ContextRenderer
+from app.context.core.models import ContextBlock, ContextBundle
+from app.context.core.policy import ContextBuildRequest, ContextPolicy
+from app.context.knowledge.rag import RAGKnowledgeProvider
+from app.context.pipeline.renderer import ContextRenderer
 from app.context.selectors.knowledge import KnowledgeSelector
 from app.infra.quillrag_client import QuillRAGDocument, QuillRAGRetrieveResult
 from app.memory.explicit import ExplicitMemoryTurn, record_explicit_memory_after_turn

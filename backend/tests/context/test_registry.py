@@ -1,14 +1,14 @@
 """Context block 注册表契约测试。"""
 
-from app.context.allowlist import is_allowed_key
-from app.context.registry import (
+from app.context.pipeline.allowlist import is_allowed_key
+from app.context.core.registry import (
     BLOCK_REGISTRY,
     ContextCategory,
     block_spec,
     prompt_allowed_keys,
     section_for_key,
 )
-from app.context.renderer import ContextRenderer
+from app.context.pipeline.renderer import ContextRenderer
 
 
 def test_existing_context_keys_are_registered() -> None:

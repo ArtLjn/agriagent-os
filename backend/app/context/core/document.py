@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from app.context.models import ContextBlock
+from app.context.core.models import ContextBlock
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.context.models import ContextBlock
+from app.context.core.models import ContextBlock
 from app.domains.finance.cost_category_models import CostCategory
 from app.domains.planting.models import (
     LaborEntry,

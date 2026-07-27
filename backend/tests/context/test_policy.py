@@ -1,6 +1,6 @@
 """Context policy 单元测试。"""
 
-from app.context.policy import ContextBuildRequest, ContextLayer, ContextPolicy
+from app.context.core.policy import ContextBuildRequest, ContextLayer, ContextPolicy
 
 
 def _selector_names(result) -> set[str]:

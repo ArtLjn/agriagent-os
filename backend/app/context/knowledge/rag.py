@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from app.context.models import ContextBlock
+from app.context.core.models import ContextBlock
 from app.infra.quillrag_client import QuillRAGClient, QuillRAGRetrieveResult
 from app.shared.config import RAGServiceConfig, settings
 

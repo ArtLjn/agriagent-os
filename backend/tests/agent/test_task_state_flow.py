@@ -11,7 +11,7 @@ from app.application.chat.task_state_updater import (
     update_task_state_after_turn,
 )
 from app.context.selectors.task_state import TaskStateSelector
-from app.context.task_state_store import AgentTaskStateStore, TaskStateStatus
+from app.context.task_state.store import AgentTaskStateStore, TaskStateStatus
 from app.domains.conversation.agent_schemas import ChatRequest
 
 

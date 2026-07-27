@@ -223,7 +223,7 @@ def _attribute_path(node: ast.AST) -> str:
 async def test_llm_node_consumes_prepared_runtime_inputs():
     """prepared 输入优先于 Runtime 内部 prompt/context/tools 选择。"""
     from app.agent.runtime.nodes import _llm_node
-    from app.context.models import ContextBlock, ContextBundle
+    from app.context.core.models import ContextBlock, ContextBundle
 
     weather_tool = MagicMock()
     weather_tool.name = "weather"
@@ -325,7 +325,7 @@ async def test_llm_node_consumes_prepared_runtime_inputs():
 async def test_llm_node_does_not_bind_tools_after_tool_results():
     """已有工具结果后的 final answer 不应再次绑定工具。"""
     from app.agent.runtime.nodes import _llm_node
-    from app.context.models import ContextBlock, ContextBundle
+    from app.context.core.models import ContextBlock, ContextBundle
 
     weather_tool = MagicMock()
     weather_tool.name = "weather"

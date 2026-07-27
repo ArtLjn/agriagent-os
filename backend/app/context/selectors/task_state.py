@@ -7,9 +7,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.context.models import ContextBlock
-from app.context.task_state_models import AgentTaskState
-from app.context.task_state_store import AgentTaskStateStore
+from app.context.core.models import ContextBlock
+from app.context.task_state.models import AgentTaskState
+from app.context.task_state.store import AgentTaskStateStore
 
 
 class TaskStateSelector:

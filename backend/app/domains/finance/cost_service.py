@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import desc, extract
 from sqlalchemy.orm import Session
 
-from app.context.invalidation import invalidate_farm_context
+from app.context.runtime.invalidation import invalidate_farm_context
 from app.shared.time import beijing_now  # harness-exempt: 迁移期 service 复用统一北京时间工具，后续下沉 shared 时间工具
 from app.domains.finance.cost_models import CostRecord
 from app.domains.finance.cost_category_models import CostCategory

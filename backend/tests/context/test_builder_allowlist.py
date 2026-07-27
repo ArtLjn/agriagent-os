@@ -1,8 +1,8 @@
 # backend/tests/context/test_builder_allowlist.py
 """ContextBuilder 白名单过滤集成测。"""
 from app.context.builder import ContextBuilder
-from app.context.models import ContextBlock
-from app.context.allowlist import FORBIDDEN_CONTEXT_KEYS
+from app.context.core.models import ContextBlock
+from app.context.pipeline.allowlist import FORBIDDEN_CONTEXT_KEYS
 
 
 class _FakeSelector:
