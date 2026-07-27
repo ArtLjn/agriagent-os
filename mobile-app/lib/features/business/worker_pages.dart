@@ -600,8 +600,6 @@ class _WorkerFormPageState extends State<WorkerFormPage> {
         primaryLabel: _saving ? '保存中' : '保存工人',
         onPrimary: _save,
         onSecondary: () => Navigator.of(context).maybePop(),
-        showTabs: true,
-        onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
         const AiLandscapeBanner(

@@ -110,8 +110,6 @@ class _LedgerManualCreatePageState extends State<LedgerManualCreatePage> {
         primaryLoading: _saving,
         onPrimary: _save,
         onSecondary: () => Navigator.of(context).maybePop(),
-        showTabs: true,
-        onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
         _AmountHero(

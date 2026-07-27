@@ -383,8 +383,6 @@ class _CropTemplateFormPageState extends State<CropTemplateFormPage> {
         primaryLabel: _saving ? '保存中' : '保存模板',
         onPrimary: _save,
         onSecondary: () => _showMessage('已生成阶段预览'),
-        showTabs: true,
-        onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
         const AiLandscapeBanner(

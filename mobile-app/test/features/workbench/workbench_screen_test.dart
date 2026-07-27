@@ -105,7 +105,7 @@ void main() {
     expect(find.bySemanticsLabel('田掌柜'), findsOneWidget);
     expect(find.text('芽芽智能填写'), findsOneWidget);
     expect(find.text('今天要记什么？'), findsOneWidget);
-    expect(find.text('说一句，芽芽会整理成账目、农事或工资'), findsOneWidget);
+    expect(find.text('账目、农事或工资，一句话自动识别'), findsOneWidget);
     expect(find.text('识别'), findsOneWidget);
     expect(find.text('手动记一笔'), findsOneWidget);
     expect(find.text('AI帮我填'), findsNothing);
@@ -116,7 +116,8 @@ void main() {
     expect(find.text('今日概览'), findsOneWidget);
     expect(find.text('开始说话'), findsNothing);
     expect(find.text('例如：今天买饲料 3680 元'), findsNothing);
-    expect(find.text('常用工具'), findsOneWidget);
+    expect(find.text('常用动作'), findsOneWidget);
+    expect(find.text('基础资料'), findsOneWidget);
     expect(find.text('建批次'), findsOneWidget);
     expect(find.text('最近记录'), findsOneWidget);
     expect(find.text('补记录'), findsOneWidget);
@@ -130,7 +131,7 @@ void main() {
   testWidgets('记录页窄屏输入框使用单行短提示', (tester) async {
     await pumpAtWidth(tester, screen(), width: 320);
 
-    expect(find.text('例：买肥料300，老王工资200'), findsOneWidget);
+    expect(find.text('例：买肥料 300，老王工资 200'), findsOneWidget);
     final field = tester.widget<TextField>(find.byType(TextField).first);
     expect(field.minLines, 1);
     expect(field.maxLines, 1);
@@ -220,7 +221,7 @@ void main() {
 
     await tester.tap(find.text('手动记一笔'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '输入金额'), '200');
+    await tester.enterText(find.widgetWithText(TextField, '0.00'), '200');
     await tester.tap(find.text('保存记录'));
     await tester.pumpAndSettle();
 

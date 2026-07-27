@@ -4,8 +4,11 @@ import 'package:farm_manager_app/data/repositories/billing_repository.dart';
 import 'package:farm_manager_app/data/repositories/business_repository.dart';
 import 'package:farm_manager_app/data/repositories/workbench_repository.dart';
 import 'package:farm_manager_app/features/business/crop_template_pages.dart';
+import 'package:farm_manager_app/features/business/farm_log_create_page.dart';
 import 'package:farm_manager_app/features/business/ledger_manual_create_page.dart';
+import 'package:farm_manager_app/features/business/wage_create_page.dart';
 import 'package:farm_manager_app/features/record_flow/record_flow_controller.dart';
+import 'package:farm_manager_app/features/shell/bottom_tab_bar.dart';
 import 'package:farm_manager_app/features/workbench/workbench_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,10 +74,32 @@ void main() {
     );
 
     expect(find.text('记账'), findsWidgets);
-    expect(find.text('农场记账'), findsOneWidget);
     expect(find.text('今天随手记一笔'), findsOneWidget);
     expect(find.text('保存记录'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('记录创建页不叠加主导航 Tab', (tester) async {
+    await pumpNarrowScreen(
+      tester,
+      LedgerManualCreatePage(repository: businessRepository()),
+    );
+    expect(find.text('保存记录'), findsOneWidget);
+    expect(find.byType(AppBottomTabBar), findsNothing);
+
+    await pumpNarrowScreen(
+      tester,
+      FarmLogCreatePage(repository: businessRepository()),
+    );
+    expect(find.text('保存农事'), findsOneWidget);
+    expect(find.byType(AppBottomTabBar), findsNothing);
+
+    await pumpNarrowScreen(
+      tester,
+      WageCreatePage(repository: businessRepository()),
+    );
+    expect(find.text('保存工资'), findsOneWidget);
+    expect(find.byType(AppBottomTabBar), findsNothing);
   });
 
   testWidgets('作物模板页窄屏横幅和卡片不产生布局异常', (tester) async {

@@ -37,6 +37,7 @@ void main() {
           onSkip: () {},
           profile: dependencies.profile,
           location: dependencies.location,
+          locations: dependencies.locations,
         ),
         name: 'setup',
       );

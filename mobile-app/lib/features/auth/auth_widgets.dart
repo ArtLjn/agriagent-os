@@ -68,21 +68,21 @@ class AuthBrandHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     if (compact) {
       return SizedBox(
-        height: 222,
+        height: 168,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
             const Positioned(
-              right: -30,
-              top: -24,
-              child: _FloatingCardsScene(width: 220, height: 150),
+              right: -24,
+              top: -32,
+              child: _FloatingCardsScene(width: 164, height: 112),
             ),
             Positioned(
               left: 0,
-              top: 16,
+              top: 8,
               child: Row(
                 children: [
-                  const AuthLogo(size: 46),
+                  const AuthLogo(size: 40),
                   const SizedBox(width: 12),
                   Text(
                     AppIdentity.displayName,
@@ -94,7 +94,7 @@ class AuthBrandHeader extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              bottom: 28,
+              bottom: 20,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -102,18 +102,18 @@ class AuthBrandHeader extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       color: AppColors.ink,
-                      fontSize: 31,
-                      height: 38 / 31,
+                      fontSize: 28,
+                      height: 34 / 28,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Text(
                     subtitle,
                     style: AppTextStyles.body.copyWith(
                       color: AppColors.subtle,
-                      fontSize: 18,
+                      fontSize: 16,
                     ),
                   ),
                 ],
@@ -125,24 +125,24 @@ class AuthBrandHeader extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 286,
+      height: 180,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           const Positioned(
-            right: -40,
-            top: 14,
-            child: _FloatingCardsScene(width: 238, height: 190),
+            right: -34,
+            top: -18,
+            child: _FloatingCardsScene(width: 178, height: 132),
           ),
           Positioned(
-            left: 10,
-            top: 56,
-            child: AuthLogo(size: 78),
+            left: 0,
+            top: 18,
+            child: AuthLogo(size: 58),
           ),
           Positioned(
             left: 0,
             right: 0,
-            bottom: 24,
+            bottom: 18,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -150,18 +150,18 @@ class AuthBrandHeader extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     color: AppColors.ink,
-                    fontSize: 42,
-                    height: 48 / 42,
+                    fontSize: 36,
+                    height: 42 / 36,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
                   subtitle,
                   style: AppTextStyles.body.copyWith(
                     color: AppColors.subtle,
-                    fontSize: 18,
+                    fontSize: 16,
                   ),
                 ),
               ],

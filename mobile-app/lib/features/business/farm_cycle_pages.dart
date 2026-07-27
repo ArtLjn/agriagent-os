@@ -315,8 +315,6 @@ class _FarmCycleFormPageState extends State<FarmCycleFormPage> {
                 : '保存茬口',
         onPrimary: _save,
         onSecondary: () => _showMessage('草稿已保留在当前页面'),
-        showTabs: true,
-        onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
         const AiLandscapeBanner(

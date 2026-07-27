@@ -3,6 +3,7 @@ import 'package:farm_manager_app/data/api/api_client.dart';
 import 'package:farm_manager_app/data/location/location_service.dart';
 import 'package:farm_manager_app/data/repositories/profile_repository.dart';
 import 'package:farm_manager_app/features/auth/auth_flow.dart';
+import 'package:farm_manager_app/features/auth/auth_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -77,6 +78,12 @@ void main() {
     final dependencies = FakeAppDependencies();
     await pumpAuthFlow(tester, dependencies: dependencies);
 
+    final phoneField = tester.widget<TextField>(find.byType(TextField).at(0));
+    final passwordField =
+        tester.widget<TextField>(find.byType(TextField).at(1));
+    expect(phoneField.controller?.text, '19083106293');
+    expect(passwordField.controller?.text, 'admin123');
+
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
 
@@ -87,6 +94,19 @@ void main() {
     expect(find.text('首页'), findsWidgets);
     expect(find.text('记录'), findsWidgets);
     expect(find.text('账本'), findsWidgets);
+  });
+
+  testWidgets('登录和注册页顶部品牌区保持紧凑', (tester) async {
+    await pumpAuthFlow(tester);
+
+    expect(tester.getSize(find.byType(AuthBrandHeader)).height,
+        lessThanOrEqualTo(180));
+
+    await tester.tap(find.text('去注册'));
+    await tester.pump();
+
+    expect(tester.getSize(find.byType(AuthBrandHeader)).height,
+        lessThanOrEqualTo(176));
   });
 
   testWidgets('建议详情页底部 Tab 可返回主应用并切到账本', (tester) async {
@@ -302,7 +322,7 @@ void main() {
         'farm': {
           'id': 1,
           'name': '农友的农场',
-          'location': '睢宁县',
+          'location': '苏州市虎丘区',
         },
       },
       '/settings': settingsResponse,
@@ -331,18 +351,18 @@ void main() {
         (widget) =>
             widget is TextField && widget.decoration?.hintText == '搜索城市或区县',
       ),
-      '睢宁',
+      '苏州',
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('睢宁县'));
+    await tester.tap(find.text('苏州市虎丘区'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('开始使用'));
     await tester.pumpAndSettle();
 
     expect(adapter.find('PUT', '/auth/me/farm-location').data, {
-      'location': '睢宁县',
-      'lat': 34.20442,
-      'lon': 117.28386,
+      'location': '苏州市虎丘区',
+      'lat': 31.3296,
+      'lon': 120.4342,
     });
     expect(find.text('首页'), findsWidgets);
   });

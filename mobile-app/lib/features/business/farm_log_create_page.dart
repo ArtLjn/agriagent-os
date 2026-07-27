@@ -108,8 +108,6 @@ class _FarmLogCreatePageState extends State<FarmLogCreatePage> {
         primaryLabel: _saving ? '保存中' : '保存农事',
         onPrimary: _save,
         onSecondary: () => Navigator.of(context).maybePop(),
-        showTabs: true,
-        onBottomTabChanged: widget.onBottomTabChanged,
       ),
       children: [
         const FarmLogHeroBanner(

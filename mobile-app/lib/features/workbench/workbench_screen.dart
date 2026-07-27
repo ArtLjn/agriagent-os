@@ -361,8 +361,7 @@ class _AiRecordHero extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.blueSoft,
                   borderRadius: BorderRadius.circular(999),
@@ -936,7 +935,24 @@ class _ToolSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [
+    final actionItems = [
+      _ToolItem(
+        label: '补记录',
+        icon: LucideIcons.filePlus,
+        onTap: onPatchRecordTap,
+      ),
+      _ToolItem(
+        label: '工资结算',
+        icon: LucideIcons.coins,
+        onTap: onWageSettlementTap,
+      ),
+      _ToolItem(
+        label: '最近记录',
+        icon: LucideIcons.history,
+        onTap: onRecentTap,
+      ),
+    ];
+    final dataItems = [
       _ToolItem(
         label: '建批次',
         icon: LucideIcons.layers,
@@ -952,21 +968,6 @@ class _ToolSection extends StatelessWidget {
         icon: LucideIcons.layoutTemplate,
         onTap: onTemplateTap,
       ),
-      _ToolItem(
-        label: '最近记录',
-        icon: LucideIcons.history,
-        onTap: onRecentTap,
-      ),
-      _ToolItem(
-        label: '补记录',
-        icon: LucideIcons.filePlus,
-        onTap: onPatchRecordTap,
-      ),
-      _ToolItem(
-        label: '工资结算',
-        icon: LucideIcons.coins,
-        onTap: onWageSettlementTap,
-      ),
     ];
 
     return _SectionCard(
@@ -976,17 +977,31 @@ class _ToolSection extends StatelessWidget {
         children: [
           const _SectionTitle(
             icon: LucideIcons.briefcaseBusiness,
-            title: '常用工具',
+            title: '常用动作',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var i = 0; i < actionItems.length; i++) ...[
+                Expanded(child: _ToolTile(item: actionItems[i], compact: true)),
+                if (i < actionItems.length - 1) const SizedBox(width: 10),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          const _SectionTitle(
+            icon: LucideIcons.database,
+            title: '基础资料',
+          ),
+          const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 1.05,
-            children: items
+            childAspectRatio: 1.18,
+            children: dataItems
                 .map((item) => _ToolTile(item: item))
                 .toList(growable: false),
           ),
@@ -997,9 +1012,10 @@ class _ToolSection extends StatelessWidget {
 }
 
 class _ToolTile extends StatelessWidget {
-  const _ToolTile({required this.item});
+  const _ToolTile({required this.item, this.compact = false});
 
   final _ToolItem item;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1007,38 +1023,72 @@ class _ToolTile extends StatelessWidget {
       scale: 0.95,
       onTap: item.onTap,
       child: Container(
+        height: compact ? 58 : null,
         decoration: BoxDecoration(
           color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(compact ? 14 : 16),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: AppColors.lineSoft),
+        child: compact
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _ToolIcon(icon: item.icon, size: 30, iconSize: 15),
+                  const SizedBox(width: 7),
+                  Flexible(child: _ToolLabel(label: item.label)),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _ToolIcon(icon: item.icon),
+                  const SizedBox(height: 7),
+                  _ToolLabel(label: item.label),
+                ],
               ),
-              child: Icon(item.icon, size: 17, color: AppColors.ink2),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              item.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.ink2,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0,
-              ),
-            ),
-          ],
-        ),
+      ),
+    );
+  }
+}
+
+class _ToolIcon extends StatelessWidget {
+  const _ToolIcon({required this.icon, this.size = 36, this.iconSize = 17});
+
+  final IconData icon;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(size <= 32 ? 9 : 11),
+        border: Border.all(color: AppColors.lineSoft),
+      ),
+      child: Icon(icon, size: iconSize, color: AppColors.ink2),
+    );
+  }
+}
+
+class _ToolLabel extends StatelessWidget {
+  const _ToolLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: AppColors.ink2,
+        fontSize: 12.5,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0,
       ),
     );
   }
