@@ -172,6 +172,19 @@ embedding_cache_key = provider + model + registry_version + operation_doc_hash
 
 embedding 配置只允许从配置系统和环境变量读取。文档、测试样例、trace 中禁止出现认证密码。trace 只能记录 provider、model、endpoint host、耗时、是否降级和错误 code。
 
+第一版使用显式开关控制外部请求：
+
+```yaml
+embedding:
+  enabled: false
+  provider: "ollama"
+  model: "qwen3-embedding:0.6b"
+  base_url: "https://ollama.example.com"
+  endpoint: "/api/embed"
+```
+
+`enabled=false` 或 `base_url` 为空时，Router 不访问 embedding 服务，自动使用 StrongRuleRecall + BM25Recall。线上启用时只在私密配置或环境变量中放认证信息，例如 `EMBEDDING__PASSWORD`。
+
 ## 7. 混合重排
 
 候选并集进入 reranker 后统一归一化和打分。
@@ -352,4 +365,3 @@ embedding 相关日志只允许包含：
 4. trace 和评测输出不包含认证密码。
 5. 写操作样本不会因为 embedding 相似而绕过 pending confirmation。
 6. 新增或修改 routing metadata 后，必须跑 skill route regression。
-

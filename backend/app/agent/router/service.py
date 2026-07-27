@@ -1,5 +1,7 @@
 """Skill Router 服务入口。"""
 
+import logging
+import time
 from copy import deepcopy
 from dataclasses import replace
 
@@ -7,6 +9,8 @@ from langchain_core.tools import BaseTool
 
 from app.agent.router.catalog import SkillCatalog
 from app.agent.router.candidate_retriever import CandidateRetriever
+from app.agent.router.embedding_client import build_router_embedding_fn
+from app.agent.router.hybrid_retriever import HybridOperationRetriever
 from app.agent.router import classifier_signals as signals
 from app.agent.router.classifier import RuleIntentClassifier
 from app.agent.router.intent import IntentType, classify_intent
@@ -17,9 +21,12 @@ from app.agent.router.models import (
     ToolCandidate,
 )
 from app.agent.router.policy import RouterPolicy
+from app.infra.trace_context import get_trace
+from app.shared.logging import log_event
 from app.skills.registry import OperationDefinition, load_skill_registry
 
 
+logger = logging.getLogger(__name__)
 _READ_OPERATION_RISKS = frozenset({"read", "external_network"})
 _WRITE_OPERATION_RISKS = frozenset({"write_confirm", "write_high"})
 _RETRIEVABLE_READ_HINTS = (
@@ -45,6 +52,38 @@ _RETRIEVABLE_READ_HINTS = (
     "remain",
     "unpaid",
 )
+_RETRIEVABLE_READ_ENTITY_HINTS = (
+    "欠款",
+    "欠",
+    "未付",
+    "未结清",
+    "没结清",
+    "账",
+    "钱",
+    "花",
+    "成本",
+    "费用",
+    "支出",
+    "工资",
+    "人工",
+    "工人",
+    "地块",
+    "棚",
+    "作物",
+    "种植",
+    "周期",
+    "天气",
+    "分类",
+    "单位",
+    "debt",
+    "payable",
+    "cost",
+    "expense",
+    "wage",
+    "labor",
+    "worker",
+    "weather",
+)
 
 
 class SkillRouter:
@@ -60,22 +99,102 @@ class SkillRouter:
         self._budget = budget or DisclosureBudget()
         self._policy = policy or RouterPolicy(self._budget)
         self._retriever = CandidateRetriever()
+        self._hybrid_retriever = HybridOperationRetriever(
+            embed=build_router_embedding_fn()
+        )
 
     def route(self, message: str, tools: list[BaseTool]) -> RouterDecision:
         """根据用户输入和可用工具返回路由决策。"""
+        started_at = time.perf_counter()
+        self._log_route_started(message=message, tools=tools)
         catalog = SkillCatalog.from_tools(tools)
-        frames = self._enrich_frames(self._classifier.classify(message), catalog)
-        intent = classify_intent(message)
-        if not frames and intent == IntentType.WRITE:
-            frames = self._retrieved_write_frames(message, catalog)
-            if not frames:
-                return self._unresolved_write_decision(message)
-        if not frames and self._looks_like_retrievable_read(message):
-            frames = self._retrieved_frames(message, catalog)
-        return self._policy.apply(
-            message=message,
-            frames=frames,
-            candidates=catalog.candidates(),
+        try:
+            frames = self._enrich_frames(self._classifier.classify(message), catalog)
+            intent = classify_intent(message)
+            if not frames and intent == IntentType.WRITE:
+                frames = self._retrieved_write_frames(message, catalog)
+                if not frames:
+                    decision = self._unresolved_write_decision(message)
+                    self._log_route_completed(
+                        started_at=started_at,
+                        decision=decision,
+                        candidate_count=len(catalog.candidates()),
+                    )
+                    return decision
+            if not frames and self._looks_like_retrievable_read(message):
+                frames = self._retrieved_frames(message, catalog)
+            decision = self._policy.apply(
+                message=message,
+                frames=frames,
+                candidates=catalog.candidates(),
+            )
+        except Exception as exc:
+            self._log_route_failed(
+                started_at=started_at,
+                error_code=exc.__class__.__name__,
+            )
+            raise
+        self._log_route_completed(
+            started_at=started_at,
+            decision=decision,
+            candidate_count=len(catalog.candidates()),
+        )
+        return decision
+
+    @staticmethod
+    def _log_route_started(*, message: str, tools: list[BaseTool]) -> None:
+        trace = get_trace()
+        log_event(
+            logger,
+            logging.INFO,
+            "skill_router_started",
+            request_id=trace.request_id if trace else None,
+            session_id=trace.session_id if trace else None,
+            status="started",
+            data={
+                "message_len": len(message),
+                "tool_count": len(tools),
+            },
+        )
+
+    @staticmethod
+    def _log_route_completed(
+        *,
+        started_at: float,
+        decision: RouterDecision,
+        candidate_count: int,
+    ) -> None:
+        trace = get_trace()
+        log_event(
+            logger,
+            logging.INFO,
+            "skill_router_completed",
+            request_id=trace.request_id if trace else None,
+            session_id=trace.session_id if trace else None,
+            status="success",
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            data={
+                "candidate_count": candidate_count,
+                "selected_tools": decision.selected_tools,
+                "selected_operations": decision.selected_operations,
+                "fallback": decision.fallback,
+                "fallback_reason": decision.fallback_reason,
+                "policy_violations": decision.policy_violations,
+            },
+        )
+
+    @staticmethod
+    def _log_route_failed(*, started_at: float, error_code: str) -> None:
+        trace = get_trace()
+        log_event(
+            logger,
+            logging.WARNING,
+            "skill_router_completed",
+            code=error_code,
+            request_id=trace.request_id if trace else None,
+            session_id=trace.session_id if trace else None,
+            status="failed",
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
         )
 
     def _retrieved_frames(
@@ -83,47 +202,74 @@ class SkillRouter:
         message: str,
         catalog: SkillCatalog,
     ) -> list[IntentFrame]:
-        retrieved = self._retriever.retrieve(
+        read_candidates = self._read_operation_candidates(catalog)
+        retrieved = self._hybrid_retriever.retrieve(
             message,
-            catalog.candidates(),
-            limit=self._budget.max_retrieved_tools_default,
+            read_candidates,
+            limit=len(read_candidates),
         )
-        selected_names = self._filter_retrieved_names(message, retrieved.selected_names)
-        if not selected_names:
+        selected_candidates = self._filter_retrieved_candidates(
+            message,
+            retrieved.selected_candidates,
+        )
+        if not selected_candidates:
             return []
         frames: list[IntentFrame] = []
-        for name in selected_names:
-            candidate = catalog.get(name)
-            operation = self._read_operation_for(candidate)
+        seen_names: set[str] = set()
+        for candidate in selected_candidates:
+            if candidate.name in seen_names:
+                continue
+            seen_names.add(candidate.name)
             frames.append(
                 IntentFrame(
-                    domain=candidate.domain if candidate else "general",
+                    domain=candidate.domain,
                     intent="retrieved_candidate",
                     risk="read",
-                    capability=candidate.capability if candidate else None,
-                    operation=operation,
-                    operation_hint=operation,
-                    candidate_tools=[name],
+                    capability=candidate.capability,
+                    operation=candidate.operation,
+                    operation_hint=candidate.operation,
+                    candidate_tools=[candidate.name],
                     confidence=0.6,
                     score=0.6,
                     evidence={
-                        "source": "candidate_retriever",
+                        "source": "hybrid_operation_retriever",
                         "scores": retrieved.scores,
-                        "retrieval_evidence": {name: retrieved.evidence.get(name, {})},
+                        "retrieval_evidence": {
+                            self._route_key(candidate): retrieved.evidence.get(
+                                self._route_key(candidate),
+                                {},
+                            )
+                        },
                     },
                 )
             )
+            if len(frames) >= self._budget.max_retrieved_tools_default:
+                break
         return frames
 
     @staticmethod
-    def _filter_retrieved_names(message: str, names: list[str]) -> list[str]:
+    def _filter_retrieved_candidates(
+        message: str,
+        candidates: list[ToolCandidate],
+    ) -> list[ToolCandidate]:
+        names = [candidate.name for candidate in candidates]
         if (
             "manage_crop_cycle" not in names
             or "manage_planting_units" not in names
             or signals.looks_like_planting_unit_query(message)
         ):
-            return names
-        return [name for name in names if name != "manage_planting_units"]
+            return candidates
+        return [
+            candidate
+            for candidate in candidates
+            if candidate.name != "manage_planting_units"
+        ]
+
+    @staticmethod
+    def _route_key(candidate: ToolCandidate) -> str:
+        if candidate.operation:
+            return f"{candidate.name}.{candidate.operation}"
+        return candidate.name
 
     def _retrieved_write_frames(
         self,
@@ -202,6 +348,39 @@ class SkillRouter:
         return write_candidates
 
     @staticmethod
+    def _read_operation_candidates(catalog: SkillCatalog) -> list[ToolCandidate]:
+        candidates = list(catalog.candidates())
+        read_candidates = [
+            candidate for candidate in candidates if candidate.risk in _READ_OPERATION_RISKS
+        ]
+        try:
+            registry = load_skill_registry()
+        except (OSError, ValueError):
+            return read_candidates
+
+        existing_keys = {
+            (candidate.name, candidate.capability, candidate.operation)
+            for candidate in read_candidates
+        }
+        for candidate in candidates:
+            if not candidate.capability or candidate.operation is not None:
+                continue
+            capability = registry.capabilities.get(candidate.capability)
+            if capability is None:
+                continue
+            for operation in capability.operations.values():
+                if operation.risk not in _READ_OPERATION_RISKS:
+                    continue
+                key = (candidate.name, candidate.capability, operation.name)
+                if key in existing_keys:
+                    continue
+                existing_keys.add(key)
+                read_candidates.append(
+                    SkillRouter._operation_candidate(candidate, operation)
+                )
+        return read_candidates
+
+    @staticmethod
     def _operation_candidate(
         candidate: ToolCandidate,
         operation: OperationDefinition,
@@ -269,7 +448,9 @@ class SkillRouter:
     @staticmethod
     def _looks_like_retrievable_read(message: str) -> bool:
         normalized = message.strip().lower()
-        return any(hint in normalized for hint in _RETRIEVABLE_READ_HINTS)
+        return any(hint in normalized for hint in _RETRIEVABLE_READ_HINTS) and any(
+            hint in normalized for hint in _RETRIEVABLE_READ_ENTITY_HINTS
+        )
 
     def build_pending_plan_steps(self, decision: RouterDecision) -> list[dict]:
         """把多写入意图帧转换为 pending plan 存储步骤。"""

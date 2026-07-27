@@ -73,6 +73,7 @@ ai:
 
 # Embedding 模型配置。可用 Ollama 原生 /api/embed，也可由代码扩展为其他 provider。
 embedding:
+  enabled: false                     # 是否启用 Skill Router embedding 召回。
   provider: "ollama"                 # embedding provider 标识。
   model: "qwen3-embedding:0.6b"       # embedding 模型名称。
   base_url: "https://ollama.example.com" # 服务根地址，不要带 endpoint。

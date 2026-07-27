@@ -125,6 +125,7 @@ class AIConfig(BaseModel):
 class EmbeddingConfig(BaseModel):
     """Embedding 模型配置，供检索、召回评测和后续向量化任务复用。"""
 
+    enabled: bool = False
     provider: str = "ollama"
     model: str = "qwen3-embedding:0.6b"
     base_url: str = ""

@@ -4,6 +4,7 @@ import json
 import logging
 from io import StringIO
 
+from app.application.chat.stream_finalization import log_stream_stage
 from app.shared.logging import JsonLineFormatter, log_event, setup_logging
 
 
@@ -87,3 +88,24 @@ def test_json_line_formatter_outputs_single_json_line():
     assert payload["status"] == "success"
     assert payload["duration_ms"] == 123
     assert payload["data"] == {"reply_preview": "第一行 第二行"}
+
+
+def test_stream_stage_timing_is_debug_only(caplog):
+    """stream 内部阶段耗时不应继续污染 INFO 主链路日志。"""
+    logger_name = "app.application.chat.stream_finalization"
+
+    with caplog.at_level(logging.INFO, logger=logger_name):
+        log_stream_stage("req-1", "background_finish_turn", 0.0)
+
+    assert all(
+        "/chat/stream 阶段耗时" not in record.getMessage()
+        for record in caplog.records
+    )
+
+    with caplog.at_level(logging.DEBUG, logger=logger_name):
+        log_stream_stage("req-1", "background_finish_turn", 0.0)
+
+    assert any(
+        "/chat/stream 阶段耗时" in record.getMessage()
+        for record in caplog.records
+    )

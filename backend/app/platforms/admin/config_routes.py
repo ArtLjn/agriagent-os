@@ -24,6 +24,7 @@ from app.ops.skill_route_eval import (
     load_route_cases,
     preview_route_recall,
 )
+from app.agent.router.service import SkillRouter
 from app.shared.config import settings
 from app.infra.skill_cache import clear_cache
 
@@ -81,15 +82,18 @@ def list_skills() -> dict:
 @router.post("/skills/route-recall")
 def preview_skill_route_recall(request: SkillRouteRecallRequest) -> dict:
     """预览单条业务输入的 Skill 候选召回。"""
+    tools = active_eval_tools()
     candidates = preview_route_recall(
         request.message,
-        active_eval_tools(),
+        tools,
         top_k=request.top_k,
     )
+    router_decision = SkillRouter().route(request.message, tools)
     return {
         "message": request.message,
         "top_k": request.top_k,
         "candidates": [asdict(candidate) for candidate in candidates],
+        "skill_router": router_decision.to_trace_payload(),
     }
 
 

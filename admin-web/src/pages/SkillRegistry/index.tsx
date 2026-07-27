@@ -240,7 +240,7 @@ export default function SkillRegistry() {
                           #{index + 1} {candidate.skill}
                         </Typography.Text>
                         <Typography.Text style={{ color: '#58a6ff' }}>
-                          {candidate.score.toFixed(2)}
+                          hybrid {candidate.score.toFixed(3)}
                         </Typography.Text>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -250,11 +250,56 @@ export default function SkillRegistry() {
                         <Tag color={riskColor(candidate.operation_risk || candidate.risk)}>
                           {candidate.operation_risk || candidate.risk}
                         </Tag>
+                        {evidenceSources(candidate.evidence).map((source) => (
+                          <Tag key={source} color={sourceColor(source)}>
+                            {source}
+                          </Tag>
+                        ))}
                       </div>
+                      <EvidenceMetrics evidence={candidate.evidence} />
                     </div>
                   ))
                 )}
               </div>
+            )}
+
+            {recallResult?.skill_router && (
+              <details
+                open
+                style={{
+                  backgroundColor: '#0d1117',
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 6,
+                  padding: 12,
+                  marginBottom: evalResult ? 16 : 0,
+                }}
+              >
+                <summary
+                  style={{
+                    color: TEXT,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    marginBottom: 10,
+                  }}
+                >
+                  完整 skill_router JSON
+                </summary>
+                <pre
+                  aria-label="完整 skill_router JSON"
+                  style={{
+                    color: TEXT,
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    margin: 0,
+                    maxHeight: 420,
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {JSON.stringify(recallResult.skill_router, null, 2)}
+                </pre>
+              </details>
             )}
 
             {evalResult && (
@@ -497,6 +542,33 @@ function SummaryCard({
   );
 }
 
+function EvidenceMetrics({ evidence }: { evidence: Record<string, unknown> }) {
+  const metrics = ['bm25', 'embedding', 'lexical']
+    .map((key) => evidenceMetric(evidence, key))
+    .filter((item): item is string => Boolean(item));
+
+  if (metrics.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 10,
+      }}
+    >
+      {metrics.map((metric) => (
+        <Typography.Text key={metric} style={{ color: TEXT_DIM, fontSize: 12 }}>
+          {metric}
+        </Typography.Text>
+      ))}
+    </div>
+  );
+}
+
 function statusColor(status: string) {
   if (status === 'active') {
     return 'success';
@@ -526,4 +598,33 @@ function formatPercent(value: number) {
 
 function routeLabel(route: { skill: string; operation: string | null }) {
   return route.operation ? `${route.skill}.${route.operation}` : route.skill;
+}
+
+function evidenceSources(evidence: Record<string, unknown>) {
+  const sources = evidence.sources;
+  if (!Array.isArray(sources)) {
+    return [];
+  }
+  return sources.filter((source): source is string => typeof source === 'string');
+}
+
+function evidenceMetric(evidence: Record<string, unknown>, key: string) {
+  const value = evidence[key];
+  if (typeof value !== 'number') {
+    return null;
+  }
+  return `${key}: ${value.toFixed(2)}`;
+}
+
+function sourceColor(source: string) {
+  if (source === 'strong_rule') {
+    return 'purple';
+  }
+  if (source === 'embedding') {
+    return 'cyan';
+  }
+  if (source === 'bm25') {
+    return 'geekblue';
+  }
+  return 'default';
 }

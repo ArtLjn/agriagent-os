@@ -84,7 +84,11 @@ class TestSkillRouteRecall:
         assert data["candidates"][0]["skill"] == "manage_cost"
         assert data["candidates"][0]["operation"] == "query_summary"
         assert data["candidates"][0]["score"] > 0
-        assert "evidence" in data["candidates"][0]
+        assert data["candidates"][0]["evidence"]["sources"]
+        assert data["candidates"][0]["evidence"]["score"] == data["candidates"][0]["score"]
+        assert data["skill_router"]["selected_operations"] == {
+            "manage_cost": ["query_summary"]
+        }
 
     def test_dataset_eval_uses_json_cases(self, db_session) -> None:
         ensure_admin_user(db_session)

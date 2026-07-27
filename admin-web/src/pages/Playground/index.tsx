@@ -23,7 +23,7 @@ import {
 } from './traceMetrics';
 import { copyAsyncText } from './clipboard';
 import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
-import { LlmContextInspector } from './LlmContextInspector';
+import { LlmContextInspector, LlmContextTriggerButton } from './LlmContextInspector';
 import { QuickPrompts } from './QuickPrompts';
 
 const CARD = palette.bgElevated;
@@ -641,7 +641,7 @@ export default function Playground() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: sidebarCollapsed ? '0 8px' : '0 16px',
+            padding: sidebarCollapsed ? '0 8px' : '0 12px 0 16px',
             borderBottom: `1px solid ${SIDEBAR_BORDER}`,
             flexShrink: 0,
           }}
@@ -665,29 +665,8 @@ export default function Playground() {
           </Tooltip>
         </div>
 
-        {/* 新建会话按钮 */}
-        {!sidebarCollapsed && (
-          <div style={{ padding: '12px 12px 8px', flexShrink: 0 }}>
-            <Button
-              block
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={createNewSession}
-              style={{
-                background: ACCENT,
-                borderColor: ACCENT,
-                height: 36,
-                borderRadius: 8,
-                fontWeight: 500,
-              }}
-            >
-              新建会话
-            </Button>
-          </div>
-        )}
-
         {/* 会话列表 */}
-        <div className="surface-scroll" style={{ flex: 1, overflow: 'auto', padding: sidebarCollapsed ? '8px 6px' : '6px 8px' }}>
+        <div className="surface-scroll" style={{ flex: 1, overflow: 'auto', padding: sidebarCollapsed ? '8px 6px' : '8px 8px' }}>
           {conversationRows.map((conv) => {
             const isActive = conv.session_id === sessionId;
             const sessionState = sessions[conv.session_id];
@@ -799,13 +778,18 @@ export default function Playground() {
 
       {/* ── 主聊天区域 ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', padding: '16px 20px 16px', position: 'relative' }}>
-        {/* 配置栏 - 极简单行 */}
-        <div style={{
+        {/* 子 header - Playground 配置 */}
+        <div className="playground-toolbar" style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '0 4px 12px',
+          gap: 12,
+          padding: '8px 16px',
+          marginBottom: 16,
+          background: CARD,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 10,
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
             <Select
               placeholder="选择用户"
               value={selectedUserId}
@@ -819,7 +803,7 @@ export default function Playground() {
                   message.error('加载会话列表失败');
                 });
               }}
-              style={{ width: 200 }}
+              style={{ width: 180, flexShrink: 0 }}
               styles={{ popup: { root: { background: CARD } } }}
               options={[
                 ...users.map((u) => ({
@@ -830,53 +814,91 @@ export default function Playground() {
                 })),
               ]}
             />
-            <Tooltip title={`${sessionId}（点击复制）`}>
+            <span style={{ width: 1, height: 20, background: BORDER, flexShrink: 0 }} />
+            <Tooltip title="点击复制 Session ID">
               <span
                 onClick={() => void copySessionId(sessionId)}
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
                   color: TEXT_DIM,
                   fontSize: 12,
                   fontFamily: 'monospace',
-                  maxWidth: 360,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  maxWidth: 260,
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  background: 'rgba(139, 148, 158, 0.06)',
+                  border: `1px solid ${palette.borderSoft}`,
                   cursor: 'pointer',
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  transition: 'background 120ms ease, color 120ms ease',
+                  transition: 'all 150ms ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = ROW_HOVER;
+                  e.currentTarget.style.background = 'rgba(139, 148, 158, 0.12)';
                   e.currentTarget.style.color = TEXT;
+                  e.currentTarget.style.borderColor = BORDER;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.background = 'rgba(139, 148, 158, 0.06)';
                   e.currentTarget.style.color = TEXT_DIM;
+                  e.currentTarget.style.borderColor = palette.borderSoft;
                 }}
               >
-                {sessionId}
+                <span style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: 200,
+                }}>
+                  {sessionId}
+                </span>
+                <CopyOutlined style={{ fontSize: 11, flexShrink: 0, opacity: 0.5 }} />
               </span>
             </Tooltip>
-            <Tooltip title="复制 Session ID">
-              <Button
-                type="text"
-                size="small"
-                icon={<CopyOutlined />}
-                onClick={() => void copySessionId(sessionId)}
-                style={{ color: TEXT_DIM, padding: '0 6px', minWidth: 24, height: 24 }}
-              />
-            </Tooltip>
           </div>
-          <Button
-            size="small"
-            type="text"
-            icon={<DeleteOutlined />}
-            onClick={handleClear}
-            style={{ color: TEXT_DIM }}
-          >
-            清空
-          </Button>
+          <Space size={4} style={{ flexShrink: 0 }}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={createNewSession}
+              style={{
+                borderRadius: 6,
+                fontWeight: 500,
+                fontSize: 13,
+                height: 32,
+                paddingInline: 14,
+                boxShadow: '0 1px 3px rgba(31, 111, 235, 0.3)',
+              }}
+            >
+              新建会话
+            </Button>
+            <Button
+              type="default"
+              icon={<DeleteOutlined />}
+              onClick={handleClear}
+              className="playground-toolbar__ghost"
+              style={{
+                color: TEXT_DIM,
+                height: 32,
+                paddingInline: 12,
+                borderRadius: 6,
+                fontSize: 13,
+                borderColor: 'transparent',
+                background: 'transparent',
+              }}
+            >
+              清空
+            </Button>
+            <span style={{ width: 1, height: 16, background: BORDER, margin: '0 4px', flexShrink: 0 }} />
+            <LlmContextTriggerButton
+              hasSnapshot={Boolean(llmContextSnapshot)}
+              loading={loading || traceLoading}
+              onClick={() => {
+                if (llmContextOpen) return;
+                openLlmContextInspector();
+              }}
+            />
+          </Space>
         </div>
 
         {/* 消息区域 */}

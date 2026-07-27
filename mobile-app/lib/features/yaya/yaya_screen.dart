@@ -167,66 +167,110 @@ class _YayaHomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasMessages = controller.messages.isNotEmpty;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Positioned.fill(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 156),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _YayaHeader(
-                      onMenuPressed: onMenuPressed,
-                      onNewConversationPressed: onNewConversationPressed,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = MediaQuery.sizeOf(context);
+        final bottomInset = MediaQuery.paddingOf(context).bottom;
+        final compactHeight = size.height < 760;
+        final horizontalPadding = constraints.maxWidth < 370 ? 16.0 : 20.0;
+        final composerHorizontalPadding = horizontalPadding / 2 - 1;
+        final inputReserve = (compactHeight ? 84.0 : 92.0) + bottomInset;
+        final emptyTopGap = compactHeight ? 18.0 : 28.0;
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned.fill(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  6,
+                  horizontalPadding,
+                  inputReserve,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 430),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _YayaHeader(
+                          onMenuPressed: onMenuPressed,
+                          onNewConversationPressed: onNewConversationPressed,
+                        ),
+                        if (hasMessages) ...[
+                          const SizedBox(height: 18),
+                          _MessageList(
+                            messages: controller.messages,
+                            errorMessage: controller.errorMessage,
+                            onPendingAction: controller.respondToPendingAction,
+                          ),
+                        ] else ...[
+                          SizedBox(height: emptyTopGap),
+                          _YayaEmptyPanel(onSelected: controller.send),
+                        ],
+                      ],
                     ),
-                    if (hasMessages) ...[
-                      const SizedBox(height: 18),
-                      _MessageList(
-                        messages: controller.messages,
-                        errorMessage: controller.errorMessage,
-                        onPendingAction: controller.respondToPendingAction,
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 54),
-                      const _YayaHero(),
-                      const SizedBox(height: 26),
-                      _SuggestionPills(onSelected: controller.send),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Container(
-            color: AppColors.background,
-            padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ModeChips(
-                  onSelected: controller.send,
-                  onSkillsPressed: onSkillsPressed,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.background.withValues(alpha: 0.96),
+                    border: const Border(
+                      top: BorderSide(color: AppColors.lineSoft),
+                    ),
+                  ),
+                  padding: EdgeInsets.fromLTRB(
+                    composerHorizontalPadding,
+                    10,
+                    composerHorizontalPadding,
+                    10,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 430),
+                      child: _ComposerPanel(
+                        sending: controller.sending,
+                        onSelected: controller.send,
+                        onSkillsPressed: onSkillsPressed,
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                AssistantInputBar(
-                  sending: controller.sending,
-                  onSubmit: controller.send,
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ComposerPanel extends StatelessWidget {
+  const _ComposerPanel({
+    required this.sending,
+    required this.onSelected,
+    required this.onSkillsPressed,
+  });
+
+  final bool sending;
+  final Future<void> Function(String text) onSelected;
+  final VoidCallback onSkillsPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AssistantInputBar(
+      sending: sending,
+      onSubmit: onSelected,
+      onMorePressed: onSkillsPressed,
     );
   }
 }
@@ -275,64 +319,106 @@ class _MessageBubble extends StatelessWidget {
     final content = message.content.isEmpty ? '芽芽正在思考...' : message.content;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 320),
-        padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
-        decoration: BoxDecoration(
-          color: isUser ? AppColors.blue : AppColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: isUser ? null : Border.all(color: AppColors.line),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x08000000),
-              blurRadius: 16,
-              offset: Offset(0, 8),
-            ),
+      child: Row(
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isUser) ...[
+            const YayaMascot(size: 30),
+            const SizedBox(width: 8),
           ],
-        ),
-        child: isUser
-            ? Text(
-                content,
-                style: AppTextStyles.body.copyWith(
-                  color: Colors.white,
-                  height: 1.45,
+          Flexible(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 320),
+              padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+              decoration: BoxDecoration(
+                color: isUser ? AppColors.blue : AppColors.surface,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(isUser ? 18 : 8),
+                  topRight: Radius.circular(isUser ? 8 : 18),
+                  bottomLeft: const Radius.circular(18),
+                  bottomRight: const Radius.circular(18),
                 ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  MarkdownBody(
-                    data: content,
-                    selectable: false,
-                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context))
-                        .copyWith(
-                      p: AppTextStyles.body.copyWith(
-                        color: AppColors.ink,
-                        height: 1.45,
-                      ),
-                      strong: AppTextStyles.body.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w800,
-                        height: 1.45,
-                      ),
-                      listBullet: AppTextStyles.body.copyWith(
-                        color: AppColors.ink,
-                        height: 1.45,
-                      ),
-                      blockSpacing: 6,
-                      listIndent: 16,
-                    ),
+                border: isUser ? null : Border.all(color: AppColors.line),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x08000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 8),
                   ),
-                  if (message.pendingAction != null) ...[
-                    const SizedBox(height: 12),
-                    _PendingActionCard(
-                      pendingAction: message.pendingAction!,
-                      onConfirm: () => onPendingAction('确认'),
-                      onCancel: () => onPendingAction('取消'),
-                    ),
-                  ],
                 ],
               ),
+              child: isUser
+                  ? Text(
+                      content,
+                      style: AppTextStyles.body.copyWith(
+                        color: Colors.white,
+                        height: 1.45,
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: message.content.isEmpty
+                                    ? AppColors.amber
+                                    : AppColors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              message.content.isEmpty ? '正在分析' : '芽芽建议',
+                              style: AppTextStyles.small.copyWith(
+                                color: AppColors.muted,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        MarkdownBody(
+                          data: content,
+                          selectable: false,
+                          styleSheet:
+                              MarkdownStyleSheet.fromTheme(Theme.of(context))
+                                  .copyWith(
+                            p: AppTextStyles.body.copyWith(
+                              color: AppColors.ink,
+                              height: 1.45,
+                            ),
+                            strong: AppTextStyles.body.copyWith(
+                              color: AppColors.ink,
+                              fontWeight: FontWeight.w800,
+                              height: 1.45,
+                            ),
+                            listBullet: AppTextStyles.body.copyWith(
+                              color: AppColors.ink,
+                              height: 1.45,
+                            ),
+                            blockSpacing: 6,
+                            listIndent: 16,
+                          ),
+                        ),
+                        if (message.pendingAction != null) ...[
+                          const SizedBox(height: 12),
+                          _PendingActionCard(
+                            pendingAction: message.pendingAction!,
+                            onConfirm: () => onPendingAction('确认'),
+                            onCancel: () => onPendingAction('取消'),
+                          ),
+                        ],
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -645,49 +731,97 @@ class _YayaHeader extends StatelessWidget {
   }
 }
 
-class _YayaHero extends StatelessWidget {
-  const _YayaHero();
+class _YayaEmptyPanel extends StatelessWidget {
+  const _YayaEmptyPanel({required this.onSelected});
+
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final greeting = _greetingText(DateTime.now());
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 2),
-          child: YayaMascot(size: 76),
-        ),
-        const SizedBox(height: 22),
-        Text.rich(
-          TextSpan(
-            text: '$greeting，我是',
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.lineSoft),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x07000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              TextSpan(
-                text: '芽芽',
-                style: AppTextStyles.title.copyWith(
-                  color: AppColors.blue,
-                  fontSize: 30,
+              const YayaMascot(size: 42),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '芽芽',
+                          style: AppTextStyles.sectionTitle.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: AppColors.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '在线',
+                          style: AppTextStyles.small.copyWith(
+                            color: AppColors.greenDark,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$greeting，我是芽芽。告诉我你想处理的农场问题。',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.body.copyWith(
+                        color: AppColors.muted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.title.copyWith(fontSize: 30),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '有问题，直接问我',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.body.copyWith(
-            color: AppColors.muted,
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
+          const SizedBox(height: 14),
+          Text(
+            '可以帮你整理农事记录、查看天气安排、复盘账本，并在保存或执行前让你确认。',
+            style: AppTextStyles.body.copyWith(
+              color: AppColors.ink2,
+              fontSize: 14,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          _SuggestionPills(onSelected: onSelected),
+        ],
+      ),
     );
   }
 }

@@ -297,7 +297,7 @@ def log_stream_stage(
 ) -> None:
     duration_ms = int((time.perf_counter() - started_at) * 1000)
     suffix = f" | {extra}" if extra else ""
-    logger.info(
+    logger.debug(
         "[%s] /chat/stream 阶段耗时 | stage=%s duration_ms=%d%s",
         request_id,
         stage,

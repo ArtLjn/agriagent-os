@@ -93,6 +93,8 @@ Context 工程边界：Agent 不直接拼接全量业务数据。Runtime 通过 
 
 Memory 部署边界：当前部署不内置 RAG、向量数据库、embedding 模型或重排服务，长期记忆和检索只通过 `MemoryService` 端口预留扩展点。未配置外部 RAG/memory 服务时，`MemoryService.build_context()` 返回空长期记忆上下文，`MemoryService.search()` 返回空检索结果，Agent 请求继续按短时上下文、业务工具和 Prompt 正常执行。未来独立 RAG/memory 服务通过 `MemoryService.search()` 和 `MemoryService.build_context()` 接入，不在当前 2h4g 部署内耦合重型检索基础设施。
 
+Skill Router 可选接入外部 embedding 服务做 operation 级候选召回，但该能力由 `embedding.enabled` 显式控制，且不引入向量数据库或内置 embedding worker。未启用或外部服务不可用时，Router 降级为 StrongRuleRecall + BM25Recall；写确认、权限和 operation 校验仍由 `RouterPolicy` 与 runtime guard 执行。
+
 ## 标准请求生命周期
 
 ```text

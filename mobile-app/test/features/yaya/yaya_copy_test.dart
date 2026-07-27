@@ -45,9 +45,9 @@ void main() {
     expect(find.text('本月成本怎么看'), findsOneWidget);
     expect(find.text('生成周报'), findsOneWidget);
     expect(find.text('深度思考'), findsNothing);
-    expect(find.text('经营分析'), findsOneWidget);
-    expect(find.text('生成报告'), findsOneWidget);
-    expect(find.text('全部技能'), findsOneWidget);
+    expect(find.text('经营分析'), findsNothing);
+    expect(find.text('生成报告'), findsNothing);
+    expect(find.text('全部技能'), findsNothing);
     expect(find.text('发消息或按住说话...'), findsOneWidget);
   });
 
@@ -76,7 +76,7 @@ void main() {
     expect(find.text('收到'), findsOneWidget);
   });
 
-  testWidgets('换一换入口存在且点击不报错', (tester) async {
+  testWidgets('换一批问题入口存在且点击不报错', (tester) async {
     await tester.binding.setSurfaceSize(const Size(393, 852));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -85,46 +85,67 @@ void main() {
 
     expect(find.text('今天适合干什么'), findsWidgets);
 
-    await tester.tap(find.widgetWithText(TextButton, '换一换'));
+    await tester.tap(find.widgetWithText(TextButton, '换一批问题'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('底部快捷标签会直接发送对应问题', (tester) async {
-    final repository = _TrackingYayaRepository();
-    await tester.pumpWidget(
-      MaterialApp(home: YayaScreen(repository: repository)),
-    );
+  testWidgets('芽芽首页展示聊天式开场和轻量建议', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(yayaScreen());
     await tester.pump();
 
-    await tester.tap(find.text('经营分析'));
-    await tester.pumpAndSettle();
-
-    expect(repository.sentMessages, ['分析一下我的农场经营情况']);
+    expect(find.text('芽芽'), findsWidgets);
+    expect(find.text('在线'), findsOneWidget);
+    expect(find.textContaining('告诉我你想处理的农场问题'), findsOneWidget);
+    expect(find.textContaining('可以帮你整理农事记录'), findsOneWidget);
+    expect(find.text('你可以问'), findsOneWidget);
+    expect(find.text('记录今天农活'), findsOneWidget);
+    expect(find.text('今天适合干什么'), findsWidgets);
+    expect(find.text('田间问答'), findsNothing);
+    expect(find.text('执行确认'), findsNothing);
+    expect(find.text('有问题，直接问我'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('生成报告标签会直接发送对应问题', (tester) async {
-    final repository = _TrackingYayaRepository();
-    await tester.pumpWidget(
-      MaterialApp(home: YayaScreen(repository: repository)),
-    );
-    await tester.pump();
-
-    await tester.tap(find.text('生成报告'));
-    await tester.pumpAndSettle();
-
-    expect(repository.sentMessages, ['生成一份农场经营报告']);
-  });
-
-  testWidgets('从芽芽首页进入全部技能页会加载接口技能', (tester) async {
+  testWidgets('输入栏加号进入全部技能页', (tester) async {
     final repository = _SkillsYayaRepository();
     await tester.pumpWidget(
       MaterialApp(home: YayaScreen(repository: repository)),
     );
     await tester.pump();
 
-    await tester.tap(find.byIcon(LucideIcons.layoutGrid).last);
+    await tester.tap(find.byIcon(LucideIcons.plus).last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('搜索技能'), findsOneWidget);
+    expect(repository.loadSkillsCalls, 1);
+  });
+
+  testWidgets('生成周报建议会直接发送对应问题', (tester) async {
+    final repository = _TrackingYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaScreen(repository: repository)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('生成周报'));
+    await tester.pumpAndSettle();
+
+    expect(repository.sentMessages, ['生成周报']);
+  });
+
+  testWidgets('从芽芽首页加号进入全部技能页会加载接口技能', (tester) async {
+    final repository = _SkillsYayaRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: YayaScreen(repository: repository)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(LucideIcons.plus).last);
     await tester.pumpAndSettle();
 
     expect(repository.loadSkillsCalls, 1);

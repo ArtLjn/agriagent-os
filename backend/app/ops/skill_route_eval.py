@@ -11,8 +11,9 @@ from typing import Any
 import yaml
 from langchain_core.tools import BaseTool
 
-from app.agent.router.candidate_retriever import CandidateRetriever
 from app.agent.router.catalog import SkillCatalog
+from app.agent.router.embedding_client import build_router_embedding_fn
+from app.agent.router.hybrid_retriever import HybridOperationRetriever
 from app.agent.router.models import ToolCandidate
 from app.skills.registry import OperationDefinition, load_skill_registry
 
@@ -77,7 +78,11 @@ def preview_route_recall(
 ) -> list[RouteRecallCandidate]:
     """预览单条业务输入的 Skill 候选召回结果。"""
     candidates = _operation_candidates(tools)
-    result = CandidateRetriever().retrieve(message, candidates, limit=len(candidates))
+    result = HybridOperationRetriever(embed=build_router_embedding_fn()).retrieve(
+        message,
+        candidates,
+        limit=len(candidates),
+    )
     return _top_unique_skill_candidates(
         result.selected_candidates,
         result.scores,
@@ -94,7 +99,7 @@ def evaluate_route_recall(
 ) -> RouteRecallReport:
     """评测 operation 级召回命中率。"""
     candidates = _operation_candidates(tools)
-    retriever = CandidateRetriever()
+    retriever = HybridOperationRetriever(embed=build_router_embedding_fn())
     failures: list[RouteRecallFailure] = []
     hit_1 = 0
     hit_k = 0
@@ -299,8 +304,12 @@ def _top_unique_skill_candidates(
         if candidate.name in seen:
             continue
         seen.add(candidate.name)
-        candidate_evidence = evidence.get(candidate.name, {})
-        score = candidate_evidence.get("score", scores.get(candidate.name, 0.0))
+        route_key = _candidate_route_key(candidate)
+        candidate_evidence = evidence.get(route_key, evidence.get(candidate.name, {}))
+        score = candidate_evidence.get(
+            "score",
+            scores.get(route_key, scores.get(candidate.name, 0.0)),
+        )
         items.append(
             RouteRecallCandidate(
                 skill=candidate.name,
@@ -314,6 +323,12 @@ def _top_unique_skill_candidates(
         if len(items) >= top_k:
             break
     return items
+
+
+def _candidate_route_key(candidate: ToolCandidate) -> str:
+    if candidate.operation:
+        return f"{candidate.name}.{candidate.operation}"
+    return candidate.name
 
 
 def _skill_hit(route: ExpectedRoute, accepted: set[ExpectedRoute]) -> bool:

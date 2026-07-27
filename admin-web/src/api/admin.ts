@@ -340,6 +340,7 @@ export interface SkillRouteRecallResponse {
   message: string;
   top_k: number;
   candidates: SkillRouteRecallCandidate[];
+  skill_router?: Record<string, unknown>;
 }
 
 export interface SkillRouteRecallDataset {

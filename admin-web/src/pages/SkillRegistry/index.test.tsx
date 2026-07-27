@@ -122,25 +122,40 @@ describe('SkillRegistry', () => {
       ],
     });
     mockedPreviewSkillRouteRecall.mockResolvedValueOnce({
-      message: '这个月花了多少钱',
-      top_k: 3,
+      message: '我有哪些欠款',
+      top_k: 5,
       candidates: [
         {
           skill: 'manage_cost',
-          operation: 'query_summary',
-          score: 6.2,
+          operation: 'query_debt',
+          score: 0.63,
           risk: 'read',
           operation_risk: 'read',
           evidence: {
-            tag_hits: ['finance'],
-            intent_hits: ['query_summary'],
-            example_hits: ['这个月花了多少钱'],
-            anti_hits: [],
-            identity_hits: [],
-            score: 6.2,
+            sources: ['strong_rule', 'bm25'],
+            bm25: 1,
+            embedding: 0,
+            lexical: 0.9,
+            lexical_hits: ['欠款'],
+            low_signal_hits: ['有哪些'],
+            score: 0.63,
           },
         },
       ],
+      skill_router: {
+        selected_tools: ['manage_cost'],
+        selected_operations: {
+          manage_cost: ['query_debt'],
+        },
+        reason: '按意图候选和 stop-loss policy 选择工具',
+        evidence: {
+          frames: [
+            {
+              source: 'hybrid_operation_retriever',
+            },
+          ],
+        },
+      },
     });
     mockedEvaluateSkillRouteRecallDataset.mockResolvedValueOnce({
       dataset: {
@@ -151,50 +166,36 @@ describe('SkillRegistry', () => {
       top_k: 5,
       report: {
         total: 6,
-        recall_at_1: 0.8,
+        recall_at_1: 1,
         recall_at_k: 1,
-        operation_recall_at_k: 0.83,
-        failures: [
-          {
-            case_id: 'debt_query_001',
-            message: '我有哪些欠款',
-            expected: {
-              skill: 'manage_cost',
-              operation: 'query_debt',
-            },
-            top_k: [
-              {
-                skill: 'get_farm_status',
-                operation: 'query_status',
-              },
-              {
-                skill: 'manage_cost_categories',
-                operation: 'query_categories',
-              },
-            ],
-            scores: {
-              get_farm_status: 2.2,
-              manage_cost_categories: 2,
-            },
-          },
-        ],
+        operation_recall_at_k: 1,
+        failures: [],
       },
     });
 
     render(<SkillRegistry />);
 
     await screen.findByText('manage_cost');
-    await user.type(screen.getByLabelText('业务输入'), '这个月花了多少钱');
+    await user.type(screen.getByLabelText('业务输入'), '我有哪些欠款');
     await user.click(screen.getByRole('button', { name: '测试召回' }));
 
     await waitFor(() => {
       expect(mockedPreviewSkillRouteRecall).toHaveBeenCalledWith({
-        message: '这个月花了多少钱',
+        message: '我有哪些欠款',
         top_k: 5,
       });
     });
-    expect(await screen.findByText('query_summary')).toBeInTheDocument();
-    expect(screen.getByText('6.20')).toBeInTheDocument();
+    expect(await screen.findByText('query_debt')).toBeInTheDocument();
+    expect(screen.getByText('hybrid 0.630')).toBeInTheDocument();
+    expect(screen.getByText('strong_rule')).toBeInTheDocument();
+    expect(screen.getByText('bm25')).toBeInTheDocument();
+    expect(screen.getByText('lexical: 0.90')).toBeInTheDocument();
+    expect(screen.getByLabelText('完整 skill_router JSON')).toHaveTextContent(
+      '"selected_operations"'
+    );
+    expect(screen.getByLabelText('完整 skill_router JSON')).toHaveTextContent(
+      '"manage_cost"'
+    );
 
     await user.click(screen.getByRole('button', { name: '运行测试集' }));
 
@@ -203,9 +204,7 @@ describe('SkillRegistry', () => {
     });
     expect(await screen.findByText('skill_route_cases.json')).toBeInTheDocument();
     expect(screen.getAllByText('100.0%').length).toBeGreaterThan(0);
-    expect(screen.getByText('debt_query_001')).toBeInTheDocument();
-    expect(screen.getByText('我有哪些欠款')).toBeInTheDocument();
-    expect(screen.getByText('manage_cost.query_debt')).toBeInTheDocument();
-    expect(screen.getByText('get_farm_status.query_status')).toBeInTheDocument();
+    expect(screen.getAllByText('0').length).toBeGreaterThan(0);
+    expect(screen.queryByText('debt_query_001')).not.toBeInTheDocument();
   });
 });

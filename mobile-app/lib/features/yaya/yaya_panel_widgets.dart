@@ -13,62 +13,44 @@ class _SuggestionPillsState extends State<_SuggestionPills> {
   static const _suggestionGroups = [
     [
       _SuggestionSpec(
-        icon: LucideIcons.sun,
-        label: '今天适合干什么',
-        color: AppColors.blue,
-        background: AppColors.blueSoft,
-      ),
-      _SuggestionSpec(
-        icon: LucideIcons.chartNoAxesColumnIncreasing,
-        label: '本月成本怎么看',
-        color: AppColors.greenDark,
-        background: AppColors.greenSoft,
-      ),
-      _SuggestionSpec(
-        icon: LucideIcons.fileText,
-        label: '生成周报',
-        color: AppColors.purple,
-        background: AppColors.purpleSoft,
-      ),
-    ],
-    [
-      _SuggestionSpec(
-        icon: LucideIcons.cloudSun,
-        label: '查一下最近天气',
-        color: AppColors.amber,
-        background: AppColors.amberSoft,
-      ),
-      _SuggestionSpec(
-        icon: LucideIcons.clipboardPenLine,
         label: '记录今天农活',
-        color: AppColors.greenDark,
-        background: AppColors.greenSoft,
       ),
       _SuggestionSpec(
-        icon: LucideIcons.walletCards,
-        label: '帮我记一笔账',
-        color: AppColors.blue,
-        background: AppColors.blueSoft,
+        label: '今天适合干什么',
+      ),
+      _SuggestionSpec(
+        label: '本月成本怎么看',
+      ),
+      _SuggestionSpec(
+        label: '生成周报',
       ),
     ],
     [
       _SuggestionSpec(
-        icon: LucideIcons.layers3,
+        label: '查一下最近天气',
+      ),
+      _SuggestionSpec(
+        label: '记录今天农活',
+      ),
+      _SuggestionSpec(
+        label: '帮我记一笔账',
+      ),
+      _SuggestionSpec(
+        label: '查看待确认事项',
+      ),
+    ],
+    [
+      _SuggestionSpec(
         label: '查看种植批次',
-        color: AppColors.blue,
-        background: AppColors.blueSoft,
       ),
       _SuggestionSpec(
-        icon: LucideIcons.handCoins,
         label: '看看未结工资',
-        color: AppColors.purple,
-        background: AppColors.purpleSoft,
       ),
       _SuggestionSpec(
-        icon: LucideIcons.fileChartColumn,
         label: '生成经营报告',
-        color: AppColors.greenDark,
-        background: AppColors.greenSoft,
+      ),
+      _SuggestionSpec(
+        label: '今天适合干什么',
       ),
     ],
   ];
@@ -84,43 +66,56 @@ class _SuggestionPillsState extends State<_SuggestionPills> {
   @override
   Widget build(BuildContext context) {
     final suggestions = _suggestionGroups[_groupIndex];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final suggestion in suggestions) ...[
-          _SuggestionPill(
-            spec: suggestion,
-            onTap: () => widget.onSelected(suggestion.label),
-          ),
-          const SizedBox(height: 10),
-        ],
-        TextButton.icon(
-          onPressed: _shuffleSuggestions,
-          icon: const Icon(LucideIcons.refreshCw, size: 16),
-          label: const Text('换一换'),
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.subtle,
-            minimumSize: const Size(0, 34),
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: AppTextStyles.body.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '你可以问',
+            style: AppTextStyles.small.copyWith(
+              color: AppColors.subtle,
+              fontWeight: FontWeight.w800,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          for (var index = 0; index < suggestions.length; index++)
+            _SuggestionRow(
+              spec: suggestions[index],
+              showDivider: index != suggestions.length - 1,
+              onTap: () => widget.onSelected(suggestions[index].label),
+            ),
+          const SizedBox(height: 2),
+          TextButton(
+            onPressed: _shuffleSuggestions,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.subtle,
+              minimumSize: const Size(0, 30),
+              padding: EdgeInsets.zero,
+              alignment: Alignment.centerLeft,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: AppTextStyles.small.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            child: const Text('换一批问题'),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _SuggestionPill extends StatelessWidget {
-  const _SuggestionPill({
+class _SuggestionRow extends StatelessWidget {
+  const _SuggestionRow({
     required this.spec,
+    required this.showDivider,
     required this.onTap,
   });
 
   final _SuggestionSpec spec;
+  final bool showDivider;
   final VoidCallback onTap;
 
   @override
@@ -129,44 +124,25 @@ class _SuggestionPill extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
+        child: Container(
           height: 42,
-          padding: const EdgeInsets.fromLTRB(12, 7, 16, 7),
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.lineSoft),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x06000000),
-                blurRadius: 12,
-                offset: Offset(0, 5),
-              ),
-            ],
+            border: showDivider
+                ? const Border(bottom: BorderSide(color: AppColors.lineSoft))
+                : null,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _SoftIcon(
-                icon: spec.icon,
-                color: spec.color,
-                background: spec.background,
-                size: 26,
-                iconSize: 14,
-                shape: _SoftIconShape.rounded,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                spec.label,
-                maxLines: 1,
-                style: AppTextStyles.body.copyWith(
-                  color: AppColors.ink2,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+          child: Text(
+            spec.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.body.copyWith(
+              color: AppColors.ink2,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
           ),
         ),
       ),
@@ -176,122 +152,10 @@ class _SuggestionPill extends StatelessWidget {
 
 class _SuggestionSpec {
   const _SuggestionSpec({
-    required this.icon,
     required this.label,
-    required this.color,
-    required this.background,
   });
 
-  final IconData icon;
   final String label;
-  final Color color;
-  final Color background;
-}
-
-class _ModeChips extends StatelessWidget {
-  const _ModeChips({
-    required this.onSelected,
-    required this.onSkillsPressed,
-  });
-
-  final ValueChanged<String> onSelected;
-  final VoidCallback onSkillsPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
-      child: Row(
-        children: [
-          ModeChip(
-            icon: LucideIcons.chartSpline,
-            label: '经营分析',
-            compact: true,
-            onTap: () => onSelected('分析一下我的农场经营情况'),
-          ),
-          const SizedBox(width: 8),
-          ModeChip(
-            icon: LucideIcons.fileChartColumn,
-            label: '生成报告',
-            compact: true,
-            onTap: () => onSelected('生成一份农场经营报告'),
-          ),
-          const SizedBox(width: 8),
-          ModeChip(
-            icon: LucideIcons.layoutGrid,
-            label: '全部技能',
-            compact: true,
-            onTap: onSkillsPressed,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ModeChip extends StatelessWidget {
-  const ModeChip({
-    super.key,
-    required this.icon,
-    required this.label,
-    this.selected = false,
-    this.compact = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final bool compact;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: compact ? 38 : 40,
-        constraints: const BoxConstraints(minWidth: 44),
-        padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 13),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.blueSoft : AppColors.surface,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? AppColors.blue : AppColors.line,
-            width: selected ? 1.3 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: compact ? 16 : 18,
-              color: selected ? AppColors.blue : AppColors.muted,
-            ),
-            SizedBox(width: compact ? 4 : 7),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  style: AppTextStyles.body.copyWith(
-                    color: selected ? AppColors.blue : AppColors.muted,
-                    fontSize: compact ? 13 : 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class AssistantInputBar extends StatefulWidget {
@@ -299,10 +163,14 @@ class AssistantInputBar extends StatefulWidget {
     super.key,
     required this.onSubmit,
     this.sending = false,
+    this.onMorePressed,
+    this.embedded = false,
   });
 
   final Future<void> Function(String text) onSubmit;
   final bool sending;
+  final VoidCallback? onMorePressed;
+  final bool embedded;
 
   @override
   State<AssistantInputBar> createState() => _AssistantInputBarState();
@@ -327,19 +195,22 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 56,
-      padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
+      height: widget.embedded ? 52 : 56,
+      padding: EdgeInsets.fromLTRB(
+          10, widget.embedded ? 6 : 7, 6, widget.embedded ? 6 : 7),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: widget.embedded ? AppColors.surface3 : AppColors.surface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: AppColors.lineSoft),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x080B2447),
-            blurRadius: 12,
-            offset: Offset(0, 5),
-          ),
-        ],
+        boxShadow: widget.embedded
+            ? null
+            : const [
+                BoxShadow(
+                  color: Color(0x080B2447),
+                  blurRadius: 12,
+                  offset: Offset(0, 5),
+                ),
+              ],
       ),
       child: Row(
         children: [
@@ -381,7 +252,7 @@ class _AssistantInputBarState extends State<AssistantInputBar> {
           const SizedBox(width: 6),
           _RoundActionButton(
             icon: LucideIcons.plus,
-            onTap: widget.sending ? null : () {},
+            onTap: widget.sending ? null : widget.onMorePressed,
           ),
         ],
       ),
@@ -955,8 +826,6 @@ class _SkillDetailsSheet extends StatelessWidget {
   }
 }
 
-enum _SoftIconShape { circle, rounded }
-
 class _SoftIcon extends StatelessWidget {
   const _SoftIcon({
     required this.icon,
@@ -964,7 +833,6 @@ class _SoftIcon extends StatelessWidget {
     required this.background,
     this.size = 42,
     this.iconSize = 21,
-    this.shape = _SoftIconShape.circle,
   });
 
   final IconData icon;
@@ -972,7 +840,6 @@ class _SoftIcon extends StatelessWidget {
   final Color background;
   final double size;
   final double iconSize;
-  final _SoftIconShape shape;
 
   @override
   Widget build(BuildContext context) {
@@ -981,11 +848,7 @@ class _SoftIcon extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: background,
-        shape: shape == _SoftIconShape.circle
-            ? BoxShape.circle
-            : BoxShape.rectangle,
-        borderRadius:
-            shape == _SoftIconShape.rounded ? BorderRadius.circular(10) : null,
+        shape: BoxShape.circle,
       ),
       child: Icon(icon, color: color, size: iconSize),
     );
