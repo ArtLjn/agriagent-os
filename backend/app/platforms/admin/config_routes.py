@@ -1,5 +1,6 @@
 """Admin 配置管理 API — Skills/Prompts/Config/Cache。"""
 
+from dataclasses import asdict
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,13 @@ from app.skills.metadata import (
     SkillPermissionLevel,
     metadata_to_dict,
     set_skill_enabled_state,
+)
+from app.ops.skill_route_eval import (
+    active_eval_tools,
+    default_route_cases_path,
+    evaluate_route_recall,
+    load_route_cases,
+    preview_route_recall,
 )
 from app.shared.config import settings
 from app.infra.skill_cache import clear_cache
@@ -33,6 +41,19 @@ class SkillEnablementRequest(BaseModel):
 
     enabled: bool
     disabled_reason: str | None = Field(default=None, max_length=200)
+
+
+class SkillRouteRecallRequest(BaseModel):
+    """Skill 召回单条预览请求。"""
+
+    message: str = Field(min_length=1, max_length=500)
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class SkillRouteRecallEvalRequest(BaseModel):
+    """Skill 召回 JSON 测试集评测请求。"""
+
+    top_k: int = Field(default=5, ge=1, le=20)
 
 
 @router.get("/skills")
@@ -55,6 +76,55 @@ def list_skills() -> dict:
             )
     summary = _build_skill_summary(skills)
     return {"items": skills, "total": len(skills), "summary": summary}
+
+
+@router.post("/skills/route-recall")
+def preview_skill_route_recall(request: SkillRouteRecallRequest) -> dict:
+    """预览单条业务输入的 Skill 候选召回。"""
+    candidates = preview_route_recall(
+        request.message,
+        active_eval_tools(),
+        top_k=request.top_k,
+    )
+    return {
+        "message": request.message,
+        "top_k": request.top_k,
+        "candidates": [asdict(candidate) for candidate in candidates],
+    }
+
+
+@router.get("/skills/route-recall/dataset")
+def get_skill_route_recall_dataset() -> dict:
+    """读取 JSON 维护的 Skill 召回测试集。"""
+    path = default_route_cases_path()
+    cases = load_route_cases(path)
+    return {
+        "dataset": {
+            "path": path.name,
+            "format": path.suffix.removeprefix("."),
+            "total": len(cases),
+        },
+        "items": [asdict(case) for case in cases],
+    }
+
+
+@router.post("/skills/route-recall/evaluate")
+def evaluate_skill_route_recall_dataset(
+    request: SkillRouteRecallEvalRequest,
+) -> dict:
+    """批量评测 JSON 测试集的 Skill 候选召回率。"""
+    path = default_route_cases_path()
+    cases = load_route_cases(path)
+    report = evaluate_route_recall(cases, active_eval_tools(), top_k=request.top_k)
+    return {
+        "dataset": {
+            "path": path.name,
+            "format": path.suffix.removeprefix("."),
+            "total": len(cases),
+        },
+        "top_k": request.top_k,
+        "report": asdict(report),
+    }
 
 
 @router.put("/skills/{skill_name}/enabled")

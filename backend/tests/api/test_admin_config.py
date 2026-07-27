@@ -45,13 +45,13 @@ class TestListSkills:
         ensure_admin_user(db_session)
         with auth_override_scope(app):
             disabled_resp = TestClient(app).put(
-                "/admin/skills/get_cost_summary/enabled",
+                "/admin/skills/manage_cost/enabled",
                 headers=admin_headers(),
                 json={"enabled": False, "disabled_reason": "测试禁用"},
             )
             list_resp = TestClient(app).get("/admin/skills", headers=admin_headers())
             enabled_resp = TestClient(app).put(
-                "/admin/skills/get_cost_summary/enabled",
+                "/admin/skills/manage_cost/enabled",
                 headers=admin_headers(),
                 json={"enabled": True},
             )
@@ -60,11 +60,63 @@ class TestListSkills:
         assert disabled_resp.json()["metadata"]["enabled"] is False
         assert disabled_resp.json()["metadata"]["disabled_reason"] == "测试禁用"
         items = {item["name"]: item for item in list_resp.json()["items"]}
-        assert items["get_cost_summary"]["status"] == "disabled"
-        assert items["get_cost_summary"]["metadata"]["disabled_reason"] == "测试禁用"
+        assert items["manage_cost"]["status"] == "disabled"
+        assert items["manage_cost"]["metadata"]["disabled_reason"] == "测试禁用"
         assert enabled_resp.status_code == 200
         assert enabled_resp.json()["metadata"]["enabled"] is True
         assert enabled_resp.json()["metadata"]["disabled_reason"] is None
+
+
+class TestSkillRouteRecall:
+    def test_preview_returns_ranked_skill_candidates(self, db_session) -> None:
+        ensure_admin_user(db_session)
+        with auth_override_scope(app):
+            resp = TestClient(app).post(
+                "/admin/skills/route-recall",
+                headers=admin_headers(),
+                json={"message": "这个月花了多少钱", "top_k": 3},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "这个月花了多少钱"
+        assert data["top_k"] == 3
+        assert data["candidates"][0]["skill"] == "manage_cost"
+        assert data["candidates"][0]["operation"] == "query_summary"
+        assert data["candidates"][0]["score"] > 0
+        assert "evidence" in data["candidates"][0]
+
+    def test_dataset_eval_uses_json_cases(self, db_session) -> None:
+        ensure_admin_user(db_session)
+        with auth_override_scope(app):
+            resp = TestClient(app).post(
+                "/admin/skills/route-recall/evaluate",
+                headers=admin_headers(),
+                json={"top_k": 5},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["dataset"]["format"] == "json"
+        assert data["report"]["total"] >= 1
+        assert data["report"]["recall_at_k"] >= data["report"]["recall_at_1"]
+        assert "failures" in data["report"]
+
+    def test_dataset_contains_debt_query_regression_case(self, db_session) -> None:
+        ensure_admin_user(db_session)
+        with auth_override_scope(app):
+            resp = TestClient(app).get(
+                "/admin/skills/route-recall/dataset",
+                headers=admin_headers(),
+            )
+
+        assert resp.status_code == 200
+        items = {item["id"]: item for item in resp.json()["items"]}
+        assert items["debt_query_001"]["message"] == "我有哪些欠款"
+        assert items["debt_query_001"]["expected"] == {
+            "skill": "manage_cost",
+            "operation": "query_debt",
+        }
 
 
 class TestListPrompts:

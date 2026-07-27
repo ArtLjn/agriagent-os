@@ -22,6 +22,13 @@ class TestYamlConfig:
                 "api_key": "test-key",
                 "base_url": "http://localhost:11434",
             },
+            "embedding": {
+                "model": "qwen3-embedding:0.6b",
+                "base_url": "https://ollama.example.com",
+                "username": "ollama",
+                "password": "basic-password",
+                "dimensions": 1024,
+            },
             "weather": {"latitude": 39.9, "longitude": 116.4},
         }
         config_file = tmp_path / "config.yaml"
@@ -33,6 +40,8 @@ class TestYamlConfig:
         assert settings.server.host == "127.0.0.1"
         assert settings.server.port == 9000
         assert settings.ai.api_key == "test-key"
+        assert settings.embedding.model == "qwen3-embedding:0.6b"
+        assert settings.embedding.password == "basic-password"
         assert settings.weather.latitude == 39.9
 
     def test_default_values_when_no_yaml(self):
@@ -61,6 +70,26 @@ class TestYamlConfig:
             assert settings.ai.api_key == "env-key"
         finally:
             del os.environ["AI__API_KEY"]
+
+    def test_nested_env_var_overrides_embedding_yaml(self, tmp_path):
+        config_data = {
+            "embedding": {
+                "username": "ollama",
+                "password": "yaml-password",
+            },
+        }
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(yaml.dump(config_data))
+
+        os.environ["EMBEDDING__PASSWORD"] = "env-password"
+        try:
+            from app.shared.config import Settings
+
+            settings = Settings(_config_path=str(config_file))
+            assert settings.embedding.username == "ollama"
+            assert settings.embedding.password == "env-password"
+        finally:
+            del os.environ["EMBEDDING__PASSWORD"]
 
     def test_farm_manager_env_loads_dev_config(self, tmp_path, monkeypatch):
         config_file = tmp_path / "config.dev.yaml"
@@ -204,3 +233,22 @@ class TestAIConfig:
 
         with pytest.raises(ValidationError):
             AIConfig(**{field_name: 0})
+
+
+class TestEmbeddingConfig:
+    def test_embedding_config_defaults_to_qwen3_ollama(self):
+        from app.shared.config import EmbeddingConfig
+
+        config = EmbeddingConfig()
+
+        assert config.provider == "ollama"
+        assert config.model == "qwen3-embedding:0.6b"
+        assert config.endpoint == "/api/embed"
+        assert config.dimensions == 1024
+
+    @pytest.mark.parametrize("field_name", ["dimensions", "timeout_seconds"])
+    def test_embedding_config_numeric_values_must_be_positive(self, field_name):
+        from app.shared.config import EmbeddingConfig
+
+        with pytest.raises(ValidationError):
+            EmbeddingConfig(**{field_name: 0})

@@ -322,6 +322,80 @@ export async function updateSkillEnabled(
   return res.data;
 }
 
+export interface SkillRouteRecallCandidate {
+  skill: string;
+  operation: string | null;
+  score: number;
+  risk: string;
+  operation_risk: string | null;
+  evidence: Record<string, unknown>;
+}
+
+export interface SkillRouteRecallRequest {
+  message: string;
+  top_k?: number;
+}
+
+export interface SkillRouteRecallResponse {
+  message: string;
+  top_k: number;
+  candidates: SkillRouteRecallCandidate[];
+}
+
+export interface SkillRouteRecallDataset {
+  path: string;
+  format: string;
+  total: number;
+}
+
+export interface SkillRouteRecallFailure {
+  case_id: string;
+  message: string;
+  expected: {
+    skill: string;
+    operation: string | null;
+  };
+  top_k: Array<{
+    skill: string;
+    operation: string | null;
+  }>;
+  scores: Record<string, number>;
+}
+
+export interface SkillRouteRecallReport {
+  total: number;
+  recall_at_1: number;
+  recall_at_k: number;
+  operation_recall_at_k: number;
+  failures: SkillRouteRecallFailure[];
+}
+
+export interface SkillRouteRecallEvalResponse {
+  dataset: SkillRouteRecallDataset;
+  top_k: number;
+  report: SkillRouteRecallReport;
+}
+
+export async function previewSkillRouteRecall(
+  payload: SkillRouteRecallRequest
+): Promise<SkillRouteRecallResponse> {
+  const res = await apiClient.post<SkillRouteRecallResponse>(
+    '/admin/skills/route-recall',
+    payload
+  );
+  return res.data;
+}
+
+export async function evaluateSkillRouteRecallDataset(
+  payload: { top_k?: number } = {}
+): Promise<SkillRouteRecallEvalResponse> {
+  const res = await apiClient.post<SkillRouteRecallEvalResponse>(
+    '/admin/skills/route-recall/evaluate',
+    payload
+  );
+  return res.data;
+}
+
 // ─── Prompts API ─────────────────────────────────────────────────────────────
 
 export interface PromptItem {

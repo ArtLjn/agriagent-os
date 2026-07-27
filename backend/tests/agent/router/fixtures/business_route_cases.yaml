@@ -1,0 +1,95 @@
+- id: crop_area_query_001
+  message: 现在西瓜多少亩
+  expected:
+    skill: manage_crop_cycle
+    operation: query_cycles
+  acceptable:
+    - skill: manage_crop_cycle
+      operation: query_cycle_info
+    - skill: manage_planting_units
+      operation: query_units
+  tags:
+    - crop_cycle
+    - area
+    - read
+
+- id: planting_unit_area_query_001
+  message: 默认地块多少亩
+  expected:
+    skill: manage_planting_units
+    operation: query_units
+  tags:
+    - planting_unit
+    - area
+    - read
+
+- id: planting_unit_area_query_002
+  message: 5号棚面积多少
+  expected:
+    skill: manage_planting_units
+    operation: query_units
+  tags:
+    - planting_unit
+    - area
+    - read
+
+- id: planting_unit_area_query_003
+  message: 这个茬口下面每个棚多少亩
+  expected:
+    skill: manage_planting_units
+    operation: query_units
+  tags:
+    - planting_unit
+    - area
+    - read
+
+- id: crop_cycle_list_001
+  message: 我的茬口有哪些
+  expected:
+    skill: manage_crop_cycle
+    operation: query_cycles
+  tags:
+    - crop_cycle
+    - read
+
+- id: farm_status_query_001
+  message: 农场最近怎么样
+  expected:
+    skill: get_farm_status
+    operation: query_status
+  acceptable:
+    - skill: manage_crop_cycle
+      operation: query_cycles
+  tags:
+    - farm_status
+    - read
+
+- id: cost_summary_query_001
+  message: 这个月花了多少钱
+  expected:
+    skill: manage_cost
+    operation: query_summary
+  tags:
+    - finance
+    - read
+
+- id: worker_query_001
+  message: 当前有哪些工人
+  expected:
+    skill: manage_workers
+    operation: query_workers
+  tags:
+    - worker
+    - read
+
+- id: weather_query_001
+  message: 今天适合打药吗
+  expected:
+    skill: weather
+    operation: query_forecast
+  acceptable:
+    - skill: get_farm_status
+      operation: query_status
+  tags:
+    - weather
+    - read

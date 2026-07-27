@@ -2,15 +2,24 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { listSkills, updateSkillEnabled } from '../../api/admin';
+import {
+  evaluateSkillRouteRecallDataset,
+  listSkills,
+  previewSkillRouteRecall,
+  updateSkillEnabled,
+} from '../../api/admin';
 import SkillRegistry from './index';
 
 vi.mock('../../api/admin', () => ({
+  evaluateSkillRouteRecallDataset: vi.fn(),
   listSkills: vi.fn(),
+  previewSkillRouteRecall: vi.fn(),
   updateSkillEnabled: vi.fn(),
 }));
 
+const mockedEvaluateSkillRouteRecallDataset = vi.mocked(evaluateSkillRouteRecallDataset);
 const mockedListSkills = vi.mocked(listSkills);
+const mockedPreviewSkillRouteRecall = vi.mocked(previewSkillRouteRecall);
 const mockedUpdateSkillEnabled = vi.mocked(updateSkillEnabled);
 
 describe('SkillRegistry', () => {
@@ -85,5 +94,118 @@ describe('SkillRegistry', () => {
       });
     });
     expect(await screen.findByText('管理员手动禁用')).toBeInTheDocument();
+  });
+
+  it('支持单条业务输入召回和 JSON 测试集批量评测', async () => {
+    const user = userEvent.setup();
+    mockedListSkills.mockResolvedValueOnce({
+      total: 1,
+      summary: {
+        total: 1,
+        enabled: 1,
+        disabled: 0,
+        admin_only: 0,
+      },
+      items: [
+        {
+          name: 'manage_cost',
+          description: '管理农场账务',
+          parameters_schema: { type: 'object' },
+          status: 'active',
+          metadata: {
+            enabled: true,
+            permission_level: 'read',
+            risk_level: 'low',
+            disabled_reason: null,
+          },
+        },
+      ],
+    });
+    mockedPreviewSkillRouteRecall.mockResolvedValueOnce({
+      message: '这个月花了多少钱',
+      top_k: 3,
+      candidates: [
+        {
+          skill: 'manage_cost',
+          operation: 'query_summary',
+          score: 6.2,
+          risk: 'read',
+          operation_risk: 'read',
+          evidence: {
+            tag_hits: ['finance'],
+            intent_hits: ['query_summary'],
+            example_hits: ['这个月花了多少钱'],
+            anti_hits: [],
+            identity_hits: [],
+            score: 6.2,
+          },
+        },
+      ],
+    });
+    mockedEvaluateSkillRouteRecallDataset.mockResolvedValueOnce({
+      dataset: {
+        path: 'skill_route_cases.json',
+        format: 'json',
+        total: 6,
+      },
+      top_k: 5,
+      report: {
+        total: 6,
+        recall_at_1: 0.8,
+        recall_at_k: 1,
+        operation_recall_at_k: 0.83,
+        failures: [
+          {
+            case_id: 'debt_query_001',
+            message: '我有哪些欠款',
+            expected: {
+              skill: 'manage_cost',
+              operation: 'query_debt',
+            },
+            top_k: [
+              {
+                skill: 'get_farm_status',
+                operation: 'query_status',
+              },
+              {
+                skill: 'manage_cost_categories',
+                operation: 'query_categories',
+              },
+            ],
+            scores: {
+              get_farm_status: 2.2,
+              manage_cost_categories: 2,
+            },
+          },
+        ],
+      },
+    });
+
+    render(<SkillRegistry />);
+
+    await screen.findByText('manage_cost');
+    await user.type(screen.getByLabelText('业务输入'), '这个月花了多少钱');
+    await user.click(screen.getByRole('button', { name: '测试召回' }));
+
+    await waitFor(() => {
+      expect(mockedPreviewSkillRouteRecall).toHaveBeenCalledWith({
+        message: '这个月花了多少钱',
+        top_k: 5,
+      });
+    });
+    expect(await screen.findByText('query_summary')).toBeInTheDocument();
+    expect(screen.getByText('6.20')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '运行测试集' }));
+
+    await waitFor(() => {
+      expect(mockedEvaluateSkillRouteRecallDataset).toHaveBeenCalledWith({ top_k: 5 });
+    });
+    expect(await screen.findByText('skill_route_cases.json')).toBeInTheDocument();
+    expect(screen.getAllByText('100.0%').length).toBeGreaterThan(0);
+    expect(screen.getByText('debt_query_001')).toBeInTheDocument();
+    expect(screen.getByText('我有哪些欠款')).toBeInTheDocument();
+    expect(screen.getByText('manage_cost.query_debt')).toBeInTheDocument();
+    expect(screen.getByText('get_farm_status.query_status')).toBeInTheDocument();
   });
 });

@@ -71,6 +71,18 @@ ai:
   session_summary_debounce_minutes: 30           # 摘要成功后的防抖窗口，单位分钟。
   session_summary_max_tokens: 500                # 单次摘要输出 token 上限，用于控制工作记忆长度和成本。
 
+# Embedding 模型配置。可用 Ollama 原生 /api/embed，也可由代码扩展为其他 provider。
+embedding:
+  provider: "ollama"                 # embedding provider 标识。
+  model: "qwen3-embedding:0.6b"       # embedding 模型名称。
+  base_url: "https://ollama.example.com" # 服务根地址，不要带 endpoint。
+  endpoint: "/api/embed"             # Ollama 原生 embedding endpoint。
+  username: ""                       # Basic Auth 用户名；无鉴权时留空。
+  password: ""                       # Basic Auth 密码；真实值只放私密配置或 EMBEDDING__PASSWORD。
+  api_key: ""                        # Bearer/API-Key 模式预留。
+  dimensions: 1024                   # qwen3-embedding:0.6b 输出维度。
+  timeout_seconds: 30.0              # 单次 embedding 请求超时，单位秒。
+
 # 默认天气坐标。用户/农场没有精确位置时会作为兜底。
 weather:
   latitude: 34.26    # 纬度，默认徐州。

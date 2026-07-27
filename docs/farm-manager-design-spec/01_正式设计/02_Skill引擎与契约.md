@@ -168,7 +168,11 @@ class CreateCostRecordSkill(Skill):
 ```
 用户输入 → agent/router
   ├─ RuleIntentClassifier 提取领域/意图/风险信号
-  ├─ CandidateRetriever 从 SkillCatalog 检索候选
+  ├─ HybridOperationRetriever 做 operation 粒度多路召回
+  │   ├─ StrongRuleRecall：强领域词、operation alias、tag 保底召回
+  │   ├─ BM25Recall：字段加权词法召回，扩大候选池
+  │   └─ EmbeddingRecall：语义召回，补足短句和同义表达
+  ├─ HybridReranker 融合 BM25、embedding、规则和 anti-example penalty
   ├─ RouterPolicy 做风险裁剪和 fallback
   └─ 输出 RouterDecision(selected_tools, reason, evidence)
 
@@ -176,7 +180,17 @@ candidates → LLM.tools 参数（绑定）
 LLM 决定调用哪个 → Executor 执行
 ```
 
-候选名单会减少 LLM 的 tools schema 长度，节省 token。
+候选名单会减少 LLM 的 tools schema 长度，节省 token。Router 的召回阶段必须遵循“多路召回取并集，混合重排出 top5”的原则：BM25 和 embedding 都不能单独作为 top5 硬筛选器，避免正确 operation 在第一阶段被截断。
+
+路由优化采用测试集驱动闭环：
+
+```
+收集失败输入 → 脱敏写入 skill_route_cases.json → 标注 expected/acceptable
+  → 跑离线评测 → 诊断 strong_rule_miss / bm25_miss / embedding_miss / rerank_wrong
+  → 最小化调整 metadata、同义词、权重或阈值 → 重跑全量回归
+```
+
+详细设计见 [../../../docs/specs/2026-07-27-skill-router-hybrid-recall-eval-design.md](../../../docs/specs/2026-07-27-skill-router-hybrid-recall-eval-design.md)。
 
 ## 9. Skill 错误处理
 
@@ -232,5 +246,6 @@ CI 校验：`backend/tests/skills/test_skill_docs.py` 扫描全量 `skill.md` �
 
 - [01_Agent平台架构](./01_Agent平台架构.md)
 - [03_接口协议/04_Skill接口契约](../03_接口协议/04_Skill接口契约.md)
+- Skill Router 混合召回设计：[../../../docs/specs/2026-07-27-skill-router-hybrid-recall-eval-design.md](../../../docs/specs/2026-07-27-skill-router-hybrid-recall-eval-design.md)
 - 权威契约：[../../../.claude/rules/skill-writing.md](../../../.claude/rules/skill-writing.md)
 - 覆盖矩阵：[../../../docs/agent/skill-coverage-matrix.md](../../../docs/agent/skill-coverage-matrix.md)

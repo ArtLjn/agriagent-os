@@ -122,6 +122,20 @@ class AIConfig(BaseModel):
     session_summary_max_tokens: int = Field(default=500, gt=0)
 
 
+class EmbeddingConfig(BaseModel):
+    """Embedding 模型配置，供检索、召回评测和后续向量化任务复用。"""
+
+    provider: str = "ollama"
+    model: str = "qwen3-embedding:0.6b"
+    base_url: str = ""
+    endpoint: str = "/api/embed"
+    username: str = ""
+    password: str = ""
+    api_key: str = ""
+    dimensions: int = Field(default=1024, gt=0)
+    timeout_seconds: float = Field(default=30.0, gt=0)
+
+
 class WeatherConfig(BaseModel):
     latitude: float = 34.26
     longitude: float = 117.18
@@ -287,6 +301,7 @@ class Settings(BaseSettings):
     rag_service: RAGServiceConfig = RAGServiceConfig()
     storage: StorageConfig = StorageConfig()
     ai: AIConfig = AIConfig()
+    embedding: EmbeddingConfig = EmbeddingConfig()
     weather: WeatherConfig = WeatherConfig()
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
     rate_limiting: RateLimitConfig = RateLimitConfig()
@@ -388,6 +403,7 @@ __all__ = [
     "DataFlywheelConfig",
     "DataFlywheelStorageBackend",
     "DatabaseConfig",
+    "EmbeddingConfig",
     "LangSmithConfig",
     "MongoConfig",
     "PROJECT_ROOT",
