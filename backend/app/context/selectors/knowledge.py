@@ -1,7 +1,7 @@
 """外部知识 selector。"""
 
 from app.context.models import ContextBlock
-from app.context.rag_provider import RAGKnowledgeProvider
+from app.context.knowledge.rag import RAGKnowledgeProvider
 
 
 class KnowledgeSelector:

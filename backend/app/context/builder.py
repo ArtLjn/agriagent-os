@@ -27,17 +27,19 @@
 - ``invalidation.py``    ``invalidate_farm_context``，写操作后失效缓存
 
 RAG / 知识
-- ``rag_provider.py``    RAG provider 实现
-- ``providers/``         provider 抽象与适配
+- ``knowledge/``         外部知识 provider 子包
+  - ``rag.py``           ``RAGKnowledgeProvider`` / ``RAGUnavailableError``
 
 任务态
-- ``task_state_models.py`` Agent 任务态数据类
-- ``task_state_store.py``   Agent 任务态存储
+- ``task_state/``        Agent 任务态子包
+  - ``models.py``        ``AgentTaskState``
+  - ``store.py``         ``AgentTaskStateStore`` / ``TaskStateStatus``
 
 业务 selector / 数据源
 - ``selectors/``         各业务域 selector（Farm / Cycle / Weather / Memory ...）
 - ``sources/``           selector 共用的底层查询与策略实现
 """
+
 
 from __future__ import annotations
 
@@ -50,7 +52,7 @@ from app.context.allowlist import is_allowed_key
 from app.context.budget import TokenBudget
 from app.context.models import ContextBlock, ContextBundle
 from app.context.policy import ContextPolicy
-from app.context.providers import RAGUnavailableError
+from app.context.knowledge import RAGUnavailableError
 from app.context.selectors import (
     ConversationSelector,
     CostCategorySelector,

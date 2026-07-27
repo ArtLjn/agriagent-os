@@ -16,7 +16,7 @@ from app.application.chat.task_state_updater import (
 from app.context.builder import ContextBuilder
 from app.context.models import ContextBlock, ContextBundle
 from app.context.policy import ContextBuildRequest, ContextPolicy
-from app.context.rag_provider import RAGKnowledgeProvider
+from app.context.knowledge.rag import RAGKnowledgeProvider
 from app.context.renderer import ContextRenderer
 from app.context.selectors.knowledge import KnowledgeSelector
 from app.infra.quillrag_client import QuillRAGDocument, QuillRAGRetrieveResult
