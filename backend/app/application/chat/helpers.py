@@ -7,7 +7,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.context.runtime.invalidation import invalidate_farm_context
+from app.context.runtime import invalidate_farm_context
 from app.shared.database import SessionLocal
 from app.infra.repository_runtime import (
     get_agent_record_repository,

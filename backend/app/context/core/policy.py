@@ -4,24 +4,15 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.shared.compatibility import StrEnum
-from app.context.core.models import ContextBlock
 from app.context.sources import (
-    ConversationSelector,
-    CostCategorySelector,
-    CycleSelector,
-    FarmSelector,
+    DEPENDENCY_SELECTOR_SPECS,
     KnowledgeSelector,
     LedgerSelector,
-    MemorySelector,
-    OperationWorkOrderSelector,
-    PlantingUnitSelector,
     RetrievalSelector,
-    TaskStateSelector,
-    UnpaidLaborSummarySelector,
-    UserSettingsSelector,
     WeatherSelector,
-    WorkerSelector,
+    build_policy_base_selectors,
 )
+from app.context.core.models import ContextBlock
 from app.shared.config import settings
 
 
@@ -153,34 +144,7 @@ class ContextPolicy:
             settings.rag_service.enabled if rag_enabled is None else rag_enabled
         )
 
-    DEPENDENCY_SELECTORS = {
-        "crop_cycle": (CycleSelector, "cycle"),
-        "crop_cycles": (CycleSelector, "cycle"),
-        "active_cycles": (CycleSelector, "cycle"),
-        "farm": (FarmSelector, "farm"),
-        "planting_unit": (PlantingUnitSelector, "planting_units"),
-        "planting_units": (PlantingUnitSelector, "planting_units"),
-        "operation_work_order": (
-            OperationWorkOrderSelector,
-            "operation_work_orders",
-        ),
-        "operation_work_orders": (
-            OperationWorkOrderSelector,
-            "operation_work_orders",
-        ),
-        "recent_operations": (
-            OperationWorkOrderSelector,
-            "operation_work_orders",
-        ),
-        "worker": (WorkerSelector, "workers"),
-        "workers": (WorkerSelector, "workers"),
-        "unpaid_labor": (UnpaidLaborSummarySelector, "unpaid_labor"),
-        "unpaid_labor_summary": (UnpaidLaborSummarySelector, "unpaid_labor"),
-        "cost_category": (CostCategorySelector, "cost_categories"),
-        "cost_categories": (CostCategorySelector, "cost_categories"),
-        "weather": (WeatherSelector, "weather"),
-        "ledger": (LedgerSelector, "ledger"),
-    }
+    DEPENDENCY_SELECTORS = DEPENDENCY_SELECTOR_SPECS
 
     def resolve(self, request: ContextBuildRequest) -> ContextPolicyResult:
         """解析 Context 层、selector 和 token 预算。"""
@@ -213,14 +177,7 @@ class ContextPolicy:
 
     @staticmethod
     def _base_selectors() -> list[ContextSelector]:
-        return [
-            FarmSelector(),
-            UserSettingsSelector(),
-            CycleSelector(),
-            TaskStateSelector(),
-            MemorySelector(),
-            ConversationSelector(),
-        ]
+        return build_policy_base_selectors()
 
     def _apply_dependency_selectors(
         self,
@@ -232,7 +189,8 @@ class ContextPolicy:
             selector_spec = self.DEPENDENCY_SELECTORS.get(dependency)
             if selector_spec is None:
                 continue
-            selector_cls, block_key = selector_spec
+            selector_cls = selector_spec.selector_cls
+            block_key = selector_spec.block_key
             self._append_selector_once(selectors, selector_cls)
             dependency_map.setdefault(block_key, []).append(dependency)
         return dependency_map

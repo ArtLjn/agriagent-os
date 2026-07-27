@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.context.runtime.invalidation import invalidate_farm_context
+from app.context.runtime import invalidate_farm_context
 from app.domains.planting.cycle_models import CropCycle
 from app.domains.planting.models import (
     OperationWorkOrder,

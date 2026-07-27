@@ -4,10 +4,11 @@ from pathlib import Path
 
 
 def test_agent_task_states_has_model_and_migration() -> None:
-    model_path = Path("app/context/task_state/models.py")
+    model_path = Path("app/context/task_state.py")
     versions_dir = Path("alembic/versions")
 
     assert model_path.exists()
+    assert not Path("app/context/task_state/models.py").exists()
     migration_text = "\n".join(
         path.read_text(encoding="utf-8") for path in versions_dir.glob("*.py")
     )

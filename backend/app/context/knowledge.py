@@ -1,8 +1,10 @@
-"""外部 RAG 只读知识 Provider。"""
+"""Context 外部只读知识。"""
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
+from types import ModuleType
 from typing import Any, Protocol
 
 from app.context.core.models import ContextBlock
@@ -178,9 +180,21 @@ def _compact_text(text: str, *, limit: int) -> str:
     return compact[: limit - 1].rstrip() + "…"
 
 
+def _install_legacy_rag_module() -> None:
+    module = ModuleType(f"{__name__}.rag")
+    module.__doc__ = "兼容入口；实际维护点是 app.context.knowledge。"
+    for exported_name in __all__:
+        setattr(module, exported_name, globals()[exported_name])
+    module.__all__ = list(__all__)
+    sys.modules[module.__name__] = module
+    setattr(sys.modules[__name__], "rag", module)
+
+
 __all__ = [
     "RAGKnowledgeProvider",
     "RAGKnowledgeSelection",
-    "RAGUnavailableError",
     "RAGRetrieveClient",
+    "RAGUnavailableError",
 ]
+
+_install_legacy_rag_module()

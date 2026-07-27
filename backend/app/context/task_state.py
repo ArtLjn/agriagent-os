@@ -1,16 +1,40 @@
-"""Task Context 最小持久化 store。"""
+"""Agent Task Context 持久化模型与存储。"""
 
 from __future__ import annotations
 
+import sys
 import uuid
 from datetime import datetime, timedelta
+from types import ModuleType
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, or_
 from sqlalchemy.orm import Session
 
-from app.context.task_state.models import AgentTaskState
 from app.shared.compatibility import StrEnum
+from app.shared.database import Base
+
+
+class AgentTaskState(Base):
+    """每个会话最近一个可恢复任务状态。"""
+
+    __tablename__ = "agent_task_states"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(String(64), nullable=False, unique=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id"), nullable=False, index=True)
+    user_id = Column(String(64), nullable=False, index=True)
+    session_id = Column(String(64), nullable=False, index=True)
+    task_type = Column(String(64), nullable=False, index=True)
+    goal = Column(Text, nullable=False)
+    entities_json = Column(JSON, nullable=False, default=dict)
+    observations_json = Column(JSON, nullable=False, default=list)
+    missing_information_json = Column(JSON, nullable=False, default=list)
+    next_action = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="active", index=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class TaskStateStatus(StrEnum):
@@ -172,4 +196,25 @@ class AgentTaskStateStore:
         return value
 
 
-__all__ = ["AgentTaskStateStore", "TaskStateStatus"]
+def _install_legacy_task_state_modules() -> None:
+    legacy_modules = {
+        "models": ("AgentTaskState",),
+        "store": ("AgentTaskStateStore", "TaskStateStatus"),
+    }
+    for module_name, exported_names in legacy_modules.items():
+        module = ModuleType(f"{__name__}.{module_name}")
+        module.__doc__ = "兼容入口；实际维护点是 app.context.task_state。"
+        for exported_name in exported_names:
+            setattr(module, exported_name, globals()[exported_name])
+        module.__all__ = list(exported_names)
+        sys.modules[module.__name__] = module
+        setattr(sys.modules[__name__], module_name, module)
+
+
+__all__ = [
+    "AgentTaskState",
+    "AgentTaskStateStore",
+    "TaskStateStatus",
+]
+
+_install_legacy_task_state_modules()

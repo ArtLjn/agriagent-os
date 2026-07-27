@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from app.context.task_state.store import AgentTaskStateStore, TaskStateStatus
+from app.context.task_state import AgentTaskStateStore, TaskStateStatus
 
 
 @dataclass(frozen=True)
