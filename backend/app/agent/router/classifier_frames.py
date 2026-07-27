@@ -425,7 +425,7 @@ def build_manage_cost_category_frame(action: str) -> IntentFrame:
     )
 
 
-def build_manage_planting_unit_frame(action: str) -> IntentFrame:
+def build_manage_planting_unit_frame(params_hint: dict) -> IntentFrame:
     return IntentFrame(
         domain="farm",
         intent="manage_planting_units",
@@ -436,7 +436,7 @@ def build_manage_planting_unit_frame(action: str) -> IntentFrame:
         operation="manage_units",
         operation_hint="manage_units",
         confidence=0.8,
-        params_hint={"action": action},
+        params_hint=params_hint,
         requires_confirmation=True,
     )
 

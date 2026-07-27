@@ -84,6 +84,8 @@ def _build_pending_execution_args(
         _normalize_settle_labor_payment_args(execution_args, original_input)
     if name == "manage_workers":
         _fill_manage_workers_target_args(execution_args, farm_id, original_input)
+    if name == "manage_planting_units":
+        _fill_manage_planting_unit_context_args(execution_args, farm_id)
     return execution_args
 
 
@@ -343,6 +345,70 @@ def _needs_debt_direction_clarification(
     if match:
         return counterparty or match.group("name")
     return None
+
+
+def _misrouted_crop_area_to_land_message(
+    *,
+    name: str,
+    execution_args: dict,
+    original_input: str,
+) -> str:
+    if name != "manage_crop_cycle":
+        return ""
+    if execution_args.get("operation") != "update_cycle":
+        return ""
+    if execution_args.get("area") in (None, ""):
+        return ""
+    if not _looks_like_land_creation(original_input):
+        return ""
+    return (
+        "这句话是在创建种植单元或地块，不是修改茬口总面积。"
+        "请改用 manage_planting_units，并补充种植单元名称；"
+        "如果要绑定当前茬口，请带上 cycle_id 或当前茬口引用。"
+    )
+
+
+def _fill_manage_planting_unit_context_args(args: dict, farm_id: int) -> None:
+    if args.get("operation") != "manage_units":
+        return
+    if args.get("action") != "create":
+        return
+    if args.get("cycle_id") not in (None, ""):
+        return
+    if not _has_cycle_reference(args):
+        return
+    db = SessionLocal()
+    try:
+        cycle = _resolve_pending_crop_cycle(db, args=args, farm_id=farm_id)
+        if cycle is not None:
+            args["cycle_id"] = cycle.id
+    except Exception as exc:
+        logger.warning(
+            "构建 manage_planting_units pending context 失败 | farm_id=%s | error=%s",
+            farm_id,
+            exc,
+        )
+    finally:
+        db.close()
+
+
+def _has_cycle_reference(args: dict) -> bool:
+    return bool(
+        args.get("cycle_ref") == "current"
+        or _clean_text(args.get("crop_name"))
+        or _clean_text(args.get("cycle_name"))
+    )
+
+
+def _looks_like_land_creation(text: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:创建|新增|新建|建).{0,12}(?:\d+(?:\.\d+)?\s*亩)?"
+            r"(?:地|地块|大棚|棚区|种植单元)"
+            r"|绑定.{0,12}(?:茬口|地|地块|大棚|棚区|种植单元)",
+            text,
+        )
+    )
 
 
 def _fill_update_crop_cycle_context_args(args: dict, farm_id: int) -> None:

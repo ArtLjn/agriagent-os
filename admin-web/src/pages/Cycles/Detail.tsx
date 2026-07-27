@@ -61,7 +61,19 @@ export default function CycleDetail() {
       <Card style={cardStyle}>
         <Descriptions column={2}>
           <Descriptions.Item label="开始日期">{cycle.start_date}</Descriptions.Item>
-          <Descriptions.Item label="地块">{cycle.field_name || '--'}</Descriptions.Item>
+          <Descriptions.Item label="地块">
+            {cycle.field_name ? (
+              <Button
+                type="link"
+                size="small"
+                aria-label={`查看${cycle.field_name}的种植单元面积`}
+                onClick={() => navigate(`/operations?tab=planting&cycle_id=${cycle.id}`)}
+                style={{ height: 'auto', padding: 0 }}
+              >
+                {cycle.field_name}
+              </Button>
+            ) : '--'}
+          </Descriptions.Item>
           <Descriptions.Item label="状态">
             <Tag color={cycle.status === 'active' ? 'green' : 'default'}>{cycle.status === 'active' ? '进行中' : cycle.status}</Tag>
           </Descriptions.Item>

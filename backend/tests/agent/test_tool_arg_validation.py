@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from langchain_core.messages import ToolMessage
 
 from app.agent.runtime.tool_arg_validation import validate_before_pending
+from app.agent.runtime import tool_pending_args as pending_args
 from app.agent.runtime.tool_metadata import _PermissionDecision
 from app.agent.runtime.tool_pending import (
     _pending_action_message,
@@ -174,3 +175,75 @@ def test_pending_action_message_does_not_store_when_contract_blocked(monkeypatch
     assert isinstance(message, ToolMessage)
     assert "缺少必填字段：category" in message.content
     store_pending_action.assert_not_called()
+
+
+def test_pending_action_message_blocks_crop_area_update_for_land_creation(
+    monkeypatch,
+):
+    store_pending_action = MagicMock()
+    monkeypatch.setattr(
+        "app.agent.runtime.tool_pending._store_pending_action_message",
+        store_pending_action,
+    )
+
+    message = _pending_action_message(
+        state={"session_id": "session-1"},
+        name="manage_crop_cycle",
+        args={
+            "operation": "update_cycle",
+            "cycle_name": "夏季西瓜",
+            "area": "20",
+        },
+        farm_id=1,
+        original_input="帮我给这个茬口创建20亩地",
+        tool_call_id="call-1",
+        permission_decision=_PermissionDecision(
+            permission_level="write_confirm",
+            requires_confirmation=True,
+            capability="manage_crop_cycle",
+            operation="update_cycle",
+            operation_risk="write_confirm",
+        ),
+        collector=MagicMock(),
+        logger=MagicMock(),
+    )
+
+    assert isinstance(message, ToolMessage)
+    assert "创建种植单元" in message.content
+    assert "manage_planting_units" in message.content
+    store_pending_action.assert_not_called()
+
+
+def test_pending_execution_args_resolve_current_cycle_for_planting_unit(
+    monkeypatch,
+):
+    class DummyDb:
+        def close(self):
+            return None
+
+    db = DummyDb()
+    monkeypatch.setattr(pending_args, "SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        pending_args,
+        "_resolve_pending_crop_cycle",
+        lambda db_arg, *, args, farm_id: (
+            SimpleNamespace(id=7)
+            if db_arg is db and farm_id == 1 and args.get("cycle_ref") == "current"
+            else None
+        ),
+    )
+
+    result = pending_args._build_pending_execution_args(
+        "manage_planting_units",
+        {
+            "operation": "manage_units",
+            "action": "create",
+            "area_mu": 20,
+            "cycle_ref": "current",
+        },
+        farm_id=1,
+        original_input="帮我给这个茬口创建20亩地",
+    )
+
+    assert result["cycle_id"] == 7
+    assert result["area_mu"] == 20

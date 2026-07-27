@@ -87,6 +87,69 @@ def test_explicit_create_crop_cycle_intent_routes_to_write_tool() -> None:
     assert decision.frames[0].risk == "write_confirm"
 
 
+def test_create_land_and_bind_crop_cycle_routes_to_planting_units() -> None:
+    tools = [
+        _tool("get_farm_status"),
+        _tool("manage_crop_cycle"),
+        _tool("manage_planting_units"),
+    ]
+
+    decision = SkillRouter().route("那你帮我创建20亩地绑定西瓜茬口", tools)
+
+    assert decision.selected_tools == ["manage_planting_units"]
+    assert decision.frames[0].intent == "manage_planting_units"
+    assert decision.frames[0].operation == "manage_units"
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].params_hint == {
+        "operation": "manage_units",
+        "action": "create",
+        "area_mu": 20,
+        "crop_name": "西瓜",
+    }
+
+
+def test_create_land_for_current_crop_cycle_routes_to_planting_units() -> None:
+    tools = [
+        _tool("get_farm_status"),
+        _tool("manage_crop_cycle"),
+        _tool("manage_planting_units"),
+    ]
+
+    decision = SkillRouter().route("帮我给这个茬口创建20亩地", tools)
+
+    assert decision.selected_tools == ["manage_planting_units"]
+    assert decision.frames[0].intent == "manage_planting_units"
+    assert decision.frames[0].operation == "manage_units"
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].params_hint == {
+        "operation": "manage_units",
+        "action": "create",
+        "area_mu": 20,
+        "cycle_ref": "current",
+    }
+
+
+def test_ordered_land_names_continue_planting_unit_binding_task() -> None:
+    tools = [
+        _tool("get_farm_status"),
+        _tool("manage_cost"),
+        _tool("manage_crop_cycle"),
+        _tool("manage_planting_units"),
+    ]
+
+    decision = SkillRouter().route("按照1号 2号顺序", tools)
+
+    assert decision.selected_tools == ["manage_planting_units"]
+    assert decision.frames[0].intent == "manage_planting_units"
+    assert decision.frames[0].operation == "manage_units"
+    assert decision.frames[0].risk == "write_confirm"
+    assert decision.frames[0].params_hint == {
+        "operation": "manage_units",
+        "action": "create",
+        "unit_names": ["1号", "2号"],
+    }
+
+
 @pytest.mark.parametrize("message", ["黑布林怎么种", "怎么种小麦", "种小麦要注意什么"])
 def test_planting_advice_keeps_read_tool(message: str) -> None:
     tools = [_tool("get_farm_status"), _tool("manage_crop_cycle")]

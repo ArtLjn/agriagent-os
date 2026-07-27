@@ -37,6 +37,7 @@ import {
   TeamOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useSearchParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { PageShell, Toolbar, MetricCard } from '../../components/PageShell';
 import { cardStyle, palette } from '../../styles/theme';
@@ -190,6 +191,25 @@ const defaultCategoryIcons = [
   { value: 'other', label: '其他' },
 ];
 
+const operationTabKeys = ['smart', 'planting', 'labor', 'finance', 'settings'] as const;
+type OperationTabKey = typeof operationTabKeys[number];
+
+function isOperationTabKey(value: string | null): value is OperationTabKey {
+  return operationTabKeys.includes(value as OperationTabKey);
+}
+
+function getInitialOperationTab(searchParams: URLSearchParams): OperationTabKey {
+  const tab = searchParams.get('tab');
+  return isOperationTabKey(tab) ? tab : 'smart';
+}
+
+function getCycleIdFromSearchParams(searchParams: URLSearchParams) {
+  const rawCycleId = searchParams.get('cycle_id');
+  if (!rawCycleId) return undefined;
+  const cycleId = Number(rawCycleId);
+  return Number.isInteger(cycleId) && cycleId > 0 ? cycleId : undefined;
+}
+
 const previewPanelStyle = {
   minHeight: 286,
   padding: 16,
@@ -231,6 +251,16 @@ function useCycles() {
 
 export default function Operations() {
   const { cycles } = useCycles();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = getInitialOperationTab(searchParams);
+  const cycleIdFromQuery = getCycleIdFromSearchParams(searchParams);
+
+  const handleTabChange = (key: string) => {
+    if (!isOperationTabKey(key)) return;
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('tab', key);
+    setSearchParams(nextSearchParams);
+  };
 
   return (
     <PageShell
@@ -238,6 +268,8 @@ export default function Operations() {
       description="把移动端和业务 API 的关键能力集中在一个管理端页面中，便于创建数据、联动调试和排查上下文。"
     >
       <Tabs
+        activeKey={activeTab}
+        onChange={handleTabChange}
         items={[
           {
             key: 'smart',
@@ -247,7 +279,7 @@ export default function Operations() {
           {
             key: 'planting',
             label: <span><FieldTimeOutlined /> 种植与作业</span>,
-            children: <PlantingPanel cycles={cycles} />,
+            children: <PlantingPanel cycles={cycles} initialCycleId={cycleIdFromQuery} />,
           },
           {
             key: 'labor',
@@ -510,13 +542,13 @@ function SmartCreatePanel() {
   );
 }
 
-function PlantingPanel({ cycles }: { cycles: CropCycleListItem[] }) {
+function PlantingPanel({ cycles, initialCycleId }: { cycles: CropCycleListItem[]; initialCycleId?: number }) {
   const [units, setUnits] = useState<PlantingUnit[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [workOrders, setWorkOrders] = useState<OperationWorkOrder[]>([]);
   const [recent, setRecent] = useState<RecentOperation[]>([]);
   const [operationOptions, setOperationOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [selectedCycle, setSelectedCycle] = useState<number | undefined>();
+  const [selectedCycle, setSelectedCycle] = useState<number | undefined>(initialCycleId);
   const [loading, setLoading] = useState(false);
   const [unitOpen, setUnitOpen] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
@@ -550,6 +582,10 @@ function PlantingPanel({ cycles }: { cycles: CropCycleListItem[] }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    setSelectedCycle(initialCycleId);
+  }, [initialCycleId]);
 
   const createUnit = async () => {
     const values = await unitForm.validateFields();

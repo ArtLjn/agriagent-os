@@ -7,6 +7,7 @@ from langchain_core.tools import BaseTool
 
 from app.agent.router.catalog import SkillCatalog
 from app.agent.router.candidate_retriever import CandidateRetriever
+from app.agent.router import classifier_signals as signals
 from app.agent.router.classifier import RuleIntentClassifier
 from app.agent.router.intent import IntentType, classify_intent
 from app.agent.router.models import (
@@ -87,10 +88,11 @@ class SkillRouter:
             catalog.candidates(),
             limit=self._budget.max_retrieved_tools_default,
         )
-        if not retrieved.selected_names:
+        selected_names = self._filter_retrieved_names(message, retrieved.selected_names)
+        if not selected_names:
             return []
         frames: list[IntentFrame] = []
-        for name in retrieved.selected_names:
+        for name in selected_names:
             candidate = catalog.get(name)
             operation = self._read_operation_for(candidate)
             frames.append(
@@ -112,6 +114,16 @@ class SkillRouter:
                 )
             )
         return frames
+
+    @staticmethod
+    def _filter_retrieved_names(message: str, names: list[str]) -> list[str]:
+        if (
+            "manage_crop_cycle" not in names
+            or "manage_planting_units" not in names
+            or signals.looks_like_planting_unit_query(message)
+        ):
+            return names
+        return [name for name in names if name != "manage_planting_units"]
 
     def _retrieved_write_frames(
         self,

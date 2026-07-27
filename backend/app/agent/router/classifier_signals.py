@@ -78,12 +78,18 @@ def looks_like_manage_cost_category(message: str) -> bool:
 def looks_like_manage_planting_unit(message: str) -> bool:
     if looks_like_planting_unit_query(message):
         return False
-    if not has_planting_unit_target(message):
+    if not (
+        has_planting_unit_target(message)
+        or looks_like_create_planting_unit_for_crop_cycle(message)
+        or looks_like_ordered_planting_unit_names(message)
+    ):
         return False
     return (
         looks_like_create_action(message)
         or looks_like_update_planting_unit(message)
         or looks_like_delete_planting_unit(message)
+        or looks_like_create_planting_unit_for_crop_cycle(message)
+        or looks_like_ordered_planting_unit_names(message)
     )
 
 
@@ -97,6 +103,8 @@ def looks_like_create_crop_cycle(message: str) -> bool:
     if has_any(message, hints.READ_BLOCKERS):
         return False
     if looks_like_planting_advice(message):
+        return False
+    if looks_like_create_planting_unit_for_crop_cycle(message):
         return False
     if "茬口" in message and looks_like_create_action(message):
         return True
@@ -269,10 +277,26 @@ def looks_like_crop_cycle_detail_query(message: str) -> bool:
     )
 
 
+def looks_like_crop_cycle_area_query(message: str) -> bool:
+    if looks_like_planting_unit_query(message):
+        return False
+    if not has_any(message, hints.QUERY_HINTS):
+        return False
+    if not re.search(r"(?:面积|多少\s*亩|几\s*亩)", message):
+        return False
+    return "茬口" in message
+
+
 def looks_like_planting_unit_query(message: str) -> bool:
-    return has_any(message, hints.PLANTING_UNIT_HINTS) and has_any(
-        message,
-        hints.QUERY_HINTS,
+    if not has_any(message, hints.QUERY_HINTS):
+        return False
+    return has_any(message, hints.PLANTING_UNIT_HINTS) or bool(
+        re.search(
+            r"[一二三四五六七八九十\d]+\s*号棚"
+            r"|每个棚"
+            r"|(?:地块|大棚|棚区|种植单元|区域)",
+            message,
+        )
     )
 
 
@@ -376,11 +400,32 @@ def has_planting_unit_target(message: str) -> bool:
     return bool(
         re.search(
             r"[一二三四五六七八九十\d]+\s*号棚"
+            r"|[一二三四五六七八九十\d]+\s*号地块"
+            r"|[一二三四五六七八九十\d]+\s*号地"
             r"|[A-Za-z]\s*区"
+            r"|\d+(?:\.\d+)?\s*亩地"
             r"|(?:地块|大棚|棚区|种植单元)\s*[\u4e00-\u9fa5A-Za-z0-9]{1,8}",
             message,
         )
     )
+
+
+def looks_like_create_planting_unit_for_crop_cycle(message: str) -> bool:
+    if has_any(message, hints.READ_BLOCKERS):
+        return False
+    has_cycle_ref = "茬口" in message
+    has_unit_create = looks_like_create_action(message) and bool(
+        re.search(r"\d+(?:\.\d+)?\s*亩地|(?:地块|大棚|棚区|种植单元)", message)
+    )
+    has_bind = "绑定" in message and bool(
+        re.search(r"茬口|(?:地块|大棚|棚区|种植单元)", message)
+    )
+    return has_cycle_ref and (has_unit_create or has_bind)
+
+
+def looks_like_ordered_planting_unit_names(message: str) -> bool:
+    names = re.findall(r"[一二三四五六七八九十\d]+\s*号(?:棚|地块|地)?", message)
+    return len(names) >= 2 and has_any(message, ("顺序", "按", "按照", "依次"))
 
 
 def planting_unit_action(message: str) -> str:

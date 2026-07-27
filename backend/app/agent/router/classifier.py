@@ -42,6 +42,8 @@ class RuleIntentClassifier:
             return [frame_builders.build_query_crop_templates_frame()]
         if signals.looks_like_planting_unit_query(message):
             return [frame_builders.build_query_planting_units_frame()]
+        if signals.looks_like_crop_cycle_area_query(message):
+            return [frame_builders.build_query_crop_cycles_frame()]
         if signals.looks_like_crop_cycle_list_query(message):
             return [frame_builders.build_query_crop_cycles_frame()]
         if signals.looks_like_crop_cycle_detail_query(message):
@@ -111,7 +113,9 @@ class RuleIntentClassifier:
             intent_frames.append(frame_builders.build_settle_debt_frame())
         if signals.looks_like_settle_labor_payment(message):
             params = extractors.extract_labor_payment_params(message)
-            intent_frames.append(frame_builders.build_settle_labor_payment_frame(params))
+            intent_frames.append(
+                frame_builders.build_settle_labor_payment_frame(params)
+            )
         if signals.looks_like_manage_wage(message):
             params = extractors.extract_wage_params(message)
             intent_frames.append(frame_builders.build_manage_wage_frame(params))
@@ -119,15 +123,20 @@ class RuleIntentClassifier:
             intent_frames.append(frame_builders.build_update_user_settings_frame())
         if signals.looks_like_manage_cost_category(message):
             action = signals.cost_category_action(message)
-            intent_frames.append(frame_builders.build_manage_cost_category_frame(action))
+            intent_frames.append(
+                frame_builders.build_manage_cost_category_frame(action)
+            )
         if signals.looks_like_manage_planting_unit(message):
             action = signals.planting_unit_action(message)
+            params = extractors.extract_planting_unit_params(message, action)
             intent_frames.append(
-                frame_builders.build_manage_planting_unit_frame(action)
+                frame_builders.build_manage_planting_unit_frame(params)
             )
         if signals.looks_like_incomplete_farm_labor_work(message):
             evidence = extractors.extract_incomplete_farm_labor_evidence(message)
-            intent_frames.append(frame_builders.build_clarify_farm_labor_frame(evidence))
+            intent_frames.append(
+                frame_builders.build_clarify_farm_labor_frame(evidence)
+            )
         if signals.looks_like_create_work_order(message):
             intent_frames.append(
                 self._create_work_order_frame(message, existing_frames + intent_frames)

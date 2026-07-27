@@ -90,6 +90,68 @@ def extract_work_order_params(message: str) -> dict:
     return params
 
 
+def extract_planting_unit_params(message: str, action: str) -> dict:
+    params: dict = {"operation": "manage_units", "action": action}
+    area_mu = extract_area_mu(message)
+    unit_names = extract_ordered_unit_names(message)
+    crop_name = extract_bound_crop_name(message)
+    if area_mu is not None:
+        params["area_mu"] = area_mu
+    if len(unit_names) == 1:
+        params["name"] = unit_names[0]
+    elif len(unit_names) > 1:
+        params["unit_names"] = unit_names
+    if crop_name:
+        params["crop_name"] = crop_name
+    if "这个茬口" in message or "该茬口" in message:
+        params["cycle_ref"] = "current"
+    return params
+
+
+def extract_area_mu(message: str) -> int | float | None:
+    match = re.search(r"(?P<area>\d+(?:\.\d+)?)\s*亩", message)
+    if not match:
+        return None
+    value = float(match.group("area"))
+    return int(value) if value.is_integer() else value
+
+
+def extract_ordered_unit_names(message: str) -> list[str]:
+    names = [
+        item.replace(" ", "")
+        for item in re.findall(
+            r"[一二三四五六七八九十\d]+\s*号(?:棚|地块|地)?", message
+        )
+    ]
+    return _merge_unique_names(names)
+
+
+def extract_bound_crop_name(message: str) -> str | None:
+    patterns = (
+        r"绑定(?P<crop>[\u4e00-\u9fa5A-Za-z0-9]{1,12})茬口",
+        r"给(?P<crop>[\u4e00-\u9fa5A-Za-z0-9]{1,12})茬口",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, message)
+        if not match:
+            continue
+        crop = match.group("crop").strip()
+        if crop not in {"这个", "该", "当前"}:
+            return crop
+    return None
+
+
+def _merge_unique_names(names: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        if name in seen:
+            continue
+        merged.append(name)
+        seen.add(name)
+    return merged
+
+
 def extract_work_order_evidence(message: str) -> dict:
     return build_farm_labor_evidence(
         worker=extract_worker_name(message),

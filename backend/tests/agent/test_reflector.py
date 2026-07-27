@@ -478,6 +478,28 @@ def test_check_tool_result_final_contradiction_allows_plan_advice_numbers() -> N
     assert result.decision == ReflectionDecision.PASS
 
 
+def test_check_tool_result_final_contradiction_allows_area_clarification() -> None:
+    tool_message = ToolMessage(
+        content=(
+            "【农场现状】 茬口：夏季西瓜(播种育苗期(阶段至2026-08-17)) "
+            "欠账：购买大棚膜 5000元(已到期) 本月花费：5000元 "
+            "天气：今天晴35°/明天晴35°/后天晴36°"
+        ),
+        tool_call_id="tc-status",
+    )
+
+    result = check_tool_result_final_contradiction(
+        tool_messages=[tool_message],
+        final_text=(
+            "根据目前的记录，系统里还没有录入夏季西瓜的**种植面积**。\n\n"
+            "为了帮你规划后续的豆角种植，我们需要确认这块“默认地块”的具体大小。"
+            "你是打算按**1亩**来规划，还是有具体的面积数值？告诉我后，我就可以把这两个茬口关联起来啦。"
+        ),
+    )
+
+    assert result.decision == ReflectionDecision.PASS
+
+
 def test_reflector_service_passes_valid_pending_plan() -> None:
     service = ReflectorService(policy=ReflectionPolicy(enabled=True))
     steps = [

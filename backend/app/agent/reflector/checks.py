@@ -57,6 +57,7 @@ _REQUIRED_TOOL_CHECK = "required_tool_missing"
 _NO_TOOL_WRITE_SUCCESS_CHECK = "no_tool_write_success_claim"
 _NO_TOOL_NEEDED_HINTS = ("不需要调用工具", "无需调用工具", "可以直接聊", "直接聊")
 _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9.])\d+(?:\.\d+)?(?![A-Za-z0-9.])")
+_CLAUSE_SPLIT_RE = re.compile(r"[。！？；;，,\n]+")
 _WRITE_SUCCESS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("已为您记录", re.compile(r"已为(?:你|您)?记录")),
     (
@@ -377,7 +378,7 @@ def check_tool_result_final_contradiction(
             checks=[_TOOL_CONCLUSION_CHECK],
         )
     tool_numbers = _extract_numbers_from_messages(tool_messages)
-    final_numbers = _extract_numbers(final_text)
+    final_numbers = _extract_asserted_numbers(final_text)
     if not tool_numbers or not final_numbers:
         return ReflectionResult.passed(
             ReflectionTrigger.POST_TOOL_RESULT,
@@ -450,6 +451,21 @@ def _extract_numbers(text: str) -> set[Decimal]:
         )
         if number is not None
     }
+
+
+def _extract_asserted_numbers(text: str) -> set[Decimal]:
+    numbers: set[Decimal] = set()
+    for clause in _business_fact_clauses(text):
+        numbers.update(_extract_numbers(clause))
+    return numbers
+
+
+def _business_fact_clauses(text: str) -> list[str]:
+    return [
+        clause.strip()
+        for clause in _CLAUSE_SPLIT_RE.split(text)
+        if _looks_like_business_fact(clause)
+    ]
 
 
 def _contains_any(text: str, hints: Iterable[str]) -> bool:

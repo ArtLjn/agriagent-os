@@ -16,6 +16,7 @@ from app.agent.runtime.tool_pending_args import (
     _ambiguous_debt_direction_message,
     _build_pending_confirmation_args,
     _build_pending_execution_args,
+    _misrouted_crop_area_to_land_message,
     _needs_debt_direction_clarification,
 )
 from app.agent.state import AgentState
@@ -662,11 +663,52 @@ def _ambiguous_pending_message(
     permission_decision: _PermissionDecision,
     collector,
 ) -> ToolMessage | None:
+    misrouted_area_message = _misrouted_crop_area_to_land_message(
+        name=name,
+        execution_args=execution_args,
+        original_input=original_input,
+    )
+    if misrouted_area_message:
+        collector.record(
+            node_type="skill_call",
+            node_name=name,
+            input_data=execution_args,
+            output_data={
+                "status": "contract_blocked",
+                "reason": "crop_area_update_used_for_land_creation",
+                **_permission_trace_output(permission_decision),
+            },
+            duration_ms=0,
+        )
+        return ToolMessage(
+            content=misrouted_area_message,
+            tool_call_id=tool_call_id,
+        )
+
     ambiguous_debt_name = _needs_debt_direction_clarification(
         name, execution_args, original_input
     )
     if not ambiguous_debt_name:
         return None
+    return _ambiguous_debt_pending_message(
+        name=name,
+        execution_args=execution_args,
+        ambiguous_debt_name=ambiguous_debt_name,
+        tool_call_id=tool_call_id,
+        permission_decision=permission_decision,
+        collector=collector,
+    )
+
+
+def _ambiguous_debt_pending_message(
+    *,
+    name: str,
+    execution_args: dict,
+    ambiguous_debt_name: str,
+    tool_call_id: str,
+    permission_decision: _PermissionDecision,
+    collector,
+) -> ToolMessage:
     content = _ambiguous_debt_direction_message(
         ambiguous_debt_name,
         execution_args,
