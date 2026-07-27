@@ -7,7 +7,7 @@ from datetime import date
 
 from app.prompt.cache import get_farm_ctx_cache
 from app.agent.router.tool_selector import ToolSelectionResult
-from app.context.models import ContextBundle
+from app.context.core.models import ContextBundle
 from app.shared.database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ async def _get_runtime_context_bundle(
         db = SessionLocal()
         try:
             from app.context.builder import ContextBuilder
-            from app.context.policy import ContextBuildRequest
+            from app.context.core.policy import ContextBuildRequest
 
             memory_context = None
             if user_id:

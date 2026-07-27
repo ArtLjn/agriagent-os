@@ -1,6 +1,6 @@
 """Context 缓存失效 helper。"""
 
-from app.context.cache import get_farm_ctx_cache, get_prompt_cache
+from app.context.runtime.cache import get_farm_ctx_cache, get_prompt_cache
 
 
 def invalidate_farm_context(farm_id: int) -> dict[str, int | bool]:

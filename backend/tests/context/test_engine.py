@@ -3,9 +3,9 @@
 import pytest
 
 from app.context import ContextBuilder
-from app.context.models import ContextBlock, ContextBundle
-from app.context.policy import ContextBuildRequest, ContextPolicy
-from app.context.renderer import ContextRenderer
+from app.context.core.models import ContextBlock, ContextBundle
+from app.context.core.policy import ContextBuildRequest, ContextPolicy
+from app.context.pipeline.renderer import ContextRenderer
 
 pytestmark = pytest.mark.no_db
 

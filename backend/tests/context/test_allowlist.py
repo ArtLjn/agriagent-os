@@ -1,7 +1,7 @@
 # backend/tests/context/test_allowlist.py
 """ContextBundle 白名单契约测试。"""
 
-from app.context.allowlist import (
+from app.context.pipeline.allowlist import (
     ALLOWED_CONTEXT_KEYS,
     FORBIDDEN_CONTEXT_KEYS,
     is_allowed_key,

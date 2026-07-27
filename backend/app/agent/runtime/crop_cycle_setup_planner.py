@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from app.context.models import ContextBundle
+from app.context.core.models import ContextBundle
 
 _CROP_VARIETY_RE = re.compile(
     r"(?<!\d)([A-Za-z]*\d+[A-Za-z0-9-]*)(?!\s*(?:亩|元|块|天|号|年|月|日))"

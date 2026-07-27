@@ -1,7 +1,7 @@
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
 
-from app.context.invalidation import invalidate_farm_context
+from app.context.runtime.invalidation import invalidate_farm_context
 from app.domains.planting.cycle_models import CropCycle
 from app.domains.planting.log_models import FarmLog
 from app.domains.planting.log_schemas import FarmLogCreate

@@ -3,8 +3,8 @@
 import pytest
 
 from app.context.builder import ContextBuilder
-from app.context.models import ContextBundle
-from app.context.renderer import ContextRenderer
+from app.context.core.models import ContextBundle
+from app.context.pipeline.renderer import ContextRenderer
 from app.context.knowledge.rag import RAGKnowledgeProvider
 from app.context.selectors.knowledge import KnowledgeSelector
 from app.infra.quillrag_client import QuillRAGDocument, QuillRAGRetrieveResult

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.shared.compatibility import StrEnum
-from app.context.models import ContextBlock
+from app.context.core.models import ContextBlock
 from app.context.sources import (
     ConversationSelector,
     CostCategorySelector,

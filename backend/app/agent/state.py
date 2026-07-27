@@ -1,7 +1,7 @@
 """Agent 状态定义。"""
 
 from app.agent.router import RouterDecision
-from app.context.models import ContextBundle
+from app.context.core.models import ContextBundle
 from langchain_core.messages import BaseMessage
 from typing_extensions import NotRequired, TypedDict
 

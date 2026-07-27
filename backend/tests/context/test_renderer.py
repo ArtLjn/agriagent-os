@@ -1,7 +1,7 @@
 """Context 分区渲染测试。"""
 
-from app.context.models import ContextBlock, ContextBundle
-from app.context.renderer import ContextRenderer
+from app.context.core.models import ContextBlock, ContextBundle
+from app.context.pipeline.renderer import ContextRenderer
 
 
 def _block(

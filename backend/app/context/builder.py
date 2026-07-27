@@ -4,41 +4,40 @@
 
 目录导航
 --------
-``app/context/`` 下文件分工：
+``app/context/`` 顶层只有本文件，其他按职责收到子包：
 
-入口与契约
 - ``builder.py``         本文件，对外唯一入口（``ContextBuilder``）
-- ``models.py``          ``ContextBlock`` / ``ContextBundle`` / ``estimate_tokens``
-- ``policy.py``          ``ContextPolicy`` / ``ContextBuildRequest`` / ``ContextPolicyResult`` / ``ContextLayer``
-- ``document.py``        ``ContextDocument`` / ``ContextSection``（prompt 文档结构）
-- ``renderer.py``        ``ContextRenderer``（Bundle → prompt 文本）
-- ``registry.py``        Block 注册表与 ``ContextBlockSpec`` / ``ContextCategory``
 
-预算与裁剪
-- ``budget.py``          ``TokenBudget``，按优先级裁剪到预算内
-- ``compression.py``     Block 压缩与 tool result 紧凑化（顶层入口）
-- ``compressors/``       具体压缩策略实现
-- ``allowlist.py``       Block key 白名单过滤（``is_allowed_key``）
+- ``core/``              核心数据契约
+  - ``models.py``        ``ContextBlock`` / ``ContextBundle`` / ``estimate_tokens``
+  - ``policy.py``        ``ContextPolicy`` / ``ContextBuildRequest`` / ``ContextPolicyResult`` / ``ContextLayer``
+  - ``document.py``      ``ContextDocument`` / ``ContextSection``（prompt 文档结构）
+  - ``registry.py``      Block 注册表与 ``ContextBlockSpec`` / ``ContextCategory``
 
-观测与缓存
-- ``trace.py``           构建 trace payload，供可观测平台消费
-- ``cache.py``           ContextBundle 缓存
-- ``preload.py``         并行预热 selector / tool 缓存
-- ``invalidation.py``    ``invalidate_farm_context``，写操作后失效缓存
+- ``pipeline/``          构建流水线（预算 / 压缩 / 白名单 / 渲染）
+  - ``budget.py``        ``TokenBudget``，按优先级裁剪到预算内
+  - ``compression.py``   Block 压缩与 tool result 紧凑化（顶层入口）
+  - ``compressors/``     具体压缩策略实现
+  - ``allowlist.py``     Block key 白名单过滤（``is_allowed_key``）
+  - ``renderer.py``      ``ContextRenderer``（Bundle → prompt 文本）
 
-RAG / 知识
-- ``knowledge/``         外部知识 provider 子包
+- ``runtime/``           运行时辅助（缓存 / 预热 / 失效 / trace）
+  - ``cache.py``         ContextBundle 缓存
+  - ``preload.py``       并行预热 selector / tool 缓存
+  - ``invalidation.py``  ``invalidate_farm_context``，写操作后失效缓存
+  - ``trace.py``         构建 trace payload，供可观测平台消费
+
+- ``knowledge/``         外部知识 provider 子包（RAG）
   - ``rag.py``           ``RAGKnowledgeProvider`` / ``RAGUnavailableError``
 
-任务态
 - ``task_state/``        Agent 任务态子包
   - ``models.py``        ``AgentTaskState``
   - ``store.py``         ``AgentTaskStateStore`` / ``TaskStateStatus``
 
-业务 selector / 数据源
 - ``selectors/``         各业务域 selector（Farm / Cycle / Weather / Memory ...）
 - ``sources/``           selector 共用的底层查询与策略实现
 """
+
 
 
 from __future__ import annotations
@@ -48,10 +47,10 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
-from app.context.allowlist import is_allowed_key
-from app.context.budget import TokenBudget
-from app.context.models import ContextBlock, ContextBundle
-from app.context.policy import ContextPolicy
+from app.context.pipeline.allowlist import is_allowed_key
+from app.context.pipeline.budget import TokenBudget
+from app.context.core.models import ContextBlock, ContextBundle
+from app.context.core.policy import ContextPolicy
 from app.context.knowledge import RAGUnavailableError
 from app.context.selectors import (
     ConversationSelector,
@@ -69,7 +68,7 @@ from app.context.selectors import (
     WeatherSelector,
     WorkerSelector,
 )
-from app.context.trace import build_context_trace_payload
+from app.context.runtime.trace import build_context_trace_payload
 from app.domains.farm.models import Farm
 from app.domains.users.models import User
 from app.domains.users.settings_models import UserSetting
@@ -81,7 +80,7 @@ from app.shared.config import (
 )
 
 if TYPE_CHECKING:
-    from app.context.policy import ContextBuildRequest, ContextPolicyResult, ContextSelector
+    from app.context.core.policy import ContextBuildRequest, ContextPolicyResult, ContextSelector
     from app.memory.models import MemoryContext
 
 

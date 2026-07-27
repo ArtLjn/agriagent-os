@@ -2,7 +2,7 @@
 
 import json
 
-from app.context.models import ContextBlock
+from app.context.core.models import ContextBlock
 from app.memory.models import (
     LongTermMemoryContext,
     MemoryContext,
