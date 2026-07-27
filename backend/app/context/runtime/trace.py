@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping
 
-from app.context.models import ContextBlock, ContextBundle
-from app.context.render import ContextRenderer
+from app.context.core.models import ContextBlock, ContextBundle
+from app.context.pipeline.renderer import ContextRenderer
 
 
 PREVIEW_LIMIT = 120

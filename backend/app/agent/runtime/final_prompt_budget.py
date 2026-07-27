@@ -5,12 +5,12 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
-from app.context.compression import (
+from app.context.pipeline.compression import (
     CompressionEvent,
     compact_tool_result,
     tool_call_names_by_id,
 )
-from app.context.models import estimate_tokens
+from app.context.core.models import estimate_tokens
 
 
 @dataclass(slots=True)

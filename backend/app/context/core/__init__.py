@@ -1,16 +1,5 @@
-"""Context 工程模块。
+"""Context 核心数据契约。"""
 
-入口
-----
-外部代码统一通过 ``ContextBuilder`` 构建 Context：
-
-    from app.context import ContextBuilder
-
-子模块分工见 ``app/context/builder.py`` 顶部文档。
-"""
-
-from app.context.builder import ContextBuilder, default_context_selectors
-from app.context.pipeline.budget import TokenBudget
 from app.context.core.document import ContextDocument, ContextSection
 from app.context.core.models import ContextBlock, ContextBundle, estimate_tokens
 from app.context.core.policy import (
@@ -19,20 +8,18 @@ from app.context.core.policy import (
     ContextPolicy,
     ContextPolicyResult,
 )
-from app.context.pipeline.renderer import ContextRenderer
+from app.context.core.registry import ContextBlockSpec, ContextCategory
 
 __all__ = [
     "ContextBlock",
+    "ContextBlockSpec",
     "ContextBuildRequest",
-    "ContextBuilder",
     "ContextBundle",
+    "ContextCategory",
     "ContextDocument",
     "ContextLayer",
     "ContextPolicy",
     "ContextPolicyResult",
-    "ContextRenderer",
     "ContextSection",
-    "TokenBudget",
-    "default_context_selectors",
     "estimate_tokens",
 ]

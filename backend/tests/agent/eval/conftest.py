@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.context.models import ContextBlock, ContextBundle
+from app.context.core.models import ContextBlock, ContextBundle
 
 
 @pytest.fixture()

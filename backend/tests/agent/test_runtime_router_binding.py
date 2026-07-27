@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.agent.router import RouterDecision
 from app.agent.runtime.nodes import _llm_node
-from app.context.models import ContextBundle
+from app.context.core.models import ContextBundle
 
 pytestmark = pytest.mark.no_db
 

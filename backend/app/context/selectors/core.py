@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import extract, func
 from sqlalchemy.orm import Session
 
-from app.context.models import ContextBlock
+from app.context.core.models import ContextBlock
 from app.infra.repository_runtime import (
     get_conversation_message_repository,
     run_maybe_awaitable,

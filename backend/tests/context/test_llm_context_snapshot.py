@@ -6,7 +6,7 @@ from langchain_core.messages import HumanMessage, ToolMessage
 
 from app.agent.runtime.final_prompt_budget import FinalPromptBudget
 from app.agent.runtime.node_helpers import _record_final_llm_context_trace
-from app.context.models import ContextBlock, ContextBundle
+from app.context.core.models import ContextBlock, ContextBundle
 
 
 class FakeCollector:

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from app.context.models import ContextBundle
+from app.context.core.models import ContextBundle
 
 
 def _make_state(messages, farm_id=1):

@@ -16,7 +16,7 @@ from app.agent.reflector.models import ReflectionIssue
 from app.agent.router import RouterDecision
 from app.agent.runtime.nodes import _llm_node
 from app.agent.runtime.reflection import apply_post_tool_reflection
-from app.context.models import ContextBundle
+from app.context.core.models import ContextBundle
 
 pytestmark = pytest.mark.no_db
 

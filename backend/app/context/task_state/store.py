@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.context.task_state_models import AgentTaskState
+from app.context.task_state.models import AgentTaskState
 from app.shared.compatibility import StrEnum
 
 

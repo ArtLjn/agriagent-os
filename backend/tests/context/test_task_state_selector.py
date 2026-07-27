@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from app.context.task_state_store import AgentTaskStateStore
+from app.context.task_state.store import AgentTaskStateStore
 from app.context.selectors.task_state import TaskStateSelector
 
 

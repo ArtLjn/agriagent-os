@@ -24,6 +24,7 @@ import {
 import { copyAsyncText } from './clipboard';
 import { buildTraceMonitorUrl, selectLatestTraceRequestId } from './traceLinks';
 import { LlmContextInspector } from './LlmContextInspector';
+import { QuickPrompts } from './QuickPrompts';
 
 const CARD = palette.bgElevated;
 const BORDER = palette.border;
@@ -893,12 +894,17 @@ export default function Playground() {
               justifyContent: 'center',
               color: TEXT_DIM,
               textAlign: 'center',
+              padding: '16px 24px',
             }}>
-              <div style={{ fontSize: 56, marginBottom: 20, opacity: 0.6 }}>🧪</div>
-              <div style={{ fontSize: 18, marginBottom: 8, color: TEXT, fontWeight: 500 }}>Playground — 开发者调试</div>
-              <div style={{ fontSize: 13, maxWidth: 360, lineHeight: 1.6 }}>
-                直接输入消息与 AI 对话，或从左侧切换历史会话
+              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.7 }}>🧪</div>
+              <div style={{ fontSize: 18, marginBottom: 6, color: TEXT, fontWeight: 500 }}>Playground — 开发者调试</div>
+              <div style={{ fontSize: 13, maxWidth: 420, lineHeight: 1.6 }}>
+                点击下方快捷提示词直接发起对话，或在输入框中输入你的问题
               </div>
+              <QuickPrompts
+                onSelect={(prompt) => { void handleSend(prompt); }}
+                disabled={loading}
+              />
             </div>
           )}
           {messages.map((m) => (

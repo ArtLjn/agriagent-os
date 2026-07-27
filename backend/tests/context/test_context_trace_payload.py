@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.context.builder import ContextBuilder
-from app.context.models import ContextBlock, ContextBundle
-from app.context.trace import build_context_trace_payload
+from app.context.core.models import ContextBlock, ContextBundle
+from app.context.runtime.trace import build_context_trace_payload
 
 
 class StaticSelector:

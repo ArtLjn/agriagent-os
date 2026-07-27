@@ -1,6 +1,6 @@
 """Context token 预算策略。"""
 
-from app.context.models import ContextBlock, ContextBundle
+from app.context.core.models import ContextBlock, ContextBundle
 
 
 class TokenBudget:

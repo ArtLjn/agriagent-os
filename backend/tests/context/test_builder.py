@@ -1,8 +1,8 @@
 """Context Builder 集成测试。"""
 
 from app.context.builder import ContextBuilder
-from app.context.models import ContextBlock
-from app.context.policy import ContextBuildRequest, ContextPolicy
+from app.context.core.models import ContextBlock
+from app.context.core.policy import ContextBuildRequest, ContextPolicy
 from app.memory.models import MemoryContext, MemoryMessage
 
 

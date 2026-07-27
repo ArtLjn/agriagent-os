@@ -9,7 +9,7 @@ from app.prompt.cache import (
     get_prompt_cache,
     get_farm_ctx_cache,
 )
-from app.context.invalidation import invalidate_farm_context
+from app.context.runtime.invalidation import invalidate_farm_context
 
 
 class TestPromptCache:

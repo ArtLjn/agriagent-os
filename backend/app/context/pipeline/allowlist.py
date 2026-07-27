@@ -6,7 +6,7 @@
 - 禁止承载可被询问的查询答案（天气、农场状态、茬口详情等）
 """
 
-from app.context.registry import prompt_allowed_keys
+from app.context.core.registry import prompt_allowed_keys
 
 
 ALLOWED_CONTEXT_KEYS: frozenset[str] = prompt_allowed_keys()

@@ -8,7 +8,7 @@ from app.agent.runtime.node_helpers import (
     _append_runtime_context,
     _record_prompt_budget,
 )
-from app.context.models import ContextBlock, ContextBundle
+from app.context.core.models import ContextBlock, ContextBundle
 
 
 def test_append_runtime_context_uses_sectioned_prompt_text() -> None:

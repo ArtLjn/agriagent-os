@@ -1,7 +1,7 @@
 """Context token 预算策略测试。"""
 
-from app.context.budget import TokenBudget
-from app.context.models import ContextBlock
+from app.context.pipeline.budget import TokenBudget
+from app.context.core.models import ContextBlock
 
 
 def test_budget_keeps_required_blocks_and_drops_low_priority_blocks() -> None:
