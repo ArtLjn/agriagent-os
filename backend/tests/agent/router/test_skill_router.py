@@ -597,6 +597,52 @@ def test_work_order_advice_question_does_not_create_work_order() -> None:
     assert decision.fallback == "no_tools"
 
 
+def test_attendance_sentence_routes_to_labor_payment_wage_record() -> None:
+    decision = SkillRouter().route(
+        "张三今天来了一天",
+        [_tool("manage_farm_logs"), _tool("manage_labor_payment")],
+    )
+
+    assert decision.selected_tools == ["manage_labor_payment"]
+    assert decision.selected_operations == {"manage_labor_payment": ["manage_wage"]}
+    assert decision.frames[0].params_hint == {
+        "operation": "manage_wage",
+        "action": "save",
+        "worker_name": "张三",
+        "quantity": 1,
+        "pay_type": "daily",
+    }
+
+
+def test_worker_operation_with_daily_price_routes_to_labor_wage_record() -> None:
+    decision = SkillRouter().route(
+        "张三今天打药一天180",
+        [_tool("manage_farm_logs"), _tool("manage_labor_payment")],
+    )
+
+    assert decision.selected_tools == ["manage_labor_payment"]
+    assert decision.selected_operations == {"manage_labor_payment": ["manage_wage"]}
+    assert decision.frames[0].params_hint == {
+        "operation": "manage_wage",
+        "action": "save",
+        "worker_name": "张三",
+        "operation_type": "打药",
+        "quantity": 1,
+        "pay_type": "daily",
+        "unit_price": 180,
+    }
+
+
+def test_worker_payroll_summary_routes_to_query_payables() -> None:
+    decision = SkillRouter().route(
+        "这个月每个工人应该发多少钱",
+        [_tool("manage_farm_logs"), _tool("manage_labor_payment")],
+    )
+
+    assert decision.selected_tools == ["manage_labor_payment"]
+    assert decision.selected_operations == {"manage_labor_payment": ["query_payables"]}
+
+
 def test_implicit_labor_without_operation_asks_clarification() -> None:
     tools = [
         _tool("create_operation_work_order"),

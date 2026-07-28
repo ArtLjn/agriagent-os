@@ -207,12 +207,7 @@ def _action_required_fields(skill_name: str, params: dict[str, Any]) -> tuple[st
                 if _has_any(params, ("worker_id", "worker_name", "worker"))
                 else ("worker_name",)
             )
-            return worker_field + (
-                "work_date",
-                "cycle_id",
-                "operation_type",
-                "unit_price",
-            )
+            return worker_field + ("work_date",)
     return ()
 
 
@@ -249,7 +244,7 @@ def _describe_action_required_fields(
         return ("create:cycle_id/name", "update/delete:unit_id")
     if skill_name == "manage_labor_payment" and operation == "manage_wage":
         return (
-            "save:worker_name/work_date/cycle_id/operation_type/unit_price",
+            "save:worker_name_or_worker_id/work_date",
             "update:labor_entry_id",
         )
     return ()

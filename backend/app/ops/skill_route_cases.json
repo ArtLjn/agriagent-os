@@ -55,6 +55,42 @@
     "tags": ["worker", "read"]
   },
   {
+    "id": "farm_log_create_001",
+    "message": "张三今天打药了",
+    "expected": {
+      "skill": "manage_farm_logs",
+      "operation": "create_log"
+    },
+    "tags": ["farm_log", "labor_boundary", "write", "regression"]
+  },
+  {
+    "id": "labor_wage_attendance_001",
+    "message": "张三今天来了一天",
+    "expected": {
+      "skill": "manage_labor_payment",
+      "operation": "manage_wage"
+    },
+    "tags": ["labor", "attendance", "payroll", "write", "regression"]
+  },
+  {
+    "id": "labor_wage_operation_001",
+    "message": "张三今天打药一天180",
+    "expected": {
+      "skill": "manage_labor_payment",
+      "operation": "manage_wage"
+    },
+    "tags": ["labor", "farm_log_boundary", "payroll", "write", "regression"]
+  },
+  {
+    "id": "payroll_summary_001",
+    "message": "这个月每个工人应该发多少钱",
+    "expected": {
+      "skill": "manage_labor_payment",
+      "operation": "query_payables"
+    },
+    "tags": ["labor", "payroll", "read", "regression"]
+  },
+  {
     "id": "weather_query_001",
     "message": "今天适合打药吗",
     "expected": {

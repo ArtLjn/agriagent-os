@@ -11,6 +11,8 @@ triggers:
   - 工资结清
   - 记录工资
   - 修改工资
+  - 发薪汇总
+  - 出勤补录
 parameters:
   type: object
   properties:
@@ -81,6 +83,9 @@ parameters:
     limit:
       type: integer
       description: 查询最多返回条数。
+    group_by_worker:
+      type: boolean
+      description: 是否按工人汇总应付、已付和未付工资。
     client_request_id:
       type: string
       description: 工资记录幂等键。
@@ -93,7 +98,7 @@ parameters:
 
 ## 何时使用
 
-用户询问人工欠款、未付工资、工钱未付时，使用 `operation=query_payables`。用户明确要补付、支付、结清或结算人工工资时，使用 `operation=settle_payment`。用户明确要新增、保存、记录或修改某条工资记录时，使用 `operation=manage_wage`。
+用户询问人工欠款、未付工资、工钱未付或发薪日每个工人应该发多少钱时，使用 `operation=query_payables`。用户明确要补付、支付、结清或结算人工工资时，使用 `operation=settle_payment`。用户明确要新增、保存、记录或修改某条工资记录，或补录“某工人今天来了/上工一天”时，使用 `operation=manage_wage`。
 
 ## 不要使用
 
@@ -110,13 +115,15 @@ parameters:
 - “把作业单 12 的人工结清” -> `operation=settle_payment`, `work_order_id=12`。
 - “把所有员工工资结了” -> `operation=settle_payment`, `scope=all_unpaid_labor`。
 - “给李海记 15 天压瓜工资每天 180” -> `operation=manage_wage`, `action=save`, `worker_name=李海`, `quantity=15`, `operation_type=压瓜`, `unit_price=180`。
+- “张三今天来了一天” -> `operation=manage_wage`, `action=save`, `worker_name=张三`, `quantity=1`, `pay_type=daily`；默认使用活跃茬口、`operation_type=出勤` 和工人默认日薪，缺失时追问。
+- “这个月每个工人应该发多少钱” -> `operation=query_payables`, `group_by_worker=true`。
 - “把工资记录 12 的日薪改成 200” -> `operation=manage_wage`, `action=update`, `labor_entry_id=12`, `unit_price=200`。
 
 ## 缺参策略
 
-- 空参数、纯查询筛选参数或只带 `worker/cycle_id/cycle_name/work_order_id/start_date/end_date/limit` 时，默认按 `query_payables` 查询，不进入写确认。
+- 空参数、纯查询筛选参数或只带 `worker/cycle_id/cycle_name/work_order_id/start_date/end_date/limit/group_by_worker` 时，默认按 `query_payables` 查询，不进入写确认。
 - `settle_payment` 缺少金额时按全额结清处理；缺少明确范围且上下文无法确定时先追问。
-- `manage_wage` 新增工资必须有 `cycle_id`、工人、`operation_type`、`unit_price` 和 `work_date`。
+- `manage_wage` 新增工资必须有工人和 `work_date`；`cycle_id` 可默认使用当前活跃茬口，`operation_type` 可默认 `出勤`，`unit_price` 可使用工人默认日薪，无法推断时追问。
 - `manage_wage` 更新工资必须有 `labor_entry_id`。
 - 同时出现结算字段和工资记录字段且没有显式 `operation` 时，返回澄清，不能随便创建或结算。
 

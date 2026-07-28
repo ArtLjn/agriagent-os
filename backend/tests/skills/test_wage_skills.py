@@ -10,7 +10,7 @@ from skillify.core.context import SkillContext
 from app.domains.finance.cost_models import CostRecord
 from app.domains.planting.crop_models import CropTemplate, GrowthStage
 from app.domains.planting.cycle_models import CropCycle, CycleStage
-from app.domains.planting.models import LaborEntry
+from app.domains.planting.models import LaborEntry, Worker
 
 _manage_labor_payment_mod = importlib.import_module(
     "app.skills.manage-labor-payment.scripts.main"
@@ -192,3 +192,127 @@ async def test_legacy_wage_fields_infer_manage_wage(wage_skill_session, ctx):
 
     assert result.status.value == "success"
     assert "已保存工资" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_attendance_wage_uses_worker_default_daily_price(
+    wage_skill_session, ctx
+):
+    cycle = _create_cycle(wage_skill_session)
+    cycle_id = cycle.id
+    worker = Worker(
+        farm_id=1,
+        name="张三",
+        default_pay_type="daily",
+        default_unit_price=Decimal("180.00"),
+    )
+    wage_skill_session.add(worker)
+    wage_skill_session.commit()
+
+    result = await ManageLaborPaymentSkill().execute(
+        {
+            "operation": "manage_wage",
+            "action": "save",
+            "worker_name": "张三",
+            "work_date": "2026-06-05",
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "已保存工资" in result.reply
+    assert "张三 出勤" in result.reply
+    entry = wage_skill_session.query(LaborEntry).one()
+    assert entry.worker_id == worker.id
+    assert entry.work_order.cycle_id == cycle_id
+    assert entry.work_order.operation_type == "出勤"
+    assert entry.quantity == Decimal("1.00")
+    assert entry.unit_price == Decimal("180.00")
+    assert entry.payable_amount == Decimal("180.00")
+
+
+@pytest.mark.asyncio
+async def test_query_payables_can_group_by_worker_for_payroll_summary(
+    wage_skill_session, ctx
+):
+    cycle = _create_cycle(wage_skill_session)
+    cycle_id = cycle.id
+    for worker_name, date_text, quantity, unit_price, paid_amount in (
+        ("张三", "2026-06-04", 1, 180, 0),
+        ("张三", "2026-06-05", 1, 180, 100),
+        ("李四", "2026-06-05", 1, 160, 0),
+    ):
+        result = await ManageLaborPaymentSkill().execute(
+                {
+                    "operation": "manage_wage",
+                    "action": "save",
+                    "cycle_id": cycle_id,
+                "operation_type": "出勤",
+                "worker_name": worker_name,
+                "work_date": date_text,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "paid_amount": paid_amount,
+            },
+            ctx,
+        )
+        assert result.status.value == "success"
+
+    result = await ManageLaborPaymentSkill().execute(
+        {
+            "operation": "query_payables",
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-30",
+            "group_by_worker": True,
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    assert "未付人工按工人汇总" in result.reply
+    assert "张三：应付360.00元，已付100.00元，未付260.00元，记录2条" in result.reply
+    assert "李四：应付160.00元，已付0.00元，未付160.00元，记录1条" in result.reply
+
+
+@pytest.mark.asyncio
+async def test_settle_payment_can_target_single_work_order(wage_skill_session, ctx):
+    """发薪结算支持按来源作业单范围结清。"""
+    cycle = _create_cycle(wage_skill_session)
+    cycle_id = cycle.id
+    for worker_name, date_text in (("张三", "2026-06-04"), ("李四", "2026-06-05")):
+        result = await ManageLaborPaymentSkill().execute(
+            {
+                "operation": "manage_wage",
+                "action": "save",
+                "cycle_id": cycle_id,
+                "operation_type": "出勤",
+                "worker_name": worker_name,
+                "work_date": date_text,
+                "quantity": 1,
+                "unit_price": 180,
+            },
+            ctx,
+        )
+        assert result.status.value == "success"
+    first_entry, second_entry = (
+        wage_skill_session.query(LaborEntry).order_by(LaborEntry.id).all()
+    )
+    first_entry_id = first_entry.id
+    second_entry_id = second_entry.id
+    first_work_order_id = first_entry.work_order_id
+
+    result = await ManageLaborPaymentSkill().execute(
+        {
+            "operation": "settle_payment",
+            "work_order_id": first_work_order_id,
+        },
+        ctx,
+    )
+
+    assert result.status.value == "success"
+    first_entry = wage_skill_session.get(LaborEntry, first_entry_id)
+    second_entry = wage_skill_session.get(LaborEntry, second_entry_id)
+    assert first_entry.settlement_status == "settled"
+    assert first_entry.unpaid_amount == Decimal("0.00")
+    assert second_entry.settlement_status == "unpaid"
+    assert second_entry.unpaid_amount == Decimal("180.00")

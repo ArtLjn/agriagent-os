@@ -169,6 +169,7 @@ LABOR_PAYABLE_QUERY_HINTS = (
 )
 LABOR_SETTLE_HINTS = ("补付", "支付", "结算", "付清", "结清", "结了")
 WAGE_RECORD_HINTS = ("记", "记录", "新增", "添加", "修改", "更改", "调整", "更新")
+WAGE_ATTENDANCE_HINTS = ("来了", "来了一天", "上工", "出勤")
 COST_CATEGORY_HINTS = (
     "账务分类",
     "成本分类",

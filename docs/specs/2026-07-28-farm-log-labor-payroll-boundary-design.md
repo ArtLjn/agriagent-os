@@ -1,6 +1,6 @@
 # 农事日志、用工与发薪统计业务边界设计
 
-> 状态：设计中 | 日期：2026-07-28 | 关联：`manage_farm_logs`、`manage_work_orders`、`manage_labor_payment`、`workers`、`labor_entries`
+> 状态：Phase 1-3 已落地 | 日期：2026-07-28 | 关联：`manage_farm_logs`、`manage_work_orders`、`manage_labor_payment`、`workers`、`labor_entries`
 
 ## 1. 背景
 
@@ -333,6 +333,8 @@ Trace 中必须保留：
 3. 作业单查询返回工资状态摘要。
 4. 结算工资时可按作业单范围结清。
 
+落地状态：已实现。`operation_work_orders` 创建和更新时通过 `labor_entries` 同步工资明细；作业单响应返回应付、已付、未付摘要；`manage_labor_payment.settle_payment` 支持 `work_order_id` 范围结算。
+
 ### Phase 3：可选增强农事日志参与人
 
 目标：让农事日志可追溯谁参与，但仍不承担工资主账。
@@ -343,6 +345,8 @@ Trace 中必须保留：
 2. 农事日志创建支持 `worker_names/worker_ids`。
 3. 农事日志详情展示参与人。
 4. 报表中允许并列展示农事事实和工资来源，但金额仍来自 `labor_entries`。
+
+落地状态：已实现。新增 `farm_logs.work_order_id` 和 `farm_log_workers`，农事日志创建/更新支持 `worker_ids/worker_names/work_order_id`，仅作为参与人和来源追溯，不创建、不更新 `labor_entries`。
 
 ## 11. 后续实现建议
 

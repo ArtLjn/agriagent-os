@@ -82,7 +82,7 @@ def test_manage_cost_write_operations_require_business_fields(
         (
             "manage_labor_payment",
             {"operation": "manage_wage", "action": "save"},
-            ["worker_name", "work_date", "cycle_id", "operation_type", "unit_price"],
+            ["worker_name", "work_date"],
         ),
         (
             "manage_labor_payment",
@@ -179,6 +179,20 @@ def test_contract_accepts_manage_wage_save_with_worker_id():
             "cycle_id": 3,
             "operation_type": "采收",
             "unit_price": 200,
+        },
+    )
+
+    assert result.valid is True
+
+
+def test_contract_accepts_attendance_wage_with_default_payroll_fields():
+    result = validate_skill_args(
+        "manage_labor_payment",
+        {
+            "operation": "manage_wage",
+            "action": "save",
+            "worker_name": "张三",
+            "work_date": "2026-07-24",
         },
     )
 

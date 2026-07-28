@@ -126,6 +126,7 @@ class Worker(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     labor_entries = relationship("LaborEntry", back_populates="worker")
+    farm_log_links = relationship("FarmLogWorker", back_populates="worker")
 
 
 class LaborEntry(Base):

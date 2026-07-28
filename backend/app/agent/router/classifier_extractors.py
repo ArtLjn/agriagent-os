@@ -4,6 +4,21 @@ import re
 
 from app.agent.router import classifier_hints as hints
 
+_WAGE_OPERATION_TYPES = ("打药", "浇水", "施肥", "除草", "翻地")
+_NON_WORKER_NAMES = {
+    "工人",
+    "员工",
+    "师傅",
+    "今天",
+    "昨天",
+    "前天",
+    "早上",
+    "上午",
+    "中午",
+    "下午",
+    "晚上",
+}
+
 
 def extract_labor_payment_params(message: str) -> dict:
     params = {"operation": "settle_payment"}
@@ -19,7 +34,7 @@ def extract_labor_payment_params(message: str) -> dict:
 def extract_wage_params(message: str) -> dict:
     params: dict = {"operation": "manage_wage", "action": "save"}
     worker = extract_worker_name(message)
-    operation_type = extract_operation_type(message)
+    operation_type = extract_wage_operation_type(message)
     quantity = extract_labor_quantity(message)
     unit_price = extract_unit_price(message)
     if worker:
@@ -75,7 +90,7 @@ def extract_work_order_params(message: str) -> dict:
     unit_name = extract_unit_name(message)
     unit_price = extract_unit_price(message)
     operation_type = extract_operation_type(message)
-    quantity = extract_labor_quantity(message)
+    quantity = extract_work_order_quantity(message)
     if name:
         params["workers"] = [name]
     if unit_name:
@@ -156,7 +171,7 @@ def extract_work_order_evidence(message: str) -> dict:
     return build_farm_labor_evidence(
         worker=extract_worker_name(message),
         operation_type=extract_operation_type(message),
-        quantity=extract_labor_quantity(message),
+        quantity=extract_work_order_quantity(message),
         unit_price=extract_unit_price(message),
     )
 
@@ -193,6 +208,8 @@ def missing_work_order_fields(params: dict) -> list[str]:
 def extract_worker_name(message: str) -> str | None:
     name_chars = r"[\u4e00-\u9fa5A-Za-z0-9]{1,8}"
     patterns = (
+        r"(?P<name>[\u4e00-\u9fa5]{2,4}?)(?:今天|昨天|前天)?(?:来了|来了一天|上工|出勤)",
+        r"(?P<name>[\u4e00-\u9fa5]{2,4}?)(?:今天|昨天|前天)?.{0,8}?(?:打药|浇水|施肥|除草|翻地).{0,8}?(?:\d+\s*(?:元|块)|一?天|\d+\s*天)",
         rf"(?:工人|员工|师傅)(?P<name>{name_chars})(?:工资|日薪|每天)",
         r"(?:把|将)?(?P<name>[\u4e00-\u9fa5]{2,4})的(?:电话|手机号|手机)",
         r"(?:今天|昨天|前天|这个月|本月)?(?P<name>[\u4e00-\u9fa5]{2,4})(?:去|到).{0,16}?(?:采收|授粉|装车|整枝|打杈|压蔓|压瓜|留瓜|垫瓜)",
@@ -206,7 +223,7 @@ def extract_worker_name(message: str) -> str | None:
         if match:
             name = match.group("name")
             name = re.sub(r"^(?:让|叫|安排)", "", name)
-            if name not in {"工人", "员工", "师傅"}:
+            if name not in _NON_WORKER_NAMES:
                 return name
     return None
 
@@ -215,6 +232,7 @@ def extract_unit_price(message: str) -> int | None:
     match = re.search(
         r"(?:工资|日薪|每天|每人|单价)\s*"
         r"(?P<price>\d+)\s*(?:元|块)?\s*(?:一?天|/天|每天)?"
+        r"|(?:一?天|每天)\s*(?P<attendance_price>\d+)\s*(?:元|块)?"
         r"|(?P<price_before>\d+)\s*(?:元|块)\s*(?:一?天|/天|每天|每人)"
         r"|(?P<slash_price>\d+)\s*/天"
         r"|每天\s*(?P<daily_price>\d+)\s*(?:元|块)?",
@@ -224,6 +242,7 @@ def extract_unit_price(message: str) -> int | None:
         return None
     price = (
         match.group("price")
+        or match.group("attendance_price")
         or match.group("price_before")
         or match.group("slash_price")
         or match.group("daily_price")
@@ -246,10 +265,24 @@ def extract_phone(message: str) -> str | None:
 
 
 def extract_labor_quantity(message: str) -> int | None:
+    if re.search(r"(?:来了一天|上工一天|出勤一天|一天)", message):
+        return 1
     match = re.search(r"(?P<quantity>\d+)\s*天", message)
     if not match:
         return None
     return int(match.group("quantity"))
+
+
+def extract_work_order_quantity(message: str) -> int | None:
+    match = re.search(
+        r"(?:干了|做了|上工|出勤)\s*(?P<quantity>\d+)\s*天"
+        r"|(?P<worker>[\u4e00-\u9fa5A-Za-z0-9]{1,8})(?:这个月|本月)?.{0,4}?干了\s*(?P<worker_quantity>\d+)\s*天",
+        message,
+    )
+    if not match:
+        return None
+    quantity = match.group("quantity") or match.group("worker_quantity")
+    return int(quantity)
 
 
 def extract_unit_name(message: str) -> str | None:
@@ -272,4 +305,14 @@ def extract_operation_type(message: str) -> str | None:
     for operation_type in hints.OPERATION_HINTS:
         if operation_type in message:
             return operation_type
+    return None
+
+
+def extract_wage_operation_type(message: str) -> str | None:
+    operation_type = extract_operation_type(message)
+    if operation_type:
+        return operation_type
+    for item in _WAGE_OPERATION_TYPES:
+        if item in message:
+            return item
     return None

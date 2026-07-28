@@ -38,6 +38,19 @@ parameters:
     photo_urls:
       type: string
       description: 图片 URL 列表字符串。
+    work_order_id:
+      type: integer
+      description: 关联作业单 ID，仅用于追溯来源，不生成工资。
+    worker_ids:
+      type: array
+      items:
+        type: integer
+      description: 参与工人 ID 列表，仅用于农事追溯。
+    worker_names:
+      type: array
+      items:
+        type: string
+      description: 参与工人名称列表，仅用于农事追溯。
     days:
       type: integer
       description: 查询最近天数，默认 7。
@@ -51,16 +64,17 @@ parameters:
 
 ## 何时使用
 
-用户要记录浇水、施肥、打药、除草、翻地等农事操作，查询最近农事日志，或明确要修改、更正、删除已有农事记录时使用。
+用户要记录浇水、施肥、打药、除草、翻地等农事操作，查询最近农事日志，或明确要修改、更正、删除已有农事记录时使用。农事日志可以携带参与工人和来源作业单作为追溯信息。
 
 ## 不要使用
 
-用户要创建农事作业单、安排工人干活或结算人工时不要使用，应使用作业单或人工相关 Skill。
+用户要创建农事作业单、安排工人干活或结算人工时不要使用，应使用作业单或人工相关 Skill。农事日志里的参与人不生成工资，应发工资只来自 `labor_entries`。
 
 ## 参数推断
 
 - “今天浇水了” -> `operation=create_log`, `operation_type=浇水`。
 - “昨天给 3 号棚打药防蚜虫” -> `operation=create_log`, `cycle_id=3`, `operation_type=打药`, `operation_date=昨天`, `note=防蚜虫`。
+- “老王参与了作业单 12 的打药日志” -> `operation=create_log`, `operation_type=打药`, `work_order_id=12`, `worker_names=["老王"]`。
 - “最近 7 天农事日志” -> `operation=query_logs`, `days=7`。
 - “3 号茬口最近一周干了什么” -> `operation=query_logs`, `cycle_id=3`, `days=7`。
 - “把农事日志 8 改成施肥” -> `operation=manage_log`, `action=update`, `log_id=8`, `operation_type=施肥`。

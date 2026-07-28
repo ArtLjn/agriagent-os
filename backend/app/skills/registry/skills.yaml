@@ -476,6 +476,8 @@ capabilities:
       - 给老王补付300人工
       - 结算李丽这个月工资
       - 保存张三工资记录
+      - 张三今天来了一天
+      - 这个月每个工人应该发多少钱
       - 查看某个作业单的人工欠款
       - 工人工资还有多少没付
       - how much unpaid worker wages remain
@@ -494,6 +496,8 @@ capabilities:
       - 未付人工
       - 结算
       - 付款
+      - 发薪
+      - 出勤
     version: v2
     owner: agent-platform
     status: active
@@ -509,7 +513,7 @@ capabilities:
     operations:
       query_payables:
         risk: read
-        description: 查询未付人工明细和汇总。
+        description: 查询未付人工明细、发薪日按工人汇总和应发工资。
         legacy_aliases:
           - get_labor_payables
       settle_payment:
@@ -523,7 +527,7 @@ capabilities:
           - get_farm_status
       manage_wage:
         risk: write_confirm
-        description: 保存或更新独立工资记录。
+        description: 保存或更新独立工资记录，支持出勤补录和默认日薪推断。
         legacy_aliases:
           - manage_wages
         cache_invalidation:
@@ -533,13 +537,14 @@ capabilities:
   - name: manage_farm_logs
     domain: log
     capability: farm_log_management
-    description: 管理农事日志，支持记录、查询、更新和删除农事操作。
+    description: 管理农事日志，支持记录、查询、更新和删除农事操作；参与工人和来源作业单仅作追溯，不生成工资。
     examples:
       - 记录今天给西瓜浇水
       - 查询最近7天农事日志
       - 修改昨天的施肥记录
       - 删除一条农事日志
       - 3号棚今天打药了
+      - 老王参与了作业单12的打药日志
     anti_examples:
       - 创建作业单
       - 查询工人工资
@@ -553,6 +558,7 @@ capabilities:
       - 打药
       - 除草
       - 操作记录
+      - 参与人追溯
     version: v2
     owner: agent-platform
     status: active
@@ -566,7 +572,7 @@ capabilities:
     operations:
       create_log:
         risk: write_confirm
-        description: 记录农事操作。
+        description: 记录农事操作，可关联来源作业单和参与工人用于追溯。
         legacy_aliases:
           - log_farm_activity
         cache_invalidation:

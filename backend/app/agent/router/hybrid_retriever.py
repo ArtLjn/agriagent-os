@@ -75,8 +75,16 @@ _COST_ANALYTICS_QUERY_TERMS = frozenset(
 _FARM_LOG_CREATE_TERMS = frozenset(
     "记录 记一下 浇水 施肥 打药 除草 翻地 育苗 农事 操作".split()
 )
+_FARM_LOG_QUERY_TERMS = frozenset("查询 查看 看看 最近 历史 日志 哪些".split())
 _WORK_ORDER_CREATE_TERMS = frozenset("安排 派 叫 让 用工 作业单 工人 干活".split())
 _UPDATE_DELETE_TERMS = frozenset("修改 更新 删除 删掉 更正 纠正 改成 改为".split())
+_LABOR_WAGE_RECORD_TERMS = frozenset(
+    "来了 上工 出勤 一天 日薪 工资 工钱 人工费 每天".split()
+)
+_LABOR_PAYROLL_QUERY_TERMS = frozenset(
+    "发薪 应发 应该发 未付 工资 工钱 人工钱 多少钱 多少".split()
+)
+_LABOR_SETTLE_TERMS = frozenset("结算 结清 结了 补付 支付 付清".split())
 
 
 @dataclass(frozen=True)
@@ -618,15 +626,9 @@ def _registry_prior(candidate: ToolCandidate) -> float:
 def _operation_prior(candidate: ToolCandidate, query_terms: set[str]) -> float:
     alias_prior = 0.03 if candidate.legacy_alias == candidate.name else 0.0
     if candidate.capability == "manage_farm_logs":
-        if query_terms & _COST_RECORD_WRITE_TERMS:
-            return -0.22 + alias_prior
-        if candidate.operation == "create_log" and query_terms & _FARM_LOG_CREATE_TERMS:
-            return 0.08 + alias_prior
-        if candidate.operation == "manage_log" and not (
-            query_terms & _UPDATE_DELETE_TERMS
-        ):
-            return -0.04 + alias_prior
-        return alias_prior
+        return _farm_log_operation_prior(candidate, query_terms, alias_prior)
+    if candidate.capability == "manage_labor_payment":
+        return _labor_payment_operation_prior(candidate, query_terms, alias_prior)
     if candidate.capability == "manage_cost_categories" and not (
         query_terms & _CATEGORY_MANAGEMENT_TERMS
     ):
@@ -655,6 +657,44 @@ def _operation_prior(candidate: ToolCandidate, query_terms: set[str]) -> float:
         query_terms & _COST_ANALYTICS_QUERY_TERMS
     ):
         return -0.04 + alias_prior
+    return alias_prior
+
+
+def _farm_log_operation_prior(
+    candidate: ToolCandidate,
+    query_terms: set[str],
+    alias_prior: float,
+) -> float:
+    if query_terms & _LABOR_WAGE_RECORD_TERMS:
+        return -0.18 + alias_prior
+    if query_terms & _COST_RECORD_WRITE_TERMS:
+        return -0.22 + alias_prior
+    if candidate.operation == "create_log" and query_terms & _FARM_LOG_CREATE_TERMS:
+        if "适合" in query_terms:
+            return -0.10 + alias_prior
+        return 0.24 + alias_prior
+    if candidate.operation == "query_logs" and not (query_terms & _FARM_LOG_QUERY_TERMS):
+        return -0.22 + alias_prior
+    if candidate.operation == "manage_log" and not (query_terms & _UPDATE_DELETE_TERMS):
+        return -0.04 + alias_prior
+    return alias_prior
+
+
+def _labor_payment_operation_prior(
+    candidate: ToolCandidate,
+    query_terms: set[str],
+    alias_prior: float,
+) -> float:
+    wage_record = bool(query_terms & _LABOR_WAGE_RECORD_TERMS)
+    payroll_query = bool(query_terms & _LABOR_PAYROLL_QUERY_TERMS)
+    if candidate.operation == "manage_wage" and wage_record:
+        return 0.26 + alias_prior
+    if candidate.operation == "query_payables" and wage_record and not payroll_query:
+        return -0.16 + alias_prior
+    if candidate.operation == "query_payables" and payroll_query:
+        return 0.14 + alias_prior
+    if candidate.operation == "settle_payment" and not (query_terms & _LABOR_SETTLE_TERMS):
+        return -0.12 + alias_prior
     return alias_prior
 
 

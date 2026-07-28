@@ -50,6 +50,20 @@ class ManageFarmLogsSkill(Skill):
                 },
                 "note": {"type": "string", "description": "备注"},
                 "photo_urls": {"type": "string", "description": "图片 URL 列表字符串"},
+                "work_order_id": {
+                    "type": "integer",
+                    "description": "关联作业单 ID，仅用于追溯来源，不生成工资。",
+                },
+                "worker_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "参与工人 ID 列表，仅用于农事追溯。",
+                },
+                "worker_names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "参与工人名称列表，仅用于农事追溯。",
+                },
                 "days": {
                     "type": "integer",
                     "description": "查询最近天数，默认 7。",
@@ -169,11 +183,14 @@ def _create_log(db, farm_id: int, params: dict) -> SkillResult:
 
     log_create = FarmLogCreate(
         cycle_id=int(cycle_id),
+        work_order_id=_to_int(params.get("work_order_id")),
         operation_type=operation_type,
         operation_date=_parse_date(params.get("operation_date")),
         operation_time=_to_datetime(params.get("operation_time")),
         note=_clean(params.get("note")),
         photo_urls=_clean(params.get("photo_urls")),
+        worker_ids=_to_int_list(params.get("worker_ids")),
+        worker_names=_to_str_list(params.get("worker_names")),
     )
     created = log_service.create_log(db, log_create, farm_id=farm_id)
     return SkillResult(status=ResultStatus.SUCCESS, reply=_format_create_reply(created))
@@ -205,7 +222,7 @@ def _query_logs(db, farm_id: int, params: dict) -> SkillResult:
         scope = f"茬口 {log.cycle_id}，" if not cycle_id else ""
         lines.append(
             f"  {log.operation_date}: {scope}{log.operation_type}"
-            f" - {log.note or '无备注'}"
+            f" - {log.note or '无备注'}{_worker_suffix(log)}"
         )
     return SkillResult(status=ResultStatus.SUCCESS, reply="\n".join(lines))
 
@@ -223,6 +240,11 @@ def _update_log(db, farm_id: int, params: dict) -> SkillResult:
         )
     data = FarmLogCreate(
         cycle_id=int(params.get("cycle_id") or existing.cycle_id),
+        work_order_id=(
+            _to_int(params.get("work_order_id"))
+            if "work_order_id" in params
+            else existing.work_order_id
+        ),
         operation_type=_clean(params.get("operation_type")) or existing.operation_type,
         operation_date=_to_date(params.get("operation_date"))
         or existing.operation_date,
@@ -236,6 +258,16 @@ def _update_log(db, farm_id: int, params: dict) -> SkillResult:
             _clean(params.get("photo_urls"))
             if "photo_urls" in params
             else existing.photo_urls
+        ),
+        worker_ids=(
+            _to_int_list(params.get("worker_ids"))
+            if "worker_ids" in params
+            else existing.worker_ids
+        ),
+        worker_names=(
+            _to_str_list(params.get("worker_names"))
+            if "worker_names" in params
+            else existing.worker_names
         ),
     )
     log = log_service.update_log(db, int(log_id), data, farm_id)
@@ -308,6 +340,35 @@ def _to_positive_int(value, *, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return number if number > 0 else default
+
+
+def _to_int(value) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int_list(value) -> list[int]:
+    if value in (None, ""):
+        return []
+    values = value if isinstance(value, (list, tuple, set)) else str(value).split(",")
+    parsed = [_to_int(item) for item in values]
+    return [item for item in parsed if item is not None]
+
+
+def _to_str_list(value) -> list[str]:
+    if value in (None, ""):
+        return []
+    values = value if isinstance(value, (list, tuple, set)) else str(value).split(",")
+    return [str(item).strip() for item in values if str(item).strip()]
+
+
+def _worker_suffix(log: FarmLog) -> str:
+    names = getattr(log, "worker_names", [])
+    return f"｜参与人：{'、'.join(names)}" if names else ""
 
 
 def _format_create_reply(log) -> str:

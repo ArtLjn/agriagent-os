@@ -12,7 +12,7 @@ from app.domains.finance.cost_category_models import CostCategory
 from app.domains.finance.cost_models import CostRecord
 from app.domains.planting.crop_models import CropTemplate, GrowthStage
 from app.domains.planting.cycle_models import CropCycle, CycleStage
-from app.domains.planting.log_models import FarmLog
+from app.domains.planting.log_models import FarmLog, FarmLogWorker
 from app.domains.planting.models import (
     LaborEntry,
     OperationWorkOrder,
@@ -56,6 +56,7 @@ __all__ = [
     "CycleStage",
     "Farm",
     "FarmLog",
+    "FarmLogWorker",
     "FeedbackRecord",
     "GrowthStage",
     "GuardrailsLog",

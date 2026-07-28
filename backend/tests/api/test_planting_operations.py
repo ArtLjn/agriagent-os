@@ -647,6 +647,68 @@ def test_recent_operations_merges_work_orders_and_legacy_logs(client):
     assert {"压蔓", "浇水"} <= operations
 
 
+def test_farm_log_tracks_workers_and_source_work_order_without_creating_payroll(
+    client, db_session
+):
+    """农事日志参与人只做追溯，不生成工资应付主账。"""
+    cycle_id = _create_watermelon_cycle(client)
+    worker = client.post(
+        "/planting/workers",
+        json={
+            "name": "老王",
+            "default_pay_type": "daily",
+            "default_unit_price": "200.00",
+        },
+    ).json()
+    work_order = client.post(
+        "/planting/work-orders",
+        json={
+            "cycle_id": cycle_id,
+            "operation_type": "打药",
+            "operation_date": date.today().isoformat(),
+            "scope_type": "cycle",
+        },
+    ).json()
+    before_count = db_session.query(LaborEntry).count()
+
+    response = client.post(
+        "/logs",
+        json={
+            "cycle_id": cycle_id,
+            "work_order_id": work_order["id"],
+            "worker_ids": [worker["id"]],
+            "operation_type": "打药",
+            "operation_date": date.today().isoformat(),
+            "note": "老王参与打药，工资另按用工明细统计",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["work_order_id"] == work_order["id"]
+    assert data["worker_ids"] == [worker["id"]]
+    assert data["worker_names"] == ["老王"]
+    assert db_session.query(LaborEntry).count() == before_count
+
+
+def test_farm_log_rejects_unknown_worker_name(client):
+    """农事日志参与人名称必须能解析到已有工人，避免追溯信息假成功。"""
+    cycle_id = _create_watermelon_cycle(client)
+
+    response = client.post(
+        "/logs",
+        json={
+            "cycle_id": cycle_id,
+            "worker_names": ["不存在的工人"],
+            "operation_type": "打药",
+            "operation_date": date.today().isoformat(),
+        },
+    )
+
+    assert response.status_code == 400
+    assert "参与工人" in response.json()["detail"]
+
+
 def test_unsettled_labor_summary(client):
     """未结人工按工人汇总。"""
     cycle_id = _create_watermelon_cycle(client)

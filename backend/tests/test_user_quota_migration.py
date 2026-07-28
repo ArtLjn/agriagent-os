@@ -53,6 +53,23 @@ def test_labor_entries_dedupe_update_avoids_mysql_direct_self_reference():
     assert "FROM (\n                              SELECT MIN(id)" in source
 
 
+def test_farm_log_worker_links_have_alembic_migration_and_sql_ddl():
+    """农事日志参与人和来源作业单必须同时进入迁移与基线 DDL。"""
+    backend_dir = Path(__file__).resolve().parents[1]
+    migration_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (backend_dir / "alembic" / "versions").glob("*.py")
+    )
+    ddl = (backend_dir / "sql" / "farm_manager.sql").read_text(encoding="utf-8")
+
+    assert "farm_log_workers" in migration_sources
+    assert "work_order_id" in migration_sources
+    assert "uq_farm_log_workers_log_worker" in migration_sources
+    assert "CREATE TABLE `farm_log_workers`" in ddl
+    assert "`work_order_id` int DEFAULT NULL" in ddl
+    assert "uq_farm_log_workers_log_worker" in ddl
+
+
 def test_review_issue_chain_ai_judge_has_schema_repair_migration():
     """ReviewIssueChain AI 预判字段必须有独立幂等修复迁移。"""
     migration_path = (

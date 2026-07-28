@@ -9,6 +9,7 @@ from skillify.skills.base import Skill
 from app.skills.context import require_farm_context
 from app.skills.metadata import SkillPermissionLevel, SkillRiskLevel
 from app.shared.database import SessionLocal
+from app.domains.planting.cycle_models import CropCycle
 from app.domains.planting.models import Worker
 from app.domains.planting.schemas import WageSaveRequest, WageUpdateRequest
 from app.domains.planting import labor_service
@@ -27,6 +28,7 @@ _QUERY_FIELDS = {
     "start_date",
     "end_date",
     "limit",
+    "group_by_worker",
 }
 _SETTLE_FIELDS = {"amount", "scope", "payment_date"}
 _WAGE_FIELDS = {
@@ -107,6 +109,10 @@ class ManageLaborPaymentSkill(Skill):
                 "start_date": {"type": "string", "description": "查询开始日期。"},
                 "end_date": {"type": "string", "description": "查询结束日期。"},
                 "limit": {"type": "integer", "description": "查询最多返回条数。"},
+                "group_by_worker": {
+                    "type": "boolean",
+                    "description": "是否按工人汇总应付、已付和未付工资。",
+                },
                 "client_request_id": {
                     "type": "string",
                     "description": "工资记录幂等键。",
@@ -255,6 +261,11 @@ def _query_payables(db, farm_id: int, params: dict) -> SkillResult:
     )
     if not entries:
         return SkillResult(status=ResultStatus.SUCCESS, reply="未找到未付人工。")
+    if _to_bool(params.get("group_by_worker")):
+        return SkillResult(
+            status=ResultStatus.SUCCESS,
+            reply=_format_worker_payroll_summary(entries),
+        )
     total_payable = sum((entry.payable_amount for entry in entries), Decimal("0"))
     total_paid = sum((entry.paid_amount for entry in entries), Decimal("0"))
     total_unpaid = sum((entry.unpaid_amount for entry in entries), Decimal("0"))
@@ -325,7 +336,7 @@ def _settlement_worker_name(db, farm_id: int, params: dict) -> str | None:
 def _manage_wage(db, farm_id: int, params: dict) -> SkillResult:
     action = _clean(params.get("action")) or "save"
     if action == "save":
-        data = _build_save_request(params)
+        data = _build_save_request(db, farm_id, params)
         entry, cost_record_id = labor_service.save_wage_entry(db, data, farm_id)
     elif action == "update":
         labor_entry_id = params.get("labor_entry_id")
@@ -347,7 +358,7 @@ def _manage_wage(db, farm_id: int, params: dict) -> SkillResult:
     return SkillResult(status=ResultStatus.SUCCESS, reply=_format_reply(action, response))
 
 
-def _build_save_request(params: dict) -> WageSaveRequest:
+def _build_save_request(db, farm_id: int, params: dict) -> WageSaveRequest:
     worker_id = params.get("worker_id")
     worker_name = _clean(params.get("worker_name") or params.get("worker"))
     if not worker_id and not worker_name:
@@ -355,13 +366,17 @@ def _build_save_request(params: dict) -> WageSaveRequest:
     work_date = _parse_date(params.get("work_date"))
     if work_date is None:
         raise ValueError("新增工资需要明确日期，请提供 work_date。")
-    cycle_id = params.get("cycle_id")
+    cycle_id = params.get("cycle_id") or _default_active_cycle_id(db, farm_id)
     if not cycle_id:
         raise ValueError("新增工资需要关联茬口 cycle_id。")
-    operation_type = _clean(params.get("operation_type"))
-    if not operation_type:
-        raise ValueError("新增工资需要作业类型 operation_type。")
-    unit_price = _to_decimal(params.get("unit_price"))
+    operation_type = _clean(params.get("operation_type")) or "出勤"
+    worker = _find_wage_worker(db, farm_id, worker_id, worker_name)
+    pay_type = _clean(params.get("pay_type")) or (
+        worker.default_pay_type if worker is not None else "daily"
+    )
+    unit_price = _to_decimal(params.get("unit_price")) or (
+        worker.default_unit_price if worker is not None else None
+    )
     if unit_price is None:
         raise ValueError("新增工资需要单价 unit_price。")
     quantity = _to_decimal(params.get("quantity")) or Decimal("1")
@@ -371,7 +386,7 @@ def _build_save_request(params: dict) -> WageSaveRequest:
         operation_type=operation_type,
         worker_id=int(worker_id) if worker_id else None,
         worker_name=worker_name,
-        pay_type=_clean(params.get("pay_type")) or "daily",
+        pay_type=pay_type,
         quantity=quantity,
         unit_price=unit_price,
         paid_amount=paid_amount,
@@ -419,6 +434,77 @@ def _client_request_id(
     worker_key = worker_name or f"worker-{worker_id}"
     operation = _clean(params.get("operation_type")) or "工资"
     return f"wage-{work_date.isoformat()}-{worker_key}-{operation}"
+
+
+def _format_worker_payroll_summary(entries) -> str:
+    grouped: dict[str, dict] = {}
+    for entry in entries:
+        worker_name = entry.worker.name if entry.worker else f"工人{entry.worker_id}"
+        item = grouped.setdefault(
+            worker_name,
+            {
+                "payable": Decimal("0"),
+                "paid": Decimal("0"),
+                "unpaid": Decimal("0"),
+                "count": 0,
+            },
+        )
+        item["payable"] += entry.payable_amount
+        item["paid"] += entry.paid_amount
+        item["unpaid"] += entry.unpaid_amount
+        item["count"] += 1
+    total_payable = sum((item["payable"] for item in grouped.values()), Decimal("0"))
+    total_paid = sum((item["paid"] for item in grouped.values()), Decimal("0"))
+    total_unpaid = sum((item["unpaid"] for item in grouped.values()), Decimal("0"))
+    lines = [
+        "未付人工按工人汇总："
+        f"应付{total_payable}元，已付{total_paid}元，未付{total_unpaid}元"
+    ]
+    for worker_name, item in grouped.items():
+        lines.append(
+            f"- {worker_name}：应付{item['payable']}元，"
+            f"已付{item['paid']}元，未付{item['unpaid']}元，"
+            f"记录{item['count']}条"
+        )
+    return "\n".join(lines)
+
+
+def _find_wage_worker(
+    db,
+    farm_id: int,
+    worker_id,
+    worker_name: str | None,
+) -> Worker | None:
+    if worker_id:
+        return (
+            db.query(Worker)
+            .filter(Worker.id == int(worker_id), Worker.farm_id == farm_id)
+            .first()
+        )
+    if worker_name:
+        return (
+            db.query(Worker)
+            .filter(Worker.farm_id == farm_id, Worker.name == worker_name)
+            .order_by(Worker.id)
+            .first()
+        )
+    return None
+
+
+def _default_active_cycle_id(db, farm_id: int) -> int | None:
+    cycle = (
+        db.query(CropCycle)
+        .filter(CropCycle.farm_id == farm_id, CropCycle.status == "active")
+        .order_by(CropCycle.id)
+        .first()
+    )
+    return cycle.id if cycle else None
+
+
+def _to_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "是"}
 
 
 def _parse_date(value) -> date | None:

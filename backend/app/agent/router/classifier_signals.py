@@ -213,13 +213,28 @@ def looks_like_settle_labor_payment(message: str) -> bool:
 
 
 def looks_like_manage_wage(message: str) -> bool:
-    if not has_any(message, ("工资", "工钱", "人工费")):
-        return False
     if looks_like_settle_labor_payment(message):
         return False
+    if looks_like_farm_labor_work(message):
+        return False
+    has_attendance_signal = (
+        extractors.extract_worker_name(message) is not None
+        and has_any(message, hints.WAGE_ATTENDANCE_HINTS)
+    )
+    if has_attendance_signal:
+        return True
+    if not has_any(message, ("工资", "工钱", "人工费")):
+        has_wage_detail_without_wage_word = (
+            extractors.extract_wage_operation_type(message) is not None
+            and extractors.extract_worker_name(message) is not None
+            and extractors.extract_labor_quantity(message) is not None
+            and extractors.extract_unit_price(message) is not None
+        )
+        if not has_wage_detail_without_wage_word:
+            return False
     has_record_action = has_any(message, hints.WAGE_RECORD_HINTS)
     has_wage_detail = (
-        extractors.extract_operation_type(message) is not None
+        extractors.extract_wage_operation_type(message) is not None
         and extractors.extract_worker_name(message) is not None
         and extractors.extract_unit_price(message) is not None
     )

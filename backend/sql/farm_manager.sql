@@ -1,6 +1,6 @@
 -- Farm Manager MySQL DDL
 -- 来源：生产 farm_manager 库结构，只包含 MySQL 当前真实存在的表。
--- 生成日期：2026-07-27
+-- 生成日期：2026-07-28
 -- 注意：MongoDB 文档集合不在本 SQL 中创建，见 backend/sql/README.md。
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -341,6 +341,7 @@ CREATE TABLE `farm_logs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `farm_id` int NOT NULL,
   `cycle_id` int NOT NULL,
+  `work_order_id` int DEFAULT NULL,
   `operation_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `operation_date` date NOT NULL,
   `operation_time` datetime DEFAULT NULL,
@@ -349,10 +350,29 @@ CREATE TABLE `farm_logs` (
   `created_at` datetime DEFAULT (now()),
   PRIMARY KEY (`id`),
   KEY `cycle_id` (`cycle_id`),
+  KEY `ix_farm_logs_work_order_id` (`work_order_id`),
   KEY `ix_farm_logs_id` (`id`),
   KEY `ix_farm_logs_farm_operation_date` (`farm_id`,`operation_date`),
   CONSTRAINT `farm_logs_ibfk_1` FOREIGN KEY (`farm_id`) REFERENCES `farms` (`id`),
-  CONSTRAINT `farm_logs_ibfk_2` FOREIGN KEY (`cycle_id`) REFERENCES `crop_cycles` (`id`) ON DELETE CASCADE
+  CONSTRAINT `farm_logs_ibfk_2` FOREIGN KEY (`cycle_id`) REFERENCES `crop_cycles` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_farm_logs_work_order_id` FOREIGN KEY (`work_order_id`) REFERENCES `operation_work_orders` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `farm_log_workers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `farm_log_workers` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `farm_log_id` int NOT NULL,
+  `worker_id` int NOT NULL,
+  `role` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `note` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_farm_log_workers_log_worker` (`farm_log_id`,`worker_id`),
+  KEY `ix_farm_log_workers_farm_log_id` (`farm_log_id`),
+  KEY `ix_farm_log_workers_worker_id` (`worker_id`),
+  CONSTRAINT `farm_log_workers_ibfk_1` FOREIGN KEY (`farm_log_id`) REFERENCES `farm_logs` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `farm_log_workers_ibfk_2` FOREIGN KEY (`worker_id`) REFERENCES `workers` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `farms`;
