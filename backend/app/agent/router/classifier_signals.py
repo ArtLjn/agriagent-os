@@ -50,6 +50,10 @@ def looks_like_daily_operation_advice(message: str) -> bool:
     return has_time and "适合" in message and has_weather_sensitive_operation
 
 
+def looks_like_work_order_advice(message: str) -> bool:
+    return has_any(message, hints.WORK_ORDER_ADVICE_HINTS)
+
+
 def looks_like_create_worker(message: str) -> bool:
     if "工人" not in message:
         return False
@@ -137,6 +141,8 @@ def looks_like_query_work_orders(message: str) -> bool:
 
 def looks_like_create_work_order(message: str) -> bool:
     if looks_like_manage_wage(message):
+        return False
+    if looks_like_work_order_advice(message):
         return False
     if has_any(message, hints.READ_BLOCKERS):
         return False

@@ -17,6 +17,10 @@ from app.shared.logging import log_event
 
 VectorSearchFn = Callable[[str, list[ToolCandidate]], dict[str, float]]
 logger = logging.getLogger(__name__)
+_SCORING_FORMULA = (
+    "0.35*bm25 + 0.35*vector + 0.20*lexical + "
+    "0.10*registry_prior + operation_prior - penalties"
+)
 
 
 _STOP_TERMS = frozenset("a an and are for how i is me much my of please the to".split())
@@ -61,9 +65,18 @@ _TOKEN_ALIASES = {
 _COST_SUMMARY_QUERY_TERMS = frozenset(
     "余额 收支 成本 费用 花费 支出 收入 利润 账单 流水 多少钱 多少".split()
 )
+_COST_RECORD_WRITE_TERMS = frozenset(
+    "买 卖 采购 购入 销售 收入 支出 花了 账单 记账".split()
+)
+_CATEGORY_MANAGEMENT_TERMS = frozenset("分类 类别 科目 category categories".split())
 _COST_ANALYTICS_QUERY_TERMS = frozenset(
     "趋势 同比 环比 分析 比上个月 比去年".split()
 )
+_FARM_LOG_CREATE_TERMS = frozenset(
+    "记录 记一下 浇水 施肥 打药 除草 翻地 育苗 农事 操作".split()
+)
+_WORK_ORDER_CREATE_TERMS = frozenset("安排 派 叫 让 用工 作业单 工人 干活".split())
+_UPDATE_DELETE_TERMS = frozenset("修改 更新 删除 删掉 更正 纠正 改成 改为".split())
 
 
 @dataclass(frozen=True)
@@ -323,17 +336,19 @@ def _log_candidate_scores(
         data={
             "candidate_count": candidate_count,
             "scored_count": len(ranked),
-            "scoring_formula": (
-                "0.35*bm25 + 0.35*vector + 0.20*lexical + "
-                "0.10*registry_prior + operation_prior - penalties"
-            ),
-            "top_candidates": {
-                "items": [
-                    _candidate_score_log_item(candidate, signals)
-                    for candidate, signals in ranked[:limit]
-                ]
-            },
+            "shown_count": min(len(ranked), limit),
+            "top_routes": [signals.route_key for _, signals in ranked[:limit]],
+            "top_score": _round_score(ranked[0][1].score),
+            "scoring_formula": _SCORING_FORMULA,
         },
+    )
+    logger.info(
+        "event=skill_router_candidate_scores_detail\n%s",
+        _format_candidate_scores_block(
+            candidate_count=candidate_count,
+            ranked=ranked,
+            limit=limit,
+        ),
     )
 
 
@@ -365,6 +380,59 @@ def _candidate_score_log_item(
 
 def _round_score(value: float) -> float:
     return round(float(value), 4)
+
+
+def _format_candidate_scores_block(
+    *,
+    candidate_count: int,
+    ranked: list[tuple[ToolCandidate, _CandidateSignals]],
+    limit: int,
+) -> str:
+    shown = ranked[:limit]
+    lines = [
+        "Skill Router Candidate Scores",
+        f"  formula: {_SCORING_FORMULA}",
+        f"  candidates: total={candidate_count} scored={len(ranked)} shown={len(shown)}",
+        "  top:",
+    ]
+    for index, (candidate, signals) in enumerate(shown, start=1):
+        lines.append(
+            "    "
+            f"{index}. {signals.route_key} "
+            f"final={_round_score(signals.score):.4f} "
+            f"bm25={_round_score(signals.bm25):.4f} "
+            f"vector={_round_score(signals.vector):.4f} "
+            f"lexical={_round_score(signals.lexical):.4f} "
+            f"registry={_round_score(signals.registry_prior):.4f} "
+            f"operation={_round_score(signals.operation_prior):.4f} "
+            "penalty="
+            f"{_round_score(signals.anti_penalty + signals.low_signal_only_penalty):.4f}"
+        )
+        lines.append(
+            "       "
+            f"skill={candidate.name} domain={candidate.domain} "
+            f"risk={candidate.risk} sources={_format_signal_values(signals.sources)}"
+        )
+        hits = _format_signal_hits(signals)
+        if hits:
+            lines.append(f"       hits: {hits}")
+    return "\n".join(lines)
+
+
+def _format_signal_values(values: set[str] | list[str] | tuple[str, ...]) -> str:
+    return ",".join(str(value) for value in values) if values else "-"
+
+
+def _format_signal_hits(signals: _CandidateSignals) -> str:
+    parts = []
+    for label, values in (
+        ("lexical", signals.lexical_hits[:5]),
+        ("low_signal", signals.low_signal_hits[:5]),
+        ("anti", signals.anti_hits[:5]),
+    ):
+        if values:
+            parts.append(f"{label}={_format_signal_values(values)}")
+    return " ".join(parts)
 
 
 def _recall_summary(
@@ -548,17 +616,46 @@ def _registry_prior(candidate: ToolCandidate) -> float:
 
 
 def _operation_prior(candidate: ToolCandidate, query_terms: set[str]) -> float:
+    alias_prior = 0.03 if candidate.legacy_alias == candidate.name else 0.0
+    if candidate.capability == "manage_farm_logs":
+        if query_terms & _COST_RECORD_WRITE_TERMS:
+            return -0.22 + alias_prior
+        if candidate.operation == "create_log" and query_terms & _FARM_LOG_CREATE_TERMS:
+            return 0.08 + alias_prior
+        if candidate.operation == "manage_log" and not (
+            query_terms & _UPDATE_DELETE_TERMS
+        ):
+            return -0.04 + alias_prior
+        return alias_prior
+    if candidate.capability == "manage_cost_categories" and not (
+        query_terms & _CATEGORY_MANAGEMENT_TERMS
+    ):
+        return -0.12 + alias_prior
+    if (
+        candidate.capability == "manage_work_orders"
+        and candidate.operation == "create_work_order"
+        and query_terms & _WORK_ORDER_CREATE_TERMS
+    ):
+        return 0.16 + alias_prior
+    if candidate.capability == "manage_planting_units" and (
+        query_terms & _WORK_ORDER_CREATE_TERMS
+    ):
+        return -0.10 + alias_prior
     if candidate.capability != "manage_cost":
-        return 0.0
+        return alias_prior
+    if candidate.operation == "create_record" and (
+        query_terms & _COST_RECORD_WRITE_TERMS
+    ):
+        return 0.36 + alias_prior
     if candidate.operation == "query_summary" and (
         query_terms & _COST_SUMMARY_QUERY_TERMS
     ):
-        return 0.06
+        return 0.06 + alias_prior
     if candidate.operation == "analyze_cost" and not (
         query_terms & _COST_ANALYTICS_QUERY_TERMS
     ):
-        return -0.04
-    return 0.0
+        return -0.04 + alias_prior
+    return alias_prior
 
 
 def _sources(*, strong_rule: bool, bm25: bool, vector: bool) -> tuple[str, ...]:

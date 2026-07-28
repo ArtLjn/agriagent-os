@@ -40,6 +40,12 @@ class RouterPolicy:
         "随便聊",
         "闲聊",
         "聊聊",
+        "安排点啥",
+        "安排什么",
+        "啥活",
+        "什么活",
+        "建议安排",
+        "适合干",
     )
     _write_action_hints = (
         "买",
@@ -169,6 +175,7 @@ class RouterPolicy:
                 candidate_by_name,
                 frame_by_name,
                 max_tools,
+                len(requested_names),
                 state,
             )
             if decision is not None:
@@ -183,6 +190,7 @@ class RouterPolicy:
         candidate_by_name: dict[str, ToolCandidate],
         frame_by_name: dict[str, IntentFrame],
         max_tools: int,
+        requested_count: int,
         state: SelectionState,
     ) -> RouterDecision | None:
         candidate = candidate_by_name.get(name)
@@ -199,6 +207,19 @@ class RouterPolicy:
         )
         if reject_reason is not None:
             reason, violation = reject_reason
+            if self._allow_single_oversized_write_candidate(
+                candidate=candidate,
+                frame=frame_by_name.get(name),
+                state=state,
+                requested_count=requested_count,
+                reason=reason,
+            ):
+                select_candidate(state, candidate)
+                state.policy_violations = with_violation(
+                    state.policy_violations,
+                    "single_candidate_schema_budget_relaxed",
+                )
+                return None
             reject_candidate(state, candidate.name, reason, candidate, violation)
             if reason == "high_risk_clarify":
                 return self._high_risk_decision(frames, state)
@@ -206,6 +227,28 @@ class RouterPolicy:
 
         select_candidate(state, candidate)
         return None
+
+    @staticmethod
+    def _allow_single_oversized_write_candidate(
+        *,
+        candidate: ToolCandidate,
+        frame: IntentFrame | None,
+        state: SelectionState,
+        requested_count: int,
+        reason: str,
+    ) -> bool:
+        """允许唯一明确写候选略超 schema 预算，避免正确 Skill 被全拒。"""
+        return (
+            reason == "schema_token_budget_exceeded"
+            and requested_count == 1
+            and not state.selected
+            and frame is not None
+            and frame.capability == "manage_work_orders"
+            and frame.operation == "create_work_order"
+            and candidate.risk == "write_confirm"
+            and candidate.capability == "manage_work_orders"
+            and candidate.operation == "create_work_order"
+        )
 
     @staticmethod
     def _candidate_for_frame(

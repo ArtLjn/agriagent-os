@@ -45,6 +45,7 @@ class TraceCollector:
         duration_ms: int | None = None,
         token_usage: dict | None = None,
         error_message: str | None = None,
+        status: str | None = None,
     ) -> None:
         """记录一条 trace。无上下文时静默跳过。"""
         trace = get_trace()
@@ -80,7 +81,7 @@ class TraceCollector:
             "end_time": datetime.fromtimestamp(end_time),
             "duration_ms": duration_ms,
             "token_usage": token_usage,
-            "status": "error" if error_message else "success",
+            "status": status or ("error" if error_message else "success"),
             "error_message": error_message,
         }
 

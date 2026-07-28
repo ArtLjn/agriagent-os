@@ -295,6 +295,8 @@ def _record_response_and_result(
         input_summary=prompt_context["input_summary"],
         extract_token_usage_func=extract_token_usage,
         extract_tokens_used_func=_extract_tokens_used,
+        tool_choice=llm_context["tool_choice"],
+        message_count=len(prompt_context["messages"]),
     )
     _node_helpers._record_final_reply_data_source_trace(
         collector=route_context["collector"],

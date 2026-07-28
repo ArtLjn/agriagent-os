@@ -235,26 +235,22 @@ async def test_llm_node_records_skill_router_trace() -> None:
     )
     assert router_trace.kwargs["node_name"] == "skill_router"
     assert router_trace.kwargs["input_data"] == {"message": user_msg[:500]}
-    assert (
-        router_trace.kwargs["output_data"]["selected_tools"]
-        == (decision.to_trace_payload()["selected_tools"])
-    )
-    assert (
-        router_trace.kwargs["output_data"]["selected_operations"]
-        == (decision.to_trace_payload()["selected_operations"])
-    )
-    assert (
-        router_trace.kwargs["output_data"]["rejected_candidates"]
-        == (decision.to_trace_payload()["rejected_candidates"])
-    )
-    assert router_trace.kwargs["output_data"]["fallback_reason"] == "test_reason"
-    assert router_trace.kwargs["output_data"]["scores"] == {"domain": {"farm": 0.85}}
-    assert router_trace.kwargs["output_data"]["plan_draft"]["route_type"] == (
-        "read_plan"
-    )
-    assert router_trace.kwargs["output_data"]["plan_draft"]["selected_tools"] == [
-        "get_farm_status"
-    ]
+    output_data = router_trace.kwargs["output_data"]
+    assert output_data["schema_version"] == 2
+    assert output_data["selected"]["tools"] == ["get_farm_status"]
+    assert output_data["selected"]["operations"] == {
+        "get_farm_status": ["query_status"]
+    }
+    assert output_data["summary"]["fallback_reason"] == "test_reason"
+    assert output_data["summary"]["policy_violations"] == ["write_tool_blocked"]
+    assert output_data["recall"]["status"] == "skipped"
+    assert output_data["recall"]["embedding_location"] == "none"
+    assert output_data["candidate_explanations"][0]["route"] == "get_farm_status"
+    assert output_data["plan"]["route_type"] == "read_plan"
+    assert output_data["plan"]["validation"]["status"] == "valid"
+    assert "frames" not in output_data
+    assert "plan_draft" not in output_data
+    assert "scores" not in output_data
     assert router_trace.kwargs["token_usage"] == {
         "schema_token_estimate": 620,
         "usage_source": "router_estimate",

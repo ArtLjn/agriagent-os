@@ -71,9 +71,14 @@ class SkillDiagnosticService:
                 event = self._reflection_event(record)
                 report.reflection_checks.append(event)
                 self._apply_plan_draft(report, event.get("input", {}).get("plan_draft"))
-            elif record.node_type in {"final_response", "assistant_response"}:
+            elif record.node_type in {
+                "final_response",
+                "assistant_response",
+                "agent_response",
+            }:
                 report.final_response = str(
                     output_data.get("reply")
+                    or output_data.get("reply_preview")
                     or output_data.get("content")
                     or output_data
                     or ""
@@ -202,7 +207,10 @@ class SkillDiagnosticService:
             return "request_bypassed_agent_or_tool_selection_missing"
 
         output = report.tool_selection.get("output") or {}
+        selected_payload = output.get("selected")
         selected = output.get("selected_tools") or output.get("tools") or []
+        if not selected and isinstance(selected_payload, dict):
+            selected = selected_payload.get("tools") or []
         excluded = output.get("excluded_tools") or output.get("filtered_out") or []
         if excluded:
             return "tool_selection_excluded_skill"

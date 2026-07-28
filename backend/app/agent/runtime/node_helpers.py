@@ -28,7 +28,9 @@ from app.context.core.models import ContextBundle
 from app.context.core.registry import block_spec
 from app.context.pipeline import ContextRenderer
 from app.infra.pending_actions import CONTRACT_BLOCKED_MARKER, PENDING_MARKER
+from app.infra.trace_diagnostics import skill_router_trace_payload
 from app.infra.trace_context import set_round_index
+from app.shared.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +102,22 @@ def _record_tool_call_forced_trace(
                 "forced_skills": sorted(forced),
                 "tool_choice": tool_choice,
                 "selected_tools": list(selected_names),
+                "bind_tools": list(selected_names),
+                "reason": _tool_selection_reason(tool_choice, forced),
             },
             start_time=wall_started_at,
             duration_ms=_elapsed_trace_ms(started_at),
         )
     except Exception:
         return
+
+
+def _tool_selection_reason(tool_choice: str, forced: set[str]) -> str:
+    if forced:
+        return "存在强制绑定工具，LLM 必须调用工具"
+    if tool_choice == "none":
+        return "工具结果已返回，最终回复阶段不再绑定工具"
+    return "读工具允许 LLM auto 选择，不强制 tool_call"
 
 
 def _record_final_reply_data_source_trace(*, collector, messages: list) -> None:
@@ -241,8 +253,10 @@ def _record_router_plan_trace(
     plan_validation = DomainValidator().validate(plan_draft)
     plan_draft = attach_validation(plan_draft, plan_validation)
     plan_draft_payload = plan_draft.to_trace_payload()
-    router_trace_payload = router_decision.to_trace_payload()
-    router_trace_payload["plan_draft"] = plan_draft_payload
+    router_trace_payload = skill_router_trace_payload(
+        router_decision,
+        plan_draft_payload=plan_draft_payload,
+    )
     collector.record(
         node_type="skill_router",
         node_name="skill_router",
@@ -586,7 +600,7 @@ def _record_llm_response(
     selected_tool_names: list[str], normal_msgs: list[ToolMessage],
     farm_id: int, session_id: str | None, intent: str, user_msg: str,
     plan_draft_payload: dict, input_summary: str, extract_token_usage_func,
-    extract_tokens_used_func,
+    extract_tokens_used_func, tool_choice: str = "auto", message_count: int = 0,
 ) -> tuple[AIMessage, dict | None]:
 # fmt: on
     """整理最终响应、记录 LLM trace，并返回 token usage。"""
@@ -618,7 +632,15 @@ def _record_llm_response(
     collector.record(
         node_type="llm_call",
         node_name=model_name,
-        input_data=input_summary,
+        input_data=_llm_trace_input(
+            input_summary=input_summary,
+            circuit_key=circuit_key,
+            model_name=model_name,
+            model_role=model_role,
+            selected_tool_names=selected_tool_names,
+            tool_choice=tool_choice,
+            message_count=message_count,
+        ),
         output_data=output_summary,
         duration_ms=duration_ms,
         token_usage=token_usage,
@@ -654,10 +676,15 @@ def _log_llm_response(
     )
 
 
-def _tool_call_output_summary(response: AIMessage, model_name: str) -> str:
+def _tool_call_output_summary(response: AIMessage, model_name: str) -> dict:
     tool_names = [tc["name"] for tc in response.tool_calls]
     logger.info("LLM 工具选择 | tool_calls=%s | model=%s", tool_names, model_name)
-    return f"tool_calls: {tool_names}"
+    return {
+        "finish_reason": "tool_calls",
+        "tool_calls": [_tool_call_trace_payload(tc) for tc in response.tool_calls],
+        "reply_preview": None,
+        "reply_len": 0,
+    }
 
 
 def _direct_response_summary(
@@ -671,7 +698,7 @@ def _direct_response_summary(
     user_msg: str,
     plan_draft_payload: dict,
     model_name: str,
-) -> tuple[AIMessage, str]:
+) -> tuple[AIMessage, dict]:
     response = _ensure_non_empty_response(response, model_name, selected_tool_names)
     response = apply_post_tool_reflection(
         response=response,
@@ -685,7 +712,49 @@ def _direct_response_summary(
     )
     content = response.content or ""
     logger.info("LLM 直接回复 | reply_len=%d | model=%s", len(content), model_name)
-    return response, content[:200]
+    return response, {
+        "finish_reason": "stop",
+        "tool_calls": [],
+        "reply_preview": safe_preview(str(content), max_chars=1000),
+        "reply_len": len(str(content)),
+    }
+
+
+def _llm_trace_input(
+    *,
+    input_summary: str,
+    circuit_key: str,
+    model_name: str,
+    model_role: str,
+    selected_tool_names: list[str],
+    tool_choice: str,
+    message_count: int,
+) -> dict:
+    provider = circuit_key.split("/", 1)[0] if "/" in circuit_key else "unknown"
+    return {
+        "input_summary": input_summary,
+        "provider": provider,
+        "model": model_name,
+        "role": model_role,
+        "selected_tools": list(selected_tool_names),
+        "tool_choice": tool_choice if selected_tool_names else "none",
+        "message_count": message_count,
+        "timeout_seconds": _llm_timeout_seconds_for_trace(),
+    }
+
+
+def _tool_call_trace_payload(tool_call: dict) -> dict:
+    args = tool_call.get("args") if isinstance(tool_call, dict) else None
+    return {
+        "id": str(tool_call.get("id") or "") if isinstance(tool_call, dict) else "",
+        "name": str(tool_call.get("name") or "") if isinstance(tool_call, dict) else "",
+        "args_summary": safe_trace_value(args or {}, max_chars=500),
+    }
+
+
+def _llm_timeout_seconds_for_trace() -> float:
+    cb = settings.circuit_breaker_config
+    return max(1.0, cb.retry_backoff_base * (2**cb.retry_max) * 2)
 
 
 def _ensure_non_empty_response(

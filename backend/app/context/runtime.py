@@ -248,6 +248,9 @@ _INLINE_SECRET_RE = re.compile(
 def build_context_trace_payload(bundle: ContextBundle) -> dict[str, Any]:
     """构造可落 Mongo 的 ContextBundle trace 摘要，不保存完整正文。"""
     selected_blocks = [_block_summary(block) for block in bundle.blocks]
+    context_dependency_diagnostics = _sanitize(
+        bundle.metadata.get("context_dependency_diagnostics", [])
+    )
     payload: dict[str, Any] = {
         "token_budget": bundle.token_budget,
         "token_estimate": bundle.token_estimate,
@@ -261,8 +264,9 @@ def build_context_trace_payload(bundle: ContextBundle) -> dict[str, Any]:
         "allowlist_filtered_keys": _string_list(
             bundle.metadata.get("allowlist_filtered_keys")
         ),
-        "context_dependency_diagnostics": _sanitize(
-            bundle.metadata.get("context_dependency_diagnostics", [])
+        "context_dependency_diagnostics": context_dependency_diagnostics,
+        "dependency_diagnostics": _dependency_diagnostics_payload(
+            context_dependency_diagnostics
         ),
         "policy": _policy_summary(bundle.metadata.get("policy")),
         "sections": _section_summary(bundle),
@@ -296,6 +300,33 @@ def _block_summary(block: ContextBlock) -> dict[str, Any]:
     if block.key == "rag_knowledge" or block.source == "external_rag":
         summary["rag"] = _rag_summary(block.metadata)
     return summary
+
+
+def _dependency_diagnostics_payload(value: Any) -> dict[str, Any]:
+    if not isinstance(value, list):
+        return {}
+    diagnostics: dict[str, Any] = {}
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        block_key = _sanitize_text(str(item.get("block_key") or ""))
+        if not block_key:
+            continue
+        status = _context_dependency_status(str(item.get("status") or ""))
+        diagnostics[block_key] = {
+            "status": status,
+            "dependencies": _string_list(item.get("dependencies")),
+        }
+    return diagnostics
+
+
+def _context_dependency_status(status: str) -> str:
+    return {
+        "selected": "available",
+        "compressed": "available",
+        "dropped": "skipped_by_policy",
+        "unavailable": "missing_required_context",
+    }.get(status, status or "missing_required_context")
 
 
 def _selector_errors(value: Any) -> list[dict[str, str]]:

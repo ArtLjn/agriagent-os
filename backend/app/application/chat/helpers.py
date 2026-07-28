@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.context.runtime import invalidate_farm_context
+from app.context.pipeline import safe_preview
 from app.shared.database import SessionLocal
 from app.infra.repository_runtime import (
     get_agent_record_repository,
@@ -108,7 +109,11 @@ def record_agent_response(
         node_type="agent_response",
         node_name=node_name,
         input_data={"message": user_input},
-        output_data={"reply": reply, "reason": reason},
+        output_data={
+            "reason": reason,
+            "reply_preview": safe_preview(reply, max_chars=1000),
+            "reply_len": len(reply or ""),
+        },
     )
 
 

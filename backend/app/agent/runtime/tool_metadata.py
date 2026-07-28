@@ -583,10 +583,11 @@ def _success_trace_output(result, permission_decision: _PermissionDecision) -> d
     if not trace_output:
         trace_output = {
             "status": "success",
-            "reply_preview": str(result)[:500],
+            "reply_preview": str(result)[:1000],
         }
     else:
-        trace_output["reply_preview"] = str(result)[:500]
+        trace_output["status"] = trace_output.get("status") or "success"
+        trace_output["reply_preview"] = str(result)[:1000]
     trace_output.update(_permission_trace_output(permission_decision))
     return trace_output
 
@@ -646,6 +647,20 @@ async def _invoke_read_tool_message(
 ) -> ToolMessage:
     """执行读操作工具并记录结果 metadata。"""
     if not tool:
+        collector.record(
+            node_type="skill_call",
+            node_name=name,
+            input_data=args,
+            output_data={
+                "error": {
+                    "code": "tool_not_found",
+                    "message": f"未知工具: {name}",
+                    "recover": "check_skill_registry_or_router_selection",
+                }
+            },
+            duration_ms=0,
+            error_message=f"未知工具: {name}",
+        )
         return ToolMessage(content=f"未知工具: {name}", tool_call_id=tool_call_id)
     try:
         result = await tool.ainvoke(args)
@@ -676,6 +691,13 @@ async def _invoke_read_tool_message(
             node_type="skill_call",
             node_name=name,
             input_data=args,
+            output_data={
+                "error": {
+                    "code": "skill_call_failed",
+                    "message": str(e)[:300],
+                    "recover": "check_skill_runtime_or_tool_arguments",
+                }
+            },
             duration_ms=duration_ms,
             error_message=str(e),
         )

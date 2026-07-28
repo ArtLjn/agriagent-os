@@ -21,8 +21,8 @@ from app.agent.router.models import (
     ToolCandidate,
 )
 from app.agent.router.policy import RouterPolicy
-from app.agent.router.trace_diagnostics import (
-    candidate_explanations,
+from app.infra.trace_diagnostics import (
+    format_skill_router_trace,
     selection_path,
     with_trace_diagnostics,
 )
@@ -88,6 +88,22 @@ _RETRIEVABLE_READ_ENTITY_HINTS = (
     "labor",
     "worker",
     "weather",
+)
+_RETRIEVABLE_WRITE_HINTS = (
+    "安排",
+    "记录",
+    "记一下",
+    "创建",
+    "新建",
+    "新增",
+    "修改",
+    "更新",
+    "删除",
+    "改成",
+    "改为",
+    "派",
+    "叫",
+    "让",
 )
 
 
@@ -180,7 +196,7 @@ class SkillRouter:
     ) -> tuple[list[IntentFrame], RouterDecision | None]:
         if frames:
             return frames, None
-        if intent == IntentType.WRITE:
+        if intent == IntentType.WRITE or self._looks_like_retrievable_write(message):
             return self._write_retrieval_frames(message, catalog, intent)
         if self._looks_like_retrievable_read(message):
             return self._retrieved_frames(message, catalog), None
@@ -294,6 +310,10 @@ class SkillRouter:
         candidate_count: int,
     ) -> None:
         trace = get_trace()
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        recall = decision.evidence.get("recall")
+        if not isinstance(recall, dict):
+            recall = {}
         log_event(
             logger,
             logging.INFO,
@@ -301,24 +321,29 @@ class SkillRouter:
             request_id=trace.request_id if trace else None,
             session_id=trace.session_id if trace else None,
             status="success",
-            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            duration_ms=duration_ms,
             data={
                 "candidate_count": candidate_count,
                 "selected_tools": decision.selected_tools,
                 "selected_operations": decision.selected_operations,
                 "selection_path": selection_path(decision),
-                "selection_reason": decision.reason,
-                "recall": decision.evidence.get("recall"),
-                "candidate_explanations": {
-                    "items": decision.evidence.get(
-                        "candidate_explanations",
-                        candidate_explanations(decision),
-                    )
-                },
+                "retrieval_engine": recall.get("retrieval_engine"),
+                "bm25_used": recall.get("bm25_used"),
+                "vector_search_used": recall.get("vector_search_used"),
+                "rag_service_used": recall.get("rag_service_used"),
+                "embedding_location": recall.get("embedding_location"),
                 "fallback": decision.fallback,
                 "fallback_reason": decision.fallback_reason,
                 "policy_violations": decision.policy_violations,
             },
+        )
+        logger.info(
+            "event=skill_router_trace\n%s",
+            format_skill_router_trace(
+                decision,
+                candidate_count=candidate_count,
+                duration_ms=duration_ms,
+            ),
         )
 
     @staticmethod
@@ -421,15 +446,19 @@ class SkillRouter:
         catalog: SkillCatalog,
     ) -> list[IntentFrame]:
         write_candidates = self._write_operation_candidates(catalog)
-        retrieved = self._retriever.retrieve(
+        retrieved = self._hybrid_retriever.retrieve(
             message,
             write_candidates,
-            limit=1,
+            limit=min(len(write_candidates), self._budget.max_retrieved_tools_default),
         )
         if not retrieved.selected_names:
             return []
         frames: list[IntentFrame] = []
-        for candidate in retrieved.selected_candidates:
+        selected_candidates = self._filter_retrieved_write_candidates(
+            retrieved.selected_candidates,
+            scores=retrieved.scores,
+        )
+        for candidate in selected_candidates:
             name = candidate.name
             frames.append(
                 IntentFrame(
@@ -446,15 +475,30 @@ class SkillRouter:
                     if candidate.operation
                     else None,
                     evidence={
-                        "source": "candidate_retriever",
+                        "source": "hybrid_operation_retriever",
                         "coarse_intent": "write",
+                        "recall": retrieved.recall,
+                        "top_candidates": retrieved.top_candidates,
                         "scores": retrieved.scores,
-                        "retrieval_evidence": {name: retrieved.evidence.get(name, {})},
+                        "retrieval_evidence": {
+                            self._route_key(candidate): retrieved.evidence.get(
+                                self._route_key(candidate),
+                                {},
+                            )
+                        },
                     },
                     requires_confirmation=True,
                 )
             )
         return frames
+
+    @staticmethod
+    def _filter_retrieved_write_candidates(
+        candidates: list[ToolCandidate],
+        *,
+        scores: dict[str, float],
+    ) -> list[ToolCandidate]:
+        return _filter_low_confidence_retrieved_candidates(candidates, scores)[:1]
 
     @staticmethod
     def _write_operation_candidates(catalog: SkillCatalog) -> list[ToolCandidate]:
@@ -474,7 +518,9 @@ class SkillRouter:
             for candidate in write_candidates
         }
         for candidate in candidates:
-            if not candidate.capability or candidate.operation is not None:
+            if not candidate.capability:
+                continue
+            if candidate.operation is not None and candidate.risk not in _WRITE_OPERATION_RISKS:
                 continue
             capability = registry.capabilities.get(candidate.capability)
             if capability is None:
@@ -507,7 +553,9 @@ class SkillRouter:
             for candidate in read_candidates
         }
         for candidate in candidates:
-            if not candidate.capability or candidate.operation is not None:
+            if not candidate.capability:
+                continue
+            if candidate.operation is not None and candidate.risk not in _READ_OPERATION_RISKS:
                 continue
             capability = registry.capabilities.get(candidate.capability)
             if capability is None:
@@ -595,6 +643,13 @@ class SkillRouter:
         return any(hint in normalized for hint in _RETRIEVABLE_READ_HINTS) and any(
             hint in normalized for hint in _RETRIEVABLE_READ_ENTITY_HINTS
         )
+
+    @staticmethod
+    def _looks_like_retrievable_write(message: str) -> bool:
+        normalized = message.strip().lower()
+        if signals.looks_like_work_order_advice(message):
+            return False
+        return any(hint in normalized for hint in _RETRIEVABLE_WRITE_HINTS)
 
     def build_pending_plan_steps(self, decision: RouterDecision) -> list[dict]:
         """把多写入意图帧转换为 pending plan 存储步骤。"""

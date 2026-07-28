@@ -18,5 +18,9 @@ def test_record_agent_response_records_agent_response_node() -> None:
         node_type="agent_response",
         node_name="greeting_reply",
         input_data={"message": "你好"},
-        output_data={"reply": "你好呀", "reason": "greeting_shortcut"},
+        output_data={
+            "reason": "greeting_shortcut",
+            "reply_preview": "你好呀",
+            "reply_len": 3,
+        },
     )

@@ -220,3 +220,18 @@ def test_hybrid_retriever_logs_vector_recall_lifecycle(caplog) -> None:
         and "vector_search_calls=1" in message
         for message in messages
     )
+    candidate_summary = next(
+        message
+        for message in messages
+        if "event=skill_router_candidate_scores" in message
+    )
+    assert "top_routes=" in candidate_summary
+    assert "top_candidates=" not in candidate_summary
+    assert any(
+        "event=skill_router_candidate_scores_detail\nSkill Router Candidate Scores"
+        in message
+        and "manage_cost.query_debt" in message
+        and "bm25=" in message
+        and "vector=" in message
+        for message in messages
+    )

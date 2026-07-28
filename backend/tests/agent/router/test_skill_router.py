@@ -535,6 +535,68 @@ def test_implicit_labor_operation_routes_to_work_order_not_no_tool() -> None:
     assert work_order_frame.missing_fields == ["unit_price_or_default_wage"]
 
 
+def test_single_work_order_candidate_over_schema_budget_is_not_dropped() -> None:
+    tools = [_tool("manage_work_orders", description="大型作业单 schema " * 900)]
+
+    decision = SkillRouter().route("安排他去育苗吧", tools)
+
+    assert decision.selected_tools == ["manage_work_orders"]
+    assert decision.selected_operations == {"manage_work_orders": ["create_work_order"]}
+    assert decision.fallback is None
+    assert "schema_token_budget_exceeded" not in decision.policy_violations
+    assert "single_candidate_schema_budget_relaxed" in decision.policy_violations
+    work_order_frame = decision.frames[0]
+    assert work_order_frame.intent == "retrieved_write_candidate"
+    assert work_order_frame.evidence["source"] == "hybrid_operation_retriever"
+    assert work_order_frame.evidence["recall"]["vector_search_used"] is True
+
+
+def test_write_hybrid_retrieval_can_select_farm_log_create_operation() -> None:
+    router = SkillRouter()
+    router._classifier = MagicMock()
+    router._classifier.classify.return_value = []
+
+    def vector_search(_query: str, candidates) -> dict[str, float]:
+        return {
+            f"{candidate.name}.{candidate.operation}": (
+                0.96
+                if candidate.name == "manage_farm_logs"
+                and candidate.operation == "create_log"
+                else 0.08
+            )
+            for candidate in candidates
+        }
+
+    router._hybrid_retriever = HybridOperationRetriever(vector_search=vector_search)
+
+    decision = router.route(
+        "记录今天育苗",
+        [_tool("manage_farm_logs"), _tool("manage_work_orders")],
+    )
+
+    assert decision.selected_tools == ["manage_farm_logs"]
+    assert decision.selected_operations == {"manage_farm_logs": ["create_log"]}
+    assert decision.frames[0].evidence["recall"]["path"] == "bm25_vector_hybrid"
+    assert decision.frames[0].evidence["recall"]["vector_search_used"] is True
+    assert decision.frames[0].evidence["top_candidates"][0]["route"] == (
+        "manage_farm_logs.create_log"
+    )
+
+
+def test_work_order_advice_question_does_not_create_work_order() -> None:
+    tools = [
+        _tool("get_farm_status"),
+        _tool("manage_cost"),
+        _tool("manage_work_orders", description="大型作业单 schema " * 900),
+    ]
+
+    decision = SkillRouter().route("蛛丝给他安排点啥活呢", tools)
+
+    assert decision.selected_tools == []
+    assert all(frame.intent != "create_work_order" for frame in decision.frames)
+    assert decision.fallback == "no_tools"
+
+
 def test_implicit_labor_without_operation_asks_clarification() -> None:
     tools = [
         _tool("create_operation_work_order"),

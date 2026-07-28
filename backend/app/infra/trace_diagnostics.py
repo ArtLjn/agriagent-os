@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
-from app.agent.router.models import RouterDecision
+if TYPE_CHECKING:
+    from app.agent.router.models import RouterDecision
+
+_SCHEMA_VERSION = 2
 
 
 def selection_path(decision: RouterDecision) -> str:
@@ -89,6 +93,189 @@ def with_trace_diagnostics(
             "candidate_explanations": explanations,
         },
     )
+
+
+def skill_router_trace_payload(
+    decision: RouterDecision,
+    *,
+    plan_draft_payload: dict | None = None,
+    candidate_count: int | None = None,
+    debug_raw: dict | None = None,
+) -> dict:
+    """构造默认落库的 Skill Router trace JSON。"""
+
+    recall = decision.evidence.get("recall")
+    if not isinstance(recall, dict):
+        recall = _decision_recall_summary(decision, vector_index_enabled=False)
+    explanations = decision.evidence.get("candidate_explanations")
+    if not isinstance(explanations, list):
+        explanations = candidate_explanations(decision)
+    selected_routes = _selected_routes(decision)
+    payload: dict = {
+        "schema_version": _SCHEMA_VERSION,
+        "summary": {
+            "selection_path": selection_path(decision),
+            "selection_reason": decision.reason,
+            "selected_routes": selected_routes,
+            "candidate_count": _candidate_count(decision, candidate_count),
+            "fallback": decision.fallback,
+            "fallback_reason": decision.fallback_reason,
+            "policy_violations": list(decision.policy_violations),
+        },
+        "selected": {
+            "tools": list(decision.selected_tools),
+            "operations": dict(decision.selected_operations),
+            "tool_choice": decision.tool_choice,
+            "force_binding": list(decision.force_binding),
+        },
+        "recall": _compact_recall(recall),
+        "candidate_explanations": explanations,
+        "plan": _compact_plan(plan_draft_payload),
+    }
+    if debug_raw is not None:
+        payload["debug_raw"] = debug_raw
+    return _drop_empty(payload)
+
+
+def format_skill_router_trace(
+    decision: RouterDecision,
+    *,
+    candidate_count: int,
+    duration_ms: int,
+    max_candidates: int = 8,
+) -> str:
+    """返回适合终端阅读的 Skill Router trace 摘要。"""
+
+    recall = decision.evidence.get("recall")
+    if not isinstance(recall, dict):
+        recall = _decision_recall_summary(decision, vector_index_enabled=False)
+    explanations = decision.evidence.get("candidate_explanations")
+    if not isinstance(explanations, list):
+        explanations = candidate_explanations(decision)
+    selected_routes = _selected_routes(decision)
+    lines = [
+        "Skill Router Trace",
+        (
+            "  route: "
+            f"path={recall.get('path') or selection_path(decision)} "
+            f"engine={recall.get('retrieval_engine') or 'unknown'} "
+            f"duration_ms={duration_ms} "
+            f"candidates={candidate_count}"
+        ),
+    ]
+    lines.extend(_format_recall_lines(recall))
+    lines.append(
+        "  selected: "
+        f"routes={_format_list(selected_routes)} "
+        f"tools={_format_list(decision.selected_tools)}"
+    )
+    if decision.selected_operations:
+        lines.append(f"  operations: {_format_operations(decision.selected_operations)}")
+    if decision.fallback or decision.fallback_reason:
+        lines.append(
+            "  fallback: "
+            f"{decision.fallback or '-'} reason={decision.fallback_reason or '-'}"
+        )
+    if decision.policy_violations:
+        lines.append(f"  policy_violations: {_format_list(decision.policy_violations)}")
+    lines.append("  candidate_scores:")
+    lines.extend(_format_candidate_lines(explanations[:max_candidates], selected_routes))
+    if len(explanations) > max_candidates:
+        lines.append(f"    ... {len(explanations) - max_candidates} more")
+    return "\n".join(lines)
+
+
+def _candidate_count(decision: RouterDecision, candidate_count: int | None) -> int:
+    if candidate_count is not None:
+        return candidate_count
+    candidates = decision.evidence.get("selected_candidates")
+    if isinstance(candidates, list):
+        return len(candidates)
+    explanations = decision.evidence.get("candidate_explanations")
+    if isinstance(explanations, list):
+        return len(explanations)
+    return len(decision.selected_tools)
+
+
+def _compact_recall(recall: dict) -> dict:
+    payload = dict(recall)
+    status = str(payload.get("status") or "")
+    if not status:
+        status = "used" if payload.get("vector_search_used") else "skipped"
+    payload["status"] = status
+    payload.setdefault("path", payload.get("selection_path") or "unknown")
+    if status == "skipped" and payload.get("skip_reason"):
+        payload.setdefault("meaning", _recall_skip_meaning(payload))
+    elif status == "used":
+        payload.setdefault(
+            "meaning",
+            "规则分类器未给出稳定候选，使用 BM25 + QuillRAG 向量混合召回",
+        )
+    return _drop_empty(payload)
+
+
+def _compact_plan(plan_draft_payload: dict | None) -> dict:
+    if not isinstance(plan_draft_payload, dict):
+        return {}
+    return _drop_empty(
+        {
+            "route_type": plan_draft_payload.get("route_type"),
+            "steps": [
+                _compact_plan_step(step)
+                for step in plan_draft_payload.get("steps", [])
+                if isinstance(step, dict)
+            ],
+            "validation": _compact_validation(plan_draft_payload.get("validation")),
+        }
+    )
+
+
+def _compact_plan_step(step: dict) -> dict:
+    params = step.get("params")
+    operation = step.get("operation")
+    if operation in (None, "") and isinstance(params, dict):
+        operation = params.get("operation")
+    return _drop_empty(
+        {
+            "step_id": step.get("step_id"),
+            "skill_name": step.get("skill_name"),
+            "operation": operation,
+            "risk": step.get("risk"),
+            "depends_on": step.get("depends_on"),
+        }
+    )
+
+
+def _compact_validation(validation: object) -> dict:
+    if not isinstance(validation, dict):
+        return {}
+    return _drop_empty(
+        {
+            "status": validation.get("status"),
+            "issues": validation.get("issues"),
+            "missing_fields": validation.get("missing_fields"),
+            "inferred_fields": validation.get("inferred_fields"),
+        }
+    )
+
+
+def _drop_empty(value):
+    if isinstance(value, dict):
+        compact = {}
+        for key, nested in value.items():
+            cleaned = _drop_empty(nested)
+            if cleaned in (None, "", [], {}):
+                continue
+            compact[key] = cleaned
+        return compact
+    if isinstance(value, list):
+        compact = []
+        for item in value:
+            cleaned = _drop_empty(item)
+            if cleaned not in ({}, []):
+                compact.append(cleaned)
+        return compact
+    return value
 
 
 def _candidate_explanation(decision: RouterDecision, candidate: dict) -> dict:
@@ -356,9 +543,7 @@ def _selected_routes(decision: RouterDecision) -> list[str]:
             return routes
     routes: list[str] = []
     for tool_name in decision.selected_tools:
-        operations = []
-        for values in decision.selected_operations.values():
-            operations.extend(values)
+        operations = list(decision.selected_operations.get(tool_name) or [])
         if operations:
             routes.extend(f"{tool_name}.{operation}" for operation in operations)
         else:
@@ -372,3 +557,119 @@ def _round_log_score(value: object) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+
+def _format_recall_lines(recall: dict) -> list[str]:
+    used = bool(recall.get("bm25_used") or recall.get("vector_search_used"))
+    if not used:
+        return [
+            "  recall: skipped",
+            f"    reason: {recall.get('skip_reason') or 'not_retrieval_path'}",
+            f"    meaning: {_recall_skip_meaning(recall)}",
+            f"    external_rag_call: {_bool_label(recall.get('rag_service_used'))}",
+            f"    embedding_call: {_bool_label(recall.get('external_embedding_requested'))}",
+            f"    local_doc_embeds: {recall.get('local_doc_embedding_calls', 0)}",
+        ]
+    return [
+        "  recall: used",
+        f"    strategy: {_recall_strategy(recall)}",
+        f"    external_rag_call: {_bool_label(recall.get('rag_service_used'))}",
+        f"    quillrag_call: {_bool_label(recall.get('quillrag_retrieve_used'))}",
+        f"    embedding_location: {recall.get('embedding_location') or 'none'}",
+        f"    local_doc_embeds: {recall.get('local_doc_embedding_calls', 0)}",
+        f"    vector_status: {recall.get('vector_status') or '-'}",
+    ]
+
+
+def _recall_skip_meaning(recall: dict) -> str:
+    reason = str(recall.get("skip_reason") or "")
+    if reason == "rule_classifier_matched":
+        return "规则分类器已命中，跳过 BM25 + RAG 向量召回"
+    if reason == "not_retrievable_read":
+        return "输入不像可检索读问题，未触发 Skill 混合召回"
+    if reason == "write_candidate_retriever":
+        return "写意图走元数据候选召回，未触发读场景向量召回"
+    if reason == "unresolved_write":
+        return "写意图未解析出可执行候选，未触发读场景向量召回"
+    return "本次路由没有进入 BM25 + RAG 向量召回路径"
+
+
+def _recall_strategy(recall: dict) -> str:
+    parts: list[str] = []
+    if recall.get("bm25_used"):
+        parts.append("bm25")
+    if recall.get("quillrag_retrieve_used"):
+        parts.append("quillrag_vector")
+    elif recall.get("vector_search_used"):
+        parts.append("vector")
+    return " + ".join(parts) if parts else "none"
+
+
+def _format_candidate_lines(
+    explanations: list[object],
+    selected_routes: list[str],
+) -> list[str]:
+    if not explanations:
+        return ["    - none"]
+    lines: list[str] = []
+    selected_set = set(selected_routes)
+    for index, item in enumerate(explanations, start=1):
+        if not isinstance(item, dict):
+            continue
+        route = str(item.get("route") or "-")
+        selected = bool(item.get("selected")) or route in selected_set
+        scores = item.get("scores") if isinstance(item.get("scores"), dict) else {}
+        lines.append(
+            "    "
+            f"{index}. {_selection_mark(selected)} {route} "
+            f"final={_score_value(scores, 'final', 'score')} "
+            f"bm25={_score_value(scores, 'bm25')} "
+            f"vector={_score_value(scores, 'vector')} "
+            f"lexical={_score_value(scores, 'lexical')} "
+            f"capability={_score_value(scores, 'capability')} "
+            f"operation={_score_value(scores, 'operation')} "
+            f"sources={_format_list(scores.get('sources') or [])}"
+        )
+        why_selected = item.get("why_selected")
+        if why_selected:
+            lines.append(f"       why: {why_selected}")
+        hits = _format_hits(scores)
+        if hits:
+            lines.append(f"       hits: {hits}")
+    return lines or ["    - none"]
+
+
+def _score_value(scores: dict, *keys: str) -> str:
+    for key in keys:
+        if key in scores:
+            return f"{_round_log_score(scores.get(key)):.4f}"
+    return "-"
+
+
+def _format_hits(scores: dict) -> str:
+    parts = []
+    for key in ("lexical_hits", "low_signal_hits", "anti_hits"):
+        values = scores.get(key)
+        if values:
+            parts.append(f"{key}={_format_list(values)}")
+    return " ".join(parts)
+
+
+def _selection_mark(selected: bool) -> str:
+    return "[selected]" if selected else "[candidate]"
+
+
+def _bool_label(value: object) -> str:
+    return "yes" if bool(value) else "no"
+
+
+def _format_list(values: object) -> str:
+    if not isinstance(values, list | tuple | set):
+        return str(values) if values else "-"
+    return ",".join(str(value) for value in values) if values else "-"
+
+
+def _format_operations(operations: dict[str, list[str]]) -> str:
+    parts = []
+    for skill, values in operations.items():
+        parts.append(f"{skill}={_format_list(values)}")
+    return "; ".join(parts) if parts else "-"

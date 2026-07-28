@@ -75,9 +75,26 @@ WORKER_UPDATE_FIELDS = (
     "状态",
 )
 WORKER_PAY_HINTS = ("工资", "日薪", "每天", "一天")
-WORK_ORDER_HINTS = ("作业", "采收", "授粉", "安排")
-OPERATION_HINTS = ("授粉", "装车", "整枝", "打杈", "压蔓", "压瓜", "留瓜", "垫瓜")
+WORK_ORDER_HINTS = ("作业", "采收", "授粉")
+OPERATION_HINTS = (
+    "授粉",
+    "装车",
+    "整枝",
+    "打杈",
+    "压蔓",
+    "压瓜",
+    "留瓜",
+    "垫瓜",
+)
 WORK_ORDER_READ_HINTS = ("作业单", "作业", "采收", "授粉")
+WORK_ORDER_ADVICE_HINTS = (
+    "安排点啥",
+    "安排什么",
+    "啥活",
+    "什么活",
+    "建议安排",
+    "适合干",
+)
 READ_BLOCKERS = ("哪些", "有哪些", "查询", "查一下", "看看", "最近", "我的")
 PLANTING_ADVICE_HINTS = ("怎么种", "如何种", "咋种", "要注意什么")
 WEB_SEARCH_HINTS = ("搜索", "网上查", "新闻")
